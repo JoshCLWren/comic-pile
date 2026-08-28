@@ -42,6 +42,20 @@ if [ -n "$FORBIDDEN_STAGED" ]; then
     exit 1
 fi
 
+# Block backup artifacts (*.bak, *.backup, *.orig, *~) — editor/LLM leftovers
+# never belong in version control. Deletions are allowed so existing backups
+# can be untracked.
+BACKUP_PATTERN='\.(bak|backup|orig)$|~$'
+BACKUP_STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -Ei "$BACKUP_PATTERN" || true)
+if [ -n "$BACKUP_STAGED" ]; then
+    echo ""
+    echo "${RED}ERROR: Backup files staged for commit:${NC}"
+    echo "$BACKUP_STAGED" | sed 's/^/  /'
+    echo "${RED}Backup artifacts (*.bak, *.backup, *.orig, *~) are banned from this repository.${NC}"
+    echo "${RED}Delete them locally instead of committing them.${NC}"
+    exit 1
+fi
+
 # Run the shared lint script (only for staged, relevant files)
 bash scripts/lint.sh --staged
 

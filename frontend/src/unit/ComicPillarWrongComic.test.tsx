@@ -94,7 +94,7 @@ describe('ComicPillar Wrong comic? flow', () => {
   it('routes a correction opened via Wrong comic? to the replace endpoint', async () => {
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
 
-    const wrongComicButton = await screen.findByRole('button', { name: 'Wrong comic?' })
+    const wrongComicButton = await screen.findByRole('button', { name: 'Wrong series?' })
     fireEvent.click(wrongComicButton)
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
@@ -138,5 +138,52 @@ describe('ComicPillar Wrong comic? flow', () => {
 
     await waitFor(() => expect(confirmIdentitySpy).toHaveBeenCalledWith(43, 36956))
     expect(replaceIdentitySpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('ComicPillar confirmed mapping display', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getIssueIdentitySpy.mockResolvedValue({
+      has_confirmed_identity: true,
+      confirmed_mappings: [{ comicvine_id: '36956', status: 'confirmed', confidence: null }],
+    })
+    searchSeriesSpy.mockResolvedValue({ query: '', results: [mockSeries], total_available: 1 })
+    getSeriesIssuesSpy.mockResolvedValue({
+      comicvine_volume_id: 42,
+      series_name: 'Stormwatch',
+      issues: [mockIssue],
+    })
+  })
+
+  it('never renders the raw ComicVine mapping ID as visible text', async () => {
+    render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
+
+    expect(await screen.findByText('ComicVine linked')).toBeInTheDocument()
+    expect(screen.queryByText(/ComicVine #\d+/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/36956/)).not.toBeInTheDocument()
+  })
+
+  it('keeps Wrong comic? targeting the exact hidden mapping without exposing it', async () => {
+    render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
+
+    expect(screen.queryByText(/ComicVine #\d+/)).not.toBeInTheDocument()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Wrong series?' }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByPlaceholderText('Search series title...'), {
+      target: { value: 'Stormwatch' },
+    })
+    fireEvent.click(await screen.findByText('Stormwatch'))
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('#1'))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
+
+    await waitFor(() =>
+      expect(replaceIdentitySpy).toHaveBeenCalledWith(43, mockIssue.comicvine_issue_id),
+    )
+    expect(confirmIdentitySpy).not.toHaveBeenCalled()
   })
 })

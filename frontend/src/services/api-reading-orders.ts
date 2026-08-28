@@ -1,4 +1,5 @@
 import api from './api'
+import type { ContinuityPlan } from './api-continuity-plans'
 
 export interface ReadingOrderItem {
   thread_id: number
@@ -69,9 +70,25 @@ export interface ReadingOrderProjectionResult {
   total_positions: number
 }
 
+export interface InsertReadingOrderItemResponse {
+  reading_order_id: number
+  thread_id: number
+  position: number
+  total_items: number
+}
+
 export const readingOrdersApi = {
   list: async (): Promise<ReadingOrderListResponse> => {
     return api.get<ReadingOrderListResponse>('/v1/reading-orders/')
+  },
+  insertItem: async (
+    readingOrderId: number,
+    data: { thread_id: number; position: number },
+  ): Promise<InsertReadingOrderItemResponse> => {
+    return api.post<InsertReadingOrderItemResponse>(
+      `/v1/reading-orders/${readingOrderId}/items`,
+      data,
+    )
   },
   previewProjection: async (
     planId: number,
@@ -93,5 +110,18 @@ export const readingOrdersApi = {
   },
   getForThread: async (threadId: number): Promise<ThreadReadingOrdersResponse> => {
     return api.get<ThreadReadingOrdersResponse>(`/v1/threads/${threadId}/reading-orders`)
-  }
+  },
+  adoptReadingOrder: async (params: {
+    readingOrderId: number
+    planName?: string
+    laneId?: string
+    laneName?: string
+  }): Promise<ContinuityPlan> => {
+    return api.post(`/v1/continuity-plans/from-reading-order`, {
+      reading_order_id: params.readingOrderId,
+      plan_name: params.planName ?? null,
+      lane_id: params.laneId ?? 'adopted',
+      lane_name: params.laneName ?? 'Adopted',
+    })
+  },
 }

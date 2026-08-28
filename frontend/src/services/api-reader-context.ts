@@ -29,20 +29,55 @@ export interface ReaderContextCrossoverNextMember {
   issue_number: string
 }
 
+export interface ReaderContextCrossoverMembership {
+  id: number
+  name: string
+}
+
 export interface ReaderContextCrossover {
   id: number
   name: string
   applies_to_current_issue: boolean
+  membership_kind: 'issue' | 'thread'
   next_member: ReaderContextCrossoverNextMember | null
   average_rating: number | null
   ratings_count: number
   read_count: number
 }
 
+export interface ReaderContextLocalIssue {
+  issue_id: number
+  issue_number: string
+  position: number
+  status: string
+  relation: 'previous' | 'current' | 'next' | 'future'
+  rating: number | null
+  crossover_memberships: ReaderContextCrossoverMembership[]
+}
+
+export interface ReaderContextEdge {
+  id: number
+  kind: 'dependency' | 'continuity'
+  source_issue_id: number
+  target_issue_id: number
+  source_thread_id: number | null
+  target_thread_id: number | null
+  source_label: string | null
+  target_label: string | null
+  note: string | null
+  explanation: string | null
+}
+
+export interface ReaderContextLocalChain {
+  issues: ReaderContextLocalIssue[]
+  edges: ReaderContextEdge[]
+}
+
 export interface ReaderContextResponse {
   issue_id: number
   series: ReaderContextSeries
   crossovers: ReaderContextCrossover[]
+  local_chain: ReaderContextLocalChain
 }
 
 export const readerContextApi = {

@@ -108,10 +108,10 @@ def test_e2e_is_selected_when_higher_lanes_are_empty(controller: types.ModuleTyp
     assert [(candidate.number, candidate.lane) for candidate in candidates] == [(301, 4)]
 
 
-def test_equal_priority_items_preserve_established_newest_first_tie_break(
+def test_equal_priority_items_drain_oldest_first(
     controller: types.ModuleType,
 ) -> None:
-    """Verify equal priority items preserve established newest first tie break."""
+    """Verify equal priority items drain oldest first so backlogged work cannot starve."""
     candidates = controller.build_candidates(
         [
             issue(
@@ -131,7 +131,7 @@ def test_equal_priority_items_preserve_established_newest_first_tie_break(
         ],
         [],
     )
-    assert [candidate.number for candidate in candidates] == [311, 310]
+    assert [candidate.number for candidate in candidates] == [310, 311]
 
 
 def test_user_bug_pr_repair_inherits_priority_without_worker_affinity(
@@ -168,8 +168,10 @@ def test_controller_uses_only_canonical_worker_issue_branch_shape(
     assert controller.linked_issue_from_branch("factory/401-repair") is None
 
 
-def test_draft_pr_does_not_make_linked_issue_disappear(controller: types.ModuleType) -> None:
-    """Verify draft pr does not make linked issue disappear."""
+def test_draft_pr_suppresses_linked_issue_until_pr_closes(
+    controller: types.ModuleType,
+) -> None:
+    """A draft canonical PR still owns issue identity until explicitly closed."""
     candidates = controller.build_candidates(
         [issue(411, "bug", "user-reported", "factory:unowned")],
         [
@@ -182,15 +184,13 @@ def test_draft_pr_does_not_make_linked_issue_disappear(controller: types.ModuleT
             )
         ],
     )
-    assert [(candidate.kind, candidate.number) for candidate in candidates] == [
-        ("issue", 411)
-    ]
+    assert candidates == []
 
 
-def test_blocked_pr_does_not_make_unblocked_linked_issue_disappear(
+def test_blocked_pr_suppresses_linked_issue_until_pr_closes(
     controller: types.ModuleType,
 ) -> None:
-    """Verify blocked pr does not make unblocked linked issue disappear."""
+    """A blocked canonical PR cannot silently spawn a replacement implementation."""
     candidates = controller.build_candidates(
         [issue(412, "bug", "user-reported", "factory:unowned")],
         [
@@ -203,9 +203,7 @@ def test_blocked_pr_does_not_make_unblocked_linked_issue_disappear(
             )
         ],
     )
-    assert [(candidate.kind, candidate.number) for candidate in candidates] == [
-        ("issue", 412)
-    ]
+    assert candidates == []
 
 
 def test_ready_pr_is_reserved_for_merge_controller_and_suppresses_duplicate_issue(
@@ -225,3 +223,48 @@ def test_ready_pr_is_reserved_for_merge_controller_and_suppresses_duplicate_issu
         ],
     )
     assert candidates == []
+
+
+def test_urgent_defects_bypass_wip_but_not_review_backlog_saturation(
+    controller: types.ModuleType,
+) -> None:
+    """Urgent defects bypass worker WIP only; main-breakage alone beats backlog."""
+    backlog = [
+        pr(
+            400 + index,
+            f"factory/{10 + index}-990-fix",
+            "factory:unowned",
+            "factory:review",
+            created=f"2026-08-20T12:00:{index:02d}Z",
+        )
+        for index in range(20)
+    ]
+    ordinary = issue(501, "enhancement", "factory:unowned")
+    urgent = issue(502, "bug", "user-reported", "factory:unowned")
+    breakage = issue(503, "bug", "main-breakage", "factory:unowned")
+
+    candidates = controller.build_candidates([ordinary, urgent, breakage], backlog)
+
+    produced = {candidate.number for candidate in candidates if candidate.kind == "issue"}
+    assert "pr" in {candidate.kind for candidate in candidates}
+    assert 501 not in produced, "ordinary issue intake must stop under backlog"
+    assert 502 not in produced, "urgent user-reported defects are stopped by backlog saturation"
+    assert 503 in produced, "main-breakage remains executable under backlog saturation"
+
+    wip = [
+        pr(
+            430 + index,
+            f"factory/{40 + index}-991-fix",
+            f"factory:{20 + index}",
+            "factory:review",
+            created=f"2026-08-20T12:00:{index:02d}Z",
+        )
+        for index in range(5)
+    ]
+    wip_candidates = controller.build_candidates([ordinary, urgent], wip)
+
+    wip_produced = {
+        candidate.number for candidate in wip_candidates if candidate.kind == "issue"
+    }
+    assert 501 not in wip_produced, "ordinary issue intake must stop under worker WIP"
+    assert 502 in wip_produced, "urgent user-reported defects still bypass worker WIP"

@@ -27,6 +27,7 @@ from app.startup_diagnostics import (
     next_request_snapshot,
     startup_event_snapshot,
 )
+from app.traffic_metrics import record_route_hit, resolve_route_template
 
 logger = logging.getLogger(__name__)
 
@@ -249,6 +250,11 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
             response = await call_next(request)
             process_time_ms = (time.perf_counter() - started_at) * 1000
             status_code = response.status_code
+            record_route_hit(
+                request.method,
+                resolve_route_template(request.scope),
+                status_code,
+            )
             diagnostics = get_request_diagnostics()
             log_path = _sanitize_log_path(request.url.path)
 

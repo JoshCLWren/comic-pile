@@ -38,7 +38,7 @@ async def test_validation_exception_handler_production_sanitization() -> None:
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post(
-                "/api/auth/login",
+                "/api/v1/auth/login",
                 json={},
             )
             assert response.status_code == 422
@@ -77,7 +77,7 @@ async def test_validation_exception_handler_development_detailed() -> None:
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post(
-                "/api/auth/login",
+                "/api/v1/auth/login",
                 json={},
             )
             assert response.status_code == 422
@@ -113,7 +113,7 @@ async def test_validation_exception_handler_test_detailed() -> None:
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post(
-                "/api/auth/login",
+                "/api/v1/auth/login",
                 json={},
             )
             assert response.status_code == 422
@@ -134,14 +134,14 @@ async def test_validation_exception_handler_test_detailed() -> None:
 @pytest.mark.asyncio
 async def test_http_exception_handler_404(auth_client: AsyncClient) -> None:
     """Test HTTP exception handler with 404 status code for non-existent endpoint."""
-    response = await auth_client.get("/api/this-endpoint-does-not-exist")
+    response = await auth_client.get("/api/v1/this-endpoint-does-not-exist")
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_http_exception_handler_for_nonexistent_thread(auth_client: AsyncClient) -> None:
     """Test HTTP exception handler when querying non-existent thread."""
-    response = await auth_client.get("/api/threads/999999")
+    response = await auth_client.get("/api/v1/threads/999999")
     assert response.status_code == 404
     data = response.json()
     assert "detail" in data
@@ -216,7 +216,7 @@ async def test_validation_exception_handler_for_thread_create_missing_fields(
 ) -> None:
     """Test validation exception handler for thread creation with missing required fields."""
     response = await auth_client.post(
-        "/api/threads/",
+        "/api/v1/threads/",
         json={},
     )
     assert response.status_code == 422

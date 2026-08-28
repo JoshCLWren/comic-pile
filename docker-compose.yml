@@ -1,7 +1,7 @@
 services:
 # SECURITY NOTE: This configuration uses hardcoded development passwords.
-# For production, use docker-compose.prod.yml with environment variables
-# and strong secrets. Never commit production secrets to version control.
+# Production runs on Vercel + Neon (make deploy-prod), not Docker Compose.
+# Never commit production secrets to version control.
   db:
     image: postgres:16-alpine
     container_name: comic-pile-test-001-db

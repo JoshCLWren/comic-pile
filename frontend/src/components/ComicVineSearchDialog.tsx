@@ -6,6 +6,7 @@ import {
   type ComicVineIssueCandidate,
 } from '../services/api'
 import ImageWithLoading from './ImageWithLoading'
+import { optimizedImageSrcSet, optimizedImageUrl } from '../services/imageDelivery'
 
 interface ComicVineSearchDialogProps {
   isOpen: boolean
@@ -18,6 +19,23 @@ interface ComicVineSearchDialogProps {
 }
 
 type DialogStep = 'search' | 'select-issue' | 'confirm'
+
+function seriesMetaParts(series: ComicVineSeriesResult): string[] {
+  return [
+    series.publisher,
+    series.start_year ? `${series.start_year}` : null,
+    series.issue_count ? `${series.issue_count} issues` : null,
+  ].filter((part): part is string => part !== null)
+}
+
+function seriesMetaText(series: ComicVineSeriesResult): string {
+  return seriesMetaParts(series).join(' · ')
+}
+
+function seriesAccessibleName(series: ComicVineSeriesResult): string {
+  const parts = seriesMetaParts(series)
+  return parts.length > 0 ? `${series.name} — ${parts.join(', ')}` : series.name
+}
 
 export default function ComicVineSearchDialog({
   isOpen,
@@ -166,12 +184,15 @@ export default function ComicVineSearchDialog({
                     key={series.comicvine_volume_id}
                     type="button"
                     onClick={() => handleSelectSeries(series)}
+                    aria-label={seriesAccessibleName(series)}
                     className="w-full text-left p-3 rounded-xl bg-stone-800/50 border border-stone-700/50 hover:border-amber-500/50 hover:bg-stone-800 transition group"
                   >
                     <div className="flex items-start gap-3">
 {series.image_url && (
           <ImageWithLoading
-            src={series.image_url}
+            src={optimizedImageUrl(series.image_url, 240) ?? series.image_url}
+            srcSet={optimizedImageSrcSet(series.image_url, [96, 240]) ?? undefined}
+            sizes="40px"
             alt=""
             className="w-10 h-14 object-cover rounded-lg shrink-0"
           />
@@ -181,9 +202,7 @@ export default function ComicVineSearchDialog({
                           {series.name}
                         </p>
                         <p className="text-[11px] text-stone-500">
-                          {[series.publisher, series.start_year ? `(${series.start_year})` : null]
-                            .filter(Boolean)
-                            .join(' · ')}
+                          {seriesMetaText(series)}
                         </p>
                       </div>
                     </div>
@@ -214,7 +233,10 @@ export default function ComicVineSearchDialog({
                 ← Back to search
               </button>
               <span className="text-xs text-stone-500">·</span>
-              <span className="text-xs text-stone-400 truncate">{selectedSeries.name}</span>
+              <span className="text-xs text-stone-400 truncate">
+                {selectedSeries.name}
+                {seriesMetaText(selectedSeries) && ` (${seriesMetaText(selectedSeries)})`}
+              </span>
             </div>
             {isSearching ? (
               <div className="flex justify-center py-8">
@@ -232,7 +254,9 @@ export default function ComicVineSearchDialog({
                     <div className="flex items-center gap-3">
 {issue.image_url && (
           <ImageWithLoading
-            src={issue.image_url}
+            src={optimizedImageUrl(issue.image_url, 240) ?? issue.image_url}
+            srcSet={optimizedImageSrcSet(issue.image_url, [96, 240]) ?? undefined}
+            sizes="32px"
             alt=""
             className="w-8 h-11 object-cover rounded shrink-0"
           />
@@ -275,7 +299,9 @@ export default function ComicVineSearchDialog({
               <div className="flex items-start gap-3">
 {selectedIssue.image_url && (
           <ImageWithLoading
-            src={selectedIssue.image_url}
+            src={optimizedImageUrl(selectedIssue.image_url, 240) ?? selectedIssue.image_url}
+            srcSet={optimizedImageSrcSet(selectedIssue.image_url, [96, 240]) ?? undefined}
+            sizes="64px"
             alt=""
             className="w-16 h-22 object-cover rounded-lg shrink-0"
           />

@@ -6,7 +6,7 @@ from collections import defaultdict
 
 import pytest
 
-from app.cache import cache, cached
+from app.cache import cache, UpstashCache, cached
 from app.cache_generation import generation_key, invalidate_user_cache
 
 
@@ -42,15 +42,26 @@ class IsolatedGenerationClient:
         return generation
 
 
+def _install_mock_backend(monkeypatch: pytest.MonkeyPatch, mock_client) -> UpstashCache:
+    """Install a mock backend for testing."""
+    mock_backend = UpstashCache()
+    mock_backend._initialized = True
+    mock_backend._client = mock_client
+    mock_backend._is_upstash = True
+    mock_backend._circuit_breaker.reset()
+    monkeypatch.setattr(cache, "_backend", mock_backend)
+    monkeypatch.setattr(cache, "_initialized", True)
+    monkeypatch.setattr(cache, "_demoted", False)
+    return mock_backend
+
+
 @pytest.mark.asyncio
 async def test_generation_invalidation_isolated_between_users(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Invalidating one user must not evict or recompute another user's cached view."""
     client = IsolatedGenerationClient()
-    monkeypatch.setattr(cache, "_client", client)
-    monkeypatch.setattr(cache, "_initialized", True)
-    monkeypatch.setattr(cache, "_is_upstash", True)
+    _install_mock_backend(monkeypatch, client)
 
     executions: defaultdict[int, int] = defaultdict(int)
 

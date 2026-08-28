@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 import { type ComicVineRelatedIssue } from '../../../services/api'
-import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass } from '../../../utils/comicIdentity'
-import { useToast } from '../../../contexts/useToast'
+import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
+import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import ImageWithLoading from '../../../components/ImageWithLoading'
+import { optimizedImageSrcSet, optimizedImageUrl } from '../../../services/imageDelivery'
 
 interface ComicIdentityProps {
   issueId: number | null | undefined
@@ -26,7 +27,7 @@ const STORY_ARC_LIMIT = 3
 const RELATED_ISSUES_PER_ARC_LIMIT = 5
 
 export function ComicIdentity({ issueId }: ComicIdentityProps) {
-  const { metadata, isLoading } = useComicVineIssueIntelligence(issueId)
+  const { metadata, isLoading, refetch } = useComicVineIssueIntelligence(issueId)
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
   const [showAllCreators, setShowAllCreators] = useState(false)
   const [showAllStoryArcs, setShowAllStoryArcs] = useState(false)
@@ -43,13 +44,38 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     }
   }, [metadata])
 
-  const { showToast } = useToast()
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [addDialogData, setAddDialogData] = useState<{
+    seriesName: string | null
+    issueNumber: string | null
+    comicvineIssueId: string
+    imageUrl: string | null
+    anchorBeforeThreadId: number | null
+    anchorAfterThreadId: number | null
+  } | null>(null)
 
-  const handleAddToComicPile = (identity: { primary: string; secondary: string | null }, _comicvineIssueId: string) => {
-    showToast(
-      `Add "${identity.primary}" to ComicPile — feature coming soon`,
-      'info'
+  const handleAddToComicPile = (
+    identity: { primary: string; secondary: string | null },
+    issue: ComicVineRelatedIssue,
+    relatedIssues: ComicVineRelatedIssue[],
+    imageUrl: string | null,
+  ) => {
+    const missingIndex = relatedIssues.findIndex(
+      (candidate) => candidate.comicvine_issue_id === issue.comicvine_issue_id,
     )
+    const { anchorBeforeThreadId, anchorAfterThreadId } = computeArcNeighborAnchors(
+      relatedIssues,
+      missingIndex,
+    )
+    setAddDialogData({
+      seriesName: issue.series_name,
+      issueNumber: issue.issue_number,
+      comicvineIssueId: issue.comicvine_issue_id,
+      imageUrl,
+      anchorBeforeThreadId,
+      anchorAfterThreadId,
+    })
+    setAddDialogOpen(true)
   }
 
   if (!issueId || (!isLoading && !metadata)) return null
@@ -65,18 +91,25 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   const hasMoreCreators = metadata.creators.length > CREATOR_LIMIT
 
   return (
+    <>
     <section
       aria-labelledby={metadata.name ? 'comic-identity-heading' : undefined}
       aria-label={metadata.name ? undefined : 'Comic details'}
       className="w-full space-y-4"
     >
-      <div className="relative aspect-[2/3] w-full max-w-full rounded-xl overflow-hidden bg-stone-900" style={{ border: '1px solid var(--theme-border)' }}>
+      <div
+        data-testid="comic-cover"
+        className="relative mx-auto aspect-[2/3] w-full max-w-full max-h-[70vh] rounded-xl overflow-hidden bg-stone-900"
+        style={{ border: '1px solid var(--theme-border)' }}
+      >
         {metadata.image_url && metadata.image_url !== failedImageUrl ? (
           <ImageWithLoading
-            src={metadata.image_url}
+            src={optimizedImageUrl(metadata.image_url, 720) ?? metadata.image_url}
+            srcSet={optimizedImageSrcSet(metadata.image_url, [240, 480, 720]) ?? undefined}
+            sizes="(min-width: 1024px) 480px, calc(100vw - 2rem)"
             alt=""
             loading="eager"
-            className="w-full h-full object-cover"
+            className="h-full w-full object-contain"
             onError={() => setFailedImageUrl(metadata.image_url)}
           />
         ) : (
@@ -133,7 +166,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
               <button
                 type="button"
                 onClick={() => setShowAllCreators(!showAllCreators)}
-                className="ml-6 text-[10px] font-bold text-amber-500 hover:text-amber-400 py-1"
+                className="ml-6 inline-flex min-h-6 items-center text-[10px] font-bold text-amber-500 hover:text-amber-400 focus:ring-2 focus:ring-amber-500 rounded"
                 aria-expanded={showAllCreators}
                 aria-controls="creators-list"
               >
@@ -160,10 +193,13 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
 
                   return (
                     <section key={arc.comicvine_arc_id} className="space-y-2">
-                      <h3 className="text-xs font-bold text-blue-300">{arc.name}</h3>
+                      <h3 className="text-xs font-bold text-blue-300">{normalizeArcName(arc.name)}</h3>
                       <p className="text-[9px] text-stone-500">
                         {arc.related_issues.filter((issue) => issue.comicpile_matches.length > 0).length} in ComicPile ·{' '}
                         {arc.related_issues.filter((issue) => issue.comicpile_matches.length === 0).length} missing
+                        {arc.total_related_count != null && arc.total_related_count > arc.related_issues.length && (
+                          <span className="ml-1 text-stone-600">({arc.related_issues.length} of {arc.total_related_count} shown)</span>
+                        )}
                       </p>
                       <p className="text-[9px] text-stone-500">Related by story-arc membership, not reading order.</p>
                       <div className="space-y-1.5 max-h-48 overflow-y-auto overscroll-contain">
@@ -192,8 +228,8 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                                   {state === 'missing' && (
                                     <button
                                       type="button"
-                                      onClick={() => handleAddToComicPile(identity, issue.comicvine_issue_id)}
-                                      className="text-[9px] font-bold text-amber-500 hover:text-amber-400 shrink-0 px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 transition-colors"
+                                      onClick={() => handleAddToComicPile(identity, issue, arc.related_issues, null)}
+                                      className="inline-flex min-h-6 items-center text-[9px] font-bold text-amber-500 hover:text-amber-400 shrink-0 px-2 rounded border border-amber-500/30 bg-amber-500/10 transition-colors focus:ring-2 focus:ring-amber-500"
                                       aria-label={`Add ${identity.primary} to ComicPile`}
                                     >
                                       Add to ComicPile
@@ -213,7 +249,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                           <button
                             type="button"
                             onClick={() => setShowAllRelatedIssues((prev) => ({ ...prev, [arc.comicvine_arc_id]: !prev[arc.comicvine_arc_id] }))}
-                            className="w-full text-left text-[10px] font-bold text-amber-500 hover:text-amber-400 py-1"
+                            className="w-full inline-flex min-h-6 items-center text-left text-[10px] font-bold text-amber-500 hover:text-amber-400 focus:ring-2 focus:ring-amber-500 rounded"
                             aria-expanded={isExpanded}
                           >
                             {isExpanded ? 'Show fewer' : `Show all ${arc.related_issues.length} issues`}
@@ -237,7 +273,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                 <button
                   type="button"
                   onClick={() => setShowAllStoryArcs(!showAllStoryArcs)}
-                  className="w-full text-left text-[10px] font-bold text-amber-500 hover:text-amber-400 py-1"
+                  className="w-full inline-flex min-h-6 items-center text-left text-[10px] font-bold text-amber-500 hover:text-amber-400 focus:ring-2 focus:ring-amber-500 rounded"
                   aria-expanded={showAllStoryArcs}
                 >
                   {showAllStoryArcs ? 'Show fewer arcs' : `Show all ${metadata.story_arcs.length} story arcs`}
@@ -259,5 +295,22 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
         )}
       </div>
     </section>
+    {addDialogData && (
+      <AddToComicPileDialog
+        isOpen={addDialogOpen}
+        seriesName={addDialogData.seriesName}
+        issueNumber={addDialogData.issueNumber}
+        comicvineIssueId={addDialogData.comicvineIssueId}
+        imageUrl={addDialogData.imageUrl}
+        anchorBeforeThreadId={addDialogData.anchorBeforeThreadId}
+        anchorAfterThreadId={addDialogData.anchorAfterThreadId}
+        onClose={() => setAddDialogOpen(false)}
+        onAdded={() => {
+          setAddDialogOpen(false)
+          refetch()
+        }}
+      />
+    )}
+    </>
   )
 }

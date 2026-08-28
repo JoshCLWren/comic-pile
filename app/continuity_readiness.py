@@ -1,387 +1,35 @@
 """Bounded direct readiness evaluation for generalized continuity rules."""
 
-import logging
-from collections.abc import Callable
-from dataclasses import dataclass
-
-from fastapi import HTTPException, status
-from sqlalchemy import select
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
-from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
-from app.models.issue import Issue
-from app.models.thread import Thread
 from app.schemas.continuity_readiness import (
-    ContinuityBlocker,
     ContinuityReadinessNodeType,
     ContinuityReadinessResponse,
-    UnreadIssueDetail,
+)
+from app.services.continuity_graph import (
+    MAX_GRAPH_GROUPS,
+    MAX_GRAPH_ISSUES,
+    MAX_GRAPH_MEMBERSHIPS,
+    MAX_GRAPH_RULES,
+    MAX_GRAPH_SELECTED_MEMBERS,
+    MAX_GRAPH_THREADS,
+    SNAPSHOT_SESSION_KEY,
+    GraphSnapshot,
+    crossover_readiness,
+    group_issue_ids,
+    is_read,
+    issue_readiness,
+    load_snapshot,
 )
 
-logger = logging.getLogger(__name__)
-
-MAX_GRAPH_THREADS = 5_000
-MAX_GRAPH_ISSUES = 10_000
-MAX_GRAPH_GROUPS = 5_000
-MAX_GRAPH_MEMBERSHIPS = 10_000
-MAX_GRAPH_RULES = 5_000
-MAX_GRAPH_SELECTED_MEMBERS = 10_000
-
-
-SNAPSHOT_SESSION_KEY = "continuity_readiness_snapshot"
-
-
-@dataclass(frozen=True)
-class _GraphSnapshot:
-    """User-owned continuity data loaded in a bounded set of queries."""
-
-    threads: dict[int, Thread]
-    issues: dict[int, Issue]
-    groups: dict[int, DependencyGroup]
-    group_memberships: dict[int, tuple[DependencyGroupMembership, ...]]
-    rules: tuple[ContinuityRule, ...]
-    rules_by_target: dict[tuple[str, int], tuple[ContinuityRule, ...]]
-    thread_issue_ids: dict[int, tuple[int, ...]]
-    selected_member_issue_ids: dict[int, tuple[int, ...]]
-    query_count: int = 0
-    rows_loaded: int = 0
-
-
-def _too_large(limit: int) -> HTTPException:
-    """Build the shared bounded-graph response for one exceeded collection."""
-    return HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        detail={"code": "continuity_graph_too_large", "limit": limit},
-    )
-
-
-def _validate_convergence_rule(rule: ContinuityRule, snapshot: _GraphSnapshot) -> None:
-    """Validate convergence gate configuration for validity.
-
-    Args:
-        rule: The convergence rule being evaluated.
-        snapshot: The loaded continuity graph snapshot.
-
-    Raises:
-        ValueError: If the convergence targets are malformed or reference unknown nodes.
-    """
-    if rule.satisfaction_type != "converged" or rule.convergence_targets is None:
-        return
-    seen: set[tuple[str, int]] = set()
-    for target_info in rule.convergence_targets:
-        if not isinstance(target_info, dict) or "type" not in target_info or "id" not in target_info:
-            raise ValueError(
-                f"Convergence targets must be objects with 'type' and 'id' (rule {rule.id})"
-            )
-        target_type = str(target_info["type"])
-        target_id = int(target_info["id"])
-        if (target_type, target_id) in seen:
-            raise ValueError(f"Convergence gate references a duplicate target (rule {rule.id})")
-        seen.add((target_type, target_id))
-        if target_type == "issue":
-            if target_id not in snapshot.issues:
-                raise ValueError(f"Convergence target issue {target_id} is unknown (rule {rule.id})")
-        elif target_type == "crossover":
-            if target_id not in snapshot.groups:
-                raise ValueError(
-                    f"Convergence target crossover {target_id} is unknown (rule {rule.id})"
-                )
-        else:
-            raise ValueError(f"Unknown convergence target type '{target_type}' (rule {rule.id})")
-
-
-def _group_rows[T](rows: list[T], key: Callable[[T], int]) -> dict[int, tuple[T, ...]]:
-    """Group bounded child rows by their parent identifier."""
-    grouped: dict[int, list[T]] = {}
-    for row in rows:
-        grouped.setdefault(key(row), []).append(row)
-    return {parent_id: tuple(children) for parent_id, children in grouped.items()}
-
-
-async def _load_snapshot(db: AsyncSession, user_id: int) -> _GraphSnapshot:
-    """Load the authenticated user's direct-readiness graph without per-row queries.
-
-    The snapshot is cached on the session (``db.info``) so that multiple
-    continuity calculations within the same request reuse the same bounded
-    load rather than repeating the full query sequence.
-
-    Returns a snapshot with ``query_count`` and ``rows_loaded`` tracking the
-    number of round-trips and total rows materialized for observability.
-    """
-    if db.info is None:
-        db.info = {}
-    session_cache = db.info.setdefault(SNAPSHOT_SESSION_KEY, {})
-    cached = session_cache.get(user_id)
-    if cached is not None:
-        logger.debug(
-            "Continuity snapshot cache hit",
-            extra={"user_id": user_id, "query_count": cached.query_count, "rows_loaded": cached.rows_loaded},
-        )
-        return cached
-
-    query_count = 0
-    rows_loaded = 0
-
-    thread_result = await db.execute(
-        select(Thread)
-        .where(Thread.user_id == user_id)
-        .order_by(Thread.id)
-        .limit(MAX_GRAPH_THREADS + 1)
-    )
-    query_count += 1
-    thread_rows = list(thread_result.scalars())
-    rows_loaded += len(thread_rows)
-    if len(thread_rows) > MAX_GRAPH_THREADS:
-        raise _too_large(MAX_GRAPH_THREADS)
-    threads = {thread.id: thread for thread in thread_rows}
-
-    issue_result = await db.execute(
-        select(Issue)
-        .join(Thread, Thread.id == Issue.thread_id)
-        .where(Thread.user_id == user_id)
-        .order_by(Issue.id)
-        .limit(MAX_GRAPH_ISSUES + 1)
-    )
-    query_count += 1
-    issue_rows = list(issue_result.scalars())
-    rows_loaded += len(issue_rows)
-    if len(issue_rows) > MAX_GRAPH_ISSUES:
-        raise _too_large(MAX_GRAPH_ISSUES)
-    issues = {issue.id: issue for issue in issue_rows}
-    thread_issue_ids = {
-        thread_id: tuple(issue.id for issue in thread_issues)
-        for thread_id, thread_issues in _group_rows(issue_rows, lambda issue: issue.thread_id).items()
-    }
-
-    group_result = await db.execute(
-        select(DependencyGroup)
-        .where(DependencyGroup.user_id == user_id)
-        .order_by(DependencyGroup.id)
-        .limit(MAX_GRAPH_GROUPS + 1)
-    )
-    query_count += 1
-    group_rows = list(group_result.scalars())
-    rows_loaded += len(group_rows)
-    if len(group_rows) > MAX_GRAPH_GROUPS:
-        raise _too_large(MAX_GRAPH_GROUPS)
-    groups = {group.id: group for group in group_rows}
-
-    membership_result = await db.execute(
-        select(DependencyGroupMembership)
-        .join(DependencyGroup, DependencyGroup.id == DependencyGroupMembership.group_id)
-        .where(DependencyGroup.user_id == user_id)
-        .order_by(DependencyGroupMembership.id)
-        .limit(MAX_GRAPH_MEMBERSHIPS + 1)
-    )
-    query_count += 1
-    membership_rows = list(membership_result.scalars())
-    rows_loaded += len(membership_rows)
-    if len(membership_rows) > MAX_GRAPH_MEMBERSHIPS:
-        raise _too_large(MAX_GRAPH_MEMBERSHIPS)
-    group_memberships = _group_rows(membership_rows, lambda membership: membership.group_id)
-
-    rule_result = await db.execute(
-        select(ContinuityRule)
-        .where(ContinuityRule.user_id == user_id)
-        .order_by(ContinuityRule.id)
-        .limit(MAX_GRAPH_RULES + 1)
-    )
-    query_count += 1
-    rule_rows = list(rule_result.scalars())
-    rows_loaded += len(rule_rows)
-    if len(rule_rows) > MAX_GRAPH_RULES:
-        raise _too_large(MAX_GRAPH_RULES)
-    rules = tuple(rule_rows)
-    grouped_rules: dict[tuple[str, int], list[ContinuityRule]] = {}
-    for rule in rule_rows:
-        grouped_rules.setdefault((rule.target_type, rule.target_id), []).append(rule)
-    rules_by_target = {
-        target: tuple(target_rules) for target, target_rules in grouped_rules.items()
-    }
-
-    selected_member_result = await db.execute(
-        select(ContinuityRuleSelectedMember)
-        .join(ContinuityRule, ContinuityRule.id == ContinuityRuleSelectedMember.rule_id)
-        .where(ContinuityRule.user_id == user_id)
-        .order_by(ContinuityRuleSelectedMember.id)
-        .limit(MAX_GRAPH_SELECTED_MEMBERS + 1)
-    )
-    query_count += 1
-    selected_member_rows = list(selected_member_result.scalars())
-    rows_loaded += len(selected_member_rows)
-    if len(selected_member_rows) > MAX_GRAPH_SELECTED_MEMBERS:
-        raise _too_large(MAX_GRAPH_SELECTED_MEMBERS)
-    selected_member_issue_ids = {
-        rule_id: tuple(member.issue_id for member in members)
-        for rule_id, members in _group_rows(
-            selected_member_rows, lambda member: member.rule_id
-        ).items()
-    }
-
-    snapshot = _GraphSnapshot(
-        threads=threads,
-        issues=issues,
-        groups=groups,
-        group_memberships=group_memberships,
-        rules=rules,
-        rules_by_target=rules_by_target,
-        thread_issue_ids=thread_issue_ids,
-        selected_member_issue_ids=selected_member_issue_ids,
-        query_count=query_count,
-        rows_loaded=rows_loaded,
-    )
-    if db.info is None:
-        db.info = {}
-    session_cache = db.info.setdefault(SNAPSHOT_SESSION_KEY, {})
-    session_cache[user_id] = snapshot
-    logger.debug(
-        "Continuity snapshot loaded and cached",
-        extra={"user_id": user_id, "query_count": query_count, "rows_loaded": rows_loaded},
-    )
-    return snapshot
-
-
-def _group_issue_ids(group_id: int, snapshot: _GraphSnapshot) -> list[int]:
-    """Return all issue IDs represented by a crossover, including thread memberships."""
-    memberships = snapshot.group_memberships.get(group_id, ())
-    issue_ids = {membership.issue_id for membership in memberships if membership.issue_id}
-    thread_ids = {membership.thread_id for membership in memberships if membership.thread_id}
-    for thread_id in thread_ids:
-        issue_ids.update(snapshot.thread_issue_ids.get(thread_id, ()))
-    return sorted(issue_ids)
-
-
-def _source_label(rule: ContinuityRule, snapshot: _GraphSnapshot) -> str:
-    """Return a stable human label while keeping blocker identity structured."""
-    if rule.source_type == "crossover":
-        group = snapshot.groups.get(rule.source_id)
-        return group.name if group is not None else f"Crossover {rule.source_id}"
-    issue = snapshot.issues.get(rule.source_id)
-    if issue is None:
-        return f"Issue {rule.source_id}"
-    thread = snapshot.threads.get(issue.thread_id)
-    if thread is None:
-        return f"Issue {issue.issue_number}"
-    return f"{thread.title} #{issue.issue_number}"
-
-
-def _issue_detail(issue_id: int, snapshot: _GraphSnapshot) -> UnreadIssueDetail:
-    """Build a structured label for one unread issue."""
-    issue = snapshot.issues.get(issue_id)
-    if issue is None:
-        return UnreadIssueDetail(issue_id=issue_id, label=f"Issue {issue_id}")
-    thread = snapshot.threads.get(issue.thread_id)
-    label = f"#{issue.issue_number}" if thread is None else f"{thread.title} #{issue.issue_number}"
-    return UnreadIssueDetail(issue_id=issue_id, label=label)
-
-
-def _is_read(issue_id: int, snapshot: _GraphSnapshot) -> bool:
-    """Return whether one owned issue is read."""
-    issue = snapshot.issues.get(issue_id)
-    return issue is not None and issue.status == "read"
-
-
-def _evaluate_rule(rule: ContinuityRule, snapshot: _GraphSnapshot) -> ContinuityBlocker | None:
-    """Return a blocker when one direct rule's satisfaction policy is not met."""
-    causing_issue_ids: list[int] = []
-    causing_member_issue_ids: list[int] = []
-
-    if rule.satisfaction_type == "item_read":
-        if rule.source_type == "issue":
-            causing_issue_ids = [] if _is_read(rule.source_id, snapshot) else [rule.source_id]
-        else:
-            member_ids = _group_issue_ids(rule.source_id, snapshot)
-            causing_member_issue_ids = [
-                issue_id for issue_id in member_ids if not _is_read(issue_id, snapshot)
-            ]
-    elif rule.satisfaction_type == "all_members_read":
-        if rule.source_type == "crossover":
-            member_ids = _group_issue_ids(rule.source_id, snapshot)
-            causing_member_issue_ids = [
-                issue_id for issue_id in member_ids if not _is_read(issue_id, snapshot)
-            ]
-        else:
-            causing_issue_ids = [] if _is_read(rule.source_id, snapshot) else [rule.source_id]
-    elif rule.satisfaction_type == "checkpoint":
-        checkpoint_id = rule.checkpoint_issue_id
-        if checkpoint_id is not None and not _is_read(checkpoint_id, snapshot):
-            causing_issue_ids = [checkpoint_id]
-    elif rule.satisfaction_type == "converged":
-        _validate_convergence_rule(rule, snapshot)
-        for target_info in rule.convergence_targets or []:
-            target_type = str(target_info["type"])
-            target_id = int(target_info["id"])
-            if target_type == "issue":
-                if not _is_read(target_id, snapshot):
-                    causing_issue_ids.append(target_id)
-            elif target_type == "crossover":
-                member_ids = _group_issue_ids(target_id, snapshot)
-                causing_member_issue_ids.extend(
-                    issue_id for issue_id in member_ids if not _is_read(issue_id, snapshot)
-                )
-    else:
-        selected_ids = snapshot.selected_member_issue_ids.get(rule.id, ())
-        causing_member_issue_ids = [
-            issue_id for issue_id in selected_ids if not _is_read(issue_id, snapshot)
-        ]
-
-    if not causing_issue_ids and not causing_member_issue_ids:
-        return None
-    if causing_member_issue_ids:
-        if rule.satisfaction_type not in {"item_read", "all_members_read"}:
-            blocker_type = "selected_members_unread"
-        else:
-            blocker_type = "members_unread"
-    else:
-        blocker_type = "item_unread"
-    all_unread_ids = sorted(set(causing_issue_ids + causing_member_issue_ids))
-    return ContinuityBlocker(
-        rule_id=rule.id,
-        source_type=rule.source_type,
-        source_id=rule.source_id,
-        source_label=_source_label(rule, snapshot),
-        satisfaction_type=rule.satisfaction_type,
-        blocker_type=blocker_type,
-        causing_issue_ids=causing_issue_ids,
-        causing_member_issue_ids=causing_member_issue_ids,
-        unread_issue_details=[_issue_detail(uid, snapshot) for uid in all_unread_ids],
-        note=rule.note,
-    )
-
-
-def _direct_blockers(
-    node_type: str,
-    node_id: int,
-    snapshot: _GraphSnapshot,
-) -> list[ContinuityBlocker]:
-    """Evaluate rules directly targeting one issue or crossover node."""
-    blockers: list[ContinuityBlocker] = []
-    for rule in snapshot.rules_by_target.get((node_type, node_id), ()):
-        blocker = _evaluate_rule(rule, snapshot)
-        if blocker is not None:
-            blockers.append(blocker)
-    return blockers
-
-
-def _issue_readiness(issue_id: int, snapshot: _GraphSnapshot) -> list[ContinuityBlocker]:
-    """Return direct blockers for one issue."""
-    return _direct_blockers("issue", issue_id, snapshot)
-
-
-def _crossover_readiness(group_id: int, snapshot: _GraphSnapshot) -> list[ContinuityBlocker]:
-    """Return direct crossover blockers plus blockers on unread member issues."""
-    blockers = _direct_blockers("crossover", group_id, snapshot)
-    seen_rule_ids = {blocker.rule_id for blocker in blockers}
-    for issue_id in _group_issue_ids(group_id, snapshot):
-        if _is_read(issue_id, snapshot):
-            continue
-        for blocker in _issue_readiness(issue_id, snapshot):
-            if blocker.rule_id not in seen_rule_ids:
-                blockers.append(blocker)
-                seen_rule_ids.add(blocker.rule_id)
-    blockers.sort(key=lambda blocker: blocker.rule_id)
-    return blockers
+# Backwards-compatible private aliases for legacy imports.
+_GraphSnapshot = GraphSnapshot
+_load_snapshot = load_snapshot
+_group_issue_ids = group_issue_ids
+_is_read = is_read
+_issue_readiness = issue_readiness
+_crossover_readiness = crossover_readiness
 
 
 async def evaluate_continuity_readiness(
@@ -402,28 +50,28 @@ async def evaluate_continuity_readiness(
     Returns:
         Structured readiness state and any unsatisfied direct blockers.
     """
-    snapshot = await _load_snapshot(db, user_id)
+    snapshot = await load_snapshot(db, user_id)
     evaluated_issue_id: int | None = None
 
     if node_type == "issue":
         issue = snapshot.issues.get(node_id)
         if issue is None:
             raise HTTPException(status_code=404, detail=f"Issue {node_id} not found")
-        blockers = _issue_readiness(node_id, snapshot)
+        blockers = issue_readiness(node_id, snapshot)
     elif node_type == "thread":
         thread = snapshot.threads.get(node_id)
         if thread is None:
             raise HTTPException(status_code=404, detail=f"Thread {node_id} not found")
         evaluated_issue_id = thread.next_unread_issue_id
         blockers = (
-            _issue_readiness(evaluated_issue_id, snapshot)
+            issue_readiness(evaluated_issue_id, snapshot)
             if evaluated_issue_id is not None
             else []
         )
     else:
         if node_id not in snapshot.groups:
             raise HTTPException(status_code=404, detail=f"Crossover {node_id} not found")
-        blockers = _crossover_readiness(node_id, snapshot)
+        blockers = crossover_readiness(node_id, snapshot)
 
     return ContinuityReadinessResponse(
         node_type=node_type,
@@ -432,3 +80,15 @@ async def evaluate_continuity_readiness(
         evaluated_issue_id=evaluated_issue_id,
         blockers=blockers,
     )
+
+
+__all__ = [
+    "MAX_GRAPH_GROUPS",
+    "MAX_GRAPH_ISSUES",
+    "MAX_GRAPH_MEMBERSHIPS",
+    "MAX_GRAPH_RULES",
+    "MAX_GRAPH_SELECTED_MEMBERS",
+    "MAX_GRAPH_THREADS",
+    "SNAPSHOT_SESSION_KEY",
+    "evaluate_continuity_readiness",
+]

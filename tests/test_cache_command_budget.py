@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from app.cache import cache
+from app.cache import cache, UpstashCache
 from app.cache_generation import bump_user_generation, generation_cached, generation_key
 from app.cache_metrics import (
     CACHE_FLOW_COMMAND_CEILINGS,
@@ -59,9 +59,16 @@ def reset_cache_metrics() -> None:
 def budget_cache(monkeypatch: pytest.MonkeyPatch) -> BudgetRedisClient:
     """Install an Upstash-shaped client behind the production cache singleton."""
     client = BudgetRedisClient()
-    monkeypatch.setattr(cache, "_client", client)
+    # Create a mock backend with the test client
+    mock_backend = UpstashCache()
+    mock_backend._initialized = True
+    mock_backend._client = client
+    mock_backend._is_upstash = True
+    mock_backend._circuit_breaker.reset()
+
+    monkeypatch.setattr(cache, "_backend", mock_backend)
     monkeypatch.setattr(cache, "_initialized", True)
-    monkeypatch.setattr(cache, "_is_upstash", True)
+    monkeypatch.setattr(cache, "_demoted", False)
     return client
 
 
@@ -146,11 +153,27 @@ async def test_mutation_flows_use_one_bounded_generation_invalidation(flow: str)
     """Mutation families stay at one remote INCR after SCAN removal."""
     client = BudgetRedisClient()
 
-    await bump_user_generation(client, 7)
+    # Create a mock backend for this test
+    mock_backend = UpstashCache()
+    mock_backend._initialized = True
+    mock_backend._client = client
+    mock_backend._is_upstash = True
+    mock_backend._circuit_breaker.reset()
 
-    assert cache_command_metrics.snapshot() == {"generation_incr": 1}
-    assert cache_command_metrics.total() == CACHE_FLOW_COMMAND_CEILINGS[flow]
-    cache_command_metrics.assert_within_flow_ceiling(flow)
+    import app.cache as cache_module
+    original_backend = cache_module.cache._backend
+    cache_module.cache._backend = mock_backend
+    cache_module.cache._initialized = True
+    cache_module.cache._demoted = False
+
+    try:
+        await bump_user_generation(client, 7)
+
+        assert cache_command_metrics.snapshot() == {"generation_incr": 1}
+        assert cache_command_metrics.total() == CACHE_FLOW_COMMAND_CEILINGS[flow]
+        cache_command_metrics.assert_within_flow_ceiling(flow)
+    finally:
+        cache_module.cache._backend = original_backend
 
 
 def test_metrics_never_expose_cache_payloads() -> None:

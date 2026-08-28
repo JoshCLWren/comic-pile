@@ -2,11 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["cle1"],
   "git": {
-    "deploymentEnabled": {
-      "main": true,
-      "*": false,
-      "**/*": false
-    }
+    "deploymentEnabled": false
   },
   "builds": [
     {
@@ -43,6 +39,13 @@
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
         "X-XSS-Protection": "1; mode=block"
+      }
+    },
+    {
+      "src": "/assets/.+",
+      "continue": true,
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
       }
     },
     {

@@ -200,7 +200,7 @@ describe('IssueCorrectionDialog', () => {
     await userEvent.type(input, 'Missing')
     await userEvent.click(screen.getByRole('button', { name: 'Update' }))
     await waitFor(() => expect(screen.getByText(/failed to update issue/i)).toBeInTheDocument())
-    fireEvent.click(screen.getByText('Correct Issue Number'))
+    fireEvent.click(screen.getByText('Fix Issue Number'))
     expect(onClose).not.toHaveBeenCalled()
   })
 })

@@ -191,6 +191,17 @@ return RollResponse(
 
 ## API Patterns
 
+### Layering Rule (House Standard): Router → Service → Repository
+Routers validate and delegate; services decide; repositories persist.
+
+- **Routers (`app/api/`)** do request validation, auth dependencies, exactly one service call, and HTTP status/error mapping. **No query construction, no business rules, no persistence** — routers must not import or call `select`, `insert`, `update`, `delete`, `func`, `text`, `or_`/`and_`, loader options like `selectinload`, or session execution methods (`execute`, `scalars`, `scalar`, `stream`).
+- **Services (`app/services/`)** own all business logic and orchestration and coordinate repositories.
+- **Repositories (`app/repositories/`)** own ALL query construction and persistence for a model family. They return ORM models or plain tuples/dicts — never HTTP types or response schemas.
+
+New backend code must follow this layering without exceptions. Legacy modules are being migrated incrementally; the conformance test `tests/test_router_layering_conformance.py` enforces that router violations never grow beyond `tests/router_layering_baseline.json`, and every migrated module must shrink that baseline file.
+
+Remember the MissingGreenlet rule above when services/repositories commit: extract model attributes BEFORE `await db.commit()`.
+
 ### Pydantic Schemas
 All API input/output uses Pydantic models in `app/schemas/`:
 ```python
@@ -322,6 +333,15 @@ export default function ExamplePage() {
   return <div>{data?.name}</div>
 }
 ```
+
+## Cache Provider Selection
+
+- `CACHE_PROVIDER` controls the cache backend: `postgres` (default), `redis`, or `off`.
+- `effective_provider` resolves `redis` to `off` when `CACHE_ENABLED` is false or no Redis credentials are present; `postgres` and `off` pass through unchanged.
+- Selection happens once at startup in `app/main.py`; callers use the stable `app.cache.cache` router so swapping the backend never strands an imported reference.
+- If the chosen provider fails repeatedly the circuit breaker opens and the router demotes to fail-open for the process lifetime — no per-request ping-pong. Demotion is covered by `tests/test_cache_provider_demotion.py`.
+- The Redis-protocol transport (`UpstashCache`) is Valkey-ready: it speaks RESP via `redis.asyncio` / `UpstashRedis` without leaking Upstash-only assumptions into the generation namespace, which is backend-agnostic via `CacheRouter` and `app.cache_generation`.
+- The Postgres provider (`PostgresCache`) speaks SQL only, stores values in `cache_entries` (JSONB) and generations in `cache_generations`, and uses the same generation-bump invalidation as Redis so both providers remain invalidated transactionally.
 
 ## Database Migrations
 

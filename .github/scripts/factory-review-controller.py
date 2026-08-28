@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Controller-owned semantic review authorization and mechanical merge gates."""
+
 from __future__ import annotations
 
 import argparse
@@ -98,34 +99,62 @@ def run_gh(
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"{' '.join(command)} timed out") from exc
     if check and proc.returncode:
-        raise RuntimeError(
-            f"{' '.join(command)} failed ({proc.returncode}): {proc.stderr.strip()}"
-        )
+        raise RuntimeError(f"{' '.join(command)} failed ({proc.returncode}): {proc.stderr.strip()}")
     return proc
 
 
 def gh_json(args: list[str], *, input_json: object | None = None) -> object | None:
-    """Run GitHub CLI and decode JSON stdout."""
+    """Run GitHub CLI and decode JSON stdout.
+
+    Returns untyped ``object`` because GitHub payloads are arbitrary JSON.
+    Every consumer must narrow through :func:`json_object` / :func:`json_array`
+    rather than casting blindly - those helpers document the one invariant
+    that makes the narrowing sound (RFC 8259 objects are str-keyed) in a
+    single place.
+    """
     output = run_gh(args, input_json=input_json).stdout
     return json.loads(output) if output.strip() else None
 
 
+def json_object(value: object) -> dict[str, Any] | None:
+    """Return ``value`` as a str-keyed dict when it is one, else ``None``.
+
+    RFC 8259 guarantees JSON object keys are strings, so once
+    :func:`isinstance` confirms dict-ness the key type is known - this is the
+    documented boundary that replaces scattered blind casts over ``gh_json``
+    output.
+    """
+    if not isinstance(value, dict):
+        return None
+    if not all(isinstance(key, str) for key in value):
+        return None
+    return cast(dict[str, Any], value)
+
+
+def json_array(value: object) -> list[object] | None:
+    """Return ``value`` as a list when it is one, else ``None``."""
+    if isinstance(value, list):
+        return cast(list[object], value)
+    return None
+
+
 def pr_json(pr_number: int) -> dict[str, Any]:
     """Fetch authoritative current PR state."""
-    return cast(
-        dict[str, Any],
-        gh_json(
-            [
-                "pr",
-                "view",
-                str(pr_number),
-                "--repo",
-                REPO,
-                "--json",
-                "state,isDraft,mergeable,headRefOid,headRefName,body,labels",
-            ]
-        ),
+    payload = gh_json(
+        [
+            "pr",
+            "view",
+            str(pr_number),
+            "--repo",
+            REPO,
+            "--json",
+            "state,isDraft,mergeable,headRefOid,headRefName,body,labels",
+        ]
     )
+    obj = json_object(payload)
+    if obj is None:
+        raise RuntimeError(f"PR #{pr_number} payload was not an object")
+    return obj
 
 
 def target_json(number: int) -> dict[str, Any]:
@@ -145,27 +174,48 @@ def labels_of(item: dict[str, Any]) -> set[str]:
 
 
 def replace_factory_labels(number: int, owner: str, stage: str) -> None:
-    """Atomically replace factory owner/stage labels on one target."""
-    current = labels_of(target_json(number))
-    labels = {
-        label
-        for label in current
-        if not OWNER_RE.fullmatch(label)
-        and label not in STAGE_LABELS
-        and label != "factory"
-    }
-    labels.update({"factory", owner, stage})
-    run_gh(
-        [
-            "api",
-            "--method",
-            "PUT",
-            f"repos/{REPO}/issues/{number}/labels",
-            "--input",
-            "-",
-        ],
-        input_json={"labels": sorted(labels)},
-    )
+    """Atomically replace factory owner/stage labels on one target.
+
+    Uses GET-then-PUT with bounded retry on transient 409/429/5xx so
+    concurrent drain vs dispatcher label clobber is eventually recovered.
+    """
+    last_exc: RuntimeError | None = None
+    for attempt in range(3):
+        try:
+            current = labels_of(target_json(number))
+            labels = {
+                label
+                for label in current
+                if not OWNER_RE.fullmatch(label) and label not in STAGE_LABELS and label != "factory"
+            }
+            labels.update({"factory", owner, stage})
+            run_gh(
+                [
+                    "api",
+                    "--method",
+                    "PUT",
+                    f"repos/{REPO}/issues/{number}/labels",
+                    "--input",
+                    "-",
+                ],
+                input_json={"labels": sorted(labels)},
+            )
+            return
+        except RuntimeError as exc:
+            last_exc = exc
+            message = str(exc)
+            is_transient = any(code in message for code in ("409", "429", "409 Conflict", "429 Too"))
+            is_transient = is_transient or "rate limit" in message.lower()
+            if is_transient and attempt < 2:
+                time.sleep(0.5 * (2**attempt))
+                continue
+            # Retry once on any other transient PUT failure (GET consistency window).
+            if attempt < 1:
+                time.sleep(0.25)
+                continue
+            raise
+    if last_exc is not None:
+        raise last_exc
 
 
 def linked_issue_from_branch(branch: str | None) -> int | None:
@@ -177,14 +227,32 @@ def linked_issue_from_branch(branch: str | None) -> int | None:
 
 
 def flatten_pages(value: object | None) -> list[dict[str, Any]]:
-    """Flatten gh api --paginate --slurp JSON pages."""
+    """Flatten gh api --paginate --slurp JSON pages into item dicts.
+
+    ``--slurp`` normally yields a list of pages (each page a list of items),
+    but a single-page response can arrive as one bare object. Both shapes
+    narrow through :func:`json_object` so the str-key invariant is checked,
+    not assumed.
+    """
+    top = json_object(value)
+    if top is not None:
+        return [top]
+    pages = json_array(value)
+    if pages is None:
+        return []
     result: list[dict[str, Any]] = []
-    pages = value if isinstance(value, list) else []
     for page in pages:
-        if isinstance(page, list):
-            result.extend(item for item in page if isinstance(item, dict))
-        elif isinstance(page, dict):
-            result.append(page)
+        page_obj = json_object(page)
+        if page_obj is not None:
+            result.append(page_obj)
+            continue
+        page_items = json_array(page)
+        if page_items is None:
+            continue
+        for item in page_items:
+            item_obj = json_object(item)
+            if item_obj is not None:
+                result.append(item_obj)
     return result
 
 
@@ -216,12 +284,15 @@ def redact_review_text(text: str) -> str:
 
 
 def review_excerpt(path: str | None, *, worker: str) -> str:
-    """Read only the expected worker log and return a redacted bounded tail."""
+    """Read only an expected worker log and return a redacted bounded tail."""
     if not path:
         return ""
-    expected = Path(f"/tmp/opencode-factory-{worker}.log")
+    expected = {
+        Path(f"/tmp/opencode-factory-{worker}.log"),
+        Path(f"/tmp/opencode-factory-{worker}.sanitized.log"),
+    }
     candidate = Path(path)
-    if candidate != expected or candidate.is_symlink():
+    if candidate not in expected or candidate.is_symlink():
         return ""
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -231,6 +302,25 @@ def review_excerpt(path: str | None, *, worker: str) -> str:
     except OSError:
         return ""
     return redact_review_text(text[-7000:])
+
+
+def has_actionable_review_findings(excerpt: str) -> bool:
+    """Reject empty findings, terminal verdict tokens, and handoff boilerplate."""
+    boilerplate = {
+        "semantic blockers remain",
+        "the pr is returning to repair",
+        "semantic blockers remain. the pr is returning to repair",
+        "repair required",
+        "factory_gate_blocked",
+        "factory_gate_not_ready",
+        "factory_gate_ready",
+        "factory_gate_reject",
+    }
+    return any(
+        line.strip().strip("*` .").casefold() not in boilerplate
+        for line in excerpt.splitlines()
+        if line.strip().strip("*` .")
+    )
 
 
 def post_review_comment(
@@ -251,13 +341,9 @@ def post_review_comment(
         parts.append(note)
     if excerpt:
         parts.append(
-            "<details><summary>Review output</summary>\n\n```text\n"
-            + excerpt
-            + "\n```\n</details>"
+            "<details><summary>Review output</summary>\n\n```text\n" + excerpt + "\n```\n</details>"
         )
-    run_gh(
-        ["issue", "comment", str(pr_number), "--repo", REPO, "--body", "\n\n".join(parts)]
-    )
+    run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", "\n\n".join(parts)])
 
 
 def interpret_required_checks(
@@ -317,7 +403,56 @@ def required_checks_gate(pr_number: int) -> GateResult:
 
 
 def list_ci_pr_numbers() -> list[int]:
-    """List open CI-stage factory PRs for deterministic reconciliation."""
+    """List open CI-stage factory PRs for deterministic reconciliation.
+
+    Uses paginated search so enumeration beyond --limit does not starve
+    oldest CI PRs. Falls back to a high-limit pr list on transient search
+    failures.
+    """
+    try:
+        pages = gh_json(
+            [
+                "api",
+                "--paginate",
+                "--slurp",
+                f"search/issues?per_page=100&q=repo:{REPO}+type:pr+state:open+label:factory:ci",
+            ]
+        )
+        flat = flatten_pages(pages)
+        # Search API returns objects with `items`; pulls API returns flat lists.
+        numbers: list[int] = []
+        for page in flat:
+            if isinstance(page, dict) and isinstance(page.get("items"), list):
+                for item in page["items"]:
+                    if isinstance(item, dict) and item.get("number") is not None:
+                        try:
+                            numbers.append(int(item["number"]))
+                        except (TypeError, ValueError):
+                            continue
+            elif isinstance(page, dict) and page.get("number") is not None:
+                try:
+                    numbers.append(int(page["number"]))
+                except (TypeError, ValueError):
+                    continue
+            elif isinstance(page, list):
+                for item in page:
+                    if isinstance(item, dict) and item.get("number") is not None:
+                        try:
+                            numbers.append(int(item["number"]))
+                        except (TypeError, ValueError):
+                            continue
+        if numbers:
+            return sorted(set(numbers))
+        # If search returned no items but succeeded, treat as empty rather than fallback.
+        if isinstance(pages, list) and flat == []:
+            # Check whether pages was an empty search result (total_count 0)
+            # vs actual failure; empty success should return []
+            for pg in pages if isinstance(pages, list) else []:
+                if isinstance(pg, dict) and "total_count" in pg:
+                    return []
+    except (RuntimeError, json.JSONDecodeError, ValueError):
+        pass
+    # Fallback: high-limit pr list (handles pagination internally) for resilience.
     rows = gh_json(
         [
             "pr",
@@ -329,7 +464,7 @@ def list_ci_pr_numbers() -> list[int]:
             "--label",
             "factory:ci",
             "--limit",
-            "500",
+            "1000",
             "--json",
             "number",
         ]
@@ -346,6 +481,39 @@ def active_factory_owner(labels: set[str]) -> str | None:
     return sorted(active)[0] if active else None
 
 
+def persist_repair_handoff(
+    *,
+    pr_number: int,
+    findings: str,
+    reviewer: str,
+    note: str,
+    marker: str | None = None,
+    branch: str | None = None,
+    worker: str | None = None,
+) -> None:
+    """Persist validated repair findings before releasing a PR for changes."""
+    excerpt = redact_review_text(findings)[-7000:]
+    if not has_actionable_review_findings(excerpt):
+        raise RuntimeError("repair handoff requires durable actionable review findings")
+    post_review_comment(
+        pr_number=pr_number,
+        marker=marker,
+        reviewer=reviewer,
+        verdict="repair",
+        excerpt=excerpt,
+        note=note,
+    )
+    if branch is not None and worker is not None:
+        transition_pr_and_linked_issue(
+            pr_number=pr_number,
+            branch=branch,
+            worker=worker,
+            pr_stage="factory:changes-requested",
+        )
+    else:
+        replace_factory_labels(pr_number, "factory:unowned", "factory:changes-requested")
+
+
 def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
     """Reconcile one unowned CI PR using exact-head controller authorities."""
     pr = pr_json(pr_number)
@@ -357,9 +525,7 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
 
     checks = required_checks_gate(pr_number)
     if checks["decision"] != "pass":
-        status = classify_ci_reconciliation(
-            checks_decision=checks["decision"], authorized=False
-        )
+        status = classify_ci_reconciliation(checks_decision=checks["decision"], authorized=False)
         return {"pr": pr_number, "status": status, "reason": checks["reason"]}
 
     head = str(pr.get("headRefOid") or "")
@@ -397,7 +563,12 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
     if status == "ready":
         replace_factory_labels(pr_number, "factory:unowned", "factory:ready")
     elif status == "changes-requested":
-        replace_factory_labels(pr_number, "factory:unowned", "factory:changes-requested")
+        persist_repair_handoff(
+            pr_number=pr_number,
+            findings=str(mechanical["reason"]),
+            reviewer="controller",
+            note=f"Exact-head mechanical gates failed for {head}; repair is required.",
+        )
     return {
         "pr": pr_number,
         "status": status,
@@ -533,10 +704,7 @@ def current_head_review_gate(pr_number: int, head: str) -> GateResult:
         detail = redact_review_text(str(exc))[-500:]
         return gate_result("retry", f"review threads could not be inspected: {detail}")
     threads = (
-        result.get("data", {})
-        .get("repository", {})
-        .get("pullRequest", {})
-        .get("reviewThreads", {})
+        result.get("data", {}).get("repository", {}).get("pullRequest", {}).get("reviewThreads", {})
     )
     return interpret_review_threads(
         threads.get("nodes"),
@@ -589,15 +757,6 @@ def mechanical_merge_gate(pr_number: int, expected_head: str) -> GateResult:
     if reviews["decision"] != "pass":
         return reviews
     return gate_result("pass", "all exact-head mechanical gates passed")
-
-
-def mechanical_merge_gates_pass(pr_number: int, expected_head: str) -> bool:
-    """Return whether the exact-head mechanical merge gate is green.
-
-    This small compatibility wrapper keeps callers that only need a boolean
-    decision separate from the controller's richer retry/deny result.
-    """
-    return mechanical_merge_gate(pr_number, expected_head)["decision"] == "pass"
 
 
 def target_owned_by_worker(number: int, worker: str) -> bool:
@@ -655,11 +814,13 @@ def return_to_review(
     status: str,
     head: str,
     producer: str | None,
+    marker: str | None = None,
+    stage: str = "factory:review",
 ) -> dict[str, Any]:
     """Record a non-authoritative result and safely release its lease."""
     post_review_comment(
         pr_number=pr_number,
-        marker=None,
+        marker=marker,
         reviewer=reviewer,
         verdict=verdict,
         excerpt=excerpt,
@@ -669,7 +830,7 @@ def return_to_review(
         pr_number=pr_number,
         branch=branch,
         worker=worker,
-        pr_stage="factory:review",
+        pr_stage=stage,
     )
     return {"status": status, "head": head, "producer": producer}
 
@@ -742,23 +903,20 @@ def handle_review(
     )
 
     if verdict == "repair":
-        post_review_comment(
+        persist_repair_handoff(
             pr_number=pr_number,
+            findings=excerpt,
             marker=marker,
             reviewer=worker,
-            verdict=verdict,
-            excerpt=excerpt,
             note="Semantic blockers remain. The PR is returning to repair.",
-        )
-        transition_pr_and_linked_issue(
-            pr_number=pr_number,
             branch=branch,
             worker=worker,
-            pr_stage="factory:changes-requested",
         )
         return {"status": "repair", "head": reviewed_head, "producer": producer}
 
     if verdict == "reject":
+        if not has_actionable_review_findings(excerpt):
+            raise RuntimeError("semantic rejection requires durable actionable review findings")
         post_review_comment(
             pr_number=pr_number,
             marker=marker,
@@ -780,11 +938,6 @@ def handle_review(
         run_gh(["pr", "close", str(pr_number), "--repo", REPO])
         return {"status": "rejected", "head": reviewed_head, "producer": producer}
 
-    prior_approvers = current_head_approvers(
-        review_comment_bodies(pr_number),
-        pr=pr_number,
-        head=reviewed_head,
-    )
     post_review_comment(
         pr_number=pr_number,
         marker=marker,
@@ -794,16 +947,15 @@ def handle_review(
         note="Semantic approval is scoped to this exact reviewed PR head.",
     )
 
-    mechanical_passed = mechanical_merge_gates_pass(pr_number, reviewed_head)
-    mechanical: GateResult = {
-        "decision": "pass" if mechanical_passed else "deny",
-        "reason": "all exact-head mechanical gates passed"
-        if mechanical_passed
-        else "exact-head mechanical gates failed",
-    }
+    mechanical = mechanical_merge_gate(pr_number, reviewed_head)
     latest = pr_json(pr_number)
     latest_head = str(latest.get("headRefOid") or "")
+
     if mechanical["decision"] == "retry":
+        # CI is pending or otherwise undecidable at this exact head. Park the
+        # approved PR at factory:ci where the dispatcher's reconcile-ci polls
+        # cheaply, instead of burning another semantic review pass on the
+        # same code.
         result = return_to_review(
             pr_number=pr_number,
             branch=branch,
@@ -813,16 +965,50 @@ def handle_review(
             excerpt="",
             note=(
                 "Semantic approval is preserved for this exact head, but mechanical gates "
-                f"are not yet decidable: {mechanical['reason']}. This is retry-later, not a denial."
+                f"are not yet decidable: {mechanical['reason']}. Parked at factory:ci for "
+                "cheap reconciliation instead of another review pass."
             ),
             status="approved-deferred",
             head=latest_head or reviewed_head,
             producer=producer,
+            marker=marker,
+            stage="factory:ci",
         )
         result["mechanical"] = mechanical
         return result
 
     mechanical_passed = mechanical["decision"] == "pass"
+    if not mechanical_passed:
+        # Mechanical gates genuinely failed (mergeability conflict or failing
+        # required checks). Route to the repair stage rather than re-reviewing
+        # identical code with another expensive model session.
+        persist_repair_handoff(
+            pr_number=pr_number,
+            findings=str(mechanical["reason"]),
+            branch=branch,
+            worker=worker,
+            reviewer=worker,
+            note=(
+                "Semantic approval recorded, but exact-head mechanical gates failed. "
+                "The PR is returning to repair."
+            ),
+        )
+        return {
+            "status": "approved-mechanical-failure",
+            "head": latest_head or reviewed_head,
+            "producer": producer,
+            "mechanical": mechanical,
+        }
+
+    # Fetch after posting so concurrent approvals are observed atomically.
+    # approval_can_promote unions reviewer, so even with eventual-consistency
+    # lag the current approval counts; the re-read ensures a second distinct
+    # reviewer for producer==None is eventually visible and can promote to ready.
+    prior_approvers = current_head_approvers(
+        review_comment_bodies(pr_number),
+        pr=pr_number,
+        head=reviewed_head,
+    )
     authorized = approval_can_promote(
         producer=producer,
         reviewer=worker,
@@ -866,6 +1052,32 @@ def handle_review(
         "producer": producer,
         "mechanical": mechanical,
     }
+
+
+def demote_ready(pr_number: int) -> dict[str, Any]:
+    """Demote a stuck factory:ready PR so its merge slot is released."""
+    pr = pr_json(pr_number)
+    if str(pr.get("state")) != "OPEN":
+        raise RuntimeError(f"PR #{pr_number} is not open")
+    if "factory:ready" not in labels_of(pr):
+        raise RuntimeError(f"PR #{pr_number} is not in factory:ready")
+
+    branch = str(pr.get("headRefName") or "")
+    replace_factory_labels(pr_number, "factory:unowned", "factory:changes-requested")
+    issue = linked_issue_from_branch(branch)
+    if issue is not None:
+        try:
+            issue_target = target_json(issue)
+        except RuntimeError:
+            issue_target = None
+        if (
+            issue_target
+            and issue_target.get("state") == "open"
+            and "factory:ready" in labels_of(issue_target)
+        ):
+            replace_factory_labels(issue, "factory:unowned", "factory:changes-requested")
+
+    return {"status": "demoted", "pr": pr_number}
 
 
 def authorize_ready(pr_number: int) -> dict[str, Any]:
@@ -935,6 +1147,9 @@ def main() -> int:
     authorized = subparsers.add_parser("authorized")
     authorized.add_argument("--pr", type=int, required=True)
 
+    demote = subparsers.add_parser("demote-ready")
+    demote.add_argument("--pr", type=int, required=True)
+
     gates = subparsers.add_parser("gates")
     gates.add_argument("--pr", type=int, required=True)
     gates.add_argument("--expected-head", required=True)
@@ -952,6 +1167,8 @@ def main() -> int:
         )
     elif args.command == "authorized":
         result = authorize_ready(args.pr)
+    elif args.command == "demote-ready":
+        result = demote_ready(args.pr)
     elif args.command == "reconcile-ci":
         result = {"results": reconcile_ci()}
     else:

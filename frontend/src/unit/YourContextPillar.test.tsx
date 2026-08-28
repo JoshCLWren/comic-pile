@@ -1,11 +1,6 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { YourContextPillar } from '../pages/RollPage/components/YourContextPillar'
-
-const mockUseReaderContext = vi.fn()
-vi.mock('../hooks/useReaderContext', () => ({
-  useReaderContext: (...args: unknown[]) => mockUseReaderContext(...args),
-}))
 
 vi.mock('../components/Tooltip', () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -48,63 +43,8 @@ function ratingThread(overrides: Record<string, unknown> = {}) {
   }
 }
 
-beforeEach(() => {
-  vi.clearAllMocks()
-  mockUseReaderContext.mockReturnValue({
-    context: null,
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
-  })
-})
-
 describe('YourContextPillar reader-context integration', () => {
-  it('passes null issue_id when no thread', () => {
-    render(
-      <YourContextPillar
-        activeRatingThread={null}
-        currentDie={6}
-        rating={3.0}
-        predictedDie={8}
-        onUpdateRating={vi.fn()}
-      />,
-    )
-    expect(mockUseReaderContext).toHaveBeenCalledWith(null)
-  })
-
-  it('uses issue_id from activeRatingThread', () => {
-    render(
-      <YourContextPillar
-        activeRatingThread={ratingThread({ issue_id: 42 })}
-        currentDie={6}
-        rating={3.0}
-        predictedDie={8}
-        onUpdateRating={vi.fn()}
-      />,
-    )
-    expect(mockUseReaderContext).toHaveBeenCalledWith(42)
-  })
-
-  it('falls back to next_issue_id when issue_id is null', () => {
-    render(
-      <YourContextPillar
-        activeRatingThread={ratingThread({ issue_id: null, next_issue_id: 99 })}
-        currentDie={6}
-        rating={3.0}
-        predictedDie={8}
-        onUpdateRating={vi.fn()}
-      />,
-    )
-    expect(mockUseReaderContext).toHaveBeenCalledWith(99)
-  })
-
   it('shows skeleton loading state while fetching', () => {
-    mockUseReaderContext.mockReturnValue({
-      context: null,
-      isLoading: true,
-      error: null,
-      refetch: vi.fn(),
-    })
     const { container } = render(
       <YourContextPillar
         activeRatingThread={ratingThread()}
@@ -112,6 +52,8 @@ describe('YourContextPillar reader-context integration', () => {
         rating={3.0}
         predictedDie={8}
         onUpdateRating={vi.fn()}
+        readerContext={null}
+        isLoading={true}
       />,
     )
     const skeletons = container.querySelectorAll('.animate-pulse')
@@ -119,26 +61,6 @@ describe('YourContextPillar reader-context integration', () => {
   })
 
   it('renders series panel with unavailable data', () => {
-    mockUseReaderContext.mockReturnValue({
-      context: {
-        issue_id: 100,
-        series: {
-          identity_source: 'unavailable',
-          canonical_series_id: null,
-          series_name: null,
-          average_rating: null,
-          ratings_count: 0,
-          previous_issue: null,
-          recent_ratings: [],
-          highest_rating: null,
-          lowest_rating: null,
-        },
-        crossovers: [],
-      },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    })
     render(
       <YourContextPillar
         activeRatingThread={ratingThread()}
@@ -146,6 +68,23 @@ describe('YourContextPillar reader-context integration', () => {
         rating={3.0}
         predictedDie={8}
         onUpdateRating={vi.fn()}
+        readerContext={{
+          issue_id: 100,
+          series: {
+            identity_source: 'unavailable',
+            canonical_series_id: null,
+            series_name: null,
+            average_rating: null,
+            ratings_count: 0,
+            previous_issue: null,
+            recent_ratings: [],
+            highest_rating: null,
+            lowest_rating: null,
+          },
+          crossovers: [],
+          local_chain: { issues: [], edges: [] },
+        }}
+        isLoading={false}
       />,
     )
     expect(screen.getByTestId('series-panel')).toHaveTextContent(
@@ -154,26 +93,6 @@ describe('YourContextPillar reader-context integration', () => {
   })
 
   it('renders series panel with populated data', () => {
-    mockUseReaderContext.mockReturnValue({
-      context: {
-        issue_id: 100,
-        series: {
-          identity_source: 'comicvine',
-          canonical_series_id: '20764',
-          series_name: 'Thanos',
-          average_rating: 3.71,
-          ratings_count: 7,
-          previous_issue: null,
-          recent_ratings: [],
-          highest_rating: null,
-          lowest_rating: null,
-        },
-        crossovers: [],
-      },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    })
     render(
       <YourContextPillar
         activeRatingThread={ratingThread()}
@@ -181,6 +100,23 @@ describe('YourContextPillar reader-context integration', () => {
         rating={3.0}
         predictedDie={8}
         onUpdateRating={vi.fn()}
+        readerContext={{
+          issue_id: 100,
+          series: {
+            identity_source: 'comicvine',
+            canonical_series_id: '20764',
+            series_name: 'Thanos',
+            average_rating: 3.71,
+            ratings_count: 7,
+            previous_issue: null,
+            recent_ratings: [],
+            highest_rating: null,
+            lowest_rating: null,
+          },
+          crossovers: [],
+          local_chain: { issues: [], edges: [] },
+        }}
+        isLoading={false}
       />,
     )
     expect(screen.getByTestId('series-panel')).toHaveTextContent(
@@ -189,36 +125,6 @@ describe('YourContextPillar reader-context integration', () => {
   })
 
   it('renders crossover analytics when present', () => {
-    mockUseReaderContext.mockReturnValue({
-      context: {
-        issue_id: 100,
-        series: {
-          identity_source: 'comicvine',
-          canonical_series_id: '20764',
-          series_name: 'Thanos',
-          average_rating: null,
-          ratings_count: 0,
-          previous_issue: null,
-          recent_ratings: [],
-          highest_rating: null,
-          lowest_rating: null,
-        },
-        crossovers: [
-          {
-            id: 3,
-            name: 'Annihilation',
-            applies_to_current_issue: true,
-            next_member: null,
-            average_rating: 4.0,
-            ratings_count: 3,
-            read_count: 5,
-          },
-        ],
-      },
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    })
     render(
       <YourContextPillar
         activeRatingThread={ratingThread()}
@@ -226,6 +132,34 @@ describe('YourContextPillar reader-context integration', () => {
         rating={3.0}
         predictedDie={8}
         onUpdateRating={vi.fn()}
+        readerContext={{
+          issue_id: 100,
+          series: {
+            identity_source: 'comicvine',
+            canonical_series_id: '20764',
+            series_name: 'Thanos',
+            average_rating: null,
+            ratings_count: 0,
+            previous_issue: null,
+            recent_ratings: [],
+            highest_rating: null,
+            lowest_rating: null,
+          },
+          crossovers: [
+            {
+              id: 3,
+              name: 'Annihilation',
+              applies_to_current_issue: true,
+              membership_kind: 'issue',
+              next_member: null,
+              average_rating: 4.0,
+              ratings_count: 3,
+              read_count: 5,
+            },
+          ],
+          local_chain: { issues: [], edges: [] },
+        }}
+        isLoading={false}
       />,
     )
     expect(screen.getByTestId('crossover-analytics')).toHaveTextContent(
@@ -234,12 +168,6 @@ describe('YourContextPillar reader-context integration', () => {
   })
 
   it('does not show loading skeleton when loaded', () => {
-    mockUseReaderContext.mockReturnValue({
-      context: null,
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    })
     const { container } = render(
       <YourContextPillar
         activeRatingThread={ratingThread()}
@@ -247,18 +175,14 @@ describe('YourContextPillar reader-context integration', () => {
         rating={3.0}
         predictedDie={8}
         onUpdateRating={vi.fn()}
+        readerContext={null}
+        isLoading={false}
       />,
     )
     expect(container.querySelectorAll('.animate-pulse').length).toBe(0)
   })
 
   it('does not disable rating slider when context is loading', () => {
-    mockUseReaderContext.mockReturnValue({
-      context: null,
-      isLoading: true,
-      error: null,
-      refetch: vi.fn(),
-    })
     render(
       <YourContextPillar
         activeRatingThread={ratingThread()}
@@ -266,6 +190,8 @@ describe('YourContextPillar reader-context integration', () => {
         rating={3.0}
         predictedDie={8}
         onUpdateRating={vi.fn()}
+        readerContext={null}
+        isLoading={true}
       />,
     )
     const slider = screen.getByRole('slider')
@@ -273,12 +199,6 @@ describe('YourContextPillar reader-context integration', () => {
   })
 
   it('does not disable rating slider when context has error', () => {
-    mockUseReaderContext.mockReturnValue({
-      context: null,
-      isLoading: false,
-      error: new Error('Network error'),
-      refetch: vi.fn(),
-    })
     render(
       <YourContextPillar
         activeRatingThread={ratingThread()}
@@ -286,6 +206,8 @@ describe('YourContextPillar reader-context integration', () => {
         rating={3.0}
         predictedDie={8}
         onUpdateRating={vi.fn()}
+        readerContext={null}
+        isLoading={false}
       />,
     )
     const slider = screen.getByRole('slider')
@@ -293,12 +215,6 @@ describe('YourContextPillar reader-context integration', () => {
   })
 
   it('hides skeleton and panels when not loading and no context', () => {
-    mockUseReaderContext.mockReturnValue({
-      context: null,
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    })
     render(
       <YourContextPillar
         activeRatingThread={ratingThread()}
@@ -306,6 +222,8 @@ describe('YourContextPillar reader-context integration', () => {
         rating={3.0}
         predictedDie={8}
         onUpdateRating={vi.fn()}
+        readerContext={null}
+        isLoading={false}
       />,
     )
     expect(screen.queryByTestId('series-panel')).not.toBeInTheDocument()
@@ -320,6 +238,8 @@ describe('YourContextPillar reader-context integration', () => {
         rating={3.0}
         predictedDie={8}
         onUpdateRating={vi.fn()}
+        readerContext={null}
+        isLoading={false}
       />,
     )
     expect(screen.queryByText('03')).not.toBeInTheDocument()
@@ -336,6 +256,8 @@ describe('YourContextPillar reader-context integration', () => {
         rating={3.0}
         predictedDie={8}
         onUpdateRating={vi.fn()}
+        readerContext={null}
+        isLoading={false}
       />,
     )
     expect(screen.getByText(/last issue in the thread/)).toBeInTheDocument()
@@ -349,6 +271,8 @@ describe('YourContextPillar reader-context integration', () => {
         rating={4.0}
         predictedDie={4}
         onUpdateRating={vi.fn()}
+        readerContext={null}
+        isLoading={false}
       />,
     )
     expect(screen.getByText('d6 → d4')).toBeInTheDocument()

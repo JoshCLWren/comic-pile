@@ -55,6 +55,7 @@ def env_positive_int(name: str, default: int) -> int:
 LOCAL_LEASE_TTL_SECONDS = env_positive_int('FACTORY_LOCAL_LEASE_TTL_SECONDS', 3600)
 FIXED_LEASE_TTL_SECONDS = env_positive_int('FACTORY_FIXED_LEASE_TTL_SECONDS', 900)
 FACTORY_PR_WIP_LIMIT = env_positive_int('FACTORY_PR_WIP_LIMIT', 5)
+FACTORY_REVIEW_BACKLOG_LIMIT = env_positive_int('FACTORY_REVIEW_BACKLOG_LIMIT', 15)
 FACTORY_NO_DIFF_RETRY_LIMIT = env_positive_int('FACTORY_NO_DIFF_RETRY_LIMIT', 3)
 FACTORY_NO_DIFF_RETRY_RESET_SECONDS = env_positive_int('FACTORY_NO_DIFF_RETRY_RESET_SECONDS', 86400)
 
@@ -73,8 +74,8 @@ class Candidate:
     conflicted: bool = False
 
     def sort_key(self) -> tuple[int, int, float, int]:
-        """Return the deterministic queue ordering key."""
-        return (self.lane, -self.priority, -parse_time(self.created_at), -self.number)
+        """Return the deterministic queue ordering key (oldest work first)."""
+        return (self.lane, -self.priority, parse_time(self.created_at), self.number)
 
 
 def parse_time(value: str | None) -> float:
@@ -109,9 +110,9 @@ def owner_of(labels: Iterable[str]) -> str | None:
 def priority_rank(labels: Iterable[str]) -> int:
     """Map explicit priority labels to a deterministic numeric rank."""
     labels = set(labels)
-    if 'ralph-priority:critical' in labels or 'priority:P0' in labels:
+    if 'ralph-priority:critical' in labels or 'priority:P0' in labels or 'priority: P0' in labels:
         return 4
-    if 'ralph-priority:high' in labels or 'priority: high' in labels:
+    if 'ralph-priority:high' in labels or 'priority:high' in labels or 'priority: high' in labels:
         return 3
     if 'ralph-priority:medium' in labels:
         return 2
@@ -141,12 +142,14 @@ def stage_of(labels: Iterable[str]) -> str | None:
 
 def provenance_lane(labels: set[str]) -> int:
     """Return the deterministic assignment lane for a label set."""
+    if 'main-breakage' in labels:
+        return 0
+    if 'user-reported' in labels and 'bug' in labels:
+        return 1
     if labels & INFRA_LABELS:
         return 5
     if 'e2e-discovered' in labels:
         return 4
-    if 'user-reported' in labels and 'bug' in labels:
-        return 1
     return 3
 
 
@@ -155,14 +158,73 @@ def item_is_unowned(labels: set[str]) -> bool:
     return owner_of(labels) in (None, 'factory:unowned')
 
 
-def issue_bypasses_wip_limit(issue: dict[str, Any]) -> bool:
-    """Keep genuinely urgent product defects executable while PR work is saturated."""
+def issue_bypasses_wip_limit(
+    issue: dict[str, Any],
+    *,
+    review_backlog_saturated: bool = False,
+) -> bool:
+    """Keep genuinely urgent product defects executable while worker WIP is saturated.
+
+    Urgent defects (main-breakage, user-reported bugs, P0/critical) bypass only
+    the worker WIP gate (>=5 leased PRs). When review_backlog_saturated is set,
+    end-to-end backpressure takes over: user-reported bugs and P0 issues must
+    wait like everything else so the fleet drains existing completion-stage PRs
+    instead of manufacturing unbounded new intake. Only main-breakage keeps
+    opening new work once the review backlog is saturated.
+    """
     labels = labels_of(issue)
+    if review_backlog_saturated:
+        return 'main-breakage' in labels
     return (
-        ('user-reported' in labels and 'bug' in labels)
+        'main-breakage' in labels
+        or ('user-reported' in labels and 'bug' in labels)
         or 'priority:P0' in labels
         or 'ralph-priority:critical' in labels
     )
+
+
+def factory_review_backlog_count(prs: Iterable[dict[str, Any]]) -> int:
+    """Count unowned factory PRs waiting at the review or ci stage.
+
+    These targets consume no worker lease while they wait, so the WIP limit
+    cannot see them. The backlog counter exists to apply end-to-end
+    backpressure: when too much work is waiting for completion stages, fresh
+    issue intake must stop so the fleet drains what already exists.
+    """
+    count = 0
+    for pr in prs:
+        if str(pr.get('state') or 'OPEN').upper() != 'OPEN' or pr.get('isDraft'):
+            continue
+        labels = labels_of(pr)
+        if not str(pr.get('headRefName') or '').startswith('factory/'):
+            continue
+        if labels & BLOCKED_LABELS or 'factory:ready' in labels:
+            continue
+        if stage_of(labels) in ('factory:review', 'factory:ci', 'factory:changes-requested') and item_is_unowned(labels):
+            count += 1
+    return count
+
+
+def factory_ready_count(prs: Iterable[dict[str, Any]]) -> int:
+    """Count open factory PRs parked at the factory:ready merge gate.
+
+    Neither the worker WIP counter nor the review-backlog counter sees ready
+    PRs because they consume no lease and wait outside the completion stages.
+    During a red-main pause that pile can grow unbounded, so this aggregate
+    exposes it for callers reporting end-to-end backpressure health.
+    """
+    count = 0
+    for pr in prs:
+        if str(pr.get('state') or 'OPEN').upper() != 'OPEN' or pr.get('isDraft'):
+            continue
+        labels = labels_of(pr)
+        if not str(pr.get('headRefName') or '').startswith('factory/'):
+            continue
+        if labels & BLOCKED_LABELS:
+            continue
+        if 'factory:ready' in labels:
+            count += 1
+    return count
 
 
 def factory_pr_wip_count(prs: Iterable[dict[str, Any]]) -> int:
@@ -243,23 +305,17 @@ def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[
     """Return whether this open factory PR is canonical work for its issue.
 
     Once a canonical factory PR exists, the linked issue must not become fresh
-    implementation work again just because the PR is temporarily ineligible.
-    The exception is an unblocked user-reported bug: a draft or blocked PR must
-    not make urgent product work disappear from the executable queue.
+    implementation work again for any reason. If an old PR is no longer worth
+    repairing, it must be explicitly closed before the issue can re-enter fresh
+    implementation. Urgency changes ranking, never canonical PR identity.
     """
+    del issue_map  # Kept in the signature for compatibility with existing callers.
     head = str(pr.get('headRefName') or '')
-    if (
-        str(pr.get('state') or 'OPEN').upper() != 'OPEN'
-        or not head.startswith('factory/')
-    ):
-        return False
-    linked = linked_issue_from_branch(head)
-    if linked is None:
-        return False
-    issue_labels = labels_of(issue_map.get(linked, {}))
-    urgent_issue = "user-reported" in issue_labels and "bug" in issue_labels
-    temporarily_ineligible = bool(pr.get("isDraft")) or bool(labels_of(pr) & BLOCKED_LABELS)
-    return not (urgent_issue and temporarily_ineligible and not issue_labels & BLOCKED_LABELS)
+    return (
+        str(pr.get('state') or 'OPEN').upper() == 'OPEN'
+        and head.startswith('factory/')
+        and linked_issue_from_branch(head) is not None
+    )
 
 
 def build_candidates(
@@ -278,6 +334,7 @@ def build_candidates(
         and pr_suppresses_issue_candidate(pr, issue_map)
     }
     pr_wip_full = factory_pr_wip_count(prs) >= FACTORY_PR_WIP_LIMIT
+    review_backlog_full = factory_review_backlog_count(prs) >= FACTORY_REVIEW_BACKLOG_LIMIT
     candidates: list[Candidate] = []
     for issue in issues:
         number = int(issue['number'])
@@ -288,6 +345,15 @@ def build_candidates(
         ):
             continue
         if pr_wip_full and not issue_bypasses_wip_limit(issue):
+            continue
+        if review_backlog_full and not issue_bypasses_wip_limit(
+            issue,
+            review_backlog_saturated=True,
+        ):
+            # End-to-end backpressure: while the completion stages are
+            # saturated, the fleet drains existing PRs instead of
+            # manufacturing new ones. Only main-breakage bypasses this gate
+            # when the review backlog is saturated (>=15).
             continue
         labels = labels_of(issue)
         candidates.append(
@@ -327,9 +393,21 @@ def build_candidates(
     return sorted(candidates, key=Candidate.sort_key)
 
 
-def review_capacity_worker(worker: str) -> bool:
-    """Return whether this deterministic worker slot prioritizes review intake."""
-    return int(worker) % 4 == 2
+def review_capacity_worker(worker: str, *, review_backlog: int = 0) -> bool:
+    """Return whether this worker slot prioritizes review, scaled to demand.
+
+    Fixed 1-in-4 was arbitrary. When the review backlog is the dominant
+    queue, most workers should work the drain. Scale the share with backlog:
+    >=50 -> 90%, >=20 -> 75%, >=15 -> 50%, else 25%.
+    """
+    w = int(worker)
+    if review_backlog >= 50:
+        return w % 10 < 9
+    if review_backlog >= 20:
+        return w % 4 < 3
+    if review_backlog >= 15:
+        return w % 2 == 0
+    return w % 4 == 2
 
 
 def candidate_is_independent_for_worker(candidate: Candidate, worker: str) -> bool:
@@ -348,22 +426,28 @@ def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> lis
         for candidate in candidates
         if candidate_is_independent_for_worker(candidate, worker)
     ]
-    review_first = review_capacity_worker(worker)
+    review_backlog = sum(1 for c in candidates if c.kind == "pr" and c.stage in ("factory:review", "factory:ci", "factory:changes-requested"))
+    review_first = review_capacity_worker(worker, review_backlog=review_backlog)
 
     def work_class(candidate: Candidate) -> int:
+        if candidate.lane == 0:
+            return 0
         if candidate.kind == 'pr':
+            # A clean review-stage PR is one independent approval from merge.
+            # Review-first workers finish it ahead of everything but lane 0;
+            # non-review workers preserve product capacity (issue first).
+            if candidate.stage == 'factory:review' and not candidate.conflicted:
+                return 1 if review_first else 6
             if candidate.conflicted:
-                return 0
+                return 2 if review_first else 8
             if candidate.stage == 'factory:ci':
-                return 1
+                return 3
             if candidate.stage == 'factory:changes-requested':
-                return 2
-            if candidate.stage == 'factory:review':
-                return 3 if review_first else 6
-            return 4 if review_first else 7
+                return 4
+            return 5 if review_first else 9
         if candidate.lane == 1:
-            return 5 if review_first else 3
-        return 6 if review_first else 4
+            return 6 if review_first else 4
+        return 7 if review_first else 5
 
     return sorted(
         eligible,

@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import type { ConnectedThreadInfo } from '../types'
@@ -69,29 +70,34 @@ const connectedThread: ConnectedThreadInfo = {
 
 function renderRatingView(overrides: Partial<React.ComponentProps<typeof RatingView>> = {}) {
   render(
-    <RatingView
-      activeRatingThread={{
-        id: 1,
-        title: 'Ultimate X-Men',
-        format: 'Comic',
-        issues_remaining: 4,
-        total_issues: 12,
-        issue_number: '11',
-        next_issue_number: '12',
-      } as never}
-      currentDie={6}
-      rolledResult={2}
-      rating={4}
-      predictedDie={4}
-      errorMessage=""
-      rateIsPending={false}
-      snoozeIsPending={false}
-      dismissIsPending={false}
-      readingOrders={[]}
-      connectedThreads={[connectedThread]}
-      {...callbacks}
-      {...overrides}
-    />,
+    <MemoryRouter>
+      <RatingView
+        activeRatingThread={{
+          id: 1,
+          title: 'Ultimate X-Men',
+          format: 'Comic',
+          issues_remaining: 4,
+          total_issues: 12,
+          issue_number: '11',
+          next_issue_number: '12',
+        } as never}
+        currentDie={6}
+        rolledResult={2}
+        rating={4}
+        predictedDie={4}
+        errorMessage=""
+        rateIsPending={false}
+        snoozeIsPending={false}
+        dismissIsPending={false}
+        readingOrders={[]}
+        connectedThreads={[connectedThread]}
+        readerContext={null}
+        isReaderContextLoading={false}
+        readerContextError={null}
+        {...callbacks}
+        {...overrides}
+      />
+    </MemoryRouter>,
   )
 }
 

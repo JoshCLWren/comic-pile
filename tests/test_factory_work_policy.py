@@ -189,6 +189,28 @@ def test_open_blocked_or_draft_pr_still_suppresses_duplicate_issue_work():
         )
 
 
+def test_urgent_bug_with_open_blocked_pr_still_has_one_canonical_pr():
+    """Urgency never permits a second implementation PR for the same issue."""
+    issue = issue_fixture(1882)
+    issue["labels"] = [
+        {"name": "factory:unowned"},
+        {"name": "user-reported"},
+        {"name": "bug"},
+    ]
+    blocked = pr_fixture(
+        number=1897,
+        issue=1882,
+        labels=["factory", "factory:unowned", "factory:blocked"],
+    )
+
+    candidates = policy.build_candidates([issue], [blocked])
+
+    assert all(
+        candidate.number != 1882 or candidate.kind != "issue"
+        for candidate in candidates
+    )
+
+
 def test_closed_pr_releases_issue_back_to_implementation_queue():
     """Closing the canonical PR makes its still-open issue eligible again."""
     issue = issue_fixture(1487)

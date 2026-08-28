@@ -27,11 +27,13 @@ export const routeModules = {
   history: () => import('../pages/HistoryPage'),
   session: () => import('../pages/SessionPage'),
   crossovers: () => import('../pages/CrossoversPage'),
+  crossoverDetail: () => import('../pages/CrossoverDetailPage'),
   continuityPlanner: () => import('../pages/ContinuityPlannerPage'),
   help: () => import('../pages/HelpPage'),
   whatsNew: () => import('../pages/WhatsNewPage'),
   login: () => import('../pages/LoginPage'),
   register: () => import('../pages/RegisterPage'),
+  identityInbox: () => import('../pages/IdentityInboxPage'),
 } as const satisfies Record<string, () => Promise<RouteModule>>
 
 export function lazyRoute<K extends RouteModuleKey>(

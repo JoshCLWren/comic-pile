@@ -5,13 +5,22 @@ from typing import ClassVar, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.continuity_readiness import ContinuityBlocker
-from app.schemas.session import ActiveThreadInfo
+from app.schemas.session import ActiveThreadInfo, BandwidthSource, SessionBandwidthState, SessionMode
+from comic_pile.recommendation_selection import Bandwidth, Intent
 
 
 class RollRequest(BaseModel):
-    """Schema for roll request."""
+    """Schema for roll request.
+
+    Optional reading-mode context may be supplied for telemetry and for the
+    selection control path. Both fields are neutral-by-default: absent values
+    resolve to ``balanced`` and never change legacy unweighted selection.
+    """
 
     model_config = ConfigDict(extra="forbid")
+
+    bandwidth: Bandwidth | None = None
+    intent: Intent | None = None
 
 
 class RollResponse(BaseModel):
@@ -32,6 +41,7 @@ class RollResponse(BaseModel):
     next_issue_number: str | None = None
     total_issues: int | None = None
     reading_progress: str | None = None
+    explanation: str | None = None
 
 
 class SetCurrentIssueRequest(BaseModel):
@@ -62,6 +72,42 @@ class OverrideRequest(BaseModel):
     """Schema for manual thread override."""
 
     thread_id: int
+
+
+class SessionModeUpdateRequest(BaseModel):
+    """Canonical request to update active session bandwidth and/or intent.
+
+    Only the supplied dimensions are changed; the other dimension is left
+    untouched. Omitting both is a no-op and returns the current mode unchanged.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    bandwidth: Literal["light", "balanced", "deep"] | None = Field(
+        default=None,
+        description="Active bandwidth to set. Omit to leave unchanged.",
+    )
+    intent: Literal["balanced", "momentum", "familiar", "explore", "random"] | None = Field(
+        default=None,
+        description="Active intent to set. Omit to leave unchanged. "
+        "Setting to 'random' bypasses contextual weighting.",
+    )
+
+
+class SessionModeResponse(BaseModel):
+    """Canonical session mode returned from manual change and bootstrap endpoints."""
+
+    active_bandwidth: str | None
+    predicted_bandwidth: str | None
+    bandwidth_confidence: float | None = None
+    bandwidth_source: BandwidthSource | None = None
+    bandwidth_version: str | None = None
+    active_intent: str | None
+    predicted_intent: str | None
+    intent_confidence: float | None = None
+    intent_source: Literal["manual", "inferred"] | None = None
+    intent_version: str | None = None
+    session_mode_correction_guidance: dict | None = None
 
 
 class RollBootstrapThread(BaseModel):
@@ -128,8 +174,10 @@ class RollBootstrapResponse(BaseModel):
     manual_die: int | None
     pending_thread_id: int | None
     last_rolled_result: int | None
+    session_mode: SessionMode
     active_thread: ActiveThreadInfo | None
     roll_recovery: RollRecoveryInfo | None = None
+    bandwidth: SessionBandwidthState
     roll_pool: list[RollBootstrapThread]
     snoozed_threads: list[RollBootstrapThread]
     snoozed_count: int
@@ -137,6 +185,7 @@ class RollBootstrapResponse(BaseModel):
     blocked_threads: list[RollBootstrapThread]
     stale_thread_count: int
     stale_thread: RollBootstrapThread | None
+    timezone: str | None = None
 
     @model_validator(mode="before")
     @classmethod

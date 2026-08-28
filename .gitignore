@@ -140,7 +140,6 @@ dmypy.json
 .vscode/
 *.swp
 *.swo
-*~
 
 # OS
 .DS_Store
@@ -152,7 +151,14 @@ logs/
 
 # Temporary files
 *.tmp
+*.pid
+
+# Editor/LLM backup artifacts - never commit these
 *.bak
+*.backup
+*.orig
+*~
+
 .env.production
 
 # AI tool sessions and configuration
@@ -206,3 +212,7 @@ prod_backup_*.json
 
 # Local production-profile authentication state
 prod-profile-storage-state*.json
+
+# Benchmark run outputs (machine-generated on every run)
+benchmarks/results/
+benchmarks/control-environment*.json

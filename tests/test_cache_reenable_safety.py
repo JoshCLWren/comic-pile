@@ -61,9 +61,17 @@ async def test_generation_invalidation_is_visible_across_application_clients(
     source = {"title": "before"}
     executions = 0
 
+    # Create a mock backend with the shared client
+    from app.cache import UpstashCache
+    mock_backend = UpstashCache()
+    mock_backend._initialized = True
+    mock_backend._client = instance_a
+    mock_backend._is_upstash = True
+    mock_backend._circuit_breaker.reset()
+
+    monkeypatch.setattr(cache, "_backend", mock_backend)
     monkeypatch.setattr(cache, "_initialized", True)
-    monkeypatch.setattr(cache, "_is_upstash", True)
-    monkeypatch.setattr(cache, "_client", instance_a)
+    monkeypatch.setattr(cache, "_demoted", False)
 
     @generation_cached(ttl=60)
     async def load_issue(user_id: int) -> dict[str, str]:
@@ -79,7 +87,8 @@ async def test_generation_invalidation_is_visible_across_application_clients(
     assert await bump_user_generation(instance_b, 7) == 1
     assert shared.generations[generation_key(7)] == 1
 
-    monkeypatch.setattr(cache, "_client", instance_a)
+    # Switch to instance_a for the read (simulating another app instance)
+    mock_backend._client = instance_a
     assert await load_issue(7) == {"title": "after"}
     assert executions == 2
 
@@ -87,10 +96,12 @@ async def test_generation_invalidation_is_visible_across_application_clients(
 def test_remote_cache_remains_explicitly_disabled_by_default() -> None:
     """Provider credentials alone must not silently turn remote caching back on."""
     settings = RedisSettings(
+        cache_provider="redis",
         cache_enabled=False,
         upstash_redis_rest_url="https://example.invalid",
         upstash_redis_rest_token="test-token",
     )
 
     assert settings.cache_enabled is False
+    assert settings.effective_provider == "off"
     assert settings.is_configured is False

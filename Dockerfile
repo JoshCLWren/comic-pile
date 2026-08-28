@@ -67,6 +67,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user with host UID/GID to avoid permission issues

@@ -23,12 +23,40 @@ from app.services.snapshot_contract import (
     SNAPSHOT_VERSION_KEY,
     USES_ISSUE_TRACKING_KEY,
 )
+from comic_pile.bandwidth import capture_ephemeral_bandwidth
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
 from comic_pile.queue import move_to_back, move_to_front, move_to_safe_position
 from comic_pile.session import get_current_die_for_session
 
 router = APIRouter()
+
+
+async def _find_source_roll_event(
+    db: AsyncSession,
+    session_id: int,
+    thread_id: int,
+) -> int | None:
+    """Find the originating roll event for a given thread in this session.
+
+    Args:
+        db: Database session.
+        session_id: Current reading session ID.
+        thread_id: Thread that was rolled/snoozed.
+
+    Returns:
+        The ID of the most recent roll event selecting this thread, or None.
+    """
+    result = await db.execute(
+        select(Event.id)
+        .where(Event.session_id == session_id)
+        .where(Event.type == "roll")
+        .where(Event.selected_thread_id == thread_id)
+        .order_by(Event.timestamp.desc(), Event.id.desc())
+        .limit(1)
+    )
+    row = result.scalar_one_or_none()
+    return row
 
 
 async def _capture_thread_pre_state(thread: Thread, db: AsyncSession) -> dict:
@@ -286,6 +314,7 @@ async def rate_thread(
             if current_session.snoozed_thread_ids
             else None
         ),
+        **capture_ephemeral_bandwidth(current_session),
     }
 
     # Validate thread has issues remaining. For issue-tracked threads, rely on
@@ -448,6 +477,8 @@ async def rate_thread(
         else step_up(current_die)
     )
 
+    source_roll_event_id = await _find_source_roll_event(db, current_session_id, thread_id)
+
     event = Event(
         type="rate",
         session_id=current_session_id,
@@ -458,6 +489,7 @@ async def rate_thread(
         die_after=new_die,
         issue_id=rated_issue_id,
         issue_number=rated_issue_number,
+        source_roll_event_id=source_roll_event_id,
     )
     db.add(event)
 

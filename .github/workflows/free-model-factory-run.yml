@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       worker:
-        description: Durable fixed-model factory number
+        description: Durable factory executor slot
         required: true
         type: string
     secrets:
@@ -70,7 +70,7 @@ jobs:
           set -Eeuo pipefail
           git remote set-url origin "https://x-access-token:${PR_REBASE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-      - name: Resolve fixed lane
+      - name: Resolve executor slot policy
         id: lane
         shell: bash
         env:
@@ -94,16 +94,11 @@ jobs:
               configured=true
               reason='configured'
               ;;
-            opencode-free)
-              runtime_model="opencode/${model}"
-              branch_suffix='opencode-free'
+            opencode-free|openrouter-free)
+              runtime_model="${source%-free}/${model}"
+              branch_suffix='catalog-free'
               configured=true
-              reason='configured-keyless'
-              ;;
-            openrouter-free)
-              runtime_model="openrouter/${model}"
-              branch_suffix='openrouter'
-              if [[ -n "${OPENROUTER_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-OPENROUTER_API_KEY'; fi
+              reason='catalog-backed-free-code-slot'
               ;;
             kilo-auto)
               runtime_model="kilo/${model}"
@@ -143,42 +138,17 @@ jobs:
         shell: bash
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
-          DISPLAY: ${{ steps.lane.outputs.display }}
-          SOURCE: ${{ steps.lane.outputs.source }}
+
         run: |
           set -Eeuo pipefail
           label="factory:${WORKER}"
-          description="Fixed-model Factory ${WORKER}: ${DISPLAY} via ${SOURCE}"
+          description="Factory ${WORKER}: code and review executor slot"
           if gh api "repos/${GITHUB_REPOSITORY}/labels/factory%3A${WORKER}" >/dev/null 2>&1; then
             gh api --method PATCH "repos/${GITHUB_REPOSITORY}/labels/factory%3A${WORKER}" \
               -f name="$label" -f color='5319e7' -f description="$description" >/dev/null
           else
             gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
               -f name="$label" -f color='5319e7' -f description="$description" >/dev/null
-          fi
-
-      - name: Report running heartbeat
-        shell: bash
-        env:
-          WORKER: ${{ steps.lane.outputs.worker }}
-          MODEL: ${{ steps.lane.outputs.model }}
-          SOURCE: ${{ steps.lane.outputs.source }}
-          MINUTE: ${{ steps.lane.outputs.minute }}
-          CONFIGURED: ${{ steps.lane.outputs.configured }}
-          REASON: ${{ steps.lane.outputs.reason }}
-        run: |
-          set -Eeuo pipefail
-          marker="<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-${WORKER} -->"
-          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          if [[ "$CONFIGURED" == true ]]; then outcome='running'; else outcome='unconfigured'; fi
-          body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nOutcome: %s\nConfiguration: %s\nUpdated: %s\nRun: %s' \
-            "$marker" "$WORKER" "$MODEL" "$SOURCE" "$MINUTE" "$outcome" "$REASON" "$now" "$GITHUB_RUN_ID")"
-          comment_id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
-            | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
-          if [[ -n "$comment_id" ]]; then
-            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
-          else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null
           fi
 
       - name: Stop cleanly when optional credentials are not configured
@@ -226,8 +196,193 @@ jobs:
           echo "$bin_dir" >> "$GITHUB_PATH"
           "$bin_dir/kilo" --version
 
+      - name: Select execution candidate at dispatch time
+        id: executor
+        if: steps.lane.outputs.configured == 'true'
+        shell: bash
+        env:
+          WORKER: ${{ steps.lane.outputs.worker }}
+          SOURCE: ${{ steps.lane.outputs.source }}
+          LANE_MODEL: ${{ steps.lane.outputs.model }}
+          LANE_RUNTIME_MODEL: ${{ steps.lane.outputs.runtime_model }}
+          LANE_DISPLAY: ${{ steps.lane.outputs.display }}
+          LANE_BRANCH_SUFFIX: ${{ steps.lane.outputs.branch_suffix }}
+        run: |
+          set -Eeuo pipefail
+          discovery_outcome="$RUNNER_TEMP/factory-discovery-outcome"
+
+          case "$SOURCE" in
+            nvidia|kilo-auto|omniroute-opencode)
+              # These adapters cannot enumerate reliably. Preserve the lane
+              # request and let the existing real invocation/probe prove it.
+              {
+                echo "source=$SOURCE"
+                echo "model=$LANE_MODEL"
+                echo "runtime_model=$LANE_RUNTIME_MODEL"
+                echo "display=$LANE_DISPLAY"
+                echo "branch_suffix=$LANE_BRANCH_SUFFIX"
+                echo "reason=selected-by-runtime-evidence"
+              } >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            opencode-free|openrouter-free) ;;
+            *)
+              printf 'control_plane_failure\tUnsupported provider adapter: %s\n' "$SOURCE" > "$discovery_outcome"
+              exit 1
+              ;;
+          esac
+
+          discover_provider() {
+            local provider="$1"
+            local catalog="$2"
+            local configured_args=()
+            while IFS= read -r configured_model; do
+              [[ -n "$configured_model" ]] || continue
+              configured_args+=(--configured-model "$configured_model")
+            done < <(
+              awk -F '\t' -v source="$provider" \
+                '$0 !~ /^#/ && $2 == source {print $3}' \
+                .github/free-model-factories.tsv | sort -u
+            )
+            python3 .github/scripts/factory_provider_candidates.py \
+              --provider "$provider" --catalog "$catalog" \
+              "${configured_args[@]}"
+          }
+
+          catalog_candidates='[]'
+          catalog_successes=0
+          catalog_failures=()
+
+          opencode_catalog="$RUNNER_TEMP/factory-opencode-catalog"
+          if opencode models opencode --refresh > "$opencode_catalog"; then
+            opencode_discovery="$(discover_provider opencode-free "$opencode_catalog")"
+            if [[ "$(jq -r '.status' <<< "$opencode_discovery")" != invalid ]]; then
+              catalog_successes=$((catalog_successes + 1))
+              candidates="$(jq -c '.candidates // []' <<< "$opencode_discovery")"
+              catalog_candidates="$(jq -cn \
+                --argjson left "$catalog_candidates" --argjson right "$candidates" \
+                '$left + $right | unique_by([.provider, .model])')"
+            else
+              catalog_failures+=('OpenCode returned an invalid model catalog')
+            fi
+          else
+            catalog_failures+=('OpenCode model discovery command failed')
+          fi
+
+          if [[ -n "${OPENROUTER_API_KEY:-}" ]]; then
+            openrouter_catalog="$RUNNER_TEMP/factory-openrouter-catalog"
+            if curl --silent --show-error --fail-with-body \
+              --connect-timeout 5 --max-time 30 \
+              --header "Authorization: Bearer ${OPENROUTER_API_KEY}" \
+              https://openrouter.ai/api/v1/models > "$openrouter_catalog"; then
+              openrouter_discovery="$(discover_provider openrouter-free "$openrouter_catalog")"
+              if [[ "$(jq -r '.status' <<< "$openrouter_discovery")" != invalid ]]; then
+                catalog_successes=$((catalog_successes + 1))
+                candidates="$(jq -c '.candidates // []' <<< "$openrouter_discovery")"
+                catalog_candidates="$(jq -cn \
+                  --argjson left "$catalog_candidates" --argjson right "$candidates" \
+                  '$left + $right | unique_by([.provider, .model])')"
+              else
+                catalog_failures+=('OpenRouter returned an invalid model catalog')
+              fi
+            else
+              catalog_failures+=('OpenRouter model catalog request failed')
+            fi
+          fi
+
+          candidate_count="$(jq 'length' <<< "$catalog_candidates")"
+          if (( candidate_count == 0 )); then
+            if (( catalog_successes == 0 )); then
+              IFS=';' failure_detail="${catalog_failures[*]}"
+              printf 'provider_unavailable\t%s\n' \
+                "${failure_detail:-No catalog provider was executable}" > "$discovery_outcome"
+            else
+              printf 'model_unavailable\tLive catalogs exposed no policy-eligible candidate\n' \
+                > "$discovery_outcome"
+            fi
+            exit 1
+          fi
+
+          discovery_file="$RUNNER_TEMP/factory-provider-discovery.json"
+          comments_file="$RUNNER_TEMP/factory-attempt-comments.json"
+          jq -cn --argjson candidates "$catalog_candidates" \
+            '{candidates: $candidates}' > "$discovery_file"
+          if ! gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+            > "$comments_file"; then
+            printf 'control_plane_failure\tFactory health evidence could not be read\n' > "$discovery_outcome"
+            exit 1
+          fi
+
+          selection="$(python3 .github/scripts/factory_candidate_health.py \
+            --discovery "$discovery_file" --comments "$comments_file" \
+            --worker "$WORKER")"
+          source="$(jq -r '.selected.provider // empty' <<< "$selection")"
+          model="$(jq -r '.selected.model // empty' <<< "$selection")"
+          runtime_model="$(jq -r '.selected.runtime_model // empty' <<< "$selection")"
+          health_state="$(jq -r '.selected.health_state // empty' <<< "$selection")"
+          if [[ -z "$source" || -z "$model" || -z "$runtime_model" ]]; then
+            failure_outcome="$(jq -r '.failure_outcome // "unknown_failure"' <<< "$selection")"
+            failure_detail="$(jq -r '.detail // "candidate health selection failed"' <<< "$selection")"
+            printf '%s\t%s\n' "$failure_outcome" "$failure_detail" > "$discovery_outcome"
+            exit 1
+          fi
+
+          case "$source" in
+            opencode-free) branch_suffix='opencode-free' ;;
+            openrouter-free) branch_suffix='openrouter' ;;
+            *)
+              printf 'control_plane_failure\tSelected unsupported catalog provider: %s\n' \
+                "$source" > "$discovery_outcome"
+              exit 1
+              ;;
+          esac
+          {
+            echo "source=$source"
+            echo "model=$model"
+            echo "runtime_model=$runtime_model"
+            echo "display=${source} · ${model}"
+            echo "branch_suffix=$branch_suffix"
+            echo "reason=selected-${health_state}-from-live-provider-catalog"
+          } >> "$GITHUB_OUTPUT"
+          printf 'Factory %s selected executor: provider=%s model=%s runtime=%s health=%s\n' \
+            "$WORKER" "$source" "$model" "$runtime_model" "$health_state"
+
+      - name: Report selected executor heartbeat
+        if: always()
+        shell: bash
+        env:
+          WORKER: ${{ steps.lane.outputs.worker }}
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+          SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
+          MINUTE: ${{ steps.lane.outputs.minute }}
+          CONFIGURED: ${{ steps.lane.outputs.configured }}
+          REASON: ${{ steps.executor.outputs.reason || steps.lane.outputs.reason }}
+          EXECUTOR_OUTCOME: ${{ steps.executor.outcome }}
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${WORKER:-}" ]] || exit 0
+          marker="<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-${WORKER} -->"
+          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          if [[ "$CONFIGURED" != true ]]; then
+            outcome='unconfigured'
+          elif [[ "$EXECUTOR_OUTCOME" != success ]]; then
+            outcome='selection-failed'
+          else
+            outcome='running'
+          fi
+          body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nOutcome: %s\nConfiguration: %s\nUpdated: %s\nRun: %s' \
+            "$marker" "$WORKER" "$MODEL" "$SOURCE" "$MINUTE" "$outcome" "$REASON" "$now" "$GITHUB_RUN_ID")"
+          comment_id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+            | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
+          if [[ -n "$comment_id" ]]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null
+          fi
+
       - name: Create ephemeral OmniRoute runtime secrets
-        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'omniroute-opencode'
+        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-opencode'
         shell: bash
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
@@ -259,11 +414,11 @@ jobs:
           chmod 600 "$runtime_env" "$RUNNER_TEMP/omniroute-initial-password"
 
       - name: Start fixed OmniRoute lane
-        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'omniroute-opencode'
+        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-opencode'
         shell: bash
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
-          MODEL: ${{ steps.lane.outputs.model }}
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
           docker pull "$OMNIROUTE_IMAGE"
@@ -311,10 +466,36 @@ jobs:
 
           request="$(jq -nc --arg model "$MODEL" '{model:$model,messages:[{role:"user",content:"Reply with exactly FIXED_MODEL_OK"}],max_tokens:64}')"
           response="$RUNNER_TEMP/omniroute-probe.json"
-          code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
-            --connect-timeout 5 --max-time 120 --header "Authorization: Bearer $key" \
-            --header 'Content-Type: application/json' --data "$request" \
-            http://127.0.0.1:20128/v1/chat/completions || true)"
+          headers="$RUNNER_TEMP/omniroute-probe-headers.txt"
+          attempt=0
+          max_attempts=3
+          code=""
+          while (( attempt < max_attempts )); do
+            attempt=$((attempt + 1))
+            code="$(curl --silent --show-error --dump-header "$headers" --output "$response" --write-out '%{http_code}' \
+              --connect-timeout 5 --max-time 120 --header "Authorization: Bearer $key" \
+              --header 'Content-Type: application/json' --data "$request" \
+              http://127.0.0.1:20128/v1/chat/completions || true)"
+            [[ "$code" =~ ^2 ]] && break
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$response" 2>/dev/null || [[ "$code" == "429" ]]; then
+              if (( attempt < max_attempts )); then
+                retry_after="$(grep -i '^retry-after:' "$headers" 2>/dev/null | tail -n1 | sed -E 's/^[^:]+:[[:space:]]*//I' | tr -d '\r' | grep -E '^[0-9]+' || true)"
+                if [[ "$retry_after" =~ ^[0-9]+$ ]]; then
+                  delay=$(( retry_after > 60 ? 60 : retry_after ))
+                else
+                  delay=$(( 5 * attempt ))
+                fi
+                echo "OmniRoute probe transient HTTP ${code} (attempt ${attempt}/${max_attempts}); retrying after ${delay}s" >&2
+                cat "$response" >&2 || true
+                sleep "$delay"
+                continue
+              fi
+              echo "Transient OmniRoute probe failure HTTP ${code} after ${attempt} attempts; allowing worker to proceed with built-in retry handling" >&2
+              cat "$response" >&2 || true
+              exit 0
+            fi
+            break
+          done
           [[ "$code" =~ ^2 ]] || { echo "Pinned OmniRoute model probe failed HTTP ${code}" >&2; cat "$response" >&2 || true; exit 1; }
 
           mkdir -p "$HOME/.config/opencode"
@@ -331,27 +512,53 @@ jobs:
           chmod 600 "$HOME/.config/opencode/opencode.json"
 
       - name: Probe pinned NVIDIA model before OpenCode smoke
-        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'nvidia'
+        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'nvidia'
         shell: bash
         env:
-          MODEL: ${{ steps.lane.outputs.model }}
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
           [[ -n "${NVIDIA_API_KEY:-}" ]] || { echo 'NVIDIA_API_KEY missing after lane configured=true' >&2; exit 1; }
           request="$(jq -nc --arg model "$MODEL" '{model:$model,messages:[{role:"user",content:"Reply with exactly FIXED_MODEL_OK"}],max_tokens:16}')"
           response="$RUNNER_TEMP/nvidia-probe.json"
-          code="$(curl --silent --show-error --output "$response" --write-out '%{http_code}' \
-            --connect-timeout 5 --max-time 120 \
-            --header "Authorization: Bearer ${NVIDIA_API_KEY}" \
-            --header 'Content-Type: application/json' \
-            --data "$request" \
-            https://integrate.api.nvidia.com/v1/chat/completions || true)"
-          if [[ "$code" == "404" ]]; then
-            echo "Pinned NVIDIA model is not currently invokable for this account: ${MODEL}" >&2
-            echo 'No fallback is allowed for a fixed-model lane.' >&2
-            cat "$response" >&2 || true
-            exit 1
-          fi
+          headers="$RUNNER_TEMP/nvidia-probe-headers.txt"
+          attempt=0
+          max_attempts=3
+          code=""
+          while (( attempt < max_attempts )); do
+            attempt=$((attempt + 1))
+            code="$(curl --silent --show-error --dump-header "$headers" --output "$response" --write-out '%{http_code}' \
+              --connect-timeout 5 --max-time 120 \
+              --header "Authorization: Bearer ${NVIDIA_API_KEY}" \
+              --header 'Content-Type: application/json' \
+              --data "$request" \
+              https://integrate.api.nvidia.com/v1/chat/completions || true)"
+            if [[ "$code" == "404" ]]; then
+              echo "Pinned NVIDIA model is not currently invokable for this account: ${MODEL}" >&2
+              echo 'No fallback is allowed for a fixed-model lane.' >&2
+              cat "$response" >&2 || true
+              exit 1
+            fi
+            [[ "$code" =~ ^2 ]] && break
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$response" 2>/dev/null || [[ "$code" == "429" ]]; then
+              if (( attempt < max_attempts )); then
+                retry_after="$(grep -i '^retry-after:' "$headers" 2>/dev/null | tail -n1 | sed -E 's/^[^:]+:[[:space:]]*//I' | tr -d '\r' | grep -E '^[0-9]+' || true)"
+                if [[ "$retry_after" =~ ^[0-9]+$ ]]; then
+                  delay=$(( retry_after > 60 ? 60 : retry_after ))
+                else
+                  delay=$(( 5 * attempt ))
+                fi
+                echo "NVIDIA probe transient HTTP ${code} (attempt ${attempt}/${max_attempts}); retrying after ${delay}s" >&2
+                cat "$response" >&2 || true
+                sleep "$delay"
+                continue
+              fi
+              echo "Transient NVIDIA probe failure HTTP ${code} after ${attempt} attempts; allowing worker to proceed with built-in retry handling" >&2
+              cat "$response" >&2 || true
+              exit 0
+            fi
+            break
+          done
           [[ "$code" =~ ^2 ]] || {
             echo "Pinned NVIDIA model probe failed HTTP ${code}" >&2
             cat "$response" >&2 || true
@@ -360,10 +567,10 @@ jobs:
           echo "NVIDIA probe succeeded for ${MODEL}"
 
       - name: Smoke exact pinned model through OpenCode
-        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source != 'kilo-auto'
+        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) != 'kilo-auto'
         shell: bash
         env:
-          RUNTIME_MODEL: ${{ steps.lane.outputs.runtime_model }}
+          RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
         run: |
           set -Eeuo pipefail
           before="$(git status --porcelain)"
@@ -376,49 +583,115 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/fixed-model-smoke.log"
           status=${PIPESTATUS[0]}
           set -e
-          (( status == 0 )) || exit "$status"
-          grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"
+          if (( status != 0 )); then
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; allowing worker to proceed with built-in retry handling" >&2
+              cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
+              exit 0
+            fi
+            exit "$status"
+          fi
+          if ! grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; allowing worker to proceed with built-in retry handling" >&2
+              cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
+              exit 0
+            fi
+            echo "Smoke did not return FIXED_MODEL_OPENCODE_OK" >&2
+            cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
+            exit 1
+          fi
           [[ -z "$(git status --porcelain)" ]] || { echo 'Model smoke modified the worktree' >&2; exit 1; }
 
       - name: Smoke Kilo Auto Free through Kilo CLI
-        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source == 'kilo-auto'
+        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'kilo-auto'
         shell: bash
         env:
-          FACTORY_RUNTIME_MODEL: ${{ steps.lane.outputs.runtime_model }}
+          FACTORY_RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
         run: |
           set -Eeuo pipefail
           before="$(git status --porcelain)"
           [[ -z "$before" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
-          bash .github/scripts/kilo-auto-factory-run.sh \
-            180 \
-            'ComicPile Kilo Auto Free smoke' \
-            'Reply with exactly KILO_AUTO_FREE_OK. Do not edit files, run commands, or use tools.' \
-            "$RUNNER_TEMP/kilo-auto-smoke.log"
-          grep -q 'KILO_AUTO_FREE_OK' "$RUNNER_TEMP/kilo-auto-smoke.log"
+          attempt=0
+          max_attempts=3
+          while (( attempt < max_attempts )); do
+            attempt=$((attempt + 1))
+            set +e
+            bash .github/scripts/kilo-auto-factory-run.sh \
+              180 \
+              'ComicPile Kilo Auto Free smoke' \
+              'Reply with exactly KILO_AUTO_FREE_OK. Do not edit files, run commands, or use tools.' \
+              "$RUNNER_TEMP/kilo-auto-smoke.log"
+            status=$?
+            set -e
+            if grep -q 'KILO_AUTO_FREE_OK' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null; then
+              break
+            fi
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null; then
+              if (( attempt < max_attempts )); then
+                retry_after="$(grep -Ei 'retry-after:[[:space:]]*[0-9]+' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' | tail -n1 || true)"
+                if [[ "$retry_after" =~ ^[0-9]+$ ]]; then
+                  delay=$(( retry_after > 60 ? 60 : retry_after ))
+                else
+                  delay=$(( 5 * attempt ))
+                fi
+                echo "Kilo smoke transient failure (attempt ${attempt}/${max_attempts}); retrying after ${delay}s" >&2
+                cat "$RUNNER_TEMP/kilo-auto-smoke.log" >&2 || true
+                sleep "$delay"
+                continue
+              fi
+              echo "Transient Kilo smoke failure after ${attempt} attempts; allowing worker to proceed with built-in retry handling" >&2
+              cat "$RUNNER_TEMP/kilo-auto-smoke.log" >&2 || true
+              exit 0
+            fi
+            # Non-transient failure without sentinel - break to final error handling
+            break
+          done
+          if grep -q 'KILO_AUTO_FREE_OK' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null; then
+            echo "Kilo smoke succeeded"
+          elif grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null; then
+            echo "Transient Kilo smoke failure detected; allowing worker to proceed with built-in retry handling" >&2
+            cat "$RUNNER_TEMP/kilo-auto-smoke.log" >&2 || true
+            exit 0
+          else
+            echo "Kilo smoke did not return KILO_AUTO_FREE_OK" >&2
+            cat "$RUNNER_TEMP/kilo-auto-smoke.log" >&2 || true
+            exit 1
+          fi
           [[ -z "$(git status --porcelain)" ]] || { echo 'Kilo smoke modified the worktree' >&2; exit 1; }
 
       - name: Run continuous fixed-model factory session
         if: steps.lane.outputs.configured == 'true'
         env:
           FACTORY_WORKER: ${{ steps.lane.outputs.worker }}
-          FACTORY_SOURCE: ${{ steps.lane.outputs.source }}
-          FACTORY_MODEL: ${{ steps.lane.outputs.model }}
-          FACTORY_RUNTIME_MODEL: ${{ steps.lane.outputs.runtime_model }}
-          FACTORY_DISPLAY: ${{ steps.lane.outputs.display }}
-          FACTORY_BRANCH_SUFFIX: ${{ steps.lane.outputs.branch_suffix }}
-        run: bash .github/scripts/free-model-factory-worker.sh
+          FACTORY_SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
+          FACTORY_MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+          FACTORY_RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
+          FACTORY_DISPLAY: ${{ steps.executor.outputs.display || steps.lane.outputs.display }}
+          FACTORY_BRANCH_SUFFIX: ${{ steps.executor.outputs.branch_suffix || steps.lane.outputs.branch_suffix }}
+        run: |
+          set +e
+          bash .github/scripts/free-model-factory-worker.sh
+          worker_status=$?
+          set -e
+          # Write after the worker (and model) exits, so attempt code cannot
+          # forge the trusted wrapper's source classification.
+          printf '%s\n' "$worker_status" > "$RUNNER_TEMP/factory-worker-status"
+          exit "$worker_status"
 
       - name: Report terminal heartbeat
         if: always()
         shell: bash
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
-          MODEL: ${{ steps.lane.outputs.model }}
-          SOURCE: ${{ steps.lane.outputs.source }}
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+          SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
           MINUTE: ${{ steps.lane.outputs.minute }}
           CONFIGURED: ${{ steps.lane.outputs.configured }}
-          REASON: ${{ steps.lane.outputs.reason }}
+          REASON: ${{ steps.executor.outputs.reason || steps.lane.outputs.reason }}
           JOB_STATUS: ${{ job.status }}
+          WORKER_STATUS_FILE: ${{ runner.temp }}/factory-worker-status
+          DISCOVERY_OUTCOME_FILE: ${{ runner.temp }}/factory-discovery-outcome
         run: |
           set -Eeuo pipefail
           [[ -n "${WORKER:-}" ]] || exit 0
@@ -433,4 +706,44 @@ jobs:
             gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
           else
             gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null
+          fi
+
+          # Publish a conservative attempt result synchronously. The asynchronous
+          # log classifier may later replace unknown_failure with a more specific
+          # outcome, but capacity never waits on a chained workflow-run event.
+          attempt_marker="<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-${WORKER} -->"
+          worker_status="$(cat "$WORKER_STATUS_FILE" 2>/dev/null || true)"
+          discovery_record="$(cat "$DISCOVERY_OUTCOME_FILE" 2>/dev/null || true)"
+          if [[ -n "$discovery_record" ]]; then
+            IFS="$(printf '\t')" read -r attempt_outcome attempt_detail <<< "$discovery_record"
+          elif [[ "$worker_status" == 2 || "$worker_status" == 3 ]]; then
+            attempt_outcome='control_plane_failure'
+            attempt_detail="factory controller assignment failed with exit status ${worker_status}"
+          elif [[ "$CONFIGURED" == true && "$JOB_STATUS" == success ]]; then
+            attempt_outcome='success'
+            attempt_detail='factory job completed successfully'
+          elif [[ "$CONFIGURED" != true ]]; then
+            attempt_outcome='unknown_failure'
+            attempt_detail="factory lane was not executable: ${REASON}"
+          else
+            attempt_outcome='unknown_failure'
+            attempt_detail='factory job failed before a more specific log classification was available'
+          fi
+          attempt_body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nOutcome: %s\nAttempt outcome: %s\nDetail: %s\nUpdated: %s\nRun: %s' \
+            "$attempt_marker" "$WORKER" "$MODEL" "$SOURCE" "$outcome" "$attempt_outcome" "$attempt_detail" "$now" "$GITHUB_RUN_ID")"
+          attempt_comment_id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+            | jq -r --arg marker "$attempt_marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
+          existing_run=''
+          if [[ -n "$attempt_comment_id" ]]; then
+            existing_run="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${attempt_comment_id}" --jq '.body' \
+              | sed -n 's/^Run: //p' | tail -1)"
+          fi
+          if [[ "$existing_run" =~ ^[0-9]+$ ]] && (( existing_run > GITHUB_RUN_ID )); then
+            echo "Newer attempt evidence from run ${existing_run} already exists; preserving it"
+          elif [[ -n "$attempt_comment_id" ]]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${attempt_comment_id}" \
+              -f body="$attempt_body" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
+              -f body="$attempt_body" >/dev/null
           fi

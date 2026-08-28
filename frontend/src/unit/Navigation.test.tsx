@@ -1,10 +1,14 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { expect, test, beforeEach, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+
+vi.mock('../contexts/useToast', () => ({
+  useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
+}))
 
 const mockApiGet = vi.fn()
 const mockApiPost = vi.fn()
@@ -68,17 +72,19 @@ test('renders retained navigation links when authenticated', async () => {
   renderWithAuth()
 
   await waitFor(() => {
-    expect(screen.getByRole('link', { name: /roll page/i })).toBeInTheDocument()
+    const mobileNav = screen.getByRole('navigation', { name: /mobile navigation/i })
+    expect(within(mobileNav).getByRole('link', { name: /roll page/i })).toBeInTheDocument()
   })
-  expect(screen.getByRole('link', { name: /queue page/i })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /history page/i })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /crossovers page/i })).toBeInTheDocument()
-  expect(screen.getByText('Roll')).toBeVisible()
-  expect(screen.getByText('Queue')).toBeVisible()
-  expect(screen.getByText('History')).toBeVisible()
-  expect(screen.getByText('Crossovers')).toBeVisible()
-  expect(screen.getByText('More')).toBeVisible()
-  expect(screen.queryByRole('link', { name: /analytics page/i })).not.toBeInTheDocument()
+  const mobileNav = screen.getByRole('navigation', { name: /mobile navigation/i })
+  expect(within(mobileNav).getByRole('link', { name: /queue page/i })).toBeInTheDocument()
+  expect(within(mobileNav).getByRole('link', { name: /history page/i })).toBeInTheDocument()
+  expect(within(mobileNav).getByRole('link', { name: /crossovers page/i })).toBeInTheDocument()
+  expect(within(mobileNav).getByText('Roll')).toBeVisible()
+  expect(within(mobileNav).getByText('Queue')).toBeVisible()
+  expect(within(mobileNav).getByText('History')).toBeVisible()
+  expect(within(mobileNav).getByText('Crossovers')).toBeVisible()
+  expect(within(mobileNav).getByText('More')).toBeVisible()
+  expect(within(mobileNav).queryByRole('link', { name: /analytics page/i })).not.toBeInTheDocument()
 })
 
 test('marks More as the only active destination on submenu routes', async () => {
@@ -98,7 +104,7 @@ test('dismisses the More tray only when tapping outside it', async () => {
   const moreNavigation = screen.getByRole('navigation', { name: /more pages/i })
   expect(moreButton).toHaveAttribute('aria-expanded', 'true')
 
-  fireEvent.pointerDown(screen.getByRole('link', { name: /help/i }))
+  fireEvent.pointerDown(within(moreNavigation).getByRole('link', { name: /help/i }))
   expect(moreNavigation).toBeInTheDocument()
   expect(moreButton).toHaveAttribute('aria-expanded', 'true')
 
@@ -189,14 +195,16 @@ test('renders all secondary nav links inline on a desktop viewport', async () =>
   renderWithAuth()
 
   await waitFor(() => {
-    expect(screen.getByRole('link', { name: /roll page/i })).toBeInTheDocument()
+    const desktopNav = screen.getByRole('navigation', { name: /desktop navigation/i })
+    expect(within(desktopNav).getByRole('link', { name: /roll page/i })).toBeInTheDocument()
   })
-  expect(screen.getByRole('link', { name: /queue page/i })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /history page/i })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /crossovers page/i })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /continuity planner page/i })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /what's new page/i })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /help page/i })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /glossary page/i })).toBeInTheDocument()
+  const desktopNav = screen.getByRole('navigation', { name: /desktop navigation/i })
+  expect(within(desktopNav).getByRole('link', { name: /queue page/i })).toBeInTheDocument()
+  expect(within(desktopNav).getByRole('link', { name: /history page/i })).toBeInTheDocument()
+  expect(within(desktopNav).getByRole('link', { name: /crossovers page/i })).toBeInTheDocument()
+  expect(within(desktopNav).getByRole('link', { name: /continuity planner page/i })).toBeInTheDocument()
+  expect(within(desktopNav).getByRole('link', { name: /what's new page/i })).toBeInTheDocument()
+  expect(within(desktopNav).getByRole('link', { name: /help page/i })).toBeInTheDocument()
+  expect(within(desktopNav).getByRole('link', { name: /glossary page/i })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /more pages/i })).not.toBeInTheDocument()
 })

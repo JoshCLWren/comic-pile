@@ -193,7 +193,7 @@ describe('PlanReadinessPanel', () => {
           nodeReadiness({
             node_id: 'issue-99',
             ref_id: 99,
-            label: 'Issue 99',
+            label: '[deleted series] #99',
             is_readable: false,
             diagnostics: [
               { code: 'dangling_plan_reference', node_type: 'issue', node_id: 99 },
@@ -238,7 +238,7 @@ describe('PlanReadinessPanel', () => {
     // Nodes group under their own lane heading.
     const laneOne = screen.getByTestId('plan-readiness-lane-main')
     expect(laneOne).toHaveTextContent('Reading order')
-    expect(laneOne).toHaveTextContent('Issue 99')
+    expect(laneOne).toHaveTextContent('[deleted series] #99')
     const laneTwo = screen.getByTestId('plan-readiness-lane-lane-2')
     expect(laneTwo).toHaveTextContent('Lane 2')
     expect(laneTwo).toHaveTextContent('Mister Miracle #1')
