@@ -12,7 +12,6 @@ if (typeof global.document === 'undefined') {
     // Minimal DOM methods used by tests
     createElement: () => ({
       setAttribute: () => {},
-      setAttribute: () => {},
       appendChild: () => {},
       removeChild: () => {},
       // Add any other attributes as needed
@@ -27,9 +26,9 @@ if (typeof global.document === 'undefined') {
 // Provide a minimal localStorage implementation if missing
 if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
   ;(window as any).localStorage = {
-    clear: jest.fn(),
-    getItem: jest.fn(),
-    setItem: jest.fn(),
+    clear: vi.fn(),
+    getItem: vi.fn(),
+    setItem: vi.fn(),
   }
 }
 
