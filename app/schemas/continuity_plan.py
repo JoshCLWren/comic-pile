@@ -129,6 +129,17 @@ class ContinuityPlanResponse(ContinuityPlanWrite):
     updated_at: datetime
 
 
+class ContinuityPlanListItem(BaseModel):
+    """Compact summary returned by the plans list endpoint."""
+
+    id: int
+    name: str
+    ordering_mode: PlanOrderingMode
+    lane_count: int
+    step_count: int
+    updated_at: datetime
+
+
 TemplateRole = Literal["core", "context/prelude", "epilogue", "unknown"]
 TemplateConfidence = Literal["high", "medium", "low"]
 

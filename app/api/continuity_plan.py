@@ -17,7 +17,9 @@ from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.thread import Thread
 from app.models.user import User
+from app.repositories.continuity_repository import plans_for_user
 from app.schemas.continuity_plan import (
+    ContinuityPlanListItem,
     ContinuityPlanNode,
     ContinuityPlanReadinessResponse,
     ContinuityPlanResponse,
@@ -167,6 +169,31 @@ async def _replace_compiled_rules(
         )
         await db.flush()
     return True
+
+
+@router.get("/continuity-plans/", response_model=list[ContinuityPlanListItem])
+async def list_continuity_plans(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[ContinuityPlanListItem]:
+    """List every continuity plan owned by the authenticated user.
+
+    Plans are returned in descending ``updated_at`` order so the most
+    recently modified plan appears first.
+    """
+    rows = await plans_for_user(db, user_id=current_user.id)
+    ordered = sorted(rows, key=lambda plan: plan.updated_at, reverse=True)
+    return [
+        ContinuityPlanListItem(
+            id=plan.id,
+            name=plan.name,
+            ordering_mode=plan.ordering_mode,
+            lane_count=len(plan.lanes_json),
+            step_count=len(plan.nodes_json),
+            updated_at=plan.updated_at,
+        )
+        for plan in ordered
+    ]
 
 
 @router.post("/continuity-plans/", response_model=ContinuityPlanResponse, status_code=201)

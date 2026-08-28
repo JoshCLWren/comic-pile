@@ -29,6 +29,7 @@ export const routeModules = {
   crossovers: () => import('../pages/CrossoversPage'),
   crossoverDetail: () => import('../pages/CrossoverDetailPage'),
   continuityPlanner: () => import('../pages/ContinuityPlannerPage'),
+  continuityPlansIndex: () => import('../pages/ContinuityPlansIndexPage'),
   help: () => import('../pages/HelpPage'),
   whatsNew: () => import('../pages/WhatsNewPage'),
   login: () => import('../pages/LoginPage'),

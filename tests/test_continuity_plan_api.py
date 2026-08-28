@@ -4,15 +4,19 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import continuity_plan as continuity_plan_api
+from app.auth import create_access_token
+from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
+from app.main import app
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.issue import Issue
 from app.models.thread import Thread
+from app.models.user import User
 from tests.conftest import get_or_create_user_async
 
 
@@ -374,3 +378,180 @@ async def test_delete_lane_behavior_is_explicit(
     accepted = await auth_client.put(f"/api/v1/continuity-plans/{plan_id}", json=dropping_empty_lane)
     assert accepted.status_code == 200, accepted.text
     assert [lane["id"] for lane in accepted.json()["lanes"]] == ["era-b"]
+
+
+@pytest.mark.asyncio
+async def test_list_plans_returns_empty_for_user_with_no_plans(
+    auth_client: AsyncClient,
+) -> None:
+    """The list endpoint returns an empty array when the user has saved no plans."""
+    response = await auth_client.get("/api/v1/continuity-plans/")
+    assert response.status_code == 200, response.text
+    assert response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_list_plans_returns_owned_plans_with_summary(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """List returns each plan with name, ordering_mode, lane_count, step_count, and updated_at."""
+    user = await get_or_create_user_async(async_db)
+    issue_a = await _make_issue(async_db, user_id=user.id, suffix="a")
+    issue_b = await _make_issue(async_db, user_id=user.id, suffix="b")
+    await async_db.commit()
+
+    parallel = _parallel_payload([issue_a.id], [issue_b.id])
+    created = await auth_client.post("/api/v1/continuity-plans/", json=parallel)
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+    plan_name = created.json()["name"]
+
+    strict = _plan_payload([issue_a.id], mode="strict_sequential")
+    strict["name"] = "Strict"
+    created2 = await auth_client.post("/api/v1/continuity-plans/", json=strict)
+    assert created2.status_code == 201, created2.text
+
+    response = await auth_client.get("/api/v1/continuity-plans/")
+    assert response.status_code == 200, response.text
+    items = response.json()
+    ids = [item["id"] for item in items]
+    assert plan_id in ids
+
+    item = next(item for item in items if item["id"] == plan_id)
+    assert item["name"] == plan_name
+    assert item["ordering_mode"] == "informational"
+    assert item["lane_count"] == 2
+    assert item["step_count"] == 2
+    assert "updated_at" in item
+
+
+@pytest.mark.asyncio
+async def test_list_plans_does_not_leak_other_users_plans(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Only plans owned by the authenticated user appear in the list."""
+    from app.models.user import User as _User
+
+    user = await get_or_create_user_async(async_db)
+    other = _User(username="other_list_user", created_at=datetime.now(UTC))
+    async_db.add(other)
+    await async_db.flush()
+    await async_db.refresh(other)
+
+    issue = await _make_issue(async_db, user_id=other.id, suffix="other")
+    await async_db.commit()
+
+    payload = _plan_payload([issue.id])
+    create_other = await AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    )
+    csrf = generate_csrf_token()
+    create_other.cookies.set(CSRF_COOKIE_NAME, csrf)
+    create_other.headers.update({CSRF_HEADER_NAME: csrf})
+    other_token = create_access_token(data={"sub": other.username, "jti": "test-other"})
+    create_other.headers.update({"Authorization": f"Bearer {other_token}"})
+    await create_other.post("/api/v1/continuity-plans/", json=payload)
+    await create_other.aclose()
+
+    response = await auth_client.get("/api/v1/continuity-plans/")
+    assert response.status_code == 200, response.text
+    items = response.json()
+    assert all(item.get("user_id") == user.id for item in items)
+
+
+@pytest.mark.asyncio
+async def test_delete_plan_cascades_owned_rules_and_leaves_unrelated_rules_intact(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Deleting a plan removes only its generated rules; other users' and manual rules survive."""
+    user = await get_or_create_user_async(async_db)
+    plan_issue = await _make_issue(async_db, user_id=user.id, suffix="plan")
+    manual_issue = await _make_issue(async_db, user_id=user.id, suffix="manual")
+    await async_db.commit()
+
+    plan_payload = _plan_payload([plan_issue.id], mode="strict_sequential")
+    plan_payload["name"] = "Plan to delete"
+    created = await auth_client.post("/api/v1/continuity-plans/", json=plan_payload)
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+
+    rules_before = (
+        await async_db.execute(select(ContinuityRule).where(ContinuityRule.user_id == user.id))
+    ).scalars().all()
+    plan_marker = f"continuity-plan:{plan_id}"
+    assert any(rule.note == plan_marker for rule in rules_before)
+
+    manual_rule = ContinuityRule(
+        user_id=user.id,
+        source_type="issue",
+        source_id=manual_issue.id,
+        target_type="issue",
+        target_id=plan_issue.id,
+        satisfaction_type="item_read",
+        note="manual-standalone",
+    )
+    async_db.add(manual_rule)
+    await async_db.commit()
+
+    rules_after_manual = (
+        await async_db.execute(select(ContinuityRule).where(ContinuityRule.user_id == user.id))
+    ).scalars().all()
+    assert len(rules_after_manual) >= 2
+
+    delete_response = await auth_client.delete(f"/api/v1/continuity-plans/{plan_id}")
+    assert delete_response.status_code == 204, delete_response.text
+
+    remaining = (
+        await async_db.execute(
+            select(ContinuityRule).where(
+                ContinuityRule.user_id == user.id,
+                ContinuityRule.note == plan_marker,
+            )
+        )
+    ).scalars().all()
+    assert remaining == []
+
+    standalone = (
+        await async_db.execute(
+            select(ContinuityRule).where(ContinuityRule.note == "manual-standalone")
+        )
+    ).scalar_one_or_none()
+    assert standalone is not None
+
+
+@pytest.mark.asyncio
+async def test_list_plans_orders_by_last_saved(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """The list returns plans sorted by most recently updated first."""
+    from sqlalchemy import select
+    from datetime import timedelta
+
+    user = await get_or_create_user_async(async_db)
+    issue = await _make_issue(async_db, user_id=user.id, suffix="order")
+    await async_db.commit()
+
+    old_payload = _plan_payload([issue.id])
+    old_payload["name"] = "Older"
+    old_resp = await auth_client.post("/api/v1/continuity-plans/", json=old_payload)
+    assert old_resp.status_code == 201, old_resp.text
+    old_id = old_resp.json()["id"]
+
+    await async_db.commit()
+    old_plan = (
+        await async_db.execute(select(ContinuityPlan).where(ContinuityPlan.id == old_id))
+    ).scalar_one()
+    old_plan.updated_at = datetime.now(UTC) - timedelta(hours=1)
+    await async_db.flush()
+    await async_db.commit()
+
+    new_payload = _plan_payload([issue.id])
+    new_payload["name"] = "Newer"
+    new_resp = await auth_client.post("/api/v1/continuity-plans/", json=new_payload)
+    assert new_resp.status_code == 201, new_resp.text
+    new_id = new_resp.json()["id"]
+
+    response = await auth_client.get("/api/v1/continuity-plans/")
+    assert response.status_code == 200, response.text
+    ids = [item["id"] for item in response.json()]
+    assert ids.index(new_id) < ids.index(old_id)
