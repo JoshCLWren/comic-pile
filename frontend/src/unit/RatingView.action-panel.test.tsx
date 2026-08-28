@@ -273,8 +273,32 @@ describe('RatingView responsive pillar contract', () => {
     expect(gridCell!.className).toContain('xl:row-start-2')
   })
 
-  it('keeps the pillars in DOM order without decorative numeric prefixes', () => {
+  it('does not render Reading Context pillar when empty - Your Context follows The Comic directly', () => {
     const { container } = render(ratingView())
+    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
+    const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
+    const text = grid!.textContent ?? ''
+    expect(text.indexOf('The Comic')).toBeGreaterThan(-1)
+    expect(text.indexOf('Your Context')).toBeGreaterThan(-1)
+    expect(text.indexOf('The Comic')).toBeLessThan(text.indexOf('Your Context'))
+    expect(text).not.toMatch(/\b0[123]\b/)
+  })
+
+  it('keeps the pillars in DOM order without decorative numeric prefixes when Reading Context has content', () => {
+    const { container } = render(
+      ratingView({
+        readingOrders: [
+          {
+            id: 7,
+            name: 'Main route',
+            description: null,
+            total_items: 2,
+            completed_items: 1,
+            items: [],
+          },
+        ],
+      }),
+    )
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     const text = grid!.textContent ?? ''
     // Hierarchy now uses reader questions instead of pillar names, but order is preserved
@@ -286,6 +310,7 @@ describe('RatingView responsive pillar contract', () => {
       expect(text.indexOf('The Comic')).toBeLessThan(text.indexOf('Reading Context'))
       expect(text.indexOf('Reading Context')).toBeLessThan(text.indexOf('Your Context'))
     }
+    expect(screen.getByText('Reading Context')).toBeInTheDocument()
     expect(text).not.toMatch(/\b0[123]\b/)
   })
 })
