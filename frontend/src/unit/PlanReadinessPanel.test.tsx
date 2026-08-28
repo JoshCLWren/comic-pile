@@ -253,4 +253,35 @@ describe('PlanReadinessPanel', () => {
     rerender(<PlanReadinessPanel planId={12} refreshKey={1} />)
     await waitFor(() => expect(mocks.readiness).toHaveBeenCalledTimes(2))
   })
+
+  it('groups nodes with unknown lane_id under the Other steps fallback lane', async () => {
+    mocks.readiness.mockResolvedValueOnce(
+      readinessResponse({
+        lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
+        nodes: [
+          nodeReadiness({ node_id: 'issue-40', label: 'Mister Miracle #1' }),
+          nodeReadiness({
+            node_id: 'issue-41',
+            ref_id: 41,
+            label: 'Orphan step',
+            lane_id: 'unknown-lane',
+            position: 0,
+          }),
+        ],
+        summary: { total: 2, readable: 2, blocked: 0, complete: 0, unavailable: 0 },
+      }),
+    )
+    render(<PlanReadinessPanel planId={12} />)
+
+    await screen.findByTestId('plan-node-readiness-issue-40')
+    await screen.findByTestId('plan-node-readiness-issue-41')
+
+    const mainLane = screen.getByTestId('plan-readiness-lane-main')
+    expect(mainLane).toHaveTextContent('Reading order')
+    expect(mainLane).toHaveTextContent('Mister Miracle #1')
+
+    const fallbackLane = screen.getByTestId('plan-readiness-lane-__unlane__')
+    expect(fallbackLane).toHaveTextContent('Other steps')
+    expect(fallbackLane).toHaveTextContent('Orphan step')
+  })
 })

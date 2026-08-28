@@ -1,6 +1,7 @@
 """API coverage for persisted continuity plans and explicit rule compilation."""
 
 from datetime import UTC, datetime
+from typing import TypedDict
 from unittest.mock import AsyncMock
 
 import pytest
@@ -14,6 +15,23 @@ from app.models.continuity_rule import ContinuityRule
 from app.models.issue import Issue
 from app.models.thread import Thread
 from tests.conftest import get_or_create_user_async
+
+
+class PlanNodeDict(TypedDict):
+    id: str
+    node_type: str
+    ref_id: int
+    lane_id: str
+    position: int
+    is_checkpoint: bool | None
+    convergence_gate: list[dict[str, str]] | None
+
+
+class PlanPayloadDict(TypedDict):
+    name: str
+    ordering_mode: str
+    lanes: list[dict[str, str | int]]
+    nodes: list[PlanNodeDict]
 
 
 async def _make_issue(async_db: AsyncSession, *, user_id: int, suffix: str) -> Issue:
@@ -37,7 +55,7 @@ async def _make_issue(async_db: AsyncSession, *, user_id: int, suffix: str) -> I
     return issue
 
 
-def _plan_payload(issue_ids: list[int], *, mode: str = "informational") -> dict[str, object]:
+def _plan_payload(issue_ids: list[int], *, mode: str = "informational") -> PlanPayloadDict:
     """Build a one-lane plan payload."""
     return {
         "name": "Imported crossover",
@@ -50,6 +68,8 @@ def _plan_payload(issue_ids: list[int], *, mode: str = "informational") -> dict[
                 "ref_id": issue_id,
                 "lane_id": "main",
                 "position": position,
+                "is_checkpoint": False,
+                "convergence_gate": None,
             }
             for position, issue_id in enumerate(issue_ids)
         ],
@@ -382,17 +402,18 @@ def _parallel_payload_with_gates(
     *,
     checkpoint_index: int | None = None,
     convergence_from_b_to_a: int | None = None,
-) -> dict[str, object]:
+) -> PlanPayloadDict:
     """Build a two-lane informational plan with optional checkpoint/convergence."""
-    nodes: list[dict[str, object]] = []
+    nodes: list[PlanNodeDict] = []
     for position, issue_id in enumerate(lane_a):
-        node: dict[str, object] = {
+        node: PlanNodeDict = {
             "id": f"a-{issue_id}",
             "node_type": "issue",
             "ref_id": issue_id,
             "lane_id": "era-a",
             "position": position,
             "is_checkpoint": position == checkpoint_index,
+            "convergence_gate": None,
         }
         nodes.append(node)
     for position, issue_id in enumerate(lane_b):
@@ -405,6 +426,7 @@ def _parallel_payload_with_gates(
             "ref_id": issue_id,
             "lane_id": "era-b",
             "position": position,
+            "is_checkpoint": False,
             "convergence_gate": gate,
         })
     return {
