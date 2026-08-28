@@ -194,16 +194,22 @@ async def roll_dice(
                 selected_thread_issue_id = next_issue.id
                 selected_thread_issue_number = next_issue.issue_number
 
-    # Decision-time context is purely observational: it records the estimate
-    # that existed when this roll happened and never changes the selection.
-    effort_estimate = await compute_effort_estimate(
-        db,
-        user_id=user_id,
-        thread_id=selected_thread_id,
-        issue_id=selected_thread_issue_id,
-    )
+    # Compute effort estimates for all candidates in the bounded pool
+    effort_estimates = []
+    for thread, unread_count, issue_number in bounded_rows:
+        issue_id = thread.next_unread_issue_id if thread.uses_issue_tracking() else None
+        effort_estimate = await compute_effort_estimate(
+            db,
+            user_id=user_id,
+            thread_id=thread.id,
+            issue_id=issue_id,
+        )
+        effort_estimates.append(effort_estimate)
+
+    # Use the selected candidate's effort estimate for the Event context
+    selected_effort_estimate = effort_estimates[selected_index]
     recommendation_context = build_recommendation_context(
-        effort_estimate,
+        selected_effort_estimate,
         thread_id=selected_thread_id,
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
@@ -249,8 +255,13 @@ async def roll_dice(
                 candidate_id=breakdown.candidate_id,
                 factors=list(breakdown.factors),
                 weight=breakdown.weight,
+                effort_minutes=round(effort_estimate.minutes, 2) if effort_estimate.minutes is not None else None,
+                effort_band=effort_estimate.band,
+                effort_source=effort_estimate.source.value,
+                effort_confidence=round(effort_estimate.confidence, 3),
+                effort_sample_count=effort_estimate.sample_count,
             )
-            for breakdown in candidate_weights
+            for breakdown, effort_estimate in zip(candidate_weights, effort_estimates)
         ]
         if candidate_weights
         else None,
@@ -443,7 +454,7 @@ async def override_roll(
     # Record recommendation context for override selection
     # Override is a manual selection, not a weighted recommendation
     context_data = RecommendationContextCreate(
-        schema_version=1,
+        schema_version=2,
         intent="balanced",
         intent_source="manual_override",
         intent_confidence=1.0,
@@ -454,6 +465,11 @@ async def override_roll(
         final_weight=1.0,
         random_bypass=False,
         balanced_neutrality=True,
+        effort_minutes=round(effort_estimate.minutes, 2) if effort_estimate.minutes is not None else None,
+        effort_band=effort_estimate.band,
+        effort_source=effort_estimate.source.value,
+        effort_confidence=round(effort_estimate.confidence, 3),
+        effort_sample_count=effort_estimate.sample_count,
     )
 
     # Flush event to get its ID for the recommendation context FK
