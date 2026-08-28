@@ -110,6 +110,8 @@ export const continuityPlansApi = {
     api.get<ContinuityPlan>(`/v1/continuity-plans/${planId}`),
   update: (planId: number, payload: ContinuityPlanWrite) =>
     api.put<ContinuityPlan, ContinuityPlanWrite>(`/v1/continuity-plans/${planId}`, payload),
+  delete: (planId: number) =>
+    api.delete<void>(`/v1/continuity-plans/${planId}`),
   readiness: (planId: number): Promise<ContinuityPlanReadinessResponse> =>
     api.get<ContinuityPlanReadinessResponse>(`/v1/continuity-plans/${planId}/readiness`),
 }

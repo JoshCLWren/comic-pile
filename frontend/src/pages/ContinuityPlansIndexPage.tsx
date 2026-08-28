@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import axios from 'axios'
 import { useNavigate } from 'react-router-dom'
 import { continuityPlansApi, type ContinuityPlanListItem } from '../services/api-continuity-plans'
 
@@ -24,11 +23,6 @@ export default function ContinuityPlansIndexPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
-  const laneLabel = useCallback((mode: string): string => {
-    if (mode === 'strict_sequential') return '1 lane'
-    return 'Parallel'
-  }, [])
-
   useEffect(() => {
     let active = true
     setIsLoading(true)
@@ -46,7 +40,7 @@ export default function ContinuityPlansIndexPage() {
     setIsDeleting(true)
     setDeleteError(null)
     try {
-      await axios.delete(`/api/v1/continuity-plans/${deleteTargetId}`)
+      await continuityPlansApi.delete(deleteTargetId)
       setPlans((current) => (current ? current.filter((plan) => plan.id !== deleteTargetId) : current))
       setDeleteTargetId(null)
     } catch (error) {
@@ -75,7 +69,7 @@ export default function ContinuityPlansIndexPage() {
           <p className="mt-2 text-sm text-stone-500">Create your first plan from the sequential planner.</p>
           <button
             type="button"
-            onClick={() => navigate('/continuity-plans')}
+            onClick={() => navigate('/continuity-plans/new')}
             className="mt-4 min-h-11 rounded-xl bg-amber-500 px-5 font-black text-stone-950"
           >
             Create a plan

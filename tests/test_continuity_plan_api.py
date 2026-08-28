@@ -4,14 +4,11 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import continuity_plan as continuity_plan_api
-from app.auth import create_access_token
-from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
-from app.main import app
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.issue import Issue
@@ -442,21 +439,22 @@ async def test_list_plans_does_not_leak_other_users_plans(
     await async_db.commit()
 
     payload = _plan_payload([issue.id])
-    create_other = await AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
+    other_plan = ContinuityPlan(
+        user_id=other.id,
+        name="Other plan",
+        ordering_mode="informational",
+        lanes_json=payload["lanes"],
+        nodes_json=payload["nodes"],
     )
-    csrf = generate_csrf_token()
-    create_other.cookies.set(CSRF_COOKIE_NAME, csrf)
-    create_other.headers.update({CSRF_HEADER_NAME: csrf})
-    other_token = create_access_token(data={"sub": other.username, "jti": "test-other"})
-    create_other.headers.update({"Authorization": f"Bearer {other_token}"})
-    await create_other.post("/api/v1/continuity-plans/", json=payload)
-    await create_other.aclose()
+    async_db.add(other_plan)
+    await async_db.flush()
+    await async_db.refresh(other_plan)
+    other_plan_id = other_plan.id
 
     response = await auth_client.get("/api/v1/continuity-plans/")
     assert response.status_code == 200, response.text
     items = response.json()
-    assert all(item.get("user_id") == user.id for item in items)
+    assert all(item["id"] != other_plan_id for item in items)
 
 
 @pytest.mark.asyncio
