@@ -44,6 +44,12 @@ interface PlannerLane {
   order: number
 }
 
+interface ConflictDetail {
+  code?: string
+  source_node_id?: string
+  target_node_id?: string
+}
+
 function getConflictMessage(
   error: unknown,
   nodes: PlannerNode[]
@@ -58,36 +64,26 @@ function getConflictMessage(
   }
 
   if (detail && typeof detail === 'object' && 'code' in detail) {
-    if (detail.code === 'plan_rule_conflict') {
-      // Try to get specific node information for a more helpful message
-      const sourceId = (detail as any).source_node_id
-      const targetId = (detail as any).target_node_id
-      
+    const conflict = detail as ConflictDetail
+    if (conflict.code === 'plan_rule_conflict' || conflict.code === 'continuity_cycle') {
+      const sourceId = conflict.source_node_id
+      const targetId = conflict.target_node_id
+
       if (sourceId !== undefined && targetId !== undefined) {
         const sourceNode = nodes.find((node) => node.id === sourceId)
         const targetNode = nodes.find((node) => node.id === targetId)
-        
+
         if (sourceNode && targetNode) {
-          return `You already require "${sourceNode.label}" before "${targetNode.label}". Change the sequence to resolve this conflict.`
-        }
-      }
-      
-      return 'This order conflicts with an existing continuity rule. Change the sequence and try again.'
-    }
-    if (detail.code === 'continuity_cycle') {
-      // Try to get specific node information for a more helpful message
-      const sourceId = (detail as any).source_node_id
-      const targetId = (detail as any).target_node_id
-      
-      if (sourceId !== undefined && targetId !== undefined) {
-        const sourceNode = nodes.find((node) => node.id === sourceId)
-        const targetNode = nodes.find((node) => node.id === targetId)
-        
-        if (sourceNode && targetNode) {
+          if (conflict.code === 'plan_rule_conflict') {
+            return `You already require "${sourceNode.label}" before "${targetNode.label}". Change the sequence to resolve this conflict.`
+          }
           return `This order would create a continuity cycle: "${sourceNode.label}" → "${targetNode.label}". Change the sequence to resolve this cycle.`
         }
       }
-      
+
+      if (conflict.code === 'plan_rule_conflict') {
+        return 'This order conflicts with an existing continuity rule. Change the sequence and try again.'
+      }
       return 'This order would create a continuity cycle. Change the sequence and try again.'
     }
   }
@@ -417,75 +413,39 @@ export default function ContinuityPlannerPage() {
     setActiveLaneId((current) => (current === laneId ? lanes.find((lane) => lane.id !== laneId)?.id ?? '' : current))
   }
 
-const save = async () => {
-     if (!name.trim()) {
-       setSaveError('Enter a plan name.')
-       return
-     }
-     setIsSaving(true)
-     setSaveError(null)
-     try {
-       const payload = buildPayload(name, lanes, nodes)
-       const saved = planId
-         ? await continuityPlansApi.update(planId, payload)
-         : await continuityPlansApi.create(payload)
-       const savedLanes = (saved.lanes.length > 0
-         ? saved.lanes
-         : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
-       ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
-         .sort((a, b) => a.order - b.order)
-       const normalized = normalizePositions(nodes)
-       setName(saved.name)
-       setLanes(savedLanes)
-       setNodes(normalized)
-       setSavedName(saved.name)
-       setSavedLanes(savedLanes)
-       setSavedNodes(normalized)
-       window.localStorage.setItem(LAST_PLAN_KEY, String(saved.id))
-       setReadinessRefreshKey((key) => key + 1)
-       if (!planId) navigate(`/continuity-plans/${saved.id}`, { replace: true })
-} catch (error) {
-        // Handle idempotent case for informational plans: if we're saving an informational plan
-        // (which creates zero rules), a plan_rule_conflict should be treated as success since
-        // no rules are actually being created
-        const payload = buildPayload(name, lanes, nodes)
-        const orderedLanes = [...lanes].sort((a, b) => a.order - b.order)
-        const isInformational = orderedLanes.length !== 1
-        
-        if (axios.isAxiosError(error) && 
-            error.response?.data?.detail?.code === 'plan_rule_conflict' &&
-            isInformational) {
-          // For informational plans, treat plan_rule_conflict as success since no rules are created
-          // But we still need to update the UI to reflect the saved state
-          const savedLanes = (payload.lanes.length > 0
-            ? payload.lanes
-            : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
-          ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
-            .sort((a, b) => a.order - b.order)
-        const normalized = normalizePositions(nodes)
-        setName(payload.name)
-        setLanes(savedLanes)
-        setNodes(normalized)
-        setSavedName(payload.name)
-        setSavedLanes(savedLanes)
-        setSavedNodes(normalized)
-        // Note: We don't actually save to backend for informational plans when there's a conflict
-        // but we update the UI to show it as saved to avoid confusing the user
-        window.localStorage.setItem(LAST_PLAN_KEY, String(Date.now())) // Use timestamp as temporary ID
-        setReadinessRefreshKey((key) => key + 1)
-        if (!planId) {
-          // Navigate to a fake ID to avoid creating actual plan entries for informational plans with conflicts
-          navigate(`/continuity-plans/${Date.now()}`, { replace: true })
-        }
-        setIsSaving(false)
-        return
-        }
-        
-        setSaveError(getConflictMessage(error, nodes))
-      } finally {
-        setIsSaving(false)
-      }
-   }
+  const save = async () => {
+    if (!name.trim()) {
+      setSaveError('Enter a plan name.')
+      return
+    }
+    setIsSaving(true)
+    setSaveError(null)
+    try {
+      const payload = buildPayload(name, lanes, nodes)
+      const saved = planId
+        ? await continuityPlansApi.update(planId, payload)
+        : await continuityPlansApi.create(payload)
+      const savedLanes = (saved.lanes.length > 0
+        ? saved.lanes
+        : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
+      ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
+        .sort((a, b) => a.order - b.order)
+      const normalized = normalizePositions(nodes)
+      setName(saved.name)
+      setLanes(savedLanes)
+      setNodes(normalized)
+      setSavedName(saved.name)
+      setSavedLanes(savedLanes)
+      setSavedNodes(normalized)
+      window.localStorage.setItem(LAST_PLAN_KEY, String(saved.id))
+      setReadinessRefreshKey((key) => key + 1)
+      if (!planId) navigate(`/continuity-plans/${saved.id}`, { replace: true })
+    } catch (error) {
+      setSaveError(getConflictMessage(error, nodes))
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const cancel = () => {
     setName(savedName || DEFAULT_PLAN_NAME)
@@ -680,11 +640,11 @@ const save = async () => {
         </div>
       </section>
 
-<PlanReadinessPanel planId={planId} refreshKey={readinessRefreshKey} />
+      <PlanReadinessPanel planId={planId} refreshKey={readinessRefreshKey} />
 
-       {saveError && <p role="alert" className="rounded-xl border border-red-800 bg-red-950/30 p-3 text-red-200 mb-4">{saveError}</p>}
+      {saveError && <p role="alert" className="rounded-xl border border-red-800 bg-red-950/30 p-3 text-red-200">{saveError}</p>}
 
-       <div className="sticky bottom-16 flex gap-3 rounded-2xl border border-stone-800 bg-stone-950/95 p-3 backdrop-blur md:bottom-24">
+      <div className="sticky bottom-16 flex gap-3 rounded-2xl border border-stone-800 bg-stone-950/95 p-3 backdrop-blur md:bottom-24">
         <button type="button" onClick={cancel} disabled={!isDirty || isSaving} className="min-h-11 flex-1 rounded-xl border border-stone-700 font-bold disabled:opacity-40">Cancel changes</button>
         <button type="button" onClick={() => void save()} disabled={!isDirty || isSaving} className="min-h-11 flex-1 rounded-xl bg-amber-500 font-black text-stone-950 disabled:opacity-40">{isSaving ? 'Saving…' : 'Save plan'}</button>
       </div>
