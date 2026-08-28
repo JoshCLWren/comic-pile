@@ -97,7 +97,14 @@ jobs:
           # Fail-closed: if GitHub is rate-limiting/erroring we cannot prove
           # main is healthy, so treat it as red rather than merging blind.
           total="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '.total_count // 0' 2>/dev/null || echo UNAVAILABLE)"
-          failing="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '[.check_runs[] | select(.conclusion=="FAILURE" or .conclusion=="TIMED_OUT" or .conclusion=="CANCELLED" or .conclusion=="STARTUP_FAILURE")] | length' 2>/dev/null || echo UNAVAILABLE)"
+          failing="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '
+            [.check_runs[]
+             | select((.conclusion // "" | ascii_downcase) as $c
+                      | $c=="failure" or $c=="timed_out"
+                        or $c=="cancelled" or $c=="startup_failure")]
+            | length
+          ' 2>/dev/null || echo UNAVAILABLE)"
+          echo "Main health API result: sha=${sha} total_count=${total} failing=${failing}"
           if [[ "$total" == "UNAVAILABLE" || "$failing" == "UNAVAILABLE" ]]; then
             echo "GitHub API unavailable proving main health at ${sha}; failing closed as main_red=true for this tick" >&2
             echo "main_red=true" >> "$GITHUB_OUTPUT"
@@ -108,7 +115,13 @@ jobs:
             echo "failing=$failing" >> "$GITHUB_OUTPUT"
             echo "main_red=true" >> "$GITHUB_OUTPUT"
             # Ensure main-breakage P0 exists (best-effort, deduplicated by main-health-gate)
-            names="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq -r '[.check_runs[] | select(.conclusion=="FAILURE" or .conclusion=="TIMED_OUT") | .name] | join(", ")' 2>/dev/null || true)"
+            names="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq -r '
+              [.check_runs[]
+               | select((.conclusion // "" | ascii_downcase) as $c
+                        | $c=="failure" or $c=="timed_out")
+               | .name]
+              | join(", ")
+            ' 2>/dev/null || true)"
             open_issue="$(gh issue list --state open --limit 100 --label "main-breakage" --json number --jq '.[0].number // empty' 2>/dev/null || true)"
             if [[ -z "$open_issue" ]]; then
               gh api "repos/${GITHUB_REPOSITORY}/labels/main-breakage" >/dev/null 2>&1 || gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" -f name="main-breakage" -f color="B60205" -f description="Main is red - factory blocked until base is green" >/dev/null 2>&1 || true
@@ -129,6 +142,7 @@ jobs:
           python3 .github/scripts/factory-review-controller.py reconcile-ci
 
       - name: Drain exact-head ready factory PRs
+        if: steps.main_health.outputs.main_red != 'true'
         continue-on-error: true
         shell: bash
         env:
@@ -416,10 +430,18 @@ jobs:
             awk -F '\t' -v worker="$DISPATCH_WORKER" '$1 == worker {found=1} END {exit !found}' "$manifest"
             workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]')"
           elif [[ "$EVENT_NAME" == schedule ]]; then
-            minute="$(date -u +%M)"
-            minute="$(( 10#$minute / 5 * 5 ))"
-            workers="$(awk -F '\t' -v minute="$minute" '$4 == minute {print $1}' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
-            echo "Scheduled :$(printf '%02d' "$minute") batch"
+            # Scheduled delivery is roughly hourly regardless of the requested
+            # cron cadence. Offer the roster and let centralized assignment
+            # lease only work that has real capacity.
+            max_per_tick="${MAX_WORKERS_PER_TICK:-12}"
+            [[ "$max_per_tick" =~ ^[1-9][0-9]*$ ]] || {
+              echo "MAX_WORKERS_PER_TICK must be a positive integer" >&2
+              exit 1
+            }
+            workers="$(awk -F '\t' '
+              $0 !~ /^#/ && NF >= 4 {print $1}
+            ' "$manifest" | head -n "$max_per_tick"               | jq -Rsc 'split("\n") | map(select(length > 0))')"
+            echo "Scheduled batch: offering $(jq -r 'length' <<<"$workers") workers (cap ${max_per_tick})"
           else
             # A control-plane change should smoke one current lane per provider.
             # Resolve these from the manifest so retired workers cannot remain
