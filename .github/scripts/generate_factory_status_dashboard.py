@@ -10,10 +10,10 @@ import os
 import re
 import sys
 from collections import defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 REPO_URL = f"https://github.com/{REPO}"
@@ -25,6 +25,7 @@ WORKER_RE = re.compile(r"^opencode-free-model-factory-(?P<worker>\d+)$")
 ATTEMPT_MARKER = "<!-- factory-attempt-outcome:v1 "
 HEARTBEAT_MARKER = "<!-- factory-heartbeat:v1 "
 STAGES = (
+    "factory:building",
     "factory:changes-requested",
     "factory:review",
     "factory:ci",
