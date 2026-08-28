@@ -51,7 +51,7 @@ test.describe('RATE-001: Rating a comic', () => {
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
     const ratingInput = page.locator('#rating-input')
-    await ratingInput.fill('7')
+    await ratingInput.fill('3')
 
     const rateResponse = page.waitForResponse(
       (resp) => resp.url().includes('/api/v1/rate/') && resp.request().method() === 'POST',

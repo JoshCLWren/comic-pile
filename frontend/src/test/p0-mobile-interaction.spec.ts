@@ -97,7 +97,7 @@ test.describe('MOBILE-001: Primary mobile interaction path', () => {
     await page.getByText('Mobile Rate Thread').first().click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
-    await page.locator('#rating-input').fill('8')
+    await page.locator('#rating-input').fill('3')
 
     const rateResponse = page.waitForResponse(
       (resp) => resp.url().includes('/api/v1/rate/') && resp.request().method() === 'POST',
