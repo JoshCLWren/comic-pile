@@ -57,6 +57,20 @@ class CBLPlacement(BaseModel):
     position: int
 
 
+class ConvergenceGateTarget(BaseModel):
+    """A node a convergence gate waits for."""
+
+    node_type: PlanNodeType
+    node_id: str = Field(min_length=1, max_length=80)
+
+
+def _coerce_convergence_gate(value: object) -> object:
+    """Coerce None to empty list for convergence_gate."""
+    if value is None:
+        return []
+    return value
+
+
 class ContinuityPlanNode(BaseModel):
     """One ordered reference in a continuity plan."""
 
@@ -79,6 +93,14 @@ class ContinuityPlanNode(BaseModel):
     # Reader override fields (user can modify independently of source)
     reader_role: ReaderRole | None = None
     reader_optional: bool | None = None
+
+    # Plan-level checkpoint/convergence semantics
+    is_checkpoint: bool = False
+    convergence_gate: Annotated[
+        list[ConvergenceGateTarget],
+        BeforeValidator(_coerce_convergence_gate),
+        Field(default_factory=list),
+    ]
 
 
 class ContinuityPlanWrite(BaseModel):
@@ -104,6 +126,8 @@ class ContinuityPlanWrite(BaseModel):
         known_lanes = set(lane_ids)
         if any(node.lane_id not in known_lanes for node in self.nodes):
             raise ValueError("every node must reference an existing lane")
+        known_node_ids = set(node_ids)
+        nodes_by_id = {node.id: node for node in self.nodes}
         positions_by_lane: dict[str, list[int]] = {}
         for node in self.nodes:
             positions_by_lane.setdefault(node.lane_id, []).append(node.position)
@@ -117,6 +141,41 @@ class ContinuityPlanWrite(BaseModel):
             positions = sorted(node.position for node in self.nodes)
             if positions != list(range(len(positions))):
                 raise ValueError("strict sequential positions must be contiguous starting at zero")
+        # Validate checkpoint placement
+        for node in self.nodes:
+            if node.is_checkpoint and node.node_type != "issue":
+                raise ValueError(
+                    f"checkpoint on node '{node.id}' is only allowed on issue nodes"
+                )
+        # Validate convergence gate references
+        for node in self.nodes:
+            if node.convergence_gate:
+                if node.node_type not in ("issue", "crossover"):
+                    raise ValueError(
+                        f"convergence gate on node '{node.id}' is only allowed on issue/crossover nodes"
+                    )
+                gate_ids = [target.node_id for target in node.convergence_gate]
+                if len(gate_ids) != len(set(gate_ids)):
+                    raise ValueError(
+                        f"convergence gate on node '{node.id}' contains duplicate targets"
+                    )
+                for target in node.convergence_gate:
+                    if target.node_id == node.id:
+                        raise ValueError(
+                            f"convergence gate on node '{node.id}' cannot wait for itself"
+                        )
+                    if target.node_id not in known_node_ids:
+                        raise ValueError(
+                            f"convergence gate on node '{node.id}' references "
+                            f"unknown node '{target.node_id}'"
+                        )
+                    target_node = nodes_by_id[target.node_id]
+                    if target_node.node_type not in ("issue", "crossover"):
+                        raise ValueError(
+                            f"convergence gate on node '{node.id}' references node "
+                            f"'{target.node_id}' of type '{target_node.node_type}'; "
+                            "convergence targets must be issue/crossover nodes"
+                        )
         return self
 
 
