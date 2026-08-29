@@ -91,9 +91,12 @@ async def _confirmed_issue_metadata(
         select(Issue.id, ExternalIdentity.metadata_json)
         .join(
             IssueExternalIdentityMapping,
-            IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
+            IssueExternalIdentityMapping.issue_id == Issue.id,
         )
-        .join(Issue, Issue.id == IssueExternalIdentityMapping.issue_id)
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
         .where(Issue.thread_id == thread_id)
         .where(IssueExternalIdentityMapping.status == "confirmed")
     )
