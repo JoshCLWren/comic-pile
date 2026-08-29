@@ -24,6 +24,7 @@ make seed       # seed local sample data
 make lint       # repository lint/type checks
 make verify     # complete local verification suite
 make verify-e2e # Chromium browser validation when required
+make tidy       # Sweep local generated artifacts
 ```
 
 Application database access is async PostgreSQL via `asyncpg` and SQLAlchemy `AsyncSession`. Alembic migrations are the only supported synchronous database exception. Do not skip or weaken failing tests to force a green build.
