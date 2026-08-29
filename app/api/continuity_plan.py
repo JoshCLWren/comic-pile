@@ -137,9 +137,9 @@ async def _replace_compiled_rules(
         lane_nodes.sort(key=lambda n: n.position)
 
     # Collect all edges to compile (for cycle detection)
-    ConvergenceTarget = dict[str, int | str]
+    convergence_target = dict[str, int | str]
     edges_to_add: list[
-        tuple[str, int, str, int, str, int | list[ConvergenceTarget] | None]
+        tuple[str, int, str, int, str, int | list[convergence_target] | None]
     ] = []
 
     # 1. Strict-sequential adjacent edges
@@ -174,7 +174,7 @@ async def _replace_compiled_rules(
     for node in payload.nodes:
         if not node.convergence_gate:
             continue
-        gate_targets: list[ConvergenceTarget] = []
+        gate_targets: list[convergence_target] = []
         for target in node.convergence_gate:
             resolved = node_map.get(target.node_id)
             if resolved is None:
