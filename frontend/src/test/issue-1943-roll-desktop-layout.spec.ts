@@ -262,9 +262,10 @@ async function enterRatingView(
   await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
   await expect(page.getByTestId('rating-actions')).toBeVisible()
   await expect(page.getByText(state.settleText).first()).toBeVisible({ timeout: 10000 })
-  await page.evaluate(() => {
-    if (document.fonts) return document.fonts.ready
-    return Promise.resolve()
+  await page.evaluate(async () => {
+    if (document.fonts) {
+      await document.fonts.ready
+    }
   })
 }
 

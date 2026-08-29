@@ -171,7 +171,7 @@ function ratingView(overrides: Record<string, unknown> = {}) {
 
 function gridChildren(container: HTMLElement) {
   const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
-  return { grid, cells: Array.from(grid!.querySelectorAll(':scope > div')) }
+  return { grid, cells: Array.from(grid!.querySelectorAll<HTMLElement>(':scope > div')) }
 }
 
 interface LayoutStateCase {
