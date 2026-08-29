@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 import scripts.next_task as next_task
-from scripts.next_task import _issue_context, select_next
+from scripts.next_task import _child_numbers, _issue_context, select_next
 
 
 def _issue(number: int, title: str, labels: list[str], body: str = "") -> dict:
@@ -180,3 +180,101 @@ def test_start_task_succeeds_when_comment_fails(
 
     assert gh_runner.call_count == 2
     assert "label updated, but comment failed" in capsys.readouterr().err
+
+
+def test_child_numbers_extracts_checkbox_references() -> None:
+    """Only checkbox-style issue references are treated as children."""
+    body = (
+        "## Executable child work\n"
+        "- [ ] #10\n"
+        "- [x] #20\n"
+        "- [ ] #30\n\n"
+        "## Related\n"
+        "- #99\n"
+        "- #100\n"
+    )
+
+    result = _child_numbers(body, issue_number=1)
+
+    assert result == {10, 20, 30}
+
+
+def test_child_numbers_excludes_self_reference() -> None:
+    """The issue's own number must not appear in the child set."""
+    body = "- [ ] #5\n- [x] #10\n"
+
+    result = _child_numbers(body, issue_number=5)
+
+    assert result == {10}
+
+
+def test_child_numbers_returns_empty_for_no_checkboxes() -> None:
+    """A body with no checkbox references returns an empty set."""
+    body = "Related: #10 #20 #30"
+
+    result = _child_numbers(body, issue_number=1)
+
+    assert result == set()
+
+
+def test_select_next_selects_epic_when_all_children_closed() -> None:
+    """An epic becomes eligible for acceptance when every child is closed."""
+    epic = _issue(
+        100,
+        "Parent epic",
+        ["epic", "ralph-status:pending", "ralph-priority:high"],
+        "Child work:\n- [ ] #10\n- [x] #20\n",
+    )
+    task = _issue(50, "Regular task", ["ralph-task", "ralph-status:pending", "ralph-priority:low"])
+
+    candidate = select_next([epic, task], {10, 20})
+
+    assert candidate is not None
+    assert candidate.issue["number"] == 100
+
+
+def test_select_next_skips_epic_with_open_children() -> None:
+    """An epic with unclosed children must not be selected."""
+    epic = _issue(
+        100,
+        "Parent epic",
+        ["epic", "ralph-status:pending", "ralph-priority:critical"],
+        "Child work:\n- [ ] #10\n- [x] #20\n",
+    )
+    task = _issue(50, "Regular task", ["ralph-task", "ralph-status:pending", "ralph-priority:low"])
+
+    candidate = select_next([epic, task], {20})
+
+    assert candidate is not None
+    assert candidate.issue["number"] == 50
+
+
+def test_select_next_skips_epic_with_only_related_references() -> None:
+    """An epic referencing only related (non-child) issues must not be selected."""
+    epic = _issue(
+        100,
+        "Parent epic",
+        ["epic", "ralph-status:pending", "ralph-priority:critical"],
+        "## Related\n- #200\n- #300\n",
+    )
+    task = _issue(50, "Regular task", ["ralph-task", "ralph-status:pending", "ralph-priority:low"])
+
+    candidate = select_next([epic, task], {200, 300})
+
+    assert candidate is not None
+    assert candidate.issue["number"] == 50
+
+
+def test_issue_context_epic_includes_acceptance_guidance() -> None:
+    """An epic selected for acceptance should include protocol guidance."""
+    epic = _issue(
+        100,
+        "Parent epic",
+        ["epic", "ralph-status:pending", "ralph-priority:high"],
+        "- [x] #10\n- [x] #20\n",
+    )
+
+    context = _issue_context(epic, {10, 20})
+
+    assert "product acceptance" in context.lower()
+    assert "PRODUCT_ACCEPTANCE_PROTOCOL.md" in context

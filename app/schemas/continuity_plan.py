@@ -108,7 +108,7 @@ class ContinuityPlanWrite(BaseModel):
 
     name: str = Field(min_length=1, max_length=200)
     ordering_mode: PlanOrderingMode = "informational"
-    lanes: list[ContinuityPlanLane] = Field(min_length=1, max_length=100)
+    lanes: list[ContinuityPlanLane] = Field(min_length=0, max_length=100)
     nodes: list[ContinuityPlanNode] = Field(default_factory=list, max_length=1000)
 
     @model_validator(mode="after")
@@ -177,6 +177,17 @@ class ContinuityPlanResponse(ContinuityPlanWrite):
     id: int
     user_id: int
     created_at: datetime
+    updated_at: datetime
+
+
+class ContinuityPlanListItem(BaseModel):
+    """Compact summary returned by the plans list endpoint."""
+
+    id: int
+    name: str
+    ordering_mode: PlanOrderingMode
+    lane_count: int
+    step_count: int
     updated_at: datetime
 
 

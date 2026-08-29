@@ -18,6 +18,14 @@ const DEFAULT_LANE_ID = 'main'
 const DEFAULT_LANE_NAME = 'Reading order'
 const DEFAULT_PLAN_NAME = 'My reading plan'
 
+function errorMessage(error: unknown, fallback: string): string {
+  if (axios.isAxiosError(error)) {
+    const detail = error.response?.data?.detail
+    if (typeof detail === 'string' && detail.trim()) return detail
+  }
+  return error instanceof Error && error.message ? error.message : fallback
+}
+
 interface PlannerNode extends ContinuityPlanNode {
   label: string
   is_checkpoint?: boolean
@@ -30,20 +38,51 @@ interface PlannerLane {
   order: number
 }
 
-function errorMessage(error: unknown, fallback: string): string {
-  if (axios.isAxiosError(error)) {
-    const detail = error.response?.data?.detail
-    if (typeof detail === 'string' && detail.trim()) return detail
-    if (detail && typeof detail === 'object' && 'code' in detail) {
-      if (detail.code === 'plan_rule_conflict') {
+interface ConflictDetail {
+  code?: string
+  source_node_id?: string
+  target_node_id?: string
+}
+
+function getConflictMessage(
+  error: unknown,
+  nodes: PlannerNode[]
+): string {
+  if (!axios.isAxiosError(error)) {
+    return error instanceof Error && error.message ? error.message : 'Unable to save this continuity plan.'
+  }
+
+  const detail = error.response?.data?.detail
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail
+  }
+
+  if (detail && typeof detail === 'object' && 'code' in detail) {
+    const conflict = detail as ConflictDetail
+    if (conflict.code === 'plan_rule_conflict' || conflict.code === 'continuity_cycle') {
+      const sourceId = conflict.source_node_id
+      const targetId = conflict.target_node_id
+
+      if (sourceId !== undefined && targetId !== undefined) {
+        const sourceNode = nodes.find((node) => node.id === sourceId)
+        const targetNode = nodes.find((node) => node.id === targetId)
+
+        if (sourceNode && targetNode) {
+          if (conflict.code === 'plan_rule_conflict') {
+            return `You already require "${sourceNode.label}" before "${targetNode.label}". Change the sequence to resolve this conflict.`
+          }
+          return `This order would create a continuity cycle: "${sourceNode.label}" → "${targetNode.label}". Change the sequence to resolve this cycle.`
+        }
+      }
+
+      if (conflict.code === 'plan_rule_conflict') {
         return 'This order conflicts with an existing continuity rule. Change the sequence and try again.'
       }
-      if (detail.code === 'continuity_cycle') {
-        return 'This order would create a continuity cycle. Change the sequence and try again.'
-      }
+      return 'This order would create a continuity cycle. Change the sequence and try again.'
     }
   }
-  return error instanceof Error && error.message ? error.message : fallback
+
+  return error instanceof Error && error.message ? error.message : 'Unable to save this continuity plan.'
 }
 
 async function fetchAllThreads(): Promise<Thread[]> {
@@ -386,7 +425,7 @@ export default function ContinuityPlannerPage() {
   }
 
   const removeLane = (laneId: string) => {
-    if (laneNodeCount(nodes, laneId) > 0 || lanes.length <= 1) return
+    if (laneNodeCount(nodes, laneId) > 0) return
     setLanes((current) =>
       current
         .filter((lane) => lane.id !== laneId)
@@ -423,7 +462,7 @@ export default function ContinuityPlannerPage() {
       setReadinessRefreshKey((key) => key + 1)
       if (!planId) navigate(`/continuity-plans/${saved.id}`, { replace: true })
     } catch (error) {
-      setSaveError(errorMessage(error, 'Unable to save this continuity plan.'))
+      setSaveError(getConflictMessage(error, nodes))
     } finally {
       setIsSaving(false)
     }
@@ -477,20 +516,22 @@ export default function ContinuityPlannerPage() {
         <form onSubmit={addIssue} className="space-y-3" aria-label="Add an issue">
           <h2 className="font-black text-stone-100">Add an issue</h2>
           <ContinuityThreadSelector threads={threads} value={selectedThread} onChange={(thread) => void selectThread(thread)} label="Comic series" />
-          <ContinuityIssueSelector issues={issues} value={selectedIssue} onChange={setSelectedIssue} isLoading={isLoadingIssues} disabled={!selectedThread} error={issueLoadError} />
-          <button type="submit" disabled={!selectedIssue} className="min-h-11 w-full rounded-xl bg-amber-500 px-4 font-black text-stone-950 disabled:opacity-50">Add issue</button>
+          <ContinuityIssueSelector issues={issues} value={selectedIssue} onChange={setSelectedIssue} isLoading={isLoadingIssues} disabled={!selectedThread || orderedLanes.length === 0} error={issueLoadError} />
+          <button type="submit" disabled={!selectedIssue || orderedLanes.length === 0} className="min-h-11 w-full rounded-xl bg-amber-500 px-4 font-black text-stone-950 disabled:opacity-50">Add issue</button>
+          {orderedLanes.length === 0 && <p className="text-xs text-stone-500">Add a lane first to add issues.</p>}
         </form>
 
         <div className="space-y-3">
           <h2 className="font-black text-stone-100">Add a crossover</h2>
           <label className="block text-xs font-bold uppercase tracking-widest text-stone-500">
             Crossover
-            <select value={selectedGroupId} onChange={(event) => setSelectedGroupId(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-stone-700 bg-stone-950 px-3 text-stone-100">
+            <select value={selectedGroupId} onChange={(event) => setSelectedGroupId(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-stone-700 bg-stone-950 px-3 text-stone-100" disabled={orderedLanes.length === 0}>
               <option value="">Select a crossover</option>
               {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
             </select>
           </label>
-          <button type="button" onClick={addCrossover} disabled={!selectedGroupId} className="min-h-11 w-full rounded-xl bg-violet-500 px-4 font-black text-stone-950 disabled:opacity-50">Add crossover</button>
+          <button type="button" onClick={addCrossover} disabled={!selectedGroupId || orderedLanes.length === 0} className="min-h-11 w-full rounded-xl bg-violet-500 px-4 font-black text-stone-950 disabled:opacity-50">Add crossover</button>
+          {orderedLanes.length === 0 && <p className="text-xs text-stone-500">Add a lane first to add crossovers.</p>}
         </div>
       </div>
 
@@ -570,7 +611,7 @@ export default function ContinuityPlannerPage() {
                     <button
                       type="button"
                       onClick={() => removeLane(lane.id)}
-                      disabled={laneNodeCount(nodes, lane.id) > 0 || lanes.length <= 1}
+                      disabled={laneNodeCount(nodes, lane.id) > 0}
                       aria-label={`Remove lane ${lane.name}`}
                       title={laneNodeCount(nodes, lane.id) > 0 ? 'Move all steps out of this lane before removing it' : undefined}
                       className="min-h-9 rounded-lg border border-red-900 px-3 text-red-300 disabled:opacity-30"
@@ -703,6 +744,7 @@ export default function ContinuityPlannerPage() {
       <PlanReadinessPanel planId={planId} refreshKey={readinessRefreshKey} />
 
       {saveError && <p role="alert" className="rounded-xl border border-red-800 bg-red-950/30 p-3 text-red-200">{saveError}</p>}
+
       <div className="sticky bottom-16 flex gap-3 rounded-2xl border border-stone-800 bg-stone-950/95 p-3 backdrop-blur md:bottom-24">
         <button type="button" onClick={cancel} disabled={!isDirty || isSaving} className="min-h-11 flex-1 rounded-xl border border-stone-700 font-bold disabled:opacity-40">Cancel changes</button>
         <button type="button" onClick={() => void save()} disabled={!isDirty || isSaving} className="min-h-11 flex-1 rounded-xl bg-amber-500 font-black text-stone-950 disabled:opacity-40">{isSaving ? 'Saving…' : 'Save plan'}</button>

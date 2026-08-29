@@ -42,7 +42,7 @@ behaviors:
     area: auth
     behavior: "User can sign in with email/password and obtain a session"
     priority: P0
-    status: uncovered
+    status: covered
 
   # ---- Queue availability (P0) ----
   - id: QUEUE-001
@@ -56,49 +56,49 @@ behaviors:
     area: roll
     behavior: "User can roll a comic and see the result"
     priority: P0
-    status: uncovered
+    status: covered
 
   # ---- Rating / advance (P0) ----
   - id: RATE-001
     area: rate
     behavior: "User can rate a comic after viewing"
     priority: P0
-    status: uncovered
+    status: covered
 
   # ---- Snooze / unsnooze (P0) ----
   - id: SNOOZE-001
     area: snooze
     behavior: "User can snooze or unsnooze a comic and it appears appropriately in the queue"
     priority: P0
-    status: uncovered
+    status: covered
 
   # ---- Core thread management (P0) ----
   - id: THREAD-001
     area: thread
     behavior: "Users can create, edit, and delete thread topics"
     priority: P0
-    status: uncovered
+    status: covered
 
   # ---- Dependency behavior (P0) ----
   - id: DEP-001
     area: dep
     behavior: "Dependency relations between comics are resolved correctly"
     priority: P0
-    status: uncovered
+    status: covered
 
   # ---- Reading-order behavior (P0) ----
   - id: ORDER-001
     area: order
     behavior: "Reading order follows declared dependency graph"
     priority: P0
-    status: uncovered
+    status: covered
 
   # ---- Primary mobile interaction path (P0) ----
   - id: MOBILE-001
     area: mobile
     behavior: "Primary mobile interaction path works for core user journeys"
     priority: P0
-    status: uncovered
+    status: covered
 
   # ---- Secondary features (P2) ----
   - id: CONT-001

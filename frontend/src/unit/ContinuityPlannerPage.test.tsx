@@ -77,7 +77,9 @@ const secondIssue = {
 }
 
 beforeEach(() => {
-  window.localStorage.clear()
+  if (typeof window !== "undefined") {
+      window.localStorage.clear();
+    }
   mocks.get.mockReset()
   mocks.create.mockReset()
   mocks.update.mockReset()
@@ -358,6 +360,274 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Add issue' }))
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(/continuity cycle/i)
+  })
+
+  it('surfaces a specific conflict message when source and target nodes are identified in the plan', async () => {
+    mocks.create.mockReset()
+    mocks.create.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: {
+        data: {
+          detail: {
+            code: 'plan_rule_conflict',
+            source_node_id: 'issue-40',
+            target_node_id: 'crossover-8',
+          },
+        },
+      },
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.clear(await screen.findByLabelText('Plan name'))
+    await user.type(screen.getByLabelText('Plan name'), 'Kirby lane')
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
+    await user.click(screen.getByRole('option', { name: /Mister Miracle/i }))
+    await screen.findByRole('option', { name: /Annual 1/i })
+    await user.selectOptions(screen.getByLabelText('Issue'), '40')
+    await user.click(screen.getByRole('button', { name: 'Add issue' }))
+    await user.selectOptions(screen.getByLabelText('Crossover'), '8')
+    await user.click(screen.getByRole('button', { name: 'Add crossover' }))
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/You already require "Mister Miracle #Annual 1" before "Fourth World"/i)
+  })
+
+  it('surfaces a specific cycle message when source and target nodes are identified in the plan', async () => {
+    mocks.create.mockReset()
+    mocks.create.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: {
+        data: {
+          detail: {
+            code: 'continuity_cycle',
+            source_node_id: 'issue-40',
+            target_node_id: 'crossover-8',
+          },
+        },
+      },
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
+    await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
+    await screen.findByRole('option', { name: /Annual 1/i })
+    await user.selectOptions(screen.getByLabelText('Issue'), '40')
+    await user.click(screen.getByRole('button', { name: 'Add issue' }))
+    await user.selectOptions(screen.getByLabelText('Crossover'), '8')
+    await user.click(screen.getByRole('button', { name: 'Add crossover' }))
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/This order would create a continuity cycle: "Mister Miracle #Annual 1" → "Fourth World"/i)
+  })
+
+  it('falls back to generic conflict message when source and target node IDs are provided but not found in the plan', async () => {
+    mocks.create.mockReset()
+    mocks.create.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: {
+        data: {
+          detail: {
+            code: 'plan_rule_conflict',
+            source_node_id: 'missing-1',
+            target_node_id: 'missing-2',
+          },
+        },
+      },
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.clear(await screen.findByLabelText('Plan name'))
+    await user.type(screen.getByLabelText('Plan name'), 'Kirby lane')
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
+    await user.click(screen.getByRole('option', { name: /Mister Miracle/i }))
+    await screen.findByRole('option', { name: /Annual 1/i })
+    await user.selectOptions(screen.getByLabelText('Issue'), '40')
+    await user.click(screen.getByRole('button', { name: 'Add issue' }))
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/This order conflicts with an existing continuity rule. Change the sequence and try again./i)
+  })
+
+  it('falls back to generic cycle message when source and target node IDs are provided but not found in the plan', async () => {
+    mocks.create.mockReset()
+    mocks.create.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: {
+        data: {
+          detail: {
+            code: 'continuity_cycle',
+            source_node_id: 'missing-1',
+            target_node_id: 'missing-2',
+          },
+        },
+      },
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
+    await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
+    await screen.findByRole('option', { name: /Annual 1/i })
+    await user.selectOptions(screen.getByLabelText('Issue'), '40')
+    await user.click(screen.getByRole('button', { name: 'Add issue' }))
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/This order would create a continuity cycle. Change the sequence and try again./i)
+  })
+
+  it('surfaces a conflict error on update when the API rejects with plan_rule_conflict', async () => {
+    mocks.get.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Saved lane',
+      ordering_mode: 'strict_sequential',
+      lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
+      nodes: [
+        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0, label: 'Mister Miracle #Annual 1' },
+        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1, label: 'Fourth World' },
+      ],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+    mocks.update.mockReset()
+    mocks.update.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { data: { detail: { code: 'plan_rule_conflict' } } },
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/12']}>
+        <Routes>
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    // Make a change to dirty the plan
+    const moveDown = await screen.findByRole('button', { name: /Move Mister Miracle #Annual 1 later/i })
+    await user.click(moveDown)
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/conflicts with an existing continuity rule/i)
+  })
+
+  it('surfaces a cycle error on update when the API rejects with continuity_cycle', async () => {
+    mocks.get.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Saved lane',
+      ordering_mode: 'strict_sequential',
+      lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
+      nodes: [
+        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0, label: 'Mister Miracle #Annual 1' },
+        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1, label: 'Fourth World' },
+      ],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+    mocks.update.mockReset()
+    mocks.update.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { data: { detail: { code: 'continuity_cycle' } } },
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/12']}>
+        <Routes>
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    // Make a change to dirty the plan
+    const moveDown = await screen.findByRole('button', { name: /Move Mister Miracle #Annual 1 later/i })
+    await user.click(moveDown)
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/continuity cycle/i)
+  })
+
+  it('falls back to the generic save message when the API detail is an object without a code', async () => {
+    mocks.create.mockReset()
+    mocks.create.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { data: { detail: { message: 'no code here' } } },
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
+    await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
+    await screen.findByRole('option', { name: /Annual 1/i })
+    await user.selectOptions(screen.getByLabelText('Issue'), '40')
+    await user.click(screen.getByRole('button', { name: 'Add issue' }))
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Unable to save this continuity plan\./i)
+  })
+
+  it('falls back to the generic save message when the API detail has an unrecognized code', async () => {
+    mocks.create.mockReset()
+    mocks.create.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { data: { detail: { code: 'some_other_error' } } },
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
+    await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
+    await screen.findByRole('option', { name: /Annual 1/i })
+    await user.selectOptions(screen.getByLabelText('Issue'), '40')
+    await user.click(screen.getByRole('button', { name: 'Add issue' }))
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Unable to save this continuity plan\./i)
   })
 
   it('shows an error for a non-numeric route id', async () => {
