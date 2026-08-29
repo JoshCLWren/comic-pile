@@ -64,7 +64,7 @@ class InferenceConfig:
     accept_penalty: float = 0.3
     weight_evidence: float = 0.4
     weight_diversity: float = 0.3
-    weight_consistency: float = 0.3
+    weight_consistency: float = 0.2
     neutral_rating_baseline: float = 3.0
 
 
@@ -214,7 +214,8 @@ def compute_inferred_signal(
             # Mixed-direction evidence must not look perfectly consistent.
             consistency_factor *= 0.5 + 0.5 * same_sign
 
-    confidence = max(
+    # Apply distinct thread multiplier to penalize single-thread evidence
+    base_confidence = max(
         0.0,
         min(
             1.0,
@@ -223,6 +224,8 @@ def compute_inferred_signal(
             + config.weight_consistency * consistency_factor,
         ),
     )
+    distinct_multiplier = 1.0 if len(distinct_threads) >= 2 else 0.5
+    confidence = base_confidence * distinct_multiplier
 
     return InferredSignal(
         affinity_estimate=affinity_estimate,
