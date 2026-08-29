@@ -1,21 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   continuityReadinessApi,
   type ContinuityReadinessResponse,
 } from '../services/api-continuity-readiness'
+import { queryKeys } from '../query/queryKeys'
 
 export interface ContinuityReadinessState {
   readiness: ContinuityReadinessResponse | null
   isLoading: boolean
   error: Error | null
   refetch: () => void
-}
-
-const EMPTY_STATE: ContinuityReadinessState = {
-  readiness: null,
-  isLoading: false,
-  error: null,
-  refetch: () => undefined,
 }
 
 export interface UseContinuityReadinessOptions {
@@ -28,37 +22,18 @@ export function useContinuityReadiness(
   options: UseContinuityReadinessOptions = {},
 ): ContinuityReadinessState {
   const { skip = false } = options
-  const [state, setState] = useState(EMPTY_STATE)
-  const [attempt, setAttempt] = useState(0)
-  const refetch = useCallback(() => setAttempt((value) => value + 1), [])
+  const enabled = issueId != null && !skip
 
-  useEffect(() => {
-    if (issueId == null || skip) {
-      setState({ ...EMPTY_STATE, refetch })
-      return
-    }
+  const { data, isPending, isError, refetch } = useQuery({
+    queryKey: enabled ? queryKeys.continuity.readiness(issueId!) : [],
+    queryFn: () => continuityReadinessApi.evaluate('issue', issueId!),
+    enabled,
+  })
 
-    let isCurrent = true
-    setState({ readiness: null, isLoading: true, error: null, refetch })
-
-    continuityReadinessApi.evaluate('issue', issueId).then(
-      (readiness) => {
-        if (isCurrent) {
-          setState({ readiness, isLoading: false, error: null, refetch })
-        }
-      },
-      (reason: unknown) => {
-        if (isCurrent) {
-          const error = reason instanceof Error ? reason : new Error('Unable to load readiness')
-          setState({ readiness: null, isLoading: false, error, refetch })
-        }
-      },
-    )
-
-    return () => {
-      isCurrent = false
-    }
-  }, [attempt, issueId, refetch, skip])
-
-  return state
+  return {
+    readiness: data ?? null,
+    isLoading: isPending,
+    error: isError ? new Error('Unable to load readiness') : null,
+    refetch,
+  }
 }

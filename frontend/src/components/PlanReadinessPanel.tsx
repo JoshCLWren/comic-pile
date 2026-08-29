@@ -117,7 +117,7 @@ export default function PlanReadinessPanel({ planId, refreshKey = 0 }: PlanReadi
         </p>
         <button
           type="button"
-          onClick={refetch}
+          onClick={() => refetch()}
           data-testid="plan-readiness-retry"
           className="mt-3 min-h-11 rounded-xl border border-rose-700/40 px-4 font-bold text-rose-200 hover:bg-rose-900/30"
         >

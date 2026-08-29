@@ -1,4 +1,6 @@
+import { type ReactNode } from 'react'
 import { act, renderHook } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useRate } from '../hooks/useRate'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
@@ -8,6 +10,11 @@ import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import type { RatePayload, Thread } from '../types'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
+
+function wrapper({ children }: { children: ReactNode }) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+}
 
 vi.mock('../services/protectedRollMutationApi', () => ({ protectedRollMutationApi: { rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() } }))
 vi.mock('../services/rollBootstrapApi', () => ({ rollBootstrapApi: { get: vi.fn() } }))
@@ -23,33 +30,33 @@ beforeEach(() => { vi.clearAllMocks(); mockedProtectedApi.rate.mockResolvedValue
 
 it('submits ratings, applies the authoritative thread cache, and publishes Roll state', async () => {
   const reconciled = vi.fn(); window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
-  try { const { result } = renderHook(() => useRate()); const payload: RatePayload = { thread_id: 1, rating: 4 }; let response: Thread | undefined; await act(async () => { response = await result.current.mutate(payload) }); expect(mockedProtectedApi.rate).toHaveBeenCalledWith(payload); expect(mockedApplyRatedThreadCache).toHaveBeenCalledWith(queryClient, thread); expect(response).toBe(thread); expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1); expect(reconciled).toHaveBeenCalledTimes(1); expect(result.current.isError).toBe(false) } finally { window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled) }
+  try { const { result } = renderHook(() => useRate(), { wrapper }); const payload: RatePayload = { thread_id: 1, rating: 4 }; let response: Thread | undefined; await act(async () => { response = await result.current.mutate(payload) }); expect(mockedProtectedApi.rate).toHaveBeenCalledWith(payload); expect(mockedApplyRatedThreadCache).toHaveBeenCalledWith(queryClient, thread); expect(response).toBe(thread); expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1); expect(reconciled).toHaveBeenCalledTimes(1); expect(result.current.isError).toBe(false) } finally { window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled) }
 })
 
 it('shares one in-flight request across repeated submissions', async () => {
-  let resolveRequest: (() => void) | undefined; mockedProtectedApi.rate.mockReturnValue(new Promise((resolve) => { resolveRequest = () => resolve(undefined as never) })); const { result } = renderHook(() => useRate()); const payload: RatePayload = { thread_id: 1, rating: 4 }; let firstRequest: Promise<unknown> | undefined; let secondRequest: Promise<unknown> | undefined; act(() => { firstRequest = result.current.mutate(payload); secondRequest = result.current.mutate(payload) }); expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1); expect(result.current.isPending).toBe(true); await act(async () => { resolveRequest?.(); await Promise.all([firstRequest, secondRequest]) }); expect(mockedApplyRatedThreadCache).toHaveBeenCalledTimes(1); expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1); expect(result.current.isPending).toBe(false); expect(result.current.isError).toBe(false)
+  let resolveRequest: (() => void) | undefined; mockedProtectedApi.rate.mockReturnValue(new Promise((resolve) => { resolveRequest = () => resolve(undefined as never) })); const { result } = renderHook(() => useRate(), { wrapper }); const payload: RatePayload = { thread_id: 1, rating: 4 }; let firstRequest: Promise<unknown> | undefined; let secondRequest: Promise<unknown> | undefined; act(() => { firstRequest = result.current.mutate(payload); secondRequest = result.current.mutate(payload) }); expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1); expect(result.current.isPending).toBe(true); await act(async () => { resolveRequest?.(); await Promise.all([firstRequest, secondRequest]) }); expect(mockedApplyRatedThreadCache).toHaveBeenCalledTimes(1); expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1); expect(result.current.isPending).toBe(false); expect(result.current.isError).toBe(false)
 })
 
 it('reconciles a committed rating after the delayed response crosses the client timeout', async () => {
   vi.useFakeTimers(); const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), { code: 'ECONNABORTED' }); mockedProtectedApi.rate.mockImplementation(() => new Promise((_, reject) => { setTimeout(() => reject(timeout), 10_000) })); mockedRollBootstrapApi.get.mockResolvedValue(bootstrapState(null, 10));
-  try { const { result } = renderHook(() => useRate()); const payload: RatePayload = { thread_id: 1, rating: 3 }; let firstRequest: Promise<unknown> | undefined; let secondRequest: Promise<unknown> | undefined; act(() => { firstRequest = result.current.mutate(payload); secondRequest = result.current.mutate(payload) }); expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1); expect(result.current.isPending).toBe(true); await act(async () => { await vi.advanceTimersByTimeAsync(10_000); await Promise.all([firstRequest, secondRequest]) }); expect(mockedApplyRatedThreadCache).not.toHaveBeenCalled(); expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1); expect(result.current.isError).toBe(false); expect(result.current.isPending).toBe(false) } finally { vi.useRealTimers() }
+  try { const { result } = renderHook(() => useRate(), { wrapper }); const payload: RatePayload = { thread_id: 1, rating: 3 }; let firstRequest: Promise<unknown> | undefined; let secondRequest: Promise<unknown> | undefined; act(() => { firstRequest = result.current.mutate(payload); secondRequest = result.current.mutate(payload) }); expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1); expect(result.current.isPending).toBe(true); await act(async () => { await vi.advanceTimersByTimeAsync(10_000); await Promise.all([firstRequest, secondRequest]) }); expect(mockedApplyRatedThreadCache).not.toHaveBeenCalled(); expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1); expect(result.current.isError).toBe(false); expect(result.current.isPending).toBe(false) } finally { vi.useRealTimers() }
 })
 
 it('surfaces a delayed timeout when authoritative state still has the same pending thread', async () => {
   vi.useFakeTimers(); const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), { code: 'ECONNABORTED' }); mockedProtectedApi.rate.mockImplementation(() => new Promise((_, reject) => { setTimeout(() => reject(timeout), 10_000) })); mockedRollBootstrapApi.get.mockResolvedValue(bootstrapState(1));
-  try { const { result } = renderHook(() => useRate()); const payload: RatePayload = { thread_id: 1, rating: 3 }; let request!: Promise<unknown>; act(() => { request = result.current.mutate(payload) }); const rejection = expect(request).rejects.toBe(timeout); await act(async () => { await vi.advanceTimersByTimeAsync(10_000); await rejection }); expect(mockedApplyRatedThreadCache).not.toHaveBeenCalled(); expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1); expect(result.current.isError).toBe(true); expect(result.current.isPending).toBe(false) } finally { vi.useRealTimers() }
+  try { const { result } = renderHook(() => useRate(), { wrapper }); const payload: RatePayload = { thread_id: 1, rating: 3 }; let request!: Promise<unknown>; act(() => { request = result.current.mutate(payload) }); const rejection = expect(request).rejects.toBe(timeout); await act(async () => { await vi.advanceTimersByTimeAsync(10_000); await rejection }); expect(mockedApplyRatedThreadCache).not.toHaveBeenCalled(); expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1); expect(result.current.isError).toBe(true); expect(result.current.isPending).toBe(false) } finally { vi.useRealTimers() }
 })
 
 it('keeps a successful rating successful when the follow-up bootstrap refresh fails', async () => {
   mockedRollBootstrapApi.get.mockRejectedValue(new Error('refresh unavailable'))
-  const { result } = renderHook(() => useRate())
+  const { result } = renderHook(() => useRate(), { wrapper })
   await act(async () => { await expect(result.current.mutate({ thread_id: 1, rating: 4 })).resolves.toBe(thread) })
   expect(result.current.isError).toBe(false)
 })
 
 it('marks ordinary rating failures as errors and rethrows them', async () => {
   const failure = new Error('rating unavailable'); mockedProtectedApi.rate.mockRejectedValue(failure)
-  const { result } = renderHook(() => useRate()); let request!: Promise<unknown>
+  const { result } = renderHook(() => useRate(), { wrapper }); let request!: Promise<unknown>
   act(() => { request = result.current.mutate({ thread_id: 1, rating: 2 }) })
   await act(async () => { await expect(request).rejects.toBe(failure) })
   expect(result.current.isError).toBe(true); expect(result.current.isPending).toBe(false)

@@ -1,8 +1,7 @@
-import { useRef, useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
-import { getApiErrorDetail } from '../utils/apiError'
 import type { RatePayload } from '../types'
 import {
   fetchAndPublishRollBootstrap,
@@ -12,20 +11,9 @@ import {
   recoverProtectedRollMutation,
 } from './rollMutationReconciliation'
 
-type RateResult = Awaited<ReturnType<typeof protectedRollMutationApi.rate>> | undefined
-
 export function useRate() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
-  const inFlightRequest = useRef<Promise<RateResult> | null>(null)
-
-  const mutate = async (data: RatePayload): Promise<RateResult> => {
-    if (inFlightRequest.current) return inFlightRequest.current
-
-    setIsPending(true)
-    setIsError(false)
-
-    const request: Promise<RateResult> = (async () => {
+  const mutation = useMutation({
+    mutationFn: async (data: RatePayload) => {
       try {
         const result = await protectedRollMutationApi.rate(data)
         await applyRatedThreadCache(queryClient, result)
@@ -35,7 +23,7 @@ export function useRate() {
         } catch (reconciliationError: unknown) {
           console.error(
             'Rating saved but authoritative Roll state failed to refresh:',
-            getApiErrorDetail(reconciliationError),
+            reconciliationError,
           )
         }
 
@@ -55,7 +43,7 @@ export function useRate() {
           } catch (recoveryError: unknown) {
             console.error(
               'Failed to recover rating after authentication expiry:',
-              getApiErrorDetail(recoveryError),
+              recoveryError,
             )
           }
         }
@@ -67,26 +55,19 @@ export function useRate() {
           } catch (reconciliationError: unknown) {
             console.error(
               'Failed to reconcile ambiguous rating result:',
-              getApiErrorDetail(reconciliationError),
+              reconciliationError,
             )
           }
         }
 
-        setIsError(true)
-        console.error('Failed to rate thread:', getApiErrorDetail(error))
         throw error
       }
-    })()
+    },
+  })
 
-    inFlightRequest.current = request
-
-    try {
-      return await request
-    } finally {
-      inFlightRequest.current = null
-      setIsPending(false)
-    }
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
   }
-
-  return { mutate, isPending, isError }
 }

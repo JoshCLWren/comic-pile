@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   tasteApi,
   type TasteDiscovery,
   type TasteVerdict,
 } from '../services/api-taste'
+import { queryKeys } from '../query/queryKeys'
 
 interface TasteDiscoveriesState {
   discoveries: TasteDiscovery[]
@@ -18,33 +20,26 @@ interface TasteDiscoveriesState {
  * hidden so rolling and rating are never interrupted.
  */
 export function useTasteDiscoveries() {
-  const [state, setState] = useState<TasteDiscoveriesState>({
-    discoveries: [],
-    isLoading: true,
+  const { data, isPending } = useQuery({
+    queryKey: queryKeys.taste.discoveries(),
+    queryFn: () => tasteApi.getDiscoveries(),
   })
+
+  const [state, setState] = useState<TasteDiscoveriesState>({
+    discoveries: data?.discoveries ?? [],
+    isLoading: isPending,
+  })
+
+  // Sync when query data changes
+  const prevDataRef = useRef(data?.discoveries)
+  if (data?.discoveries !== prevDataRef.current) {
+    prevDataRef.current = data?.discoveries
+    setState({ discoveries: data?.discoveries ?? [], isLoading: isPending })
+  } else if (state.isLoading !== isPending) {
+    setState((prev) => ({ ...prev, isLoading: isPending }))
+  }
+
   const pendingIdsRef = useRef(new Set<number>())
-
-  useEffect(() => {
-    let isCurrent = true
-
-    setState({ discoveries: [], isLoading: true })
-    tasteApi
-      .getDiscoveries()
-      .then((response) => {
-        if (isCurrent) {
-          setState({ discoveries: response.discoveries, isLoading: false })
-        }
-      })
-      .catch(() => {
-        if (isCurrent) {
-          setState({ discoveries: [], isLoading: false })
-        }
-      })
-
-    return () => {
-      isCurrent = false
-    }
-  }, [])
 
   const removeCurrent = useCallback((signalId: number) => {
     setState((previous) => ({
@@ -64,7 +59,6 @@ export function useTasteDiscoveries() {
         removeCurrent(current.id)
         return true
       } catch {
-        // Keep the card visible on failure so the reader can retry later.
         return false
       } finally {
         pendingIdsRef.current.delete(current.id)
