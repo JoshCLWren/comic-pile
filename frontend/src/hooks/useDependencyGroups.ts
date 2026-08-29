@@ -28,7 +28,6 @@ export function useDependencyGroups(threadId: number | null | undefined): Depend
       }
     },
     enabled: threadId != null,
-    initialData: [] as DependencyGroupSummary[],
   })
 
   if (threadId == null) return EMPTY_STATE

@@ -23,14 +23,37 @@ export function useRollBootstrap() {
   const lastNotifiedSessionIdRef = useRef<number | null>(null)
   const justReconciledRef = useRef<RollBootstrapResponse | null>(null)
   const reconciliationExpiryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Bumped on every fetch and on every reconciliation so a stale in-flight
+  // request can be identified and ignored once a newer fetch or a reconciliation
+  // has superseded it (mirrors the pre-React-Query generation guard).
+  const requestGenerationRef = useRef(0)
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: queryKeys.roll.bootstrap(),
-    queryFn: async () => {
+    queryFn: async (): Promise<RollBootstrapResponse | null> => {
+      const generation = ++requestGenerationRef.current
       try {
-        return await rollBootstrapApi.get(resolveBrowserTimezone())
+        const result = await rollBootstrapApi.get(resolveBrowserTimezone())
+        // A reconciliation (or newer fetch) superseded this request before it
+        // settled. Keep the authoritative cache instead of applying stale data.
+        if (generation !== requestGenerationRef.current) {
+          return queryClient.getQueryData<RollBootstrapResponse | null>(
+            queryKeys.roll.bootstrap(),
+          ) ?? null
+        }
+        return result
       } catch (err) {
-        throw err instanceof Error ? err : new Error('Failed to fetch roll bootstrap')
+        const normalized =
+          err instanceof Error ? err : new Error('Failed to fetch roll bootstrap')
+        if (generation !== requestGenerationRef.current) {
+          // Stale failure: leave the authoritative cache untouched.
+          return (
+            queryClient.getQueryData<RollBootstrapResponse | null>(
+              queryKeys.roll.bootstrap(),
+            ) ?? null
+          )
+        }
+        throw normalized
       }
     },
   })
@@ -91,9 +114,12 @@ export function useRollBootstrap() {
 
   useEffect(() => {
     const handleReconciledBootstrap = (event: Event) => {
+      console.log("DBG_HANDLER_FIRED", !!(event as CustomEvent<RollBootstrapResponse>).detail)
       const reconciled = (event as CustomEvent<RollBootstrapResponse>).detail
       if (!reconciled) return
 
+      // Supersede any in-flight request so its eventual result is ignored.
+      requestGenerationRef.current += 1
       justReconciledRef.current = reconciled
       if (reconciliationExpiryRef.current) clearTimeout(reconciliationExpiryRef.current)
       reconciliationExpiryRef.current = setTimeout(() => {

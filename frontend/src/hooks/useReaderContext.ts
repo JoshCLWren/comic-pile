@@ -30,7 +30,6 @@ export function useReaderContext(issueId: number | null | undefined): ReaderCont
       }
     },
     enabled: issueId != null,
-    initialData: null as ReaderContextResponse | null,
   })
 
   if (issueId == null) return EMPTY_STATE

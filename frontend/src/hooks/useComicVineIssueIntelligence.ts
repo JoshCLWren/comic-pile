@@ -15,7 +15,6 @@ export function useComicVineIssueIntelligence(
     queryKey: issueId ? queryKeys.comicVine.issueIntelligence(issueId) : [],
     queryFn: () => comicVineApi.getIssueIntelligence(issueId!),
     enabled: !!issueId,
-    initialData: null as ComicVineIssueIntelligence | null,
   })
 
   return {

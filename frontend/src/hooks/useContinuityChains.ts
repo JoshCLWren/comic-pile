@@ -32,7 +32,6 @@ export function useContinuityChains(
       }
     },
     enabled: issueId != null,
-    initialData: null as ContinuityChainResponse | null,
   })
 
   if (issueId == null) return EMPTY_STATE

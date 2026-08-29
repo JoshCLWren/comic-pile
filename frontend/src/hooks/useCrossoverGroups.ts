@@ -86,7 +86,6 @@ export function useCrossoverGroups(threadIds: number[]): CrossoverGroupsState {
       }
     },
     enabled: requestedThreadIds.length > 0,
-    initialData: EMPTY_GROUPS,
   })
 
   if (requestedThreadIds.length === 0) {

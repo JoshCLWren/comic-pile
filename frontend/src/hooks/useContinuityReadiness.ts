@@ -39,7 +39,6 @@ export function useContinuityReadiness(
       }
     },
     enabled: issueId != null && !skip,
-    initialData: null as ContinuityReadinessResponse | null,
   })
 
   if (issueId == null || skip) return EMPTY_STATE

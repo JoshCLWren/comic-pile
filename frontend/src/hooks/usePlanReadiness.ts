@@ -35,7 +35,6 @@ export function usePlanReadiness(
       }
     },
     enabled: isValid,
-    initialData: null as ContinuityPlanReadinessResponse | null,
   })
 
   useEffect(() => {

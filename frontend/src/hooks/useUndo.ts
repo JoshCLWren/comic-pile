@@ -10,7 +10,6 @@ export function useSnapshots(sessionId: number | string | null | undefined) {
     queryKey: sessionId != null ? queryKeys.undo.snapshots(sessionId) : [],
     queryFn: () => undoApi.listSnapshots(sessionId!),
     enabled: sessionId != null,
-    initialData: null as SessionSnapshotsResponse | null,
   })
 
   useEffect(() => {
