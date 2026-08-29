@@ -512,6 +512,23 @@ def owned_worker_ids(items: Iterable[Mapping[str, Any]]) -> set[str]:
     return workers
 
 
+def candidate_is_batch_executable(
+    controller: Any,
+    candidate: Any,
+    cache: dict[int, bool],
+) -> bool:
+    """Evaluate one candidate's live mechanical state once per allocation batch.
+
+    Assignment still performs its own live lease and label checks at the
+    mutation boundary. This cache only prevents the worker-by-candidate ranking
+    loop from repeating the same read-only target and required-check queries.
+    """
+    number = int(candidate.number)
+    if number not in cache:
+        cache[number] = bool(controller.candidate_is_live_executable(candidate))
+    return cache[number]
+
+
 def assign_completion_batch(*, now_epoch: int | None = None) -> dict[str, object]:
     """Claim one bounded batch of existing completion-stage PRs."""
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
@@ -564,6 +581,7 @@ def assign_completion_batch(*, now_epoch: int | None = None) -> dict[str, object
     remaining = [candidate for candidate in candidates if candidate.kind == "pr"]
 
     assignments: list[dict[str, object]] = []
+    executable_cache: dict[int, bool] = {}
     for worker in selected:
         # Recheck the worker lease at the mutation boundary. The regular
         # dispatcher and the completion drain have independent workflow
@@ -572,7 +590,11 @@ def assign_completion_batch(*, now_epoch: int | None = None) -> dict[str, object
             continue
         ordered = policy.order_candidates_for_worker(remaining, worker)
         for candidate in ordered:
-            if not controller.candidate_is_live_executable(candidate):
+            if not candidate_is_batch_executable(
+                controller,
+                candidate,
+                executable_cache,
+            ):
                 continue
             if not controller.assign_candidate(candidate, worker):
                 continue
