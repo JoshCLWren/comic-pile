@@ -166,6 +166,18 @@ async def _plan_edges(
     for rule in rule_result.scalars():
         source = (rule.source_type, rule.source_id)
         target = (rule.target_type, rule.target_id)
+        if rule.satisfaction_type == "converged" and rule.convergence_targets:
+            # A converged rule is persisted as a self-loop (source == target) but
+            # actually blocks the node until each gate target is read. Represent
+            # those as dependency edges so cycle detection reflects the real
+            # blocking dependency instead of flagging the node as self-cyclic.
+            for target_info in rule.convergence_targets:
+                if not isinstance(target_info, dict):
+                    continue
+                target_key = (str(target_info.get("type")), int(target_info.get("id", 0)))
+                if target_key in plan_keys and target_key != source:
+                    edges.append((target_key, source))
+            continue
         if source in plan_keys and target in plan_keys:
             edges.append((source, target))
     return edges

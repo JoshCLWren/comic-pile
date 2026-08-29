@@ -698,3 +698,86 @@ async def test_convergence_self_wait_rejected_by_schema(
     response = await auth_client.post("/api/v1/continuity-plans/", json=payload)
     assert response.status_code == 422
     assert "cannot wait for itself" in response.text
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_on_non_issue_rejected_by_schema(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A checkpoint on a non-issue node is rejected by schema validation."""
+    user = await get_or_create_user_async(async_db)
+    issues = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2)]
+    await async_db.commit()
+    payload = _plan_payload([issue.id for issue in issues])
+    payload["nodes"][0]["node_type"] = "crossover"
+    payload["nodes"][0]["is_checkpoint"] = True
+
+    response = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert response.status_code == 422
+    assert "only allowed on issue nodes" in response.text
+
+
+@pytest.mark.asyncio
+async def test_convergence_cycle_rejected_before_save(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A convergence gate that closes a dependency cycle is rejected before save."""
+    user = await get_or_create_user_async(async_db)
+    issues = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2)]
+    await async_db.commit()
+    payload = {
+        "name": "Cycle plan",
+        "ordering_mode": "informational",
+        "lanes": [{"id": "main", "name": "Main", "order": 0}],
+        "nodes": [
+            {
+                "id": "n-1",
+                "node_type": "issue",
+                "ref_id": issues[0].id,
+                "lane_id": "main",
+                "position": 0,
+                "is_checkpoint": False,
+                "convergence_gate": [{"node_type": "issue", "node_id": "n-2"}],
+            },
+            {
+                "id": "n-2",
+                "node_type": "issue",
+                "ref_id": issues[1].id,
+                "lane_id": "main",
+                "position": 1,
+                "is_checkpoint": False,
+                "convergence_gate": [{"node_type": "issue", "node_id": "n-1"}],
+            },
+        ],
+    }
+
+    response = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "plan_convergence_cycle"
+
+
+@pytest.mark.asyncio
+async def test_convergence_gate_not_false_cyclic_in_readiness(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A convergence gate node is not falsely reported as a self cycle in readiness."""
+    user = await get_or_create_user_async(async_db)
+    lane_a = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2)]
+    lane_b = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2, 4)]
+    await async_db.commit()
+    payload = _parallel_payload_with_gates(
+        [issue.id for issue in lane_a],
+        [issue.id for issue in lane_b],
+        convergence_from_b_to_a=lane_a[1].id,
+    )
+
+    created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+
+    readiness = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/readiness")
+    assert readiness.status_code == 200, readiness.text
+    body = readiness.json()
+    assert [d for d in body["plan_diagnostics"] if d["code"] == "plan_cycle_detected"] == []
+    conv_node = next(n for n in body["nodes"] if n["id"] == f"b-{lane_b[0].id}")
+    assert not any(d["code"] == "plan_cycle_detected" for d in conv_node.get("diagnostics", []))

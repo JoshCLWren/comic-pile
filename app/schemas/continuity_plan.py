@@ -140,6 +140,12 @@ class ContinuityPlanWrite(BaseModel):
             positions = sorted(node.position for node in self.nodes)
             if positions != list(range(len(positions))):
                 raise ValueError("strict sequential positions must be contiguous starting at zero")
+        # Validate checkpoint placement
+        for node in self.nodes:
+            if node.is_checkpoint and node.node_type != "issue":
+                raise ValueError(
+                    f"checkpoint on node '{node.id}' is only allowed on issue nodes"
+                )
         # Validate convergence gate references
         for node in self.nodes:
             if node.convergence_gate:
