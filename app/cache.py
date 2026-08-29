@@ -498,6 +498,8 @@ class UpstashCache:
         url: str | None = None,
         token: str | None = None,
         local_url: str | None = None,
+        *,
+        allow_local: bool = False,
     ) -> None:
         """Configure a Redis client without opening a network connection.
 
@@ -508,12 +510,21 @@ class UpstashCache:
         Supports two modes:
         - Upstash cloud: provide url (REST URL) and token
         - Local Redis: provide local_url (e.g., redis://localhost:6379/0)
+
+        The local Redis path is dev-only. Callers must pass ``allow_local=True``
+        (the startup wiring does so only when ``CACHE_LOCAL_REDIS_DEV`` is set) so
+        a stray local URL can never enable caching in a deployed environment.
         """
         if self._initialized:
             logger.warning("Cache already initialized")
             return
 
         if local_url:
+            if not allow_local:
+                raise ValueError(
+                    "Local Redis client path is disabled unless CACHE_LOCAL_REDIS_DEV "
+                    "is set; use Upstash credentials or enable the dev flag."
+                )
             self._client = aioredis.Redis.from_url(
                 local_url,
                 decode_responses=True,
@@ -656,6 +667,20 @@ class UpstashCache:
 
         if self._client is None:
             return False
+
+        # Smoke-test throttle: once the monthly Upstash budget is exhausted, drop a
+        # bounded fraction of best-effort value writes so a runaway rollout degrades
+        # gracefully instead of exhausting the provider. Critical invalidations
+        # (generation INCRs) are never throttled; only value writes are subject.
+        from app.cache_quota import should_throttle_cache_write
+
+        if should_throttle_cache_write():
+            logger.warning(
+                "Cache write smoke-test throttled: monthly budget reached; "
+                "serving from the database path for key %s",
+                key,
+            )
+            return True
 
         try:
             prepared = _prepare_value(value)
@@ -1102,6 +1127,7 @@ class CacheRouter:
                 url=kwargs.get("url"),
                 token=kwargs.get("token"),
                 local_url=kwargs.get("local_url"),
+                allow_local=kwargs.get("allow_local", False),
             )
             return backend
         raise ValueError(f"Unknown cache provider: {provider}")
@@ -1126,9 +1152,14 @@ class CacheRouter:
         token: str | None = None,
         local_url: str | None = None,
     ) -> None:
-        """Backward-compatible redis initialization used by tests/fixtures."""
+        """Backward-compatible redis initialization used by tests/fixtures.
+
+        Test harnesss may exercise the local Redis path directly, so this helper
+        passes ``allow_local=True``; production wiring goes through
+        :meth:`configure` and honors ``CACHE_LOCAL_REDIS_DEV``.
+        """
         await self.configure(
-            "redis", url=url, token=token, local_url=local_url
+            "redis", url=url, token=token, local_url=local_url, allow_local=True
         )
 
     async def demote(self) -> None:

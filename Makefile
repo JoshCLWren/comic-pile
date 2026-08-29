@@ -71,6 +71,9 @@ start-task:  ## Validate and start a GitHub issue (Usage: make start-task ISSUE=
 	@if [ -z "$(ISSUE)" ]; then echo "Usage: make start-task ISSUE=644"; exit 1; fi
 	@$(PYTHON) scripts/next_task.py start $(ISSUE)
 
+cache-usage:  ## Print one-command Upstash cache usage vs budget (issue #1716)
+	@$(PYTHON) -m scripts.cache_usage_report
+
 db-up:  ## Start local PostgreSQL without changing its data
 	@docker compose up -d db
 

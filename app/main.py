@@ -519,10 +519,17 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                     },
                 )
             elif redis_settings.redis_url:
+                if not redis_settings.cache_local_redis_dev:
+                    logger.warning(
+                        "Local Redis URL present but CACHE_LOCAL_REDIS_DEV is not set; "
+                        "refusing the local Redis client path. Use Upstash credentials "
+                        "or enable the dev flag to use local Redis."
+                    )
+                    return
                 await _init_provided_cache(
                     "redis",
                     startup_state,
-                    {"local_url": redis_settings.redis_url},
+                    {"local_url": redis_settings.redis_url, "allow_local": True},
                 )
             else:
                 logger.warning(

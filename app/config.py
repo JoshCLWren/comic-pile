@@ -307,18 +307,28 @@ class RedisSettings(BaseSettings):
         description="Local Redis URL (e.g., redis://localhost:6379/0)",
         json_schema_extra={"env": "REDIS_URL"},
     )
+    cache_local_redis_dev: bool = Field(
+        default=False,
+        description=(
+            "Dev-only escape hatch that permits the local Redis client path. "
+            "Production must use Upstash; a bare REDIS_URL is ignored unless "
+            "this flag is explicitly set, so a stray local URL can never enable "
+            "caching in a deployed environment."
+        ),
+        json_schema_extra={"env": "CACHE_LOCAL_REDIS_DEV"},
+    )
     cache_ttl_short: int = Field(
-        default=90,
+        default=120,
         description="Short TTL for high-frequency queries",
         json_schema_extra={"env": "CACHE_TTL_SHORT"},
     )
     cache_ttl_medium: int = Field(
-        default=180,
+        default=360,
         description="Medium TTL for moderate-frequency queries",
         json_schema_extra={"env": "CACHE_TTL_MEDIUM"},
     )
     cache_ttl_long: int = Field(
-        default=360,
+        default=900,
         description="Long TTL for low-frequency queries",
         json_schema_extra={"env": "CACHE_TTL_LONG"},
     )
@@ -347,10 +357,15 @@ class RedisSettings(BaseSettings):
         if self.cache_provider == "redis":
             if not self.cache_enabled:
                 return "off"
-            if not (
-                (self.upstash_redis_rest_url and self.upstash_redis_rest_token) or self.redis_url
-            ):
-                return "off"
+            upstash_ok = bool(
+                self.upstash_redis_rest_url and self.upstash_redis_rest_token
+            )
+            # The local Redis client is a dev-only path. A bare REDIS_URL must not
+            # enable caching in production; it requires CACHE_LOCAL_REDIS_DEV.
+            local_ok = bool(self.redis_url) and self.cache_local_redis_dev
+            if upstash_ok or local_ok:
+                return "redis"
+            return "off"
         return self.cache_provider
 
 
