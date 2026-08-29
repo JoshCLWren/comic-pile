@@ -282,57 +282,97 @@ Port conflicts: Dev (5435), Test (5437), CI (5432).
 ## Frontend Code Style
 
 - Functional components with hooks
-- Custom hooks with useState/useEffect for server state
+- **Server state is managed with TanStack React Query (`@tanstack/react-query`)** — never hand-rolled `useState`/`useEffect` fetch hooks. `useQuery` for reads, `useMutation` for writes.
 - React Router for navigation
 
-```jsx
-import { useState, useEffect, useCallback } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { api } from '../services/api'
+**Query directory layout (`frontend/src/query/`):**
 
-export function useResource(id) {
-  const [data, setData] = useState(null)
-  const [isPending, setIsPending] = useState(true)
-  const [isError, setIsError] = useState(false)
-  const [error, setError] = useState(null)
+- `queryKeys.ts` — all query-key builders live here. Use hierarchical per-domain namespaces
+  (`queue`, `session`, `roll`, `thread`, `dependencies`, `analytics`) with `all`/`list`/`detail`/`page`
+  shapes and `as const`. Normalize filter params (e.g. trimmed/nullable search) so keys stay
+  canonical. Never inline raw key arrays inside components or hooks.
+- `queryClient.ts` — the single shared `QueryClient` with app defaults (`staleTime` 30s, `gcTime`
+  5min, `refetchOnWindowFocus: false`, no retry on 401/403-auth, mutations `retry: false`).
+- `cacheEffects.ts` — **all** cache writes, invalidation, and optimistic-update helpers live here
+  (e.g. `invalidateAfterQueueMutation`, `applyEditedThreadToQueuePages`,
+  `optimisticallyUpdateThreadCache`). Keep these centralized rather than scattering
+  `setQueryData`/`invalidateQueries` calls through components.
 
-  const fetchData = useCallback(async () => {
-    if (!id) {
-      setIsPending(false)
-      return
-    }
-    setIsPending(true)
-    setIsError(false)
-    setError(null)
-    try {
-      const result = await api.getResource(id)
-      setData(result)
-    } catch (err) {
-      setIsError(true)
-      setError(err)
-    } finally {
-      setIsPending(false)
-    }
-  }, [id])
+**Query keys naming:** build every key through `queryKeys.*` from `queryKeys.ts`. Prefer stable keys
+with normalized params; put pagination cursors in `pageParam`, not in the key.
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
+**Reads (`useQuery`):** wrap a service call from `services/api.ts`; gate with `enabled`; keys from
+`queryKeys.*`. Return `{ data, isPending, isError, refetch }`.
 
-  return { data, isPending, isError, error, refetch: fetchData }
+**Writes (`useMutation`):** `mutationFn` calls the API service; `onSuccess` performs cache effects
+(usually an invalidation/update helper from `cacheEffects.ts`). Return `{ mutate, isPending,
+isError }`. The mutation is the single source of truth for the write; do not call `refetch()`
+manually after an invalidation helper that already triggers refetch.
+
+**Optimistic updates:** when a mutation should feel instant, call
+`optimisticallyUpdateThreadCache(client, id, update)` (or the matching `cacheEffects.ts` helper)
+in `onMutate`, keep the returned rollback function, and call it in `onError` to restore the prior
+cache. Always pair optimistic writes with a rollback path.
+
+```tsx
+import { useQuery, useMutation } from '@tanstack/react-query'
+import { threadsApi } from '../services/api'
+import type { Thread } from '../types'
+import { queryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
+import {
+  invalidateAfterQueueMutation,
+  optimisticallyUpdateThreadCache,
+} from '../query/cacheEffects'
+
+export function useThread(id?: number | null) {
+  return useQuery({
+    queryKey: id ? queryKeys.thread.detail(id) : [],
+    queryFn: () => threadsApi.get(id!),
+    enabled: !!id,
+  })
+}
+
+export function useRenameThread() {
+  return useMutation({
+    mutationFn: ({ id, title }: { id: number; title: string }) =>
+      threadsApi.update(id, { title }),
+    onMutate: async ({ id, title }) => {
+      const rollback = optimisticallyUpdateThreadCache(
+        queryClient,
+        id,
+        (thread: Thread) => ({ ...thread, title }),
+      )
+      return { rollback }
+    },
+    onError: (_err, _vars, ctx) => ctx?.rollback?.(),
+    onSuccess: async () => {
+      await invalidateAfterQueueMutation(queryClient)
+    },
+  })
 }
 
 export default function ExamplePage() {
   const { id } = useParams()
-  const navigate = useNavigate()
-  const { data, isPending, isError } = useResource(id)
+  const { data, isPending, isError } = useThread(Number(id))
+  const rename = useRenameThread()
 
   if (isPending) return <div>Loading...</div>
-  if (isError) return <div>Error loading resource</div>
+  if (isError) return <div>Error loading thread</div>
 
-  return <div>{data?.name}</div>
+  return (
+    <div>
+      {data?.title}
+      <button onClick={() => rename.mutate({ id: Number(id), title: 'New' })}>Rename</button>
+    </div>
+  )
 }
 ```
+
+**Single place for conventions:** this section is the canonical reference for frontend server-state
+conventions. Any query-key, cache-effect, or optimistic-update pattern must match what is implemented
+in `frontend/src/query/` (see `queryKeys.ts`, `queryClient.ts`, `cacheEffects.ts`) and the
+`frontend/src/hooks/` wrappers.
 
 ## Cache Provider Selection
 
