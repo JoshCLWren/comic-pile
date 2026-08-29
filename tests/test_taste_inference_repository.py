@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.taste_signal import TasteSignal
 from app.models.user import User
 from app.repositories import taste_signal as taste_signal_repository
-from app.services.taste_inference import InferredSignal
+from app.services.taste_inference import SignalMetrics
 
 pytestmark = pytest.mark.asyncio
 
@@ -53,8 +53,8 @@ async def test_apply_inferred_signal_preserves_explicit_verdict(
     """A recomputed signal refreshes derived columns without touching a verdict."""
     await _seed_signal(async_db, default_user.id, verdict)
 
-    inferred = InferredSignal(
-        affinity_estimate=0.9,
+    metrics = SignalMetrics(
+        affinity=0.9,
         confidence=0.95,
         evidence_count=12,
         distinct_thread_count=9,
@@ -65,7 +65,7 @@ async def test_apply_inferred_signal_preserves_explicit_verdict(
         signal_type="creator",
         external_key="creator:writer:alan-moore",
         display_name="Alan Moore",
-        inferred=inferred,
+        metrics=metrics,
         now=datetime.now(UTC),
     )
     await async_db.commit()
@@ -83,8 +83,8 @@ async def test_apply_inferred_signal_creates_row_without_verdict(
     default_user: User,
 ) -> None:
     """A missing row is created with inferred columns and no verdict."""
-    inferred = InferredSignal(
-        affinity_estimate=0.5,
+    metrics = SignalMetrics(
+        affinity=0.5,
         confidence=0.7,
         evidence_count=4,
         distinct_thread_count=3,
@@ -95,7 +95,7 @@ async def test_apply_inferred_signal_creates_row_without_verdict(
         signal_type="character",
         external_key="character:42",
         display_name="Swamp Thing",
-        inferred=inferred,
+        metrics=metrics,
         now=datetime.now(UTC),
     )
     await async_db.commit()
@@ -119,8 +119,8 @@ async def test_inferred_only_signal_has_no_verdict_written(
     default_user: User,
 ) -> None:
     """Inferred-only persistence never writes a verdict value."""
-    inferred = InferredSignal(
-        affinity_estimate=-0.8,
+    metrics = SignalMetrics(
+        affinity=-0.8,
         confidence=0.9,
         evidence_count=10,
         distinct_thread_count=8,
@@ -131,7 +131,7 @@ async def test_inferred_only_signal_has_no_verdict_written(
         signal_type="team",
         external_key="team:7",
         display_name="The League",
-        inferred=inferred,
+        metrics=metrics,
         now=datetime.now(UTC),
     )
     await async_db.commit()

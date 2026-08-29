@@ -1,392 +1,267 @@
-"""Inferred Taste Bank affinity and confidence from reading history.
+"""Cautious Taste Bank inference from reading history (issue #1745).
 
-This is the calculation layer for issue #1745. It derives cautious taste
-signals from a reader's own rating/acceptance history instead of silently
-treating one good comic as a permanent creator preference.
+Derives per-feature affinity and confidence from a reader's confirmed
+ratings instead of silently equating one good comic with a permanent creator
+preference. Every function here is pure and deterministic: given the same
+evidence it always produces the same metrics, so the Taste Bank stays
+rebuildable from raw rating history.
 
-The math is intentionally conservative and fully deterministic:
+Design goals from the issue contract:
 
-- Affinity is the mean rating lift over the reader's own baseline, normalized
-  into ``[-1, 1]``. Positive means the reader rates the feature above their
-  usual baseline; negative means below.
-- Confidence combines three factors so that a pattern must be *repeated*,
-  *consistent*, and *diverse* before it is treated as a real signal:
+- **Baseline-relative affinity**: A feature's affinity is measured against the
+  reader's own average rating, in normalized effect units, so a middling 3/5
+  is not mistaken for a positive signal for a reader whose baseline is also 3.
+- **Sparse evidence stays weak**: Confidence grows slowly with distinct issue
+  evidence and is further discounted for single-thread clusters, so one or two
+  isolated issues remain low-confidence.
+- **No intra-issue double counting**: Each distinct issue contributes at most
+  one observation per feature, even when highly correlated metadata points to
+  the same underlying person or team.
+- **Verdicts are authoritative**: Recomputation updates only inferred columns;
+  an explicit user verdict is never overwritten.
 
-  - evidence factor: more observations raise confidence, but it saturates;
-  - diversity factor: evidence spread across distinct threads/runs raises
-    confidence more than the same number of reads stacked inside one thread
-    (this is what stops a single-run cluster from looking authoritative);
-  - consistency factor: low spread and one-directional agreement raise
-    confidence, mixed signs lower it.
-
-Explicit user verdicts (``confirmed``/``sometimes``/``rejected``) are never
-written here. Persistence helpers in the repository layer update only the
-inferred columns, so a verdict survives every recomputation.
-
-All functions are pure (stdlib only) so the contract can be covered by
-focused unit tests without a database.
+The prompt-eligibility engine (``app.services.prompt_eligibility``) decides
+whether an inferred metric is strong enough to ask about. This module only
+produces the metrics.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from statistics import fmean, pstdev
+from datetime import datetime
 
-from app.services.comicvine_taste import extract_taste_features
+from app.models.taste_signal import TasteSignal
+
+# Confidence curve: effective-sample smoothing so sparse evidence stays weak
+# while repeated evidence trends toward 1.0.
+_CONFIDENCE_SMOOTHING = 2.0
+
+# Diversity weight: how much an additional distinct thread boosts the
+# effective sample relative to reading more issues from the same thread.
+_DIVERSITY_BOOST = 0.25
+
+
+class InferenceError(ValueError):
+    """Raised when inference input is malformed (e.g. empty evidence)."""
 
 
 @dataclass(frozen=True)
-class InferenceConfig:
-    """Tunable constants for the inferred-signal calculation.
+class RatingEvidence:
+    """One rating observation for a feature from a single read.
 
     Attributes:
-        affinity_normalization: Sustained rating lift (in stars over baseline)
-            that maps to a full ``|affinity|`` of 1.0.
-        evidence_ceil: Number of observations at which the evidence factor
-            saturates at 1.0.
-        diversity_ceil: Number of distinct threads/runs at which the diversity
-            factor saturates at 1.0.
-        consistency_std_ceil: Rating-lift standard deviation that drives the
-            consistency factor to 0.0.
-        accept_bonus: Lift contributed by one accepted roll with no rating.
-        accept_penalty: Lift subtracted by one rejected roll with no rating.
-        weight_evidence: Confidence weight for the evidence factor.
-        weight_diversity: Confidence weight for the diversity factor.
-        weight_consistency: Confidence weight for the consistency factor.
-        neutral_rating_baseline: Baseline used when the reader has no ratings.
+        rating: The reader's rating for the read (scale-relative).
+        thread_id: Database id of the reading-project thread for the read.
+        issue_key: Stable key identifying one distinct issue within a thread,
+            used to prevent intra-issue double counting.
     """
 
-    affinity_normalization: float = 1.5
-    evidence_ceil: int = 10
-    diversity_ceil: int = 5
-    consistency_std_ceil: float = 1.0
-    accept_bonus: float = 0.3
-    accept_penalty: float = 0.3
-    weight_evidence: float = 0.4
-    weight_diversity: float = 0.3
-    weight_consistency: float = 0.2
-    neutral_rating_baseline: float = 3.0
+    rating: float
+    thread_id: int
+    issue_key: str
 
 
-DEFAULT_INFERENCE_CONFIG = InferenceConfig()
-
-
-@dataclass
-class TasteObservation:
-    """One occurrence of a feature in a user's reading history.
+@dataclass(frozen=True)
+class SignalMetrics:
+    """Inferred metrics for one taste signal.
 
     Attributes:
-        thread_id: Stable thread/run id, used for evidence diversity. May be
-            ``None`` when the source cannot identify a thread.
-        rating: The user's rating for the read (stars), or ``None``.
-        accepted: Whether the roll was accepted, or ``None`` when unknown.
+        affinity: Baseline-relative effect size normalized to ``[-1, 1]``;
+            positive means the reader rated the feature above their own
+            baseline.
+        confidence: Statistical confidence in the affinity estimate in
+            ``[0, 1]``, growing with evidence count and diversity.
+        evidence_count: Number of distinct issues contributing evidence.
+        distinct_thread_count: Number of distinct threads contributing.
     """
 
-    thread_id: int | None
-    rating: float | None = None
-    accepted: bool | None = None
-
-
-@dataclass
-class InferredSignal:
-    """Computed inferred state for one taste feature.
-
-    Attributes:
-        affinity_estimate: Mean lift over baseline, clamped to ``[-1, 1]``.
-        confidence: Statistical confidence in the estimate, in ``[0, 1]``.
-        evidence_count: Observations carrying a usable rating or acceptance.
-        distinct_thread_count: Distinct threads/runs among the observations.
-    """
-
-    affinity_estimate: float
+    affinity: float
     confidence: float
     evidence_count: int
     distinct_thread_count: int
 
 
-@dataclass
-class FeatureEvidence:
-    """Accumulated observations for one normalized feature key.
-
-    Attributes:
-        display_name: Human-readable label for the feature.
-        observations: Every occurrence of the feature in reading history.
-    """
-
-    display_name: str
-    observations: list[TasteObservation]
-
-
-@dataclass
-class FeatureResult:
-    """Computed inferred signal keyed for persistence.
-
-    Attributes:
-        signal_type: One of the canonical ``taste_signal`` signal types.
-        external_key: Stable normalized external key for the feature.
-        display_name: Human-readable label for the feature.
-        inferred: The computed inferred state.
-    """
-
-    signal_type: str
-    external_key: str
-    display_name: str
-    inferred: InferredSignal
-
-
-def _observation_delta(
-    observation: TasteObservation,
-    baseline_rating: float,
-    config: InferenceConfig,
-) -> float | None:
-    """Convert one observation into a lift-over-baseline signal.
+def _mean(values: list[float]) -> float:
+    """Return the arithmetic mean of ``values``.
 
     Args:
-        observation: The single history occurrence.
-        baseline_rating: The reader's mean rating across all reads.
-        config: Active tuning constants.
+        values: Non-empty list of numbers.
 
     Returns:
-        The rating lift contributed by this observation, or ``None`` when the
-        observation carries no usable evidence.
+        The mean.
+
+    Raises:
+        InferenceError: When ``values`` is empty.
     """
-    if observation.rating is not None:
-        return observation.rating - baseline_rating
-    if observation.accepted is True:
-        return config.accept_bonus
-    if observation.accepted is False:
-        return -config.accept_penalty
-    return None
+    if not values:
+        raise InferenceError("cannot compute a mean over empty evidence")
+    return sum(values) / len(values)
 
 
-def compute_inferred_signal(
-    observations: list[TasteObservation],
-    baseline_rating: float,
-    config: InferenceConfig | None = None,
-) -> InferredSignal:
-    """Compute inferred affinity and confidence from feature observations.
-
-    The function is pure and deterministic. It never reads or writes any
-    verdict state; verdicts are the caller's responsibility.
+def baseline_rating(all_ratings: list[float]) -> float:
+    """Return a reader's overall baseline rating across confirmed reads.
 
     Args:
-        observations: Every occurrence of the feature in a reader's history.
-        baseline_rating: The reader's own mean rating (lift is measured
-            against this, not an absolute scale).
-        config: Tuning constants; defaults to :data:`DEFAULT_INFERENCE_CONFIG`.
+        all_ratings: Every confirmed rating the reader has given, across all
+            features and threads.
 
     Returns:
-        The inferred ``affinity_estimate`` (``[-1, 1]``), ``confidence``
-        (``[0, 1]``), ``evidence_count``, and ``distinct_thread_count``.
+        The reader's average baseline rating.
+
+    Raises:
+        InferenceError: When ``all_ratings`` is empty.
     """
-    config = config or DEFAULT_INFERENCE_CONFIG
-    usable = [
-        delta
-        for observation in observations
-        if (delta := _observation_delta(observation, baseline_rating, config))
-        is not None
-    ]
-    if not usable:
-        return InferredSignal(
-            affinity_estimate=0.0,
-            confidence=0.0,
-            evidence_count=0,
-            distinct_thread_count=0,
-        )
+    return _mean(list(all_ratings))
 
-    mean_delta = fmean(usable)
-    affinity_estimate = max(-1.0, min(1.0, mean_delta / config.affinity_normalization))
 
-    evidence_factor = min(len(usable) / config.evidence_ceil, 1.0)
-    distinct_threads = {o.thread_id for o in observations if o.thread_id is not None}
-    diversity_factor = min(len(distinct_threads) / config.diversity_ceil, 1.0)
+def _dedupe_evidence(evidence: list[RatingEvidence]) -> list[RatingEvidence]:
+    """Drop repeat observations of the same distinct issue for one feature.
 
-    if len(usable) == 1:
-        consistency_factor = 0.5
-    else:
-        std = pstdev(usable)
-        consistency_factor = max(0.0, 1.0 - std / config.consistency_std_ceil)
-        nonzero = [delta for delta in usable if delta != 0.0]
-        if nonzero and mean_delta != 0.0:
-            same_sign = sum(
-                1 for delta in nonzero if (delta > 0) == (mean_delta > 0)
-            ) / len(nonzero)
-            # Mixed-direction evidence must not look perfectly consistent.
-            consistency_factor *= 0.5 + 0.5 * same_sign
+    One issue contributes a single rating observation per feature; any extra
+    observations carry no independent signal and would double-count correlated
+    metadata.
 
-    # Apply distinct thread multiplier to penalize single-thread evidence
-    base_confidence = max(
-        0.0,
-        min(
-            1.0,
-            config.weight_evidence * evidence_factor
-            + config.weight_diversity * diversity_factor
-            + config.weight_consistency * consistency_factor,
-        ),
+    Args:
+        evidence: Raw per-read observations for one feature.
+
+    Returns:
+        One observation per distinct ``issue_key``, preserving first-seen
+        order.
+    """
+    seen: set[str] = set()
+    deduped: list[RatingEvidence] = []
+    for observation in evidence:
+        if observation.issue_key in seen:
+            continue
+        seen.add(observation.issue_key)
+        deduped.append(observation)
+    return deduped
+
+
+def compute_confidence(evidence_count: int, distinct_thread_count: int) -> float:
+    """Compute a confidence score from evidence count and diversity.
+
+    Uses a Laplace-style effective-sample smoothing: confidence equals
+    ``effective / (effective + smoothing)``. The effective sample grows with
+    evidence count and is boosted modestly by evidence drawn from more distinct
+    threads, so a single-thread cluster stays less confident than a spread of
+    reads.
+
+    Args:
+        evidence_count: Distinct issues contributing evidence.
+        distinct_thread_count: Distinct threads contributing evidence.
+
+    Returns:
+        A confidence value in ``[0, 1]``.
+    """
+    if evidence_count <= 0:
+        return 0.0
+    boost = max(0, distinct_thread_count - 1) * _DIVERSITY_BOOST
+    effective = evidence_count * (1.0 + boost)
+    raw = effective / (effective + _CONFIDENCE_SMOOTHING)
+    return max(0.0, min(1.0, raw))
+
+
+def compute_signal_metrics(
+    evidence: list[RatingEvidence],
+    *,
+    baseline: float,
+    rating_span: float = 4.0,
+) -> SignalMetrics:
+    """Infer affinity, confidence, and evidence metadata for one feature.
+
+    Args:
+        evidence: Per-read rating observations for the feature. May contain
+            duplicates for the same distinct issue; they are deduplicated.
+        baseline: The reader's global average rating from
+            :func:`baseline_rating`.
+        rating_span: Width of the rating scale (max minus min) used to
+            normalize affinity. Defaults to 4 for a 1-5 star scale.
+
+    Returns:
+        The inferred :class:`SignalMetrics`.
+
+    Raises:
+        InferenceError: When ``evidence`` is empty after deduplication, or
+            ``rating_span`` is not positive.
+
+    Examples:
+        Repeated above-baseline evidence yields a confident, positive signal::
+
+            >>> compute_signal_metrics(
+            ...     [RatingEvidence(4, 1, "a"), RatingEvidence(4, 2, "b"),
+            ...      RatingEvidence(4, 3, "c")],
+            ...     baseline=3.0,
+            ... ).confidence > 0.6
+            True
+
+        A single isolated above-baseline read stays low-confidence::
+
+            >>> compute_signal_metrics(
+            ...     [RatingEvidence(4, 1, "a")],
+            ...     baseline=3.0,
+            ... ).confidence < 0.6
+            True
+    """
+    if rating_span <= 0:
+        raise InferenceError("rating_span must be positive")
+
+    deduped = _dedupe_evidence(evidence)
+    if not deduped:
+        raise InferenceError("cannot infer metrics from empty evidence")
+
+    feature_mean = _mean([observation.rating for observation in deduped])
+    raw_affinity = (feature_mean - baseline) / rating_span
+    affinity = max(-1.0, min(1.0, raw_affinity))
+
+    evidence_count = len(deduped)
+    distinct_thread_count = len({observation.thread_id for observation in deduped})
+
+    return SignalMetrics(
+        affinity=affinity,
+        confidence=compute_confidence(evidence_count, distinct_thread_count),
+        evidence_count=evidence_count,
+        distinct_thread_count=distinct_thread_count,
     )
-    distinct_multiplier = 1.0 if len(distinct_threads) >= 2 else 0.5
-    confidence = base_confidence * distinct_multiplier
-
-    return InferredSignal(
-        affinity_estimate=affinity_estimate,
-        confidence=confidence,
-        evidence_count=len(usable),
-        distinct_thread_count=len(distinct_threads),
-    )
 
 
-def _iter_features(features: dict[str, object]) -> list[tuple[str, str, str]]:
-    """Yield ``(signal_type, external_key, display_name)`` for extracted features.
+def merge_inferred_into(
+    signal: TasteSignal,
+    metrics: SignalMetrics,
+    *,
+    now: datetime,
+) -> TasteSignal:
+    """Merge freshly inferred metrics onto a durable signal row.
 
-    Args:
-        features: Output of :func:`app.services.comicvine_taste.extract_taste_features`.
-
-    Returns:
-        One tuple per distinct normalized feature (creators, characters,
-        teams, publisher, and publication era).
-    """
-    emitted: list[tuple[str, str, str]] = []
-
-    creators = features.get("creators")
-    if isinstance(creators, list):
-        for creator in creators:
-            if not isinstance(creator, dict):
-                continue
-            creator_id = creator.get("id")
-            name = creator.get("name")
-            if creator_id is None or not name:
-                continue
-            role = creator.get("role")
-            key = f"creator:{role}:{creator_id}" if role else f"creator:{creator_id}"
-            emitted.append(("creator", key, str(name)))
-
-    characters = features.get("characters")
-    if isinstance(characters, list):
-        for character in characters:
-            if not isinstance(character, dict):
-                continue
-            character_id = character.get("id")
-            name = character.get("name")
-            if character_id is None or not name:
-                continue
-            emitted.append(("character", f"character:{character_id}", str(name)))
-
-    teams = features.get("teams")
-    if isinstance(teams, list):
-        for team in teams:
-            if not isinstance(team, dict):
-                continue
-            team_id = team.get("id")
-            name = team.get("name")
-            if team_id is None or not name:
-                continue
-            emitted.append(("team", f"team:{team_id}", str(name)))
-
-    publisher = features.get("publisher")
-    if isinstance(publisher, dict):
-        publisher_id = publisher.get("id")
-        name = publisher.get("name")
-        if publisher_id is not None and name:
-            emitted.append(("publisher", f"publisher:{publisher_id}", str(name)))
-
-    era = features.get("publication_era")
-    if era:
-        emitted.append(("era", f"era:{era}", str(era)))
-
-    return emitted
-
-
-def recompute_from_reading_history(
-    baseline_rating: float,
-    rated_items: list[dict[str, object]],
-    config: InferenceConfig | None = None,
-) -> list[FeatureResult]:
-    """Compute inferred signals for every feature in a reader's history.
-
-    Each rated item is one read issue. Features are extracted from its
-    confirmed ComicVine metadata and de-duplicated per ``(feature, thread,
-    issue)`` so highly correlated metadata from one issue cannot double-count
-    the same evidence.
+    Only the inferred columns (``affinity_estimate``, ``confidence``,
+    ``evidence_count``, ``distinct_thread_count``) and observation timestamps
+    are updated. An explicit ``user_verdict`` is authoritative and is never
+    overwritten by recomputation.
 
     Args:
-        baseline_rating: The reader's mean rating across all reads.
-        rated_items: List of dicts with keys ``thread_id`` (int | None),
-            ``issue_id`` (int | None), ``rating`` (float | None),
-            ``accepted`` (bool | None), ``issue_metadata`` (dict), and
-            ``volume_metadata`` (dict | None).
-        config: Tuning constants; defaults to :data:`DEFAULT_INFERENCE_CONFIG`.
+        signal: The durable ORM signal to update in place.
+        metrics: Freshly computed inference metrics.
+        now: Timezone-aware UTC timestamp recording the recomputation.
 
     Returns:
-        One :class:`FeatureResult` per feature that appeared in the history,
-        sorted by signal type then external key for determinism.
+        The updated signal (the same object, mutated in place).
     """
-    config = config or DEFAULT_INFERENCE_CONFIG
-    grouped: dict[tuple[str, str], FeatureEvidence] = {}
-    seen: set[tuple[str, str, object, object]] = set()
-
-    for item in rated_items:
-        issue_value = item.get("issue_metadata")
-        if not isinstance(issue_value, dict):
-            issue_value = {}
-        volume_value = item.get("volume_metadata")
-        if not isinstance(volume_value, dict):
-            volume_value = None
-        features = extract_taste_features(issue_value, volume_value)
-
-        thread_id = item.get("thread_id")
-        if not isinstance(thread_id, int):
-            thread_id = None
-        issue_id = item.get("issue_id")
-        if not isinstance(issue_id, int):
-            issue_id = None
-        rating = item.get("rating")
-        if isinstance(rating, bool) or not isinstance(rating, (int, float)):
-            rating = None
-        elif isinstance(rating, int):
-            rating = float(rating)
-        accepted = item.get("accepted")
-        if not isinstance(accepted, bool):
-            accepted = None
-        observation = TasteObservation(
-            thread_id=thread_id,
-            rating=rating,
-            accepted=accepted,
-        )
-
-        for signal_type, external_key, display_name in _iter_features(features):
-            dedupe = (signal_type, external_key, thread_id, issue_id)
-            if dedupe in seen:
-                continue
-            seen.add(dedupe)
-            evidence = grouped.setdefault(
-                (signal_type, external_key),
-                FeatureEvidence(display_name=display_name, observations=[]),
-            )
-            evidence.observations.append(observation)
-
-    results: list[FeatureResult] = []
-    for (signal_type, external_key), evidence in grouped.items():
-        inferred = compute_inferred_signal(evidence.observations, baseline_rating, config)
-        results.append(
-            FeatureResult(
-                signal_type=signal_type,
-                external_key=external_key,
-                display_name=evidence.display_name,
-                inferred=inferred,
-            )
-        )
-
-    results.sort(key=lambda result: (result.signal_type, result.external_key))
-    return results
+    signal.affinity_estimate = metrics.affinity
+    signal.confidence = metrics.confidence
+    signal.evidence_count = metrics.evidence_count
+    signal.distinct_thread_count = metrics.distinct_thread_count
+    if signal.first_observed_at is None:
+        signal.first_observed_at = now
+    signal.last_observed_at = now
+    return signal
 
 
 __all__ = [
-    "DEFAULT_INFERENCE_CONFIG",
-    "FeatureEvidence",
-    "FeatureResult",
-    "InferenceConfig",
-    "InferredSignal",
-    "TasteObservation",
-    "compute_inferred_signal",
-    "recompute_from_reading_history",
+    "InferenceError",
+    "RatingEvidence",
+    "SignalMetrics",
+    "baseline_rating",
+    "compute_confidence",
+    "compute_signal_metrics",
+    "merge_inferred_into",
 ]

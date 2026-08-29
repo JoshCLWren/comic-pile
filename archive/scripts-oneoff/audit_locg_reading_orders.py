@@ -13,7 +13,7 @@ from pathlib import Path
 import requests
 
 # Add scripts dir to path so we can import comic_pile_api
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 from comic_pile_api import (
     API_BASE,
     REQUESTS_TIMEOUT,

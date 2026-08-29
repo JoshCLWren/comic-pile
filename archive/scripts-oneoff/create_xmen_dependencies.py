@@ -11,7 +11,7 @@ Environment Variables:
 Usage:
     export COMIC_PILE_USERNAME=Josh
     export COMIC_PILE_PASSWORD=your_password
-    python scripts/create_xmen_dependencies.py
+    python archive/scripts-oneoff/create_xmen_dependencies.py
 """
 
 import os

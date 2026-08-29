@@ -12,7 +12,7 @@ Environment Variables:
 Usage:
     export COMIC_PILE_USERNAME=Josh_Digital_Comics
     export COMIC_PILE_PASSWORD=your_password
-    python scripts/create_ultimate_universe_dependencies.py
+    python archive/scripts-oneoff/create_ultimate_universe_dependencies.py
 """
 
 import os

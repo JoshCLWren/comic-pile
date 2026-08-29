@@ -253,4 +253,89 @@ describe('PlanReadinessPanel', () => {
     rerender(<PlanReadinessPanel planId={12} refreshKey={1} />)
     await waitFor(() => expect(mocks.readiness).toHaveBeenCalledTimes(2))
   })
+
+  it('labels a checkpoint blocker with a checkpoint reason and badge', async () => {
+    mocks.readiness.mockResolvedValueOnce(
+      readinessResponse({
+        nodes: [
+          nodeReadiness({
+            node_id: 'issue-40',
+            label: 'Mister Miracle #1',
+            is_readable: false,
+            blockers: [
+              {
+                ...blocker,
+                satisfaction_type: 'checkpoint' as const,
+                unread_issue_details: [],
+              },
+            ],
+          }),
+        ],
+        summary: { total: 1, readable: 0, blocked: 1, complete: 0, unavailable: 0 },
+      }),
+    )
+    render(<PlanReadinessPanel planId={12} />)
+
+    await screen.findByTestId('plan-node-readiness-issue-40')
+    expect(screen.getByText('Waiting on checkpoint to be read.')).toBeInTheDocument()
+    expect(screen.getByText('Checkpoint')).toBeInTheDocument()
+  })
+
+  it('labels a converged blocker with a convergence reason and badge', async () => {
+    mocks.readiness.mockResolvedValueOnce(
+      readinessResponse({
+        nodes: [
+          nodeReadiness({
+            node_id: 'issue-40',
+            label: 'Mister Miracle #1',
+            is_readable: false,
+            blockers: [
+              {
+                ...blocker,
+                satisfaction_type: 'converged' as const,
+                unread_issue_details: [],
+              },
+            ],
+          }),
+        ],
+        summary: { total: 1, readable: 0, blocked: 1, complete: 0, unavailable: 0 },
+      }),
+    )
+    render(<PlanReadinessPanel planId={12} />)
+
+    await screen.findByTestId('plan-node-readiness-issue-40')
+    expect(screen.getByText('Waiting on convergence gate prerequisites.')).toBeInTheDocument()
+    expect(screen.getByText('Convergence')).toBeInTheDocument()
+  })
+
+  it('groups nodes with unknown lane_id under the Other steps fallback lane', async () => {
+    mocks.readiness.mockResolvedValueOnce(
+      readinessResponse({
+        lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
+        nodes: [
+          nodeReadiness({ node_id: 'issue-40', label: 'Mister Miracle #1' }),
+          nodeReadiness({
+            node_id: 'issue-41',
+            ref_id: 41,
+            label: 'Orphan step',
+            lane_id: 'unknown-lane',
+            position: 0,
+          }),
+        ],
+        summary: { total: 2, readable: 2, blocked: 0, complete: 0, unavailable: 0 },
+      }),
+    )
+    render(<PlanReadinessPanel planId={12} />)
+
+    await screen.findByTestId('plan-node-readiness-issue-40')
+    await screen.findByTestId('plan-node-readiness-issue-41')
+
+    const mainLane = screen.getByTestId('plan-readiness-lane-main')
+    expect(mainLane).toHaveTextContent('Reading order')
+    expect(mainLane).toHaveTextContent('Mister Miracle #1')
+
+    const fallbackLane = screen.getByTestId('plan-readiness-lane-__unlane__')
+    expect(fallbackLane).toHaveTextContent('Other steps')
+    expect(fallbackLane).toHaveTextContent('Orphan step')
+  })
 })

@@ -126,6 +126,7 @@ async def test_sequential_plan_preview_is_deterministic_and_incremental(
                 "ref_id": thread.id,
                 "lane_id": "main",
                 "position": index,
+                "convergence_gate": [],
             }
             for index, thread in enumerate(threads)
         ],
@@ -182,6 +183,7 @@ async def test_parallel_plan_uses_documented_flattening_policy(
                 "ref_id": thread.id,
                 "lane_id": lane,
                 "position": position,
+                "convergence_gate": [],
             }
             for lane, threads in threads_by_lane.items()
             for position, thread in enumerate(threads)
@@ -231,6 +233,7 @@ async def test_confirm_creates_reading_order_items(
                 "ref_id": thread.id,
                 "lane_id": "main",
                 "position": index,
+                "convergence_gate": [],
             }
             for index, thread in enumerate(threads)
         ],
@@ -288,6 +291,7 @@ async def test_duplicate_thread_conflict_is_reported_before_mutation(
                 "ref_id": thread.id,
                 "lane_id": "alpha",
                 "position": 0,
+                "convergence_gate": [],
             },
             {
                 "id": "node-b",
@@ -295,6 +299,7 @@ async def test_duplicate_thread_conflict_is_reported_before_mutation(
                 "ref_id": thread.id,
                 "lane_id": "bravo",
                 "position": 0,
+                "convergence_gate": [],
             },
         ],
     )
@@ -349,6 +354,7 @@ async def test_non_thread_node_is_reported_before_mutation(
                 "ref_id": thread.id,
                 "lane_id": "main",
                 "position": 0,
+                "convergence_gate": [],
             },
             {
                 "id": "issue-node",
@@ -356,6 +362,7 @@ async def test_non_thread_node_is_reported_before_mutation(
                 "ref_id": thread.id,
                 "lane_id": "main",
                 "position": 1,
+                "convergence_gate": [],
             },
         ],
     )
@@ -405,6 +412,7 @@ async def test_failed_projection_leaves_resources_unchanged(
                 "ref_id": thread.id,
                 "lane_id": "main",
                 "position": 0,
+                "convergence_gate": [],
             }
         ],
     )
@@ -477,6 +485,7 @@ async def test_projection_updates_existing_entries(
                 "ref_id": thread.id,
                 "lane_id": "main",
                 "position": index,
+                "convergence_gate": [],
             }
             for index, thread in enumerate(threads)
         ],
@@ -595,6 +604,7 @@ async def test_projection_with_unowned_reading_order_is_not_found(
                 "ref_id": thread.id,
                 "lane_id": "main",
                 "position": 0,
+                "convergence_gate": [],
             }
         ],
     )
@@ -627,6 +637,7 @@ async def test_malformed_plan_nodes_are_rejected_as_conflict(
                 "ref_id": thread.id,
                 "lane_id": "main",
                 "position": 0,
+                "convergence_gate": [],
             }
         ],
     )
@@ -663,6 +674,7 @@ async def test_missing_thread_conflict_is_reported(
                 "ref_id": foreign_thread.id,
                 "lane_id": "main",
                 "position": 0,
+                "convergence_gate": [],
             }
         ],
     )
@@ -702,6 +714,7 @@ async def test_kept_entries_are_counted_when_position_unchanged(
                 "ref_id": thread.id,
                 "lane_id": "main",
                 "position": 0,
+                "convergence_gate": [],
             }
         ],
     )
@@ -748,6 +761,7 @@ async def test_apply_projection_rolls_back_on_db_failure(
                 "ref_id": thread.id,
                 "lane_id": "main",
                 "position": 0,
+                "convergence_gate": [],
             }
         ],
     )

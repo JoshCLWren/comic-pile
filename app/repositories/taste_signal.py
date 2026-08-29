@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.taste_signal import TasteSignal
 
 if TYPE_CHECKING:
-    from app.services.taste_inference import InferredSignal
+    from app.services.taste_inference import SignalMetrics
 
 
 async def get_user_signals(
@@ -124,7 +124,7 @@ async def apply_inferred_signal(
     signal_type: str,
     external_key: str,
     display_name: str,
-    inferred: InferredSignal,
+    metrics: SignalMetrics,
     now: datetime,
 ) -> TasteSignal:
     """Persist a recomputed inferred signal without touching any verdict.
@@ -141,7 +141,7 @@ async def apply_inferred_signal(
         signal_type: Canonical signal type slug.
         external_key: Stable normalized external key for the feature.
         display_name: Current human-readable label for the feature.
-        inferred: The recomputed inferred state.
+        metrics: The freshly computed inference metrics.
         now: Current UTC timestamp for observation bookkeeping.
 
     Returns:
@@ -160,15 +160,15 @@ async def apply_inferred_signal(
         )
         db.add(signal)
 
-    updates = merge_inferred_into_signal(inferred, display_name, now, is_new=is_new)
+    updates = merge_metrics_into_signal(metrics, display_name, now, is_new=is_new)
     for column, value in updates.items():
         setattr(signal, column, value)
 
     return signal
 
 
-def merge_inferred_into_signal(
-    inferred: InferredSignal,
+def merge_metrics_into_signal(
+    metrics: SignalMetrics,
     display_name: str,
     now: datetime,
     *,
@@ -180,7 +180,7 @@ def merge_inferred_into_signal(
     user verdict survives recomputation untouched.
 
     Args:
-        inferred: The freshly computed inferred state.
+        metrics: The freshly computed inference metrics.
         display_name: Current human-readable label for the feature.
         now: Timestamp to record as ``last_observed_at``.
         is_new: Whether the row is being created (controls ``first_observed_at``).
@@ -190,10 +190,10 @@ def merge_inferred_into_signal(
     """
     updates: dict[str, object] = {
         "display_name": display_name,
-        "affinity_estimate": inferred.affinity_estimate,
-        "confidence": inferred.confidence,
-        "evidence_count": inferred.evidence_count,
-        "distinct_thread_count": inferred.distinct_thread_count,
+        "affinity_estimate": metrics.affinity,
+        "confidence": metrics.confidence,
+        "evidence_count": metrics.evidence_count,
+        "distinct_thread_count": metrics.distinct_thread_count,
         "last_observed_at": now,
     }
     if is_new:

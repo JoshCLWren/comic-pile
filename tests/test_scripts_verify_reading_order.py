@@ -1,4 +1,4 @@
-"""Tests for scripts/comic_pile_api.py verify_reading_order() and create_wildstorm_reading_order.py flags."""
+"""Tests for scripts/comic_pile_api.py verify_reading_order() and archive one-off reading-order flags."""
 
 import importlib.util
 import sys
@@ -9,11 +9,17 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-def _load_script_module(name: str) -> ModuleType:
-    """Dynamically load a module from the scripts directory."""
+def _load_script_module(name: str, subdir: str = "scripts") -> ModuleType:
+    """Dynamically load a module from a repository script directory.
+
+    Args:
+        name: Module basename without the ``.py`` suffix.
+        subdir: Repository-relative directory containing the module. Defaults to
+            ``scripts``; archived one-off scripts live in ``archive/scripts-oneoff``.
+    """
     spec = importlib.util.spec_from_file_location(
         name,
-        str(Path(__file__).parent.parent / "scripts" / f"{name}.py"),
+        str(Path(__file__).parent.parent / subdir / f"{name}.py"),
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -29,7 +35,7 @@ verify_reading_order = _comic_pile_api.verify_reading_order
 _wildstorm_chains = _load_script_module("wildstorm_chains")
 sys.modules["wildstorm_chains"] = _wildstorm_chains
 
-_create_module = _load_script_module("create_wildstorm_reading_order")
+_create_module = _load_script_module("create_wildstorm_reading_order", subdir="archive/scripts-oneoff")
 run_verify = _create_module.run_verify
 run_fix = _create_module.run_fix
 _parse_args = _create_module._parse_args

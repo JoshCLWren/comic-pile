@@ -459,6 +459,27 @@ class TestContradictoryEvidence:
         # Max band fraction < 40% → contradictory evidence reduces confidence
         assert result.confidence < 0.5
 
+    def test_light_deep_tie_is_balanced_low_confidence_with_reason(self) -> None:
+        """Equal light and deep evidence (no dominant band) is contradictory.
+
+        This is the genuine contradiction case: the reader's history shows
+        equal support for the two extremes and none for the midpoint. The
+        service must fail safe to BALANCED with low confidence and must
+        explain the contradiction in its evidence reasons.
+        """
+        obs = [_obs(5.0) for _ in range(4)] + [_obs(25.0) for _ in range(4)]
+        result = infer_bandwidth(obs)
+
+        # 4 light + 4 deep → light and deep fractions both 0.5
+        assert result.evidence.light_fraction == pytest.approx(0.5, abs=0.01)
+        assert result.evidence.deep_fraction == pytest.approx(0.5, abs=0.01)
+        # Safe midpoint prediction, never an extreme
+        assert result.level == BandwidthLevel.BALANCED
+        # Low confidence: alignment with BALANCED is zero, then reduced further
+        assert result.confidence <= 0.1 + 1e-9
+        # The contradiction is explained for tests and future explanations
+        assert any("Contradictory" in r for r in result.evidence.reasons)
+
 
 # ---------------------------------------------------------------------------
 # Edge cases

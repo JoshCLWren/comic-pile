@@ -40,7 +40,7 @@ async def _reinitialize_cache() -> AsyncIterator[None]:
     settings = get_redis_settings()
     if not settings.redis_url:
         assert settings.redis_url is not None, "REDIS_URL is required for cache regression tests"
-    await cache.initialize(local_url=settings.redis_url)
+    await cache.initialize(local_url=settings.redis_url, allow_local=True)
     assert cache.is_initialized, "Cache failed to initialize for cache regression tests"
     yield
 
@@ -424,7 +424,7 @@ async def test_cache_reinitialize_resets_open_circuit() -> None:
     assert backend._circuit_breaker.state == CircuitState.OPEN
 
     await cache.close()
-    await cache.initialize(local_url=settings.redis_url)
+    await cache.initialize(local_url=settings.redis_url, allow_local=True)
 
     assert cache.is_initialized
     # After reinitialize, we have a new backend
