@@ -793,7 +793,6 @@ describe('ContinuityPlannerPage', () => {
       created_at: '2026-08-12T00:00:00Z',
       updated_at: '2026-08-12T00:00:00Z',
     })
-    mocks.getIssue.mockReset()
 
     render(
       <MemoryRouter initialEntries={['/continuity-plans/12']}>
@@ -1571,7 +1570,6 @@ describe('ContinuityPlannerPage', () => {
       updated_at: '2026-08-12T00:00:00Z',
     })
 
-    const user = userEvent.setup()
     render(
       <MemoryRouter initialEntries={['/continuity-plans/12']}>
         <Routes>
