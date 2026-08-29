@@ -651,7 +651,11 @@ export default function ContinuityPlannerPage() {
                                 </p>
                                 <div className="grid gap-1">
                                   {nodes
-                                    .filter((other) => other.id !== node.id)
+                                    .filter(
+                                      (other) =>
+                                        other.id !== node.id &&
+                                        (other.node_type === 'issue' || other.node_type === 'crossover'),
+                                    )
                                     .sort((a, b) => {
                                       const aLane = orderedLanes.find((l) => l.id === a.lane_id)
                                       const bLane = orderedLanes.find((l) => l.id === b.lane_id)
@@ -692,24 +696,28 @@ export default function ContinuityPlannerPage() {
                             )}
                           </div>
                           <div className="flex flex-wrap gap-1">
-                            <button
-                              type="button"
-                              onClick={() => toggleCheckpoint(node.id)}
-                              title={node.is_checkpoint ? 'Remove checkpoint' : 'Mark as checkpoint (blocks next step)'}
-                              aria-label={node.is_checkpoint ? `Remove checkpoint from ${node.label}` : `Mark ${node.label} as checkpoint`}
-                              className={`min-h-9 rounded-lg border px-2 text-[10px] font-bold uppercase tracking-wider ${node.is_checkpoint ? 'border-amber-600 bg-amber-950/40 text-amber-300' : 'border-stone-700 text-stone-400 hover:border-amber-700 hover:text-amber-300'}`}
-                            >
-                              {node.is_checkpoint ? '⚑' : '⚐'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingGateNodeId(editingGateNodeId === node.id ? null : node.id)}
-                              title={editingGateNodeId === node.id ? 'Close convergence editor' : 'Edit convergence gate'}
-                              aria-label={editingGateNodeId === node.id ? `Close convergence editor for ${node.label}` : `Edit convergence gate for ${node.label}`}
-                              className={`min-h-9 rounded-lg border px-2 text-[10px] font-bold uppercase tracking-wider ${(node.convergence_gate ?? []).length > 0 ? 'border-violet-600 bg-violet-950/40 text-violet-300' : 'border-stone-700 text-stone-400 hover:border-violet-700 hover:text-violet-300'}`}
-                            >
-                              ⇄
-                            </button>
+                            {node.node_type === 'issue' && (
+                              <button
+                                type="button"
+                                onClick={() => toggleCheckpoint(node.id)}
+                                title={node.is_checkpoint ? 'Remove checkpoint' : 'Mark as checkpoint (blocks next step)'}
+                                aria-label={node.is_checkpoint ? `Remove checkpoint from ${node.label}` : `Mark ${node.label} as checkpoint`}
+                                className={`min-h-9 rounded-lg border px-2 text-[10px] font-bold uppercase tracking-wider ${node.is_checkpoint ? 'border-amber-600 bg-amber-950/40 text-amber-300' : 'border-stone-700 text-stone-400 hover:border-amber-700 hover:text-amber-300'}`}
+                              >
+                                {node.is_checkpoint ? '⚑' : '⚐'}
+                              </button>
+                            )}
+                            {(node.node_type === 'issue' || node.node_type === 'crossover') && (
+                              <button
+                                type="button"
+                                onClick={() => setEditingGateNodeId(editingGateNodeId === node.id ? null : node.id)}
+                                title={editingGateNodeId === node.id ? 'Close convergence editor' : 'Edit convergence gate'}
+                                aria-label={editingGateNodeId === node.id ? `Close convergence editor for ${node.label}` : `Edit convergence gate for ${node.label}`}
+                                className={`min-h-9 rounded-lg border px-2 text-[10px] font-bold uppercase tracking-wider ${(node.convergence_gate ?? []).length > 0 ? 'border-violet-600 bg-violet-950/40 text-violet-300' : 'border-stone-700 text-stone-400 hover:border-violet-700 hover:text-violet-300'}`}
+                              >
+                                ⇄
+                              </button>
+                            )}
                             {otherLanes.length > 0 && (
                               <select
                                 aria-label={`Move ${node.label} to another lane`}

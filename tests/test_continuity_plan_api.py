@@ -722,6 +722,57 @@ async def test_checkpoint_on_non_issue_rejected_by_schema(
 
 
 @pytest.mark.asyncio
+async def test_convergence_gate_thread_target_rejected_by_schema(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A convergence gate targeting a thread node is rejected before save."""
+    user = await get_or_create_user_async(async_db)
+    issue = await _make_issue(async_db, user_id=user.id, suffix="0")
+    thread = Thread(
+        title="Series target",
+        format="comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+        reading_progress="unstarted",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    payload = {
+        "name": "Thread gate plan",
+        "ordering_mode": "informational",
+        "lanes": [{"id": "main", "name": "Main", "order": 0}],
+        "nodes": [
+            {
+                "id": "a-1",
+                "node_type": "issue",
+                "ref_id": issue.id,
+                "lane_id": "main",
+                "position": 0,
+                "is_checkpoint": False,
+                "convergence_gate": [{"node_type": "thread", "node_id": "t-1"}],
+            },
+            {
+                "id": "t-1",
+                "node_type": "thread",
+                "ref_id": thread.id,
+                "lane_id": "main",
+                "position": 1,
+                "is_checkpoint": False,
+                "convergence_gate": [],
+            },
+        ],
+    }
+
+    response = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert response.status_code == 422
+    assert "convergence targets must be issue/crossover nodes" in response.text
+
+
+@pytest.mark.asyncio
 async def test_convergence_cycle_rejected_before_save(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:

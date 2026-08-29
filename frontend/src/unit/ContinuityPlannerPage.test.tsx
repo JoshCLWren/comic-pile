@@ -1555,4 +1555,74 @@ describe('ContinuityPlannerPage', () => {
 
     expect(screen.getByText('Convergence (1)')).toBeVisible()
   })
+
+  it('only offers checkpoint and convergence controls on supported node types', async () => {
+    mocks.get.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Mixed plan',
+      ordering_mode: 'informational',
+      lanes: [{ id: 'main', name: 'Lane A', order: 0 }],
+      nodes: [
+        { id: 'a-1', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0, label: 'Mister Miracle #1' },
+        { id: 't-1', node_type: 'thread', ref_id: 4, lane_id: 'main', position: 1, label: 'New Gods Series' },
+      ],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/12']}>
+        <Routes>
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Mister Miracle #1')).toBeVisible())
+
+    // Issue nodes keep both controls
+    expect(screen.getByRole('button', { name: /Mark Mister Miracle #1 as checkpoint/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Edit convergence gate for Mister Miracle #1/i })).toBeInTheDocument()
+
+    // Thread nodes offer neither control
+    expect(screen.queryByRole('button', { name: /Mark New Gods Series as checkpoint/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Edit convergence gate for New Gods Series/i })).not.toBeInTheDocument()
+  })
+
+  it('does not offer thread nodes as convergence gate targets', async () => {
+    mocks.get.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Mixed plan',
+      ordering_mode: 'informational',
+      lanes: [{ id: 'main', name: 'Lane A', order: 0 }],
+      nodes: [
+        { id: 'a-1', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0, label: 'Mister Miracle #1' },
+        { id: 'b-1', node_type: 'issue', ref_id: 42, lane_id: 'main', position: 1, label: 'New Gods #2' },
+        { id: 't-1', node_type: 'thread', ref_id: 4, lane_id: 'main', position: 2, label: 'New Gods Series' },
+      ],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/12']}>
+        <Routes>
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Mister Miracle #1')).toBeVisible())
+
+    const convergenceButton = screen.getByRole('button', { name: /Edit convergence gate for Mister Miracle #1/i })
+    await user.click(convergenceButton)
+    expect(screen.getByTestId('convergence-editor-a-1')).toBeVisible()
+
+    expect(screen.getByRole('checkbox', { name: /New Gods #2/i })).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: /New Gods Series/i })).not.toBeInTheDocument()
+  })
 })
