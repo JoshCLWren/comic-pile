@@ -554,7 +554,12 @@ class UpstashCache:
             self._client = None
             self._initialized = False
             if not self._is_upstash:
-                await client.aclose()
+                try:
+                    await client.aclose()
+                except RuntimeError:
+                    # Event loop may have been closed during test teardown;
+                    # ignore as the client resources will be GC'd.
+                    pass
             logger.info("Redis cache closed")
 
     async def ping(self) -> None:
