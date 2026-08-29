@@ -85,7 +85,7 @@ async def import_csv(
 
             new_thread = Thread(
                 title=title,
-                format=format_val,
+                format=normalize_format_value(format_val),
                 issues_remaining=issues_remaining,
                 queue_position=1,
                 status="active",

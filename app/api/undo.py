@@ -156,7 +156,7 @@ async def _restore_thread_from_state(
         thread = Thread(
             id=thread_id,
             title=state.get("title", "Unknown Thread"),
-            format=state.get("format", "comic"),
+            format=normalize_format_value(state.get("format", "comic")),
             issues_remaining=state.get("issues_remaining", 0),
             last_rating=state.get("last_rating"),
             queue_position=state.get("queue_position", 1),
