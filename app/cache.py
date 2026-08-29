@@ -1156,6 +1156,8 @@ class CacheRouter:
         url: str | None = None,
         token: str | None = None,
         local_url: str | None = None,
+        *,
+        allow_local: bool = False,
     ) -> None:
         """Backward-compatible redis initialization used by tests/fixtures.
 
@@ -1164,7 +1166,11 @@ class CacheRouter:
         :meth:`configure` and honors ``CACHE_LOCAL_REDIS_DEV``.
         """
         await self.configure(
-            "redis", url=url, token=token, local_url=local_url, allow_local=True
+            "redis",
+            url=url,
+            token=token,
+            local_url=local_url,
+            allow_local=allow_local,
         )
 
     async def demote(self) -> None:
