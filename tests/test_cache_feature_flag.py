@@ -161,7 +161,7 @@ async def test_local_redis_initialization_does_not_ping_service(monkeypatch) -> 
     monkeypatch.setattr(cache_module.cache, "_backend", None)
     monkeypatch.setattr(cache_module.aioredis.Redis, "from_url", from_url)
 
-    await cache_module.cache.initialize(local_url="redis://localhost:6379/0")
+    await cache_module.cache.initialize(local_url="redis://localhost:6379/0", allow_local=True)
 
     assert cache_module.cache.is_initialized is True
     from_url.assert_called_once_with(
