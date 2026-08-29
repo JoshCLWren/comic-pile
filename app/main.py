@@ -494,6 +494,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         await compute_startup_duration()
 
         redis_settings = get_redis_settings()
+        from app.cache_quota import set_quota_throttle_enabled
+
+        set_quota_throttle_enabled(redis_settings.cache_quota_throttle_enabled)
         provider = redis_settings.effective_provider
 
         if provider == "off":

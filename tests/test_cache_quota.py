@@ -97,3 +97,32 @@ def test_module_helper_evaluates_live_metrics(monkeypatch: object) -> None:
     cache_command_metrics.record("get", count=400_000)
     assert evaluate_cache_quota(fire_alert=False).status == "over-budget"
     assert should_throttle_cache_write(rng=random.Random(0)) in (True, False)
+
+
+def test_module_helper_does_not_throttle_unless_armed() -> None:
+    """The hot-path write-drop must stay off until the guardrail is explicitly armed.
+
+    This prevents test-suite or accidental command volume from silently dropping
+    cache writes; only a deliberate evaluation enables the smoke-test throttle.
+    """
+    from app.cache_metrics import cache_command_metrics
+    from app.cache_quota import (
+        quota_guardrail,
+        set_quota_throttle_enabled,
+        should_throttle_cache_write,
+    )
+
+    cache_command_metrics.reset()
+    quota_guardrail.reset()
+    set_quota_throttle_enabled(False)
+
+    # Far over the hard budget but the drop is not armed: never throttle.
+    cache_command_metrics.record("get", count=400_000)
+    assert should_throttle_cache_write(rng=random.Random(0)) is False
+    assert should_throttle_cache_write(rng=random.Random(1)) is False
+
+    # Arm it: once over budget the helper may now drop writes.
+    set_quota_throttle_enabled(True)
+    assert should_throttle_cache_write(rng=random.Random(0)) in (True, False)
+
+    set_quota_throttle_enabled(False)

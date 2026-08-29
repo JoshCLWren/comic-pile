@@ -332,6 +332,15 @@ class RedisSettings(BaseSettings):
         description="Long TTL for low-frequency queries",
         json_schema_extra={"env": "CACHE_TTL_LONG"},
     )
+    cache_quota_throttle_enabled: bool = Field(
+        default=False,
+        description=(
+            "Arm the smoke-test write-drop throttle once the observed monthly cache "
+            "command budget is reached. Off by default; enable only during a deliberate "
+            "cache re-enable evaluation so normal operation never silently drops writes."
+        ),
+        json_schema_extra={"env": "CACHE_QUOTA_THROTTLE_ENABLED"},
+    )
 
     @property
     def is_configured(self) -> bool:

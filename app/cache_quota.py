@@ -190,6 +190,24 @@ class QuotaGuardrail:
 # Process-wide guardrail consulted by the cache write path and the usage CLI.
 quota_guardrail = QuotaGuardrail()
 
+# Whether the smoke-test write-drop is armed. The alert band and budget report
+# stay active regardless; only the aggressive drop of best-effort value writes is
+# gated behind this flag. It is OFF by default so normal operation and the test
+# suite never silently drop cache writes. An "evaluation" rollout enables it
+# explicitly via CACHE_QUOTA_THROTTLE_ENABLED once the budget is being watched.
+quota_throttle_enabled = False
+
+
+def set_quota_throttle_enabled(enabled: bool) -> None:
+    """Arm or disarm the smoke-test write-drop throttle.
+
+    Args:
+        enabled: When ``True``, the cache write path drops a bounded fraction of
+            best-effort value writes once the observed monthly budget is reached.
+    """
+    global quota_throttle_enabled
+    quota_throttle_enabled = enabled
+
 
 def evaluate_cache_quota(used: int | None = None, *, fire_alert: bool = True) -> QuotaState:
     """Assess the current cache quota from observed application command usage.
@@ -216,6 +234,8 @@ def should_throttle_cache_write(*, rng: random.Random | None = None) -> bool:
     Returns:
         ``True`` when throttling is active and this write is in the drop sample.
     """
+    if not quota_throttle_enabled:
+        return False
     if quota_guardrail.last_state is None or not quota_guardrail.last_state.throttling:
         evaluate_cache_quota(fire_alert=False)
     return quota_guardrail.should_throttle_write(rng=rng)
