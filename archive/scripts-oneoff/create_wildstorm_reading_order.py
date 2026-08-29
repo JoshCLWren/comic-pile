@@ -26,6 +26,8 @@ import sys
 
 import requests
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
+
 from comic_pile_api import (
     ThreadSpec,
     VerificationResult,
