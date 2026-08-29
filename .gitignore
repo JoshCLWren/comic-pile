@@ -216,3 +216,6 @@ prod-profile-storage-state*.json
 # Benchmark run outputs (machine-generated on every run)
 benchmarks/results/
 benchmarks/control-environment*.json
+
+# Stale root-level OpenAPI export (canonical is frontend/src/generated/openapi.json)
+openapi.json
