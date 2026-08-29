@@ -124,8 +124,10 @@ class QuotaGuardrail:
 
         Args:
             used: Observed monthly cache command count.
-            fire_alert: When ``False``, record the alert band without invoking
-                the alert sink (used for idempotent re-checks in tests).
+            fire_alert: When ``False``, evaluate the alert band without invoking
+                the alert sink and without consuming the one-shot latch, so a
+                later ``fire_alert=True`` evaluation (e.g., the operator report)
+                can still emit the alert.
 
         Returns:
             The resulting :class:`QuotaState`.
@@ -139,9 +141,12 @@ class QuotaGuardrail:
         status = "over-budget" if throttling else ("near-limit" if alerted else "ok")
 
         if alerted and not self._alerted_once:
-            self._alerted_once = True
             if fire_alert:
                 self._alert_sink(self._snapshot(used, ratio, alerted, throttling, remaining, status))
+                self._alerted_once = True
+            # When fire_alert is False (e.g., the hot cache-write path), do not
+            # consume the latch so a later fire_alert=True evaluation (the operator
+            # report) can still emit the one-shot alert at the 80% band.
         elif not alerted:
             # Usage fell back under the band (e.g., new month): re-arm the alert.
             self._alerted_once = False

@@ -94,6 +94,6 @@ def test_module_helper_evaluates_live_metrics(monkeypatch: object) -> None:
     assert state.used == 10
     assert should_throttle_cache_write() is False
 
-    cache_command_metrics.record("get", count=400)
+    cache_command_metrics.record("get", count=400_000)
     assert evaluate_cache_quota(fire_alert=False).status == "over-budget"
     assert should_throttle_cache_write(rng=random.Random(0)) in (True, False)

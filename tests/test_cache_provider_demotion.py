@@ -31,13 +31,24 @@ def test_effective_provider_redis_requires_credentials() -> None:
     assert s.effective_provider == "off"
     assert s.is_configured is False
 
+    # The local Redis client path is dev-flagged: a bare REDIS_URL no longer
+    # enables caching in production unless CACHE_LOCAL_REDIS_DEV is set.
     s2 = _settings(
         cache_provider="redis",
         cache_enabled=True,
         redis_url="redis://localhost:6379/0",
     )
-    assert s2.effective_provider == "redis"
-    assert s2.is_configured is True
+    assert s2.effective_provider == "off"
+    assert s2.is_configured is False
+
+    s3 = _settings(
+        cache_provider="redis",
+        cache_enabled=True,
+        redis_url="redis://localhost:6379/0",
+        cache_local_redis_dev=True,
+    )
+    assert s3.effective_provider == "redis"
+    assert s3.is_configured is True
 
 
 def test_effective_provider_off_always_off() -> None:
