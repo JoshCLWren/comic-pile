@@ -50,7 +50,8 @@ async def test_apply_inferred_signal_preserves_explicit_verdict(
     default_user: User,
     verdict: str,
 ) -> None:
-    signal = await _seed_signal(async_db, default_user.id, verdict)
+    """A recomputed signal refreshes derived columns without touching a verdict."""
+    await _seed_signal(async_db, default_user.id, verdict)
 
     inferred = InferredSignal(
         affinity_estimate=0.9,
@@ -81,6 +82,7 @@ async def test_apply_inferred_signal_creates_row_without_verdict(
     async_db: AsyncSession,
     default_user: User,
 ) -> None:
+    """A missing row is created with inferred columns and no verdict."""
     inferred = InferredSignal(
         affinity_estimate=0.5,
         confidence=0.7,
@@ -116,6 +118,7 @@ async def test_inferred_only_signal_has_no_verdict_written(
     async_db: AsyncSession,
     default_user: User,
 ) -> None:
+    """Inferred-only persistence never writes a verdict value."""
     inferred = InferredSignal(
         affinity_estimate=-0.8,
         confidence=0.9,

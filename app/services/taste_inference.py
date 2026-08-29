@@ -30,7 +30,6 @@ focused unit tests without a database.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from statistics import fmean, pstdev
 
 from app.services.comicvine_taste import extract_taste_features
@@ -245,34 +244,40 @@ def _iter_features(features: dict[str, object]) -> list[tuple[str, str, str]]:
     """
     emitted: list[tuple[str, str, str]] = []
 
-    for creator in features.get("creators") or []:  # type: ignore[assignment]
-        if not isinstance(creator, dict):
-            continue
-        creator_id = creator.get("id")
-        name = creator.get("name")
-        if creator_id is None or not name:
-            continue
-        role = creator.get("role")
-        key = f"creator:{role}:{creator_id}" if role else f"creator:{creator_id}"
-        emitted.append(("creator", key, str(name)))
+    creators = features.get("creators")
+    if isinstance(creators, list):
+        for creator in creators:
+            if not isinstance(creator, dict):
+                continue
+            creator_id = creator.get("id")
+            name = creator.get("name")
+            if creator_id is None or not name:
+                continue
+            role = creator.get("role")
+            key = f"creator:{role}:{creator_id}" if role else f"creator:{creator_id}"
+            emitted.append(("creator", key, str(name)))
 
-    for character in features.get("characters") or []:  # type: ignore[assignment]
-        if not isinstance(character, dict):
-            continue
-        character_id = character.get("id")
-        name = character.get("name")
-        if character_id is None or not name:
-            continue
-        emitted.append(("character", f"character:{character_id}", str(name)))
+    characters = features.get("characters")
+    if isinstance(characters, list):
+        for character in characters:
+            if not isinstance(character, dict):
+                continue
+            character_id = character.get("id")
+            name = character.get("name")
+            if character_id is None or not name:
+                continue
+            emitted.append(("character", f"character:{character_id}", str(name)))
 
-    for team in features.get("teams") or []:  # type: ignore[assignment]
-        if not isinstance(team, dict):
-            continue
-        team_id = team.get("id")
-        name = team.get("name")
-        if team_id is None or not name:
-            continue
-        emitted.append(("team", f"team:{team_id}", str(name)))
+    teams = features.get("teams")
+    if isinstance(teams, list):
+        for team in teams:
+            if not isinstance(team, dict):
+                continue
+            team_id = team.get("id")
+            name = team.get("name")
+            if team_id is None or not name:
+                continue
+            emitted.append(("team", f"team:{team_id}", str(name)))
 
     publisher = features.get("publisher")
     if isinstance(publisher, dict):
@@ -317,16 +322,32 @@ def recompute_from_reading_history(
     seen: set[tuple[str, str, object, object]] = set()
 
     for item in rated_items:
-        issue_metadata = item.get("issue_metadata") or {}
-        volume_metadata = item.get("volume_metadata")
-        features = extract_taste_features(issue_metadata, volume_metadata)  # type: ignore[arg-type]
+        issue_value = item.get("issue_metadata")
+        if not isinstance(issue_value, dict):
+            issue_value = {}
+        volume_value = item.get("volume_metadata")
+        if not isinstance(volume_value, dict):
+            volume_value = None
+        features = extract_taste_features(issue_value, volume_value)
 
         thread_id = item.get("thread_id")
+        if not isinstance(thread_id, int):
+            thread_id = None
         issue_id = item.get("issue_id")
+        if not isinstance(issue_id, int):
+            issue_id = None
+        rating = item.get("rating")
+        if isinstance(rating, bool) or not isinstance(rating, (int, float)):
+            rating = None
+        elif isinstance(rating, int):
+            rating = float(rating)
+        accepted = item.get("accepted")
+        if not isinstance(accepted, bool):
+            accepted = None
         observation = TasteObservation(
-            thread_id=thread_id,  # type: ignore[arg-type]
-            rating=item.get("rating"),  # type: ignore[arg-type]
-            accepted=item.get("accepted"),  # type: ignore[arg-type]
+            thread_id=thread_id,
+            rating=rating,
+            accepted=accepted,
         )
 
         for signal_type, external_key, display_name in _iter_features(features):
@@ -356,40 +377,6 @@ def recompute_from_reading_history(
     return results
 
 
-def merge_inferred_into_signal(
-    inferred: InferredSignal,
-    display_name: str,
-    now: datetime,
-    *,
-    is_new: bool,
-) -> dict[str, object]:
-    """Build the inferred column updates for a TasteSignal row.
-
-    This deliberately omits ``user_verdict`` and ``verdict_at`` so an explicit
-    user verdict survives recomputation untouched.
-
-    Args:
-        inferred: The freshly computed inferred state.
-        display_name: Current human-readable label for the feature.
-        now: Timestamp to record as ``last_observed_at``.
-        is_new: Whether the row is being created (controls ``first_observed_at``).
-
-    Returns:
-        A dict of ORM column values to assign. It never contains a verdict.
-    """
-    updates: dict[str, object] = {
-        "display_name": display_name,
-        "affinity_estimate": inferred.affinity_estimate,
-        "confidence": inferred.confidence,
-        "evidence_count": inferred.evidence_count,
-        "distinct_thread_count": inferred.distinct_thread_count,
-        "last_observed_at": now,
-    }
-    if is_new:
-        updates["first_observed_at"] = now
-    return updates
-
-
 __all__ = [
     "DEFAULT_INFERENCE_CONFIG",
     "FeatureEvidence",
@@ -398,6 +385,5 @@ __all__ = [
     "InferredSignal",
     "TasteObservation",
     "compute_inferred_signal",
-    "merge_inferred_into_signal",
     "recompute_from_reading_history",
 ]

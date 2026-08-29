@@ -7,12 +7,15 @@ execute calls, satisfying the router-layering conformance contract.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.taste_signal import TasteSignal
-from app.services.taste_inference import InferredSignal
+
+if TYPE_CHECKING:
+    from app.services.taste_inference import InferredSignal
 
 
 async def get_user_signals(
@@ -157,31 +160,42 @@ async def apply_inferred_signal(
         )
         db.add(signal)
 
-    updates = _inferred_updates(inferred, display_name, now, is_new=is_new)
+    updates = merge_inferred_into_signal(inferred, display_name, now, is_new=is_new)
     for column, value in updates.items():
         setattr(signal, column, value)
 
     return signal
 
 
-def _inferred_updates(
+def merge_inferred_into_signal(
     inferred: InferredSignal,
     display_name: str,
     now: datetime,
     *,
     is_new: bool,
 ) -> dict[str, object]:
-    """Column updates for an inferred recompute (verdict excluded).
+    """Build the inferred column updates for a TasteSignal row.
+
+    This deliberately omits ``user_verdict`` and ``verdict_at`` so an explicit
+    user verdict survives recomputation untouched.
 
     Args:
-        inferred: The recomputed inferred state.
+        inferred: The freshly computed inferred state.
         display_name: Current human-readable label for the feature.
-        now: Timestamp for ``last_observed_at``.
-        is_new: Whether the row is new (controls ``first_observed_at``).
+        now: Timestamp to record as ``last_observed_at``.
+        is_new: Whether the row is being created (controls ``first_observed_at``).
 
     Returns:
-        ORM column values to assign; never includes a verdict column.
+        A dict of ORM column values to assign. It never contains a verdict.
     """
-    from app.services.taste_inference import merge_inferred_into_signal
-
-    return merge_inferred_into_signal(inferred, display_name, now, is_new=is_new)
+    updates: dict[str, object] = {
+        "display_name": display_name,
+        "affinity_estimate": inferred.affinity_estimate,
+        "confidence": inferred.confidence,
+        "evidence_count": inferred.evidence_count,
+        "distinct_thread_count": inferred.distinct_thread_count,
+        "last_observed_at": now,
+    }
+    if is_new:
+        updates["first_observed_at"] = now
+    return updates

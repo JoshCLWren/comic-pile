@@ -15,14 +15,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from app.repositories.taste_signal import merge_inferred_into_signal
 from app.services.taste_inference import (
-    DEFAULT_INFERENCE_CONFIG,
-    FeatureResult,
     InferenceConfig,
     InferredSignal,
     TasteObservation,
     compute_inferred_signal,
-    merge_inferred_into_signal,
     recompute_from_reading_history,
 )
 
@@ -32,6 +30,7 @@ def _obs(thread_id: int, rating: float | None = None, accepted: bool | None = No
 
 
 def test_strong_repeated_above_baseline_creates_high_confidence_signal() -> None:
+    """A sustained above-baseline pattern raises affinity and confidence."""
     baseline = 3.0
     observations = [
         _obs(thread_id=t, rating=baseline + 1.5) for t in range(1, 11)
@@ -45,6 +44,7 @@ def test_strong_repeated_above_baseline_creates_high_confidence_signal() -> None
 
 
 def test_one_isolated_issue_stays_low_confidence() -> None:
+    """A single isolated above-baseline issue stays low-confidence."""
     baseline = 3.0
     result = compute_inferred_signal(
         [_obs(thread_id=1, rating=baseline + 1.5)], baseline_rating=baseline
@@ -55,6 +55,7 @@ def test_one_isolated_issue_stays_low_confidence() -> None:
 
 
 def test_two_isolated_issues_stay_low_confidence() -> None:
+    """Two isolated issues still stay below the prompt threshold."""
     baseline = 3.0
     result = compute_inferred_signal(
         [_obs(thread_id=1, rating=baseline + 1.5), _obs(thread_id=2, rating=baseline + 1.5)],
@@ -66,6 +67,7 @@ def test_two_isolated_issues_stay_low_confidence() -> None:
 
 
 def test_evidence_diversity_raises_confidence_over_single_run_cluster() -> None:
+    """Spreading evidence across threads beats one clustered run."""
     baseline = 3.0
     single_run = [_obs(thread_id=1, rating=baseline + 1.5) for _ in range(6)]
     spread = [_obs(thread_id=t, rating=baseline + 1.5) for t in range(1, 7)]
@@ -84,6 +86,7 @@ def test_evidence_diversity_raises_confidence_over_single_run_cluster() -> None:
 
 
 def test_neutral_evidence_stays_near_zero_affinity() -> None:
+    """At-baseline ratings produce a near-zero affinity."""
     baseline = 3.0
     observations = [_obs(thread_id=t, rating=baseline) for t in range(1, 9)]
     result = compute_inferred_signal(observations, baseline_rating=baseline)
@@ -94,6 +97,7 @@ def test_neutral_evidence_stays_near_zero_affinity() -> None:
 
 
 def test_negative_evidence_produces_negative_affinity() -> None:
+    """Sustained below-baseline ratings produce a negative affinity."""
     baseline = 3.0
     observations = [_obs(thread_id=t, rating=baseline - 1.5) for t in range(1, 9)]
     result = compute_inferred_signal(observations, baseline_rating=baseline)
@@ -104,6 +108,7 @@ def test_negative_evidence_produces_negative_affinity() -> None:
 
 
 def test_sparse_negative_evidence_stays_low_confidence() -> None:
+    """A single below-baseline issue stays low-confidence."""
     baseline = 3.0
     result = compute_inferred_signal(
         [_obs(thread_id=1, rating=baseline - 1.5)], baseline_rating=baseline
@@ -113,6 +118,7 @@ def test_sparse_negative_evidence_stays_low_confidence() -> None:
 
 
 def test_correlated_metadata_from_one_issue_does_not_double_count() -> None:
+    """Duplicated credits on one issue count as one piece of evidence."""
     # Same feature credited many times on one issue/thread must not inflate
     # evidence beyond a single occurrence; confidence stays low.
     baseline = 3.0
@@ -149,6 +155,7 @@ def test_correlated_metadata_from_one_issue_does_not_double_count() -> None:
 
 
 def test_recompute_spreads_features_across_threads_into_high_confidence() -> None:
+    """The same feature across threads reaches prompt confidence."""
     baseline = 3.0
     issue_metadata = {
         "creator_credits": [{"id": 100, "name": "Alan Moore", "role": "writer"}],
@@ -176,6 +183,7 @@ def test_recompute_spreads_features_across_threads_into_high_confidence() -> Non
 
 
 def test_merge_inferred_into_signal_preserves_verdict_columns() -> None:
+    """Column updates never include the verdict columns."""
     inferred = InferredSignal(
         affinity_estimate=0.8,
         confidence=0.7,
@@ -194,6 +202,7 @@ def test_merge_inferred_into_signal_preserves_verdict_columns() -> None:
 
 
 def test_merge_inferred_into_signal_sets_first_observed_only_when_new() -> None:
+    """first_observed_at is only set on newly created rows."""
     inferred = InferredSignal(
         affinity_estimate=0.5,
         confidence=0.5,
@@ -209,11 +218,13 @@ def test_merge_inferred_into_signal_sets_first_observed_only_when_new() -> None:
 
 
 def test_empty_history_yields_zero_signal() -> None:
+    """No observations produce the zero signal."""
     result = compute_inferred_signal([], baseline_rating=3.0)
     assert result == InferredSignal(0.0, 0.0, 0, 0)
 
 
 def test_mixed_sign_evidence_lowers_confidence() -> None:
+    """Opposing evidence directions lower confidence."""
     baseline = 3.0
     # Half far above, half far below: net affinity ~0, low consistency.
     observations = [
@@ -228,6 +239,7 @@ def test_mixed_sign_evidence_lowers_confidence() -> None:
 
 
 def test_acceptance_only_evidence_contributes_positive_signal() -> None:
+    """Accepted rolls without ratings still contribute a positive lift."""
     baseline = 3.0
     observations = [
         _obs(thread_id=t, rating=None, accepted=True) for t in range(1, 9)
@@ -239,6 +251,7 @@ def test_acceptance_only_evidence_contributes_positive_signal() -> None:
 
 
 def test_custom_config_is_honored() -> None:
+    """Custom tuning constants are applied to the calculation."""
     config = InferenceConfig(evidence_ceil=3, diversity_ceil=2)
     baseline = 3.0
     observations = [_obs(thread_id=t, rating=baseline + 1.0) for t in range(1, 4)]
