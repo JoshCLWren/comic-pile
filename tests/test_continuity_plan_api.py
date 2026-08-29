@@ -18,6 +18,8 @@ from tests.conftest import get_or_create_user_async
 
 
 class PlanNodeDict(TypedDict):
+    """TypedDict for a plan node in test payloads."""
+
     id: str
     node_type: str
     ref_id: int
@@ -28,6 +30,8 @@ class PlanNodeDict(TypedDict):
 
 
 class PlanPayloadDict(TypedDict):
+    """TypedDict for a complete plan payload in tests."""
+
     name: str
     ordering_mode: str
     lanes: list[dict[str, str | int]]

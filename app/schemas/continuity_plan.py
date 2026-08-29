@@ -64,6 +64,13 @@ class ConvergenceGateTarget(BaseModel):
     node_id: str = Field(min_length=1, max_length=80)
 
 
+def _coerce_convergence_gate(value: object) -> object:
+    """Coerce None to empty list for convergence_gate."""
+    if value is None:
+        return []
+    return value
+
+
 class ContinuityPlanNode(BaseModel):
     """One ordered reference in a continuity plan."""
 
@@ -89,7 +96,11 @@ class ContinuityPlanNode(BaseModel):
 
     # Plan-level checkpoint/convergence semantics
     is_checkpoint: bool = False
-    convergence_gate: list[ConvergenceGateTarget] = Field(default_factory=list)
+    convergence_gate: Annotated[
+        list[ConvergenceGateTarget],
+        BeforeValidator(_coerce_convergence_gate),
+        Field(default_factory=list),
+    ]
 
 
 class ContinuityPlanWrite(BaseModel):
