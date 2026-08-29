@@ -298,7 +298,6 @@ async def roll_dice(
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
     )
-    selection_method = "momentum" if max_bonus > 0 else "random"
 
     # Extract effort estimate band as string for JSON serialization
     effort_estimate_str = effort_estimate.band if isinstance(effort_estimate, EffortEstimate) else effort_estimate
