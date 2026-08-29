@@ -99,7 +99,7 @@ Put `Part of #NUMBER` and `Depends on #NUMBER` in issue bodies. Add `epic`, `ral
 
 ## Rules for cheaper agents
 
-- Do not use the old `docs/ISSUE_KANBAN.md` as status authority.
+- Do not use the archived `archive/historical/ISSUE_KANBAN.md` markdown kanban as status authority.
 - Do not dump issue comment history into context.
 - Do not begin work on an issue without updating its status label.
 - Do not close an issue without a verification comment.
