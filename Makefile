@@ -6,6 +6,7 @@
 .PHONY: test-e2e-prod-smoke check-prod-assets clone-prod-export clone-prod-import
 .PHONY: verify-reading-order railway-control-baseline railway-control-compare
 .PHONY: railway-control-results railway-control-c32-diagnostic railway-control-c32-compare
+.PHONY: cache-upstash-report
 
 # Configuration
 PREFIX ?= /usr/local
@@ -501,3 +502,6 @@ clone-prod-export:  ## Backup production user data (ex: make clone-prod-export A
 
 clone-prod-import:  ## Restore backup into local dev database
 	@python -m scripts.clone_prod_to_local import $(ARGS)
+
+cache-upstash-report:  ## Print Upstash cache usage vs budget via REST API (issue #1748)
+	@$(PYTHON) -m scripts.cache_upstash_report
