@@ -91,7 +91,7 @@ async def test_roll_bounded_candidate_ids_match_pool(
     result = await async_db.execute(
         select(Event)
         .where(Event.type == "roll")
-        .where(Event.id == data["thread_id"])
+        .where(Event.selected_thread_id == data["thread_id"])
         .order_by(Event.id.desc())
         .limit(1)
     )

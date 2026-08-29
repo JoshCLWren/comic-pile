@@ -46,7 +46,6 @@ from app.schemas import (
 from app.schemas.recommendation_context import (
     CandidateFactor,
     RecommendationContextCreate,
-    RollingRecommendationContext,
 )
 from app.schemas.session import build_session_bandwidth_state
 from app.momentum import MomentumCandidateWeight, weighted_momentum_selection
