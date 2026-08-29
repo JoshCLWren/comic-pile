@@ -1,9 +1,10 @@
-name: Auto Rebase Open PRs
+name: Rebase Open Factory PRs
 
+# Keep this workflow manual-only. Rebasing every open factory PR whenever main
+# advances rewrites every exact head, invalidates semantic reviews and CI, and
+# creates O(N) new validation work for each successful merge. Normal conflict
+# detection belongs to the exact-head mechanical merge gate and ready drain.
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -15,7 +16,7 @@ concurrency:
 
 jobs:
   rebase-open-prs:
-    name: Rebase open factory PRs onto main
+    name: Manually rebase open factory PRs onto main
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -33,11 +34,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          # drain.yml:150-165 only rescues factory:ci+ready PRs whose heads
-          # never received CI runs. It does not rebase PRs that are behind
-          # main but already have CI. Without a rebase, those PRs stay stale
-          # and risk merge conflicts or stale checks. This workflow rebases
-          # all open factory/* PRs whenever main advances.
+          # This is an explicit maintenance operation, not part of the normal
+          # merge loop. Exact-head review and CI must be allowed to converge
+          # without unrelated main merges rewriting every open PR underneath
+          # active factory workers.
 
           mapfile -t prs < <(
             gh api --paginate \
@@ -81,7 +81,7 @@ jobs:
               --input - <<<"$(jq -n --argjson labels "${labels_json}" '{labels: $labels}')"
 
             gh pr comment "${pr}" --repo "${GITHUB_REPOSITORY}" --body \
-              "Automatic rebase onto current main hit merge conflicts. Routed to \`factory:changes-requested\` and released to \`factory:unowned\` so a factory worker can repair the conflict."
+              "Manual rebase onto current main hit merge conflicts. Routed to \`factory:changes-requested\` and released to \`factory:unowned\` so a factory worker can repair the conflict."
           done
 
           if (( ${#conflicts[@]} > 0 )); then
