@@ -110,6 +110,14 @@ class Event(Base):
     # Snooze correction before/after bandwidth and reason codes).
     context: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
 
+    # Versioned snapshot of the recommendation context captured at roll decision time.
+    # Contains bounded candidate pool data, selection method, and thread state as seen
+    # at decision time. Enables later analysis to explain what ComicPile knew and
+    # what candidate set it chose from when the roll was made.
+    rolling_recommendation_context: Mapped[dict[str, object] | None] = mapped_column(
+        JSON, nullable=True
+    )
+
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),
         Index("ix_event_timestamp", "timestamp"),

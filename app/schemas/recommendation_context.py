@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -51,3 +52,49 @@ class RecommendationContextCreate(BaseModel):
     final_weight: float | None = Field(default=None, ge=0.0)
     random_bypass: bool = False
     balanced_neutrality: bool = False
+
+
+class RollingRecommendationContext(BaseModel):
+    """Versioned recommendation context snapshot captured at roll decision time.
+
+    This schema captures the bounded candidate pool and selection context
+    that existed when a roll was made, enabling later analysis to explain not
+    only what the reader did, but what ComicPile knew and what candidate set
+    it chose from at that moment.
+
+    This is instrumentation only - does not change candidate ordering,
+    random-selection probability, dice behavior, queue movement, or snooze semantics.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    schema_version: int = Field(default=1, ge=1, description="Version of the context schema")
+    algorithm_version: str = Field(
+        default="legacy",
+        description="Identifying today's legacy/unweighted selector",
+    )
+    die_size: int = Field(..., gt=0, description="Current die size at roll time")
+    selected_queue_position: int = Field(..., ge=1, description="Selected thread queue position at roll time")
+    bounded_candidate_ids: list[int] = Field(
+        default_factory=list,
+        description="Bounded candidate thread IDs in exact selection order",
+    )
+    selected_index: int = Field(..., ge=0, description="Selected candidate index/result")
+    selection_method: Literal["random", "momentum", "override"] = Field(
+        ..., description="Selection method (random, momentum-weighted, or override)"
+    )
+    session_timezone: str | None = Field(
+        default=None, description="Session timezone if available from browser"
+    )
+    local_hour: int | None = Field(
+        default=None, ge=0, le=23, description="Local hour (0-23) derived from session timezone"
+    )
+    selected_thread_last_rating: float | None = Field(
+        default=None, description="Selected thread last rating as seen at decision time"
+    )
+    selected_thread_last_activity_at: datetime | None = Field(
+        default=None, description="Selected thread last activity timestamp as seen at decision time"
+    )
+    effort_estimate: str | None = Field(
+        default=None, max_length=50, description="Explicitly known effort estimate if later work added it"
+    )
