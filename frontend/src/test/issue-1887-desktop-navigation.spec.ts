@@ -24,14 +24,14 @@ import { test } from './fixtures'
 const DESKTOP_VIEWPORT = { width: 1920, height: 1080 }
 
 const DESTINATIONS = [
-   'Roll page',
-   'Queue page',
-   'History page',
-   'Crossovers page',
-   'Continuity Planner page',
-   "What's New page",
-   'Help page',
- ]
+  'Roll page',
+  'Queue page',
+  'History page',
+  'Crossovers page',
+  'Continuity Planner page',
+  "What's New page",
+  'Help page',
+]
 
 async function openAuthenticatedDesktop(page: Page): Promise<void> {
   await page.setViewportSize(DESKTOP_VIEWPORT)
