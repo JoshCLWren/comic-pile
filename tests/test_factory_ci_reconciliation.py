@@ -45,6 +45,17 @@ def ci_pr_payload() -> dict[str, Any]:
     }
 
 
+def owned_ci_pr_payload() -> dict[str, Any]:
+    """Build one CI PR still leased to its producing factory."""
+    payload = ci_pr_payload()
+    payload["labels"] = [
+        {"name": "factory"},
+        {"name": "factory:43"},
+        {"name": "factory:ci"},
+    ]
+    return payload
+
+
 def test_failed_checks_become_actionable_changes_requested(
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -85,6 +96,95 @@ def test_failed_checks_become_actionable_changes_requested(
     assert posted[0]["verdict"] == "repair"
     assert posted[0]["excerpt"] == "required checks failed: FAILURE"
     assert transitions == [(PR_NUMBER, "factory:unowned", "factory:changes-requested")]
+
+
+def test_owned_failed_checks_override_lease_and_become_actionable_changes_requested(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Terminal CI failure overrides an active factory lease and returns to repair."""
+    module = load_review_controller()
+    posted: list[dict[str, object]] = []
+    transitions: list[tuple[int, str, str]] = []
+
+    monkeypatch.setattr(module, "pr_json", lambda _pr: owned_ci_pr_payload())
+    monkeypatch.setattr(
+        module,
+        "required_checks_gate",
+        lambda _pr: {"decision": "deny", "reason": "required checks failed: FAILURE"},
+    )
+    monkeypatch.setattr(
+        module,
+        "post_review_comment",
+        lambda **kwargs: posted.append(kwargs),
+    )
+    monkeypatch.setattr(
+        module,
+        "replace_factory_labels",
+        lambda number, owner, stage: transitions.append((number, owner, stage)),
+    )
+    monkeypatch.setattr(
+        module,
+        "mechanical_merge_gate",
+        lambda _pr, _head: pytest.fail("terminal failed checks must not continue to merge gates"),
+    )
+
+    result = module.reconcile_ci_pr(PR_NUMBER)
+
+    assert result == {
+        "pr": PR_NUMBER,
+        "status": "changes-requested",
+        "reason": "required checks failed: FAILURE",
+    }
+    assert posted[0]["verdict"] == "repair"
+    assert posted[0]["reviewer"] == "controller"
+    assert posted[0]["excerpt"] == "required checks failed: FAILURE"
+    assert transitions == [(PR_NUMBER, "factory:unowned", "factory:changes-requested")]
+
+
+@pytest.mark.parametrize(
+    ("decision", "reason"),
+    [
+        ("retry", "required checks are not terminal: PENDING"),
+        ("pass", "all required checks are successful"),
+    ],
+)
+def test_owned_nonfailed_checks_keep_existing_lease(
+    monkeypatch: MonkeyPatch,
+    decision: str,
+    reason: str,
+) -> None:
+    """Only terminal CI failure can override an active factory lease."""
+    module = load_review_controller()
+    transitions: list[tuple[int, str, str]] = []
+    posted: list[dict[str, object]] = []
+
+    monkeypatch.setattr(module, "pr_json", lambda _pr: owned_ci_pr_payload())
+    monkeypatch.setattr(
+        module,
+        "required_checks_gate",
+        lambda _pr: {"decision": decision, "reason": reason},
+    )
+    monkeypatch.setattr(
+        module,
+        "post_review_comment",
+        lambda **kwargs: posted.append(kwargs),
+    )
+    monkeypatch.setattr(
+        module,
+        "replace_factory_labels",
+        lambda number, owner, stage: transitions.append((number, owner, stage)),
+    )
+    monkeypatch.setattr(
+        module,
+        "mechanical_merge_gate",
+        lambda _pr, _head: pytest.fail("owned nonfailed CI must not continue to merge gates"),
+    )
+
+    result = module.reconcile_ci_pr(PR_NUMBER)
+
+    assert result == {"pr": PR_NUMBER, "status": "owned"}
+    assert posted == []
+    assert transitions == []
 
 
 def test_pending_checks_stay_in_ci(monkeypatch: MonkeyPatch) -> None:
