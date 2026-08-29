@@ -283,9 +283,6 @@ async def roll_dice(
     )
     selection_method = "momentum" if max_bonus > 0 else "random"
 
-    # Determine selection method for rolling context
-    selection_method_for_context = selection_method
-
     event = Event(
         type="roll",
         session_id=current_session_id,
@@ -302,7 +299,7 @@ async def roll_dice(
             selected_queue_position=selected_thread_queue_position,
             bounded_candidate_ids=bounded_candidate_ids,
             selected_index=selected_index,
-            selection_method=selection_method_for_context,
+            selection_method=selection_method,
             session_timezone=current_session.timezone,
             selected_thread_last_rating=selected_thread.last_rating,
             selected_thread_last_activity_at=selected_thread.last_activity_at,
