@@ -92,7 +92,7 @@ const CrossoversPage = lazyRoute('crossovers')
 const CrossoverDetailPage = lazyRoute('crossoverDetail')
 const ContinuityPlannerPage = lazyRoute('continuityPlanner')
 const ContinuityPlansIndexPage = lazyRoute('continuityPlansIndex')
-const HelpPage = lazyRoute('help')
+const HelpPage = lazyRoute('glossary')
 const WhatsNewPage = lazyRoute('whatsNew')
 const LoginPage = lazyRoute('login')
 const RegisterPage = lazyRoute('register')
@@ -349,9 +349,9 @@ function AppRoutes() {
         <Route path="/continuity-plans/new" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ContinuityPlannerPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/continuity-plans/:id" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ContinuityPlannerPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/whats-new" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><WhatsNewPage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/help" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/identity-inbox" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><IdentityInboxPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/glossary" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/help" element={<Navigate to="/glossary" replace />} />
+        <Route path="/identity-inbox" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><IdentityInboxPage /></AuthenticatedLayout></ProtectedRoute>} />
       </Routes>
       {isAuthenticated && <BugReportConnected onSubmit={submit} />}
     </Suspense>

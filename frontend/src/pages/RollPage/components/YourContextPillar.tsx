@@ -1,4 +1,5 @@
 import Tooltip from '../../../components/Tooltip'
+import GlossaryLink from '../../../components/GlossaryLink'
 import type { ReaderContextResponse } from '../../../services/api-reader-context'
 import { RATING_THRESHOLD, getDieDirection } from '../utils'
 import type { RatingThread } from '../types'
@@ -65,7 +66,9 @@ export function YourContextPillar({
             </p>
           </div>
           <div className="text-right">
-            <p className="text-sm font-black text-stone-200">d{currentDie} → d{predictedDie}</p>
+            <p className="text-sm font-black text-stone-200">
+            <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
+          </p>
             <p className="text-[10px] font-bold text-stone-500">{dieDirection}</p>
           </div>
         </div>

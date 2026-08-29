@@ -30,7 +30,6 @@ type NavIconName =
   | 'crossovers'
   | 'planner'
   | 'new'
-  | 'help'
   | 'glossary'
   | 'more'
 
@@ -51,7 +50,6 @@ const MAIN_NAV_ITEMS: NavItem[] = [
 const SECONDARY_NAV_ITEMS: NavItem[] = [
   { path: '/continuity-plans', label: 'Planner', icon: 'planner', ariaLabel: 'Continuity Planner page' },
   { path: '/whats-new', label: 'New', icon: 'new', ariaLabel: "What's New page" },
-  { path: '/help', label: 'Help', icon: 'help', ariaLabel: 'Help page' },
   { path: '/glossary', label: 'Glossary', icon: 'glossary', ariaLabel: 'Glossary page' },
 ]
 
@@ -109,13 +107,6 @@ function NavIcon({ name }: { name: NavIconName }) {
       <>
         <path d="m12 3-1.35 4.15a2 2 0 0 1-1.3 1.3L5.2 9.8l4.15 1.35a2 2 0 0 1 1.3 1.3L12 16.6l1.35-4.15a2 2 0 0 1 1.3-1.3L18.8 9.8l-4.15-1.35a2 2 0 0 1-1.3-1.3L12 3Z"></path>
         <path d="m19 16-.55 1.45L17 18l1.45.55L19 20l.55-1.45L21 18l-1.45-.55L19 16Z"></path>
-      </>
-    ),
-    help: (
-      <>
-        <circle cx="12" cy="12" r="9"></circle>
-        <path d="M9.75 9a2.5 2.5 0 1 1 3.5 2.3c-.8.35-1.25.9-1.25 1.7v.25"></path>
-        <circle cx="12" cy="17" r=".75" fill="currentColor" stroke="none"></circle>
       </>
     ),
     glossary: (
