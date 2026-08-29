@@ -288,3 +288,97 @@ class TestComputeSnoozeCorrection:
             last_snooze_direction=None,
         )
         assert isinstance(result, SnoozeCorrectionResult)
+
+
+class TestIssue1723AcceptanceContract:
+    """Explicit mapping of every issue #1723 acceptance criterion to assertions.
+
+    Issue #1723 requires a pure, deterministic, side-effect-free Snooze
+    correction service. These tests lock the contract so the issue can be
+    closed with durable regression coverage.
+    """
+
+    def test_ac1_heavy_recommendation_snooze_produces_lighter_correction(self) -> None:
+        """Heavy-recommendation snooze can produce a lighter correction."""
+        result = compute_snooze_correction(
+            current_bandwidth="balanced",
+            current_confidence=0.5,
+            predicted_bandwidth="balanced",
+            candidate_effort_level="deep",
+            consecutive_snoozes=1,
+            last_snooze_direction=None,
+        )
+        assert result.bandwidth_changed is True
+        assert result.active_bandwidth == "light"
+        assert result.reason_code == CorrectionReason.HEAVY_SNOOZE_SHIFT
+        assert result.active_confidence > 0.5
+
+    def test_ac2_light_recommendation_snooze_no_impossible_extra_light(self) -> None:
+        """Snoozing while already light never infers an impossible extra-light."""
+        result = compute_snooze_correction(
+            current_bandwidth="light",
+            current_confidence=0.7,
+            predicted_bandwidth="balanced",
+            candidate_effort_level="deep",
+            consecutive_snoozes=1,
+            last_snooze_direction=None,
+        )
+        assert result.bandwidth_changed is False
+        assert result.active_bandwidth == "light"
+        assert result.active_confidence < 0.7
+        assert result.reason_code == CorrectionReason.LIGHT_SNOOZE_DEFLATE
+
+    def test_ac3_contradictory_evidence_lowers_confidence_with_reason(self) -> None:
+        """Contradictory evidence lowers confidence with an explainable code."""
+        result = compute_snooze_correction(
+            current_bandwidth="balanced",
+            current_confidence=0.5,
+            predicted_bandwidth="balanced",
+            candidate_effort_level="balanced",
+            consecutive_snoozes=3,
+            last_snooze_direction="heavier",
+        )
+        assert result.suggest_clarification is True
+        assert result.reason_code == CorrectionReason.CLARIFICATION_NEEDED
+        assert result.bandwidth_changed is False
+
+    def test_ac4_deterministic_and_side_effect_free(self) -> None:
+        """The function is deterministic and does not mutate inputs."""
+        args = {
+            "current_bandwidth": "balanced",
+            "current_confidence": 0.5,
+            "predicted_bandwidth": "balanced",
+            "candidate_effort_level": "deep",
+            "consecutive_snoozes": 2,
+            "last_snooze_direction": "lighter",
+        }
+        args_copy = dict(args)
+        r1 = compute_snooze_correction(**args)
+        r2 = compute_snooze_correction(**args)
+        assert (
+            r1.active_bandwidth,
+            r1.active_confidence,
+            r1.reason_code,
+            r1.bandwidth_changed,
+            r1.suggest_clarification,
+        ) == (
+            r2.active_bandwidth,
+            r2.active_confidence,
+            r2.reason_code,
+            r2.bandwidth_changed,
+            r2.suggest_clarification,
+        )
+        assert args == args_copy
+
+    def test_ac5_pure_service_preserves_predicted_bandwidth(self) -> None:
+        """The pure service never overrides the launch prediction (no affinity mutation)."""
+        result = compute_snooze_correction(
+            current_bandwidth="balanced",
+            current_confidence=0.5,
+            predicted_bandwidth="deep",
+            candidate_effort_level="balanced",
+            consecutive_snoozes=1,
+            last_snooze_direction=None,
+        )
+        assert result.predicted_bandwidth == "deep"
+        assert isinstance(result, SnoozeCorrectionResult)
