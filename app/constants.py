@@ -43,10 +43,41 @@ class BandwidthSource(StrEnum):
 BandwidthLevel = Bandwidth
 
 
+class Intent(StrEnum):
+    """Ephemeral reading-intent levels for an active session (issue #1728).
+
+    ``random`` is a first-class intent value that bypasses contextual
+    weighting. The remaining values are ordinary intents that are neutral by
+    default until later intent inference is implemented.
+    """
+
+    BALANCED = "balanced"
+    MOMENTUM = "momentum"
+    FAMILIAR = "familiar"
+    EXPLORE = "explore"
+    RANDOM = "random"
+
+
+class IntentSource(StrEnum):
+    """Provenance of a session's ephemeral reading-intent state (issue #1728)."""
+
+    INFERRED = "inferred"
+    MANUAL = "manual"
+    SNOOZE = "snooze"
+    QUIZ = "quiz"
+
+
+# Inference-facing alias mirroring BandwidthLevel: later intent-inference
+# services and their tests can refer to the canonical level enum by this name.
+IntentLevel = Intent
+
+
 # Persisted value tuples backing the sessions CHECK constraints. Kept in sync
-# with the Bandwidth / BandwidthSource StrEnum members above.
+# with the Bandwidth / BandwidthSource / Intent / IntentSource StrEnum members.
 BANDWIDTH_VALUES: tuple[str, ...] = tuple(b.value for b in Bandwidth)
 BANDWIDTH_SOURCE_VALUES: tuple[str, ...] = tuple(s.value for s in BandwidthSource)
+INTENT_VALUES: tuple[str, ...] = tuple(i.value for i in Intent)
+INTENT_SOURCE_VALUES: tuple[str, ...] = tuple(src.value for src in IntentSource)
 
 
 # Dice ladder - standard RPG dice progression

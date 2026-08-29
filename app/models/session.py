@@ -18,7 +18,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.constants import BANDWIDTH_SOURCE_VALUES, BANDWIDTH_VALUES
+from app.constants import (
+    BANDWIDTH_SOURCE_VALUES,
+    BANDWIDTH_VALUES,
+    INTENT_SOURCE_VALUES,
+    INTENT_VALUES,
+)
 from app.database import Base
 
 if TYPE_CHECKING:
@@ -97,6 +102,23 @@ class Session(Base):
             "bandwidth_confidence IS NULL "
             "OR (bandwidth_confidence >= 0 AND bandwidth_confidence <= 1)",
             name="ck_sessions_bandwidth_confidence_range",
+        ),
+        CheckConstraint(
+            f"active_intent IS NULL OR active_intent IN {INTENT_VALUES}",
+            name="ck_sessions_active_intent_valid",
+        ),
+        CheckConstraint(
+            f"predicted_intent IS NULL OR predicted_intent IN {INTENT_VALUES}",
+            name="ck_sessions_predicted_intent_valid",
+        ),
+        CheckConstraint(
+            f"intent_source IS NULL OR intent_source IN {INTENT_SOURCE_VALUES}",
+            name="ck_sessions_intent_source_valid",
+        ),
+        CheckConstraint(
+            "intent_confidence IS NULL "
+            "OR (intent_confidence >= 0 AND intent_confidence <= 1)",
+            name="ck_sessions_intent_confidence_range",
         ),
     )
 
