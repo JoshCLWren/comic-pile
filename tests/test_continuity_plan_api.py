@@ -779,5 +779,5 @@ async def test_convergence_gate_not_false_cyclic_in_readiness(
     assert readiness.status_code == 200, readiness.text
     body = readiness.json()
     assert [d for d in body["plan_diagnostics"] if d["code"] == "plan_cycle_detected"] == []
-    conv_node = next(n for n in body["nodes"] if n["id"] == f"b-{lane_b[0].id}")
+    conv_node = next(n for n in body["nodes"] if n["node_id"] == f"b-{lane_b[0].id}")
     assert not any(d["code"] == "plan_cycle_detected" for d in conv_node.get("diagnostics", []))

@@ -197,12 +197,12 @@ async def _replace_compiled_rules(
     graph_edges: list[tuple[tuple[str, int], tuple[str, int]]] = []
     for source_type, source_id, target_type, target_id, sat, extra in edges_to_add:
         source_key = (source_type, source_id)
-        if sat == "converged":
+        if sat == "converged" and isinstance(extra, list):
             # A converged node waits for every gate target, so each target points
             # into the convergence node. Model those as dependency edges so cycle
             # detection sees the real blocking dependency (the stored rule is a
             # self-loop, which would never register as a cycle).
-            for target in extra or []:
+            for target in extra:
                 target_key = (str(target["type"]), int(target["id"]))
                 if target_key in all_plan_keys and target_key != source_key:
                     graph_edges.append((target_key, source_key))
