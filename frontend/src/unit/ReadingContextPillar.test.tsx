@@ -263,8 +263,8 @@ describe('ReadingContextPillar dependency and continuity edges', () => {
 })
 
 describe('ReadingContextPillar loading and error states', () => {
-  it('shows loading skeleton when loading and no context', () => {
-    render(
+  it('shows a bounded loading card, not the full pillar, when loading with no content', () => {
+    const { container } = render(
       <MemoryRouter>
         <ReadingContextPillar
           activeRatingThread={ratingThread}
@@ -279,11 +279,33 @@ describe('ReadingContextPillar loading and error states', () => {
         />
       </MemoryRouter>,
     )
-    expect(screen.getByText('Reading Context')).toBeInTheDocument()
+    expect(screen.getByText('Checking reading context…')).toBeInTheDocument()
+    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
+    expect(container.querySelector('.animate-pulse')).not.toBeNull()
   })
 
-  it('shows error message when context fails to load', () => {
+  it('renders the full pillar when loading and meaningful content exists', () => {
     render(
+      <MemoryRouter>
+        <ReadingContextPillar
+          activeRatingThread={ratingThread}
+          readingOrders={[{ id: 1, name: 'Main route', description: null, total_items: 2, completed_items: 1, items: [] }]}
+          connectedThreads={[]}
+          onRefreshThread={vi.fn()}
+          rolledResult={4}
+          currentDie={6}
+          readerContext={null}
+          isReaderContextLoading={true}
+          readerContextError={null}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByText('Reading Context')).toBeInTheDocument()
+    expect(screen.getByText('Checking reading context…')).toBeInTheDocument()
+  })
+
+  it('shows a bounded error card, not the full pillar, when context fails with no content', () => {
+    const { container } = render(
       <MemoryRouter>
         <ReadingContextPillar
           activeRatingThread={ratingThread}
@@ -300,6 +322,27 @@ describe('ReadingContextPillar loading and error states', () => {
     )
     expect(screen.getByText('Local reading context unavailable')).toBeInTheDocument()
     expect(screen.getByText('Network timeout')).toBeInTheDocument()
+    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
+    expect(container.querySelectorAll('.animate-pulse').length).toBe(0)
+  })
+
+  it('renders nothing for a successful-empty context', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <ReadingContextPillar
+          activeRatingThread={ratingThread}
+          readingOrders={[]}
+          connectedThreads={[]}
+          onRefreshThread={vi.fn()}
+          rolledResult={null}
+          currentDie={6}
+          readerContext={null}
+          isReaderContextLoading={false}
+          readerContextError={null}
+        />
+      </MemoryRouter>,
+    )
+    expect(container.textContent).toBe('')
   })
 })
 
