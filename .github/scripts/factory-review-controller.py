@@ -791,15 +791,30 @@ def transition_pr_and_linked_issue(
     replace_factory_labels(issue, "factory:unowned", issue_stage or pr_stage)
 
 
-def validate_review_lease(pr_number: int, worker: str, pr: dict[str, Any]) -> None:
-    """Reject review state changes not backed by the current worker lease."""
+def validate_review_lease(
+    pr_number: int, worker: str, pr: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Reject review state changes not backed by the current worker lease.
+
+    Returns ``{"status": "already-ready"}`` when the PR has already been
+    promoted to ``factory:ready`` by another process — a normal race between
+    the work controller assignment and the review session start.  In that
+    case the caller must skip the review instead of crashing.
+    """
     if str(pr.get("state")) != "OPEN":
         raise RuntimeError(f"PR #{pr_number} is not open")
     labels = labels_of(pr)
-    if "factory:review" not in labels:
-        raise RuntimeError(f"PR #{pr_number} is not in factory:review")
-    if f"factory:{worker}" not in labels or not target_owned_by_worker(pr_number, worker):
-        raise RuntimeError(f"PR #{pr_number} is not exclusively leased to Factory {worker}")
+    if "factory:review" in labels:
+        if f"factory:{worker}" not in labels or not target_owned_by_worker(
+            pr_number, worker
+        ):
+            raise RuntimeError(
+                f"PR #{pr_number} is not exclusively leased to Factory {worker}"
+            )
+        return None
+    if "factory:ready" in labels:
+        return {"status": "already-ready"}
+    raise RuntimeError(f"PR #{pr_number} is not in factory:review")
 
 
 def return_to_review(
@@ -852,7 +867,9 @@ def handle_review(
         raise RuntimeError("reviewed head must be a full lowercase Git SHA")
 
     pr = pr_json(pr_number)
-    validate_review_lease(pr_number, worker, pr)
+    lease_result = validate_review_lease(pr_number, worker, pr)
+    if lease_result is not None:
+        return lease_result
     branch = str(pr.get("headRefName") or "")
     current_head = str(pr.get("headRefOid") or "")
     if not HEAD_RE.fullmatch(current_head):
