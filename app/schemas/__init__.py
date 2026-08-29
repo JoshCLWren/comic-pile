@@ -50,6 +50,7 @@ from app.schemas.roll import (
 from app.schemas.recommendation_context import (
     RecommendationContextCreate,
     RecommendationContextResponse,
+    RollingRecommendationContext,
 )
 from app.schemas.session import (
     ActiveThreadInfo,
@@ -125,6 +126,7 @@ __all__ = [
     # Recommendation Context
     "RecommendationContextCreate",
     "RecommendationContextResponse",
+    "RollingRecommendationContext",
     # Rate
     "RateRequest",
     # Session

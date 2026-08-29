@@ -26,6 +26,7 @@ from app.models.user import User
 from app.roll_recovery import build_roll_recovery
 from app.services.explanation_projection import get_primary_explanation
 from app.services.reading_effort import (
+    EffortEstimate,
     build_recommendation_context,
     compute_effort_estimate,
 )
@@ -42,7 +43,10 @@ from app.schemas import (
     SessionModeResponse,
     SessionModeUpdateRequest,
 )
-from app.schemas.recommendation_context import CandidateFactor, RecommendationContextCreate
+from app.schemas.recommendation_context import (
+    CandidateFactor,
+    RecommendationContextCreate,
+)
 from app.schemas.session import build_session_bandwidth_state
 from app.momentum import MomentumCandidateWeight, weighted_momentum_selection
 from comic_pile.queue import get_bounded_roll_pool_rows
@@ -60,6 +64,72 @@ from comic_pile.session import get_current_die_for_session, get_or_create
 router = APIRouter(tags=["roll"])
 
 logger = logging.getLogger(__name__)
+
+
+def _get_local_hour_from_timezone(timezone: str | None) -> int | None:
+    """Derive local hour from session timezone for recommendation context.
+    
+    Args:
+        timezone: IANA timezone string (e.g., "America/Chicago")
+        
+    Returns:
+        Local hour (0-23) or None if timezone is invalid/unavailable.
+    """
+    if timezone is None:
+        return None
+    try:
+        tz = ZoneInfo(timezone)
+        return datetime.now(tz).hour
+    except Exception:
+        return None
+
+
+def _build_rolling_recommendation_context(
+    *,
+    die_size: int,
+    selected_queue_position: int,
+    bounded_candidate_ids: list[int],
+    selected_index: int,
+    selection_method: str,
+    session_timezone: str | None,
+    selected_thread_last_rating: float | None,
+    selected_thread_last_activity_at: datetime | None,
+    effort_estimate: str | None = None,
+) -> dict[str, object]:
+    """Build the rolling recommendation context snapshot for a roll event.
+    
+    Args:
+        die_size: Current die size at roll time
+        selected_queue_position: Selected thread queue position at roll time
+        bounded_candidate_ids: Bounded candidate thread IDs in exact selection order
+        selected_index: Selected candidate index/result
+        selection_method: Selection method (random, momentum, override)
+        session_timezone: Session timezone if available
+        selected_thread_last_rating: Last rating of selected thread at decision time
+        selected_thread_last_activity_at: Last activity timestamp of selected thread
+        effort_estimate: Optional effort estimate if available
+        
+    Returns:
+        Dictionary suitable for JSON storage as rolling_recommendation_context
+    """
+    local_hour = _get_local_hour_from_timezone(session_timezone)
+    
+    return {
+        "schema_version": 1,
+        "algorithm_version": "legacy",
+        "die_size": die_size,
+        "selected_queue_position": selected_queue_position,
+        "bounded_candidate_ids": bounded_candidate_ids,
+        "selected_index": selected_index,
+        "selection_method": selection_method,
+        "session_timezone": session_timezone,
+        "local_hour": local_hour,
+        "selected_thread_last_rating": selected_thread_last_rating,
+        "selected_thread_last_activity_at": selected_thread_last_activity_at.isoformat()
+        if selected_thread_last_activity_at
+        else None,
+        "effort_estimate": effort_estimate,
+    }
 
 
 @router.post("/", response_model=RollResponse)
@@ -173,6 +243,9 @@ async def roll_dice(
     selected_thread_format = selected_thread.format
     selected_thread_queue_position = selected_thread.queue_position
 
+    # Capture bounded candidate IDs in exact selection order for recommendation context
+    bounded_candidate_ids = [row[0].id if isinstance(row, tuple) else row.id for row in bounded_rows]
+
     selected_thread_issues_remaining = unread_count
 
     selected_thread_total_issues = selected_thread.total_issues
@@ -208,6 +281,10 @@ async def roll_dice(
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
     )
+    selection_method = "momentum" if max_bonus > 0 else "random"
+
+    # Extract effort estimate band as string for JSON serialization
+    effort_estimate_str = effort_estimate.band if isinstance(effort_estimate, EffortEstimate) else effort_estimate
 
     event = Event(
         type="roll",
@@ -215,11 +292,22 @@ async def roll_dice(
         selected_thread_id=selected_thread_id,
         die=current_die,
         result=selected_index + 1,
-        selection_method="momentum" if max_bonus > 0 else "random",
+        selection_method=selection_method,
         recommendation_reason_codes=recommendation_reason_codes,
         recommendation_context=recommendation_context,
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
+        rolling_recommendation_context=_build_rolling_recommendation_context(
+            die_size=current_die,
+            selected_queue_position=selected_thread_queue_position,
+            bounded_candidate_ids=bounded_candidate_ids,
+            selected_index=selected_index,
+            selection_method=selection_method,
+            session_timezone=current_session.timezone,
+            selected_thread_last_rating=selected_thread.last_rating,
+            selected_thread_last_activity_at=selected_thread.last_activity_at,
+            effort_estimate=effort_estimate_str,
+        ),
     )
     db.add(event)
 
@@ -426,6 +514,9 @@ async def override_roll(
         issue_number=override_thread_issue_number,
     )
 
+    # Extract effort estimate band as string for JSON serialization
+    effort_estimate_str = effort_estimate.band if isinstance(effort_estimate, EffortEstimate) else effort_estimate
+
     event = Event(
         type="roll",
         session_id=current_session_id,
@@ -437,6 +528,17 @@ async def override_roll(
         recommendation_context=recommendation_context,
         issue_id=override_thread_issue_id,
         issue_number=override_thread_issue_number,
+        rolling_recommendation_context=_build_rolling_recommendation_context(
+            die_size=current_die,
+            selected_queue_position=override_thread_queue_position,
+            bounded_candidate_ids=[override_thread_id],
+            selected_index=0,
+            selection_method="override",
+            session_timezone=current_session.timezone,
+            selected_thread_last_rating=override_thread.last_rating,
+            selected_thread_last_activity_at=override_thread.last_activity_at,
+            effort_estimate=effort_estimate_str,
+        ),
     )
     db.add(event)
 
