@@ -31,7 +31,6 @@ type NavIconName =
   | 'planner'
   | 'new'
   | 'help'
-  | 'glossary'
   | 'more'
 
 interface NavItem {
@@ -49,11 +48,10 @@ const MAIN_NAV_ITEMS: NavItem[] = [
 ]
 
 const SECONDARY_NAV_ITEMS: NavItem[] = [
-  { path: '/continuity-plans', label: 'Planner', icon: 'planner', ariaLabel: 'Continuity Planner page' },
-  { path: '/whats-new', label: 'New', icon: 'new', ariaLabel: "What's New page" },
-  { path: '/help', label: 'Help', icon: 'help', ariaLabel: 'Help page' },
-  { path: '/glossary', label: 'Glossary', icon: 'glossary', ariaLabel: 'Glossary page' },
-]
+    { path: '/continuity-plans', label: 'Planner', icon: 'planner', ariaLabel: 'Continuity Planner page' },
+    { path: '/whats-new', label: 'New', icon: 'new', ariaLabel: "What's New page" },
+    { path: '/help', label: 'Help', icon: 'help', ariaLabel: 'Help page' },
+  ]
 
 const APPEARANCE_OPTIONS: Array<{ id: ThemeId; label: string; ariaLabel: string; mobileClassName: string }> = [
   { id: 'classic', label: 'Classic', ariaLabel: 'Classic theme', mobileClassName: 'classic:text-stone-100 ink-gold:text-stone-900 command-center:text-stone-100' },
@@ -111,28 +109,21 @@ function NavIcon({ name }: { name: NavIconName }) {
         <path d="m19 16-.55 1.45L17 18l1.45.55L19 20l.55-1.45L21 18l-1.45-.55L19 16Z"></path>
       </>
     ),
-    help: (
-      <>
-        <circle cx="12" cy="12" r="9"></circle>
-        <path d="M9.75 9a2.5 2.5 0 1 1 3.5 2.3c-.8.35-1.25.9-1.25 1.7v.25"></path>
-        <circle cx="12" cy="17" r=".75" fill="currentColor" stroke="none"></circle>
-      </>
-    ),
-    glossary: (
-      <>
-        <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H11a3 3 0 0 1 3 3v17a3 3 0 0 0-3-3H6.5A2.5 2.5 0 0 0 4 21.5v-17Z"></path>
-        <path d="M20 4.5A2.5 2.5 0 0 0 17.5 2H14"></path>
-        <path d="M20 4.5v17A2.5 2.5 0 0 0 17.5 19H14"></path>
-      </>
-    ),
-    more: (
-      <>
-        <circle cx="12" cy="12" r="9"></circle>
-        <circle cx="8" cy="12" r="1" fill="currentColor" stroke="none"></circle>
-        <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"></circle>
-        <circle cx="16" cy="12" r="1" fill="currentColor" stroke="none"></circle>
-      </>
-    ),
+help: (
+       <>
+         <circle cx="12" cy="12" r="9"></circle>
+         <path d="M9.75 9a2.5 2.5 0 1 1 3.5 2.3c-.8.35-1.25.9-1.25 1.7v.25"></path>
+         <circle cx="12" cy="17" r=".75" fill="currentColor" stroke="none"></circle>
+       </>
+     ),
+     more: (
+       <>
+         <circle cx="12" cy="12" r="9"></circle>
+         <circle cx="8" cy="12" r="1" fill="currentColor" stroke="none"></circle>
+         <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"></circle>
+         <circle cx="16" cy="12" r="1" fill="currentColor" stroke="none"></circle>
+       </>
+     ),
   }
 
   return (

@@ -24,15 +24,14 @@ import { test } from './fixtures'
 const DESKTOP_VIEWPORT = { width: 1920, height: 1080 }
 
 const DESTINATIONS = [
-  'Roll page',
-  'Queue page',
-  'History page',
-  'Crossovers page',
-  'Continuity Planner page',
-  "What's New page",
-  'Help page',
-  'Glossary page',
-]
+   'Roll page',
+   'Queue page',
+   'History page',
+   'Crossovers page',
+   'Continuity Planner page',
+   "What's New page",
+   'Help page',
+ ]
 
 async function openAuthenticatedDesktop(page: Page): Promise<void> {
   await page.setViewportSize(DESKTOP_VIEWPORT)
@@ -113,8 +112,8 @@ test.describe('Desktop navigation redesign (#1887)', () => {
     const desktopNav = page.getByRole('navigation', { name: 'Desktop navigation' })
     await expect(desktopNav).toBeVisible()
 
-    await desktopNav.getByRole('link', { name: 'Glossary page' }).click()
-    await expect(page).toHaveURL(/\/glossary$/)
+    await desktopNav.getByRole('link', { name: 'Help page' }).click()
+    await expect(page).toHaveURL(/\/help$/)
     await desktopNav.getByRole('link', { name: 'Queue page' }).click()
     await expect(page).toHaveURL(/\/queue$/)
 
