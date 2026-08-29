@@ -1518,4 +1518,41 @@ describe('ContinuityPlannerPage', () => {
     const convergenceNode = payload.nodes.find((n) => n.id === 'b-1')
     expect(convergenceNode?.convergence_gate).toHaveLength(0)
   })
+
+  it('renders convergence targets even when a target lane is missing from the plan lanes', async () => {
+    mocks.get.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Convergence plan',
+      ordering_mode: 'informational',
+      lanes: [{ id: 'main', name: 'Lane A', order: 0 }],
+      nodes: [
+        { id: 'a-1', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0, label: 'Mister Miracle #1' },
+        { id: 'b-1', node_type: 'issue', ref_id: 42, lane_id: 'ghost-lane', position: 0, label: 'New Gods #1' },
+      ],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/12']}>
+        <Routes>
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Mister Miracle #1')).toBeVisible())
+
+    const convergenceButton = screen.getByRole('button', { name: /Edit convergence gate for Mister Miracle #1/i })
+    await user.click(convergenceButton)
+
+    expect(screen.getByTestId('convergence-editor-a-1')).toBeVisible()
+
+    const checkbox = screen.getByRole('checkbox', { name: /New Gods #1/i })
+    await user.click(checkbox)
+
+    expect(screen.getByText('Convergence (1)')).toBeVisible()
+  })
 })

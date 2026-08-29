@@ -387,8 +387,7 @@ export default function ContinuityPlannerPage() {
         if (node.id !== nodeId) return node
         const gate = node.convergence_gate ?? []
         const exists = gate.some((target) => target.node_id === targetNodeId)
-        const targetNode = current.find((n) => n.id === targetNodeId)
-        if (!targetNode) return node
+        const targetNode = current.find((n) => n.id === targetNodeId)!
         const updated = exists
           ? gate.filter((target) => target.node_id !== targetNodeId)
           : [...gate, { node_type: targetNode.node_type as ContinuityPlanNodeType, node_id: targetNodeId }]

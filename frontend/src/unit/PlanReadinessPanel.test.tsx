@@ -254,6 +254,60 @@ describe('PlanReadinessPanel', () => {
     await waitFor(() => expect(mocks.readiness).toHaveBeenCalledTimes(2))
   })
 
+  it('labels a checkpoint blocker with a checkpoint reason and badge', async () => {
+    mocks.readiness.mockResolvedValueOnce(
+      readinessResponse({
+        nodes: [
+          nodeReadiness({
+            node_id: 'issue-40',
+            label: 'Mister Miracle #1',
+            is_readable: false,
+            blockers: [
+              {
+                ...blocker,
+                satisfaction_type: 'checkpoint' as const,
+                unread_issue_details: [],
+              },
+            ],
+          }),
+        ],
+        summary: { total: 1, readable: 0, blocked: 1, complete: 0, unavailable: 0 },
+      }),
+    )
+    render(<PlanReadinessPanel planId={12} />)
+
+    await screen.findByTestId('plan-node-readiness-issue-40')
+    expect(screen.getByText('Waiting on checkpoint to be read.')).toBeInTheDocument()
+    expect(screen.getByText('Checkpoint')).toBeInTheDocument()
+  })
+
+  it('labels a converged blocker with a convergence reason and badge', async () => {
+    mocks.readiness.mockResolvedValueOnce(
+      readinessResponse({
+        nodes: [
+          nodeReadiness({
+            node_id: 'issue-40',
+            label: 'Mister Miracle #1',
+            is_readable: false,
+            blockers: [
+              {
+                ...blocker,
+                satisfaction_type: 'converged' as const,
+                unread_issue_details: [],
+              },
+            ],
+          }),
+        ],
+        summary: { total: 1, readable: 0, blocked: 1, complete: 0, unavailable: 0 },
+      }),
+    )
+    render(<PlanReadinessPanel planId={12} />)
+
+    await screen.findByTestId('plan-node-readiness-issue-40')
+    expect(screen.getByText('Waiting on convergence gate prerequisites.')).toBeInTheDocument()
+    expect(screen.getByText('Convergence')).toBeInTheDocument()
+  })
+
   it('groups nodes with unknown lane_id under the Other steps fallback lane', async () => {
     mocks.readiness.mockResolvedValueOnce(
       readinessResponse({
