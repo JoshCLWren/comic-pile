@@ -578,6 +578,58 @@ describe('ContinuityPlannerPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/continuity cycle/i)
   })
 
+  it('falls back to the generic save message when the API detail is an object without a code', async () => {
+    mocks.create.mockReset()
+    mocks.create.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { data: { detail: { message: 'no code here' } } },
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
+    await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
+    await screen.findByRole('option', { name: /Annual 1/i })
+    await user.selectOptions(screen.getByLabelText('Issue'), '40')
+    await user.click(screen.getByRole('button', { name: 'Add issue' }))
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Unable to save this continuity plan\./i)
+  })
+
+  it('falls back to the generic save message when the API detail has an unrecognized code', async () => {
+    mocks.create.mockReset()
+    mocks.create.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { data: { detail: { code: 'some_other_error' } } },
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.type(screen.getByLabelText('Comic series'), 'Mister');
+    await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
+    await screen.findByRole('option', { name: /Annual 1/i })
+    await user.selectOptions(screen.getByLabelText('Issue'), '40')
+    await user.click(screen.getByRole('button', { name: 'Add issue' }))
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Unable to save this continuity plan\./i)
+  })
+
   it('shows an error for a non-numeric route id', async () => {
     render(
       <MemoryRouter initialEntries={['/continuity-plans/not-a-number']}>

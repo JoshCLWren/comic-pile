@@ -22,14 +22,6 @@ function errorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail
     if (typeof detail === 'string' && detail.trim()) return detail
-    if (detail && typeof detail === 'object' && 'code' in detail) {
-      if (detail.code === 'plan_rule_conflict') {
-        return 'This order conflicts with an existing continuity rule. Change the sequence and try again.'
-      }
-      if (detail.code === 'continuity_cycle') {
-        return 'This order would create a continuity cycle. Change the sequence and try again.'
-      }
-    }
   }
   return error instanceof Error && error.message ? error.message : fallback
 }
