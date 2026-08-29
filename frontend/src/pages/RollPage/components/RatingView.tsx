@@ -54,15 +54,15 @@ export function RatingView({
 }: RatingViewProps) {
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const hasReadingContextContent = readingOrders.length > 0 || connectedThreads.length > 0
-  const gridCols = hasReadingContextContent
-    ? 'xl:grid-cols-[minmax(0,26fr)_minmax(0,46fr)_minmax(0,28fr)]'
-    : 'xl:grid-cols-[minmax(0,50fr)_minmax(0,50fr)]'
 
   return (
     <div className="relative z-10 space-y-4 p-3 md:p-4">
       <WhyThisRoll explanation={activeRatingThread?.explanation} />
-      <div className={`grid gap-4 md:grid-cols-2 md:gap-6 ${gridCols}`} data-testid="rating-pillars-grid">
-        <div className="md:row-span-2 xl:row-span-1">
+      <div
+        className="grid items-start gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]"
+        data-testid="rating-pillars-grid"
+      >
+        <div className="min-w-0" data-testid="rating-region-comic">
           <ComicPillar
             activeRatingThread={activeRatingThread}
             onRefreshThread={onRefreshThread}
@@ -70,33 +70,35 @@ export function RatingView({
         </div>
 
         {hasReadingContextContent && (
-          <ReadingContextPillar
-            activeRatingThread={activeRatingThread}
-            readingOrders={readingOrders}
-            connectedThreads={connectedThreads}
-            onRefreshThread={onRefreshThread}
-            rolledResult={rolledResult}
-            currentDie={currentDie}
-            readerContext={readerContext}
-            isReaderContextLoading={isReaderContextLoading}
-            readerContextError={readerContextError}
-          />
+          <div className="min-w-0" data-testid="rating-region-reading-context">
+            <ReadingContextPillar
+              activeRatingThread={activeRatingThread}
+              readingOrders={readingOrders}
+              connectedThreads={connectedThreads}
+              onRefreshThread={onRefreshThread}
+              rolledResult={rolledResult}
+              currentDie={currentDie}
+              readerContext={readerContext}
+              isReaderContextLoading={isReaderContextLoading}
+              readerContextError={readerContextError}
+            />
+          </div>
         )}
 
-        <YourContextPillar
-          activeRatingThread={activeRatingThread}
-          currentDie={currentDie}
-          rating={rating}
-          predictedDie={predictedDie}
-          onUpdateRating={onUpdateRating}
-          readerContext={readerContext}
-          isLoading={isReaderContextLoading}
-        />
+        <div className="min-w-0" data-testid="rating-region-your-context">
+          <YourContextPillar
+            activeRatingThread={activeRatingThread}
+            currentDie={currentDie}
+            rating={rating}
+            predictedDie={predictedDie}
+            onUpdateRating={onUpdateRating}
+            readerContext={readerContext}
+            isLoading={isReaderContextLoading}
+          />
+        </div>
 
         <div
-          className={`md:col-span-2 md:row-start-3 xl:col-start-2 xl:row-start-2 ${
-            hasReadingContextContent ? 'xl:col-span-2' : 'xl:col-end-3'
-          }`}
+          className="min-w-0 xl:col-span-full"
           data-testid="rating-actions-grid-cell"
         >
           <RatingActionPanel
