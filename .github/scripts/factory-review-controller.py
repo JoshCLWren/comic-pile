@@ -515,13 +515,27 @@ def persist_repair_handoff(
 
 
 def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
-    """Reconcile one unowned CI PR using exact-head controller authorities."""
+    """Reconcile one CI PR using exact-head controller authorities."""
     pr = pr_json(pr_number)
     labels = labels_of(pr)
     if str(pr.get("state")) != "OPEN" or "factory:ci" not in labels:
         return {"pr": pr_number, "status": "skipped"}
-    if active_factory_owner(labels) is not None:
-        return {"pr": pr_number, "status": "owned"}
+
+    owner = active_factory_owner(labels)
+    if owner is not None:
+        checks = required_checks_gate(pr_number)
+        if checks["decision"] != "deny":
+            return {"pr": pr_number, "status": "owned"}
+        persist_repair_handoff(
+            pr_number=pr_number,
+            findings=str(checks["reason"]),
+            reviewer="controller",
+            note=(
+                f"Required checks failed during CI reconciliation while {owner} still held "
+                "the lease; terminal CI failure overrides that lease and requires repair."
+            ),
+        )
+        return {"pr": pr_number, "status": "changes-requested", "reason": checks["reason"]}
 
     checks = required_checks_gate(pr_number)
     if checks["decision"] != "pass":
@@ -586,7 +600,7 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
 
 
 def reconcile_ci() -> list[dict[str, Any]]:
-    """Reconcile every currently open, unowned factory:ci PR."""
+    """Reconcile every currently open factory:ci PR."""
     results: list[dict[str, Any]] = []
     for pr_number in list_ci_pr_numbers():
         try:
