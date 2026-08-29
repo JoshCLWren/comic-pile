@@ -8,7 +8,8 @@
  */
 
 function readBool(raw: string | undefined, fallback: boolean): boolean {
-  if (raw === undefined || raw === null || raw === '') {
+  // Env var values are always strings; an unset or empty flag falls back.
+  if (!raw) {
     return fallback
   }
   return raw === 'true' || raw === '1'
@@ -34,6 +35,4 @@ declare global {
   }
 }
 
-if (typeof window !== 'undefined') {
-  window.__COMIC_PILE_FEATURES__ = FEATURES
-}
+window.__COMIC_PILE_FEATURES__ = FEATURES
