@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query'
+import { useRef, useState } from 'react'
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
@@ -11,9 +11,20 @@ import {
   recoverProtectedRollMutation,
 } from './rollMutationReconciliation'
 
+type RateResult = Awaited<ReturnType<typeof protectedRollMutationApi.rate>> | undefined
+
 export function useRate() {
-  const mutation = useMutation({
-    mutationFn: async (data: RatePayload) => {
+  const [isPending, setIsPending] = useState(false)
+  const [isError, setIsError] = useState(false)
+  const inFlightRequest = useRef<Promise<RateResult> | null>(null)
+
+  const mutate = async (data: RatePayload): Promise<RateResult> => {
+    if (inFlightRequest.current) return inFlightRequest.current
+
+    setIsPending(true)
+    setIsError(false)
+
+    const request: Promise<RateResult> = (async () => {
       try {
         const result = await protectedRollMutationApi.rate(data)
         await applyRatedThreadCache(queryClient, result)
@@ -60,14 +71,20 @@ export function useRate() {
           }
         }
 
+        setIsError(true)
         throw error
       }
-    },
-  })
+    })()
 
-  return {
-    mutate: mutation.mutateAsync,
-    isPending: mutation.isPending,
-    isError: mutation.isError,
+    inFlightRequest.current = request
+
+    try {
+      return await request
+    } finally {
+      inFlightRequest.current = null
+      setIsPending(false)
+    }
   }
+
+  return { mutate, isPending, isError }
 }
