@@ -138,8 +138,8 @@ class QuotaGuardrail:
 
         Args:
             used: Observed monthly cache command count.
-            fire_alert: When ``False``, record the alert band without invoking
-                the alert sink (used by monitoring and tests).
+            fire_alert: When ``False``, evaluate without invoking the alert sink
+                or arming the one-shot alert latch (used by monitoring and tests).
 
         Returns:
             The resulting :class:`QuotaState`.
@@ -158,8 +158,8 @@ class QuotaGuardrail:
         )
 
         if alerted and not self._alerted_once:
-            self._alerted_once = True
             if fire_alert:
+                self._alerted_once = True
                 snapshot = self._snapshot(
                     used,
                     ratio,
@@ -200,7 +200,7 @@ class QuotaGuardrail:
 
     @property
     def alerted(self) -> bool:
-        """Return whether the alert band has been crossed since the last reset."""
+        """Return whether the one-shot visible alert has fired since the last reset."""
         return self._alerted_once
 
     def reset(self) -> None:

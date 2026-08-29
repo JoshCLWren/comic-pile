@@ -228,6 +228,26 @@ def test_observe_cache_quota_never_fires_alert(
     assert quota_guardrail.alerted is False
 
 
+def test_monitoring_poll_does_not_starve_write_path_alert(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A monitoring poll never consumes the one-shot; the write path still alerts."""
+    from app.cache_metrics import cache_command_metrics
+
+    alerts: list[QuotaState] = []
+    monkeypatch.setattr(quota_guardrail, "_alert_sink", alerts.append)
+
+    cache_command_metrics.record("get", count=300_000)  # near-limit band
+    state = observe_cache_quota()
+    assert state.status == "near-limit"
+    assert quota_guardrail.alerted is False
+
+    cache_command_metrics.record("set", count=1)  # 300_001, still near-limit
+    assert should_throttle_cache_write() is False  # write path crosses the band
+    assert quota_guardrail.alerted is True
+    assert len(alerts) == 1
+
+
 # --- Transport integration: smoke tests cannot silently drain quota -----------
 
 
