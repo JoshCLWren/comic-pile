@@ -436,9 +436,9 @@ class SessionMode(BaseModel):
     intent_confidence: float | None = Field(
         default=None, ge=0.0, le=1.0, description="Confidence in the intent prediction"
     )
-    intent_source: Literal["manual", "inferred"] | None = Field(
+    intent_source: IntentSource | None = Field(
         default=None,
-        description="Origin of the intent value: manual user override or algorithm inference",
+        description="Origin of the intent value: inferred, manual, snooze, or quiz",
     )
     intent_version: str | None = Field(
         default=None, description="Version tag for the intent inference algorithm"

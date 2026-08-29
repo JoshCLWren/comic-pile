@@ -10,8 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import create_access_token
 from app.constants import INTENT_SOURCE_VALUES, INTENT_VALUES, Intent, IntentSource
-from app.models import Session as SessionModel
-from app.models import Thread
+from app.models import Event, Session as SessionModel, Snapshot, Thread
 from app.schemas.session import SessionListItem, build_session_intent_state
 from comic_pile.session import get_or_create
 
@@ -325,3 +324,122 @@ async def test_end_session_clears_ephemeral_intent(
     assert session.intent_source is None
     assert session.intent_confidence is None
     assert session.intent_version is None
+
+
+@pytest.mark.asyncio
+async def test_snooze_endpoint_exposes_intent_state(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user
+) -> None:
+    """Snooze response exposes stored active/predicted intent independently."""
+    session = SessionModel(
+        start_die=6,
+        user_id=default_user.id,
+        active_intent="familiar",
+        predicted_intent="familiar",
+        intent_source="manual",
+        intent_confidence=0.8,
+        intent_version="snooze-test",
+    )
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Snooze Test Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    event = Event(
+        type="roll",
+        die=6,
+        result=1,
+        selected_thread_id=thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    async_db.add(event)
+    session.pending_thread_id = thread.id
+    await async_db.commit()
+
+    response = await auth_client.post("/api/v1/snooze/")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["intent"] is not None
+    assert data["intent"]["active_intent"] == "familiar"
+    assert data["intent"]["predicted_intent"] == "familiar"
+    assert data["intent"]["confidence"] == 0.8
+    assert data["intent"]["source"] == "manual"
+    assert data["intent"]["mode_version"] == "snooze-test"
+
+
+@pytest.mark.asyncio
+async def test_undo_endpoint_exposes_intent_state(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user
+) -> None:
+    """Undo response exposes stored active/predicted intent independently."""
+    session = SessionModel(
+        start_die=6,
+        user_id=default_user.id,
+        active_intent="explore",
+        predicted_intent="momentum",
+        intent_source="inferred",
+        intent_confidence=0.6,
+        intent_version="undo-test",
+    )
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Undo Test Thread",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    event = Event(
+        type="roll",
+        session_id=session.id,
+        thread_id=thread.id,
+        selected_thread_id=thread.id,
+        result=3,
+    )
+    async_db.add(event)
+    await async_db.commit()
+    await async_db.refresh(event)
+
+    snapshot = Snapshot(
+        session_id=session.id,
+        event_id=event.id,
+        thread_states={
+            thread.id: {
+                "issues_remaining": 10,
+                "queue_position": 1,
+            }
+        },
+        description="Before undo",
+    )
+    async_db.add(snapshot)
+    await async_db.commit()
+
+    response = await auth_client.post(f"/api/v1/undo/{session.id}/undo/{snapshot.id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["intent"] is not None
+    assert data["intent"]["active_intent"] == "explore"
+    assert data["intent"]["predicted_intent"] == "momentum"
+    assert data["intent"]["confidence"] == 0.6
+    assert data["intent"]["source"] == "inferred"
+    assert data["intent"]["mode_version"] == "undo-test"

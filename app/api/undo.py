@@ -16,6 +16,7 @@ from app.models import Event, Issue, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
 from app.schemas import ActiveThreadInfo, SessionResponse
+from app.schemas.session import build_session_intent_state
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
     QUEUE_CHANGES_KEY,
@@ -572,6 +573,13 @@ async def undo_to_snapshot(
                 snapshot_count=pre_snapshot_count,
                 pending_thread_id=session.pending_thread_id,
                 timezone=session.timezone,
+                intent=build_session_intent_state(
+                    predicted_intent=session.predicted_intent,
+                    active_intent=session.active_intent,
+                    confidence=session.intent_confidence,
+                    source=session.intent_source,
+                    mode_version=session.intent_version,
+                ),
             )
         except OperationalError as error:
             if "deadlock" not in str(error).lower():

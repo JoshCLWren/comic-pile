@@ -20,6 +20,7 @@ from app.schemas.session import (
     SnoozeCorrectionInfo,
     SnoozedThreadInfo,
     build_session_bandwidth_state,
+    build_session_intent_state,
 )
 from comic_pile.bandwidth_correction import (
     classify_candidate_effort,
@@ -197,6 +198,13 @@ async def build_session_response(
             confidence=session.bandwidth_confidence,
             source=session.bandwidth_source,
             mode_version=session.bandwidth_version,
+        ),
+        intent=build_session_intent_state(
+            predicted_intent=session.predicted_intent,
+            active_intent=session.active_intent,
+            confidence=session.intent_confidence,
+            source=session.intent_source,
+            mode_version=session.intent_version,
         ),
         correction=correction,
     )
