@@ -14,7 +14,7 @@ Usage:
     export COMIC_PILE_API_BASE=http://localhost:8000
     export COMIC_PILE_USERNAME=Josh
     export COMIC_PILE_PASSWORD=your_password
-    python scripts/complete_annual_dependencies.py
+    python archive/scripts-oneoff/complete_annual_dependencies.py
 """
 
 import os
@@ -24,7 +24,7 @@ API_BASE = os.environ.get("COMIC_PILE_API_BASE", "").rstrip("/")
 REQUESTS_TIMEOUT = 10
 
 if not API_BASE:
-    raise RuntimeError("Set COMIC_PILE_API_BASE before running scripts/complete_annual_dependencies.py")
+    raise RuntimeError("Set COMIC_PILE_API_BASE before running archive/scripts-oneoff/complete_annual_dependencies.py")
 
 # Annuals to link: {thread_id: [(annual_name, after_issue_number)]}
 ANNUALS = {
