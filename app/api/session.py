@@ -26,7 +26,11 @@ from app.schemas import (
     SnapshotResponse,
     SnapshotsListResponse,
 )
-from app.schemas.session import SnoozedThreadInfo, build_session_bandwidth_state
+from app.schemas.session import (
+    SnoozedThreadInfo,
+    build_session_bandwidth_state,
+    build_session_intent_state,
+)
 from app.services.ownership import get_owned_session_or_404
 from app.services.session_history_projection import project_session_history_events
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
@@ -453,6 +457,13 @@ async def get_current_session(
                     source=active_session.bandwidth_source,
                     mode_version=active_session.bandwidth_version,
                 ),
+                intent=build_session_intent_state(
+                    predicted_intent=active_session.predicted_intent,
+                    active_intent=active_session.active_intent,
+                    confidence=active_session.intent_confidence,
+                    source=active_session.intent_source,
+                    mode_version=active_session.intent_version,
+                ),
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
@@ -728,6 +739,13 @@ async def get_session(
             confidence=session.bandwidth_confidence,
             source=session.bandwidth_source,
             mode_version=session.bandwidth_version,
+        ),
+        intent=build_session_intent_state(
+            predicted_intent=session.predicted_intent,
+            active_intent=session.active_intent,
+            confidence=session.intent_confidence,
+            source=session.intent_source,
+            mode_version=session.intent_version,
         ),
     )
 
@@ -1151,6 +1169,13 @@ async def restore_session_start(
                     confidence=session.bandwidth_confidence,
                     source=session.bandwidth_source,
                     mode_version=session.bandwidth_version,
+                ),
+                intent=build_session_intent_state(
+                    predicted_intent=session.predicted_intent,
+                    active_intent=session.active_intent,
+                    confidence=session.intent_confidence,
+                    source=session.intent_source,
+                    mode_version=session.intent_version,
                 ),
             )
         except OperationalError as e:

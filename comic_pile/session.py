@@ -13,6 +13,7 @@ from app.models import Event, Issue, Session, Snapshot, Thread, User
 from app.performance_diagnostics import get_request_diagnostics
 from app.services.snapshot_contract import USES_ISSUE_TRACKING_KEY
 from comic_pile.bandwidth import clear_ephemeral_bandwidth, initialize_session_bandwidth
+from comic_pile.intent import clear_ephemeral_intent
 
 logger = logging.getLogger(__name__)
 _session_creation_lock = asyncio.Lock()
@@ -418,6 +419,7 @@ async def end_session(session_id: int, db: AsyncSession) -> None:
     if session:
         session.ended_at = datetime.now(UTC)
         clear_ephemeral_bandwidth(session)
+        clear_ephemeral_intent(session)
         await db.commit()
 
 

@@ -12,9 +12,15 @@ from pydantic import BaseModel, Field, field_serializer
 
 BandwidthLevel = Literal["light", "balanced", "deep"]
 BandwidthSource = Literal["inferred", "manual", "snooze", "quiz"]
+IntentLevel = Literal["balanced", "momentum", "familiar", "explore", "random"]
+IntentSource = Literal["inferred", "manual", "snooze", "quiz"]
 
 _BANDWIDTH_LEVELS: frozenset[str] = frozenset({"light", "balanced", "deep"})
 _BANDWIDTH_SOURCES: frozenset[str] = frozenset({"inferred", "manual", "snooze", "quiz"})
+_INTENT_LEVELS: frozenset[str] = frozenset(
+    {"balanced", "momentum", "familiar", "explore", "random"}
+)
+_INTENT_SOURCES: frozenset[str] = frozenset({"inferred", "manual", "snooze", "quiz"})
 
 
 def _to_utc_iso(value: datetime) -> str:
@@ -89,6 +95,56 @@ def build_session_bandwidth_state(
             confidence if confidence is not None and 0.0 <= confidence <= 1.0 else None
         ),
         source=source if source in _BANDWIDTH_SOURCES else None,
+        mode_version=mode_version,
+    )
+
+
+class SessionIntentState(BaseModel):
+    """Canonical ephemeral reading-intent state for the active reading session.
+
+    Symmetric to :class:`SessionBandwidthState`. Every field is always present
+    but nullable so legacy sessions that predate intent tracking serialize to a
+    stable, safe shape instead of a missing or partially shaped object. A fully
+    null object means the session defaults to the balanced intent.
+    """
+
+    predicted_intent: IntentLevel | None
+    active_intent: IntentLevel | None
+    confidence: float | None = Field(default=..., ge=0.0, le=1.0)
+    source: IntentSource | None
+    mode_version: str | None
+
+
+def build_session_intent_state(
+    *,
+    predicted_intent: str | None,
+    active_intent: str | None,
+    confidence: float | None,
+    source: str | None,
+    mode_version: str | None,
+) -> SessionIntentState:
+    """Build a canonical intent state from raw stored values, safely.
+
+    Unknown enum strings, out-of-range confidences, or other legacy garbage are
+    normalized to ``None`` so bootstrap never fails because of stored state.
+    Valid values pass through unchanged. Legacy null rows yield an all-null
+    shape that the frontend treats as the default balanced intent.
+
+    Args:
+        predicted_intent: Stored predicted intent value or None.
+        active_intent: Stored active intent value or None.
+        confidence: Stored confidence in ``[0.0, 1.0]`` or None.
+        source: Stored intent source value or None.
+        mode_version: Stored mode/algorithm version tag or None.
+
+    Returns:
+        A SessionIntentState with invalid values normalized to None.
+    """
+    return SessionIntentState(
+        predicted_intent=predicted_intent if predicted_intent in _INTENT_LEVELS else None,
+        active_intent=active_intent if active_intent in _INTENT_LEVELS else None,
+        confidence=confidence if confidence is not None and 0.0 <= confidence <= 1.0 else None,
+        source=source if source in _INTENT_SOURCES else None,
         mode_version=mode_version,
     )
 
@@ -193,6 +249,13 @@ class SessionResponse(BaseModel):
         description=(
             "Canonical ephemeral bandwidth state for the session. Null on endpoints "
             "that do not load bandwidth state."
+        ),
+    )
+    intent: SessionIntentState | None = Field(
+        default=None,
+        description=(
+            "Canonical ephemeral reading-intent state for the session. Null on "
+            "endpoints that do not load intent state."
         ),
     )
     correction: SnoozeCorrectionInfo | None = Field(
