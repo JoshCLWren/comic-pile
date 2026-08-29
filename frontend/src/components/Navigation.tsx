@@ -320,27 +320,33 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
             <span className="block truncate text-xs font-medium text-[var(--theme-text-muted)]">{username}</span>
           ) : null}
           <div
-            className="mt-2 flex flex-wrap items-center justify-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
+            className="mt-2 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-2"
             role="group"
             aria-label="Appearance"
           >
-            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>Theme</span>
-            {APPEARANCE_OPTIONS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                data-theme={option.id}
-                onClick={() => setTheme(option.id)}
-                aria-pressed={activeTheme === option.id}
-                className={`rounded-md px-2 py-1 text-xs font-bold transition-colors ${
-                  activeTheme === option.id
-                    ? 'bg-white/10 text-[var(--theme-text-primary)]'
-                    : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+            <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>Theme</span>
+            <div className="flex flex-col gap-1">
+              {APPEARANCE_OPTIONS.map((option) => {
+                const selected = activeTheme === option.id
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    data-theme={option.id}
+                    onClick={() => setTheme(option.id)}
+                    aria-pressed={selected}
+                    className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-xs font-bold transition-colors ${
+                      selected
+                        ? 'bg-white/10 text-[var(--theme-text-primary)]'
+                        : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+                    }`}
+                  >
+                    <span className="break-words">{option.label}</span>
+                    {selected && <span aria-hidden="true">✓</span>}
+                  </button>
+                )
+              })}
+            </div>
           </div>
           <button onClick={handleLogout} className="mt-2 w-full px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors" aria-label="Log out">
             Log Out
