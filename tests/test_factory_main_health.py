@@ -156,3 +156,5 @@ def test_merge_drain_can_approve_and_dispatch_workflow_recovery() -> None:
         "concurrency:", maxsplit=1
     )[0]
     assert "actions: write" in permissions
+    assert 'GH_TOKEN="$FALLBACK_GH_TOKEN" gh workflow run' in drain
+    assert "Dispatch errors for PR #${pr}" in drain
