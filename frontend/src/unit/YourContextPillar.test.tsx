@@ -230,7 +230,7 @@ describe('YourContextPillar reader-context integration', () => {
     expect(screen.queryByTestId('crossover-analytics')).not.toBeInTheDocument()
   })
 
-  it('still renders the pillar header and rating section', () => {
+  it('hides the YOUR CONTEXT chrome when no meaningful context content exists but keeps the rating form', () => {
     render(
       <YourContextPillar
         activeRatingThread={ratingThread()}
@@ -242,10 +242,26 @@ describe('YourContextPillar reader-context integration', () => {
         isLoading={false}
       />,
     )
+    expect(screen.queryByText('Your Context')).not.toBeInTheDocument()
     expect(screen.queryByText('03')).not.toBeInTheDocument()
-    expect(screen.getByText('Your Context')).toBeInTheDocument()
     expect(screen.getByText('Your rating')).toBeInTheDocument()
     expect(screen.getByText('3.0')).toBeInTheDocument()
+  })
+
+  it('keeps the YOUR CONTEXT heading while the reading context loads', () => {
+    render(
+      <YourContextPillar
+        activeRatingThread={ratingThread()}
+        currentDie={6}
+        rating={3.0}
+        predictedDie={8}
+        onUpdateRating={vi.fn()}
+        readerContext={null}
+        isLoading={true}
+      />,
+    )
+    expect(screen.getByText('Your Context')).toBeInTheDocument()
+    expect(screen.getByText('Your rating')).toBeInTheDocument()
   })
 
   it('shows last-issue banner when issues_remaining is 1', () => {
