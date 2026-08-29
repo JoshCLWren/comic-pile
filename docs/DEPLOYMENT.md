@@ -7,7 +7,9 @@ ComicPile has one supported production deployment: Vercel, sourced from the `mai
 - Vercel serves the built React/Vite frontend as static output.
 - FastAPI handles the intentional API routes and OpenAPI document.
 - Neon provides PostgreSQL.
-- Remote Redis caching is disabled by default while its command budget and invalidation design are being corrected.
+- The cache provider is Postgres by default (decision memo: `CACHE_PROVIDER_DECISION_2026-08.md`).
+  Remote Redis caching stays disabled while its re-enable gate and command budget are pending
+  measurement; `CACHE_ENABLED` cannot activate Redis without an explicit provider override.
 - Pull requests are validated locally and in GitHub Actions. ComicPile does not provision or maintain Vercel Preview environments.
 
 ## Production delivery

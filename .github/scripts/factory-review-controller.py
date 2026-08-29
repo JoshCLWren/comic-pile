@@ -515,17 +515,39 @@ def persist_repair_handoff(
 
 
 def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
-    """Reconcile one unowned CI PR using exact-head controller authorities."""
+    """Reconcile one CI PR using exact-head controller authorities."""
     pr = pr_json(pr_number)
     labels = labels_of(pr)
     if str(pr.get("state")) != "OPEN" or "factory:ci" not in labels:
         return {"pr": pr_number, "status": "skipped"}
-    if active_factory_owner(labels) is not None:
-        return {"pr": pr_number, "status": "owned"}
+
+    owner = active_factory_owner(labels)
+    if owner is not None:
+        checks = required_checks_gate(pr_number)
+        if checks["decision"] != "deny":
+            return {"pr": pr_number, "status": "owned"}
+        persist_repair_handoff(
+            pr_number=pr_number,
+            findings=str(checks["reason"]),
+            reviewer="controller",
+            note=(
+                f"Required checks failed during CI reconciliation while {owner} still held "
+                "the lease; terminal CI failure overrides that lease and requires repair."
+            ),
+        )
+        return {"pr": pr_number, "status": "changes-requested", "reason": checks["reason"]}
 
     checks = required_checks_gate(pr_number)
     if checks["decision"] != "pass":
         status = classify_ci_reconciliation(checks_decision=checks["decision"], authorized=False)
+        if checks["decision"] == "deny":
+            persist_repair_handoff(
+                pr_number=pr_number,
+                findings=str(checks["reason"]),
+                reviewer="controller",
+                note="Required checks failed during CI reconciliation; repair is required.",
+            )
+            status = "changes-requested"
         return {"pr": pr_number, "status": status, "reason": checks["reason"]}
 
     head = str(pr.get("headRefOid") or "")
@@ -578,7 +600,7 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
 
 
 def reconcile_ci() -> list[dict[str, Any]]:
-    """Reconcile every currently open, unowned factory:ci PR."""
+    """Reconcile every currently open factory:ci PR."""
     results: list[dict[str, Any]] = []
     for pr_number in list_ci_pr_numbers():
         try:
@@ -791,15 +813,30 @@ def transition_pr_and_linked_issue(
     replace_factory_labels(issue, "factory:unowned", issue_stage or pr_stage)
 
 
-def validate_review_lease(pr_number: int, worker: str, pr: dict[str, Any]) -> None:
-    """Reject review state changes not backed by the current worker lease."""
+def validate_review_lease(
+    pr_number: int, worker: str, pr: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Reject review state changes not backed by the current worker lease.
+
+    Returns ``{"status": "already-ready"}`` when the PR has already been
+    promoted to ``factory:ready`` by another process — a normal race between
+    the work controller assignment and the review session start.  In that
+    case the caller must skip the review instead of crashing.
+    """
     if str(pr.get("state")) != "OPEN":
         raise RuntimeError(f"PR #{pr_number} is not open")
     labels = labels_of(pr)
-    if "factory:review" not in labels:
-        raise RuntimeError(f"PR #{pr_number} is not in factory:review")
-    if f"factory:{worker}" not in labels or not target_owned_by_worker(pr_number, worker):
-        raise RuntimeError(f"PR #{pr_number} is not exclusively leased to Factory {worker}")
+    if "factory:review" in labels:
+        if f"factory:{worker}" not in labels or not target_owned_by_worker(
+            pr_number, worker
+        ):
+            raise RuntimeError(
+                f"PR #{pr_number} is not exclusively leased to Factory {worker}"
+            )
+        return None
+    if "factory:ready" in labels:
+        return {"status": "already-ready"}
+    raise RuntimeError(f"PR #{pr_number} is not in factory:review")
 
 
 def return_to_review(
@@ -852,7 +889,9 @@ def handle_review(
         raise RuntimeError("reviewed head must be a full lowercase Git SHA")
 
     pr = pr_json(pr_number)
-    validate_review_lease(pr_number, worker, pr)
+    lease_result = validate_review_lease(pr_number, worker, pr)
+    if lease_result is not None:
+        return lease_result
     branch = str(pr.get("headRefName") or "")
     current_head = str(pr.get("headRefOid") or "")
     if not HEAD_RE.fullmatch(current_head):

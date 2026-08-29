@@ -13,14 +13,12 @@ SHORTCUT_REFERENCE_RE = re.compile(r"(?<!!)\[([^\]\n]+)\](?![\[(])")
 REFERENCE_DEFINITION_RE = re.compile(r"^\s*\[([^\]]+)\]:\s*(\S+)", re.MULTILINE)
 ALLOWED_ROOT_MARKDOWN = {
     "AGENTS.md",
-    "COMIC_DEPENDENCIES_GUIDE.md",
     "CONTRIBUTING.md",
     "LOCAL_TESTING.md",
     "README.md",
     "ROLLBACK.md",
     "SECURITY.md",
     "TECH_DEBT.md",
-    "prd.md",
 }
 IGNORED_DIRECTORIES = {".git", ".venv", ".vercel", "node_modules", "archive"}
 

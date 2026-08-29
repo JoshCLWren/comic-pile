@@ -19,22 +19,24 @@ Issue: #1782
 
 ## Quota context
 
-Upstash Redis free-tier REST quota is exhausted.  The automated quota pause is
-expected to lift on or before approximately 2026-08-28.  The benchmark script
-handles this gracefully: any HTTP 429 response is recorded as `"status":
+Upstash Redis free-tier REST quota was exhausted, and the automated quota pause
+lifted on or before approximately 2026-08-28.  The benchmark script handles a
+still-blocked path gracefully: any HTTP 429 response is recorded as `"status":
 "quota_blocked"` rather than aborting, so the Neon and uncached-queue paths can
-still be measured independently.
+always be measured independently.
 
-Until the reset, the **Neon point SELECT** and **uncached queue read** rows
-below are the only live measurements.  The **Upstash REST GET** row is recorded
-with the exact observed quota-blocked pattern so a post-reset run can be
-compared directly.
+A post-reset full run was still outstanding when the provider-decision memo
+(`CACHE_PROVIDER_DECISION_2026-08.md`) was written, so the **Upstash REST GET**,
+**Neon point SELECT**, and **uncached queue read** rows below remain unfilled
+with the exact "awaiting run" marker a pre-reset observation window leaves
+behind.  The decision rule that consumes these cells is codified in
+`app/cache_provider_decision.py` (issue #1785).
 
 ## Measurements
 
 | Path | Samples | Min (ms) | Median (ms) | P95 (ms) | Max (ms) | Mean (ms) | Status |
 |---|---|---|---|---|---|---|---|
-| Upstash REST GET | 0 | — | — | — | — | — | `quota_blocked` (HTTP 429 quota exhausted) |
+| Upstash REST GET | 0 | — | — | — | — | — | *Awaiting post-reset run* |
 | Neon point SELECT (KV table) | 0 | — | — | — | — | — | *Awaiting run* |
 | Uncached queue read (`/api/v1/sessions/current/`) | 0 | — | — | — | — | — | *Awaiting run* |
 
@@ -90,6 +92,14 @@ application stack add to a raw Postgres point read?"
 
 ## Provider decision memo
 
+The go/no-go ruling for the production provider lives in
+`CACHE_PROVIDER_DECISION_2026-08.md` (issue #1785): **Postgres**, with remote
+Redis re-enable marked NO-GO until both the measured latency ratio here and a
+clean route-traffic census land.  The `app/cache_provider_decision.py` rule makes
+that ruling reproducible: `provider_recommendation()` applies the thresholds
+below, and `project_monthly_cache_commands()` checks the census against the
+budget in `docs/CACHE_COMMAND_BUDGET.md`.
+
 **Hypothesis (to be verified after quota reset):**
 
 The raw Upstash REST hop should outperform a Neon point SELECT when measured
@@ -104,9 +114,7 @@ Once both samples are available the decision rule is:
   gate in `docs/CACHE_REENABLE_DECISION.md` can proceed when command-rate
   evidence is also in range.
 - **Upstash REST p50 ≥ 2× Neon p50, or Neon p50 ≤ 3 ms** → Neon point reads
-  are not meaningfully slower; the re-enable gate can consider Enabling
-  `REDIS_URL` against a local or managed Redis instead, or accept that
-  the per-request overhead justifies keeping the cache disabled.
+  are not meaningfully slower; staying on the Postgres provider is justified.
 - **Either path shows high variance (p95 / p50 > 5×)** → investigate network
   instability before declaring a stable default.
 
@@ -127,11 +135,13 @@ After the Upstash quota resets (target: 2026-08-28 or earlier):
    --location "vercel:iad1" --output docs/CACHE_LOOKUP_LATENCY_2026-08.json
 3. Replace the placeholder numbers in the summary table above with the values
    from the JSON file.
-4. Update the "Provider decision memo" section with the measured ratio and a
+4. Feed the medians into `app/cache_provider_decision.py::provider_recommendation`
+   and update the conclusion in `CACHE_PROVIDER_DECISION_2026-08.md`, plus the
    concrete action on `docs/CACHE_REENABLE_DECISION.md`.
 
 ## Related documents and code
 
+- `CACHE_PROVIDER_DECISION_2026-08.md` – the go/no-go memo this benchmark feeds
 - `docs/CACHE_REENABLE_DECISION.md` – the live re-enable gate this benchmark feeds
 - `docs/CACHE_COMMAND_BUDGET.md` – 350 000 command/month budget constraint
 - `app/cache.py` – `UpstashCache`, circuit breaker, `@cached` decorator

@@ -619,3 +619,79 @@ def test_dispatcher_requires_controller_authorization_before_merge() -> None:
     assert merge in source
     assert source.index(authorization) < source.index(merge)
     assert '"$authorized_head" != "$head"' in source
+
+
+def test_validate_review_lease_returns_already_ready_for_promoted_pr() -> None:
+    """Review lease validation gracefully handles PRs promoted to factory:ready."""
+    module = load_review_controller()
+    pr = {
+        "state": "OPEN",
+        "labels": [
+            {"name": "factory"},
+            {"name": "factory:43"},
+            {"name": "factory:ready"},
+        ],
+    }
+    result = module.validate_review_lease(1972, "43", pr)
+    assert result == {"status": "already-ready"}
+
+
+def test_handle_review_skips_when_pr_already_ready(monkeypatch: MonkeyPatch) -> None:
+    """A review session on a PR already promoted to ready returns a skip status."""
+    module = load_review_controller()
+
+    def pr_already_ready(_pr: int) -> dict[str, Any]:
+        return {
+            "state": "OPEN",
+            "headRefOid": REVIEWED_HEAD,
+            "headRefName": "factory/43-1972-opencode-free",
+            "body": "Closes #1972.\nWorker: opencode-free-model-factory-43",
+            "labels": [
+                {"name": "factory"},
+                {"name": "factory:43"},
+                {"name": "factory:ready"},
+            ],
+        }
+
+    monkeypatch.setattr(module, "pr_json", pr_already_ready)
+    monkeypatch.setattr(
+        module, "target_owned_by_worker", lambda _number, _worker: True
+    )
+    result = module.handle_review(
+        worker="43",
+        pr_number=1972,
+        verdict="approve",
+        reviewed_head=REVIEWED_HEAD,
+        review_log="/tmp/model.log",
+    )
+    assert result == {"status": "already-ready"}
+
+
+def test_validate_review_lease_rejects_closed_pr() -> None:
+    """Closed PRs cannot be reviewed regardless of labels."""
+    module = load_review_controller()
+    pr = {
+        "state": "CLOSED",
+        "labels": [
+            {"name": "factory"},
+            {"name": "factory:43"},
+            {"name": "factory:review"},
+        ],
+    }
+    with pytest.raises(RuntimeError, match="is not open"):
+        module.validate_review_lease(1972, "43", pr)
+
+
+def test_validate_review_lease_rejects_unleased_pr() -> None:
+    """PRs not leased to the claiming worker are rejected."""
+    module = load_review_controller()
+    pr = {
+        "state": "OPEN",
+        "labels": [
+            {"name": "factory"},
+            {"name": "factory:43"},
+            {"name": "factory:review"},
+        ],
+    }
+    with pytest.raises(RuntimeError, match="not exclusively leased"):
+        module.validate_review_lease(1972, "17", pr)

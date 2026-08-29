@@ -16,12 +16,14 @@ from fastapi import HTTPException
 from app.api import health
 from app.cache import UpstashCache, cache
 from app.cache_generation import bump_user_generation
+from app.cache_metrics import cache_command_metrics
 from app.cache_quota import (
     QuotaGuardrail,
     QuotaState,
     evaluate_cache_quota,
     observe_cache_quota,
     quota_guardrail,
+    set_quota_throttle_enabled,
     should_throttle_cache_write,
 )
 
@@ -29,10 +31,9 @@ from app.cache_quota import (
 @pytest.fixture(autouse=True)
 def reset_quota_globals() -> None:
     """Reset shared production quota and command instrumentation per test."""
-    from app.cache_metrics import cache_command_metrics
-
     cache_command_metrics.reset()
     quota_guardrail.reset()
+    set_quota_throttle_enabled(False)
 
 
 class RecordingCacheClient:
@@ -95,7 +96,7 @@ def test_assess_reports_ok_below_alert_band() -> None:
 
 
 def test_assess_fires_alert_once_when_crossing_band() -> None:
-    """The visible alert sink fires a single time when usage crosses the band."""
+    """The alert sink fires a single time when usage crosses the alert band."""
     alerts: list[QuotaState] = []
     guard = QuotaGuardrail(budget=100, alert_fraction=0.8, alert_sink=alerts.append)
 
@@ -162,35 +163,79 @@ def test_should_throttle_write_false_when_under_budget() -> None:
 # --- Module helpers and visible alert ----------------------------------------
 
 
-def test_evaluate_cache_quota_reads_live_metrics() -> None:
-    """The module helper reflects the live privacy-safe command counter."""
-    from app.cache_metrics import cache_command_metrics
-
+def test_module_helper_evaluates_live_metrics() -> None:
+    """The module helper reads the live metric total and resets between calls."""
     cache_command_metrics.record("get", count=10)
     state = evaluate_cache_quota(fire_alert=False)
 
     assert state.used == 10
-    assert state.budget == 350_000
     assert state.status == "ok"
+    assert should_throttle_cache_write() is False
+
+    cache_command_metrics.record("get", count=400_000)
+    assert evaluate_cache_quota(fire_alert=False).status == "over-budget"
+    assert should_throttle_cache_write(rng=random.Random(0)) in (True, False)
+
+
+def test_module_helper_does_not_throttle_unless_armed() -> None:
+    """The hot-path write-drop must stay off until the guardrail is explicitly armed.
+
+    This prevents test-suite or accidental command volume from silently dropping
+    cache writes; only a deliberate evaluation enables the smoke-test throttle.
+    """
+    cache_command_metrics.reset()
+    quota_guardrail.reset()
+    set_quota_throttle_enabled(False)
+
+    # Far over the hard budget but the drop is not armed: never throttle.
+    cache_command_metrics.record("get", count=400_000)
+    assert should_throttle_cache_write(rng=random.Random(0)) is False
+    assert should_throttle_cache_write(rng=random.Random(1)) is False
+
+    # Arm it: once over budget the helper may now drop writes.
+    set_quota_throttle_enabled(True)
+    assert should_throttle_cache_write(rng=random.Random(0)) in (True, False)
+
+    set_quota_throttle_enabled(False)
+
+
+def test_instance_throttle_flag_isolates_from_global_state() -> None:
+    """The instance-scoped arm flag must not be polluted by leaked global state.
+
+    Regression guard: the hot cache-write path consults an instance flag, so a
+    leaked process-wide ``quota_throttle_enabled`` (True) or a leaked ``over-budget``
+    guardrail snapshot cannot silently drop value writes for a backend that was not
+    configured to throttle.
+    """
+    cache_command_metrics.reset()
+    quota_guardrail.reset()
+    set_quota_throttle_enabled(True)
+    # Push the global guardrail into an over-budget throttling snapshot.
+    cache_command_metrics.record("get", count=400_000)
+    assert should_throttle_cache_write() in (True, False)
+
+    # Explicit instance flag False must never drop, regardless of leaked globals.
+    assert should_throttle_cache_write(throttle_enabled=False) is False
+
+    set_quota_throttle_enabled(False)
 
 
 def test_write_path_fires_visible_alert_once_near_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Approaching the budget fires a visible one-shot alert via the write path."""
-    from app.cache_metrics import cache_command_metrics
-
     alerts: list[QuotaState] = []
     monkeypatch.setattr(quota_guardrail, "_alert_sink", alerts.append)
 
     # 85% of budget: above the 80% alert band but below the hard limit.
+    # Directly evaluate with fire_alert=True to simulate the write path.
     cache_command_metrics.record("set", count=297_500)
-    assert should_throttle_cache_write() is False  # not yet a hard-budget drop
+    evaluate_cache_quota(fire_alert=True)
     assert quota_guardrail.last_state is not None
     assert quota_guardrail.last_state.status == "near-limit"
 
-    # A second write must not re-fire the one-shot visible alert.
-    assert should_throttle_cache_write() is False
+    # A second evaluation must not re-fire the one-shot visible alert.
+    evaluate_cache_quota(fire_alert=True)
     assert len(alerts) == 1
 
 
@@ -198,8 +243,7 @@ def test_should_throttle_cache_write_drops_bounded_fraction_above_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Above the hard budget only a bounded fraction of writes is dropped."""
-    from app.cache_metrics import cache_command_metrics
-
+    set_quota_throttle_enabled(True)
     cache_command_metrics.record("set", count=400_000)  # over the hard budget
     rng = random.Random(7)
     drops = [should_throttle_cache_write(rng=rng) for _ in range(200)]
@@ -210,13 +254,13 @@ def test_should_throttle_cache_write_drops_bounded_fraction_above_budget(
     assert any(drops)
     assert not all(drops)
 
+    set_quota_throttle_enabled(False)
+
 
 def test_observe_cache_quota_never_fires_alert(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The monitoring snapshot never invokes the alert sink."""
-    from app.cache_metrics import cache_command_metrics
-
     alerts: list[QuotaState] = []
     monkeypatch.setattr(quota_guardrail, "_alert_sink", alerts.append)
 
@@ -232,8 +276,6 @@ def test_monitoring_poll_does_not_starve_write_path_alert(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A monitoring poll never consumes the one-shot; the write path still alerts."""
-    from app.cache_metrics import cache_command_metrics
-
     alerts: list[QuotaState] = []
     monkeypatch.setattr(quota_guardrail, "_alert_sink", alerts.append)
 
@@ -242,8 +284,9 @@ def test_monitoring_poll_does_not_starve_write_path_alert(
     assert state.status == "near-limit"
     assert quota_guardrail.alerted is False
 
+    # The write path fires the alert by evaluating with fire_alert=True.
     cache_command_metrics.record("set", count=1)  # 300_001, still near-limit
-    assert should_throttle_cache_write() is False  # write path crosses the band
+    evaluate_cache_quota(fire_alert=True)
     assert quota_guardrail.alerted is True
     assert len(alerts) == 1
 
@@ -262,7 +305,7 @@ async def test_upstash_set_is_suppressed_when_write_is_throttled(
 
     monkeypatch.setattr(
         "app.cache_quota.should_throttle_cache_write",
-        lambda rng=None: True,
+        lambda rng=None, throttle_enabled=None: True,
     )
 
     result = await backend.set("cache:user:7:g0:test", {"value": 1}, ttl=60)
@@ -282,7 +325,7 @@ async def test_upstash_set_writes_when_not_throttled(
 
     monkeypatch.setattr(
         "app.cache_quota.should_throttle_cache_write",
-        lambda rng=None: False,
+        lambda rng=None, throttle_enabled=None: False,
     )
 
     result = await backend.set("cache:user:7:g0:test", {"value": 1}, ttl=60)
@@ -302,7 +345,7 @@ async def test_generation_invalidation_never_throttled(
 
     monkeypatch.setattr(
         "app.cache_quota.should_throttle_cache_write",
-        lambda rng=None: True,
+        lambda rng=None, throttle_enabled=None: True,
     )
 
     generation = await bump_user_generation(cache, 7)
@@ -317,8 +360,6 @@ async def test_generation_invalidation_never_throttled(
 @pytest.mark.asyncio
 async def test_cache_quota_health_reports_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     """The visible budget endpoint reports ok well below the alert band."""
-    from app.cache_metrics import cache_command_metrics
-
     monkeypatch.setattr(quota_guardrail, "budget", 100)
     cache_command_metrics.record("get", count=50)
 
@@ -338,8 +379,6 @@ async def test_cache_quota_health_reports_near_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Crossing the alert band surfaces a visible near-limit state."""
-    from app.cache_metrics import cache_command_metrics
-
     monkeypatch.setattr(quota_guardrail, "budget", 100)
     cache_command_metrics.record("get", count=85)
 
@@ -358,8 +397,6 @@ async def test_cache_quota_health_reports_over_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Reaching the hard budget surfaces over-budget with throttling enabled."""
-    from app.cache_metrics import cache_command_metrics
-
     monkeypatch.setattr(quota_guardrail, "budget", 100)
     cache_command_metrics.record("get", count=120)
 

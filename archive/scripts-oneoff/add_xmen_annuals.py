@@ -12,7 +12,7 @@ Environment Variables:
 Usage:
     export COMIC_PILE_USERNAME=Josh
     export COMIC_PILE_PASSWORD=your_password
-    python scripts/add_xmen_annuals.py
+    python archive/scripts-oneoff/add_xmen_annuals.py
 """
 
 import os
