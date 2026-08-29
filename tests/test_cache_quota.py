@@ -335,6 +335,31 @@ async def test_upstash_set_writes_when_not_throttled(
 
 
 @pytest.mark.asyncio
+async def test_upstash_set_fires_visible_alert_once_near_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A best-effort value write near the budget fires the one-shot visible alert."""
+    alerts: list[QuotaState] = []
+    monkeypatch.setattr(quota_guardrail, "_alert_sink", alerts.append)
+
+    client = RecordingCacheClient()
+    backend = _fresh_backend(client)
+    _install_backend(monkeypatch, backend)
+
+    cache_command_metrics.record("set", count=297_500)  # 85% of 350,000
+    await backend.set("cache:user:7:g0:test", {"value": 1}, ttl=60)
+
+    assert quota_guardrail.last_state is not None
+    assert quota_guardrail.last_state.status == "near-limit"
+    assert quota_guardrail.alerted is True
+    assert len(alerts) == 1
+
+    # A second write must not re-fire the one-shot visible alert.
+    await backend.set("cache:user:7:g0:test", {"value": 2}, ttl=60)
+    assert len(alerts) == 1
+
+
+@pytest.mark.asyncio
 async def test_generation_invalidation_never_throttled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
