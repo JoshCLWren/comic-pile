@@ -1,7 +1,7 @@
 """Add CHECK constraints for ephemeral session reading-intent state.
 
 Revision ID: 05f8245be922
-Revises: 05f8245be921
+Revises: c85900000002
 Create Date: 2026-08-29 00:00:00.000000
 
 Completes the ephemeral session reading-intent schema (issue #1728): the
@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "05f8245be922"
-down_revision: str | Sequence[str] | None = "05f8245be921"
+down_revision: str | Sequence[str] | None = "c85900000002"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
