@@ -519,6 +519,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                     {
                         "url": redis_settings.upstash_redis_rest_url,
                         "token": redis_settings.upstash_redis_rest_token,
+                        "throttle_enabled": redis_settings.cache_quota_throttle_enabled,
                     },
                 )
             elif redis_settings.redis_url:
@@ -532,7 +533,11 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                 await _init_provided_cache(
                     "redis",
                     startup_state,
-                    {"local_url": redis_settings.redis_url, "allow_local": True},
+                    {
+                        "local_url": redis_settings.redis_url,
+                        "allow_local": True,
+                        "throttle_enabled": redis_settings.cache_quota_throttle_enabled,
+                    },
                 )
             else:
                 logger.warning(

@@ -488,6 +488,10 @@ class UpstashCache:
         self._circuit_breaker = CircuitBreaker(name="redis")
         self._initialized = False
         self._is_upstash = False
+        # Smoke-test write-drop throttle is instance-scoped (set from settings at
+        # configure time) so the process-wide guardrail state can never leak across
+        # callers or test sessions and silently drop value writes.
+        self._throttle_enabled = False
 
     @property
     def is_initialized(self) -> bool:
@@ -500,6 +504,7 @@ class UpstashCache:
         local_url: str | None = None,
         *,
         allow_local: bool = False,
+        throttle_enabled: bool = False,
     ) -> None:
         """Configure a Redis client without opening a network connection.
 
@@ -534,6 +539,7 @@ class UpstashCache:
             self._circuit_breaker.reset()
             self._initialized = True
             self._is_upstash = False
+            self._throttle_enabled = throttle_enabled
             logger.info("Local Redis cache configured for lazy connection")
             return
 
@@ -542,6 +548,7 @@ class UpstashCache:
             self._circuit_breaker.reset()
             self._initialized = True
             self._is_upstash = True
+            self._throttle_enabled = throttle_enabled
             logger.info("Upstash Redis cache configured for lazy connection")
             return
 
@@ -679,7 +686,7 @@ class UpstashCache:
         # (generation INCRs) are never throttled; only value writes are subject.
         from app.cache_quota import should_throttle_cache_write
 
-        if should_throttle_cache_write():
+        if should_throttle_cache_write(throttle_enabled=self._throttle_enabled):
             logger.warning(
                 "Cache write smoke-test throttled: monthly budget reached; "
                 "serving from the database path for key %s",
@@ -1133,6 +1140,7 @@ class CacheRouter:
                 token=kwargs.get("token"),
                 local_url=kwargs.get("local_url"),
                 allow_local=kwargs.get("allow_local", False),
+                throttle_enabled=kwargs.get("throttle_enabled", False),
             )
             return backend
         raise ValueError(f"Unknown cache provider: {provider}")

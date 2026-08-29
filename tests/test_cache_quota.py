@@ -126,3 +126,31 @@ def test_module_helper_does_not_throttle_unless_armed() -> None:
     assert should_throttle_cache_write(rng=random.Random(0)) in (True, False)
 
     set_quota_throttle_enabled(False)
+
+
+def test_instance_throttle_flag_isolates_from_global_state() -> None:
+    """The instance-scoped arm flag must not be polluted by leaked global state.
+
+    Regression guard: the hot cache-write path consults an instance flag, so a
+    leaked process-wide ``quota_throttle_enabled`` (True) or a leaked ``over-budget``
+    guardrail snapshot cannot silently drop value writes for a backend that was not
+    configured to throttle.
+    """
+    from app.cache_metrics import cache_command_metrics
+    from app.cache_quota import (
+        quota_guardrail,
+        set_quota_throttle_enabled,
+        should_throttle_cache_write,
+    )
+
+    cache_command_metrics.reset()
+    quota_guardrail.reset()
+    set_quota_throttle_enabled(True)
+    # Push the global guardrail into an over-budget throttling snapshot.
+    cache_command_metrics.record("get", count=400_000)
+    assert should_throttle_cache_write() in (True, False)
+
+    # Explicit instance flag False must never drop, regardless of leaked globals.
+    assert should_throttle_cache_write(throttle_enabled=False) is False
+
+    set_quota_throttle_enabled(False)

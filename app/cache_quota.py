@@ -225,16 +225,23 @@ def evaluate_cache_quota(used: int | None = None, *, fire_alert: bool = True) ->
     return quota_guardrail.assess(used, fire_alert=fire_alert)
 
 
-def should_throttle_cache_write(*, rng: random.Random | None = None) -> bool:
+def should_throttle_cache_write(
+    *, rng: random.Random | None = None, throttle_enabled: bool | None = None
+) -> bool:
     """Return whether the next best-effort cache write should be smoke-test dropped.
 
     Args:
         rng: Optional seeded RNG for deterministic tests.
+        throttle_enabled: Explicit arm state; defaults to the process-wide
+            :data:`quota_throttle_enabled` flag. Callers that own an instance-scoped
+            backend (for example ``UpstashCache``) pass their own flag so leaked
+            process-wide guardrail state can never silently drop writes.
 
     Returns:
         ``True`` when throttling is active and this write is in the drop sample.
     """
-    if not quota_throttle_enabled:
+    armed = quota_throttle_enabled if throttle_enabled is None else throttle_enabled
+    if not armed:
         return False
     if quota_guardrail.last_state is None or not quota_guardrail.last_state.throttling:
         evaluate_cache_quota(fire_alert=False)
