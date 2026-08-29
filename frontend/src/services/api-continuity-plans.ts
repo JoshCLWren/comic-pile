@@ -34,6 +34,15 @@ export interface ContinuityPlan extends ContinuityPlanWrite {
   updated_at: string
 }
 
+export interface ContinuityPlanListItem {
+  id: number
+  name: string
+  ordering_mode: ContinuityPlanOrderingMode
+  lane_count: number
+  step_count: number
+  updated_at: string
+}
+
 export type PlanReadinessDiagnosticCode =
   | 'dangling_plan_reference'
   | 'plan_cycle_detected'
@@ -93,12 +102,16 @@ export interface ContinuityPlanReadinessResponse {
 export type { ContinuityBlocker, UnreadIssueDetail }
 
 export const continuityPlansApi = {
+  list: (): Promise<ContinuityPlanListItem[]> =>
+    api.get<ContinuityPlanListItem[]>('/v1/continuity-plans/'),
   create: (payload: ContinuityPlanWrite) =>
     api.post<ContinuityPlan, ContinuityPlanWrite>('/v1/continuity-plans/', payload),
   get: (planId: number) =>
     api.get<ContinuityPlan>(`/v1/continuity-plans/${planId}`),
   update: (planId: number, payload: ContinuityPlanWrite) =>
     api.put<ContinuityPlan, ContinuityPlanWrite>(`/v1/continuity-plans/${planId}`, payload),
+  delete: (planId: number) =>
+    api.delete<void>(`/v1/continuity-plans/${planId}`),
   readiness: (planId: number): Promise<ContinuityPlanReadinessResponse> =>
     api.get<ContinuityPlanReadinessResponse>(`/v1/continuity-plans/${planId}/readiness`),
 }

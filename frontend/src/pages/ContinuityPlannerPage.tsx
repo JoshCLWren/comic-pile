@@ -396,7 +396,7 @@ export default function ContinuityPlannerPage() {
   }
 
   const removeLane = (laneId: string) => {
-    if (laneNodeCount(nodes, laneId) > 0 || lanes.length <= 1) return
+    if (laneNodeCount(nodes, laneId) > 0) return
     setLanes((current) =>
       current
         .filter((lane) => lane.id !== laneId)
@@ -487,20 +487,22 @@ export default function ContinuityPlannerPage() {
         <form onSubmit={addIssue} className="space-y-3" aria-label="Add an issue">
           <h2 className="font-black text-stone-100">Add an issue</h2>
           <ContinuityThreadSelector threads={threads} value={selectedThread} onChange={(thread) => void selectThread(thread)} label="Comic series" />
-          <ContinuityIssueSelector issues={issues} value={selectedIssue} onChange={setSelectedIssue} isLoading={isLoadingIssues} disabled={!selectedThread} error={issueLoadError} />
-          <button type="submit" disabled={!selectedIssue} className="min-h-11 w-full rounded-xl bg-amber-500 px-4 font-black text-stone-950 disabled:opacity-50">Add issue</button>
+          <ContinuityIssueSelector issues={issues} value={selectedIssue} onChange={setSelectedIssue} isLoading={isLoadingIssues} disabled={!selectedThread || orderedLanes.length === 0} error={issueLoadError} />
+          <button type="submit" disabled={!selectedIssue || orderedLanes.length === 0} className="min-h-11 w-full rounded-xl bg-amber-500 px-4 font-black text-stone-950 disabled:opacity-50">Add issue</button>
+          {orderedLanes.length === 0 && <p className="text-xs text-stone-500">Add a lane first to add issues.</p>}
         </form>
 
         <div className="space-y-3">
           <h2 className="font-black text-stone-100">Add a crossover</h2>
           <label className="block text-xs font-bold uppercase tracking-widest text-stone-500">
             Crossover
-            <select value={selectedGroupId} onChange={(event) => setSelectedGroupId(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-stone-700 bg-stone-950 px-3 text-stone-100">
+            <select value={selectedGroupId} onChange={(event) => setSelectedGroupId(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-stone-700 bg-stone-950 px-3 text-stone-100" disabled={orderedLanes.length === 0}>
               <option value="">Select a crossover</option>
               {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
             </select>
           </label>
-          <button type="button" onClick={addCrossover} disabled={!selectedGroupId} className="min-h-11 w-full rounded-xl bg-violet-500 px-4 font-black text-stone-950 disabled:opacity-50">Add crossover</button>
+          <button type="button" onClick={addCrossover} disabled={!selectedGroupId || orderedLanes.length === 0} className="min-h-11 w-full rounded-xl bg-violet-500 px-4 font-black text-stone-950 disabled:opacity-50">Add crossover</button>
+          {orderedLanes.length === 0 && <p className="text-xs text-stone-500">Add a lane first to add crossovers.</p>}
         </div>
       </div>
 
@@ -580,7 +582,7 @@ export default function ContinuityPlannerPage() {
                     <button
                       type="button"
                       onClick={() => removeLane(lane.id)}
-                      disabled={laneNodeCount(nodes, lane.id) > 0 || lanes.length <= 1}
+                      disabled={laneNodeCount(nodes, lane.id) > 0}
                       aria-label={`Remove lane ${lane.name}`}
                       title={laneNodeCount(nodes, lane.id) > 0 ? 'Move all steps out of this lane before removing it' : undefined}
                       className="min-h-9 rounded-lg border border-red-900 px-3 text-red-300 disabled:opacity-30"
