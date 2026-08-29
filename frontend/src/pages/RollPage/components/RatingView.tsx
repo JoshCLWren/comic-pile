@@ -69,17 +69,19 @@ export function RatingView({
           />
         </div>
 
-        <ReadingContextPillar
-          activeRatingThread={activeRatingThread}
-          readingOrders={readingOrders}
-          connectedThreads={connectedThreads}
-          onRefreshThread={onRefreshThread}
-          rolledResult={rolledResult}
-          currentDie={currentDie}
-          readerContext={readerContext}
-          isReaderContextLoading={isReaderContextLoading}
-          readerContextError={readerContextError}
-        />
+        {hasReadingContextContent && (
+          <ReadingContextPillar
+            activeRatingThread={activeRatingThread}
+            readingOrders={readingOrders}
+            connectedThreads={connectedThreads}
+            onRefreshThread={onRefreshThread}
+            rolledResult={rolledResult}
+            currentDie={currentDie}
+            readerContext={readerContext}
+            isReaderContextLoading={isReaderContextLoading}
+            readerContextError={readerContextError}
+          />
+        )}
 
         <YourContextPillar
           activeRatingThread={activeRatingThread}

@@ -43,7 +43,10 @@ const callbacks = {
   onRefreshThread: vi.fn(),
 }
 
-function renderRatingView(activeRatingThread: Parameters<typeof RatingView>[0]['activeRatingThread']) {
+function renderRatingView(
+  activeRatingThread: Parameters<typeof RatingView>[0]['activeRatingThread'],
+  overrides: Partial<Parameters<typeof RatingView>[0]> = {},
+) {
   return render(
     <MemoryRouter>
       <RatingView
@@ -56,8 +59,8 @@ function renderRatingView(activeRatingThread: Parameters<typeof RatingView>[0]['
         rateIsPending={false}
         snoozeIsPending={false}
         dismissIsPending={false}
-        readingOrders={[]}
-        connectedThreads={[]}
+        readingOrders={overrides.readingOrders ?? []}
+        connectedThreads={overrides.connectedThreads ?? []}
         {...callbacks}
       />
     </MemoryRouter>,
@@ -66,15 +69,29 @@ function renderRatingView(activeRatingThread: Parameters<typeof RatingView>[0]['
 
 describe('RatingView crossovers', () => {
   it('shows crossover names owned by the active rating thread', () => {
-    renderRatingView({
-      id: 42,
-      title: 'Silver Surfer',
-      format: 'Comic',
-      issues_remaining: 3,
-      total_issues: 6,
-      issue_number: '3',
-      next_issue_number: '4',
-    } as never)
+    renderRatingView(
+      {
+        id: 42,
+        title: 'Silver Surfer',
+        format: 'Comic',
+        issues_remaining: 3,
+        total_issues: 6,
+        issue_number: '3',
+        next_issue_number: '4',
+      } as never,
+      {
+        readingOrders: [
+          {
+            id: 1,
+            name: 'Main route',
+            description: null,
+            total_items: 2,
+            completed_items: 1,
+            items: [],
+          },
+        ],
+      },
+    )
 
     expect(screen.getByRole('heading', { name: 'Crossovers' })).toBeInTheDocument()
     expect(screen.getByText('Cosmic bridge')).toBeInTheDocument()
