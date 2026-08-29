@@ -29,40 +29,38 @@ jobs:
           sha="$(git rev-parse HEAD)"
           echo "Checking main health at $sha"
 
-          # Use check-runs API (populated by CI's check jobs). Fail-closed:
-          # if the API errors we cannot prove main healthy, so report
-          # failing=UNAVAILABLE which opens/refreshes main-breakage instead
-          # of silently treating an outage as green.
-          total="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '.total_count // 0' 2>/dev/null || echo UNAVAILABLE)"
-          failing="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '
-            [.check_runs[]
-             | select((.conclusion // "" | ascii_downcase) as $c
-                      | $c=="failure" or $c=="timed_out"
-                        or $c=="cancelled" or $c=="startup_failure")]
-            | length
-          ' 2>/dev/null || echo UNAVAILABLE)"
-          failing_names="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq -r '
-            [.check_runs[]
-             | select((.conclusion // "" | ascii_downcase) as $c
-                      | $c=="failure" or $c=="timed_out")
-             | .name]
-            | join(", ")
-          ' 2>/dev/null || true)"
-          echo "Main health API result: sha=${sha} total_count=${total} failing=${failing}"
-          if [[ "$total" == "UNAVAILABLE" || "$failing" == "UNAVAILABLE" ]]; then
-            echo "GitHub API unavailable proving main health at ${sha}; reporting failure so breakage stays visible" >&2
+          runs_file="$RUNNER_TEMP/main-ci-workflow-runs.json"
+          if ! gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${sha}&event=push&per_page=100" \
+            > "$runs_file"; then
+            echo "GitHub API unavailable proving product CI health at ${sha}" >&2
             echo "failing=1" >> "$GITHUB_OUTPUT"
             echo "total=0" >> "$GITHUB_OUTPUT"
             echo "names=api-unavailable" >> "$GITHUB_OUTPUT"
             echo "sha=$sha" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          if ! health="$(python3 .github/scripts/factory_main_health.py --sha "$sha" < "$runs_file")"; then
+            echo "GitHub returned invalid product CI health data at ${sha}" >&2
+            echo "failing=1" >> "$GITHUB_OUTPUT"
+            echo "total=0" >> "$GITHUB_OUTPUT"
+            echo "names=invalid-api-response" >> "$GITHUB_OUTPUT"
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          total="$(jq -r '.total' <<< "$health")"
+          failing="$(jq -r '.failing' <<< "$health")"
+          failing_names="$(jq -r '.failing_names' <<< "$health")"
+          echo "Main health API result: sha=${sha} total_count=${total} failing=${failing}"
 
-          # CI has no checks yet (e.g. docs-only push) -> treat as healthy.
+          # Factory-token merges do not always emit a push CI run. Exact-head
+          # PR gates remain authoritative, so absent product CI is not red.
           if [[ "${total:-0}" == "0" ]]; then
-            echo "No check-runs reported for $sha; treating as healthy (docs-only or pending)"
+            echo "No push-triggered product CI runs reported for $sha; no red signal exists"
             echo "failing=0" >> "$GITHUB_OUTPUT"
             echo "total=0" >> "$GITHUB_OUTPUT"
+            echo "names=" >> "$GITHUB_OUTPUT"
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 

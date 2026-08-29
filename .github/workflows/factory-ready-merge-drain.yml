@@ -58,7 +58,7 @@ jobs:
         run: |
           python3 .github/scripts/factory_post_merge_closure.py --self-test
 
-      - name: Approve held workflow runs on factory PR heads
+      - name: Recover held or missing workflow runs on factory PR heads
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.PR_REBASE_TOKEN || github.token }}
@@ -66,45 +66,94 @@ jobs:
         run: |
           set -Eeuo pipefail
 
-          echo 'Approving action_required workflow runs stuck on current factory PR heads'
+          echo 'Recovering action_required workflow runs on current factory PR heads'
           mapfile -t open_heads < <(
             gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" \
-              --jq '.[] | [.head.sha, .number] | @tsv' 2>/dev/null \
+              --jq '.[] | select(.labels | map(.name) | contains(["factory:ready"]) or contains(["factory:ci"])) | [.head.sha, .number, .head.ref] | @tsv' \
               || gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 500 \
-                --json number,headRefOid \
-                --jq '.[] | [.headRefOid, .number] | @tsv'
+                --json number,headRefName,headRefOid,labels \
+                --jq '.[] | select(.labels | map(.name) | contains(["factory:ready"]) or contains(["factory:ci"])) | [.headRefOid, .number, .headRefName] | @tsv'
           )
           (( ${#open_heads[@]} > 0 )) || exit 0
 
-          approve_run() {
-            local run_id="$1"
-            gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/approve" >/dev/null 2>&1 && return 0
-            GH_TOKEN="$FALLBACK_GH_TOKEN" gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/approve" >/dev/null 2>&1
+          declare -A recovery_attempted=()
+
+          workflow_file_for_name() {
+            case "$1" in
+              CI) echo 'ci.yml' ;;
+              'Fixed Model PR Repair Guard') echo 'fixed-model-pr-repair-guard.yml' ;;
+              *) return 1 ;;
+            esac
           }
 
-          approved_any=false
+          dispatch_recovery() {
+            local pr="$1" branch="$2" workflow_name="$3" workflow_file key
+            workflow_file="$(workflow_file_for_name "$workflow_name")" || return 0
+            key="${pr}:${workflow_file}"
+            [[ -z "${recovery_attempted[$key]:-}" ]] || return 0
+            recovery_attempted[$key]=true
+            if gh workflow run "$workflow_file" --ref "$branch"; then
+              echo "Dispatched ${workflow_name} recovery for PR #${pr} on ${branch}"
+              return 0
+            fi
+            echo "Unable to dispatch ${workflow_name} recovery for PR #${pr}; retrying next drain" >&2
+            return 1
+          }
+
+          approve_run() {
+            local run_id="$1"
+            local primary_error fallback_error
+            if primary_error="$(gh api -X POST \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/approve" 2>&1 >/dev/null)"; then
+              return 0
+            fi
+            if fallback_error="$(GH_TOKEN="$FALLBACK_GH_TOKEN" gh api -X POST \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/approve" 2>&1 >/dev/null)"; then
+              return 0
+            fi
+            primary_error="${primary_error//$'\n'/ }"
+            fallback_error="${fallback_error//$'\n'/ }"
+            echo "Approval errors: primary=${primary_error:-unknown}; fallback=${fallback_error:-unknown}" >&2
+            return 1
+          }
+
+          held_runs_file="$RUNNER_TEMP/action-required-runs.json"
+          if ! gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/runs?status=action_required&per_page=100" \
+            > "$held_runs_file"; then
+            echo 'Unable to enumerate action_required workflow runs; continuing with missing-check recovery' >&2
+            printf '[]\n' > "$held_runs_file"
+          fi
+
           while IFS=$'\t' read -r run_id head_sha name; do
             [[ -n "$run_id" && -n "$head_sha" ]] || continue
             for entry in "${open_heads[@]}"; do
-              IFS=$'\t' read -r open_head open_pr <<< "$entry"
+              IFS=$'\t' read -r open_head open_pr open_branch <<< "$entry"
               if [[ "$head_sha" == "$open_head" ]]; then
                 if approve_run "$run_id"; then
                   echo "Approved held ${name} run ${run_id} on PR #${open_pr} head ${head_sha:0:12}"
-                  approved_any=true
+                  workflow_file="$(workflow_file_for_name "$name" || true)"
+                  [[ -z "$workflow_file" ]] || recovery_attempted["${open_pr}:${workflow_file}"]=true
                 else
-                  echo "Unable to approve run ${run_id} on PR #${open_pr}; will retry next drain" >&2
+                  echo "Unable to approve run ${run_id} on PR #${open_pr}; dispatching exact-branch recovery" >&2
+                  dispatch_recovery "$open_pr" "$open_branch" "$name" || true
                 fi
                 break
               fi
             done
           done < <(
-            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?status=action_required&per_page=100" \
-              --jq '.workflow_runs[] | select(.created_at >= (now - 3600 | strftime("%Y-%m-%dT%H:%M:%SZ"))) | [.id, .head_sha, .name] | @tsv' 2>/dev/null || true
+            jq -r '.[]?.workflow_runs[]? | [.id, .head_sha, .name] | @tsv' "$held_runs_file"
           )
 
-          if [[ "$approved_any" == false ]]; then
-            echo 'No held workflow runs matched current factory PR heads'
-          fi
+          for entry in "${open_heads[@]}"; do
+            IFS=$'\t' read -r open_head open_pr open_branch <<< "$entry"
+            check_count="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${open_head}/check-runs?per_page=1" \
+              --jq '.total_count' 2>/dev/null || echo 0)"
+            [[ "${check_count:-0}" == "0" ]] || continue
+            echo "PR #${open_pr} has no check runs at head ${open_head:0:12}; dispatching recovery"
+            dispatch_recovery "$open_pr" "$open_branch" 'CI' || true
+            dispatch_recovery "$open_pr" "$open_branch" 'Fixed Model PR Repair Guard' || true
+          done
 
       - name: Check main health before merging
         id: main_health
@@ -114,25 +163,26 @@ jobs:
         run: |
           set -Eeuo pipefail
           sha="$(git rev-parse HEAD 2>/dev/null || git rev-parse origin/main)"
-          # Drain checks out main at HEAD, so HEAD is origin/main. Log both
-          # the SHA and API total to make truncated or mismatched reads visible.
-          total="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '.total_count // 0' 2>/dev/null || echo UNAVAILABLE)"
-          failing="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/check-runs?per_page=100" --jq '
-            [.check_runs[]
-             | select((.conclusion // "" | ascii_downcase) as $c
-                      | $c=="failure" or $c=="timed_out"
-                        or $c=="cancelled" or $c=="startup_failure")]
-            | length
-          ' 2>/dev/null || echo UNAVAILABLE)"
-          echo "Main health API result: sha=${sha} total_count=${total} failing=${failing}"
-          if [[ "$total" == "UNAVAILABLE" || "$failing" == "UNAVAILABLE" ]]; then
-            echo "GitHub API unavailable proving main health at ${sha}; blocking factory merges" >&2
+          runs_file="$RUNNER_TEMP/main-ci-workflow-runs.json"
+          if ! gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${sha}&event=push&per_page=100" \
+            > "$runs_file"; then
+            echo "GitHub API unavailable proving product CI health at ${sha}; blocking factory merges" >&2
             echo "main_red=true" >> "$GITHUB_OUTPUT"
             echo "failing=UNAVAILABLE" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          if ! health="$(python3 .github/scripts/factory_main_health.py --sha "$sha" < "$runs_file")"; then
+            echo "GitHub returned invalid product CI health data at ${sha}; blocking factory merges" >&2
+            echo "main_red=true" >> "$GITHUB_OUTPUT"
+            echo "failing=UNAVAILABLE" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          total="$(jq -r '.total' <<< "$health")"
+          failing="$(jq -r '.failing' <<< "$health")"
+          echo "Main health API result: sha=${sha} total_count=${total} failing=${failing}"
           if [[ "${total:-0}" != "0" && "${failing:-0}" != "0" ]]; then
-            echo "Main $sha is red ($failing/$total failing) - blocking factory merges until main-breakage is fixed" >&2
+            echo "Main $sha has failed product CI ($failing/$total failing) - blocking factory merges" >&2
             echo "main_red=true" >> "$GITHUB_OUTPUT"
             echo "failing=$failing" >> "$GITHUB_OUTPUT"
             exit 0
@@ -162,25 +212,6 @@ jobs:
           python3 "$closure_script" --sweep || {
             echo 'Stranded-closure sweep failed; retrying on the next drain' >&2
           }
-
-          echo 'Rescuing factory PRs whose heads never received CI runs'
-          while IFS=$'\t' read -r pr head_sha branch; do
-            [[ -n "$pr" && -n "$head_sha" && -n "$branch" ]] || continue
-            check_count="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${head_sha}/check-runs?per_page=1" \
-              --jq '.total_count' 2>/dev/null || echo 0)"
-            if [[ "${check_count:-0}" == "0" ]]; then
-              echo "PR #${pr} has no check runs at head ${head_sha:0:12}; dispatching CI rescue"
-              gh workflow run ci.yml --ref "$branch" 2>/dev/null \
-                || echo "CI rescue dispatch for PR #${pr} failed; retrying on the next drain" >&2
-            fi
-          done < <(
-            gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" \
-              --jq '.[] | select(.labels | map(.name) | contains(["factory:ready"]) or contains(["factory:ci"])) | [.number, .head.sha, .head.ref] | @tsv' 2>/dev/null \
-              || gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 500 \
-                --label 'factory:ready' --label 'factory:ci' \
-                --json number,headRefName,headRefOid \
-                --jq '.[] | [.number, .headRefOid, .headRefName] | @tsv'
-          )
 
           mapfile -t ready_prs < <(
             gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" \
