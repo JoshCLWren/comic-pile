@@ -26,6 +26,7 @@ from app.models.user import User
 from app.roll_recovery import build_roll_recovery
 from app.services.explanation_projection import get_primary_explanation
 from app.services.reading_effort import (
+    EffortEstimate,
     build_recommendation_context,
     compute_effort_estimate,
 )
@@ -283,6 +284,9 @@ async def roll_dice(
     )
     selection_method = "momentum" if max_bonus > 0 else "random"
 
+    # Extract effort estimate band as string for JSON serialization
+    effort_estimate_str = effort_estimate.band if isinstance(effort_estimate, EffortEstimate) else effort_estimate
+
     event = Event(
         type="roll",
         session_id=current_session_id,
@@ -303,7 +307,7 @@ async def roll_dice(
             session_timezone=current_session.timezone,
             selected_thread_last_rating=selected_thread.last_rating,
             selected_thread_last_activity_at=selected_thread.last_activity_at,
-            effort_estimate=effort_estimate if effort_estimate else None,
+            effort_estimate=effort_estimate_str,
         ),
     )
     db.add(event)
@@ -511,6 +515,9 @@ async def override_roll(
         issue_number=override_thread_issue_number,
     )
 
+    # Extract effort estimate band as string for JSON serialization
+    effort_estimate_str = effort_estimate.band if isinstance(effort_estimate, EffortEstimate) else effort_estimate
+
     event = Event(
         type="roll",
         session_id=current_session_id,
@@ -531,7 +538,7 @@ async def override_roll(
             session_timezone=current_session.timezone,
             selected_thread_last_rating=override_thread.last_rating,
             selected_thread_last_activity_at=override_thread.last_activity_at,
-            effort_estimate=effort_estimate if effort_estimate else None,
+            effort_estimate=effort_estimate_str,
         ),
     )
     db.add(event)

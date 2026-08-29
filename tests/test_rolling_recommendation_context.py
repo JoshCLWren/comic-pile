@@ -9,6 +9,7 @@ Tests verify that:
 """
 
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 from sqlalchemy import select
@@ -52,13 +53,14 @@ async def test_roll_persists_rolling_recommendation_context(
     assert ctx is not None
     assert ctx["schema_version"] == 1
     assert ctx["algorithm_version"] == "legacy"
-    assert ctx["die_size"] > 0
-    assert ctx["selected_queue_position"] >= 1
+    assert cast(int, ctx["die_size"]) > 0
+    assert cast(int, ctx["selected_queue_position"]) >= 1
     assert isinstance(ctx["bounded_candidate_ids"], list)
-    assert len(ctx["bounded_candidate_ids"]) > 0
-    assert ctx["selected_index"] >= 0
+    assert len(cast(list[int], ctx["bounded_candidate_ids"])) > 0
+    assert cast(int, ctx["selected_index"]) >= 0
     assert ctx["selection_method"] in ("random", "momentum")
-    assert ctx["local_hour"] is None or 0 <= ctx["local_hour"] <= 23
+    local_hour = cast(int | None, ctx["local_hour"])
+    assert local_hour is None or 0 <= local_hour <= 23
 
 
 @pytest.mark.asyncio
@@ -97,8 +99,9 @@ async def test_roll_bounded_candidate_ids_match_pool(
     ctx = event.rolling_recommendation_context
     assert ctx is not None
 
-    assert data["thread_id"] in ctx["bounded_candidate_ids"]
-    assert ctx["selected_index"] < len(ctx["bounded_candidate_ids"])
+    bounded_candidate_ids = cast(list[int], ctx["bounded_candidate_ids"])
+    assert data["thread_id"] in bounded_candidate_ids
+    assert cast(int, ctx["selected_index"]) < len(bounded_candidate_ids)
 
 
 @pytest.mark.asyncio
@@ -212,7 +215,8 @@ async def test_rolling_recommendation_context_bounded_payload_size(
     ctx = event.rolling_recommendation_context
     assert ctx is not None
 
-    for candidate_id in ctx["bounded_candidate_ids"]:
+    bounded_candidate_ids = cast(list[int], ctx["bounded_candidate_ids"])
+    for candidate_id in bounded_candidate_ids:
         assert isinstance(candidate_id, int)
 
     assert "title" not in ctx
