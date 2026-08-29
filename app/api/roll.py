@@ -748,27 +748,24 @@ async def update_session_mode(
         intent_version = version_tag
         changed_dimensions.append("intent")
 
-    # Record a compact, distinguishable mode-change event for later analytics.
-    # The source is always "manual" here, and the changed dimensions and resulting
-    # values are captured so manual overrides are separable from inferred/Snooze
-    # mode changes in the decision history.
-    db.add(
-        Event(
-            session_id=session_id,
-            type="session_mode",
-            die=None,
-            selected_thread_id=None,
-            thread_id=None,
-            issue_id=None,
-            context={
-                "source": "manual",
-                "changed": changed_dimensions,
-                "bandwidth": active_bandwidth,
-                "intent": active_intent,
-                "version": version_tag,
-            },
+    if changed_dimensions:
+        db.add(
+            Event(
+                session_id=session_id,
+                type="session_mode",
+                die=None,
+                selected_thread_id=None,
+                thread_id=None,
+                issue_id=None,
+                context={
+                    "source": "manual",
+                    "changed": changed_dimensions,
+                    "bandwidth": active_bandwidth,
+                    "intent": active_intent,
+                    "version": version_tag,
+                },
+            )
         )
-    )
     await db.commit()
     await _invalidate_session_caches(current_user.id)
 
