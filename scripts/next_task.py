@@ -44,12 +44,13 @@ PRIORITY_RANKS = {
 }
 EXCLUDED_LABELS = {
     "duplicate",
-    "epic",
     "ralph-status:blocked",
     "ralph-status:done",
     "ralph-status:in-progress",
     "ralph-status:in-review",
 }
+
+EPIC_ACCEPTANCE_LABELS = {"epic", "prd"}
 
 
 def _labels(issue: IssuePayload) -> set[str]:
@@ -77,14 +78,50 @@ def _has_unresolved_dependency(issue: IssuePayload, closed_numbers: set[int]) ->
     return bool(references - closed_numbers)
 
 
+def _child_numbers(body: str, issue_number: int) -> set[int]:
+    """Extract child issue numbers from checkbox-style references in the body.
+
+    Only matches ``- [ ] #NNN`` or ``- [x] #NNN`` lines, ignoring unrelated
+    issue references such as "Related prior work".
+    """
+    return {
+        int(num)
+        for num in re.findall(r"- \[[ x]\] #(\d+)", body)
+        if int(num) != issue_number
+    }
+
+
+def _is_epic_ready_for_acceptance(issue: IssuePayload, closed_numbers: set[int]) -> bool:
+    """Return whether an epic/PRD issue is ready for product acceptance.
+
+    An epic is ready for acceptance when it has the epic or prd label,
+    all its child issues are closed, and it has not yet been marked done.
+    """
+    labels = _labels(issue)
+    if not (labels & EPIC_ACCEPTANCE_LABELS):
+        return False
+    body = issue.get("body") or ""
+    issue_number = issue["number"]
+    child_nums = _child_numbers(body, issue_number)
+    if not child_nums:
+        return False
+    return child_nums.issubset(closed_numbers)
+
+
 def select_next(issues: list[IssuePayload], closed_numbers: set[int]) -> Candidate | None:
-    """Select the highest-priority pending issue without unresolved dependencies."""
+    """Select the highest-priority pending issue without unresolved dependencies.
+
+    Epics and PRDs are eligible for selection when all their children are closed,
+    making them ready for product-acceptance verification.
+    """
     candidates: list[Candidate] = []
     for issue in issues:
         labels = _labels(issue)
         if "ralph-status:pending" not in labels or labels & EXCLUDED_LABELS:
             continue
         if _has_unresolved_dependency(issue, closed_numbers):
+            continue
+        if labels & EPIC_ACCEPTANCE_LABELS and not _is_epic_ready_for_acceptance(issue, closed_numbers):
             continue
         candidates.append(Candidate(issue=issue, priority=_priority(issue)))
 
@@ -134,6 +171,7 @@ def _run_gh_json(command: list[str], failure_message: str) -> object:
 def _issue_context(issue: IssuePayload, closed_numbers: set[int]) -> str:
     """Render the bounded context an agent needs before starting an issue."""
     body = issue.get("body") or "No issue body was provided."
+    labels = _labels(issue)
     dependencies = sorted(_dependency_numbers(body))
     required_files = sorted(
         {
@@ -150,15 +188,24 @@ def _issue_context(issue: IssuePayload, closed_numbers: set[int]) -> str:
             for number in dependencies
         )
     files_text = ", ".join(required_files) if required_files else "none explicitly named"
-    return "\n".join(
-        [
-            "Scope:",
-            body.strip(),
-            f"Dependencies: {dependency_text}",
-            f"Required files named by issue: {files_text}",
-            "Required verification: follow AGENTS.md and the issue acceptance criteria.",
-        ]
-    )
+
+    lines = [
+        "Scope:",
+        body.strip(),
+        f"Dependencies: {dependency_text}",
+        f"Required files named by issue: {files_text}",
+    ]
+
+    if labels & EPIC_ACCEPTANCE_LABELS:
+        lines.append(
+            "This is a parent PRD/epic ready for product acceptance. "
+            "Read docs/PRODUCT_ACCEPTANCE_PROTOCOL.md for the acceptance workflow. "
+            "Verify each acceptance criterion against integrated current main with evidence."
+        )
+    else:
+        lines.append("Required verification: follow AGENTS.md and the issue acceptance criteria.")
+
+    return "\n".join(lines)
 
 
 def _gh_issue(issue_number: int) -> IssuePayload:

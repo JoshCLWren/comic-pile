@@ -104,6 +104,19 @@ Non-factory agents require Josh's explicit authorization before merging unless h
 
 A green or ready PR must not monopolize a worker. When another executable issue exists, preserve state and return to backlog selection.
 
+## Product acceptance for parent PRDs and epics
+
+When executing or selecting a parent PRD or epic issue (labeled `epic` or `prd`), the following acceptance gate applies in addition to the standard lifecycle:
+
+1. **Pre-acceptance check**: Verify all child issues are closed and no children remain with `ralph-status:pending`, `ralph-status:in-progress`, or `ralph-status:blocked`.
+2. **Acceptance execution**: For each criterion in the parent's acceptance criteria, determine pass/fail/not-applicable with evidence. UI/workflow criteria require focused Chromium/E2E coverage or equivalent reproducible browser verification against integrated current `main`.
+3. **Acceptance report**: Post a durable comment on the parent issue using the `<!-- product-acceptance:v1 -->` marker, listing each criterion's result and evidence.
+4. **Closure or retention**: If all criteria pass, label the parent `ralph-status:done` and close. If any fail, keep the parent open and create or reference executable follow-up issues for the gaps.
+
+Child closure alone does not satisfy parent acceptance. Factory metadata must not close a parent solely because sub-issue completion reaches 100%.
+
+See [`docs/PRODUCT_ACCEPTANCE_PROTOCOL.md`](PRODUCT_ACCEPTANCE_PROTOCOL.md) for the full protocol.
+
 ## Required final issue comment
 
 Before closing an issue, add a concise durable comment containing:
