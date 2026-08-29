@@ -119,6 +119,7 @@ async def test_recompute_creates_inferred_signal_from_confirmed_history(
     )
     row = result.scalar_one_or_none()
     assert row is not None
+    assert row.affinity_estimate is not None
     assert row.affinity_estimate > 0
     assert row.evidence_count == 2
     assert row.distinct_thread_count == 2
@@ -179,6 +180,7 @@ async def test_recompute_preserves_existing_verdict_through_service(
     row = result.scalar_one_or_none()
     assert row is not None
     assert row.user_verdict == "confirmed"
+    assert row.affinity_estimate is not None
     assert row.affinity_estimate > 0.1
     assert row.evidence_count == 3
     assert row.distinct_thread_count == 3
