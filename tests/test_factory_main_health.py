@@ -139,4 +139,10 @@ def test_held_workflow_recovery_is_unbounded_and_observable() -> None:
     assert "now - 3600" not in drain
     assert "Approval errors:" in drain
     assert 'gh workflow run "$workflow_file" --ref "$branch"' in drain
+    assert "actions/workflows/ci.yml/runs?head_sha=${open_head}&per_page=1" in drain
+    assert (
+        "actions/workflows/fixed-model-pr-repair-guard.yml/runs?"
+        "head_sha=${open_head}&per_page=1"
+    ) in drain
+    assert "commits/${open_head}/check-runs" not in drain
     assert "workflow_dispatch:" in guard
