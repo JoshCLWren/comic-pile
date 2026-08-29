@@ -526,6 +526,14 @@ def reconcile_ci_pr(pr_number: int) -> dict[str, Any]:
     checks = required_checks_gate(pr_number)
     if checks["decision"] != "pass":
         status = classify_ci_reconciliation(checks_decision=checks["decision"], authorized=False)
+        if checks["decision"] == "deny":
+            persist_repair_handoff(
+                pr_number=pr_number,
+                findings=str(checks["reason"]),
+                reviewer="controller",
+                note="Required checks failed during CI reconciliation; repair is required.",
+            )
+            status = "changes-requested"
         return {"pr": pr_number, "status": status, "reason": checks["reason"]}
 
     head = str(pr.get("headRefOid") or "")
