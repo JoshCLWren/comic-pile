@@ -146,3 +146,13 @@ def test_held_workflow_recovery_is_unbounded_and_observable() -> None:
     ) in drain
     assert "commits/${open_head}/check-runs" not in drain
     assert "workflow_dispatch:" in guard
+
+
+def test_merge_drain_can_approve_and_dispatch_workflow_recovery() -> None:
+    """The drain token has the least privilege needed for Actions recovery."""
+    drain = (WORKFLOWS / "factory-ready-merge-drain.yml").read_text(encoding="utf-8")
+
+    permissions = drain.split("permissions:", maxsplit=1)[1].split(
+        "concurrency:", maxsplit=1
+    )[0]
+    assert "actions: write" in permissions
