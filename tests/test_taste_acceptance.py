@@ -320,7 +320,7 @@ class TestCriterion3PromptEligibilityGates:
             "evidence_diversity": 3,
         }
         defaults.update(overrides)
-        return EligibilitySignal(**defaults)  # type: ignore[arg-type]
+        return EligibilitySignal.model_validate(defaults)
 
 
 # ---------------------------------------------------------------------------
