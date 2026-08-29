@@ -186,10 +186,21 @@ async def roll_dice(
         )
 
     pool_size = len(bounded_rows)
+    # The active session mode is the durable, user-controlled override. A per-roll
+    # request value wins when supplied; otherwise the session's canonical
+    # active_bandwidth/active_intent drives selection so a manual "random" intent
+    # (or any inferred mode) actually changes this roll. Legacy sessions with null
+    # session mode fall back to the balanced defaults, preserving old behavior.
     selection_bandwidth = (
-        roll_request.bandwidth if roll_request.bandwidth is not None else DEFAULT_BANDWIDTH
+        roll_request.bandwidth
+        if roll_request.bandwidth is not None
+        else (current_session.active_bandwidth or DEFAULT_BANDWIDTH)
     )
-    selection_intent = roll_request.intent if roll_request.intent is not None else DEFAULT_INTENT
+    selection_intent = (
+        roll_request.intent
+        if roll_request.intent is not None
+        else (current_session.active_intent or DEFAULT_INTENT)
+    )
 
     resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent)
 
@@ -709,26 +720,38 @@ async def update_session_mode(
 
     version_tag = f"manual-{int(datetime.now(UTC).timestamp())}"
 
+    changed_dimensions: list[str] = []
+
     if mode_update.bandwidth is not None:
         current_session.active_bandwidth = mode_update.bandwidth
         current_session.predicted_bandwidth = mode_update.bandwidth
         current_session.bandwidth_source = "manual"
+        current_session.bandwidth_confidence = 1.0
         current_session.bandwidth_version = version_tag
         active_bandwidth = mode_update.bandwidth
         predicted_bandwidth = mode_update.bandwidth
         bandwidth_source = "manual"
+        bandwidth_confidence = 1.0
         bandwidth_version = version_tag
+        changed_dimensions.append("bandwidth")
 
     if mode_update.intent is not None:
         current_session.active_intent = mode_update.intent
         current_session.predicted_intent = mode_update.intent
         current_session.intent_source = "manual"
+        current_session.intent_confidence = 1.0
         current_session.intent_version = version_tag
         active_intent = mode_update.intent
         predicted_intent = mode_update.intent
         intent_source = "manual"
+        intent_confidence = 1.0
         intent_version = version_tag
+        changed_dimensions.append("intent")
 
+    # Record a compact, distinguishable mode-change event for later analytics.
+    # The source is always "manual" here, and the changed dimensions and resulting
+    # values are captured so manual overrides are separable from inferred/Snooze
+    # mode changes in the decision history.
     db.add(
         Event(
             session_id=session_id,
@@ -737,6 +760,13 @@ async def update_session_mode(
             selected_thread_id=None,
             thread_id=None,
             issue_id=None,
+            context={
+                "source": "manual",
+                "changed": changed_dimensions,
+                "bandwidth": active_bandwidth,
+                "intent": active_intent,
+                "version": version_tag,
+            },
         )
     )
     await db.commit()
