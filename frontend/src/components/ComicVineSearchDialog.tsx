@@ -55,6 +55,7 @@ export default function ComicVineSearchDialog({
   const [isSearching, setIsSearching] = useState(false)
   const [isConfirming, setIsConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [hasSearched, setHasSearched] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -69,16 +70,21 @@ export default function ComicVineSearchDialog({
       setIssueCandidates([])
       setSelectedIssue(null)
       setError(null)
+      setHasSearched(false)
     }
   }, [isOpen, threadTitle])
+
+  const hasAutoSearchedRef = useRef(false)
 
   const handleSearch = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim()) {
       setSeriesResults([])
+      setHasSearched(false)
       return
     }
     setIsSearching(true)
     setError(null)
+    setHasSearched(true)
     try {
       const response = await comicVineApi.searchSeries(searchQuery.trim(), 10)
       setSeriesResults(response.results)
@@ -90,9 +96,24 @@ export default function ComicVineSearchDialog({
     }
   }, [])
 
+  useEffect(() => {
+    if (isOpen && threadTitle.trim() && !hasAutoSearchedRef.current) {
+      hasAutoSearchedRef.current = true
+      handleSearch(threadTitle)
+    }
+    if (!isOpen) {
+      hasAutoSearchedRef.current = false
+    }
+  }, [isOpen, threadTitle, handleSearch])
+
   const handleQueryChange = useCallback((value: string) => {
     setQuery(value)
     if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!value.trim()) {
+      setHasSearched(false)
+      setSeriesResults([])
+      return
+    }
     debounceRef.current = setTimeout(() => handleSearch(value), 350)
   }, [handleSearch])
 
@@ -210,8 +231,18 @@ export default function ComicVineSearchDialog({
                 ))}
               </div>
             )}
-            {!isSearching && query.trim() && seriesResults.length === 0 && (
+            {!isSearching && !query.trim() && (
               <p className="text-xs text-stone-500 text-center py-4">
+                Type a series name to search ComicVine
+              </p>
+            )}
+            {!isSearching && query.trim() && seriesResults.length === 0 && !hasSearched && (
+              <p className="text-xs text-stone-500 text-center py-4">
+                Search ComicVine for the correct series
+              </p>
+            )}
+            {!isSearching && query.trim() && seriesResults.length === 0 && hasSearched && !error && (
+              <p className="text-xs text-stone-400 text-center py-4">
                 No series found. Try a different search term.
               </p>
             )}
