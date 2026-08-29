@@ -48,7 +48,8 @@ from app.schemas.recommendation_context import (
     RecommendationContextCreate,
 )
 from app.schemas.session import build_session_bandwidth_state
-from app.momentum import MomentumCandidateWeight, weighted_momentum_selection
+from app.momentum import MomentumCandidateWeight
+from app.services.bandwidth_selection import select_bandwidth_weighted
 from comic_pile.queue import get_bounded_roll_pool_rows
 from comic_pile.recommendation_selection import (
     DEFAULT_BANDWIDTH,
@@ -194,6 +195,7 @@ async def roll_dice(
     resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent)
 
     max_bonus = 0.0
+    weights_applied = False
     candidate_weights: list = []
     if resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
         selection = select_from_pool(
@@ -216,26 +218,41 @@ async def roll_dice(
         # get_bounded_roll_pool_rows already applied the die cap, so the contextual
         # weighting below cannot draw from outside the active die pool.
 
-        # Apply momentum weighting; weights fall back to uniform (pure-random)
-        # when no positive momentum applies, preserving the pure-random bypass.
+        # Apply momentum + bandwidth weighting. Bandwidth contributes a neutral
+        # (1.0) factor for balanced/default rolls and for unknown effort, so
+        # those draws stay byte-for-byte identical to the legacy momentum
+        # behavior; light/deep bandwidth reweights candidates inside the pool.
         session_events_result = await db.execute(
             select(Event).where(Event.session_id == current_session_id)
         )
         session_events = list(session_events_result.scalars().all())
 
-        selected_index, max_bonus, candidate_weights = await weighted_momentum_selection(
+        selected = await select_bandwidth_weighted(
             db=db,
             bounded_rows=bounded_rows,
             user_id=user_id,
             session_events=session_events,
+            bandwidth=selection_bandwidth,
+            intent=selection_intent,
             now=datetime.now(UTC),
         )
+        selected_index = selected.selected_index
+        max_bonus = selected.max_bonus
+        candidate_weights = selected.weights
+        weights_applied = selected.weights_applied
+
     # Derive concise, user-facing reason codes from the actual decision-time
-    # selection context. Momentum weighting is applied only when a positive
-    # bonus exists; otherwise the selection is genuinely unweighted/pure-random.
-    recommendation_reason_codes = (
-        ["momentum_weighted"] if max_bonus > 0 else ["pure_random"]
-    )
+    # selection context. A bandwidth-aware draw (light/deep with known effort)
+    # is labeled bandwidth_weighted; a momentum-only draw is momentum_weighted;
+    # otherwise the selection is genuinely unweighted/pure-random.
+    if resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
+        if selection_bandwidth in ("light", "deep"):
+            recommendation_reason_codes = ["bandwidth_weighted"]
+        else:
+            recommendation_reason_codes = ["momentum_weighted"]
+    else:
+        recommendation_reason_codes = ["pure_random"]
+
     selected_thread, unread_count, issue_number = bounded_rows[selected_index]
 
     selected_thread_id = selected_thread.id
@@ -285,6 +302,13 @@ async def roll_dice(
 
     # Extract effort estimate band as string for JSON serialization
     effort_estimate_str = effort_estimate.band if isinstance(effort_estimate, EffortEstimate) else effort_estimate
+
+    if resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
+        selection_method = (
+            "bandwidth" if selection_bandwidth in ("light", "deep") else "momentum"
+        )
+    else:
+        selection_method = "random"
 
     event = Event(
         type="roll",
@@ -345,8 +369,8 @@ async def roll_dice(
         final_weight=candidate_weights[selected_index].weight
         if candidate_weights
         else None,
-        random_bypass=max_bonus <= 0.0,
-        balanced_neutrality=max_bonus <= 0.0,
+        random_bypass=not weights_applied,
+        balanced_neutrality=not weights_applied,
     )
 
     # Flush event to get its ID for the recommendation context FK
