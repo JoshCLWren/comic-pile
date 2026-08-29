@@ -601,7 +601,7 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
     expect(
       geometry.cover!.height,
       'the cover frame must actually consume meaningful vertical space',
-    ).toBeGreaterThanOrEqual(math.floor(0.45 * geometry.viewport.height))
+      ).toBeGreaterThanOrEqual(Math.floor(0.45 * geometry.viewport.height))
 
     assertFitsViewportWidth(geometry)
     assertPillarsDoNotOverlap(geometry)
@@ -705,7 +705,7 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
       await openRatingView(page, thread.id)
       await expect(page.getByText('Idempotentverse #1', { exact: false })).toBeVisible()
       // Even with duplicate seeding the confirmation must not be lost.
-      expect(await visibleElements(page, '[data-testid="comic-cover"]')).toBeGreaterThan(0)
+      expect(await page.locator('[data-testid="comic-cover"]').count()).toBeGreaterThan(0)
     })
   })
 })
