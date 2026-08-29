@@ -657,6 +657,20 @@ class UpstashCache:
         if self._client is None:
             return False
 
+        # Quota guardrail (issue #1751): once observed command usage reaches the
+        # monthly budget, drop a bounded fraction of best-effort value writes so
+        # smoke-test traffic and runaway rollouts cannot silently drain the
+        # provider quota. Generation invalidations never pass through ``set``;
+        # they use ``incr`` so critical freshness is never throttled.
+        from app.cache_quota import should_throttle_cache_write
+
+        if should_throttle_cache_write():
+            logger.warning(
+                "Cache value write smoke-test throttled: monthly command budget "
+                "reached; serving the database-backed path"
+            )
+            return True
+
         try:
             prepared = _prepare_value(value)
             data = json.dumps(

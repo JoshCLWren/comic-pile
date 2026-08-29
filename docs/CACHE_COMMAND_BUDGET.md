@@ -41,3 +41,22 @@ These are cold-cache upper bounds for the production generation-cache command co
 | Continuity mutation | 1 | one user-generation `INCR` invalidation |
 
 The source-of-truth ceilings live in `app/cache_metrics.py` and are exercised by `tests/test_cache_command_budget.py`. If a flow legitimately needs more cache commands, update the implementation, ceiling test, and this document together so budget growth is explicit rather than accidental.
+
+## Guardrail: visible alert + smoke-test throttle (issue #1751)
+
+The guardrail in `app/cache_quota.py` protects the 350,000-command application budget with two reactive boundaries, both driven by the same privacy-safe aggregate counter in `app/cache_metrics.py`:
+
+| Band | Trigger | Behavior |
+| --- | --- | --- |
+| Alert | observed usage reaches **80%** of budget (280,000 / 350,000) | One-shot visible alert (structured warning log plus `alerted: true` in the health snapshot) |
+| Throttle | observed usage reaches the **350,000** hard budget | A bounded fraction (default 50%) of best-effort value writes is smoke-test dropped so the request serves the database-backed path instead |
+
+Rules:
+
+- **Alerting is one-shot and re-arms.** The alert fires once when usage first crosses the 80% band and is re-armed only after usage falls back under it (for example, a new billing month). It never spams every request.
+- **Throttling is bounded, not total.** Half of best-effort value writes fall through the provider while the other half fail open to the database, keeping warm-read effectiveness partially available instead of turning caching into a hard outage.
+- **Critical invalidations are never throttled.** Generation `INCR` (bump) commands — required for cache freshness — bypass the guardrail entirely. Only non-essential value writes are dropped.
+- **Fail open by default.** A throttled write returns the same success path as a normal write; callers fall back to their database/service path. Cache is an optional performance layer, never a correctness dependency (see `docs/CACHE_REENABLE_DECISION.md`).
+- **Operator visibility.** The bounded `GET /api/v1/health/cache-quota` probe (health token required, no database connection) reports `status` (`ok` / `near-limit` / `over-budget`), `observed_commands`, `budget`, `remaining`, `usage_ratio`, `alerted`, and `throttling`.
+
+Configuration constants live in `app/cache_quota.py` (`DEFAULT_ALERT_FRACTION = 0.8`, `DEFAULT_SMOKE_TEST_DROP_RATE = 0.5`, `BUDGETED_COMMANDS_PER_MONTH = 350_000`). Policy is exercised by `tests/test_cache_quota.py`.
