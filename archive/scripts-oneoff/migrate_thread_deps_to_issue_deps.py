@@ -10,7 +10,7 @@ Run this script BEFORE applying the Alembic migration that drops the
 source_thread_id / target_thread_id columns.
 
 Usage:
-    python -m scripts.migrate_thread_deps_to_issue_deps
+    python archive/scripts-oneoff/migrate_thread_deps_to_issue_deps.py
 """
 
 import asyncio

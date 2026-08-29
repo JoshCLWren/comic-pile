@@ -1,4 +1,4 @@
-"""Regression tests for fix_stale_blocked_flags script.
+"""Regression tests for archive/scripts-oneoff/fix_stale_blocked_flags.py script.
 
 Verifies that refresh_user_blocked_status (the core of the script) correctly
 recalculates stale is_blocked flags after the next-unread-only blocking logic:

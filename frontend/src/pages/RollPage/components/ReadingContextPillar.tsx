@@ -10,6 +10,8 @@ import { ReadingRouteExplanation } from './ReadingRouteExplanation'
 import { ReadingPathPanel } from './ReadingPathPanel'
 import { useContinuityReadiness } from '../../../hooks/useContinuityReadiness'
 import { readingContextType } from '../readingContextTypography'
+import { hasReadingContextContent } from '../readingContextContent'
+import { ReadingContextStatusCard } from './ReadingContextStatusCard'
 
 interface ReadingContextPillarProps {
   activeRatingThread: RatingThread | null
@@ -148,6 +150,18 @@ export function ReadingContextPillar({
         {copy}
       </div>
     )
+  }
+
+  const hasContent = hasReadingContextContent(readingOrders, connectedThreads, readerContext)
+
+  if (!hasContent) {
+    if (isReaderContextLoading) {
+      return <ReadingContextStatusCard isLoading error={readerContextError} />
+    }
+    if (readerContextError) {
+      return <ReadingContextStatusCard isLoading={false} error={readerContextError} />
+    }
+    return null
   }
 
   return (
@@ -333,23 +347,9 @@ export function ReadingContextPillar({
       )}
 
       {isReaderContextLoading && !readerContext ? (
-        <div className="space-y-2 rounded-2xl p-3" style={{ border: '1px solid rgba(6,182,212,0.1)', backgroundColor: 'rgba(6, 182, 212, 0.04)' }}>
-          <div className="h-3 w-24 animate-pulse rounded bg-white/5" />
-          <div className="h-5 w-16 animate-pulse rounded bg-white/5" />
-        </div>
+        <ReadingContextStatusCard isLoading error={readerContextError} />
       ) : readerContextError && !readerContext ? (
-        <section aria-labelledby="reader-context-unavailable-heading" className="rounded-2xl p-3" style={{ border: '1px solid rgba(6,182,212,0.3)', backgroundColor: 'rgba(6, 182, 212, 0.09)' }}>
-          <h3
-            id="reader-context-unavailable-heading"
-            className="font-bold text-rose-300"
-            style={readingContextType('sectionHeading')}
-          >
-            Local reading context unavailable
-          </h3>
-          <p className="mt-1 text-stone-400" style={readingContextType('bodyCopy')}>
-            {readerContextError}
-          </p>
-        </section>
+        <ReadingContextStatusCard isLoading={false} error={readerContextError} />
       ) : null}
 
       {readerContext && (dependencyEdges.length > 0 || continuityEdges.length > 0) && (

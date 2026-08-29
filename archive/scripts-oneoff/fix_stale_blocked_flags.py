@@ -7,7 +7,7 @@ instead of all issues, but the denormalized is_blocked column on Thread was neve
 recalculated for existing rows.  Run this once against production after deploy.
 
 Usage:
-    python -m scripts.fix_stale_blocked_flags
+    python archive/scripts-oneoff/fix_stale_blocked_flags.py
 """
 
 import asyncio

@@ -5,10 +5,13 @@ import pytest
 from app.config import RedisSettings
 
 
-def test_redis_cache_ttl_defaults_are_three_times_the_original_values(
+def test_redis_cache_ttl_defaults_reduce_churn_for_reenable_evaluation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Use longer cache tiers by default to reduce repeated database work.
+
+    The tuned tiers (2:6:15 minutes) cut cache-command churn versus the original
+    30/60/120 defaults while generation invalidation keeps user data fresh.
 
     Args:
         monkeypatch: Pytest fixture used to remove cache TTL environment overrides.
@@ -22,9 +25,9 @@ def test_redis_cache_ttl_defaults_are_three_times_the_original_values(
 
     settings = RedisSettings()
 
-    assert settings.cache_ttl_short == 90
-    assert settings.cache_ttl_medium == 180
-    assert settings.cache_ttl_long == 360
+    assert settings.cache_ttl_short == 120
+    assert settings.cache_ttl_medium == 360
+    assert settings.cache_ttl_long == 900
 
 
 def test_redis_cache_ttl_environment_overrides_are_preserved(
