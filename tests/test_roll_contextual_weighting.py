@@ -348,6 +348,7 @@ async def test_light_bandwidth_roll_persists_bandwidth_context(
     context = context_result.scalar_one()
     assert context.random_bypass is False
     assert context.balanced_neutrality is False
+    assert context.candidate_factors is not None
 
     factors = {factor["candidate_id"]: factor for factor in context.candidate_factors}
     assert set(factors) == {light.id, medium.id}
