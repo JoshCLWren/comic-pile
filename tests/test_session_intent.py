@@ -1,6 +1,6 @@
 """Tests for ephemeral session reading-intent state (issue #1728)."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -281,7 +281,7 @@ async def test_new_session_defaults_intent_to_null_not_thread_affinity(
     stale = SessionModel(
         start_die=6,
         user_id=default_user.id,
-        started_at=datetime.now(UTC),
+        started_at=datetime.now(UTC) - timedelta(hours=8),
         active_intent="momentum",
         predicted_intent="momentum",
         intent_source="manual",
@@ -291,6 +291,10 @@ async def test_new_session_defaults_intent_to_null_not_thread_affinity(
 
     created = await get_or_create(async_db, user_id=default_user.id)
     assert created.id != stale.id
+    # The stale row keeps its own state; nothing leaks across sessions.
+    assert stale.active_intent == "momentum"
+    assert stale.intent_source == "manual"
+    # The fresh session starts with no inherited reading intent.
     assert created.active_intent is None
     assert created.predicted_intent is None
     assert created.intent_source is None
