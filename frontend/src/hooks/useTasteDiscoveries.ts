@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   tasteApi,
   type TasteDiscovery,
   type TasteVerdict,
 } from '../services/api-taste'
+import { queryKeys } from '../query/queryKeys'
 
 interface TasteDiscoveriesState {
   discoveries: TasteDiscovery[]
@@ -18,44 +20,28 @@ interface TasteDiscoveriesState {
  * hidden so rolling and rating are never interrupted.
  */
 export function useTasteDiscoveries() {
-  const [state, setState] = useState<TasteDiscoveriesState>({
-    discoveries: [],
-    isLoading: true,
+  const { data, isPending } = useQuery({
+    queryKey: queryKeys.taste.discoveries(),
+    queryFn: () => tasteApi.getDiscoveries(),
+    initialData: { discoveries: [] } as { discoveries: TasteDiscovery[] },
   })
+
+  const [dismissed, setDismissed] = useState<Set<number>>(new Set())
   const pendingIdsRef = useRef(new Set<number>())
 
-  useEffect(() => {
-    let isCurrent = true
-
-    setState({ discoveries: [], isLoading: true })
-    tasteApi
-      .getDiscoveries()
-      .then((response) => {
-        if (isCurrent) {
-          setState({ discoveries: response.discoveries, isLoading: false })
-        }
-      })
-      .catch(() => {
-        if (isCurrent) {
-          setState({ discoveries: [], isLoading: false })
-        }
-      })
-
-    return () => {
-      isCurrent = false
-    }
-  }, [])
+  const discoveries = (data?.discoveries ?? []).filter((item) => !dismissed.has(item.id))
 
   const removeCurrent = useCallback((signalId: number) => {
-    setState((previous) => ({
-      ...previous,
-      discoveries: previous.discoveries.filter((item) => item.id !== signalId),
-    }))
+    setDismissed((previous) => {
+      const next = new Set(previous)
+      next.add(signalId)
+      return next
+    })
   }, [])
 
   const respond = useCallback(
     async (verdict: TasteVerdict): Promise<boolean> => {
-      const current = state.discoveries[0]
+      const current = discoveries[0]
       if (!current || pendingIdsRef.current.has(current.id)) return false
 
       pendingIdsRef.current.add(current.id)
@@ -70,28 +56,31 @@ export function useTasteDiscoveries() {
         pendingIdsRef.current.delete(current.id)
       }
     },
-    [state.discoveries, removeCurrent],
+    [discoveries, removeCurrent],
   )
 
-  const dismiss = useCallback(async (): Promise<boolean> => {
-    const current = state.discoveries[0]
-    if (!current || pendingIdsRef.current.has(current.id)) return false
+  const dismiss = useCallback(
+    async (): Promise<boolean> => {
+      const current = discoveries[0]
+      if (!current || pendingIdsRef.current.has(current.id)) return false
 
-    pendingIdsRef.current.add(current.id)
-    try {
-      await tasteApi.dismiss(current.id)
-      removeCurrent(current.id)
-      return true
-    } catch {
-      return false
-    } finally {
-      pendingIdsRef.current.delete(current.id)
-    }
-  }, [state.discoveries, removeCurrent])
+      pendingIdsRef.current.add(current.id)
+      try {
+        await tasteApi.dismiss(current.id)
+        removeCurrent(current.id)
+        return true
+      } catch {
+        return false
+      } finally {
+        pendingIdsRef.current.delete(current.id)
+      }
+    },
+    [discoveries, removeCurrent],
+  )
 
   return {
-    current: state.discoveries.length > 0 ? state.discoveries[0] : null,
-    isLoading: state.isLoading,
+    current: discoveries.length > 0 ? discoveries[0] : null,
+    isLoading: isPending,
     respond,
     dismiss,
   }

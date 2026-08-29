@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api'
+import { queryKeys } from '../query/queryKeys'
 
 interface ComicVineIssueIntelligenceState {
   metadata: ComicVineIssueIntelligence | null
@@ -10,31 +11,18 @@ interface ComicVineIssueIntelligenceState {
 export function useComicVineIssueIntelligence(
   issueId: number | null | undefined,
 ): ComicVineIssueIntelligenceState {
-  const [metadata, setMetadata] = useState<ComicVineIssueIntelligence | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [refreshCounter, setRefreshCounter] = useState(0)
+  const { data, isPending, refetch } = useQuery({
+    queryKey: issueId ? queryKeys.comicVine.issueIntelligence(issueId) : [],
+    queryFn: () => comicVineApi.getIssueIntelligence(issueId!),
+    enabled: !!issueId,
+    initialData: null as ComicVineIssueIntelligence | null,
+  })
 
-  useEffect(() => {
-    let active = true
-    setMetadata(null)
-    if (!issueId) return () => { active = false }
-
-    setIsLoading(true)
-    comicVineApi.getIssueIntelligence(issueId)
-      .then((result) => {
-        if (active) setMetadata(result)
-      })
-      .catch(() => {
-        if (active) setMetadata(null)
-      })
-      .finally(() => {
-        if (active) setIsLoading(false)
-      })
-
-    return () => { active = false }
-  }, [issueId, refreshCounter])
-
-  const refetch = useCallback(() => setRefreshCounter((counter) => counter + 1), [])
-
-  return { metadata, isLoading, refetch }
+  return {
+    metadata: data ?? null,
+    isLoading: isPending,
+    refetch: () => {
+      void refetch()
+    },
+  }
 }

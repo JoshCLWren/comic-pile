@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   continuityPlansApi,
   type ContinuityPlanReadinessResponse,
 } from '../services/api-continuity-plans'
+import { queryKeys } from '../query/queryKeys'
 
 interface PlanReadinessState {
   readiness: ContinuityPlanReadinessResponse | null
@@ -22,47 +24,39 @@ export function usePlanReadiness(
   planId: number | null | undefined,
   refreshKey = 0,
 ): PlanReadinessState {
-  const [state, setState] = useState(EMPTY_STATE)
-  const [attempt, setAttempt] = useState(0)
-  const refetch = useCallback(() => setAttempt((value) => value + 1), [])
+  const isValid = planId != null && Number.isInteger(planId) && planId > 0
+  const { data, isPending, error, refetch } = useQuery({
+    queryKey: isValid ? queryKeys.plans.readiness(planId, refreshKey) : [],
+    queryFn: async () => {
+      try {
+        return await continuityPlansApi.readiness(planId!)
+      } catch (reason) {
+        throw reason instanceof Error ? reason : new Error('Unable to load plan readiness')
+      }
+    },
+    enabled: isValid,
+    initialData: null as ContinuityPlanReadinessResponse | null,
+  })
 
   useEffect(() => {
-    if (planId == null || !Number.isInteger(planId) || planId <= 0) {
-      setState({ ...EMPTY_STATE, refetch })
-      return
-    }
-
-    let isCurrent = true
-    setState((current) => ({ ...current, isLoading: true, error: null }))
-
-    continuityPlansApi
-      .readiness(planId)
-      .then((readiness) => {
-        if (isCurrent) {
-          setState({ readiness, isLoading: false, error: null, refetch })
-        }
-      })
-      .catch((reason: unknown) => {
-        if (isCurrent) {
-          const error =
-            reason instanceof Error ? reason : new Error('Unable to load plan readiness')
-          setState({ readiness: null, isLoading: false, error, refetch })
-        }
-      })
-
-    return () => {
-      isCurrent = false
-    }
-  }, [attempt, planId, refetch, refreshKey])
-
-  useEffect(() => {
-    if (planId == null) return
+    if (!isValid) return
     const onVisible = () => {
-      if (document.visibilityState === 'visible') refetch()
+      if (document.visibilityState === 'visible') {
+        void refetch()
+      }
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [planId, refetch])
+  }, [isValid, refetch])
 
-  return state
+  if (!isValid) return EMPTY_STATE
+
+  return {
+    readiness: data ?? null,
+    isLoading: isPending,
+    error: (error as Error | null) ?? null,
+    refetch: () => {
+      void refetch()
+    },
+  }
 }

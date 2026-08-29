@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   dependencyGroupsApi,
   type DependencyGroupSummary,
 } from '../services/api-dependency-groups'
+import { queryKeys } from '../query/queryKeys'
 
 interface CrossoverGroupsState {
   groupsByThreadId: Record<number, DependencyGroupSummary[]>
@@ -72,45 +74,28 @@ export function useCrossoverGroups(threadIds: number[]): CrossoverGroupsState {
     () => [...new Set(threadIds)].sort((a, b) => a - b).join(','),
     [threadIds],
   )
-  const [state, setState] = useState<CrossoverGroupsState>({
-    groupsByThreadId: EMPTY_GROUPS,
-    isPending: requestKey.length > 0,
-    error: null,
+  const requestedThreadIds = requestKey ? requestKey.split(',').map((threadId) => Number(threadId)) : []
+
+  const { data, isPending, error } = useQuery({
+    queryKey: requestedThreadIds.length > 0 ? queryKeys.crossover.groups(requestedThreadIds) : [],
+    queryFn: async () => {
+      try {
+        return await requestCrossoverGroups(requestedThreadIds)
+      } catch (err) {
+        throw err instanceof Error ? err : new Error('Failed to load crossovers')
+      }
+    },
+    enabled: requestedThreadIds.length > 0,
+    initialData: EMPTY_GROUPS,
   })
 
-  useEffect(() => {
-    let cancelled = false
-    const requestedThreadIds = requestKey
-      ? requestKey.split(',').map((threadId) => Number(threadId))
-      : []
+  if (requestedThreadIds.length === 0) {
+    return { groupsByThreadId: EMPTY_GROUPS, isPending: false, error: null }
+  }
 
-    if (requestedThreadIds.length === 0) {
-      setState({ groupsByThreadId: EMPTY_GROUPS, isPending: false, error: null })
-      return () => {
-        cancelled = true
-      }
-    }
-
-    setState((current) => ({ ...current, isPending: true, error: null }))
-
-    requestCrossoverGroups(requestedThreadIds)
-      .then((groupsByThreadId) => {
-        if (cancelled) return
-        setState({ groupsByThreadId, isPending: false, error: null })
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return
-        setState({
-          groupsByThreadId: EMPTY_GROUPS,
-          isPending: false,
-          error: error instanceof Error ? error : new Error('Failed to load crossovers'),
-        })
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [requestKey])
-
-  return state
+  return {
+    groupsByThreadId: data ?? EMPTY_GROUPS,
+    isPending,
+    error: (error as Error | null) ?? null,
+  }
 }

@@ -1,5 +1,45 @@
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
+import { createElement } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+// The real application mounts a single QueryClientProvider at the root
+// (see App.tsx). Unit tests render isolated components, so provide a provider
+// for every render to mirror production. A fresh client per render keeps
+// tests isolated; any test-supplied wrapper is composed inside it.
+vi.mock('@testing-library/react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@testing-library/react')>()
+  const makeWrapper = (innerWrapper?: (props: { children: unknown }) => JSX.Element) => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    return ({ children }: { children: unknown }) =>
+      createElement(
+        QueryClientProvider,
+        { client },
+        innerWrapper ? createElement(innerWrapper, null, children) : children,
+      )
+  }
+
+  return {
+    ...actual,
+    render: (ui: Parameters<typeof actual.render>[0], options?: Record<string, unknown>) => {
+      const wrapper = options?.wrapper as
+        | ((props: { children: unknown }) => JSX.Element)
+        | undefined
+      return actual.render(ui, { ...options, wrapper: makeWrapper(wrapper) })
+    },
+    renderHook: (
+      callback: Parameters<typeof actual.renderHook>[0],
+      options?: Record<string, unknown>,
+    ) => {
+      const wrapper = options?.wrapper as
+        | ((props: { children: unknown }) => JSX.Element)
+        | undefined
+      return actual.renderHook(callback, { ...options, wrapper: makeWrapper(wrapper) })
+    },
+  }
+})
 
 // Ensure globals exist before user-event and other libraries access them
 if (typeof global.window === 'undefined') {
