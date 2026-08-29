@@ -270,6 +270,13 @@ async def roll_dice(
         else None,
         random_bypass=max_bonus <= 0.0,
         balanced_neutrality=max_bonus <= 0.0,
+        effort_minutes=round(selected_effort_estimate.minutes, 2)
+        if selected_effort_estimate.minutes is not None
+        else None,
+        effort_band=selected_effort_estimate.band,
+        effort_source=selected_effort_estimate.source.value,
+        effort_confidence=round(selected_effort_estimate.confidence, 3),
+        effort_sample_count=selected_effort_estimate.sample_count,
     )
 
     # Flush event to get its ID for the recommendation context FK

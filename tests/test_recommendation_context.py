@@ -62,7 +62,7 @@ async def test_roll_creates_recommendation_context(
     # Verify balanced neutrality is explicit
     assert context.balanced_neutrality is True
     # Verify schema version
-    assert context.schema_version == 1
+    assert context.schema_version == 2
     # Verify intent is balanced (default for random selection)
     assert context.intent == "balanced"
     assert context.intent_source == "default"
@@ -238,11 +238,11 @@ async def test_recommendation_context_schema_versioning(
     assert context is not None
 
     # Verify schema version is recorded
-    assert context.schema_version == 1
+    assert context.schema_version == 2
 
     # Verify the context can be read as a response schema
     response_data = RecommendationContextResponse.model_validate(context)
-    assert response_data.schema_version == 1
+    assert response_data.schema_version == 2
     assert response_data.intent == "balanced"
     assert response_data.random_bypass is True
     assert response_data.balanced_neutrality is True
