@@ -53,27 +53,27 @@ def test_effective_provider_prefers_upstash_regardless_of_dev_flag() -> None:
     assert settings.effective_provider == "redis"
 
 
-def test_upstash_initialize_refuses_local_url_without_allow_local() -> None:
+async def test_upstash_initialize_refuses_local_url_without_allow_local() -> None:
     """The transport refuses a local URL unless allow_local is explicit."""
     backend = _fresh_upstash()
 
     with pytest.raises(ValueError, match="CACHE_LOCAL_REDIS_DEV"):
-        backend.initialize(local_url="redis://localhost:6379/0", allow_local=False)
+        await backend.initialize(local_url="redis://localhost:6379/0", allow_local=False)
 
 
-def test_upstash_initialize_accepts_local_url_with_allow_local() -> None:
+async def test_upstash_initialize_accepts_local_url_with_allow_local() -> None:
     """allow_local=True permits the dev-only local Redis transport."""
     backend = _fresh_upstash()
 
-    backend.initialize(local_url="redis://localhost:6379/0", allow_local=True)
+    await backend.initialize(local_url="redis://localhost:6379/0", allow_local=True)
 
     assert backend.is_initialized
     assert backend._is_upstash is False
 
 
-def test_router_configure_refuses_local_redis_without_allow_local() -> None:
+async def test_router_configure_refuses_local_redis_without_allow_local() -> None:
     """CacheRouter.configure propagates the dev-flag gate to the transport."""
     router = CacheRouter()
 
     with pytest.raises(ValueError):
-        router.configure("redis", local_url="redis://localhost:6379/0")
+        await router.configure("redis", local_url="redis://localhost:6379/0")
