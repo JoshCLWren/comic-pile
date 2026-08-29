@@ -1,8 +1,8 @@
 """Add reading-effort estimate fields to recommendation_contexts.
 
-Revision ID: a1b2c3d4e5f6
-Revises: d3a1c2b4e5f6
-Create Date: 2026-08-28 14:08:00.000000
+Revision ID: d3b4e6f8a0c2
+Revises: 05f8245be921
+Create Date: 2026-08-29 00:00:00.000000
 
 """
 
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "a1b2c3d4e5f6"
-down_revision: str | Sequence[str] | None = "d3a1c2b4e5f6"
+revision: str = "d3b4e6f8a0c2"
+down_revision: str | Sequence[str] | None = "05f8245be921"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

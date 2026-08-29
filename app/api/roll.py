@@ -243,7 +243,7 @@ async def roll_dice(
     # from persisted data alone.
     has_explicit_mode = bool(current_session.active_intent)
     context_data = RecommendationContextCreate(
-        schema_version=1,
+        schema_version=2,
         intent=normalize_intent(selection_intent).value,
         intent_source=current_session.intent_source or "default",
         intent_confidence=1.0 if has_explicit_mode else 0.0,
@@ -290,6 +290,11 @@ async def roll_dice(
         final_weight=context_data.final_weight,
         random_bypass=context_data.random_bypass,
         balanced_neutrality=context_data.balanced_neutrality,
+        effort_minutes=context_data.effort_minutes,
+        effort_band=context_data.effort_band,
+        effort_source=context_data.effort_source,
+        effort_confidence=context_data.effort_confidence,
+        effort_sample_count=context_data.effort_sample_count,
     )
     db.add(rec_context)
     if current_session:
@@ -490,6 +495,11 @@ async def override_roll(
         final_weight=context_data.final_weight,
         random_bypass=context_data.random_bypass,
         balanced_neutrality=context_data.balanced_neutrality,
+        effort_minutes=context_data.effort_minutes,
+        effort_band=context_data.effort_band,
+        effort_source=context_data.effort_source,
+        effort_confidence=context_data.effort_confidence,
+        effort_sample_count=context_data.effort_sample_count,
     )
     db.add(rec_context)
 
