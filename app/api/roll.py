@@ -69,10 +69,10 @@ logger = logging.getLogger(__name__)
 
 def _get_local_hour_from_timezone(timezone: str | None) -> int | None:
     """Derive local hour from session timezone for recommendation context.
-    
+
     Args:
         timezone: IANA timezone string (e.g., "America/Chicago")
-        
+
     Returns:
         Local hour (0-23) or None if timezone is invalid/unavailable.
     """
@@ -98,7 +98,7 @@ def _build_rolling_recommendation_context(
     effort_estimate: str | None = None,
 ) -> dict[str, object]:
     """Build the rolling recommendation context snapshot for a roll event.
-    
+
     Args:
         die_size: Current die size at roll time
         selected_queue_position: Selected thread queue position at roll time
@@ -109,12 +109,12 @@ def _build_rolling_recommendation_context(
         selected_thread_last_rating: Last rating of selected thread at decision time
         selected_thread_last_activity_at: Last activity timestamp of selected thread
         effort_estimate: Optional effort estimate if available
-        
+
     Returns:
         Dictionary suitable for JSON storage as rolling_recommendation_context
     """
     local_hour = _get_local_hour_from_timezone(session_timezone)
-    
+
     return {
         "schema_version": 1,
         "algorithm_version": "legacy",

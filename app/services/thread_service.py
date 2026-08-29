@@ -85,7 +85,7 @@ async def thread_to_response(
     issues_remaining_map: dict[int, int] | None = None,
 ) -> ThreadResponse:
     """Convert Thread model to ThreadResponse.
-    
+
     Args:
         thread: Thread model instance.
         db: Database session for computing issues_remaining (fallback only).
@@ -95,7 +95,7 @@ async def thread_to_response(
             When provided and the thread uses issue tracking, avoids a per-thread
             COUNT query. Single-thread callers may omit this to use the per-row
             fallback.
-    
+
     Returns:
         ThreadResponse schema.
     """
@@ -116,7 +116,7 @@ async def thread_to_response(
             next_issue = await issue_repository.get_issue(db, next_unread_issue_id)
             if next_issue:
                 next_unread_issue_number = next_issue.issue_number
-    
+
     return ThreadResponse(
         id=thread.id,
         title=thread.title,
@@ -163,14 +163,14 @@ async def threads_to_responses(threads: list[Thread], db: AsyncSession) -> list[
 
 def to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
     """Convert a full ThreadResponse to a narrow QueueThreadListItem.
-    
+
     Deliberately drops detail-only fields (last_rating, is_test,
     reading_progress, next_unread_issue_id) to reduce payload size for list
     views.
-    
+
     Args:
         tr: Full thread response.
-    
+
     Returns:
         Narrow list-item projection of the thread response.
     """
@@ -285,11 +285,11 @@ async def list_queue_threads(
 
 async def completed_threads_html(db: AsyncSession, user_id: int) -> str:
     """Render completed threads as option elements for the reactivation modal.
-    
+
     Args:
         db: Database session.
         user_id: Owner of the threads.
-    
+
     Returns:
         HTML string with option elements for completed threads.
     """
@@ -328,22 +328,22 @@ async def create_thread_with_retry(
     db: AsyncSession, user_id: int, thread_data: ThreadCreate
 ) -> ThreadResponse:
     """Create a new thread at the end of the user's queue with deadlock retry.
-    
+
     Args:
         db: Database session.
         user_id: Owner of the new thread.
         thread_data: Thread creation data.
-    
+
     Returns:
         ThreadResponse with created thread details.
-    
+
     Raises:
         RuntimeError: If creation keeps deadlocking past the retry budget.
     """
     max_retries = 3
     initial_delay = 0.1
     retries = 0
-    
+
     while retries < max_retries:
         try:
             max_position = await thread_repository.max_queue_position(db, user_id)
@@ -362,7 +362,7 @@ async def create_thread_with_retry(
             await thread_repository.insert_thread(db, new_thread)
             await db.commit()
             await db.refresh(new_thread)
-            
+
             await invalidate_user_view(user_id)
             return await thread_to_response(new_thread, db)
         except OperationalError as e:
@@ -375,7 +375,7 @@ async def create_thread_with_retry(
                 await asyncio.sleep(delay)
             else:
                 raise
-    
+
     raise RuntimeError(f"Failed to create thread after {max_retries} retries")
 
 
@@ -439,7 +439,7 @@ async def update_thread(
         thread.is_test = thread_data.is_test
     await db.commit()
     await db.refresh(thread)
-    
+
     await invalidate_user_view(user_id)
     return await thread_to_response(thread, db)
 
