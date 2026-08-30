@@ -90,13 +90,22 @@ const SCENARIOS: Scenario[] = [
     checkBlankRegions: false,
   },
   {
+    name: 'continuity-planner',
+    route: '/continuity-plans/new',
+    checkBlankRegions: true,
+    prepare: async (page) => {
+      await expect(page.getByRole('heading', { name: 'Sequential planner' })).toBeVisible()
+    },
+  },
+  {
     name: 'manual-picker-dialog',
     route: '/',
     checkBlankRegions: false,
     prepare: openManualPicker,
     afterCapture: async (page) => {
-      await page.getByRole('dialog', { name: 'Pick manually' }).getByRole('button', { name: 'Close modal' }).click()
-      await expect(page.getByRole('dialog', { name: 'Pick manually' })).toBeHidden()
+      const dialog = page.getByRole('dialog', { name: 'Pick manually' })
+      await dialog.getByRole('button', { name: 'Close modal' }).click()
+      await expect(dialog).toBeHidden()
     },
   },
 ]

@@ -68,21 +68,9 @@ export async function captureRenderedAudit(
     const findings: AuditFinding[] = []
     const viewportWidth = window.innerWidth
     const viewportHeight = window.innerHeight
-    const doc = document.documentElement
+    const documentElement = document.documentElement
 
-    const rectOf = (element: Element) => {
-      const rect = element.getBoundingClientRect()
-      return {
-        top: Math.round(rect.top * 10) / 10,
-        right: Math.round(rect.right * 10) / 10,
-        bottom: Math.round(rect.bottom * 10) / 10,
-        left: Math.round(rect.left * 10) / 10,
-        width: Math.round(rect.width * 10) / 10,
-        height: Math.round(rect.height * 10) / 10,
-      }
-    }
-
-    const isVisible = (element: HTMLElement) => {
+    const isVisible = (element: HTMLElement): boolean => {
       const style = window.getComputedStyle(element)
       const rect = element.getBoundingClientRect()
       return style.display !== 'none'
@@ -92,19 +80,28 @@ export async function captureRenderedAudit(
         && rect.height > 1
     }
 
-    const describe = (element: HTMLElement) => {
+    const describe = (element: HTMLElement): string => {
       const role = element.getAttribute('role')
-      const aria = element.getAttribute('aria-label')
+      const ariaLabel = element.getAttribute('aria-label')
       const testId = element.getAttribute('data-testid')
-      const text = (element.innerText || element.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80)
-      const identity = [
+      const text = (element.innerText || element.textContent || '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 80)
+      return [
         element.tagName.toLowerCase(),
         role ? `role=${role}` : '',
-        aria ? `aria-label=${aria}` : '',
+        ariaLabel ? `aria-label=${ariaLabel}` : '',
         testId ? `data-testid=${testId}` : '',
         text ? `text=${JSON.stringify(text)}` : '',
-      ].filter(Boolean)
-      return identity.join(' ')
+      ].filter(Boolean).join(' ')
+    }
+
+    const round = (value: number): number => Math.round(value * 10) / 10
+    const intersection = (first: DOMRect, second: DOMRect) => {
+      const width = Math.max(0, Math.min(first.right, second.right) - Math.max(first.left, second.left))
+      const height = Math.max(0, Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top))
+      return { width, height, area: width * height }
     }
 
     const addFinding = (
@@ -112,7 +109,7 @@ export async function captureRenderedAudit(
       message: string,
       elements: HTMLElement[],
       measurements: AuditFinding['measurements'],
-    ) => {
+    ): void => {
       if (findings.length >= 100) return
       findings.push({
         kind,
@@ -123,22 +120,17 @@ export async function captureRenderedAudit(
       })
     }
 
-    if (doc.scrollWidth > viewportWidth + 2) {
-      addFinding(
-        'horizontal-overflow',
-        'The rendered document is wider than the viewport.',
-        [document.body],
-        {
-          scrollWidth: doc.scrollWidth,
-          viewportWidth,
-          overflowPx: doc.scrollWidth - viewportWidth,
-        },
-      )
+    if (documentElement.scrollWidth > viewportWidth + 2) {
+      addFinding('horizontal-overflow', 'The rendered document is wider than the viewport.', [document.body], {
+        scrollWidth: documentElement.scrollWidth,
+        viewportWidth,
+        overflowPx: documentElement.scrollWidth - viewportWidth,
+      })
     }
 
     const meaningful = Array.from(document.querySelectorAll<HTMLElement>(
-      'main, main h1, main h2, main h3, main button, main a, main input, main select, main textarea, main [role="button"], main [role="dialog"]',
-    )).filter(isVisible).slice(0, 160)
+      'main, main h1, main h2, main h3, main button, main a, main input, main select, main textarea, main [role="button"], [role="dialog"]',
+    )).filter(isVisible).slice(0, 180)
 
     const chrome = Array.from(document.querySelectorAll<HTMLElement>('body *'))
       .filter((element) => {
@@ -146,77 +138,59 @@ export async function captureRenderedAudit(
         const position = window.getComputedStyle(element).position
         return position === 'fixed' || position === 'sticky'
       })
-      .slice(0, 40)
+      .slice(0, 50)
 
     for (const overlay of chrome) {
       const overlayRect = overlay.getBoundingClientRect()
       for (const target of meaningful) {
         if (overlay === target || overlay.contains(target) || target.contains(overlay)) continue
-        const targetRect = target.getBoundingClientRect()
-        const overlapWidth = Math.max(0, Math.min(overlayRect.right, targetRect.right) - Math.max(overlayRect.left, targetRect.left))
-        const overlapHeight = Math.max(0, Math.min(overlayRect.bottom, targetRect.bottom) - Math.max(overlayRect.top, targetRect.top))
-        const overlapArea = overlapWidth * overlapHeight
-        if (overlapArea < 64) continue
-        addFinding(
-          'chrome-overlap',
-          'Fixed or sticky chrome intersects meaningful page content.',
-          [overlay, target],
-          {
-            overlapWidth: Math.round(overlapWidth * 10) / 10,
-            overlapHeight: Math.round(overlapHeight * 10) / 10,
-            overlapArea: Math.round(overlapArea),
-            chromePosition: window.getComputedStyle(overlay).position,
-          },
-        )
+        const overlap = intersection(overlayRect, target.getBoundingClientRect())
+        if (overlap.area < 64) continue
+        addFinding('chrome-overlap', 'Fixed or sticky chrome intersects meaningful page content.', [overlay, target], {
+          overlapWidth: round(overlap.width),
+          overlapHeight: round(overlap.height),
+          overlapArea: Math.round(overlap.area),
+          chromePosition: window.getComputedStyle(overlay).position,
+        })
         break
       }
     }
 
-    const candidateChildren = Array.from(document.querySelectorAll<HTMLElement>(
-      'main button, main a, main input, main select, main textarea, main [role="button"], [role="dialog"] button, [role="dialog"] input, [role="dialog"] select',
-    )).filter(isVisible).slice(0, 160)
+    const controls = Array.from(document.querySelectorAll<HTMLElement>(
+      'main button, main a, main input, main select, main textarea, main [role="button"], [role="dialog"] button, [role="dialog"] input, [role="dialog"] select, [role="dialog"] textarea',
+    )).filter(isVisible).slice(0, 180)
 
-    for (const element of candidateChildren) {
-      const container = element.parentElement?.closest<HTMLElement>('main, section, article, form, [role="dialog"]') ?? null
-      if (!container || !isVisible(container)) continue
+    for (const element of controls) {
       const elementRect = element.getBoundingClientRect()
-      const containerRect = container.getBoundingClientRect()
-      const escapesHorizontally = elementRect.left < containerRect.left - 2 || elementRect.right > containerRect.right + 2
-      if (escapesHorizontally) {
-        addFinding(
-          'container-escape',
-          'An interactive element extends beyond its nearest semantic container.',
-          [element, container],
-          {
-            elementLeft: Math.round(elementRect.left),
-            elementRight: Math.round(elementRect.right),
-            containerLeft: Math.round(containerRect.left),
-            containerRight: Math.round(containerRect.right),
-          },
-        )
+      const container = element.parentElement?.closest<HTMLElement>('main, section, article, form, [role="dialog"]') ?? null
+      if (container && isVisible(container)) {
+        const containerRect = container.getBoundingClientRect()
+        if (elementRect.left < containerRect.left - 2 || elementRect.right > containerRect.right + 2) {
+          addFinding('container-escape', 'An interactive element extends beyond its nearest semantic container.', [element, container], {
+            elementLeft: round(elementRect.left),
+            elementRight: round(elementRect.right),
+            containerLeft: round(containerRect.left),
+            containerRight: round(containerRect.right),
+          })
+        }
       }
 
       let ancestor = element.parentElement
       while (ancestor && ancestor !== document.body) {
         const style = window.getComputedStyle(ancestor)
-        const overflowClipsX = style.overflowX === 'hidden' || style.overflowX === 'clip'
-        const overflowClipsY = style.overflowY === 'hidden' || style.overflowY === 'clip'
-        if (overflowClipsX || overflowClipsY) {
+        const clipsX = style.overflowX === 'hidden' || style.overflowX === 'clip'
+        const clipsY = style.overflowY === 'hidden' || style.overflowY === 'clip'
+        if (clipsX || clipsY) {
           const ancestorRect = ancestor.getBoundingClientRect()
-          const clippedX = overflowClipsX && (elementRect.left < ancestorRect.left - 1 || elementRect.right > ancestorRect.right + 1)
-          const clippedY = overflowClipsY && (elementRect.top < ancestorRect.top - 1 || elementRect.bottom > ancestorRect.bottom + 1)
+          const clippedX = clipsX && (elementRect.left < ancestorRect.left - 1 || elementRect.right > ancestorRect.right + 1)
+          const clippedY = clipsY && (elementRect.top < ancestorRect.top - 1 || elementRect.bottom > ancestorRect.bottom + 1)
           if (clippedX || clippedY) {
-            addFinding(
-              'clipped-action',
-              'An interactive control is clipped by an ancestor without a scrolling path on that axis.',
-              [element, ancestor],
-              {
-                clippedX,
-                clippedY,
-                ancestorOverflowX: style.overflowX,
-                ancestorOverflowY: style.overflowY,
-              },
-            )
+            addFinding('clipped-action', 'An interactive control is clipped by an ancestor without a scrolling path on that axis.', [element, ancestor], {
+              clippedX,
+              clippedY,
+              ancestorOverflowX: style.overflowX,
+              ancestorOverflowY: style.overflowY,
+            })
             break
           }
         }
@@ -226,8 +200,11 @@ export async function captureRenderedAudit(
 
     const dialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]')).filter(isVisible)
     for (const dialog of dialogs) {
-      const rect = dialog.getBoundingClientRect()
-      if (rect.height <= viewportHeight - 8 && rect.top >= 0 && rect.bottom <= viewportHeight) continue
+      const dialogRect = dialog.getBoundingClientRect()
+      const exceedsViewport = dialogRect.top < 0
+        || dialogRect.bottom > viewportHeight
+        || dialogRect.height > viewportHeight - 8
+      if (!exceedsViewport) continue
       const scrollContainers = [dialog, ...Array.from(dialog.querySelectorAll<HTMLElement>('*'))]
       const hasScrollPath = scrollContainers.some((element) => {
         const style = window.getComputedStyle(element)
@@ -235,21 +212,16 @@ export async function captureRenderedAudit(
           && element.scrollHeight > element.clientHeight + 1
       })
       if (!hasScrollPath) {
-        addFinding(
-          'dialog-scroll-path',
-          'A dialog exceeds the usable viewport without an internal vertical scrolling path.',
-          [dialog],
-          {
-            dialogTop: Math.round(rect.top),
-            dialogBottom: Math.round(rect.bottom),
-            dialogHeight: Math.round(rect.height),
-            viewportHeight,
-          },
-        )
+        addFinding('dialog-scroll-path', 'A dialog exceeds the usable viewport without an internal vertical scrolling path.', [dialog], {
+          dialogTop: round(dialogRect.top),
+          dialogBottom: round(dialogRect.bottom),
+          dialogHeight: round(dialogRect.height),
+          viewportHeight,
+        })
       }
     }
 
-    const collisionCandidates = candidateChildren.slice(0, 80)
+    const collisionCandidates = controls.slice(0, 90)
     let collisionCount = 0
     for (let index = 0; index < collisionCandidates.length && collisionCount < 12; index += 1) {
       const first = collisionCandidates[index]
@@ -258,21 +230,14 @@ export async function captureRenderedAudit(
         const second = collisionCandidates[otherIndex]
         if (first.contains(second) || second.contains(first)) continue
         const secondRect = second.getBoundingClientRect()
-        const overlapWidth = Math.max(0, Math.min(firstRect.right, secondRect.right) - Math.max(firstRect.left, secondRect.left))
-        const overlapHeight = Math.max(0, Math.min(firstRect.bottom, secondRect.bottom) - Math.max(firstRect.top, secondRect.top))
-        const overlapArea = overlapWidth * overlapHeight
+        const overlap = intersection(firstRect, secondRect)
         const smallerArea = Math.min(firstRect.width * firstRect.height, secondRect.width * secondRect.height)
-        if (smallerArea <= 0 || overlapArea / smallerArea < 0.3) continue
-        addFinding(
-          'element-collision',
-          'Two independent interactive controls substantially overlap.',
-          [first, second],
-          {
-            overlapArea: Math.round(overlapArea),
-            smallerElementArea: Math.round(smallerArea),
-            overlapRatio: Math.round((overlapArea / smallerArea) * 1000) / 1000,
-          },
-        )
+        if (smallerArea <= 0 || overlap.area / smallerArea < 0.3) continue
+        addFinding('element-collision', 'Two independent interactive controls substantially overlap.', [first, second], {
+          overlapArea: Math.round(overlap.area),
+          smallerElementArea: Math.round(smallerArea),
+          overlapRatio: Math.round((overlap.area / smallerArea) * 1000) / 1000,
+        })
         collisionCount += 1
       }
     }
@@ -280,9 +245,9 @@ export async function captureRenderedAudit(
     if (auditContext.checkBlankRegions) {
       const main = document.querySelector<HTMLElement>('main')
       const blocks = main
-        ? Array.from(main.children)
-          .filter((child): child is HTMLElement => child instanceof HTMLElement && isVisible(child))
-          .map((child) => ({ element: child, rect: child.getBoundingClientRect() }))
+        ? Array.from(main.querySelectorAll<HTMLElement>(':scope > *, :scope > * > section, :scope > * > article'))
+          .filter(isVisible)
+          .map((element) => ({ element, rect: element.getBoundingClientRect() }))
           .sort((first, second) => first.rect.top - second.rect.top)
         : []
       const threshold = Math.max(240, viewportHeight * 0.35)
@@ -290,18 +255,12 @@ export async function captureRenderedAudit(
         const previous = blocks[index - 1]
         const current = blocks[index]
         const gap = current.rect.top - previous.rect.bottom
-        if (gap > threshold) {
-          addFinding(
-            'large-blank-region',
-            'Stable fixture content contains a large vertical gap between primary page blocks.',
-            [previous.element, current.element],
-            {
-              gapPx: Math.round(gap),
-              thresholdPx: Math.round(threshold),
-              viewportHeight,
-            },
-          )
-        }
+        if (gap <= threshold) continue
+        addFinding('large-blank-region', 'Stable fixture content contains a large vertical gap between primary page blocks.', [previous.element, current.element], {
+          gapPx: Math.round(gap),
+          thresholdPx: Math.round(threshold),
+          viewportHeight,
+        })
       }
     }
 
@@ -326,17 +285,25 @@ export async function captureRenderedAudit(
       ['controls', 'min-height'],
       ['controls', 'height'],
       ['controls', 'border-width'],
+      ['panels', 'background-color'],
+      ['panels', 'border-radius'],
+      ['panels', 'border-color'],
+      ['panels', 'box-shadow'],
     ] as const
 
     const styleSamples = Array.from(document.querySelectorAll<HTMLElement>(
-      'main, header, nav, section, article, [role="dialog"], button, a, input, select, textarea, [role="button"]',
-    )).filter(isVisible).slice(0, 220)
+      'main, main > div, header, nav, section, article, [role="dialog"], button, a, input, select, textarea, [role="button"]',
+    )).filter(isVisible).slice(0, 240)
     const inventory = new Map<string, StyleInventoryEntry>()
     for (const element of styleSamples) {
-      const style = window.getComputedStyle(element)
+      const computed = window.getComputedStyle(element)
       const example = describe(element)
+      const isPanel = element.matches('main, main > div, section, article, [role="dialog"]')
+      const isControl = element.matches('button, a, input, select, textarea, [role="button"]')
       for (const [category, property] of styleProperties) {
-        const value = style.getPropertyValue(property).trim()
+        if (category === 'panels' && !isPanel) continue
+        if (category === 'controls' && !isControl) continue
+        const value = computed.getPropertyValue(property).trim()
         if (!value) continue
         const key = `${category}\u0000${property}\u0000${value}`
         const existing = inventory.get(key)
@@ -354,10 +321,10 @@ export async function captureRenderedAudit(
       route: auditContext.route,
       viewport: auditContext.viewport,
       document: {
-        scrollWidth: doc.scrollWidth,
-        scrollHeight: doc.scrollHeight,
-        clientWidth: doc.clientWidth,
-        clientHeight: doc.clientHeight,
+        scrollWidth: documentElement.scrollWidth,
+        scrollHeight: documentElement.scrollHeight,
+        clientWidth: documentElement.clientWidth,
+        clientHeight: documentElement.clientHeight,
       },
       findings,
       styleInventory: Array.from(inventory.values()).sort((first, second) => {
@@ -392,9 +359,7 @@ export function renderAuditMarkdown(report: AuditReport): string {
   ]
 
   for (const result of report.results) {
-    lines.push(
-      `| ${escapeTableCell(result.scenario)} | \`${escapeTableCell(result.route)}\` | ${result.viewport.name} (${result.viewport.width}x${result.viewport.height}) | \`${escapeTableCell(result.screenshot)}\` | ${result.findings.length} | ${result.document.scrollWidth}x${result.document.scrollHeight} |`,
-    )
+    lines.push(`| ${escapeTableCell(result.scenario)} | \`${escapeTableCell(result.route)}\` | ${result.viewport.name} (${result.viewport.width}x${result.viewport.height}) | \`${escapeTableCell(result.screenshot)}\` | ${result.findings.length} | ${result.document.scrollWidth}x${result.document.scrollHeight} |`)
   }
 
   lines.push('', '## Findings', '')
@@ -420,9 +385,7 @@ export function renderAuditMarkdown(report: AuditReport): string {
     lines.push('| Category | Property | Value | Count | Examples |')
     lines.push('| --- | --- | --- | ---: | --- |')
     for (const entry of result.styleInventory) {
-      lines.push(
-        `| ${escapeTableCell(entry.category)} | ${escapeTableCell(entry.property)} | \`${escapeTableCell(entry.value)}\` | ${entry.count} | ${escapeTableCell(entry.examples.join('; '))} |`,
-      )
+      lines.push(`| ${escapeTableCell(entry.category)} | ${escapeTableCell(entry.property)} | \`${escapeTableCell(entry.value)}\` | ${entry.count} | ${escapeTableCell(entry.examples.join('; '))} |`)
     }
     lines.push('')
   }

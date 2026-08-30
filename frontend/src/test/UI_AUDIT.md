@@ -30,6 +30,7 @@ It captures:
 - History, after the fixture has saved a rating
 - Crossovers
 - Continuity Plans index
+- Continuity Planner at `/continuity-plans/new`
 - the Roll manual-picker dialog
 
 Each state is exercised at 390x844, 820x1180, 1280x900, and 1920x1080.
@@ -52,6 +53,6 @@ Warnings include the state, route, viewport, element descriptions, and concrete 
 
 ## Computed-style inventory
 
-For visible semantic page elements and controls, the JSON and Markdown reports also inventory useful computed-style signals such as radii, typography, colors, shadows, spacing, dimensions, and border treatments. Counts and representative elements are included for context.
+For visible semantic page elements, panels, and controls, the JSON and Markdown reports inventory useful computed-style signals such as radii, typography, colors, shadows, spacing, dimensions, border treatments, button/control treatments, and card/panel treatments. Counts and representative elements are included for context.
 
 The inventory is descriptive evidence, not a list of defects. A unique value is not automatically a problem.
