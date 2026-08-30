@@ -2,7 +2,7 @@
 """Rebuild reading order directories on SD card from API dependency graph.
 
 Usage:
-    python scripts/rebuild_reading_orders.py [--dry-run]
+    python archive/scripts-oneoff/rebuild_reading_orders.py [--dry-run]
 
 Requires COMIC_PILE_USERNAME and COMIC_PILE_PASSWORD env vars.
 """
@@ -15,7 +15,7 @@ import time
 
 import requests
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from comic_pile_api import API_BASE, get_all_threads, login

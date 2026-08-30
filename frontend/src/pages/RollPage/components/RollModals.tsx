@@ -3,6 +3,7 @@ import { useState } from 'react'
 import Modal from '../../../components/Modal'
 import MigrationDialog from '../../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../../components/SimpleMigrationDialog'
+import GlossaryLink from '../../../components/GlossaryLink'
 import { DICE_LADDER } from '../../../components/diceLadder'
 import type { Thread } from '../../../types'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'
@@ -228,6 +229,7 @@ export function RollModals({
           {manualDie
             ? `Manual mode is active at d${manualDie}. Choose another die or return to automatic mode.`
             : `Automatic mode is active at d${currentDie}. Choosing a die switches to manual mode.`}
+          {' '}<GlossaryLink id="autoladder">What is AutoLadder?</GlossaryLink>
         </p>
         <div className="grid grid-cols-3 gap-2">
           {DICE_LADDER.map((die) => (

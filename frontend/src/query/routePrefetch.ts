@@ -85,7 +85,7 @@ const LIKELY_NEXT_CHUNKS: ReadonlyArray<{
 /**
  * Retained screens deliberately excluded from chunk prefetching because no
  * measured navigation benefit justifies the speculative fetch:
- * Crossovers, What's New, Help, and Glossary are low-frequency, static, or
+ * Crossovers, What's New, and Glossary are low-frequency, static, or
  * non-primary destinations.
  *
  * Retained screens deliberately excluded from *data* prefetching because

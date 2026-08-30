@@ -498,6 +498,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         await compute_startup_duration()
 
         redis_settings = get_redis_settings()
+        from app.cache_quota import set_quota_throttle_enabled
+
+        set_quota_throttle_enabled(redis_settings.cache_quota_throttle_enabled)
         provider = redis_settings.effective_provider
 
         if provider == "off":
@@ -520,13 +523,25 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                     {
                         "url": redis_settings.upstash_redis_rest_url,
                         "token": redis_settings.upstash_redis_rest_token,
+                        "throttle_enabled": redis_settings.cache_quota_throttle_enabled,
                     },
                 )
             elif redis_settings.redis_url:
+                if not redis_settings.cache_local_redis_dev:
+                    logger.warning(
+                        "Local Redis URL present but CACHE_LOCAL_REDIS_DEV is not set; "
+                        "refusing the local Redis client path. Use Upstash credentials "
+                        "or enable the dev flag to use local Redis."
+                    )
+                    return
                 await _init_provided_cache(
                     "redis",
                     startup_state,
-                    {"local_url": redis_settings.redis_url},
+                    {
+                        "local_url": redis_settings.redis_url,
+                        "allow_local": True,
+                        "throttle_enabled": redis_settings.cache_quota_throttle_enabled,
+                    },
                 )
             else:
                 logger.warning(

@@ -60,7 +60,8 @@ class ContinuityRule(Base):
             name="ck_continuity_rule_satisfaction_type",
         ),
         CheckConstraint(
-            "NOT (source_type = target_type AND source_id = target_id)",
+            "NOT (source_type = target_type AND source_id = target_id) "
+            "OR satisfaction_type = 'converged'",
             name="ck_continuity_rule_not_self",
         ),
         CheckConstraint(

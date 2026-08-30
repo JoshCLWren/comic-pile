@@ -69,7 +69,14 @@ current_owner_is_self() {
 release_target() {
   local number="$1" fallback_stage="$2" reason="$3" target_kind="${4:-target}"
   local stage epoch marker
-  stage="$(current_stage "$number" "$fallback_stage")"
+  case "${target_kind}:${reason}" in
+    pr:repair-no-change-ready-handoff|pr:repair-no-persisted-change-handoff)
+      stage="$fallback_stage"
+      ;;
+    *)
+      stage="$(current_stage "$number" "$fallback_stage")"
+      ;;
+  esac
   epoch="$(date +%s)"
   marker="<!-- comic-pile-factory-claim-released-v3:${target_kind}-${number}:${WORKER_ID}:${epoch}:${reason} -->"
   if [[ "$target_kind" == 'issue' && "$reason" == 'no-persisted-change-handoff' ]]; then

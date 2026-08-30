@@ -16,7 +16,7 @@ A comprehensive audit script that checks:
 
 **Usage:**
 ```bash
-python -m scripts.audit_thread_positions
+python archive/scripts-oneoff/audit_thread_positions.py
 ```
 
 **Output:**
@@ -33,7 +33,7 @@ A script to fix duplicate positions by reorganizing all active threads into sequ
 
 **Usage:**
 ```bash
-python -m scripts.fix_thread_positions
+python archive/scripts-oneoff/fix_thread_positions.py
 ```
 
 **What it does:**
@@ -49,19 +49,19 @@ python -m scripts.fix_thread_positions
 ### 1. Diagnose Issues
 Run the audit script to identify problems:
 ```bash
-python -m scripts.audit_thread_positions
+python archive/scripts-oneoff/audit_thread_positions.py
 ```
 
 ### 2. Fix Issues (if found)
 If the audit finds duplicate positions, run the fix script:
 ```bash
-python -m scripts.fix_thread_positions
+python archive/scripts-oneoff/fix_thread_positions.py
 ```
 
 ### 3. Verify Fixes
 Run the audit again to confirm issues are resolved:
 ```bash
-python -m scripts.audit_thread_positions
+python archive/scripts-oneoff/audit_thread_positions.py
 ```
 
 ## Common Issues Detected

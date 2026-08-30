@@ -14,6 +14,7 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Issue, Snapshot, Thread
 from app.models import Session as SessionModel
+from app.models.thread import normalize_format_value
 from app.models.user import User
 from app.schemas import RateRequest, ThreadResponse
 from app.services.snapshot_contract import (
@@ -72,7 +73,7 @@ async def _capture_thread_pre_state(thread: Thread, db: AsyncSession) -> dict:
     uses_issue_tracking = thread.uses_issue_tracking()
     state: dict = {
         "title": thread.title,
-        "format": thread.format,
+        "format": normalize_format_value(thread.format),
         "issues_remaining": thread.issues_remaining,
         "last_rating": thread.last_rating,
         "last_activity_at": thread.last_activity_at.isoformat()
@@ -532,7 +533,7 @@ async def rate_thread(
     # that trigger MissingGreenlet errors on expired session objects.
     resp_id = thread.id
     resp_title = thread.title
-    resp_format = thread.format
+    resp_format = normalize_format_value(thread.format)
     resp_queue_position = thread.queue_position
     resp_status = thread.status
     resp_last_rating = thread.last_rating

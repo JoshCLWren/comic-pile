@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache_invalidation import invalidate_user_view
 from app.models import Event, Issue, Thread
+from app.models.thread import normalize_format_value
 from app.repositories import (
     continuity_repository,
     issue_repository,
@@ -104,6 +105,8 @@ async def thread_to_response(
         issues_remaining = await thread.get_issues_remaining(db)
     reading_progress = thread.reading_progress
 
+    format_value = normalize_format_value(thread.format)
+
     next_unread_issue_id = thread.next_unread_issue_id
     next_unread_issue_number: str | None = None
     if next_unread_issue_id is not None:
@@ -117,7 +120,7 @@ async def thread_to_response(
     return ThreadResponse(
         id=thread.id,
         title=thread.title,
-        format=thread.format,
+        format=format_value,
         issues_remaining=issues_remaining,
         queue_position=thread.queue_position,
         status=thread.status,
@@ -126,12 +129,12 @@ async def thread_to_response(
         notes=thread.notes,
         is_test=thread.is_test,
         is_blocked=thread.is_blocked,
+        blocking_reasons=[],
         created_at=thread.created_at,
         total_issues=thread.total_issues,
         reading_progress=reading_progress,
         next_unread_issue_id=next_unread_issue_id,
         next_unread_issue_number=next_unread_issue_number,
-        blocking_reasons=[],
     )
 
 
@@ -171,16 +174,18 @@ def to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
     Returns:
         Narrow list-item projection of the thread response.
     """
+    format_value = normalize_format_value(tr.format)
+
     return QueueThreadListItem(
         id=tr.id,
         title=tr.title,
-        format=tr.format,
+        format=format_value,
         issues_remaining=tr.issues_remaining,
         queue_position=tr.queue_position,
         status=tr.status,
+        last_activity_at=tr.last_activity_at,
         is_blocked=tr.is_blocked,
         blocking_reasons=tr.blocking_reasons,
-        last_activity_at=tr.last_activity_at,
         total_issues=tr.total_issues,
         next_unread_issue_number=tr.next_unread_issue_number,
         notes=tr.notes,
@@ -290,7 +295,7 @@ async def completed_threads_html(db: AsyncSession, user_id: int) -> str:
     """
     threads = await thread_repository.fetch_completed_threads(db, user_id)
     options = "\n".join(
-        f'<option value="{thread.id}">{thread.title} ({thread.format})</option>'
+        f'<option value="{thread.id}">{thread.title} ({thread.normalize_format()})</option>'
         for thread in threads
     )
     return f'<option value="">Select a completed thread...</option>\n{options}'
@@ -312,7 +317,7 @@ async def active_threads_html(db: AsyncSession, user_id: int) -> str:
         f'<input type="radio" name="thread_id" value="{thread.id}" id="thread-{thread.id}" class="mr-3">'
         f'<label for="thread-{thread.id}" class="flex-1 cursor-pointer">'
         f'<span class="font-medium">{thread.title}</span>'
-        f'<span class="text-sm text-gray-500 ml-2">({thread.format})</span>'
+        f'<span class="text-sm text-gray-500 ml-2">({thread.normalize_format()})</span>'
         f"</label></div>"
         for thread in threads
     )
@@ -342,9 +347,11 @@ async def create_thread_with_retry(
     while retries < max_retries:
         try:
             max_position = await thread_repository.max_queue_position(db, user_id)
+            format_value = normalize_format_value(thread_data.format)
+
             new_thread = Thread(
                 title=thread_data.title,
-                format=thread_data.format,
+                format=format_value,
                 issues_remaining=thread_data.issues_remaining,
                 total_issues=thread_data.total_issues,
                 queue_position=max_position + 1,
@@ -418,7 +425,7 @@ async def update_thread(
     if thread_data.title is not None:
         thread.title = thread_data.title
     if thread_data.format is not None:
-        thread.format = thread_data.format
+        thread.format = normalize_format_value(thread_data.format)
     if thread_data.issues_remaining is not None:
         if not thread.uses_issue_tracking():
             thread.issues_remaining = thread_data.issues_remaining
@@ -642,7 +649,7 @@ async def set_pending_thread(
 
     thread_id_int = thread.id
     thread_title = thread.title
-    thread_format = thread.format
+    thread_format = normalize_format_value(thread.format)
     thread_issues = thread.issues_remaining
     thread_position = thread.queue_position
     thread_total_issues = thread.total_issues
@@ -964,7 +971,7 @@ async def set_current_issue(
     reading_progress = thread.reading_progress
     queue_position = thread.queue_position
     thread_title = thread.title
-    thread_format = thread.format
+    thread_format = normalize_format_value(thread.format)
 
     current_session = await get_or_create(db, user_id=user_id)
     current_session.pending_thread_id = thread_id

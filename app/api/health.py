@@ -19,6 +19,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import cache
+from app.cache_quota import observe_cache_quota
 from app.database import get_db
 from app.models import Event
 
@@ -69,6 +70,24 @@ class DependencyHealthResponse(BaseModel):
     database: DependencyProbe
     cache: DependencyProbe
     total_duration_ms: float
+
+
+class CacheQuotaHealthResponse(BaseModel):
+    """Visible cache-quota snapshot for budget alerting.
+
+    Surfaces the privacy-safe monthly command budget state so operators and
+    automated monitoring can detect "approaching the budget" before the hard
+    limit is reached. Contains only aggregate counts and ratios; never cache
+    keys, user data, or provider credentials.
+    """
+
+    status: Literal["ok", "near-limit", "over-budget"]
+    observed_commands: int
+    budget: int
+    remaining: int
+    usage_ratio: float
+    alerted: bool
+    throttling: bool
 
 
 class WarmInstanceDiagnostics(BaseModel):
@@ -235,6 +254,39 @@ async def dependency_health(
             content=payload.model_dump(),
         )
     return payload
+
+
+@router.get(
+    "/health/cache-quota",
+    response_model=CacheQuotaHealthResponse,
+    include_in_schema=False,
+)
+async def cache_quota_health(
+    _: Annotated[None, Depends(_authorize_operational_probe)],
+) -> CacheQuotaHealthResponse:
+    """Report the observed monthly cache command budget snapshot.
+
+    Purely in-process: reads the privacy-safe command counter from
+    :func:`app.cache_quota.observe_cache_quota` without opening any connection or
+    firing the alert sink. Monitoring polls this to see the near-limit /
+    over-budget band and to confirm alerting and smoke-test throttling state.
+
+    Args:
+        _: Operational-probe authorization result.
+
+    Returns:
+        Aggregate budget snapshot with alert and throttle state.
+    """
+    state = observe_cache_quota()
+    return CacheQuotaHealthResponse(
+        status=state.status,
+        observed_commands=state.used,
+        budget=state.budget,
+        remaining=state.remaining,
+        usage_ratio=round(state.usage_ratio, 6),
+        alerted=state.alerted,
+        throttling=state.throttling,
+    )
 
 
 @router.get(
