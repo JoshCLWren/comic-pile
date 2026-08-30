@@ -583,9 +583,13 @@ class TestAC7RatingIsDurableAuthority:
         )
         assert rate_resp.status_code == 200
 
-        # Verify: snoozed thread kept position, rated thread may have moved
+        # Verify: rated thread was promoted to front; snoozed thread shifted
+        # down only because move_to_front shifts all others, not because
+        # snooze altered its durable rank.
         await async_db.refresh(snoozed_thread)
-        assert snoozed_thread.queue_position == 1
+        await async_db.refresh(threads[2])
+        assert threads[2].queue_position == 1
+        assert snoozed_thread.queue_position == 2
 
     @pytest.mark.asyncio
     async def test_session_end_clears_snooze_state(
