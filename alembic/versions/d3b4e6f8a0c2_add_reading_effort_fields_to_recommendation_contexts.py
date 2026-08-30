@@ -1,7 +1,7 @@
 """Add reading-effort estimate fields to recommendation_contexts.
 
 Revision ID: d3b4e6f8a0c2
-Revises: c2a1b0d3e4f5
+Revises: c85500000002
 Create Date: 2026-08-29 00:00:00.000000
 
 """
