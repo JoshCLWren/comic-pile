@@ -4,11 +4,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
-import { queryClient } from '../query/queryClient'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
+let client: QueryClient
+
 function wrapper({ children }: { children: ReactNode }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>
 }
 
@@ -63,6 +63,7 @@ const bootstrapState = (
 
 describe('snooze hooks', () => {
   beforeEach(() => {
+    client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
     vi.clearAllMocks()
     invalidateCurrentSessionAfterSnooze.mockReset()
     protectedRollMutationApi.snooze.mockResolvedValue(undefined)
@@ -81,14 +82,14 @@ describe('snooze hooks', () => {
       expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
       expect(rollBootstrapApi.get).toHaveBeenCalledTimes(1)
       expect(reconciled).toHaveBeenCalledTimes(1)
-      expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledWith(queryClient)
+      expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledWith(client)
       expect(snooze.result.current.isError).toBe(false)
 
       const unsnooze = renderHook(() => useUnsnooze(), { wrapper })
       await act(async () => await unsnooze.result.current.mutate(7))
       expect(snoozeApi.unsnooze).toHaveBeenCalledWith(7)
       expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledTimes(2)
-      expect(invalidateCurrentSessionAfterSnooze).toHaveBeenLastCalledWith(queryClient)
+      expect(invalidateCurrentSessionAfterSnooze).toHaveBeenLastCalledWith(client)
     } finally {
       window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
     }

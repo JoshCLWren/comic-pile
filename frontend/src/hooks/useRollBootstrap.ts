@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import { useToast } from '../contexts/useToast'
-import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from './rollMutationReconciliation'
 
@@ -20,6 +19,7 @@ export function resolveBrowserTimezone(): string | undefined {
 
 
 export function useRollBootstrap() {
+  const queryClient = useQueryClient()
   const { showToast } = useToast()
   const lastNotifiedSessionIdRef = useRef<number | null>(null)
   const justReconciledRef = useRef<RollBootstrapResponse | null>(null)

@@ -1,8 +1,16 @@
+import { type PropsWithChildren } from 'react'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ContinuityPlannerPage from '../pages/ContinuityPlannerPage'
+
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+
+function queryWrapper({ children }: PropsWithChildren) {
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+}
 
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
@@ -132,6 +140,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.clear(await screen.findByLabelText('Plan name'))
@@ -174,6 +183,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     expect(await screen.findByRole('button', { name: 'Remove Fourth World' })).toBeVisible()
@@ -205,6 +215,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     // Initially first item is "Mister Miracle #Annual 1" at position 1
@@ -253,6 +264,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     const reopen = await screen.findByRole('button', { name: 'Reopen last saved plan' })
@@ -277,6 +289,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister');
@@ -301,6 +314,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister');
@@ -323,6 +337,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.clear(await screen.findByLabelText('Plan name'))
@@ -351,6 +366,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister');
@@ -385,6 +401,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.clear(await screen.findByLabelText('Plan name'))
@@ -423,6 +440,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister');
@@ -459,6 +477,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.clear(await screen.findByLabelText('Plan name'))
@@ -495,6 +514,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister');
@@ -533,6 +553,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     // Make a change to dirty the plan
@@ -569,6 +590,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     // Make a change to dirty the plan
@@ -593,6 +615,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister');
@@ -619,6 +642,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister');
@@ -638,6 +662,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/Invalid continuity plan ID/i)
@@ -652,6 +677,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/Invalid continuity plan ID/i)
@@ -666,6 +692,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/Invalid continuity plan ID/i)
@@ -693,6 +720,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     const moveDown = await screen.findByRole('button', { name: /Move Mister Miracle #Annual 1 later/i })
@@ -717,6 +745,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     const nameInput = await screen.findByLabelText('Plan name')
@@ -740,6 +769,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister');
@@ -767,6 +797,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     const nameInput = await screen.findByLabelText('Plan name')
@@ -801,6 +832,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     expect(await screen.findByText('Mister Miracle #Annual 1')).toBeVisible()
@@ -825,6 +857,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     expect(await screen.findByText('Missing crossover')).toBeVisible()
@@ -839,6 +872,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/Cannot read plan/i)
@@ -859,6 +893,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister');
@@ -882,6 +917,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister');
@@ -911,6 +947,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await waitFor(() => expect(mocks.listThreads).toHaveBeenCalledTimes(2))
@@ -941,6 +978,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     expect(await screen.findByRole('button', { name: /Move Mister Miracle #Annual 1 earlier/i })).toBeDisabled()
@@ -971,6 +1009,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     const moveDownButton = await screen.findByRole('button', { name: /Move Mister Miracle #Annual 1 later/i })
@@ -990,6 +1029,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     const addIssueButton = await screen.findByRole('button', { name: 'Add issue' })
@@ -1007,6 +1047,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     const addCrossoverButton = await screen.findByRole('button', { name: 'Add crossover' })
@@ -1028,6 +1069,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await waitFor(() => expect(mocks.listThreads).toHaveBeenCalledTimes(2))
@@ -1042,6 +1084,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.click(screen.getByRole('button', { name: 'Cancel changes' }))
@@ -1060,6 +1103,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister');
@@ -1085,6 +1129,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister');
@@ -1107,6 +1152,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister');
@@ -1132,6 +1178,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     unmount()
@@ -1155,6 +1202,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister');
@@ -1178,6 +1226,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     const cancelButton = await screen.findByRole('button', { name: 'Cancel changes' })
@@ -1211,6 +1260,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister');
@@ -1284,6 +1334,7 @@ describe('ContinuityPlannerPage', () => {
           <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
         </Routes>
       </MemoryRouter>,
+      { wrapper: queryWrapper },
     )
 
     const removeMain = await screen.findByRole('button', { name: 'Remove lane Reading order' })

@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { invalidateCurrentSessionAfterSnooze } from '../query/cacheEffects'
-import { queryClient } from '../query/queryClient'
 import { snoozeApi } from '../services/api'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import {
@@ -15,6 +14,7 @@ import {
 const SNOOZE_REFRESH_ATTEMPTS = 2
 
 export function useSnooze() {
+  const queryClient = useQueryClient()
   const [refreshError, setRefreshError] = useState<unknown>(null)
   const inFlightRequest = useRef<Promise<unknown> | null>(null)
   const refreshRequest = useRef<Promise<boolean> | null>(null)
@@ -124,6 +124,7 @@ export function useSnooze() {
 }
 
 export function useUnsnooze() {
+  const queryClient = useQueryClient()
   const mutation = useMutation({
     mutationFn: (threadId: number) => snoozeApi.unsnooze(threadId),
     onSuccess: async () => {
