@@ -44,6 +44,7 @@ services:
       - "127.0.0.1:${E2E_API_PORT:-8002}:8000"
     volumes:
       - ./app:/workspace/app:ro
+      - ./comic_pile:/workspace/comic_pile:ro
       - ./alembic:/workspace/alembic:ro
       - ./alembic.ini:/workspace/alembic.ini:ro
     depends_on:
