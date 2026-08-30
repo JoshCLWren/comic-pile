@@ -18,6 +18,7 @@ import type {
   RollResponse,
   SessionCurrent,
   SessionDetails,
+  SessionModeResponse,
   SessionListResponse,
   SessionSnapshotsResponse,
   SessionSummary,
