@@ -134,7 +134,9 @@ describe('Roll mutation reconciliation', () => {
 
     expect(reused).toBe(reconciled)
     expect(mockedBootstrap).toHaveBeenCalledTimes(1)
-    expect(result.current.data).toBe(reconciled)
+    // React Query applies the reconciled cache value to the observer asynchronously
+    // and structurally shares it, so compare by content.
+    await waitFor(() => expect(result.current.data).toStrictEqual(reconciled))
     expect(result.current.data?.current_die).toBe(8)
     expect(result.current.data?.pending_thread_id).toBeNull()
     expect(result.current.isPending).toBe(false)
@@ -165,9 +167,14 @@ describe('Roll mutation reconciliation', () => {
         refreshed = await result.current.refetch()
       })
 
-      expect(refreshed).toBe(later)
+      // React Query structurally shares data, so compare by content rather than
+      // reference. Flush the refetch's observer update before asserting it.
+      expect(refreshed).toStrictEqual(later)
       expect(mockedBootstrap).toHaveBeenCalledTimes(2)
-      expect(result.current.data).toBe(later)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      expect(result.current.data).toStrictEqual(later)
     } finally {
       vi.useRealTimers()
     }

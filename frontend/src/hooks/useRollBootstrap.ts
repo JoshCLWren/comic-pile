@@ -108,12 +108,10 @@ export function useRollBootstrap() {
 
     const result = await refetch()
     if (result.isError) throw result.error ?? new Error('Failed to fetch roll bootstrap')
-    // Read the authoritative cache rather than the refetch result's snapshot, which
-    // can still reflect the pre-refetch value when the observer resolves. The cache
-    // is updated synchronously once the fetch settles, so it holds the fresh data.
-    const fresh = queryClient.getQueryData<RollBootstrapResponse | null>(
-      queryKeys.roll.bootstrap(),
-    )
+    // The refetch result carries the settled data even though the query observer
+    // re-renders asynchronously, so return it directly instead of re-reading the
+    // cache (which can still hold the pre-refetch value at this microtask boundary).
+    const fresh = result.data
     if (fresh == null) throw new Error('Failed to fetch roll bootstrap')
     return fresh
   }, [refetch])
