@@ -144,11 +144,31 @@ async def test_roll_override_populates_issue_id_and_number(
 @pytest.mark.asyncio
 async def test_roll_nullable_issue_fields_for_non_issue_tracked(
     auth_client: AsyncClient,
-    sample_data: dict,
+    async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Roll event has NULL issue_id/issue_number for non-issue-tracked threads."""
-    _ = sample_data
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=6, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Non-Issue-Tracked Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
     monkeypatch.setattr("app.momentum.random.randint", lambda _start, _end: 0)
     monkeypatch.setattr("app.momentum.random.uniform", lambda _a, _b: 0.0)
 
