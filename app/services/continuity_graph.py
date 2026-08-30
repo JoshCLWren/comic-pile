@@ -391,6 +391,13 @@ def _evaluate_rule(rule: ContinuityRule, snapshot: GraphSnapshot) -> ContinuityB
             issue_id for issue_id in selected_ids if not is_read(issue_id, snapshot)
         ]
 
+    # Defensive reconciliation: causing lists are already filtered via is_read, but
+    # re-filter the union through the snapshot so a genuinely read prerequisite
+    # can never leak into unread_issue_details after recomputation (issue #2041).
+    causing_issue_ids = [issue_id for issue_id in causing_issue_ids if not is_read(issue_id, snapshot)]
+    causing_member_issue_ids = [
+        issue_id for issue_id in causing_member_issue_ids if not is_read(issue_id, snapshot)
+    ]
     if not causing_issue_ids and not causing_member_issue_ids:
         return None
     if causing_member_issue_ids:
@@ -400,7 +407,13 @@ def _evaluate_rule(rule: ContinuityRule, snapshot: GraphSnapshot) -> ContinuityB
             blocker_type = "members_unread"
     else:
         blocker_type = "item_unread"
-    all_unread_ids = sorted(set(causing_issue_ids + causing_member_issue_ids))
+    all_unread_ids = sorted(
+        issue_id
+        for issue_id in set(causing_issue_ids + causing_member_issue_ids)
+        if not is_read(issue_id, snapshot)
+    )
+    if not all_unread_ids:
+        return None
     return ContinuityBlocker(
         rule_id=rule.id,
         source_type=rule.source_type,
