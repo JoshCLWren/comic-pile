@@ -10,8 +10,8 @@
 19	nvidia	nvidia/nemotron-3-nano-30b-a3b	40	dispatcher	Nemotron Nano 30B
 20	nvidia	openai/gpt-oss-20b	45	dispatcher	GPT OSS 20B
 21	nvidia	google/gemma-4-31b-it	50	dispatcher	Gemma 4 31B
-23	nvidia	nvidia/nvidia-nemotron-nano-9b-v2	55	dispatcher	Nemotron Nano 9B v2
-29	nvidia	thinkingmachines/inkling	0	dispatcher	Inkling
+23	opencode-free	big-pickle	55	dispatcher	Catalog Free Slot 23
+29	opencode-free	big-pickle	0	dispatcher	Catalog Free Slot 29
 39	opencode-free	big-pickle	5	dispatcher	OpenCode Big Pickle
 40	opencode-free	deepseek-v4-flash-free	10	dispatcher	OpenCode DeepSeek V4 Flash Free
 41	opencode-free	mimo-v2.5-free	15	dispatcher	OpenCode MiMo V2.5 Free

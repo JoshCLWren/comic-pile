@@ -28,6 +28,10 @@ vi.mock('../components/LazyDice3D', () => ({
   default: ({ sides }: { sides: number }) => <div data-testid="lazy-dice" data-sides={sides} />,
 }))
 
+vi.mock('../components/GlossaryLink', () => ({
+  default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
+
 vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
 vi.mock('../hooks/useRoll', () => ({

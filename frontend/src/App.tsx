@@ -92,7 +92,7 @@ const CrossoversPage = lazyRoute('crossovers')
 const CrossoverDetailPage = lazyRoute('crossoverDetail')
 const ContinuityPlannerPage = lazyRoute('continuityPlanner')
 const ContinuityPlansIndexPage = lazyRoute('continuityPlansIndex')
-const HelpPage = lazyRoute('help')
+const HelpPage = lazyRoute('glossary')
 const WhatsNewPage = lazyRoute('whatsNew')
 const LoginPage = lazyRoute('login')
 const RegisterPage = lazyRoute('register')
@@ -310,7 +310,18 @@ function PublicRoute({ children }: { children: ReactNode }) {
 
 function AuthenticatedLayout({ children, onBugReportSubmit, wide = false }: { children: ReactNode; onBugReportSubmit: BugReportSubmit; wide?: boolean }) {
   const maxWidthClass = wide ? 'max-w-lg md:max-w-2xl lg:max-w-5xl xl:max-w-[1536px]' : 'max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl';
-  return <div className="flex min-h-screen md:pl-72" data-app-shell-ready data-authenticated-shell><main className={`min-w-0 flex-1 container mx-auto px-3 md:px-4 py-4 md:py-6 ${maxWidthClass} pb-28 md:pb-6`}>{children}</main><Navigation onBugReportSubmit={onBugReportSubmit} /></div>
+  return (
+    <div
+      className="min-h-screen md:grid md:grid-cols-[auto_minmax(0,1fr)]"
+      data-app-shell-ready
+      data-authenticated-shell
+    >
+      <Navigation onBugReportSubmit={onBugReportSubmit} />
+      <main className={`container mx-auto min-w-0 px-3 md:px-4 py-4 md:py-6 ${maxWidthClass} pb-28 md:pb-6`}>
+        {children}
+      </main>
+    </div>
+  )
 }
 
 function PublicLayout({ children, onBugReportSubmit }: { children: ReactNode; onBugReportSubmit: BugReportSubmit }) {
@@ -349,9 +360,9 @@ function AppRoutes() {
         <Route path="/continuity-plans/new" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ContinuityPlannerPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/continuity-plans/:id" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ContinuityPlannerPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/whats-new" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><WhatsNewPage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/help" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/identity-inbox" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><IdentityInboxPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/glossary" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/help" element={<Navigate to="/glossary" replace />} />
+        <Route path="/identity-inbox" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><IdentityInboxPage /></AuthenticatedLayout></ProtectedRoute>} />
       </Routes>
       {isAuthenticated && <BugReportConnected onSubmit={submit} />}
     </Suspense>

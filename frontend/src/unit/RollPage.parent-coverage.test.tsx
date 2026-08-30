@@ -59,6 +59,7 @@ vi.mock('../components/LazyDice3D', () => ({
   ),
 }))
 vi.mock('../components/Tooltip', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
+vi.mock('../components/GlossaryLink', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
 vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children, onClose }: { isOpen: boolean; title: string; children: React.ReactNode; onClose: () => void }) => isOpen ? <section><h2>{title}</h2><button onClick={onClose}>close modal</button>{children}</section> : null }))
 vi.mock('../components/CollectionDialog', () => ({ default: ({ collection }: { collection: { name?: string } | null }) => <div data-testid="collection-dialog">collection dialog {collection?.name ?? 'new'}</div> }))
 vi.mock('../components/MigrationDialog', () => ({ default: ({ onComplete, onSkip, onClose }: { onComplete: (thread: unknown) => void; onSkip: () => void; onClose: () => void }) => <div><button onClick={onSkip}>skip migration</button><button onClick={onClose}>close migration</button><button onClick={() => onComplete({ id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10 })}>complete migration</button></div> }))

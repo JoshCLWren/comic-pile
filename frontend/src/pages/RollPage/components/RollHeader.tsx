@@ -1,5 +1,6 @@
 import LazyDice3D from '../../../components/LazyDice3D'
 import Tooltip from '../../../components/Tooltip'
+import GlossaryLink from '../../../components/GlossaryLink'
 import { DICE_LADDER } from '../../../components/diceLadder'
 import type { DiceSide } from '../../../components/diceTypes'
 import type { RollBootstrapResponse, RollBootstrapThread, SessionModeState } from '../../../types/rollBootstrap'
@@ -144,9 +145,11 @@ export function RollHeader({
           </div>
           <div className="text-right">
             <Tooltip content="Dice ladder: d4→d6→d8→d10→d12→d20→d30→d50→d100. Promotes automatically based on ratings (5→up, 1-2→down)">
-              <span className="block text-[8px] font-black text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">
-                Ladder
-              </span>
+              <GlossaryLink id="die-ladder">
+                <span className="block text-[8px] font-black text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">
+                  Ladder
+                </span>
+              </GlossaryLink>
             </Tooltip>
             <span id="header-die-label" className="text-[10px] font-black text-amber-500">
               d{currentDie}

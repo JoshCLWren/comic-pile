@@ -77,6 +77,7 @@ vi.mock('../components/LazyDice3D', () => ({
   ),
 }))
 vi.mock('../components/Tooltip', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
+vi.mock('../components/GlossaryLink', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
 vi.mock('../components/Modal', () => ({
   default: ({ isOpen, title, children, onClose }: { isOpen: boolean; title: string; children: React.ReactNode; onClose: () => void }) =>
     isOpen ? <section><h2>{title}</h2><button type="button" onClick={onClose}>close modal</button>{children}</section> : null,

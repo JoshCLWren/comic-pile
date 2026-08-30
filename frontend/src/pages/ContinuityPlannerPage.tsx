@@ -11,6 +11,7 @@ import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api'
 import PlanProjectionDialog from '../components/PlanProjectionDialog'
 import PlanReadinessPanel from '../components/PlanReadinessPanel'
+import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
 
 const LAST_PLAN_KEY = 'comic-pile:last-continuity-plan'
@@ -497,7 +498,12 @@ export default function ContinuityPlannerPage() {
       <header>
         <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-500">Continuity</p>
         <h1 id="planner-heading" className="mt-1 text-3xl font-black text-stone-100">Sequential planner</h1>
-        <p className="mt-2 text-sm text-stone-400">Arrange issues and crossovers in one or more parallel reading lanes. Saving creates only the continuity rules you chose.</p>
+        <p className="mt-2 text-sm text-stone-400">
+          Arrange issues and crossovers in one or more parallel reading lanes. Saving creates only the continuity rules you chose.{' '}
+          <GlossaryLink id="continuity-plan">Continuity Plan</GlossaryLink>,{' '}
+          <GlossaryLink id="lane">Lane</GlossaryLink>, and{' '}
+          <GlossaryLink id="crossover">Crossover</GlossaryLink> definitions.
+        </p>
       </header>
 
       {!planId && lastPlanId && (

@@ -6,6 +6,10 @@ vi.mock('../components/Tooltip', () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
+vi.mock('../components/GlossaryLink', () => ({
+  default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
+
 vi.mock('../pages/RollPage/components/SeriesPanel', () => ({
   SeriesPanel: ({ series }: { series: { identity_source: string; series_name?: string; ratings_count?: number } }) => (
     <div data-testid="series-panel">
