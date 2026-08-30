@@ -114,11 +114,9 @@ export function useRollBootstrap() {
 
   useEffect(() => {
     const handleReconciledBootstrap = (event: Event) => {
-      console.log("DBG_HANDLER_FIRED", !!(event as CustomEvent<RollBootstrapResponse>).detail)
       const reconciled = (event as CustomEvent<RollBootstrapResponse>).detail
       if (!reconciled) return
 
-      // Supersede any in-flight request so its eventual result is ignored.
       requestGenerationRef.current += 1
       justReconciledRef.current = reconciled
       if (reconciliationExpiryRef.current) clearTimeout(reconciliationExpiryRef.current)

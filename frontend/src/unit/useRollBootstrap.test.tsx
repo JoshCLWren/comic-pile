@@ -1,8 +1,10 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
+import { queryClient } from '../query/queryClient'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { ToastProvider } from '../contexts/ToastProvider'
 
@@ -57,7 +59,9 @@ function deferred<T>() {
 function renderBootstrap() {
   return renderHook(() => useRollBootstrap(), {
     wrapper: ({ children }: { children: React.ReactNode }) => (
-      <ToastProvider>{children}</ToastProvider>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>{children}</ToastProvider>
+      </QueryClientProvider>
     ),
   })
 }

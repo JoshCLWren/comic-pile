@@ -9,10 +9,16 @@ import { queryClient } from '../query/queryClient'
 // bootstrap reconciliation) reach the cache the rendered component reads. Retries
 // are disabled for deterministic, fast failure paths, and the cache is cleared
 // per render so tests stay isolated; any test-supplied wrapper is composed inside.
+const originalQueryRetry = queryClient.getDefaultOptions().queries?.retry
 queryClient.setDefaultOptions({
   queries: { retry: false },
   mutations: { retry: false },
 })
+if (typeof originalQueryRetry === 'function') {
+  queryClient.setDefaultOptions({
+    queries: { retry: originalQueryRetry },
+  })
+}
 
 vi.mock('@testing-library/react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@testing-library/react')>()

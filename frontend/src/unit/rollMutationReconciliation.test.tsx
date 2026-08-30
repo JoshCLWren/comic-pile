@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { ToastProvider } from '../contexts/ToastProvider'
 import {
   isAmbiguousNetworkFailure,
@@ -9,6 +10,7 @@ import {
 } from '../hooks/rollMutationReconciliation'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
+import { queryClient } from '../query/queryClient'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
 vi.mock('../services/rollBootstrapApi', () => ({
@@ -19,7 +21,9 @@ vi.mock('../services/rollBootstrapApi', () => ({
 
 const mockedBootstrap = vi.mocked(rollBootstrapApi.get)
 const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <ToastProvider>{children}</ToastProvider>
+  <QueryClientProvider client={queryClient}>
+    <ToastProvider>{children}</ToastProvider>
+  </QueryClientProvider>
 )
 
 const bootstrapState = (
