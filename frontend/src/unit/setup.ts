@@ -11,7 +11,9 @@ import { queryClient } from '../query/queryClient'
 // once per test so tests stay isolated while multiple renders within a test can
 // share the cache coherently; any test-supplied wrapper is composed inside.
 // Preserve the app's other query defaults (notably `staleTime`) so assertions that
-// depend on them (e.g. queryClient.test.ts) keep passing.
+// depend on them continue to hold. The app's real retry policy is asserted against
+// the exported `queryRetryPolicy` in queryClient.test.ts because test setup
+// intentionally overrides the singleton's `retry` default to `false`.
 const defaultOptions = queryClient.getDefaultOptions()
 queryClient.setDefaultOptions({
   queries: { ...(defaultOptions.queries ?? {}), retry: false },
