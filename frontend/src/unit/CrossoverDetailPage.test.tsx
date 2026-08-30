@@ -199,7 +199,7 @@ describe('CrossoverDetailPage', () => {
     expect(mockedReadiness.evaluate).toHaveBeenCalledWith('crossover', 7)
   })
 
-  it('sorts the reading order by issue position and marks read entries', async () => {
+  it('renders members in authoritative order with read state overlaid', async () => {
     const firstIssue = { ...warlockIssue, id: 11, issue_number: '3', position: 2, status: 'read' as const }
     const secondIssue = { ...warlockIssue, id: 12, issue_number: '4', position: 9, status: 'unread' as const }
     mockedGroups.get.mockResolvedValue(makeGroup([
@@ -215,10 +215,10 @@ describe('CrossoverDetailPage', () => {
 
     const rows = await screen.findAllByTestId('crossover-member-row')
     expect(rows).toHaveLength(2)
-    expect(within(rows[0]).getByText('Read')).toBeInTheDocument()
-    expect(within(rows[0]).getByText(/Issue 3/)).toBeInTheDocument()
-    expect(within(rows[1]).getByText('Unread')).toBeInTheDocument()
-    expect(within(rows[1]).getByText(/Issue 4/)).toBeInTheDocument()
+    expect(within(rows[0]).getByText('Unread')).toBeInTheDocument()
+    expect(within(rows[0]).getByText(/Issue 4/)).toBeInTheDocument()
+    expect(within(rows[1]).getByText('Read')).toBeInTheDocument()
+    expect(within(rows[1]).getByText(/Issue 3/)).toBeInTheDocument()
     expect(screen.getByText((_, element) => element?.textContent === '50%')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Continue Reading' })).toHaveAttribute(
       'href',
