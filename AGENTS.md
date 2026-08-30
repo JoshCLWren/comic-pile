@@ -2,6 +2,16 @@
 
 Guidelines for AI agents working in this codebase.
 
+## MANDATORY: Frontend Visual Policy
+
+**Any task that changes frontend code, UI behavior, layout, styling, or visual treatment MUST read `docs/FRONTEND_VISUAL_GRAMMAR.md` before making changes.**
+
+That document is the canonical visual/UI policy for Comic Pile. Do not infer frontend visual rules solely from nearby code, Tailwind usage, `docs/REACT_ARCHITECTURE.md`, or other older architecture documentation.
+
+Before editing frontend files, agents must be able to identify the relevant visual-grammar rule they are following. If the task would introduce a new visual convention or conflicts with the grammar's incremental-migration policy, do not make the change merely because nearby code already contains similar drift.
+
+`frontend/AGENTS.md` may provide additional scoped guidance, but it is supplemental. **The root instruction above applies to every factory and agent working from the repository root.**
+
 ## Agent Ownership Policy
 
 All AI agents working in this codebase are **high-ownership agents**.
