@@ -429,11 +429,24 @@ async def add_member(
         thread = await db.get(Thread, issue.thread_id) if issue else None
         if issue is None or thread is None or thread.user_id != current_user.id:
             raise HTTPException(status_code=404, detail=f"Issue {payload.issue_id} not found")
+    proposed_sequence = payload.sequence_order if payload.issue_id is not None else None
+    if proposed_sequence is not None:
+        existing = await db.execute(
+            select(DependencyGroupMembership.id).where(
+                DependencyGroupMembership.group_id == group_id,
+                DependencyGroupMembership.sequence_order == proposed_sequence,
+            )
+        )
+        if existing.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Each sequence_order position may appear at most once in the crossover",
+            )
     member = DependencyGroupMembership(
         group_id=group_id,
         thread_id=payload.thread_id,
         issue_id=payload.issue_id,
-        sequence_order=payload.sequence_order if payload.issue_id is not None else None,
+        sequence_order=proposed_sequence,
     )
     db.add(member)
     try:
@@ -493,6 +506,11 @@ async def set_group_order(
         raise HTTPException(
             status_code=422,
             detail="Each crossover issue may appear at most once in the order",
+        )
+    if len(set(ordered_positions.values())) != len(ordered_positions):
+        raise HTTPException(
+            status_code=422,
+            detail="Each sequence_order position may appear at most once in the order",
         )
 
     result = await db.execute(
