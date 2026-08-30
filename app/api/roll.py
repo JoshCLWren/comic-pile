@@ -2,6 +2,7 @@
 
 import json
 import logging
+import random
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -1002,26 +1003,33 @@ async def roll_bootstrap(
 
     stale_thread = None
     if stale_thread_count > 0:
-        stale_result = await db.execute(
-            select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
+        stale_ids_result = await db.execute(
+            select(Thread.id)
             .where(Thread.user_id == user_id)
             .where(Thread.status == "active")
             .where(Thread.is_blocked.is_(False))
             .where(effective_activity < stale_cutoff)
-            .order_by(effective_activity.asc())
-            .limit(1)
         )
-        stale_row = stale_result.first()
-        if stale_row:
-            stale_last_activity = (
-                stale_row.last_activity_at.isoformat() if stale_row.last_activity_at else None
+        stale_ids = [row[0] for row in stale_ids_result.all()]
+        if stale_ids:
+            chosen_id = random.choice(stale_ids)
+            stale_detail_result = await db.execute(
+                select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
+                .where(Thread.id == chosen_id)
             )
-            stale_thread = RollBootstrapThread(
-                id=stale_row.id,
-                title=stale_row.title,
-                format=normalize_format_value(stale_row.format),
-                last_activity_at=stale_last_activity,
-            )
+            stale_row = stale_detail_result.first()
+            if stale_row:
+                stale_last_activity = (
+                    stale_row.last_activity_at.isoformat()
+                    if stale_row.last_activity_at
+                    else None
+                )
+                stale_thread = RollBootstrapThread(
+                    id=stale_row.id,
+                    title=stale_row.title,
+                    format=normalize_format_value(stale_row.format),
+                    last_activity_at=stale_last_activity,
+                )
 
     return RollBootstrapResponse(
         current_die=die_size,

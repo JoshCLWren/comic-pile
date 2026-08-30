@@ -1,6 +1,6 @@
 """Ownership and response-contract coverage for the Roll bootstrap endpoint."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -621,3 +621,111 @@ async def test_bootstrap_session_mode_includes_guidance(monkeypatch):
     response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
 
     assert response.session_mode.session_mode_correction_guidance == guidance
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_stale_thread_is_randomly_selected(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Stale thread selection picks randomly from eligible stale threads.
+
+    Creates multiple stale threads and verifies the bootstrap endpoint can
+    return any of them, not just the oldest. The statistical check relies on
+    PostgreSQL's non-deterministic ordering across calls.
+    """
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=30)
+
+    titles = ["Stale Alpha", "Stale Beta", "Stale Gamma"]
+    threads = []
+    for idx, title in enumerate(titles):
+        thread = Thread(
+            title=title,
+            format="Comic",
+            issues_remaining=5,
+            queue_position=idx + 1,
+            status="active",
+            user_id=user.id,
+            last_activity_at=stale_date,
+            created_at=now,
+        )
+        threads.append(thread)
+    async_db.add_all(threads)
+    await async_db.commit()
+
+    seen_titles: set[str] = set()
+    for _ in range(30):
+        response = await auth_client.get("/api/v1/roll/bootstrap")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["stale_thread_count"] == 3
+        seen_titles.add(data["stale_thread"]["title"])
+
+    assert len(seen_titles) > 1, (
+        f"Expected random stale thread selection but only saw: {seen_titles}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
+    """Unit test: random.choice is called with stale thread IDs for selection."""
+    import random as random_mod
+
+    current_session = _mode_session(id=55, timezone=None)
+    current_user = SimpleNamespace(id=7)
+
+    monkeypatch.setattr(
+        roll_api,
+        "get_or_create",
+        AsyncMock(return_value=current_session),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_session_with_thread_safe",
+        AsyncMock(return_value=(current_session, None)),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "get_current_die_for_session",
+        AsyncMock(return_value=4),
+    )
+
+    stale_ids_captured: list[int] = []
+
+    original_choice = random_mod.choice
+
+    def _capturing_choice(seq):
+        if seq and isinstance(seq[0], int) and len(seq) > 0:
+            stale_ids_captured.extend(seq)
+        return original_choice(seq)
+
+    monkeypatch.setattr(random_mod, "choice", _capturing_choice)
+
+    db = AsyncMock()
+    db.execute.side_effect = [
+        _Result(rows=[]),
+        _Result(scalar_value=0),
+        _Result(rows=[]),
+        _Result(scalar_value=3),
+        _Result(rows=[(10,), (20,), (30,)]),
+        _Result(
+            rows=[
+                SimpleNamespace(
+                    id=20,
+                    title="Chosen Stale",
+                    format="ongoing",
+                    last_activity_at=datetime(2026, 7, 1, tzinfo=UTC),
+                )
+            ]
+        ),
+    ]
+
+    response = await roll_api.roll_bootstrap(current_user=current_user, db=db)
+
+    assert stale_ids_captured == [10, 20, 30]
+    assert response.stale_thread_count == 3
+    assert response.stale_thread is not None
+    assert response.stale_thread.id == 20
+    assert response.stale_thread.title == "Chosen Stale"
