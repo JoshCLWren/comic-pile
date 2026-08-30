@@ -5,12 +5,13 @@ import {
   ContinuityIssueSelector,
   ContinuityThreadSelector,
 } from '../components/continuity'
-import { continuityPlansApi, type ContinuityPlanNode } from '../services/api-continuity-plans'
+import { continuityPlansApi, type ContinuityPlanNode, type ContinuityPlanNodeType } from '../services/api-continuity-plans'
 import { dependencyGroupsApi, type DependencyGroup } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api'
 import PlanProjectionDialog from '../components/PlanProjectionDialog'
 import PlanReadinessPanel from '../components/PlanReadinessPanel'
+import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
 
 const LAST_PLAN_KEY = 'comic-pile:last-continuity-plan'
@@ -28,6 +29,8 @@ function errorMessage(error: unknown, fallback: string): string {
 
 interface PlannerNode extends ContinuityPlanNode {
   label: string
+  is_checkpoint?: boolean
+  convergence_gate?: Array<{ node_type: ContinuityPlanNodeType; node_id: string }>
 }
 
 interface PlannerLane {
@@ -144,6 +147,8 @@ function buildPayload(name: string, lanes: PlannerLane[], nodeList: PlannerNode[
       lane_id: node.lane_id,
       position: node.position,
       label: node.label ?? null,
+      is_checkpoint: node.is_checkpoint ?? false,
+      convergence_gate: node.convergence_gate ?? [],
     })),
   }
 }
@@ -180,6 +185,7 @@ export default function ContinuityPlannerPage() {
   const [isProjectionOpen, setIsProjectionOpen] = useState(false)
   const [laneSeq, setLaneSeq] = useState(0)
   const [readinessRefreshKey, setReadinessRefreshKey] = useState(0)
+  const [editingGateNodeId, setEditingGateNodeId] = useState<string | null>(null)
   const lastPlanId = typeof window === 'undefined' ? null : window.localStorage.getItem(LAST_PLAN_KEY)
   const issueRequestRef = useRef<AbortController | null>(null)
 
@@ -368,6 +374,29 @@ export default function ContinuityPlannerPage() {
     )
   }
 
+  const toggleCheckpoint = (nodeId: string) => {
+    setNodes((current) =>
+      current.map((node) =>
+        node.id === nodeId ? { ...node, is_checkpoint: !node.is_checkpoint } : node,
+      ),
+    )
+  }
+
+  const toggleConvergenceGate = (nodeId: string, targetNodeId: string) => {
+    setNodes((current) =>
+      current.map((node) => {
+        if (node.id !== nodeId) return node
+        const gate = node.convergence_gate ?? []
+        const exists = gate.some((target) => target.node_id === targetNodeId)
+        const targetNode = current.find((n) => n.id === targetNodeId)!
+        const updated = exists
+          ? gate.filter((target) => target.node_id !== targetNodeId)
+          : [...gate, { node_type: targetNode.node_type as ContinuityPlanNodeType, node_id: targetNodeId }]
+        return { ...node, convergence_gate: updated }
+      }),
+    )
+  }
+
   const addLane = () => {
     const id = `lane-${laneSeq + 1}`
     setLaneSeq((currentSeq) => currentSeq + 1)
@@ -469,7 +498,12 @@ export default function ContinuityPlannerPage() {
       <header>
         <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-500">Continuity</p>
         <h1 id="planner-heading" className="mt-1 text-3xl font-black text-stone-100">Sequential planner</h1>
-        <p className="mt-2 text-sm text-stone-400">Arrange issues and crossovers in one or more parallel reading lanes. Saving creates only the continuity rules you chose.</p>
+        <p className="mt-2 text-sm text-stone-400">
+          Arrange issues and crossovers in one or more parallel reading lanes. Saving creates only the continuity rules you chose.{' '}
+          <GlossaryLink id="continuity-plan">Continuity Plan</GlossaryLink>,{' '}
+          <GlossaryLink id="lane">Lane</GlossaryLink>, and{' '}
+          <GlossaryLink id="crossover">Crossover</GlossaryLink> definitions.
+        </p>
       </header>
 
       {!planId && lastPlanId && (
@@ -602,8 +636,94 @@ export default function ContinuityPlannerPage() {
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-bold text-stone-100">{node.label}</p>
                             <p className="text-xs uppercase tracking-wider text-stone-500">{node.node_type}</p>
+                            {(node.is_checkpoint || (node.convergence_gate && node.convergence_gate.length > 0)) && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {node.is_checkpoint && (
+                                  <span className="inline-flex items-center rounded-full border border-amber-600/50 bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                                    Checkpoint
+                                  </span>
+                                )}
+                                {node.convergence_gate && node.convergence_gate.length > 0 && (
+                                  <span className="inline-flex items-center rounded-full border border-violet-600/50 bg-violet-950/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-300">
+                                    Convergence ({node.convergence_gate.length})
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {editingGateNodeId === node.id && (
+                              <div className="mt-2 w-full rounded-xl border border-violet-800/50 bg-violet-950/20 p-3" data-testid={`convergence-editor-${node.id}`}>
+                                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-violet-300">
+                                  Wait for these steps before reading:
+                                </p>
+                                <div className="grid gap-1">
+                                  {nodes
+                                    .filter(
+                                      (other) =>
+                                        other.id !== node.id &&
+                                        (other.node_type === 'issue' || other.node_type === 'crossover'),
+                                    )
+                                    .sort((a, b) => {
+                                      const aLane = orderedLanes.find((l) => l.id === a.lane_id)
+                                      const bLane = orderedLanes.find((l) => l.id === b.lane_id)
+                                      return ((aLane?.order ?? 0) - (bLane?.order ?? 0)) || a.position - b.position
+                                    })
+                                    .map((other) => {
+                                      const isSelected = (node.convergence_gate ?? []).some(
+                                        (target) => target.node_id === other.id,
+                                      )
+                                      const otherLane = orderedLanes.find((l) => l.id === other.lane_id)
+                                      return (
+                                        <label
+                                          key={other.id}
+                                          className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm ${isSelected ? 'bg-violet-900/40 text-violet-200' : 'text-stone-400 hover:bg-stone-800/50'}`}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            onChange={() => toggleConvergenceGate(node.id, other.id)}
+                                            className="accent-violet-500"
+                                          />
+                                          <span className="truncate">{other.label}</span>
+                                          {otherLane && (
+                                            <span className="ml-auto shrink-0 text-[10px] text-stone-500">{otherLane.name}</span>
+                                          )}
+                                        </label>
+                                      )
+                                    })}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingGateNodeId(null)}
+                                  className="mt-2 min-h-9 rounded-lg border border-stone-700 px-3 text-xs font-bold text-stone-300"
+                                >
+                                  Done
+                                </button>
+                              </div>
+                            )}
                           </div>
                           <div className="flex flex-wrap gap-1">
+                            {node.node_type === 'issue' && (
+                              <button
+                                type="button"
+                                onClick={() => toggleCheckpoint(node.id)}
+                                title={node.is_checkpoint ? 'Remove checkpoint' : 'Mark as checkpoint (blocks next step)'}
+                                aria-label={node.is_checkpoint ? `Remove checkpoint from ${node.label}` : `Mark ${node.label} as checkpoint`}
+                                className={`min-h-9 rounded-lg border px-2 text-[10px] font-bold uppercase tracking-wider ${node.is_checkpoint ? 'border-amber-600 bg-amber-950/40 text-amber-300' : 'border-stone-700 text-stone-400 hover:border-amber-700 hover:text-amber-300'}`}
+                              >
+                                {node.is_checkpoint ? '⚑' : '⚐'}
+                              </button>
+                            )}
+                            {(node.node_type === 'issue' || node.node_type === 'crossover') && (
+                              <button
+                                type="button"
+                                onClick={() => setEditingGateNodeId(editingGateNodeId === node.id ? null : node.id)}
+                                title={editingGateNodeId === node.id ? 'Close convergence editor' : 'Edit convergence gate'}
+                                aria-label={editingGateNodeId === node.id ? `Close convergence editor for ${node.label}` : `Edit convergence gate for ${node.label}`}
+                                className={`min-h-9 rounded-lg border px-2 text-[10px] font-bold uppercase tracking-wider ${(node.convergence_gate ?? []).length > 0 ? 'border-violet-600 bg-violet-950/40 text-violet-300' : 'border-stone-700 text-stone-400 hover:border-violet-700 hover:text-violet-300'}`}
+                              >
+                                ⇄
+                              </button>
+                            )}
                             {otherLanes.length > 0 && (
                               <select
                                 aria-label={`Move ${node.label} to another lane`}

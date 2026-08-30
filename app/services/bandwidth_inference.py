@@ -311,10 +311,15 @@ def infer_bandwidth(
     predicted_level = max(raw_scores, key=lambda lvl: raw_scores[lvl])
     top_score = raw_scores[predicted_level]
     tied_levels = {lvl for lvl, score in raw_scores.items() if abs(score - top_score) < 1e-9}
-    if {BandwidthLevel.LIGHT, BandwidthLevel.DEEP} <= tied_levels:
+    light_deep_tie = {BandwidthLevel.LIGHT, BandwidthLevel.DEEP} <= tied_levels
+    if light_deep_tie:
         # When light and deep evidence tie, neither extreme has support over
-        # the other; the safe midpoint is the balanced prediction.
+        # the other; the safe midpoint is the balanced prediction. Record the
+        # contradiction explicitly so future explanations can show why.
         predicted_level = BandwidthLevel.BALANCED
+        reasons.append(
+            "Contradictory light/deep evidence tied; returning balanced as the safe midpoint"
+        )
 
     # --- alignment score ---
     alignment_score = {
@@ -345,6 +350,14 @@ def infer_bandwidth(
         confidence *= 0.6
         reasons.append(
             f"Contradictory evidence (max band fraction {max_fraction:.0%}), confidence reduced"
+        )
+    elif light_deep_tie:
+        # Genuinely contradictory: equal light and deep support with no
+        # dominant band. Confidence is already low (balanced aligns with no
+        # effort band); reduce it further to reflect the indecision.
+        confidence *= 0.6
+        reasons.append(
+            "Contradictory light/deep evidence; confidence reduced to reflect indecision"
         )
 
     # --- build reason strings for the predicted level ---

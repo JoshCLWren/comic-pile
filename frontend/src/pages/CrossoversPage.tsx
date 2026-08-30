@@ -13,6 +13,7 @@ import {
   type DependencyGroupMember,
 } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
+import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
 
 type PositionedIssue = Issue & { position: number }
@@ -306,7 +307,11 @@ export default function CrossoversPage() {
       <header>
         <p className="text-xs font-bold uppercase tracking-[0.25em] text-amber-500">Continuity</p>
         <h1 id="crossovers-heading" className="mt-1 text-3xl font-black text-stone-100">Crossovers</h1>
-        <p className="mt-2 max-w-2xl text-sm text-stone-400">Name connected comics so their continuity is easy to recognize across ComicPile. Membership does not create a reading block by itself.</p>
+        <p className="mt-2 max-w-2xl text-sm text-stone-400">
+          Name connected comics so their continuity is easy to recognize across ComicPile.
+          Membership labels the group — it does not create a reading block by itself.{' '}
+          <GlossaryLink id="crossover">What is a crossover?</GlossaryLink>
+        </p>
       </header>
 
       <form onSubmit={createGroup} className="rounded-2xl border border-stone-700 bg-stone-900/70 p-4" aria-label="Create crossover">
@@ -319,7 +324,7 @@ export default function CrossoversPage() {
       </form>
 
       {mutationError && <p role="alert" className="rounded-xl border border-red-800 bg-red-950/40 p-3 text-sm text-red-300">{mutationError}</p>}
-      {isLoading ? <p role="status">Loading crossovers…</p> : loadError ? <div role="alert"><p>{loadError}</p><button type="button" onClick={() => void loadGroups()}>Try again</button></div> : groups.length === 0 ? <p>No crossovers yet</p> : (
+      {isLoading ? <p role="status">Loading crossovers…</p> : loadError ? <div role="alert"><p>{loadError}</p><button type="button" onClick={() => void loadGroups()}>Try again</button></div> : groups.length === 0 ? <p>No crossovers yet. <GlossaryLink id="crossover">What is a crossover?</GlossaryLink></p> : (
         <ul className="grid gap-3" aria-label="Your crossovers">
           {groups.map((group) => {
             const isEditing = editingId === group.id

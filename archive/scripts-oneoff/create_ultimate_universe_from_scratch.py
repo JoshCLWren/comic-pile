@@ -14,11 +14,13 @@ Environment Variables:
 Usage:
     export COMIC_PILE_USERNAME=Josh_Digital_Comics
     export COMIC_PILE_PASSWORD=your_password
-    python scripts/create_ultimate_universe_from_scratch.py
+    python archive/scripts-oneoff/create_ultimate_universe_from_scratch.py
 """
 
 import os
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
 
 from comic_pile_api import (
     ThreadSpecWithLastRead,

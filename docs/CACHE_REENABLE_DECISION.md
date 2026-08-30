@@ -35,3 +35,16 @@ A future staged enablement may set `CACHE_ENABLED=true` only after all of these 
 Rollback is the `CACHE_ENABLED` environment flag. Setting it to `false` disables remote caching while leaving database-backed application correctness intact. Provider URL/token values may remain configured because `RedisSettings.is_configured` is false unless the explicit flag is enabled.
 
 If a staged rollout shows unexpected command growth, cache errors, latency regressions, or stale-data symptoms, disable `CACHE_ENABLED` immediately and investigate from the database-backed path rather than increasing the command budget to accommodate the regression.
+
+## Evaluation progress (issue #1716)
+
+The re-enable evaluation added the operational guardrails the decision was missing. None of these change the remain-disabled verdict; they make a future staged enablement safer and observable.
+
+- **One-command usage report vs budget.** `app/cache_usage.py` and `scripts/cache_usage_report.py` (`make cache-usage`) render observed application command usage against the 350,000-command operating budget and 500,000-command free allowance, with an optional provider month-to-date count from the Upstash console.
+- **Quota guardrail: alert + smoke-test throttling.** `app/cache_quota.py` fires a one-shot alert at 80% of the operating budget and, once usage reaches the hard budget, smoke-test throttles a bounded fraction (default 50%) of best-effort value writes through `should_throttle_cache_write()`, consulted by `UpstashCache.set`. Critical generation invalidations are never throttled. The write-drop is **opt-in**: the guardrail starts disarmed and is only armed by `RedisSettings.cache_quota_throttle_enabled` (env `CACHE_QUOTA_THROTTLE_ENABLED`) so normal operation and the test suite never silently drop cache writes; alerting and the budget report remain active regardless.
+- **Local Redis client path dev-flagged.** The local Redis client is no longer selectable in production. `RedisSettings.cache_local_redis_dev` (env `CACHE_LOCAL_REDIS_DEV`) must be explicit; `effective_provider` returns `off` for a bare `REDIS_URL`, and `UpstashCache.initialize` refuses `local_url` unless `allow_local=True`. Startup wiring honors the flag.
+- **TTL tuning.** Default tiers raised to 120/360/900 seconds to cut cache-command churn; generation invalidation keeps user data fresh so the longer windows do not increase staleness risk.
+
+### Go / no-go memo
+
+**Decision: NO-GO for enabling remote Redis at this time.** The remain-disabled verdict from the prior decision stands. The evaluation is complete: observability, an alert-plus-throttle guardrail, a dev-gated local path, and tuned TTLs are now in place. Enabling `CACHE_ENABLED=true` is still gated behind the production-traffic evidence in the re-enable gate (observed mix projecting below 350,000 commands/month with 30% headroom). A future staged rollout must keep `CACHE_ENABLED` reversible and the quota guardrail active from day one.

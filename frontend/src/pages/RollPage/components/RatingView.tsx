@@ -3,7 +3,9 @@ import type { ConnectedThreadInfo, ReaderContextResponse } from '../../../types'
 import type { RatingThread } from '../types'
 import { ComicPillar } from './ComicPillar'
 import { ReadingContextPillar } from './ReadingContextPillar'
+import { ReadingContextStatusCard } from './ReadingContextStatusCard'
 import { YourContextPillar } from './YourContextPillar'
+import { hasReadingContextContent } from '../readingContextContent'
 import { RatingActionPanel } from './RatingActionPanel'
 import { WhyThisRoll } from './WhyThisRoll'
 
@@ -53,7 +55,10 @@ export function RatingView({
   readerContextError = null,
 }: RatingViewProps) {
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
-  const hasReadingContextContent = readingOrders.length > 0 || connectedThreads.length > 0
+  const hasReadingContextContentValue = hasReadingContextContent(readingOrders, connectedThreads, readerContext)
+  const readerContextLoading = isReaderContextLoading && !readerContext
+  const readerContextFailure = !!readerContextError && !readerContext
+  const showReadingContextStatus = !hasReadingContextContentValue && (readerContextLoading || readerContextFailure)
 
   return (
     <div className="relative z-10 space-y-4 p-3 md:p-4">
@@ -69,7 +74,7 @@ export function RatingView({
           />
         </div>
 
-        {hasReadingContextContent && (
+        {hasReadingContextContentValue && (
           <div className="min-w-0" data-testid="rating-region-reading-context">
             <ReadingContextPillar
               activeRatingThread={activeRatingThread}
@@ -113,6 +118,13 @@ export function RatingView({
           />
         </div>
       </div>
+
+      {showReadingContextStatus && (
+        <ReadingContextStatusCard
+          isLoading={readerContextLoading}
+          error={readerContextError}
+        />
+      )}
     </div>
   )
 }

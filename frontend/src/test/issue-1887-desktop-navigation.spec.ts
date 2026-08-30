@@ -30,7 +30,6 @@ const DESTINATIONS = [
   'Crossovers page',
   'Continuity Planner page',
   "What's New page",
-  'Help page',
   'Glossary page',
 ]
 

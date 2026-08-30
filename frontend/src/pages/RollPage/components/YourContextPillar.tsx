@@ -1,4 +1,5 @@
 import Tooltip from '../../../components/Tooltip'
+import GlossaryLink from '../../../components/GlossaryLink'
 import type { ReaderContextResponse } from '../../../services/api-reader-context'
 import { RATING_THRESHOLD, getDieDirection } from '../utils'
 import type { RatingThread } from '../types'
@@ -36,12 +37,15 @@ export function YourContextPillar({
 }: YourContextPillarProps) {
   const dieDirection = getDieDirection(currentDie, predictedDie)
   const isLastIssue = activeRatingThread?.issues_remaining === 1
+  const hasMeaningfulContext = isLoading || readerContext !== null || isLastIssue
 
   return (
     <div className="w-full space-y-4">
-      <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: 'var(--theme-personal-accent)' }}>
-        <span className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-personal-accent)' }}>Your Context</span>
-      </div>
+      {hasMeaningfulContext && (
+        <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: 'var(--theme-personal-accent)' }}>
+          <span className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-personal-accent)' }}>Your Context</span>
+        </div>
+      )}
 
       {isLoading ? <ReaderContextLoading /> : null}
 
@@ -65,7 +69,9 @@ export function YourContextPillar({
             </p>
           </div>
           <div className="text-right">
-            <p className="text-sm font-black text-stone-200">d{currentDie} → d{predictedDie}</p>
+            <p className="text-sm font-black text-stone-200">
+            <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
+          </p>
             <p className="text-[10px] font-bold text-stone-500">{dieDirection}</p>
           </div>
         </div>

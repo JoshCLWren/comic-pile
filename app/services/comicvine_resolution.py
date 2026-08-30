@@ -632,7 +632,7 @@ async def import_comicvine_issue(
     ).scalar() or 0
     thread = Thread(
         title=request.title.strip(),
-        format="Comics",
+        format="Comic",
         issues_remaining=1,
         total_issues=1,
         queue_position=max_position + 1,

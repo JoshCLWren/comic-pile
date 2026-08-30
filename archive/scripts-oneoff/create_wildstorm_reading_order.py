@@ -15,9 +15,9 @@ Environment Variables:
 Usage:
     export COMIC_PILE_USERNAME=Josh_Digital_Comics
     export COMIC_PILE_PASSWORD=your_password
-    python scripts/create_wildstorm_reading_order.py              # Create all deps
-    python scripts/create_wildstorm_reading_order.py --verify     # Verify only
-    python scripts/create_wildstorm_reading_order.py --fix        # Create only missing deps
+    python archive/scripts-oneoff/create_wildstorm_reading_order.py              # Create all deps
+    python archive/scripts-oneoff/create_wildstorm_reading_order.py --verify     # Verify only
+    python archive/scripts-oneoff/create_wildstorm_reading_order.py --fix        # Create only missing deps
 """
 
 import argparse
@@ -25,6 +25,8 @@ import os
 import sys
 
 import requests
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
 
 from comic_pile_api import (
     ThreadSpec,

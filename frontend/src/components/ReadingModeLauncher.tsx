@@ -4,6 +4,7 @@ import {
   dismissReadingModeSuggestion,
   getReadingMode,
 } from '../services/readingMode'
+import { FEATURES } from '../config/features'
 import type { ReadingModeState } from '../types'
 
 /**
@@ -44,6 +45,13 @@ export default function ReadingModeLauncher() {
       setDismissing(false)
     }
   }, [])
+
+  // Product-surface gate (issue #1945): the quiz persists its result and the
+  // weighting machinery exists, but the production Roll path does not yet
+  // consume the quiz-selected mode, so the launcher would be misleading. The
+  // component, API, persistence, and tests remain available for later
+  // completion; flipping FEATURES.readingModeQuiz restores it.
+  if (!FEATURES.readingModeQuiz) return null
 
   const showSuggestion = mode?.suggested === true && !mode.source
 

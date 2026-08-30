@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import PlanProjectionDialog from '../components/PlanProjectionDialog'
 import { readingOrdersApi } from '../services/api-reading-orders'
@@ -20,12 +21,14 @@ vi.mock('../services/api-reading-orders', () => ({
 
 const renderDialog = (overrides: Partial<{ isOpen: boolean; planId: number; planName: string }> = {}) => {
   render(
-    <PlanProjectionDialog
-      isOpen={overrides.isOpen ?? true}
-      planId={overrides.planId ?? 9}
-      planName={overrides.planName ?? 'My reading plan'}
-      onClose={vi.fn()}
-    />,
+    <MemoryRouter>
+      <PlanProjectionDialog
+        isOpen={overrides.isOpen ?? true}
+        planId={overrides.planId ?? 9}
+        planName={overrides.planName ?? 'My reading plan'}
+        onClose={vi.fn()}
+      />
+    </MemoryRouter>,
   )
 }
 

@@ -18,13 +18,52 @@ function renderRoute(ui: React.ReactElement) {
 
 describe('HelpPage', () => {
   it('renders the complete glossary', () => {
-    render(<HelpPage />)
-    expect(screen.getByRole('heading', { name: 'Help / Glossary' })).toBeInTheDocument()
-    expect(screen.getAllByTestId('glossary-term')).toHaveLength(7)
+    renderRoute(<HelpPage />)
+    expect(screen.getByRole('heading', { name: 'Glossary' })).toBeInTheDocument()
+    expect(screen.getAllByTestId('glossary-term')).toHaveLength(15)
     expect(
-      screen.getByText(/Reading order rules: "read X before Y"\./),
+      screen.getByText(/read X before Y/),
     ).toBeInTheDocument()
     expect(screen.getByText('Dependency Builder')).toBeInTheDocument()
+  })
+
+  it('defines the reader-facing continuity and roll vocabulary', () => {
+    renderRoute(<HelpPage />)
+    for (const term of [
+      'Crossover',
+      'Continuity Plan',
+      'Lane',
+      'Reading Order',
+      'Readiness / Blocked',
+      'Projection',
+      'Die ladder (d6 → d8)',
+      'AutoLadder',
+    ]) {
+      expect(screen.getByText(term)).toBeInTheDocument()
+    }
+  })
+
+  it('gives every definition a stable anchor id for cross-linking', () => {
+    renderRoute(<HelpPage />)
+    for (const id of [
+      'thread',
+      'roll-pool',
+      'ladder-mode',
+      'die-ladder',
+      'autoladder',
+      'offset',
+      'snoozed',
+      'dependency',
+      'readiness',
+      'crossover',
+      'continuity-plan',
+      'lane',
+      'reading-order',
+      'projection',
+      'dependency-builder',
+    ]) {
+      expect(document.getElementById(id)).not.toBeNull()
+    }
   })
 })
 
