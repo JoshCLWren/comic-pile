@@ -42,6 +42,10 @@ services:
       TEST_ENVIRONMENT: "true"
     ports:
       - "127.0.0.1:${E2E_API_PORT:-8002}:8000"
+    volumes:
+      - ./app:/workspace/app:ro
+      - ./alembic:/workspace/alembic:ro
+      - ./alembic.ini:/workspace/alembic.ini:ro
     depends_on:
       postgres-test:
         condition: service_healthy
@@ -49,7 +53,7 @@ services:
         condition: service_healthy
     networks:
       - test-network
-    command: ["/bin/bash", "-c", "cd /workspace && .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    command: ["/bin/bash", "-c", "cd /workspace && .venv/bin/alembic upgrade head && exec .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
