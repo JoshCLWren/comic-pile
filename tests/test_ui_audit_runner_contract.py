@@ -17,6 +17,8 @@ def test_ui_audit_runner_owns_start_readiness_execution_and_cleanup() -> None:
     """The wrapper must own every phase that previously required manual setup."""
     runner = (ROOT / "scripts" / "run_ui_audit.sh").read_text()
     assert 'AUDIT_API_PORT="${AUDIT_API_PORT:-8002}"' in runner
+    assert 'E2E_POSTGRES_PUBLISH="${E2E_POSTGRES_PUBLISH:-5432}"' in runner
+    assert 'E2E_REDIS_PUBLISH="${E2E_REDIS_PUBLISH:-6379}"' in runner
     assert "compose up -d --build" in runner
     assert 'curl --fail --silent --show-error "$AUDIT_BASE_URL/health"' in runner
     assert 'BASE_URL="$AUDIT_BASE_URL"' in runner
@@ -26,10 +28,12 @@ def test_ui_audit_runner_owns_start_readiness_execution_and_cleanup() -> None:
 
 
 def test_test_compose_uses_project_scoped_names_and_canonical_api_port() -> None:
-    """Parallel checkouts must not share hard-coded container identities."""
+    """Parallel checkouts must not share hard-coded container identities or dependency ports."""
     compose = (ROOT / "docker-compose.test.yml").read_text()
     assert "container_name:" not in compose
-    assert '${E2E_API_PORT:-8002}:8000' in compose
+    assert '127.0.0.1:${E2E_API_PORT:-8002}:8000' in compose
+    assert '${E2E_POSTGRES_PUBLISH:-5437:5432}' in compose
+    assert '${E2E_REDIS_PUBLISH:-6379:6379}' in compose
 
 
 def test_playwright_audit_defaults_to_canonical_local_api() -> None:
