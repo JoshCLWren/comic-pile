@@ -22,13 +22,25 @@ Recommendation-context snapshot contract
 ----------------------------------------
 
 Roll events may persist a ``recommendation_context`` JSON payload recording
-the effort estimate that existed at decision time:
+the effort estimate that existed at decision time.
+
+Version 1:
 
 ``{"context_version": 1, "selected_candidate": {...effort fields...}}``
 
-``RECOMMENDATION_CONTEXT_VERSION`` is bumped whenever the payload shape
-changes incompatibly. Readers must tolerate historical rows with a NULL or
-missing payload and unknown versions, treating them as neutral.
+Version 2 (issue #1718):
+
+``{"context_version": 2, "selected_candidate": {...}, "candidate_weights": [...], "selected_weight": ..., "bandwidth": ..., "bandwidth_source": ..., "bandwidth_confidence": ..., "random_bypass": ..., "balanced_neutrality": ...}``
+
+``candidate_weights`` is bounded to the die pool (max 100 entries) and holds
+``{"candidate_id": int, "weight": float, "reasons": [str]}`` per bounded
+candidate in pool order. Compact bandwidth/effort reason codes (e.g.
+``bandwidth_light_favors_low_effort``, ``bandwidth_deep_permits_high_effort``,
+``effort_unknown_neutral``) are stored per candidate; the selected
+candidate's final weight and active bandwidth/source/confidence are also
+captured. Pure-random and balanced legacy paths set ``random_bypass`` and
+``balanced_neutrality`` explicitly. Readers must tolerate historical rows
+with a NULL/missing payload, missing v2 keys, or unknown versions.
 """
 
 from __future__ import annotations
@@ -96,9 +108,16 @@ ERA_PRIOR_MODERN_MINUTES: Final[float] = 17.0
 
 _YEAR_PATTERN: Final[re.Pattern[str]] = re.compile(r"(19|20)\d{2}")
 
-RECOMMENDATION_CONTEXT_VERSION: Final[int] = 1
+RECOMMENDATION_CONTEXT_VERSION: Final[int] = 2
 RECOMMENDATION_CONTEXT_VERSION_KEY: Final[str] = "context_version"
 RECOMMENDATION_CONTEXT_CANDIDATE_KEY: Final[str] = "selected_candidate"
+RECOMMENDATION_CONTEXT_CANDIDATE_WEIGHTS_KEY: Final[str] = "candidate_weights"
+RECOMMENDATION_CONTEXT_SELECTED_WEIGHT_KEY: Final[str] = "selected_weight"
+RECOMMENDATION_CONTEXT_BANDWIDTH_KEY: Final[str] = "bandwidth"
+RECOMMENDATION_CONTEXT_BANDWIDTH_SOURCE_KEY: Final[str] = "bandwidth_source"
+RECOMMENDATION_CONTEXT_BANDWIDTH_CONFIDENCE_KEY: Final[str] = "bandwidth_confidence"
+RECOMMENDATION_CONTEXT_RANDOM_BYPASS_KEY: Final[str] = "random_bypass"
+RECOMMENDATION_CONTEXT_BALANCED_NEUTRALITY_KEY: Final[str] = "balanced_neutrality"
 
 
 class EstimateSource(StrEnum):
@@ -512,21 +531,50 @@ def build_recommendation_context(
     thread_id: int,
     issue_id: int | None,
     issue_number: str | None,
+    candidate_weights: Sequence[dict[str, object]] | None = None,
+    bandwidth: str | None = None,
+    bandwidth_source: str | None = None,
+    bandwidth_confidence: float | None = None,
+    random_bypass: bool | None = None,
+    balanced_neutrality: bool | None = None,
+    selected_weight: float | None = None,
 ) -> dict[str, object]:
     """Build the versioned decision-time recommendation-context payload.
 
-    The payload is bounded to the selected candidate; it records the
-    estimate/source that existed at decision time for later analysis.
+    Version 2 extends the original selected-candidate snapshot so every
+    contextually weighted roll can be explained from persisted decision-time
+    data alone:
+
+    - ``candidate_weights``: bounded per-candidate list aligned to the die pool
+      (``candidate_id``, final ``weight``, compact bandwidth/effort ``reasons``)
+      in pool order. Payload is bounded to the die pool; no full metadata is
+      dumped.
+    - ``selected_weight``: final chooser weight of the selected candidate.
+    - ``bandwidth``/``bandwidth_source``/``bandwidth_confidence``: active
+      bandwidth state at decision time.
+    - ``random_bypass``/``balanced_neutrality``: explicit flags for
+      pure-random and legacy control paths.
+
+    Older ``context_version: 1`` payloads remain readable: readers must treat
+    absent v2 keys as neutral/unknown.
 
     Args:
-        estimate: The resolved effort estimate.
+        estimate: The resolved effort estimate for the selected candidate.
         thread_id: Selected thread id.
         issue_id: Selected next unread issue id, if any.
         issue_number: Selected issue number, if any.
+        candidate_weights: Bounded per-candidate weight breakdown in pool order,
+            or None when unavailable (e.g. historical rows).
+        bandwidth: Active bandwidth label at decision time.
+        bandwidth_source: How bandwidth was determined.
+        bandwidth_confidence: Confidence in bandwidth.
+        random_bypass: Whether contextual weighting was bypassed.
+        balanced_neutrality: Whether the draw was explicitly neutral.
+        selected_weight: Final weight of the selected candidate.
 
     Returns:
         JSON-serializable context dict tagged with
-        ``RECOMMENDATION_CONTEXT_VERSION``.
+        ``RECOMMENDATION_CONTEXT_VERSION`` (currently 2).
     """
     candidate: dict[str, object] = {
         "thread_id": thread_id,
@@ -538,7 +586,32 @@ def build_recommendation_context(
         "effort_confidence": round(estimate.confidence, 3),
         "effort_sample_count": estimate.sample_count,
     }
-    return {
+    payload: dict[str, object] = {
         RECOMMENDATION_CONTEXT_VERSION_KEY: RECOMMENDATION_CONTEXT_VERSION,
         RECOMMENDATION_CONTEXT_CANDIDATE_KEY: candidate,
     }
+    # Version 2 extensions are always present on new writes so every roll can
+    # be explained from persisted context alone. Absent values are written as
+    # explicit None/bool rather than omitted, keeping the shape stable.
+    if candidate_weights is not None:
+        # Defensive copy and bounded-size guarantee: callers already bound to
+        # die pool; we slice to 100 as an extra guard against payload growth.
+        bounded = list(candidate_weights)[:100]
+        payload[RECOMMENDATION_CONTEXT_CANDIDATE_WEIGHTS_KEY] = bounded
+    else:
+        payload[RECOMMENDATION_CONTEXT_CANDIDATE_WEIGHTS_KEY] = None
+    if selected_weight is not None:
+        payload[RECOMMENDATION_CONTEXT_SELECTED_WEIGHT_KEY] = round(float(selected_weight), 4)
+    else:
+        payload[RECOMMENDATION_CONTEXT_SELECTED_WEIGHT_KEY] = None
+    payload[RECOMMENDATION_CONTEXT_BANDWIDTH_KEY] = bandwidth
+    payload[RECOMMENDATION_CONTEXT_BANDWIDTH_SOURCE_KEY] = bandwidth_source
+    if bandwidth_confidence is not None:
+        payload[RECOMMENDATION_CONTEXT_BANDWIDTH_CONFIDENCE_KEY] = round(
+            float(bandwidth_confidence), 3
+        )
+    else:
+        payload[RECOMMENDATION_CONTEXT_BANDWIDTH_CONFIDENCE_KEY] = None
+    payload[RECOMMENDATION_CONTEXT_RANDOM_BYPASS_KEY] = bool(random_bypass)
+    payload[RECOMMENDATION_CONTEXT_BALANCED_NEUTRALITY_KEY] = bool(balanced_neutrality)
+    return payload
