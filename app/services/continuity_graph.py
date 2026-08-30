@@ -251,7 +251,7 @@ async def load_snapshot(db: AsyncSession, user_id: int) -> GraphSnapshot:
                     for row in rows
                     if row.issue_id is not None and row.sequence_order is not None
                 ),
-                key=lambda membership: membership.sequence_order,
+                key=lambda membership: (membership.sequence_order, membership.id),
             )
         )
         for group_id, rows in group_memberships.items()
