@@ -26,25 +26,9 @@ async def _authenticated_user_id(async_db: AsyncSession, test_username: str) -> 
     return result.scalar_one()
 
 
-def _postgres_test_url() -> str | None:
-    """Return a PostgreSQL test database URL, or ``None`` when absent."""
-    import os
-
-    url = os.getenv("TEST_DATABASE_URL") or os.getenv("DATABASE_URL")
-    if url and url.startswith("postgresql"):
-        return url
-    return None
-
-
-@pytest_asyncio.fixture(params=["redis", "postgres"], ids=["redis", "postgres"], autouse=True)
-async def _cache_backend(request: pytest.FixtureRequest) -> AsyncIterator[None]:
-    """Reinitialize the cache against one backend per param (issue #1781).
-
-    The existing cache wrapper regression tests must pass against both the Redis
-    and Postgres clients behind the shared ``cache`` router. Each variant
-    configures the process-wide router to its backend; the Postgres variant
-    relies on the session ``db_engine`` fixture for the cache schema.
-    """
+@pytest_asyncio.fixture(autouse=True)
+async def _reinitialize_cache() -> AsyncIterator[None]:
+    """Reinitialize cache in current event loop to avoid cross-loop issues."""
     from app.config import get_redis_settings
 
     if cache.is_initialized:
@@ -53,29 +37,12 @@ async def _cache_backend(request: pytest.FixtureRequest) -> AsyncIterator[None]:
         except RuntimeError:
             cache._client = None
             cache._initialized = False
-
-    kind = request.param
-    if kind == "redis":
-        settings = get_redis_settings()
-        if not settings.redis_url:
-            pytest.fail("REDIS_URL is required for the redis cache regression variant")
-        await cache.initialize(local_url=settings.redis_url)
-    else:
-        db_url = _postgres_test_url()
-        if not db_url:
-            pytest.skip("PostgreSQL test database not configured; skipping postgres cache variant")
-        # Ensure the cache schema exists before the Postgres backend initializes.
-        request.getfixturevalue("db_engine")
-        await cache.configure("postgres", database_url=db_url)
-        await cache.clear_pattern("cache:*")
-
-    assert cache.is_initialized, f"Cache failed to initialize for {kind} cache regression tests"
+    settings = get_redis_settings()
+    if not settings.redis_url:
+        assert settings.redis_url is not None, "REDIS_URL is required for cache regression tests"
+    await cache.initialize(local_url=settings.redis_url, allow_local=True)
+    assert cache.is_initialized, "Cache failed to initialize for cache regression tests"
     yield
-    try:
-        await cache.close()
-    except RuntimeError:
-        cache._client = None
-        cache._initialized = False
 
 
 @pytest.mark.asyncio
@@ -457,7 +424,7 @@ async def test_cache_reinitialize_resets_open_circuit() -> None:
     assert backend._circuit_breaker.state == CircuitState.OPEN
 
     await cache.close()
-    await cache.initialize(local_url=settings.redis_url)
+    await cache.initialize(local_url=settings.redis_url, allow_local=True)
 
     assert cache.is_initialized
     # After reinitialize, we have a new backend

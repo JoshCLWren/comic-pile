@@ -52,18 +52,24 @@ async def cache_router(
     """
     del db_engine  # only needed for its schema side effect
     kind = request.param
+    if cache.is_initialized:
+        try:
+            await cache.close()
+        except RuntimeError:
+            cache._client = None
+            cache._initialized = False
     router = CacheRouter()
     try:
         if kind == "redis":
             redis_url = _redis_url()
             if not redis_url:
-                pytest.skip("REDIS_URL not configured; skipping Redis backend variant")
-            await router.configure("redis", local_url=redis_url)
+                pytest.skip(reason="REDIS_URL not configured; skipping Redis backend variant")
+            await router.configure("redis", local_url=redis_url, allow_local=True)
         else:
             db_url = _postgres_test_url()
             if not db_url:
                 pytest.skip(
-                    "PostgreSQL test database not configured; skipping Postgres backend variant"
+                    reason="PostgreSQL test database not configured; skipping Postgres backend variant"
                 )
             await router.configure("postgres", database_url=db_url)
             await router.clear_pattern("cache:*")
@@ -158,9 +164,9 @@ async def test_atomic_generation_read_postgres(cache_router: CacheRouter) -> Non
     import uuid
 
     if cache_router.provider_kind != "postgres":
-        pytest.skip("atomic_generation_read is Postgres-specific")
+        pytest.skip(reason="atomic_generation_read is Postgres-specific")
     generation_key = f"wrapper:agen:{uuid.uuid4()}"
-    value_key = f"cache:user:1:g1:wrapper:avalue:"
+    value_key = "cache:user:1:g1:wrapper:avalue:"
     await cache_router.incr(generation_key)
     assert await cache_router.set(value_key, {"x": 1}, ttl=30)
     raw = await cache_router.atomic_generation_read(
@@ -191,12 +197,18 @@ async def test_fail_open_after_demote() -> None:
     redis_url = _redis_url()
     db_url = _postgres_test_url()
     router = CacheRouter()
+    if cache.is_initialized:
+        try:
+            await cache.close()
+        except RuntimeError:
+            cache._client = None
+            cache._initialized = False
     if db_url:
         await router.configure("postgres", database_url=db_url)
     elif redis_url:
-        await router.configure("redis", local_url=redis_url)
+        await router.configure("redis", local_url=redis_url, allow_local=True)
     else:
-        pytest.skip("No cache backend available to exercise demotion")
+        pytest.skip(reason="No cache backend available to exercise demotion")
     assert router.is_initialized
     await router.demote()
     assert router.is_initialized is False
@@ -238,12 +250,12 @@ async def wrapper_cache(request: pytest.FixtureRequest, db_engine: object) -> As
         if kind == "redis":
             redis_url = _redis_url()
             if not redis_url:
-                pytest.skip("REDIS_URL not configured; skipping Redis wrapper variant")
-            await cache.configure("redis", local_url=redis_url)
+                pytest.skip(reason="REDIS_URL not configured; skipping Redis wrapper variant")
+            await cache.configure("redis", local_url=redis_url, allow_local=True)
         else:
             pg_url = _postgres_test_url()
             if not pg_url:
-                pytest.skip("PostgreSQL not configured; skipping Postgres wrapper variant")
+                pytest.skip(reason="PostgreSQL not configured; skipping Postgres wrapper variant")
             await cache.configure("postgres", database_url=pg_url)
             await cache.clear_pattern("cache:*")
         assert cache.is_initialized
@@ -256,7 +268,7 @@ async def wrapper_cache(request: pytest.FixtureRequest, db_engine: object) -> As
             cache._initialized = False
         if prior_initialized and prior_kind == "redis" and _redis_url():
             try:
-                await cache.configure("redis", local_url=_redis_url())
+                await cache.configure("redis", local_url=_redis_url(), allow_local=True)
             except Exception:  # pragma: no cover - best-effort restore
                 pass
 
