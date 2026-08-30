@@ -49,7 +49,7 @@ export default function ReadingModeQuiz({ isOpen, onClose, onComplete }: Reading
     } else {
       setStep((s) => s + 1)
     }
-  }, [selectedForStep, isLastStep])
+  }, [selectedForStep, isLastStep, submit])
 
   const handleBack = useCallback(() => {
     setError(null)
