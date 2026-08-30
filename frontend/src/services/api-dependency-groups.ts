@@ -4,6 +4,8 @@ export interface DependencyGroupMember {
   id: number
   thread_id: number | null
   issue_id: number | null
+  /** Authoritative cross-series reading-order slot inside the group. */
+  position: number
   /** Series title of the owning thread; null when the target no longer resolves. */
   series_title?: string | null
   /** Exact issue number for issue-level memberships; null for thread memberships. */

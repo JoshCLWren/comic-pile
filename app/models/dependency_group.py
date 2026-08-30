@@ -46,7 +46,14 @@ class DependencyGroup(Base):
 
 
 class DependencyGroupMembership(Base):
-    """Thread- or issue-level membership in a named dependency group."""
+    """Thread- or issue-level membership in a named dependency group.
+
+    ``position`` is the authoritative cross-series reading-order slot inside
+    the group. It is assigned in source order when members are added and is
+    never derived from each issue's series-local position, so the crossover
+    sequence survives the same issue number or position appearing in several
+    series.
+    """
 
     __tablename__ = "dependency_group_memberships"
 
@@ -60,6 +67,7 @@ class DependencyGroupMembership(Base):
     issue_id: Mapped[int | None] = mapped_column(
         ForeignKey("issues.id", ondelete="CASCADE"), nullable=True
     )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     group: Mapped[DependencyGroup] = relationship(
         "DependencyGroup", back_populates="memberships"
@@ -76,4 +84,5 @@ class DependencyGroupMembership(Base):
         Index("ix_dependency_group_memberships_group_id", "group_id"),
         Index("ix_dependency_group_memberships_thread_id", "thread_id"),
         Index("ix_dependency_group_memberships_issue_id", "issue_id"),
+        Index("ix_dependency_group_memberships_group_position", "group_id", "position"),
     )

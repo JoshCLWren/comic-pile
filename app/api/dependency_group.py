@@ -86,6 +86,7 @@ async def _member_responses(
                 id=member.id,
                 thread_id=member.thread_id,
                 issue_id=member.issue_id,
+                position=member.position,
                 series_title=series_title,
                 issue_number=issue_number,
             )
@@ -108,7 +109,7 @@ async def _group_response(
     result = await db.execute(
         select(DependencyGroupMembership)
         .where(DependencyGroupMembership.group_id == group.id)
-        .order_by(DependencyGroupMembership.id)
+        .order_by(DependencyGroupMembership.position, DependencyGroupMembership.id)
     )
     memberships = list(result.scalars())
     return DependencyGroupResponse(
@@ -117,6 +118,26 @@ async def _group_response(
         created_at=group.created_at,
         memberships=await _member_responses(db, memberships),
     )
+
+
+async def _next_group_position(db: AsyncSession, group_id: int) -> int:
+    """Return the next sequential reading-order slot for a group.
+
+    Args:
+        db: The asynchronous database session.
+        group_id: The owned group whose memberships are being extended.
+
+    Returns:
+        One greater than the current maximum membership position (or ``1``
+        when the group has no memberships yet).
+    """
+    result = await db.execute(
+        select(func.max(DependencyGroupMembership.position)).where(
+            DependencyGroupMembership.group_id == group_id
+        )
+    )
+    current_max = result.scalar()
+    return (current_max if current_max is not None else 0) + 1
 
 
 async def _refresh_crossover_blocked_state(user_id: int, db: AsyncSession) -> None:
@@ -374,9 +395,19 @@ async def add_issue_range(
         )
 
     issue_ids = [issue.id for issue in issues]
+    base_position = await _next_group_position(db, group_id)
     statement = (
         pg_insert(DependencyGroupMembership)
-        .values([{"group_id": group_id, "issue_id": issue_id} for issue_id in issue_ids])
+        .values(
+            [
+                {
+                    "group_id": group_id,
+                    "issue_id": issue_id,
+                    "position": base_position + index,
+                }
+                for index, issue_id in enumerate(issue_ids)
+            ]
+        )
         .on_conflict_do_nothing(constraint="uq_dependency_group_issue")
         .returning(DependencyGroupMembership.issue_id)
     )
@@ -427,10 +458,12 @@ async def add_member(
         thread = await db.get(Thread, issue.thread_id) if issue else None
         if issue is None or thread is None or thread.user_id != current_user.id:
             raise HTTPException(status_code=404, detail=f"Issue {payload.issue_id} not found")
+    position = await _next_group_position(db, group_id)
     member = DependencyGroupMembership(
         group_id=group_id,
         thread_id=payload.thread_id,
         issue_id=payload.issue_id,
+        position=position,
     )
     db.add(member)
     try:

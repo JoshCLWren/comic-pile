@@ -127,8 +127,8 @@ describe('dependencyGroupsApi', () => {
 
   it('adds and removes both supported membership target types', async () => {
     apiMock.post
-      .mockResolvedValueOnce({ id: 10, thread_id: 42, issue_id: null })
-      .mockResolvedValueOnce({ id: 11, thread_id: null, issue_id: 99 })
+      .mockResolvedValueOnce({ id: 10, thread_id: 42, issue_id: null, position: 1 })
+      .mockResolvedValueOnce({ id: 11, thread_id: null, issue_id: 99, position: 2 })
     apiMock.delete.mockResolvedValue(undefined)
 
     await dependencyGroupsApi.addMember(7, { thread_id: 42 })

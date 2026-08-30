@@ -150,7 +150,11 @@ export default function CrossoverDetailPage() {
     )
   }
 
-  const sortedMembers = [...members]
+  const sortedMembers = [...members].sort(
+    (a, b) =>
+      a.membership.position - b.membership.position ||
+      a.membership.id - b.membership.id,
+  )
 
   const readCount = sortedMembers.filter(m => m.issue?.status === 'read').length
   const totalCount = sortedMembers.filter(m => m.issue).length
@@ -293,9 +297,9 @@ export default function CrossoverDetailPage() {
             <p className="text-stone-500 text-center py-8">No members in this crossover yet.</p>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {sortedMembers.map((member, index) => {
+              {sortedMembers.map((member) => {
                 const isRead = member.issue?.status === 'read'
-                const position = index + 1
+                const position = member.membership.position
                 const threadTitle = member.thread?.title ?? 'Unknown Series'
                 const issueNumber = member.issue?.issue_number ?? '?'
                 const blockedInfo = blockedMemberMap.get(member.membership.id)

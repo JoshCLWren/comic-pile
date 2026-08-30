@@ -86,8 +86,8 @@ const warlockThread = makeThread(101, 'Warlock: Rebirth')
 const warlockIssue = makeIssue(11, 101, '3', 'unread')
 
 const populatedGroup = makeGroup([
-  { id: 1, thread_id: 22, issue_id: null },
-  { id: 2, thread_id: null, issue_id: 11 },
+  { id: 1, thread_id: 22, issue_id: null, position: 1 },
+  { id: 2, thread_id: null, issue_id: 11, position: 2 },
 ])
 
 const readableReadiness: ContinuityReadinessResponse = {
@@ -184,7 +184,8 @@ describe('CrossoverDetailPage', () => {
     expect(screen.getByText('Issues Tracked')).toBeInTheDocument()
     expect(screen.getByText((_, element) => element?.textContent === '0%')).toBeInTheDocument()
     expect(screen.getByText('Next Up')).toBeInTheDocument()
-    expect(screen.getByText(/Position 5/)).toBeInTheDocument()
+    expect(screen.getByText((_, element) => element?.textContent === '1.')).toBeInTheDocument()
+    expect(screen.queryByText(/Position 5/)).not.toBeInTheDocument()
     expect(screen.getAllByText('Readable').length).toBeGreaterThan(0)
     expect(screen.getByText('This crossover is ready to read.'))
     expect(screen.getByText('Evaluated issue: 55')).toBeInTheDocument()
@@ -200,11 +201,11 @@ describe('CrossoverDetailPage', () => {
   })
 
   it('renders members in authoritative order with read state overlaid', async () => {
-    const firstIssue = { ...warlockIssue, id: 11, issue_number: '3', position: 2, status: 'read' as const }
-    const secondIssue = { ...warlockIssue, id: 12, issue_number: '4', position: 9, status: 'unread' as const }
+    const firstIssue = { ...warlockIssue, id: 11, issue_number: '3', position: 9, status: 'read' as const }
+    const secondIssue = { ...warlockIssue, id: 12, issue_number: '4', position: 2, status: 'unread' as const }
     mockedGroups.get.mockResolvedValue(makeGroup([
-      { id: 2, thread_id: null, issue_id: 12 },
-      { id: 1, thread_id: null, issue_id: 11 },
+      { id: 2, thread_id: null, issue_id: 12, position: 2 },
+      { id: 1, thread_id: null, issue_id: 11, position: 1 },
     ]))
     mockedIssues.get.mockImplementation(async (id: number) => (id === 11 ? firstIssue : secondIssue))
     mockedThreads.get.mockResolvedValue(warlockThread)
@@ -215,10 +216,10 @@ describe('CrossoverDetailPage', () => {
 
     const rows = await screen.findAllByTestId('crossover-member-row')
     expect(rows).toHaveLength(2)
-    expect(within(rows[0]).getByText('Unread')).toBeInTheDocument()
-    expect(within(rows[0]).getByText(/Issue 4/)).toBeInTheDocument()
-    expect(within(rows[1]).getByText('Read')).toBeInTheDocument()
-    expect(within(rows[1]).getByText(/Issue 3/)).toBeInTheDocument()
+    expect(within(rows[0]).getByText('Read')).toBeInTheDocument()
+    expect(within(rows[0]).getByText(/Issue 3/)).toBeInTheDocument()
+    expect(within(rows[1]).getByText('Unread')).toBeInTheDocument()
+    expect(within(rows[1]).getByText(/Issue 4/)).toBeInTheDocument()
     expect(screen.getByText((_, element) => element?.textContent === '50%')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Continue Reading' })).toHaveAttribute(
       'href',
@@ -228,7 +229,7 @@ describe('CrossoverDetailPage', () => {
 
   it('shows blocked readiness with human-readable blocking reasons per member', async () => {
     const readIssue = { ...warlockIssue, status: 'read' as const }
-    mockedGroups.get.mockResolvedValue(makeGroup([{ id: 2, thread_id: null, issue_id: 11 }]))
+    mockedGroups.get.mockResolvedValue(makeGroup([{ id: 2, thread_id: null, issue_id: 11, position: 1 }]))
     mockedIssues.get.mockResolvedValue(readIssue)
     mockedThreads.get.mockResolvedValue(warlockThread)
     mockedGroups.listForThread.mockResolvedValue([])
@@ -270,8 +271,8 @@ describe('CrossoverDetailPage', () => {
 
   it('falls back to Unknown Series for a membership without thread or issue metadata', async () => {
     mockedGroups.get.mockResolvedValue(makeGroup([
-      { id: 5, thread_id: null, issue_id: null },
-      { id: 6, thread_id: null, issue_id: null },
+      { id: 5, thread_id: null, issue_id: null, position: 1 },
+      { id: 6, thread_id: null, issue_id: null, position: 2 },
     ]))
     mockedReadiness.evaluate.mockResolvedValue(readableReadiness)
 

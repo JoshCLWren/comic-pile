@@ -37,8 +37,8 @@ const annihilation = {
   name: 'Annihilation',
   created_at: '2026-08-06T00:00:00Z',
   memberships: [
-    { id: 1, issue_id: 11, thread_id: null, series_title: 'Nova', issue_number: '11' },
-    { id: 2, issue_id: null, thread_id: 22, series_title: 'Nova', issue_number: null },
+    { id: 1, issue_id: 11, thread_id: null, position: 1, series_title: 'Nova', issue_number: '11' },
+    { id: 2, issue_id: null, thread_id: 22, position: 2, series_title: 'Nova', issue_number: null },
   ],
 }
 

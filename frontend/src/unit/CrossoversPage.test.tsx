@@ -40,8 +40,8 @@ const annihilation = {
   name: 'Annihilation',
   created_at: '2026-08-06T00:00:00Z',
   memberships: [
-    { id: 1, issue_id: 11, thread_id: null, series_title: 'Nova', issue_number: '4' },
-    { id: 2, issue_id: null, thread_id: 22, series_title: 'Nova', issue_number: null },
+    { id: 1, issue_id: 11, thread_id: null, position: 1, series_title: 'Nova', issue_number: '4' },
+    { id: 2, issue_id: null, thread_id: 22, position: 2, series_title: 'Nova', issue_number: null },
   ],
 }
 
@@ -49,7 +49,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   api.list.mockResolvedValue([])
   api.get.mockResolvedValue({ id: 7, name: 'Annihilation', created_at: '2026-08-06T00:00:00Z', memberships: [] })
-  api.addMember.mockResolvedValue({ id: 99, thread_id: null, issue_id: null })
+  api.addMember.mockResolvedValue({ id: 99, thread_id: null, issue_id: null, position: 3 })
   api.addIssueRange.mockResolvedValue({ thread_id: 1, start_position: 1, end_position: 5, added_issue_ids: [], already_present_issue_ids: [] })
   issueApi.list.mockResolvedValue({ issues: [], total_count: 0, page_size: 20, next_page_token: null })
   vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -159,7 +159,7 @@ describe('CrossoversPage', () => {
 
   it('shows singular and empty membership states and collapses details', async () => {
     api.list.mockResolvedValue([
-      { ...annihilation, id: 8, name: 'Secret Wars', memberships: [{ id: 3, issue_id: 12, thread_id: null, series_title: 'Mighty Avengers', issue_number: '12' }] },
+      { ...annihilation, id: 8, name: 'Secret Wars', memberships: [{ id: 3, issue_id: 12, thread_id: null, position: 1, series_title: 'Mighty Avengers', issue_number: '12' }] },
       { ...annihilation, id: 9, name: 'House of M', memberships: [] },
     ])
     renderPage()

@@ -3476,7 +3476,7 @@ export interface components {
         };
         /**
          * DependencyGroupMemberResponse
-         * @description One persisted group membership with human-readable target metadata. ``series_title`` carries the owning thread's title for both membership kinds. For issue-level memberships, ``issue_number`` identifies the exact issue inside that series. A missing value means the target could not be resolved and the client must render a readable fallback instead of raw IDs.
+         * @description One persisted group membership with human-readable target metadata. ``series_title`` carries the owning thread's title for both membership kinds. For issue-level memberships, ``issue_number`` identifies the exact issue inside that series. A missing value means the target could not be resolved and the client must render a readable fallback instead of raw IDs. ``position`` is the authoritative cross-series reading-order slot for the membership inside its group. It is never derived from each issue's series-local position, so the crossover sequence stays stable even when several series reuse the same local position.
          */
         DependencyGroupMemberResponse: {
             /** Id */
@@ -3485,6 +3485,8 @@ export interface components {
             issue_id: number | null;
             /** Issue Number */
             issue_number?: string | null;
+            /** Position */
+            position: number;
             /** Series Title */
             series_title?: string | null;
             /** Thread Id */

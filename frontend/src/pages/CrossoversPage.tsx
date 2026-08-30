@@ -224,7 +224,14 @@ export default function CrossoversPage() {
     try {
       const member = await dependencyGroupsApi.addMember(groupId, { thread_id: memberThread.id })
       const threadTitle = memberThread.title
-      setGroups((current) => current.map((group) => group.id === groupId ? { ...group, memberships: [...group.memberships, member] } : group))
+      setGroups((current) => current.map((group) => group.id === groupId
+        ? {
+            ...group,
+            memberships: [...group.memberships, member].sort(
+              (a, b) => a.position - b.position || a.id - b.id,
+            ),
+          }
+        : group))
       setMemberThread(null)
       setMembershipMessage(`${threadTitle} added to crossover as 1 thread member.`)
     } catch (error) {
