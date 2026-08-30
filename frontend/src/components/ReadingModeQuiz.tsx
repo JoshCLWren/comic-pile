@@ -42,6 +42,19 @@ export default function ReadingModeQuiz({ isOpen, onClose, onComplete }: Reading
     [currentQuestion],
   )
 
+  const submit = useCallback(async () => {
+    setSubmitting(true)
+    setError(null)
+    try {
+      const state = await setReadingModeFromQuiz(answers)
+      onComplete?.(state)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save reading mode')
+      setSubmitting(false)
+    }
+  }, [answers, onComplete, onClose])
+
   const handleNext = useCallback(() => {
     if (selectedForStep === undefined) return
     if (isLastStep) {
@@ -59,19 +72,6 @@ export default function ReadingModeQuiz({ isOpen, onClose, onComplete }: Reading
       setStep((s) => s - 1)
     }
   }, [step, onClose])
-
-  const submit = useCallback(async () => {
-    setSubmitting(true)
-    setError(null)
-    try {
-      const state = await setReadingModeFromQuiz(answers)
-      onComplete?.(state)
-      onClose()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save reading mode')
-      setSubmitting(false)
-    }
-  }, [answers, onComplete, onClose])
 
   const canAdvance = selectedForStep !== undefined && !submitting
 
