@@ -1,7 +1,7 @@
 """Add reading-effort estimate fields to recommendation_contexts.
 
 Revision ID: d3b4e6f8a0c2
-Revises: 05f8245be921
+Revises: c2a1b0d3e4f5
 Create Date: 2026-08-29 00:00:00.000000
 
 """
@@ -14,7 +14,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "d3b4e6f8a0c2"
-down_revision: str | Sequence[str] | None = "05f8245be921"
+down_revision: str | Sequence[str] | None = "c2a1b0d3e4f5"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
