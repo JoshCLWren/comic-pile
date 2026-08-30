@@ -303,7 +303,7 @@ export default function CrossoversPage() {
   }
 
   return (
-    <section className="space-y-6" aria-labelledby="crossovers-heading">
+    <section className="space-y-6 pb-28" aria-labelledby="crossovers-heading">
       <header>
         <p className="text-xs font-bold uppercase tracking-[0.25em] text-amber-500">Continuity</p>
         <h1 id="crossovers-heading" className="mt-1 text-3xl font-black text-stone-100">Crossovers</h1>

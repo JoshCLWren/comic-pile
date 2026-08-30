@@ -55,7 +55,7 @@ export function RollHeader({
       }
     : null
   return (
-    <header className="flex justify-between items-center px-2 md:px-3 py-2 shrink-0 z-10">
+    <header className="flex flex-wrap justify-between items-center px-2 md:px-3 py-2 shrink-0 z-10 gap-2">
       <div className="min-w-0">
         <h1 className="text-xl md:text-2xl font-black tracking-tighter text-glow uppercase">
           Pile Roller
@@ -84,7 +84,7 @@ export function RollHeader({
       </div>
       <div className={`items-center gap-1 md:gap-2 shrink-0 ${isRatingView ? 'hidden' : 'flex'}`}>
         <div id="die-selector">
-          <div className="hidden md:flex gap-1">
+          <div className="hidden md:flex flex-wrap gap-1">
             {DICE_LADDER.map((die) => (
               <button
                 key={die}
