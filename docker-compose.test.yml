@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: comic_pile_test
     ports:
-      - "${E2E_POSTGRES_PORT:-5437}:5432"
+      - "${E2E_POSTGRES_PUBLISH:-5437:5432}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -18,7 +18,7 @@ services:
   redis-test:
     image: redis:7-alpine
     ports:
-      - "${E2E_REDIS_PORT:-6379}:6379"
+      - "${E2E_REDIS_PUBLISH:-6379:6379}"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -41,7 +41,7 @@ services:
       SECRET_KEY: test-secret-key-for-testing-only
       TEST_ENVIRONMENT: "true"
     ports:
-      - "${E2E_API_PORT:-8002}:8000"
+      - "127.0.0.1:${E2E_API_PORT:-8002}:8000"
     depends_on:
       postgres-test:
         condition: service_healthy
