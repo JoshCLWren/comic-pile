@@ -131,6 +131,9 @@ async def _next_group_position(db: AsyncSession, group_id: int) -> int:
         One greater than the current maximum membership position (or ``1``
         when the group has no memberships yet).
     """
+    await db.execute(
+        select(DependencyGroup.id).where(DependencyGroup.id == group_id).with_for_update()
+    )
     result = await db.execute(
         select(func.max(DependencyGroupMembership.position)).where(
             DependencyGroupMembership.group_id == group_id
