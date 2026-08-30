@@ -30,6 +30,7 @@ from app.schemas import (
     ThreadUpdate,
 )
 from app.schemas.migration import MigrateToIssuesSimpleRequest
+from app.repositories.session_repository import fetch_active_session
 from app.services import thread_service
 from app.services.errors import (
     ConflictError,
@@ -69,7 +70,12 @@ async def list_stale_threads(
 ) -> list[ThreadResponse]:
     """List the authenticated user's threads not read in ``days`` (default 30)."""
     try:
-        return await thread_service.list_stale_thread_responses(db, current_user.id, days)
+        session = await fetch_active_session(db, current_user.id)
+        snoozed = session.snoozed_thread_ids if session else None
+        snoozed_ids = list(snoozed) if snoozed else None
+        return await thread_service.list_stale_thread_responses(
+            db, current_user.id, days, snoozed_ids=snoozed_ids
+        )
     except ServiceError as exc:
         raise _map_service_error(exc) from exc
 

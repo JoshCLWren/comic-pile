@@ -305,11 +305,35 @@ async def roll_dice(
         thread_id=selected_thread_id,
         issue_id=selected_thread_issue_id,
     )
+    # Build bounded per-candidate weight snapshot for the versioned JSON
+    # context (issue #1718). Keep payload bounded to the die pool and record
+    # the exact weights passed to the chooser plus compact reason codes.
+    json_candidate_weights: list[dict[str, object]] | None = None
+    json_selected_weight: float | None = None
+    if candidate_weights:
+        json_candidate_weights = [
+            {
+                "candidate_id": entry.candidate_id,
+                "weight": round(float(entry.weight), 4),
+                "reasons": list(entry.factors),
+                # Keep "factors" alias for compatibility with RecommendationContext table naming.
+                "factors": list(entry.factors),
+            }
+            for entry in candidate_weights
+        ]
+        json_selected_weight = float(candidate_weights[selected_index].weight)
     recommendation_context = build_recommendation_context(
         effort_estimate,
         thread_id=selected_thread_id,
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
+        candidate_weights=json_candidate_weights,
+        bandwidth=normalize_bandwidth(selection_bandwidth).value,
+        bandwidth_source=current_session.bandwidth_source or "default",
+        bandwidth_confidence=current_session.bandwidth_confidence or 0.0,
+        random_bypass=not weights_applied,
+        balanced_neutrality=not weights_applied,
+        selected_weight=json_selected_weight,
     )
 
     # Extract effort estimate band as string for JSON serialization
@@ -361,7 +385,7 @@ async def roll_dice(
     # from persisted data alone.
     has_explicit_mode = bool(current_session.active_intent)
     context_data = RecommendationContextCreate(
-        schema_version=1,
+        schema_version=2,
         intent=normalize_intent(selection_intent).value,
         intent_source=current_session.intent_source or "default",
         intent_confidence=1.0 if has_explicit_mode else 0.0,
@@ -543,11 +567,28 @@ async def override_roll(
         thread_id=override_thread_id,
         issue_id=override_thread_issue_id,
     )
+    # Versioned JSON context for override: single bounded candidate, neutral
+    # weighting but explicit manual-override bandwidth source (issue #1718).
+    override_candidate_weights: list[dict[str, object]] = [
+        {
+            "candidate_id": override_thread_id,
+            "weight": 1.0,
+            "reasons": [],
+            "factors": [],
+        }
+    ]
     recommendation_context = build_recommendation_context(
         effort_estimate,
         thread_id=override_thread_id,
         issue_id=override_thread_issue_id,
         issue_number=override_thread_issue_number,
+        candidate_weights=override_candidate_weights,
+        bandwidth="balanced",
+        bandwidth_source="manual_override",
+        bandwidth_confidence=1.0,
+        random_bypass=False,
+        balanced_neutrality=True,
+        selected_weight=1.0,
     )
 
     # Extract effort estimate band as string for JSON serialization
@@ -581,7 +622,7 @@ async def override_roll(
     # Record recommendation context for override selection
     # Override is a manual selection, not a weighted recommendation
     context_data = RecommendationContextCreate(
-        schema_version=1,
+        schema_version=2,
         intent="balanced",
         intent_source="manual_override",
         intent_confidence=1.0,
@@ -991,7 +1032,7 @@ async def roll_bootstrap(
 
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
     effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
-    stale_count_result = await db.execute(
+    stale_base = (
         select(func.count())
         .select_from(Thread)
         .where(Thread.user_id == user_id)
@@ -999,17 +1040,23 @@ async def roll_bootstrap(
         .where(Thread.is_blocked.is_(False))
         .where(effective_activity < stale_cutoff)
     )
+    if snoozed_ids:
+        stale_base = stale_base.where(Thread.id.not_in(snoozed_ids))
+    stale_count_result = await db.execute(stale_base)
     stale_thread_count = stale_count_result.scalar() or 0
 
     stale_thread = None
     if stale_thread_count > 0:
-        stale_ids_result = await db.execute(
+        stale_ids_query = (
             select(Thread.id)
             .where(Thread.user_id == user_id)
             .where(Thread.status == "active")
             .where(Thread.is_blocked.is_(False))
             .where(effective_activity < stale_cutoff)
         )
+        if snoozed_ids:
+            stale_ids_query = stale_ids_query.where(Thread.id.not_in(snoozed_ids))
+        stale_ids_result = await db.execute(stale_ids_query)
         stale_ids = [row[0] for row in stale_ids_result.all()]
         if stale_ids:
             chosen_id = random.choice(stale_ids)

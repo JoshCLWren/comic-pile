@@ -535,11 +535,28 @@ async def get_bounded_roll_pool_rows(
     return rows[:current_die]
 
 
-async def get_stale_threads(user_id: int, db: AsyncSession, days: int = 7) -> list[Thread]:
-    """Get threads not read in the specified number of days."""
+async def get_stale_threads(
+    user_id: int,
+    db: AsyncSession,
+    days: int = 7,
+    snoozed_ids: list[int] | None = None,
+) -> list[Thread]:
+    """Get threads not read in the specified number of days.
+
+    Args:
+        user_id: Owner of the threads.
+        db: Async database session.
+        days: Number of days after which a thread is considered stale.
+        snoozed_ids: Thread IDs currently snoozed in the session; these are
+            excluded from the stale result.
+
+    Returns:
+        Active, unblocked threads whose last activity predates the cutoff,
+        ordered oldest activity first (nulls first).
+    """
     cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
-    result = await db.execute(
+    query = (
         select(Thread)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
@@ -547,4 +564,8 @@ async def get_stale_threads(user_id: int, db: AsyncSession, days: int = 7) -> li
         .where((Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None)))
         .order_by(Thread.last_activity_at.asc().nullsfirst())
     )
+    if snoozed_ids:
+        query = query.where(Thread.id.not_in(snoozed_ids))
+
+    result = await db.execute(query)
     return list(result.scalars().all())

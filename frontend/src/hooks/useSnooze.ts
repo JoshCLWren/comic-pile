@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { invalidateCurrentSessionAfterSnooze } from '../query/cacheEffects'
-import { queryClient } from '../query/queryClient'
 import { snoozeApi } from '../services/api'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import { getApiErrorDetail } from '../utils/apiError'
@@ -17,6 +17,7 @@ type SnoozeResult = Awaited<ReturnType<typeof protectedRollMutationApi.snooze>> 
 const SNOOZE_REFRESH_ATTEMPTS = 2
 
 export function useSnooze() {
+  const queryClient = useQueryClient()
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
   const [refreshError, setRefreshError] = useState<unknown>(null)
@@ -142,23 +143,17 @@ export function useSnooze() {
 }
 
 export function useUnsnooze() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
-
-  const mutate = async (threadId: number) => {
-    setIsPending(true)
-    setIsError(false)
-    try {
-      await snoozeApi.unsnooze(threadId)
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: (threadId: number) => snoozeApi.unsnooze(threadId),
+    onSuccess: async () => {
       await invalidateCurrentSessionAfterSnooze(queryClient)
-    } catch (error: unknown) {
-      setIsError(true)
-      console.error('Failed to unsnooze thread:', getApiErrorDetail(error))
-      throw error
-    } finally {
-      setIsPending(false)
-    }
-  }
+    },
+  })
 
-  return { mutate, isPending, isError }
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  }
 }

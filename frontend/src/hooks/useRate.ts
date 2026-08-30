@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
-import { getApiErrorDetail } from '../utils/apiError'
 import type { RatePayload } from '../types'
 import {
   fetchAndPublishRollBootstrap,
@@ -35,7 +34,7 @@ export function useRate() {
         } catch (reconciliationError: unknown) {
           console.error(
             'Rating saved but authoritative Roll state failed to refresh:',
-            getApiErrorDetail(reconciliationError),
+            reconciliationError,
           )
         }
 
@@ -55,7 +54,7 @@ export function useRate() {
           } catch (recoveryError: unknown) {
             console.error(
               'Failed to recover rating after authentication expiry:',
-              getApiErrorDetail(recoveryError),
+              recoveryError,
             )
           }
         }
@@ -67,13 +66,12 @@ export function useRate() {
           } catch (reconciliationError: unknown) {
             console.error(
               'Failed to reconcile ambiguous rating result:',
-              getApiErrorDetail(reconciliationError),
+              reconciliationError,
             )
           }
         }
 
         setIsError(true)
-        console.error('Failed to rate thread:', getApiErrorDetail(error))
         throw error
       }
     })()

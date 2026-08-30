@@ -1,132 +1,75 @@
-import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { rollApi } from '../services/api'
-import { getApiErrorDetail } from '../utils/apiError'
 import type { OverrideRollPayload } from '../types'
 
 export function useRoll() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
+  const mutation = useMutation({
+    mutationFn: () => rollApi.roll(),
+  })
 
-  const mutate = async () => {
-    setIsPending(true)
-    setIsError(false)
-    try {
-      const response = await rollApi.roll()
-      setIsPending(false)
-      return response
-    } catch (error: unknown) {
-      setIsPending(false)
-      setIsError(true)
-      console.error('Failed to roll:', getApiErrorDetail(error))
-      throw error
-    }
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
   }
-
-  return { mutate, isPending, isError }
 }
 
 export function useOverrideRoll() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
+  const mutation = useMutation({
+    mutationFn: (data: OverrideRollPayload) => rollApi.override(data),
+  })
 
-  const mutate = async (data: OverrideRollPayload) => {
-    setIsPending(true)
-    setIsError(false)
-    try {
-      const response = await rollApi.override(data)
-      return response
-    } catch (error: unknown) {
-      setIsError(true)
-      console.error('Failed to override roll:', getApiErrorDetail(error))
-      throw error
-    } finally {
-      setIsPending(false)
-    }
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
   }
-
-  return { mutate, isPending, isError }
 }
 
 export function useDismissPending() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
-  
-  const mutate = async () => {
-    setIsPending(true)
-    setIsError(false)
-    try {
-      await rollApi.dismissPending()
-    } catch (error: unknown) {
-      setIsError(true)
-      console.error('Failed to dismiss pending roll:', getApiErrorDetail(error))
-      throw error
-    } finally {
-      setIsPending(false)
-    }
+  const mutation = useMutation({
+    mutationFn: () => rollApi.dismissPending(),
+  })
+
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
   }
-  
-  return { mutate, isPending, isError }
 }
 
 export function useSetDie() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
-  
-  const mutate = async (die: number) => {
-    setIsPending(true)
-    setIsError(false)
-    try {
-      await rollApi.setDie(die)
-    } catch (error: unknown) {
-      setIsError(true)
-      console.error('Failed to set die:', getApiErrorDetail(error))
-      throw error
-    } finally {
-      setIsPending(false)
-    }
+  const mutation = useMutation({
+    mutationFn: (die: number) => rollApi.setDie(die),
+  })
+
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
   }
-  
-  return { mutate, isPending, isError }
 }
 
 export function useClearManualDie() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
-  
-  const mutate = async () => {
-    setIsPending(true)
-    setIsError(false)
-    try {
-      await rollApi.clearManualDie()
-    } catch (error: unknown) {
-      setIsError(true)
-      console.error('Failed to clear manual die:', getApiErrorDetail(error))
-      throw error
-    } finally {
-      setIsPending(false)
-    }
+  const mutation = useMutation({
+    mutationFn: () => rollApi.clearManualDie(),
+  })
+
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
   }
-  
-  return { mutate, isPending, isError }
 }
 
 export function useReroll() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
-  
-  const mutate = async () => {
-    setIsPending(true)
-    setIsError(false)
-    try {
-      await rollApi.reroll()
-    } catch (error: unknown) {
-      setIsError(true)
-      console.error('Failed to reroll:', getApiErrorDetail(error))
-      throw error
-    } finally {
-      setIsPending(false)
-    }
+  const mutation = useMutation({
+    mutationFn: () => rollApi.reroll(),
+  })
+
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
   }
-  
-  return { mutate, isPending, isError }
 }

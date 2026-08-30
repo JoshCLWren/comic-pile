@@ -8,7 +8,7 @@ export interface UnreadIssueDetail {
 }
 
 export interface ContinuityBlocker {
-  rule_id: number
+  rule_id: number | null
   source_type: 'issue' | 'thread' | 'crossover'
   source_id: number
   source_label: string
@@ -18,7 +18,16 @@ export interface ContinuityBlocker {
   causing_member_issue_ids: number[]
   unread_issue_details: UnreadIssueDetail[]
   note: string | null
+  crossover_id?: number | null
+  sequence_position?: number | null
 }
+
+export type ContinuityBlockerType =
+  | 'item_unread'
+  | 'members_unread'
+  | 'selected_members_unread'
+  | 'crossover_order'
+  | 'crossover_order_series'
 
 export interface ContinuityReadinessResponse {
   node_type: ContinuityReadinessNodeType

@@ -42,24 +42,6 @@ export default function ReadingModeQuiz({ isOpen, onClose, onComplete }: Reading
     [currentQuestion],
   )
 
-  const handleNext = useCallback(() => {
-    if (selectedForStep === undefined) return
-    if (isLastStep) {
-      void submit()
-    } else {
-      setStep((s) => s + 1)
-    }
-  }, [selectedForStep, isLastStep])
-
-  const handleBack = useCallback(() => {
-    setError(null)
-    if (step === 0) {
-      onClose()
-    } else {
-      setStep((s) => s - 1)
-    }
-  }, [step, onClose])
-
   const submit = useCallback(async () => {
     setSubmitting(true)
     setError(null)
@@ -72,6 +54,24 @@ export default function ReadingModeQuiz({ isOpen, onClose, onComplete }: Reading
       setSubmitting(false)
     }
   }, [answers, onComplete, onClose])
+
+  const handleNext = useCallback(() => {
+    if (selectedForStep === undefined) return
+    if (isLastStep) {
+      void submit()
+    } else {
+      setStep((s) => s + 1)
+    }
+  }, [selectedForStep, isLastStep, submit])
+
+  const handleBack = useCallback(() => {
+    setError(null)
+    if (step === 0) {
+      onClose()
+    } else {
+      setStep((s) => s - 1)
+    }
+  }, [step, onClose])
 
   const canAdvance = selectedForStep !== undefined && !submitting
 

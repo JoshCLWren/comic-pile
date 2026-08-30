@@ -413,6 +413,60 @@ async def test_roll_bootstrap_counts_null_activity_old_threads_as_stale(
 
 
 @pytest.mark.asyncio
+async def test_roll_bootstrap_excludes_snoozed_threads_from_stale(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Bootstrap stale count excludes threads that are currently snoozed."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.models import Session as SessionModel, Thread
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=10)
+
+    stale_thread = Thread(
+        title="Stale Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+    snoozed_stale_thread = Thread(
+        title="Snoozed Stale Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+    async_db.add_all([stale_thread, snoozed_stale_thread])
+    await async_db.flush()
+
+    session = SessionModel(
+        user_id=user.id,
+        started_at=now,
+        snoozed_thread_ids=[snoozed_stale_thread.id],
+    )
+    async_db.add(session)
+    await async_db.commit()
+
+    response = await auth_client.get("/api/v1/roll/bootstrap")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["stale_thread_count"] == 1
+    assert data["stale_thread"]["title"] == "Stale Thread"
+
+
+@pytest.mark.asyncio
 async def test_roll_die_boundary_caps_result(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:

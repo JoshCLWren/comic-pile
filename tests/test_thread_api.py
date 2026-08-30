@@ -6,7 +6,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from app.models import Issue, Thread, User
+from app.models import Issue, Session as SessionModel, Thread, User
 from tests.conftest import get_or_create_user_async
 
 
@@ -506,6 +506,54 @@ async def test_stale_endpoint_includes_unblocked_stale_threads(
     data = response.json()
     thread_ids = {t["id"] for t in data}
     assert unblocked_thread.id in thread_ids
+
+
+@pytest.mark.asyncio
+async def test_stale_endpoint_excludes_snoozed_threads(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Stale endpoint excludes threads that are currently snoozed in the session."""
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=60)
+
+    stale_thread = Thread(
+        title="Stale Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+    snoozed_stale_thread = Thread(
+        title="Snoozed Stale Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+    async_db.add_all([stale_thread, snoozed_stale_thread])
+    await async_db.flush()
+
+    session = SessionModel(
+        user_id=user.id,
+        started_at=now,
+        snoozed_thread_ids=[snoozed_stale_thread.id],
+    )
+    async_db.add(session)
+    await async_db.commit()
+
+    response = await auth_client.get("/api/v1/threads/stale?days=30")
+    assert response.status_code == 200
+    data = response.json()
+    thread_ids = {t["id"] for t in data}
+    assert stale_thread.id in thread_ids
+    assert snoozed_stale_thread.id not in thread_ids
 
 
 @pytest.mark.asyncio
