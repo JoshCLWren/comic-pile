@@ -132,10 +132,8 @@ export function ReadingContextPillar({
   const openCurrentThread = () => {
     if (activeRatingThread) navigate(`/thread/${activeRatingThread.id}`)
   }
-  const openCrossover = (crossoverId: number, nextMemberIssueNumber?: string | null) => {
-    const params = new URLSearchParams({ group: String(crossoverId) })
-    if (nextMemberIssueNumber) params.set('starts_at', String(nextMemberIssueNumber))
-    navigate(`/crossovers?${params.toString()}`)
+  const openCrossover = (crossoverId: number) => {
+    navigate(`/crossovers/${crossoverId}`)
   }
   const openThread = (threadId: number) => navigate(`/thread/${threadId}`)
 
