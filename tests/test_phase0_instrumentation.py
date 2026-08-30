@@ -163,12 +163,10 @@ async def test_roll_nullable_issue_fields_for_non_issue_tracked(
     monkeypatch.setattr("app.momentum.random.randint", lambda _start, _end: 0)
     monkeypatch.setattr("app.momentum.random.uniform", lambda _a, _b: 0.0)
     # Also direct the thread selection to Superman when the service uses choice/weighted logic.
-    original_choice = None
     try:
         import app.momentum as momentum_module
 
         if hasattr(momentum_module.random, "choice"):
-            original_choice = momentum_module.random.choice
             monkeypatch.setattr(
                 momentum_module.random,
                 "choice",
