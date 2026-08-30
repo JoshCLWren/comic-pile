@@ -206,7 +206,7 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     expect(grid!.className).not.toMatch(/minmax\(0,\d+fr\)/)
 
     const expectedRegionCount = state.expectReadingContextRegion ? 3 : 2
-    expect(cells.length).toBe(expectedRegionCount + 1)
+    expect(cells.length).toBe(expectedRegionCount)
 
     expect(cells[0].dataset.testid).toBe('rating-region-comic')
     if (state.expectReadingContextRegion) {
@@ -215,7 +215,6 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     } else {
       expect(cells[1].dataset.testid).toBe('rating-region-your-context')
     }
-    expect(cells[cells.length - 1].dataset.testid).toBe('rating-actions-grid-cell')
 
     for (const cell of cells) {
       expect(cell.className).not.toMatch(/\b(?:md:|xl:)?(?:col-start|row-start|col-end|row-end|row-span)-\d+\b/)
@@ -238,7 +237,7 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     }
   })
 
-  it('places the action panel on its own full-width desktop row below every region', () => {
+  it('stacks the action panel with Your Context instead of below the tallest desktop pillar', () => {
     const { container } = render(
       ratingView({
         readingOrders: readingOrders(2),
@@ -246,10 +245,12 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
         readerContext: richReaderContext(),
       }),
     )
-    const { cells } = gridChildren(container)
-    const actions = cells[cells.length - 1]
-    expect(actions.dataset.testid).toBe('rating-actions-grid-cell')
-    expect(actions.className).toContain('xl:col-span-full')
+    const yourContext = container.querySelector('[data-testid="rating-region-your-context"]')
+    const actions = container.querySelector('[data-testid="rating-actions-grid-cell"]')
+    expect(yourContext).not.toBeNull()
+    expect(actions).not.toBeNull()
+    expect(yourContext!.contains(actions)).toBe(true)
+    expect(actions!.className).not.toContain('xl:col-span-full')
     expect(container.querySelector('[data-testid="rating-actions"]')).not.toBeNull()
   })
 
@@ -271,9 +272,14 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     const { container } = render(ratingView())
     const comicRegion = container.querySelector('[data-testid="rating-region-comic"]')
     const cover = container.querySelector('[data-testid="comic-cover"]')
+    const actions = container.querySelector('[data-testid="rating-actions-grid-cell"]')
+    const yourContext = container.querySelector('[data-testid="rating-region-your-context"]')
     expect(comicRegion).not.toBeNull()
     expect(cover).not.toBeNull()
+    expect(actions).not.toBeNull()
+    expect(yourContext).not.toBeNull()
     expect(comicRegion!.contains(cover)).toBe(true)
+    expect(yourContext!.contains(actions)).toBe(true)
     expect(cover!.className).toContain('max-h-[min(70vh,45vh)]')
     expect(cover!.className).not.toContain('max-h-[70vh]')
   })
