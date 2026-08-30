@@ -242,20 +242,20 @@ async def load_snapshot(db: AsyncSession, user_id: int) -> GraphSnapshot:
         ).items()
     }
 
-    crossover_ordered_issue_ids = {
-        group_id: tuple(
-            membership.issue_id
-            for membership in sorted(
-                (
-                    row
-                    for row in rows
-                    if row.issue_id is not None and row.sequence_order is not None
-                ),
-                key=lambda membership: (membership.sequence_order, membership.id),
-            )
-        )
-        for group_id, rows in group_memberships.items()
-    }
+    crossover_ordered_issue_ids: dict[int, tuple[int, ...]] = {}
+    for group_id, rows in group_memberships.items():
+        ordered: list[int] = []
+        for membership in sorted(
+            (
+                row
+                for row in rows
+                if row.issue_id is not None and row.sequence_order is not None
+            ),
+            key=lambda membership: (membership.sequence_order, membership.id),
+        ):
+            if membership.issue_id is not None:
+                ordered.append(membership.issue_id)
+        crossover_ordered_issue_ids[group_id] = tuple(ordered)
     issue_crossover_positions: dict[int, list[tuple[int, int]]] = {}
     for group_id, ordered_ids in crossover_ordered_issue_ids.items():
         for position, issue_id in enumerate(ordered_ids, start=1):
