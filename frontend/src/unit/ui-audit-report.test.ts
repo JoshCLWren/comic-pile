@@ -21,6 +21,7 @@ function sampleReport(): AuditReport {
           {
             kind: 'horizontal-overflow',
             severity: 'warning',
+            confidence: 'high',
             message: 'The rendered document is wider than the viewport.',
             elements: ['body text="Queue"'],
             measurements: {
@@ -53,6 +54,7 @@ describe('UI audit report rendering', () => {
     expect(markdown).toContain('Audit warnings are rendered evidence for investigation')
     expect(markdown).toContain('do not fail the harness by themselves')
     expect(markdown).toContain('horizontal-overflow')
+    expect(markdown).toContain('high confidence')
   })
 
   it('records enough state, viewport, element, measurement, screenshot, and style evidence to reproduce a finding', () => {

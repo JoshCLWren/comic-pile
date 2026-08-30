@@ -1,6 +1,6 @@
-import { mkdir } from 'node:fs/promises'
+import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { Page } from '@playwright/test'
+import type { Page, Route } from '@playwright/test'
 import { expect, test } from './fixtures'
 import {
   captureRenderedAudit,
@@ -9,9 +9,15 @@ import {
   type AuditViewport,
   writeAuditReport,
 } from './ui-audit/harness'
+import {
+  AUDIT_FIXED_NOW,
+  AUDIT_FIXED_USERNAME,
+  stabilizeAuditApiPayload,
+} from './ui-audit/stabilize'
 
 const OUTPUT_DIRECTORY = join(process.cwd(), 'test-results', 'ui-audit')
 const SCREENSHOT_DIRECTORY = join(OUTPUT_DIRECTORY, 'screenshots')
+const results: AuditPageResult[] = []
 
 const VIEWPORTS: AuditViewport[] = [
   { name: 'phone', width: 390, height: 844 },
@@ -28,10 +34,39 @@ type Scenario = {
   afterCapture?: (page: Page) => Promise<void>
 }
 
-async function waitForApplicationState(page: Page): Promise<void> {
+async function stabilizeApiRoute(route: Route): Promise<void> {
+  const response = await route.fetch()
+  const contentType = response.headers()['content-type'] ?? ''
+  if (!contentType.includes('application/json')) {
+    await route.fulfill({ response })
+    return
+  }
+
+  const pathname = new URL(route.request().url()).pathname
+  const payload = await response.json()
+  await route.fulfill({
+    response,
+    json: stabilizeAuditApiPayload(pathname, payload),
+  })
+}
+
+async function installStableAuditResponses(page: Page): Promise<void> {
+  await page.route('**/api/v1/auth/me', stabilizeApiRoute)
+  await page.route(/\/api\/v1\/sessions\/(?:current\/)?(?:\?.*)?$/, stabilizeApiRoute)
+}
+
+async function waitForApplicationState(page: Page, viewport: AuditViewport): Promise<void> {
   await page.locator('[data-app-shell-ready]').waitFor({ state: 'visible' })
   await expect(page.getByText('Loading page...', { exact: true })).toBeHidden()
   await expect(page.locator('main')).toBeVisible()
+  if (viewport.width >= 768) {
+    await expect(page.getByText(AUDIT_FIXED_USERNAME, { exact: true })).toBeVisible()
+  }
+  await page.evaluate(async () => {
+    await document.fonts.ready
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  })
 }
 
 async function openManualPicker(page: Page): Promise<void> {
@@ -48,6 +83,7 @@ async function enterDeterministicRatingState(page: Page): Promise<void> {
   await dialog.getByRole('button', { name: 'Pick this thread' }).click()
   await expect(page.getByTestId('rating-pillars-grid')).toBeVisible()
   await expect(page.getByTestId('rating-actions')).toBeVisible()
+  await page.locator('#rating-input').fill('4')
 }
 
 const SCENARIOS: Scenario[] = [
@@ -65,7 +101,11 @@ const SCENARIOS: Scenario[] = [
     checkBlankRegions: true,
     prepare: enterDeterministicRatingState,
     afterCapture: async (page) => {
+      const rateResponse = page.waitForResponse(
+        (response) => response.url().includes('/api/v1/rate/') && response.request().method() === 'POST',
+      )
       await page.getByTestId('save-and-continue').click()
+      expect((await rateResponse).ok()).toBe(true)
       await expect(page.getByTestId('rating-pillars-grid')).toBeHidden()
     },
   },
@@ -110,72 +150,93 @@ const SCENARIOS: Scenario[] = [
   },
 ]
 
-test('cross-page visual and geometry audit (#2043)', async ({ authenticatedWithThreadsPage }) => {
-  const page = authenticatedWithThreadsPage
-  const results: AuditPageResult[] = []
+test.describe('cross-page visual and geometry audit (#2043)', () => {
+  test.describe.configure({ mode: 'serial' })
 
-  await mkdir(SCREENSHOT_DIRECTORY, { recursive: true })
-  await page.addInitScript({
-    content: `(() => {
-      const fixedNow = Date.parse('2026-08-30T12:00:00Z');
-      const RealDate = Date;
-      class FixedDate extends RealDate {
-        constructor(...args) {
-          super(...(args.length ? args : [fixedNow]));
-        }
-        static now() { return fixedNow; }
-      }
-      window.Date = FixedDate;
-    })();`,
+  test.beforeAll(async () => {
+    await rm(OUTPUT_DIRECTORY, { recursive: true, force: true })
+    await mkdir(SCREENSHOT_DIRECTORY, { recursive: true })
   })
 
   for (const viewport of VIEWPORTS) {
-    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    test(`${viewport.name} ${viewport.width}x${viewport.height}`, async ({ authenticatedWithThreadsPage }) => {
+      const page = authenticatedWithThreadsPage
+      const viewportResults: AuditPageResult[] = []
 
-    for (const scenario of SCENARIOS) {
-      await page.goto(scenario.route, { waitUntil: 'domcontentloaded' })
-      await waitForApplicationState(page)
-      await page.addStyleTag({
-        content: `
-          *, *::before, *::after {
-            animation-duration: 0s !important;
-            animation-delay: 0s !important;
-            transition-duration: 0s !important;
-            transition-delay: 0s !important;
-            caret-color: transparent !important;
+      await installStableAuditResponses(page)
+      await page.addInitScript({
+        content: `(() => {
+          const fixedNow = Date.parse(${JSON.stringify(AUDIT_FIXED_NOW)});
+          const RealDate = Date;
+          class FixedDate extends RealDate {
+            constructor(...args) {
+              super(...(args.length ? args : [fixedNow]));
+            }
+            static now() { return fixedNow; }
           }
-        `,
+          window.Date = FixedDate;
+        })();`,
       })
-      await scenario.prepare?.(page)
+      await page.setViewportSize({ width: viewport.width, height: viewport.height })
 
-      const fileStem = `${scenario.name}-${viewport.name}-${viewport.width}x${viewport.height}`
-      const screenshotRelativePath = `screenshots/${fileStem}.png`
-      const captured = await captureRenderedAudit(page, {
-        scenario: scenario.name,
-        route: scenario.route,
-        viewport,
-        checkBlankRegions: scenario.checkBlankRegions,
-      })
-      await page.screenshot({
-        path: join(OUTPUT_DIRECTORY, screenshotRelativePath),
-        fullPage: true,
-        animations: 'disabled',
-        caret: 'hide',
-      })
-      results.push({ ...captured, screenshot: screenshotRelativePath })
+      for (const scenario of SCENARIOS) {
+        await page.goto(scenario.route, { waitUntil: 'domcontentloaded' })
+        await waitForApplicationState(page, viewport)
+        await page.addStyleTag({
+          content: `
+            *, *::before, *::after {
+              animation-duration: 0s !important;
+              animation-delay: 0s !important;
+              transition-duration: 0s !important;
+              transition-delay: 0s !important;
+              caret-color: transparent !important;
+            }
+          `,
+        })
+        await scenario.prepare?.(page)
+        await page.evaluate(async () => {
+          await document.fonts.ready
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        })
 
-      await scenario.afterCapture?.(page)
+        const fileStem = `${scenario.name}-${viewport.name}-${viewport.width}x${viewport.height}`
+        const screenshotRelativePath = `screenshots/${fileStem}.png`
+        const captured = await captureRenderedAudit(page, {
+          scenario: scenario.name,
+          route: scenario.route,
+          viewport,
+          checkBlankRegions: scenario.checkBlankRegions,
+        })
+        const diceCanvas = page.locator('#main-die-3d canvas')
+        const screenshotMask = (await diceCanvas.count()) > 0 ? [diceCanvas] : []
+        await page.screenshot({
+          path: join(OUTPUT_DIRECTORY, screenshotRelativePath),
+          fullPage: true,
+          animations: 'disabled',
+          caret: 'hide',
+          mask: screenshotMask,
+          maskColor: '#1c1917',
+        })
+        const result = { ...captured, screenshot: screenshotRelativePath }
+        results.push(result)
+        viewportResults.push(result)
+
+        await scenario.afterCapture?.(page)
+      }
+
+      expect(viewportResults).toHaveLength(SCENARIOS.length)
+      expect(viewportResults.every((result) => result.styleInventory.length > 0)).toBe(true)
+    })
+  }
+
+  test.afterAll(async () => {
+    const report: AuditReport = {
+      schemaVersion: 1,
+      generatedAt: AUDIT_FIXED_NOW,
+      fixture: 'fresh authenticatedWithThreadsPage user per viewport; three deterministic ten-issue threads; volatile username/session timestamps normalized',
+      results,
     }
-  }
-
-  const report: AuditReport = {
-    schemaVersion: 1,
-    generatedAt: '2026-08-30T12:00:00.000Z',
-    fixture: 'authenticatedWithThreadsPage: isolated user, three deterministic ten-issue threads',
-    results,
-  }
-  await writeAuditReport(report, OUTPUT_DIRECTORY)
-
-  expect(results).toHaveLength(VIEWPORTS.length * SCENARIOS.length)
-  expect(results.every((result) => result.styleInventory.length > 0)).toBe(true)
+    await writeAuditReport(report, OUTPUT_DIRECTORY)
+  })
 })
