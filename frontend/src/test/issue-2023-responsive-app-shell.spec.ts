@@ -119,20 +119,26 @@ test.describe('Responsive authenticated app shell (#2023)', () => {
     await expect(main).toBeVisible()
     await expect(desktopNav).toBeVisible()
 
+    const initialMainLeft = await main.evaluate(
+      (element) => element.getBoundingClientRect().left,
+    )
+
     await desktopNav.evaluate((nav) => {
       nav.style.width = '20rem'
     })
 
     await expect.poll(async () => {
-      return page.evaluate(() => {
+      return page.evaluate((initialLeft) => {
         const mainRect = document
           .querySelector<HTMLElement>('[data-authenticated-shell] > main')
           ?.getBoundingClientRect()
         const navRect = document
           .querySelector<HTMLElement>('nav[aria-label="Desktop navigation"]')
           ?.getBoundingClientRect()
-        return (mainRect?.left ?? Number.NEGATIVE_INFINITY) >= (navRect?.right ?? Number.POSITIVE_INFINITY)
-      })
+        const mainLeft = mainRect?.left ?? Number.NEGATIVE_INFINITY
+        const navRight = navRect?.right ?? Number.POSITIVE_INFINITY
+        return Math.abs(mainLeft - navRight) <= 1 && mainLeft > initialLeft
+      }, initialMainLeft)
     }).toBe(true)
 
     const overflow = await page.evaluate(() => ({
