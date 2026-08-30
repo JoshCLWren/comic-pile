@@ -494,7 +494,7 @@ export default function ContinuityPlannerPage() {
   }
 
   return (
-    <section className="space-y-5" aria-labelledby="planner-heading">
+    <section className="space-y-5 pb-28" aria-labelledby="planner-heading">
       <header>
         <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-500">Continuity</p>
         <h1 id="planner-heading" className="mt-1 text-3xl font-black text-stone-100">Sequential planner</h1>
