@@ -108,8 +108,14 @@ export function useRollBootstrap() {
 
     const result = await refetch()
     if (result.isError) throw result.error ?? new Error('Failed to fetch roll bootstrap')
-    if (result.data == null) throw new Error('Failed to fetch roll bootstrap')
-    return result.data
+    // Read the authoritative cache rather than the refetch result's snapshot, which
+    // can still reflect the pre-refetch value when the observer resolves. The cache
+    // is updated synchronously once the fetch settles, so it holds the fresh data.
+    const fresh = queryClient.getQueryData<RollBootstrapResponse | null>(
+      queryKeys.roll.bootstrap(),
+    )
+    if (fresh == null) throw new Error('Failed to fetch roll bootstrap')
+    return fresh
   }, [refetch])
 
   useEffect(() => {
