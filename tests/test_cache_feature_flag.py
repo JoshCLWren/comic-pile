@@ -67,13 +67,19 @@ def test_remote_redis_url_defaults_to_disabled() -> None:
 
 
 def test_local_cache_configuration_requires_explicit_enablement() -> None:
-    """Disposable local Redis remains available when tests opt in."""
-    settings = redis_settings(
+    """Disposable local Redis remains available only when the dev flag opts in."""
+    unflagged = redis_settings(
         cache_enabled=True,
         redis_url="redis://localhost:6379/0",
     )
+    assert unflagged.is_configured is False
 
-    assert settings.is_configured is True
+    flagged = redis_settings(
+        cache_enabled=True,
+        redis_url="redis://localhost:6379/0",
+        cache_local_redis_dev=True,
+    )
+    assert flagged.is_configured is True
 
 
 def test_incomplete_upstash_configuration_stays_disabled() -> None:
@@ -155,7 +161,7 @@ async def test_local_redis_initialization_does_not_ping_service(monkeypatch) -> 
     monkeypatch.setattr(cache_module.cache, "_backend", None)
     monkeypatch.setattr(cache_module.aioredis.Redis, "from_url", from_url)
 
-    await cache_module.cache.initialize(local_url="redis://localhost:6379/0")
+    await cache_module.cache.initialize(local_url="redis://localhost:6379/0", allow_local=True)
 
     assert cache_module.cache.is_initialized is True
     from_url.assert_called_once_with(

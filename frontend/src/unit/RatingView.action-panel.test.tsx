@@ -276,14 +276,15 @@ describe('RatingView responsive pillar contract', () => {
     expect(gridCell!.className).toContain('xl:row-start-2')
   })
 
-  it('does not render Reading Context pillar when empty - Your Context follows The Comic directly', () => {
+  it('does not render Reading Context or a YOUR CONTEXT heading when empty - rating form follows The Comic directly', () => {
     const { container } = render(ratingView())
     expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
+    expect(screen.queryByText('Your Context')).not.toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     const text = grid!.textContent ?? ''
     expect(text.indexOf('The Comic')).toBeGreaterThan(-1)
-    expect(text.indexOf('Your Context')).toBeGreaterThan(-1)
-    expect(text.indexOf('The Comic')).toBeLessThan(text.indexOf('Your Context'))
+    expect(text.indexOf('Your rating')).toBeGreaterThan(-1)
+    expect(text.indexOf('The Comic')).toBeLessThan(text.indexOf('Your rating'))
     expect(text).not.toMatch(/\b0[123]\b/)
   })
 
@@ -304,15 +305,8 @@ describe('RatingView responsive pillar contract', () => {
     )
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     const text = grid!.textContent ?? ''
-    // Hierarchy now uses reader questions instead of pillar names, but order is preserved
-    const hasNewHierarchy = text.includes('What am I reading?')
-    if (hasNewHierarchy) {
-      expect(text.indexOf('What am I reading?')).toBeLessThan(text.indexOf('Why this one / can I read it?'))
-      expect(text.indexOf('Why this one / can I read it?')).toBeLessThan(text.indexOf("What's connected?"))
-    } else {
-      expect(text.indexOf('The Comic')).toBeLessThan(text.indexOf('Reading Context'))
-      expect(text.indexOf('Reading Context')).toBeLessThan(text.indexOf('Your Context'))
-    }
+    expect(text.indexOf('The Comic')).toBeLessThan(text.indexOf('Reading Context'))
+    expect(text.indexOf('Reading Context')).toBeLessThan(text.indexOf('Your rating'))
     expect(screen.getByText('Reading Context')).toBeInTheDocument()
     expect(text).not.toMatch(/\b0[123]\b/)
   })

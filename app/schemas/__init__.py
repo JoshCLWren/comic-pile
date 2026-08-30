@@ -58,6 +58,7 @@ from app.schemas.session import (
     SessionBandwidthState,
     SessionDetailsResponse,
     SessionHistoryListResponse,
+    SessionIntentState,
     SessionListItem,
     SessionListResponse,
     SessionMode,
@@ -139,6 +140,7 @@ __all__ = [
     "EventDetail",
     "SessionMode",
     "SessionBandwidthState",
+    "SessionIntentState",
     # Snapshot
     "SnapshotResponse",
     "SnapshotsListResponse",

@@ -80,7 +80,7 @@ export interface SessionMode {
   active_intent: string | null
   predicted_intent: string | null
   intent_confidence: number | null
-  intent_source: 'manual' | 'inferred' | null
+  intent_source: 'inferred' | 'manual' | 'snooze' | 'quiz' | null
   intent_version: string | null
   session_mode_correction_guidance: Record<string, unknown> | null
 }

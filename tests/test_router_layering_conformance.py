@@ -201,11 +201,22 @@ def test_routers_add_no_new_layering_violations() -> None:
 
 
 def test_layering_rule_is_codified_in_agents_md() -> None:
-    """AGENTS.md must keep documenting the house layering standard."""
+    """AGENTS.md must keep documenting the complete house layering standard.
+
+    Enforces the full acceptance contract from tracker issue #1747: routers do
+    validation plus exactly one service call, business logic lives in
+    ``app/services/``, persistence in ``app/repositories/``, routers build no
+    queries, and the MissingGreenlet extraction-before-commit rule is noted.
+    """
     agents_md = AGENTS_MD_PATH.read_text(encoding="utf-8")
 
     assert "Router → Service → Repository" in agents_md
+    assert "exactly one service call" in agents_md
+    assert "**Services (`app/services/`)**" in agents_md
     assert "**Repositories (`app/repositories/`)**" in agents_md
+    assert "No query construction" in agents_md
+    assert "MissingGreenlet" in agents_md
+    assert "extract model attributes BEFORE `await db.commit()`" in agents_md
     assert "tests/router_layering_baseline.json" in agents_md
 
 

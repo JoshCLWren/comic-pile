@@ -45,7 +45,7 @@ changes. Safe to run.
 
 **Run via:**
 ```bash
-railway connect Postgres < scripts/fix_death_metal.sql | tee /tmp/fix_death_metal_result.txt
+railway connect Postgres < archive/scripts-oneoff/fix_death_metal.sql | tee /tmp/fix_death_metal_result.txt
 ```
 
 ---

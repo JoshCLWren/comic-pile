@@ -16,6 +16,7 @@ from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Issue, Session as SessionModel, Snapshot, Thread, User
+from app.models.thread import normalize_format_value
 from app.schemas import (
     ActiveThreadInfo,
     EventDetail,
@@ -26,7 +27,11 @@ from app.schemas import (
     SnapshotResponse,
     SnapshotsListResponse,
 )
-from app.schemas.session import SnoozedThreadInfo, build_session_bandwidth_state
+from app.schemas.session import (
+    SnoozedThreadInfo,
+    build_session_bandwidth_state,
+    build_session_intent_state,
+)
 from app.services.ownership import get_owned_session_or_404
 from app.services.session_history_projection import project_session_history_events
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
@@ -152,7 +157,7 @@ async def get_session_with_thread_safe(
             return session, ActiveThreadInfo(
                 id=pending_thread.id,
                 title=pending_thread.title,
-                format=pending_thread.format,
+                format=normalize_format_value(pending_thread.format),
                 issues_remaining=issues_remaining,
                 queue_position=pending_thread.queue_position,
                 last_rolled_result=last_rolled_result,
@@ -173,7 +178,7 @@ async def get_session_with_thread_safe(
             return session, ActiveThreadInfo(
                 id=thread.id,
                 title=thread.title,
-                format=thread.format,
+                format=normalize_format_value(thread.format),
                 issues_remaining=issues_remaining,
                 queue_position=thread.queue_position,
                 last_rolled_result=last_rolled_result,
@@ -345,7 +350,7 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
     return ActiveThreadInfo(
         id=thread.id,
         title=thread.title,
-        format=thread.format,
+        format=normalize_format_value(thread.format),
         issues_remaining=issues_remaining,
         queue_position=thread.queue_position,
         last_rolled_result=event.result,
@@ -452,6 +457,13 @@ async def get_current_session(
                     confidence=active_session.bandwidth_confidence,
                     source=active_session.bandwidth_source,
                     mode_version=active_session.bandwidth_version,
+                ),
+                intent=build_session_intent_state(
+                    predicted_intent=active_session.predicted_intent,
+                    active_intent=active_session.active_intent,
+                    confidence=active_session.intent_confidence,
+                    source=active_session.intent_source,
+                    mode_version=active_session.intent_version,
                 ),
             )
         except OperationalError as e:
@@ -620,7 +632,7 @@ async def list_sessions(
                     active_threads_dict[sid] = ActiveThreadInfo(
                         id=thread.id,
                         title=thread.title,
-                        format=thread.format,
+                        format=normalize_format_value(thread.format),
                         issues_remaining=issues_remaining,
                         queue_position=thread.queue_position,
                         last_rolled_result=safe_result,
@@ -728,6 +740,13 @@ async def get_session(
             confidence=session.bandwidth_confidence,
             source=session.bandwidth_source,
             mode_version=session.bandwidth_version,
+        ),
+        intent=build_session_intent_state(
+            predicted_intent=session.predicted_intent,
+            active_intent=session.active_intent,
+            confidence=session.intent_confidence,
+            source=session.intent_source,
+            mode_version=session.intent_version,
         ),
     )
 
@@ -975,7 +994,7 @@ async def restore_session_start(
                     if "title" in state:
                         thread.title = state["title"]
                     if "format" in state:
-                        thread.format = state["format"]
+                        thread.format = normalize_format_value(state["format"])
                     thread.issues_remaining = state.get("issues_remaining", thread.issues_remaining)
                     thread.last_rating = state.get("last_rating", thread.last_rating)
                     thread.queue_position = state.get("queue_position", thread.queue_position)
@@ -1025,7 +1044,7 @@ async def restore_session_start(
                     new_thread = Thread(
                         id=thread_id_int,
                         title=state.get("title", "Unknown Thread"),
-                        format=state.get("format", "comic"),
+                        format=normalize_format_value(state.get("format", "comic")),
                         issues_remaining=state.get("issues_remaining", 0),
                         last_rating=state.get("last_rating"),
                         queue_position=state.get("queue_position", 1),
@@ -1151,6 +1170,13 @@ async def restore_session_start(
                     confidence=session.bandwidth_confidence,
                     source=session.bandwidth_source,
                     mode_version=session.bandwidth_version,
+                ),
+                intent=build_session_intent_state(
+                    predicted_intent=session.predicted_intent,
+                    active_intent=session.active_intent,
+                    confidence=session.intent_confidence,
+                    source=session.intent_source,
+                    mode_version=session.intent_version,
                 ),
             )
         except OperationalError as e:
