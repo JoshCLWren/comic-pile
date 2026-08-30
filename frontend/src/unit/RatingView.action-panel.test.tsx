@@ -278,14 +278,14 @@ describe('RatingView desktop layout contract (issue #1943)', () => {
     const grid = container.querySelector<HTMLElement>('[data-testid="rating-pillars-grid"]')
     expect(grid).not.toBeNull()
     const cells = Array.from(grid!.querySelectorAll<HTMLDivElement>(':scope > div'))
-    expect(cells.length).toBeGreaterThanOrEqual(4)
+    expect(cells.length).toBeGreaterThanOrEqual(3)
     for (const cell of cells) {
       expect(cell.className).not.toMatch(/\b(?:md:|xl:)?(?:col-start|row-start|col-end|row-end|row-span)-\d+\b/)
       expect(cell.className).not.toContain('md:row-span-2')
     }
   })
 
-  it('spans the action panel across the full desktop grid width below the regions', () => {
+  it('stacks the action panel with Your Context instead of spanning the full grid width', () => {
     const { container } = render(
       ratingView({
         readingOrders: [
@@ -300,12 +300,12 @@ describe('RatingView desktop layout contract (issue #1943)', () => {
         ],
       }),
     )
-    const grid = container.querySelector<HTMLElement>('[data-testid="rating-pillars-grid"]')
-    const gridCell = container.querySelector<HTMLElement>('[data-testid="rating-actions-grid-cell"]')
-    expect(gridCell).not.toBeNull()
-    expect(gridCell!.className).toContain('xl:col-span-full')
-    const regions = Array.from(grid!.querySelectorAll<HTMLDivElement>(':scope > div')).filter((cell) => cell !== gridCell)
-    expect(regions[regions.length - 1].dataset.testid).toBe('rating-region-your-context')
+    const yourContext = container.querySelector<HTMLElement>('[data-testid="rating-region-your-context"]')
+    const actions = container.querySelector<HTMLElement>('[data-testid="rating-actions-grid-cell"]')
+    expect(yourContext).not.toBeNull()
+    expect(actions).not.toBeNull()
+    expect(yourContext!.contains(actions)).toBe(true)
+    expect(actions!.className).not.toContain('xl:col-span-full')
   })
 
   it('does not render Reading Context or a YOUR CONTEXT heading when empty - rating form follows The Comic directly', () => {
