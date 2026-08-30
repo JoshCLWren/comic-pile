@@ -4,19 +4,40 @@ Issue #2043 adds a diagnostic Playwright harness for inspecting rendered Comic P
 
 ## Run it
 
-From `frontend/`, with the same backend/test prerequisites used by the existing Playwright suite:
+From the repository root:
 
 ```bash
 pnpm run audit:ui
 ```
 
-The command builds the frontend, runs the audit in Chromium with one worker, captures deterministic screenshots, and writes local output under:
+This is the self-contained acceptance command. It:
 
-- `test-results/ui-audit/report.md`
-- `test-results/ui-audit/report.json`
-- `test-results/ui-audit/screenshots/`
+1. starts an isolated Docker Compose test stack (PostgreSQL, Redis, and the FastAPI test API);
+2. waits for the API at the canonical local E2E/audit address `http://127.0.0.1:8002`;
+3. builds the frontend;
+4. runs the rendered audit in Chromium with one worker;
+5. tears the isolated stack down on success or failure.
 
-`frontend/test-results/` is already ignored by the repository, so generated audit evidence stays local unless a specific artifact is deliberately promoted later. The output directory is cleared at the beginning of each run so stale screenshots cannot masquerade as current evidence.
+Generated browser/audit evidence remains on the host after stack cleanup under:
+
+- `frontend/test-results/ui-audit/report.md`
+- `frontend/test-results/ui-audit/report.json`
+- `frontend/test-results/ui-audit/screenshots/`
+
+`frontend/test-results/` is already ignored by the repository, so generated audit evidence stays local unless a specific artifact is deliberately promoted later. The output directory is cleared at the beginning of each audit run so stale screenshots cannot masquerade as current evidence.
+
+The wrapper uses a unique Compose project name by default and the test Compose file does not use global fixed container names. If port 8002 is deliberately occupied by another E2E stack, `AUDIT_API_PORT` may override the host port; the wrapper passes the matching `BASE_URL` to Playwright.
+
+### Low-level runner
+
+If an appropriate test backend is already running, the frontend package still exposes the lower-level command:
+
+```bash
+cd frontend
+BASE_URL=http://127.0.0.1:8002 pnpm run audit:ui
+```
+
+That command does **not** own backend startup or cleanup. Use the repository-root command for normal local acceptance and CI-equivalent execution.
 
 ## Covered states
 
@@ -63,7 +84,7 @@ The report can warn about:
 - substantial collisions between independent interactive controls
 - large vertical blank regions in stable states where that check is meaningful
 
-Warnings include the state, route, viewport, element descriptions, concrete measurements, and confidence needed to reproduce and triage the observation. They are intentionally diagnostic. A warning does not make the audit command fail. Fixture setup, navigation, browser-health, screenshot, or report-generation failures still fail the harness.
+Warnings include the state, route, viewport, element descriptions, concrete measurements, and confidence needed to reproduce and triage the observation. They are intentionally diagnostic. A warning does not make the audit command fail. Fixture setup, navigation, browser-health, high-confidence invariant, screenshot, or report-generation failures still fail the harness and therefore CI.
 
 ## Computed-style inventory
 
