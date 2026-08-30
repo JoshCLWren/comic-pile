@@ -4,10 +4,17 @@ from pydantic import BaseModel, Field
 
 
 class ComicVineCreator(BaseModel):
-    """One credited creator and their provider-supplied roles."""
+    """One credited creator and their provider-supplied roles.
+
+    When the provider supplies a stable external person/creator ID the
+    ``creator_key`` is set to a canonical provider+ID form suitable for API
+    keys and frontend routing.  ``creator_key`` is ``None`` when no usable
+    stable ID exists; callers must not fabricate a key from the display name.
+    """
 
     name: str
     roles: list[str] = Field(default_factory=list)
+    creator_key: str | None = None
 
 
 class ComicVineComicPileMatch(BaseModel):

@@ -133,7 +133,7 @@ async def test_comicvine_intelligence_normalizes_metadata_and_matches_arc_member
     body = response.json()
     assert body["description"] == "A bold beginning."
     assert body["image_url"] == "https://images.example/100.jpg"
-    assert body["creators"] == [{"name": "Writer One", "roles": ["writer", "cover"]}]
+    assert body["creators"] == [{"name": "Writer One", "roles": ["writer", "cover"], "creator_key": None}]
     related_issues = body["story_arcs"][0]["related_issues"]
     assert [item["comicvine_issue_id"] for item in related_issues] == ["101", "102"]
     assert [item["name"] for item in related_issues] == ["Middle", "Finale"]

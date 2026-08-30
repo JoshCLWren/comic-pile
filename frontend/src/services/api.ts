@@ -402,6 +402,7 @@ export const dependenciesApi = {
 export interface ComicVineCreator {
   name: string
   roles: string[]
+  creator_key?: string | null
 }
 
 export interface ComicVineComicPileMatch {

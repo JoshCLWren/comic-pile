@@ -93,15 +93,49 @@ def _image(metadata: dict[str, object]) -> str | None:
 
 
 def _creators(metadata: dict[str, object]) -> list[ComicVineCreator]:
-    creators: list[ComicVineCreator] = []
+    """Normalize creator credits into stable identities.
+
+    Credits are deduplicated by provider creator ID when available.  Multiple
+    credit rows for the same person (e.g. one per role) are merged into a
+    single ``ComicVineCreator`` with combined roles.  A canonical
+    ``creator_key`` of the form ``comicvine:<id>`` is emitted when the
+    provider supplies a usable stable ID; otherwise ``creator_key`` is
+    ``None`` and the row is display-only.
+
+    Args:
+        metadata: Normalized issue metadata dict.
+
+    Returns:
+        Deduplicated list of ``ComicVineCreator`` instances.
+    """
+    by_key: dict[tuple[object, str], ComicVineCreator] = {}
+    unnamed: list[ComicVineCreator] = []
+
     for credit in _reference_list(metadata, "person_credits", "creator_credits"):
         name = _string(credit.get("name"))
         if not name:
             continue
+        creator_id = credit.get("id")
         role_value = _string(credit.get("role")) or ""
         roles = [role.strip() for role in role_value.split(",") if role.strip()]
-        creators.append(ComicVineCreator(name=name, roles=roles))
-    return creators
+
+        if creator_id is not None:
+            dedup_key = (creator_id, name)
+            if dedup_key in by_key:
+                existing = by_key[dedup_key]
+                for role in roles:
+                    if role not in existing.roles:
+                        existing.roles.append(role)
+            else:
+                by_key[dedup_key] = ComicVineCreator(
+                    name=name,
+                    roles=roles,
+                    creator_key=f"comicvine:{creator_id}",
+                )
+        else:
+            unnamed.append(ComicVineCreator(name=name, roles=roles))
+
+    return list(by_key.values()) + unnamed
 
 
 def _arc_references(metadata: dict[str, object]) -> list[dict[str, object]]:
