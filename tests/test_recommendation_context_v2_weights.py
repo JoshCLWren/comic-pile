@@ -9,6 +9,7 @@ Verifies:
 """
 
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 import pytest
 from httpx import AsyncClient
@@ -116,6 +117,7 @@ async def test_v1_context_remains_readable() -> None:
 async def test_light_bandwidth_json_records_weights(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
+    """Light bandwidth records per-candidate weights and reason codes."""
     light = await _add_thread(async_db, default_user, "Light Era", queue_position=1)
     await _confirm_series_era(async_db, light, "1965-01-01")
     heavy = await _add_thread(async_db, default_user, "Heavy Effort", queue_position=2)
@@ -126,14 +128,17 @@ async def test_light_bandwidth_json_records_weights(
     assert resp.status_code == 200
     data = resp.json()
 
-    ev = (await async_db.execute(select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1))).scalar_one()
-    ctx = ev.recommendation_context
-    assert ctx is not None
+    ev = (
+        await async_db.execute(select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1))
+    ).scalar_one()
+    ctx_raw = ev.recommendation_context
+    assert ctx_raw is not None
+    ctx = cast(dict[str, Any], ctx_raw)
     assert ctx["context_version"] == 2
     assert ctx["bandwidth"] == "light"
     assert ctx["random_bypass"] is False
     assert ctx["balanced_neutrality"] is False
-    cw = ctx["candidate_weights"]
+    cw = cast(list[dict[str, Any]], ctx["candidate_weights"])
     assert isinstance(cw, list)
     assert len(cw) == 2
     # Bounded payload: only ids/weights/reasons, no full metadata.
@@ -152,19 +157,22 @@ async def test_light_bandwidth_json_records_weights(
     assert "bandwidth_light_dampens_high_effort" in by_id[heavy.id]["reasons"]
     # Selected weight matches chooser weight and table final_weight.
     assert ctx["selected_weight"] == pytest.approx(by_id[data["thread_id"]]["weight"])
-    rc = (await async_db.execute(select(RecommendationContext).where(RecommendationContext.event_id == ev.id))).scalar_one()
+    rc = (
+        await async_db.execute(select(RecommendationContext).where(RecommendationContext.event_id == ev.id))
+    ).scalar_one()
     assert rc.schema_version == 2
     assert rc.candidate_factors is not None
-    cf_by_id = {f["candidate_id"]: f for f in rc.candidate_factors}
+    cf_by_id = {f["candidate_id"]: f for f in cast(list[dict[str, Any]], rc.candidate_factors)}
     for cid, w in by_id.items():
         assert cf_by_id[cid]["weight"] == pytest.approx(w["weight"])
-    assert rc.final_weight == pytest.approx(ctx["selected_weight"])
+    assert rc.final_weight == pytest.approx(cast(float, ctx["selected_weight"]))
 
 
 @pytest.mark.asyncio
 async def test_deep_bandwidth_json_records_weights(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
+    """Deep bandwidth records inverted weights and reasons."""
     light = await _add_thread(async_db, default_user, "Light Era Deep", queue_position=1)
     await _confirm_series_era(async_db, light, "1965-01-01")
     heavy = await _add_thread(async_db, default_user, "Heavy Effort Deep", queue_position=2)
@@ -173,12 +181,15 @@ async def test_deep_bandwidth_json_records_weights(
 
     resp = await auth_client.post("/api/roll/", json={"bandwidth": "deep"})
     assert resp.status_code == 200
-    ev = (await async_db.execute(select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1))).scalar_one()
-    ctx = ev.recommendation_context
+    ev = (
+        await async_db.execute(select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1))
+    ).scalar_one()
+    ctx = cast(dict[str, Any], ev.recommendation_context)
+    assert ctx is not None
     assert ctx["context_version"] == 2
     assert ctx["bandwidth"] == "deep"
     assert ctx["random_bypass"] is False
-    cw = ctx["candidate_weights"]
+    cw = cast(list[dict[str, Any]], ctx["candidate_weights"])
     by_id = {e["candidate_id"]: e for e in cw}
     assert by_id[heavy.id]["weight"] == pytest.approx(1.25)
     assert by_id[light.id]["weight"] == pytest.approx(0.9)
@@ -190,6 +201,7 @@ async def test_deep_bandwidth_json_records_weights(
 async def test_balanced_json_shows_neutral_bypass(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
+    """Balanced bandwidth shows explicit neutral bypass."""
     a = await _add_thread(async_db, default_user, "Balanced A", queue_position=1)
     await _confirm_series_era(async_db, a, "1965-01-01")
     b = await _add_thread(async_db, default_user, "Balanced B", queue_position=2)
@@ -198,18 +210,22 @@ async def test_balanced_json_shows_neutral_bypass(
 
     resp = await auth_client.post("/api/roll/", json={"bandwidth": "balanced"})
     assert resp.status_code == 200
-    ev = (await async_db.execute(select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1))).scalar_one()
-    ctx = ev.recommendation_context
+    ev = (
+        await async_db.execute(select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1))
+    ).scalar_one()
+    ctx = cast(dict[str, Any], ev.recommendation_context)
     assert ctx["context_version"] == 2
     assert ctx["bandwidth"] == "balanced"
     # Balanced is explicit neutral/bypass.
     assert ctx["random_bypass"] is True
     assert ctx["balanced_neutrality"] is True
-    for entry in ctx["candidate_weights"]:
+    for entry in cast(list[dict[str, Any]], ctx["candidate_weights"]):
         assert entry["weight"] == pytest.approx(1.0)
         assert entry["reasons"] == []
         assert entry["factors"] == []
-    rc = (await async_db.execute(select(RecommendationContext).where(RecommendationContext.event_id == ev.id))).scalar_one()
+    rc = (
+        await async_db.execute(select(RecommendationContext).where(RecommendationContext.event_id == ev.id))
+    ).scalar_one()
     assert rc.random_bypass is True
     assert rc.balanced_neutrality is True
 
@@ -218,18 +234,21 @@ async def test_balanced_json_shows_neutral_bypass(
 async def test_unknown_effort_json_stays_neutral(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
-    a = await _add_thread(async_db, default_user, "Unknown A", queue_position=1)
-    b = await _add_thread(async_db, default_user, "Unknown B", queue_position=2)
+    """Unknown effort stays neutral even with light bandwidth."""
+    await _add_thread(async_db, default_user, "Unknown A", queue_position=1)
+    await _add_thread(async_db, default_user, "Unknown B", queue_position=2)
     await async_db.commit()
 
     resp = await auth_client.post("/api/roll/", json={"bandwidth": "light"})
     assert resp.status_code == 200
-    ev = (await async_db.execute(select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1))).scalar_one()
-    ctx = ev.recommendation_context
+    ev = (
+        await async_db.execute(select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1))
+    ).scalar_one()
+    ctx = cast(dict[str, Any], ev.recommendation_context)
     assert ctx["context_version"] == 2
     # Unknown effort is exactly neutral even for light.
     assert ctx["random_bypass"] is True
-    for entry in ctx["candidate_weights"]:
+    for entry in cast(list[dict[str, Any]], ctx["candidate_weights"]):
         assert entry["weight"] == pytest.approx(1.0)
         assert entry["reasons"] == []
 
@@ -238,6 +257,7 @@ async def test_unknown_effort_json_stays_neutral(
 async def test_random_intent_json_shows_bypass(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
+    """Random intent bypasses weighting even with light bandwidth."""
     light = await _add_thread(async_db, default_user, "Random Light", queue_position=1)
     await _confirm_series_era(async_db, light, "1965-01-01")
     heavy = await _add_thread(async_db, default_user, "Random Heavy", queue_position=2)
@@ -246,17 +266,21 @@ async def test_random_intent_json_shows_bypass(
 
     resp = await auth_client.post("/api/roll/", json={"bandwidth": "light", "intent": "random"})
     assert resp.status_code == 200
-    ev = (await async_db.execute(select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1))).scalar_one()
-    ctx = ev.recommendation_context
+    ev = (
+        await async_db.execute(select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1))
+    ).scalar_one()
+    ctx = cast(dict[str, Any], ev.recommendation_context)
     assert ctx["context_version"] == 2
     assert ctx["random_bypass"] is True
     assert ctx["balanced_neutrality"] is True
-    for entry in ctx["candidate_weights"]:
+    for entry in cast(list[dict[str, Any]], ctx["candidate_weights"]):
         assert entry["weight"] == pytest.approx(1.0)
         assert entry["reasons"] == []
     assert ev.selection_method == "random"
-    rc = (await async_db.execute(select(RecommendationContext).where(RecommendationContext.event_id == ev.id))).scalar_one()
+    rc = (
+        await async_db.execute(select(RecommendationContext).where(RecommendationContext.event_id == ev.id))
+    ).scalar_one()
     assert rc.random_bypass is True
     # Candidate factors uniform as well.
-    for f in rc.candidate_factors or []:
+    for f in cast(list[dict[str, Any]], rc.candidate_factors or []):
         assert f["weight"] == pytest.approx(1.0)
