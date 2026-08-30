@@ -211,8 +211,6 @@ def set_quota_throttle_enabled(enabled: bool) -> None:
     quota_throttle_enabled = enabled
 
 
-
-
 def evaluate_cache_quota(used: int | None = None, *, fire_alert: bool = True) -> QuotaState:
     """Assess the current cache quota from observed application command usage.
 
