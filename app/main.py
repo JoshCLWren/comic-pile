@@ -244,7 +244,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
     app.include_router(analytics.router, prefix="/api", tags=["analytics"])
     app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
-    app.include_router(health.router, prefix="/api", tags=["health"])
     app.include_router(health.router, prefix="/api/v1", tags=["health"])
     app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
     app.include_router(bug_report.router, prefix="/api/v1/bug-reports", tags=["bug-reports"])
