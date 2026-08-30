@@ -100,7 +100,6 @@ class TestAC1QueuePreserved:
     ) -> None:
         """Single snooze leaves every thread's queue_position untouched."""
         user_id, session, threads = await _create_session_with_pending(async_db)
-        target = threads[0]
         original_positions = {t.id: t.queue_position for t in threads}
 
         response = await auth_client.post("/api/v1/snooze/")
@@ -489,6 +488,7 @@ class TestAC6StructuredCorrectionGuidance:
             .limit(1)
         )
         ctx1 = result1.scalar_one().context
+        assert ctx1 is not None
         assert ctx1["consecutive_snoozes"] == 1
 
         # Roll and snooze second thread
@@ -514,6 +514,7 @@ class TestAC6StructuredCorrectionGuidance:
             .limit(1)
         )
         ctx2 = result2.scalar_one().context
+        assert ctx2 is not None
         assert ctx2["consecutive_snoozes"] == 2
 
 
