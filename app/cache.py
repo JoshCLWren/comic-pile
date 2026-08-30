@@ -537,11 +537,15 @@ class UpstashCache:
         logger.warning("No Redis configuration provided - caching disabled")
 
     async def close(self) -> None:
-        """Close the Redis connection."""
-        if self._client is not None:
-            client = self._client
-            self._client = None
-            self._initialized = False
+        """Close the Redis connection and reset singleton state.
+
+        Always clears the initialized flag even when no client is present, so a
+        previously-initialized singleton can always be reconfigured from scratch.
+        """
+        client = self._client
+        self._client = None
+        self._initialized = False
+        if client is not None:
             if not self._is_upstash:
                 await client.aclose()
             logger.info("Redis cache closed")
@@ -800,10 +804,15 @@ class PostgresCache:
         logger.info("Postgres cache configured")
 
     async def close(self) -> None:
-        if self._engine is not None:
-            engine = self._engine
-            self._engine = None
-            self._initialized = False
+        """Close the engine and reset singleton state.
+
+        Always clears the initialized flag even when no engine is present, so a
+        previously-initialized singleton can always be reconfigured from scratch.
+        """
+        engine = self._engine
+        self._engine = None
+        self._initialized = False
+        if engine is not None:
             await engine.dispose()
             logger.info("Postgres cache closed")
 
