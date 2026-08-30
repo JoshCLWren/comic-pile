@@ -9,7 +9,7 @@ const { routeLoaderKeys, routeLoaders } = vi.hoisted(() => {
     'history',
     'session',
     'crossovers',
-    'help',
+    'glossary',
     'whatsNew',
     'login',
     'register',
@@ -134,7 +134,7 @@ describe('scheduleRoutePrefetch scoping', () => {
   })
 
   it('does not prefetch anything from retained low-frequency screens', () => {
-    for (const path of ['/crossovers', '/whats-new', '/help']) {
+    for (const path of ['/crossovers', '/whats-new', '/glossary']) {
       scheduleRoutePrefetch(path)
       flushIdleWork()
     }

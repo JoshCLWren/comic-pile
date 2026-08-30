@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import { RollHeader } from '../pages/RollPage/components/RollHeader'
@@ -178,10 +179,12 @@ describe('ReadingModeControl', () => {
 describe('RollHeader reading-mode control integration', () => {
   it('shows the bootstrap session mode without dominating the header', () => {
     render(
-      <RollHeader
-        bootstrap={bootstrapWithMode({ bandwidth: 'light', intent: 'momentum', source: 'manual' })}
-        {...headerBaseProps}
-      />,
+      <MemoryRouter>
+        <RollHeader
+          bootstrap={bootstrapWithMode({ bandwidth: 'light', intent: 'momentum', source: 'manual' })}
+          {...headerBaseProps}
+        />
+      </MemoryRouter>,
     )
 
     expect(screen.getByTestId('reading-mode-control')).toHaveTextContent('Light · Momentum')
@@ -191,21 +194,29 @@ describe('RollHeader reading-mode control integration', () => {
 
   it('stays synchronized when the bootstrap payload reports a manual mode change', () => {
     const { rerender } = render(
-      <RollHeader bootstrap={bootstrapWithMode({ bandwidth: 'light', intent: 'momentum' })} {...headerBaseProps} />,
+      <MemoryRouter>
+        <RollHeader bootstrap={bootstrapWithMode({ bandwidth: 'light', intent: 'momentum' })} {...headerBaseProps} />
+      </MemoryRouter>,
     )
     expect(screen.getByTestId('reading-mode-control')).toHaveTextContent('Light · Momentum')
 
     rerender(
-      <RollHeader
-        bootstrap={bootstrapWithMode({ bandwidth: 'deep', intent: 'random', source: 'manual' })}
-        {...headerBaseProps}
-      />,
+      <MemoryRouter>
+        <RollHeader
+          bootstrap={bootstrapWithMode({ bandwidth: 'deep', intent: 'random', source: 'manual' })}
+          {...headerBaseProps}
+        />
+      </MemoryRouter>,
     )
     expect(screen.getByTestId('reading-mode-control')).toHaveTextContent('Deep · Random')
   })
 
   it('omits the control entirely for legacy bootstrap payloads without mode state', () => {
-    render(<RollHeader bootstrap={bootstrapWithMode(undefined)} {...headerBaseProps} />)
+    render(
+      <MemoryRouter>
+        <RollHeader bootstrap={bootstrapWithMode(undefined)} {...headerBaseProps} />
+      </MemoryRouter>,
+    )
 
     expect(screen.queryByTestId('reading-mode-control')).not.toBeInTheDocument()
   })

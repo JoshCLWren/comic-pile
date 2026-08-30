@@ -30,7 +30,7 @@ const DESTINATIONS = [
   'Crossovers page',
   'Continuity Planner page',
   "What's New page",
-  'Help page',
+  'Glossary page',
 ]
 
 async function openAuthenticatedDesktop(page: Page): Promise<void> {
@@ -112,8 +112,8 @@ test.describe('Desktop navigation redesign (#1887)', () => {
     const desktopNav = page.getByRole('navigation', { name: 'Desktop navigation' })
     await expect(desktopNav).toBeVisible()
 
-    await desktopNav.getByRole('link', { name: 'Help page' }).click()
-    await expect(page).toHaveURL(/\/help$/)
+    await desktopNav.getByRole('link', { name: 'Glossary page' }).click()
+    await expect(page).toHaveURL(/\/glossary$/)
     await desktopNav.getByRole('link', { name: 'Queue page' }).click()
     await expect(page).toHaveURL(/\/queue$/)
 

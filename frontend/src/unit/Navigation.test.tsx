@@ -88,7 +88,7 @@ test('renders retained navigation links when authenticated', async () => {
 })
 
 test('marks More as the only active destination on submenu routes', async () => {
-  renderWithAuth('/help')
+  renderWithAuth('/glossary')
 
   const moreButton = await screen.findByRole('button', { name: /more pages/i })
   expect(moreButton).toHaveClass('active')
@@ -104,7 +104,7 @@ test('dismisses the More tray only when tapping outside it', async () => {
   const moreNavigation = screen.getByRole('navigation', { name: /more pages/i })
   expect(moreButton).toHaveAttribute('aria-expanded', 'true')
 
-  fireEvent.pointerDown(within(moreNavigation).getByRole('link', { name: /help/i }))
+  fireEvent.pointerDown(within(moreNavigation).getByRole('link', { name: /glossary/i }))
   expect(moreNavigation).toBeInTheDocument()
   expect(moreButton).toHaveAttribute('aria-expanded', 'true')
 
@@ -204,6 +204,6 @@ test('renders all secondary nav links inline on a desktop viewport', async () =>
   expect(within(desktopNav).getByRole('link', { name: /crossovers page/i })).toBeInTheDocument()
   expect(within(desktopNav).getByRole('link', { name: /continuity planner page/i })).toBeInTheDocument()
   expect(within(desktopNav).getByRole('link', { name: /what's new page/i })).toBeInTheDocument()
-  expect(within(desktopNav).getByRole('link', { name: /help page/i })).toBeInTheDocument()
+  expect(within(desktopNav).getByRole('link', { name: /glossary page/i })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /more pages/i })).not.toBeInTheDocument()
 })

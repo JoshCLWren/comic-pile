@@ -64,7 +64,7 @@ describe('CrossoversPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Loading crossovers')
 
     resolveList?.([])
-    expect(await screen.findByText('No crossovers yet')).toBeInTheDocument()
+    expect(await screen.findByText(/No crossovers yet/)).toBeInTheDocument()
   })
 
   it('blocks creation until the current list request settles', async () => {
@@ -79,7 +79,7 @@ describe('CrossoversPage', () => {
     expect(createButton).toBeDisabled()
 
     resolveList?.([])
-    await screen.findByText('No crossovers yet')
+    await screen.findByText(/No crossovers yet/)
     expect(nameInput).toBeEnabled()
     expect(createButton).toBeEnabled()
 
@@ -92,7 +92,7 @@ describe('CrossoversPage', () => {
   it('creates a trimmed crossover and displays it', async () => {
     api.create.mockResolvedValue(annihilation)
     renderPage()
-    await screen.findByText('No crossovers yet')
+    await screen.findByText(/No crossovers yet/)
 
     fireEvent.change(screen.getByLabelText('New crossover'), { target: { value: '  Annihilation  ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create crossover' }))
@@ -213,7 +213,7 @@ describe('CrossoversPage', () => {
   it('presents validation and server failures clearly', async () => {
     api.create.mockRejectedValue(new Error('Duplicate crossover name'))
     renderPage()
-    await screen.findByText('No crossovers yet')
+    await screen.findByText(/No crossovers yet/)
 
     fireEvent.click(screen.getByRole('button', { name: 'Create crossover' }))
     expect(screen.getByRole('alert')).toHaveTextContent('Enter a crossover name.')

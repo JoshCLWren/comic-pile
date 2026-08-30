@@ -30,7 +30,7 @@ type NavIconName =
   | 'crossovers'
   | 'planner'
   | 'new'
-  | 'help'
+  | 'glossary'
   | 'more'
 
 interface NavItem {
@@ -50,7 +50,7 @@ const MAIN_NAV_ITEMS: NavItem[] = [
 const SECONDARY_NAV_ITEMS: NavItem[] = [
   { path: '/continuity-plans', label: 'Planner', icon: 'planner', ariaLabel: 'Continuity Planner page' },
   { path: '/whats-new', label: 'New', icon: 'new', ariaLabel: "What's New page" },
-  { path: '/help', label: 'Help', icon: 'help', ariaLabel: 'Help page' },
+  { path: '/glossary', label: 'Glossary', icon: 'glossary', ariaLabel: 'Glossary page' },
 ]
 
 const APPEARANCE_OPTIONS: Array<{ id: ThemeId; label: string; ariaLabel: string; mobileClassName: string }> = [
@@ -109,11 +109,11 @@ function NavIcon({ name }: { name: NavIconName }) {
         <path d="m19 16-.55 1.45L17 18l1.45.55L19 20l.55-1.45L21 18l-1.45-.55L19 16Z"></path>
       </>
     ),
-    help: (
+    glossary: (
       <>
-        <circle cx="12" cy="12" r="9"></circle>
-        <path d="M9.75 9a2.5 2.5 0 1 1 3.5 2.3c-.8.35-1.25.9-1.25 1.7v.25"></path>
-        <circle cx="12" cy="17" r=".75" fill="currentColor" stroke="none"></circle>
+        <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H11a3 3 0 0 1 3 3v17a3 3 0 0 0-3-3H6.5A2.5 2.5 0 0 0 4 21.5v-17Z"></path>
+        <path d="M20 4.5A2.5 2.5 0 0 0 17.5 2H14"></path>
+        <path d="M20 4.5v17A2.5 2.5 0 0 0 17.5 19H14"></path>
       </>
     ),
     more: (
@@ -311,33 +311,27 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
             <span className="block truncate text-xs font-medium text-[var(--theme-text-muted)]">{username}</span>
           ) : null}
           <div
-            className="mt-2 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-2"
+            className="mt-2 flex flex-wrap items-center justify-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
             role="group"
             aria-label="Appearance"
           >
-            <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>Theme</span>
-            <div className="flex flex-col gap-1">
-              {APPEARANCE_OPTIONS.map((option) => {
-                const selected = activeTheme === option.id
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    data-theme={option.id}
-                    onClick={() => setTheme(option.id)}
-                    aria-pressed={selected}
-                    className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-xs font-bold transition-colors ${
-                      selected
-                        ? 'bg-white/10 text-[var(--theme-text-primary)]'
-                        : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
-                    }`}
-                  >
-                    <span className="break-words">{option.label}</span>
-                    {selected && <span aria-hidden="true">✓</span>}
-                  </button>
-                )
-              })}
-            </div>
+            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>Theme</span>
+            {APPEARANCE_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                data-theme={option.id}
+                onClick={() => setTheme(option.id)}
+                aria-pressed={activeTheme === option.id}
+                className={`rounded-md px-2 py-1 text-xs font-bold transition-colors ${
+                  activeTheme === option.id
+                    ? 'bg-white/10 text-[var(--theme-text-primary)]'
+                    : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
           <button onClick={handleLogout} className="mt-2 w-full px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors" aria-label="Log out">
             Log Out

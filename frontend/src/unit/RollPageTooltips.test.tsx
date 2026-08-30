@@ -35,6 +35,10 @@ vi.mock('../components/LazyDice3D', () => ({
   ),
 }))
 
+vi.mock('../components/GlossaryLink', () => ({
+  default: ({ children }: { children: ReactNode }) => <>{children}</>,
+}))
+
 vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
 vi.mock('../hooks/useThread', () => ({ useStaleThreads: vi.fn() }))
 vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
