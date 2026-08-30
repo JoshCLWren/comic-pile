@@ -359,6 +359,8 @@ export const sessionApi = {
   getDetails: (id: number | string) => api.get<SessionDetails>(`/v1/sessions/${id}/details`),
   getSnapshots: (id: number | string) => api.get<SessionSnapshotsResponse>(`/v1/sessions/${id}/snapshots`),
   restoreSessionStart: (id: number | string) => api.post<void>(`/v1/sessions/${id}/restore-session-start`),
+  updateMode: (data: { bandwidth?: string; intent?: string }) =>
+    api.patch<SessionModeResponse, { bandwidth?: string; intent?: string }>('/v1/roll/session-mode', data),
 }
 
 export const queueApi = {
