@@ -11,6 +11,7 @@ tooling.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 import pytest
 import pytest_asyncio
@@ -189,7 +190,7 @@ async def _make_ultimate_universe_fixture(async_db) -> dict[str, object]:
 async def test_duplicate_detection_finds_shared_comicvine_identity(async_db) -> None:
     """Same confirmed ComicVine issue cannot remain independent without being surfaced."""
     fixture = await _make_ultimate_universe_fixture(async_db)
-    user = fixture["user"]  # type: ignore[assignment]
+    user = cast(User, fixture["user"])
 
     anomalies = await find_duplicate_physical_issues(async_db, user_id=user.id)
     # Five overlapping ComicVine IDs each duplicated across two issues.
@@ -205,7 +206,7 @@ async def test_duplicate_detection_finds_shared_comicvine_identity(async_db) -> 
 async def test_cbl_reconciliation_uses_canonical_identity(async_db) -> None:
     """CBL adoption resolves to canonical physical-issue identity, not arbitrary duplicate."""
     fixture = await _make_ultimate_universe_fixture(async_db)
-    user = fixture["user"]  # type: ignore[assignment]
+    user = cast(User, fixture["user"])
 
     # CBL entry for #7 carrying the same ComicVine issue ID as both rows.
     cbl_entries = [
@@ -215,8 +216,8 @@ async def test_cbl_reconciliation_uses_canonical_identity(async_db) -> None:
     resolved = await resolve_cbl_entries_to_canonical(async_db, user_id=user.id, cbl_entries=cbl_entries)
     assert len(resolved) == 2
     # Each entry resolves to canonical (read-history holder).
-    legacy_issues = fixture["legacy_issues"]  # type: ignore[assignment]
-    legacy_seven = next(iss for iss in legacy_issues if iss.issue_number == "7")  # type: ignore[union-attr]
+    legacy_issues = cast(list[Issue], fixture["legacy_issues"])
+    legacy_seven = next(iss for iss in legacy_issues if iss.issue_number == "7")
     for entry in resolved:
         assert entry.canonical_issue_id is not None
         assert entry.resolution_status.startswith("resolved_via_comicvine_canonical")
@@ -231,9 +232,9 @@ async def test_cbl_reconciliation_uses_canonical_identity(async_db) -> None:
 async def test_history_survives_consolidation(async_db) -> None:
     """Historical read_at, rating, and event facts survive consolidation."""
     fixture = await _make_ultimate_universe_fixture(async_db)
-    user = fixture["user"]  # type: ignore[assignment]
-    newer_issues = fixture["newer_issues"]  # type: ignore[assignment]
-    newer_seven = next(iss for iss in newer_issues if iss.issue_number == "7")  # type: ignore[union-attr]
+    user = cast(User, fixture["user"])
+    newer_issues = cast(list[Issue], fixture["newer_issues"])
+    newer_seven = next(iss for iss in newer_issues if iss.issue_number == "7")
 
     # Newer #7 is unread; legacy #7 is read. Preview should show history to preserve.
     preview = await preview_consolidation(async_db, user_id=user.id, comicvine_issue_id="97001")
@@ -242,8 +243,8 @@ async def test_history_survives_consolidation(async_db) -> None:
     assert preview.is_ambiguous is True
 
     # Explicitly keep the legacy read holder - newest #7's event should move.
-    legacy_issues = fixture["legacy_issues"]  # type: ignore[assignment]
-    legacy_seven = next(iss for iss in legacy_issues if iss.issue_number == "7")  # type: ignore[union-attr]
+    legacy_issues = cast(list[Issue], fixture["legacy_issues"])
+    legacy_seven = next(iss for iss in legacy_issues if iss.issue_number == "7")
     result = await consolidate_duplicate_issues(
         async_db, user_id=user.id, comicvine_issue_id="97001", keep_issue_id=legacy_seven.id
     )
@@ -264,7 +265,7 @@ async def test_history_survives_consolidation(async_db) -> None:
 async def test_thread_boundaries_do_not_define_physical_identity(async_db) -> None:
     """A thread starting at #7 does not imply a different physical comic than legacy #7."""
     fixture = await _make_ultimate_universe_fixture(async_db)
-    user = fixture["user"]  # type: ignore[assignment]
+    user = cast(User, fixture["user"])
     # Canonical resolution must ignore thread title/position and use ComicVine ID.
     result = await resolve_canonical_issue(async_db, user_id=user.id, comicvine_issue_id="97001")
     assert result.canonical_issue_id is not None
@@ -337,7 +338,7 @@ async def test_title_number_alone_never_defines_identity(async_db) -> None:
 async def test_ambiguous_no_comicvine_id_surfaced_not_silently_dropped(async_db) -> None:
     """Entries without ComicVine IDs are reported as ambiguous, not silently dropped."""
     fixture = await _make_ultimate_universe_fixture(async_db)
-    user = fixture["user"]  # type: ignore[assignment]
+    user = cast(User, fixture["user"])
     entries = [
         {"position": 1, "series_name": "Unknown Series", "issue_number": "5", "comicvine_issue_id": None},
         {"position": 2, "series_name": "Unknown Series", "issue_number": "6", "comicvine_issue_id": ""},
@@ -352,7 +353,7 @@ async def test_ambiguous_no_comicvine_id_surfaced_not_silently_dropped(async_db)
 async def test_reporting_tooling_identifies_existing_affected_rows(async_db) -> None:
     """Focused reporting can identify existing affected production rows before mutation."""
     fixture = await _make_ultimate_universe_fixture(async_db)
-    user = fixture["user"]  # type: ignore[assignment]
+    user = cast(User, fixture["user"])
 
     report = await get_identity_report(async_db, user_id=user.id)
     assert report.total_duplicate_groups == 5
@@ -364,7 +365,7 @@ async def test_reporting_tooling_identifies_existing_affected_rows(async_db) -> 
 async def test_cbl_reconciliation_report_includes_first_unread(async_db) -> None:
     """CBL reconciliation report identifies first unread ordered entry after overlaying read history."""
     fixture = await _make_ultimate_universe_fixture(async_db)
-    user = fixture["user"]  # type: ignore[assignment]
+    user = cast(User, fixture["user"])
 
     # Create a CBL source list that mirrors the UU file with ordered entries.
     source = CBLSource(repository="test/repo", revision_sha="abc123", synced_at=datetime.now(UTC))
@@ -403,7 +404,7 @@ async def test_cbl_reconciliation_report_includes_first_unread(async_db) -> None
     await async_db.flush()
 
     # Mark newer #7 as read so we can test first-unread detection.
-    newer_issues = fixture["newer_issues"]  # type: ignore[assignment]
+    newer_issues = cast(list[Issue], fixture["newer_issues"])
     # Resolve canonical for #97001 is legacy #7 (read). We need to make legacy #7 unread to test first unread is position 1.
     # Easier: check with current fixture where canonical #97001 is read, so first unread should be None or next unread after.
     # Instead verify the report enumerates every position with read state.
@@ -418,7 +419,7 @@ async def test_cbl_reconciliation_report_includes_first_unread(async_db) -> None
 async def test_prevent_future_hydration_from_recreating_duplicate(async_db) -> None:
     """Future hydrations/imports must not recreate a second logical copy of a known physical issue."""
     fixture = await _make_ultimate_universe_fixture(async_db)
-    user = fixture["user"]  # type: ignore[assignment]
+    user = cast(User, fixture["user"])
 
     dup = await check_hydration_would_duplicate(async_db, user_id=user.id, comicvine_issue_id="97001")
     assert dup is not None
@@ -444,7 +445,7 @@ async def test_prevent_future_hydration_from_recreating_duplicate(async_db) -> N
 async def test_cbl_entries_without_matching_owned_issue_are_unresolved_not_dropped(async_db) -> None:
     """Unresolved CBL entries are reported, not silently skipped."""
     fixture = await _make_ultimate_universe_fixture(async_db)
-    user = fixture["user"]  # type: ignore[assignment]
+    user = cast(User, fixture["user"])
     entries = [
         {"position": 99, "series_name": "Unknown", "issue_number": "99", "comicvine_issue_id": "00000"},
     ]

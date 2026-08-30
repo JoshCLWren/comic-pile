@@ -14,7 +14,7 @@ issue_number alone is never sufficient evidence when provider IDs disagree.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -336,8 +336,8 @@ async def resolve_canonical_issue(
     # Prefer read history holder; never infer from title+number when provider IDs disagree.
     read_rows = [(r[0], r[2]) for r in rows if str(r[1]) == "read"]
     if read_rows:
-        # Earliest read_at first, then lowest id. Use naive max as sentinel for NULL read_at.
-        sentinel = datetime.max  # noqa: DTZ001 - sentinel comparison only
+        # Earliest read_at first, then lowest id. Use max datetime as sentinel for NULL read_at.
+        sentinel = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=UTC)
         read_rows.sort(key=lambda item: (item[1] if item[1] is not None else sentinel, int(item[0])))
         # If the anomaly spans read and unread for same physical issue, surface as needing review.
         statuses = [str(r[1]) for r in rows]
