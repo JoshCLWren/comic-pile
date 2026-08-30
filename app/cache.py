@@ -845,7 +845,7 @@ class PostgresCache:
             async with engine.connect() as conn:
                 result = await conn.execute(
                     text(
-                        "SELECT value FROM cache_entries "
+                        "SELECT value::text FROM cache_entries "
                         "WHERE namespace = :ns AND cache_key = :k AND expires_at > now()"
                     ),
                     {"ns": _CACHE_NAMESPACE, "k": key},
@@ -854,10 +854,10 @@ class PostgresCache:
             self._circuit_breaker.record_success()
             if row is None:
                 return None
-            if isinstance(row, str):
-                return _reconstruct_value(json.loads(row))
-            # SQLAlchemy+asyncpg may return already-decoded JSONB (dict/list)
-            return _reconstruct_value(row)
+            # value::text always yields canonical JSON text regardless of how
+            # SQLAlchemy+asyncpg decodes JSONB, so json.loads is unambiguous
+            # for plain-string payloads too.
+            return _reconstruct_value(json.loads(row))
         except Exception as e:
             self._circuit_breaker.record_failure()
             self._maybe_demote()
@@ -1015,9 +1015,8 @@ class PostgresCache:
         """Read the active generation and matching value atomically (Postgres).
 
         Mirrors the Redis Lua path: returns ``[generation, raw_value]`` where
-        ``raw_value`` is the stored JSON payload (or ``None`` on a miss).
-        The payload may be returned as decoded JSONB (dict/list) or as text,
-        depending on the asyncpg/SQLAlchemy decoding.
+        ``raw_value`` is the stored JSON payload as canonical text (or ``None``
+        on a miss), ready for the shared ``decode_value`` path.
         """
         engine = self._engine
         if engine is None or not self.is_initialized:
@@ -1033,19 +1032,12 @@ class PostgresCache:
                 value_key = f"{value_prefix}{generation}:{normalized}"
                 val_row = await conn.execute(
                     text(
-                        "SELECT value FROM cache_entries "
+                        "SELECT value::text FROM cache_entries "
                         "WHERE namespace = :ns AND cache_key = :k AND expires_at > now()"
                     ),
                     {"ns": _CACHE_NAMESPACE, "k": value_key},
                 )
                 raw = val_row.scalar_one_or_none()
-                # Normalize JSONB payload to text for the shared decode path:
-                # Postgres may return already-decoded dict/list; callers expect
-                # a JSON text string akin to the Redis transport.
-                if isinstance(raw, (dict, list)):
-                    raw = json.dumps(raw)
-                elif isinstance(raw, bytes):
-                    raw = raw.decode()
             self._circuit_breaker.record_success()
             return [generation, raw]
         except Exception as e:

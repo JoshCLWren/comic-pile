@@ -178,6 +178,26 @@ async def test_atomic_generation_read_postgres(cache_router: CacheRouter) -> Non
     assert json.loads(raw[1]) == {"x": 1}
 
 
+@pytest.mark.asyncio
+async def test_atomic_generation_read_string_payload_postgres(
+    cache_router: CacheRouter,
+) -> None:
+    """A plain-string payload survives the atomic generation read path."""
+    import json
+    import uuid
+
+    if cache_router.provider_kind != "postgres":
+        pytest.skip(**{"reason": "atomic_generation_read is Postgres-specific"})
+    generation_key = f"wrapper:agen:str:{uuid.uuid4()}"
+    await cache_router.incr(generation_key)
+    assert await cache_router.set("cache:user:2:g1:stringval:", "hello", ttl=30)
+    raw = await cache_router.atomic_generation_read(
+        generation_key, "cache:user:2:g", "stringval:"
+    )
+    assert raw[0] == 1
+    assert json.loads(raw[1]) == "hello"
+
+
 # --- Fail-open behavior (must be preserved across both backends) --------------
 
 
