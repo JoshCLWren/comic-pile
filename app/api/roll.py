@@ -2,6 +2,7 @@
 
 import json
 import logging
+import random
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -22,10 +23,12 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Session, Thread
 from app.models.recommendation_context import RecommendationContext
+from app.models.thread import normalize_format_value
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
 from app.services.explanation_projection import get_primary_explanation
 from app.services.reading_effort import (
+    EffortEstimate,
     build_recommendation_context,
     compute_effort_estimate,
 )
@@ -42,9 +45,13 @@ from app.schemas import (
     SessionModeResponse,
     SessionModeUpdateRequest,
 )
-from app.schemas.recommendation_context import CandidateFactor, RecommendationContextCreate
+from app.schemas.recommendation_context import (
+    CandidateFactor,
+    RecommendationContextCreate,
+)
 from app.schemas.session import build_session_bandwidth_state
-from app.momentum import MomentumCandidateWeight, weighted_momentum_selection
+from app.momentum import MomentumCandidateWeight
+from app.services.bandwidth_selection import select_bandwidth_weighted
 from comic_pile.queue import get_bounded_roll_pool_rows
 from comic_pile.recommendation_selection import (
     DEFAULT_BANDWIDTH,
@@ -60,6 +67,72 @@ from comic_pile.session import get_current_die_for_session, get_or_create
 router = APIRouter(tags=["roll"])
 
 logger = logging.getLogger(__name__)
+
+
+def _get_local_hour_from_timezone(timezone: str | None) -> int | None:
+    """Derive local hour from session timezone for recommendation context.
+
+    Args:
+        timezone: IANA timezone string (e.g., "America/Chicago")
+
+    Returns:
+        Local hour (0-23) or None if timezone is invalid/unavailable.
+    """
+    if timezone is None:
+        return None
+    try:
+        tz = ZoneInfo(timezone)
+        return datetime.now(tz).hour
+    except Exception:
+        return None
+
+
+def _build_rolling_recommendation_context(
+    *,
+    die_size: int,
+    selected_queue_position: int,
+    bounded_candidate_ids: list[int],
+    selected_index: int,
+    selection_method: str,
+    session_timezone: str | None,
+    selected_thread_last_rating: float | None,
+    selected_thread_last_activity_at: datetime | None,
+    effort_estimate: str | None = None,
+) -> dict[str, object]:
+    """Build the rolling recommendation context snapshot for a roll event.
+
+    Args:
+        die_size: Current die size at roll time
+        selected_queue_position: Selected thread queue position at roll time
+        bounded_candidate_ids: Bounded candidate thread IDs in exact selection order
+        selected_index: Selected candidate index/result
+        selection_method: Selection method (random, momentum, override)
+        session_timezone: Session timezone if available
+        selected_thread_last_rating: Last rating of selected thread at decision time
+        selected_thread_last_activity_at: Last activity timestamp of selected thread
+        effort_estimate: Optional effort estimate if available
+
+    Returns:
+        Dictionary suitable for JSON storage as rolling_recommendation_context
+    """
+    local_hour = _get_local_hour_from_timezone(session_timezone)
+
+    return {
+        "schema_version": 1,
+        "algorithm_version": "legacy",
+        "die_size": die_size,
+        "selected_queue_position": selected_queue_position,
+        "bounded_candidate_ids": bounded_candidate_ids,
+        "selected_index": selected_index,
+        "selection_method": selection_method,
+        "session_timezone": session_timezone,
+        "local_hour": local_hour,
+        "selected_thread_last_rating": selected_thread_last_rating,
+        "selected_thread_last_activity_at": selected_thread_last_activity_at.isoformat()
+        if selected_thread_last_activity_at
+        else None,
+        "effort_estimate": effort_estimate,
+    }
 
 
 @router.post("/", response_model=RollResponse)
@@ -116,14 +189,26 @@ async def roll_dice(
         )
 
     pool_size = len(bounded_rows)
+    # The active session mode is the durable, user-controlled override. A per-roll
+    # request value wins when supplied; otherwise the session's canonical
+    # active_bandwidth/active_intent drives selection so a manual "random" intent
+    # (or any inferred mode) actually changes this roll. Legacy sessions with null
+    # session mode fall back to the balanced defaults, preserving old behavior.
     selection_bandwidth = (
-        roll_request.bandwidth if roll_request.bandwidth is not None else DEFAULT_BANDWIDTH
+        roll_request.bandwidth
+        if roll_request.bandwidth is not None
+        else (current_session.active_bandwidth or DEFAULT_BANDWIDTH)
     )
-    selection_intent = roll_request.intent if roll_request.intent is not None else DEFAULT_INTENT
+    selection_intent = (
+        roll_request.intent
+        if roll_request.intent is not None
+        else (current_session.active_intent or DEFAULT_INTENT)
+    )
 
     resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent)
 
     max_bonus = 0.0
+    weights_applied = False
     candidate_weights: list = []
     if resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
         selection = select_from_pool(
@@ -146,32 +231,50 @@ async def roll_dice(
         # get_bounded_roll_pool_rows already applied the die cap, so the contextual
         # weighting below cannot draw from outside the active die pool.
 
-        # Apply momentum weighting; weights fall back to uniform (pure-random)
-        # when no positive momentum applies, preserving the pure-random bypass.
+        # Apply momentum + bandwidth weighting. Bandwidth contributes a neutral
+        # (1.0) factor for balanced/default rolls and for unknown effort, so
+        # those draws stay byte-for-byte identical to the legacy momentum
+        # behavior; light/deep bandwidth reweights candidates inside the pool.
         session_events_result = await db.execute(
             select(Event).where(Event.session_id == current_session_id)
         )
         session_events = list(session_events_result.scalars().all())
 
-        selected_index, max_bonus, candidate_weights = await weighted_momentum_selection(
+        selected = await select_bandwidth_weighted(
             db=db,
             bounded_rows=bounded_rows,
             user_id=user_id,
             session_events=session_events,
+            bandwidth=selection_bandwidth,
+            intent=selection_intent,
             now=datetime.now(UTC),
         )
+        selected_index = selected.selected_index
+        max_bonus = selected.max_bonus
+        candidate_weights = selected.weights
+        weights_applied = selected.weights_applied
+
     # Derive concise, user-facing reason codes from the actual decision-time
-    # selection context. Momentum weighting is applied only when a positive
-    # bonus exists; otherwise the selection is genuinely unweighted/pure-random.
-    recommendation_reason_codes = (
-        ["momentum_weighted"] if max_bonus > 0 else ["pure_random"]
-    )
+    # selection context. A bandwidth-aware draw (light/deep with known effort)
+    # is labeled bandwidth_weighted; a momentum-only draw is momentum_weighted;
+    # otherwise the selection is genuinely unweighted/pure-random.
+    if resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
+        if selection_bandwidth in ("light", "deep"):
+            recommendation_reason_codes = ["bandwidth_weighted"]
+        else:
+            recommendation_reason_codes = ["momentum_weighted"]
+    else:
+        recommendation_reason_codes = ["pure_random"]
+
     selected_thread, unread_count, issue_number = bounded_rows[selected_index]
 
     selected_thread_id = selected_thread.id
     selected_thread_title = selected_thread.title
-    selected_thread_format = selected_thread.format
+    selected_thread_format = normalize_format_value(selected_thread.format)
     selected_thread_queue_position = selected_thread.queue_position
+
+    # Capture bounded candidate IDs in exact selection order for recommendation context
+    bounded_candidate_ids = [row[0].id if isinstance(row, tuple) else row.id for row in bounded_rows]
 
     selected_thread_issues_remaining = unread_count
 
@@ -215,17 +318,38 @@ async def roll_dice(
         issue_number=selected_thread_issue_number,
     )
 
+    # Extract effort estimate band as string for JSON serialization
+    effort_estimate_str = selected_effort_estimate.band if isinstance(selected_effort_estimate, EffortEstimate) else selected_effort_estimate
+
+    if resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
+        selection_method = (
+            "bandwidth" if selection_bandwidth in ("light", "deep") else "momentum"
+        )
+    else:
+        selection_method = "random"
+
     event = Event(
         type="roll",
         session_id=current_session_id,
         selected_thread_id=selected_thread_id,
         die=current_die,
         result=selected_index + 1,
-        selection_method="momentum" if max_bonus > 0 else "random",
+        selection_method=selection_method,
         recommendation_reason_codes=recommendation_reason_codes,
         recommendation_context=recommendation_context,
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
+        rolling_recommendation_context=_build_rolling_recommendation_context(
+            die_size=current_die,
+            selected_queue_position=selected_thread_queue_position,
+            bounded_candidate_ids=bounded_candidate_ids,
+            selected_index=selected_index,
+            selection_method=selection_method,
+            session_timezone=current_session.timezone,
+            selected_thread_last_rating=selected_thread.last_rating,
+            selected_thread_last_activity_at=selected_thread.last_activity_at,
+            effort_estimate=effort_estimate_str,
+        ),
     )
     db.add(event)
 
@@ -268,8 +392,8 @@ async def roll_dice(
         final_weight=candidate_weights[selected_index].weight
         if candidate_weights
         else None,
-        random_bypass=max_bonus <= 0.0,
-        balanced_neutrality=max_bonus <= 0.0,
+        random_bypass=not weights_applied,
+        balanced_neutrality=not weights_applied,
         effort_minutes=round(selected_effort_estimate.minutes, 2)
         if selected_effort_estimate.minutes is not None
         else None,
@@ -403,7 +527,7 @@ async def override_roll(
 
     override_thread_id = override_thread.id
     override_thread_title = override_thread.title
-    override_thread_format = override_thread.format
+    override_thread_format = normalize_format_value(override_thread.format)
     override_thread_queue_position = override_thread.queue_position
 
     override_thread_issues_remaining = await override_thread.get_issues_remaining(db)
@@ -449,6 +573,9 @@ async def override_roll(
         issue_number=override_thread_issue_number,
     )
 
+    # Extract effort estimate band as string for JSON serialization
+    effort_estimate_str = effort_estimate.band if isinstance(effort_estimate, EffortEstimate) else effort_estimate
+
     event = Event(
         type="roll",
         session_id=current_session_id,
@@ -460,6 +587,17 @@ async def override_roll(
         recommendation_context=recommendation_context,
         issue_id=override_thread_issue_id,
         issue_number=override_thread_issue_number,
+        rolling_recommendation_context=_build_rolling_recommendation_context(
+            die_size=current_die,
+            selected_queue_position=override_thread_queue_position,
+            bounded_candidate_ids=[override_thread_id],
+            selected_index=0,
+            selection_method="override",
+            session_timezone=current_session.timezone,
+            selected_thread_last_rating=override_thread.last_rating,
+            selected_thread_last_activity_at=override_thread.last_activity_at,
+            effort_estimate=effort_estimate_str,
+        ),
     )
     db.add(event)
 
@@ -640,36 +778,52 @@ async def update_session_mode(
 
     version_tag = f"manual-{int(datetime.now(UTC).timestamp())}"
 
+    changed_dimensions: list[str] = []
+
     if mode_update.bandwidth is not None:
         current_session.active_bandwidth = mode_update.bandwidth
         current_session.predicted_bandwidth = mode_update.bandwidth
         current_session.bandwidth_source = "manual"
+        current_session.bandwidth_confidence = 1.0
         current_session.bandwidth_version = version_tag
         active_bandwidth = mode_update.bandwidth
         predicted_bandwidth = mode_update.bandwidth
         bandwidth_source = "manual"
+        bandwidth_confidence = 1.0
         bandwidth_version = version_tag
+        changed_dimensions.append("bandwidth")
 
     if mode_update.intent is not None:
         current_session.active_intent = mode_update.intent
         current_session.predicted_intent = mode_update.intent
         current_session.intent_source = "manual"
+        current_session.intent_confidence = 1.0
         current_session.intent_version = version_tag
         active_intent = mode_update.intent
         predicted_intent = mode_update.intent
         intent_source = "manual"
+        intent_confidence = 1.0
         intent_version = version_tag
+        changed_dimensions.append("intent")
 
-    db.add(
-        Event(
-            session_id=session_id,
-            type="session_mode",
-            die=None,
-            selected_thread_id=None,
-            thread_id=None,
-            issue_id=None,
+    if changed_dimensions:
+        db.add(
+            Event(
+                session_id=session_id,
+                type="session_mode",
+                die=None,
+                selected_thread_id=None,
+                thread_id=None,
+                issue_id=None,
+                context={
+                    "source": "manual",
+                    "changed": changed_dimensions,
+                    "bandwidth": active_bandwidth,
+                    "intent": active_intent,
+                    "version": version_tag,
+                },
+            )
         )
-    )
     await db.commit()
     await _invalidate_session_caches(current_user.id)
 
@@ -819,7 +973,7 @@ async def roll_bootstrap(
         RollBootstrapThread(
             id=row.id,
             title=row.title,
-            format=row.format,
+            format=normalize_format_value(row.format),
             issue_id=row.issue_id,
             issue_number=row.issue_number,
             route_labels=list(row.route_labels or []),
@@ -835,7 +989,9 @@ async def roll_bootstrap(
             .where(Thread.id.in_(snoozed_ids))
         )
         snoozed_threads = [
-            RollBootstrapThread(id=row.id, title=row.title, format=row.format)
+            RollBootstrapThread(
+                id=row.id, title=row.title, format=normalize_format_value(row.format)
+            )
             for row in snoozed_result.all()
         ]
 
@@ -857,7 +1013,9 @@ async def roll_bootstrap(
         .limit(20)
     )
     blocked_threads = [
-        RollBootstrapThread(id=row.id, title=row.title, format=row.format)
+        RollBootstrapThread(
+            id=row.id, title=row.title, format=normalize_format_value(row.format)
+        )
         for row in blocked_result.all()
     ]
     snoozed_count = len(snoozed_threads)
@@ -866,7 +1024,7 @@ async def roll_bootstrap(
 
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
     effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
-    stale_count_result = await db.execute(
+    stale_base = (
         select(func.count())
         .select_from(Thread)
         .where(Thread.user_id == user_id)
@@ -874,30 +1032,43 @@ async def roll_bootstrap(
         .where(Thread.is_blocked.is_(False))
         .where(effective_activity < stale_cutoff)
     )
+    if snoozed_ids:
+        stale_base = stale_base.where(Thread.id.not_in(snoozed_ids))
+    stale_count_result = await db.execute(stale_base)
     stale_thread_count = stale_count_result.scalar() or 0
 
     stale_thread = None
     if stale_thread_count > 0:
-        stale_result = await db.execute(
-            select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
+        stale_ids_query = (
+            select(Thread.id)
             .where(Thread.user_id == user_id)
             .where(Thread.status == "active")
             .where(Thread.is_blocked.is_(False))
             .where(effective_activity < stale_cutoff)
-            .order_by(effective_activity.asc())
-            .limit(1)
         )
-        stale_row = stale_result.first()
-        if stale_row:
-            stale_last_activity = (
-                stale_row.last_activity_at.isoformat() if stale_row.last_activity_at else None
+        if snoozed_ids:
+            stale_ids_query = stale_ids_query.where(Thread.id.not_in(snoozed_ids))
+        stale_ids_result = await db.execute(stale_ids_query)
+        stale_ids = [row[0] for row in stale_ids_result.all()]
+        if stale_ids:
+            chosen_id = random.choice(stale_ids)
+            stale_detail_result = await db.execute(
+                select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
+                .where(Thread.id == chosen_id)
             )
-            stale_thread = RollBootstrapThread(
-                id=stale_row.id,
-                title=stale_row.title,
-                format=stale_row.format,
-                last_activity_at=stale_last_activity,
-            )
+            stale_row = stale_detail_result.first()
+            if stale_row:
+                stale_last_activity = (
+                    stale_row.last_activity_at.isoformat()
+                    if stale_row.last_activity_at
+                    else None
+                )
+                stale_thread = RollBootstrapThread(
+                    id=stale_row.id,
+                    title=stale_row.title,
+                    format=normalize_format_value(stale_row.format),
+                    last_activity_at=stale_last_activity,
+                )
 
     return RollBootstrapResponse(
         current_die=die_size,

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   readerContextApi,
   type ReaderContextResponse,
 } from '../services/api-reader-context'
+import { queryKeys } from '../query/queryKeys'
 
 interface ReaderContextState {
   context: ReaderContextResponse | null
@@ -18,48 +19,27 @@ const EMPTY_STATE: ReaderContextState = {
   refetch: () => undefined,
 }
 
-export function useReaderContext(
-  issueId: number | null | undefined,
-): ReaderContextState {
-  const [state, setState] = useState(EMPTY_STATE)
-  const [attempt, setAttempt] = useState(0)
-  const refetch = useCallback(() => setAttempt((value) => value + 1), [])
-  const issueIdRef = useRef(issueId)
+export function useReaderContext(issueId: number | null | undefined): ReaderContextState {
+  const { data, isPending, error, refetch } = useQuery({
+    queryKey: issueId ? queryKeys.readerContext.detail(issueId) : [],
+    queryFn: async () => {
+      try {
+        return await readerContextApi.get(issueId!)
+      } catch (reason) {
+        throw reason instanceof Error ? reason : new Error('Unable to load reader context')
+      }
+    },
+    enabled: issueId != null,
+  })
 
-  useEffect(() => {
-    issueIdRef.current = issueId
-  }, [issueId])
+  if (issueId == null) return EMPTY_STATE
 
-  useEffect(() => {
-    if (issueId == null) {
-      setState({ ...EMPTY_STATE, refetch })
-      return
-    }
-
-    let isCurrent = true
-    setState({ context: null, isLoading: true, error: null, refetch })
-
-    readerContextApi.get(issueId).then(
-      (context) => {
-        if (isCurrent && issueIdRef.current === issueId) {
-          setState({ context, isLoading: false, error: null, refetch })
-        }
-      },
-      (reason: unknown) => {
-        if (isCurrent && issueIdRef.current === issueId) {
-          const error =
-            reason instanceof Error
-              ? reason
-              : new Error('Unable to load reader context')
-          setState({ context: null, isLoading: false, error, refetch })
-        }
-      },
-    )
-
-    return () => {
-      isCurrent = false
-    }
-  }, [attempt, issueId, refetch])
-
-  return state
+  return {
+    context: data ?? null,
+    isLoading: isPending,
+    error: (error as Error | null) ?? null,
+    refetch: () => {
+      void refetch()
+    },
+  }
 }

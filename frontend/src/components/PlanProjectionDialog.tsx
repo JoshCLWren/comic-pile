@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import Modal from './Modal'
+import GlossaryLink from './GlossaryLink'
 import {
   readingOrdersApi,
   type ReadingOrderProjectionPreview,
@@ -102,7 +103,9 @@ export default function PlanProjectionDialog({
       overlayClassName="bg-black/70 backdrop-blur-sm"
     >
       <p className="text-sm text-stone-400">
-        Preview how “{planName}” would appear inside a saved reading order, then confirm to apply it. Your plan is never modified.
+        Preview how “{planName}” would appear inside a saved{' '}
+        <GlossaryLink id="reading-order">reading order</GlossaryLink>, then confirm to apply it.
+        Your plan is never modified (<GlossaryLink id="projection">Projection</GlossaryLink>).
       </p>
 
       <label className="mt-4 block">

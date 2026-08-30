@@ -296,6 +296,50 @@ async def test_get_stale_threads(async_db: AsyncSession, default_user: User) -> 
 
 
 @pytest.mark.asyncio
+async def test_get_stale_threads_excludes_snoozed(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """get_stale_threads excludes threads in the snoozed_ids list."""
+    from datetime import UTC, datetime, timedelta
+    from comic_pile.queue import get_stale_threads
+
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=10)
+
+    stale_thread = Thread(
+        title="Stale Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+    snoozed_stale_thread = Thread(
+        title="Snoozed Stale Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=2,
+        status="active",
+        user_id=default_user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+
+    async_db.add_all([stale_thread, snoozed_stale_thread])
+    await async_db.commit()
+
+    stale_threads = await get_stale_threads(
+        default_user.id, async_db, days=7, snoozed_ids=[snoozed_stale_thread.id]
+    )
+
+    assert len(stale_threads) == 1
+    assert stale_threads[0].id == stale_thread.id
+    assert snoozed_stale_thread.id not in {t.id for t in stale_threads}
+
+
+@pytest.mark.asyncio
 async def test_move_to_front_already_at_position_1(
     async_db: AsyncSession, default_user: User
 ) -> None:

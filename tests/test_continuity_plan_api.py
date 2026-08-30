@@ -1,6 +1,7 @@
 """API coverage for persisted continuity plans and explicit rule compilation."""
 
 from datetime import UTC, datetime
+from typing import TypedDict
 from unittest.mock import AsyncMock
 
 import pytest
@@ -14,6 +15,27 @@ from app.models.continuity_rule import ContinuityRule
 from app.models.issue import Issue
 from app.models.thread import Thread
 from tests.conftest import get_or_create_user_async
+
+
+class PlanNodeDict(TypedDict):
+    """TypedDict for a plan node in test payloads."""
+
+    id: str
+    node_type: str
+    ref_id: int
+    lane_id: str
+    position: int
+    is_checkpoint: bool | None
+    convergence_gate: list[dict[str, str]] | None
+
+
+class PlanPayloadDict(TypedDict):
+    """TypedDict for a complete plan payload in tests."""
+
+    name: str
+    ordering_mode: str
+    lanes: list[dict[str, str | int]]
+    nodes: list[PlanNodeDict]
 
 
 async def _make_issue(async_db: AsyncSession, *, user_id: int, suffix: str) -> Issue:
@@ -37,7 +59,7 @@ async def _make_issue(async_db: AsyncSession, *, user_id: int, suffix: str) -> I
     return issue
 
 
-def _plan_payload(issue_ids: list[int], *, mode: str = "informational") -> dict[str, object]:
+def _plan_payload(issue_ids: list[int], *, mode: str = "informational") -> PlanPayloadDict:
     """Build a one-lane plan payload."""
     return {
         "name": "Imported crossover",
@@ -50,6 +72,8 @@ def _plan_payload(issue_ids: list[int], *, mode: str = "informational") -> dict[
                 "ref_id": issue_id,
                 "lane_id": "main",
                 "position": position,
+                "is_checkpoint": False,
+                "convergence_gate": None,
             }
             for position, issue_id in enumerate(issue_ids)
         ],
@@ -179,9 +203,9 @@ def test_strict_plan_rejects_parallel_lanes_and_thread_nodes() -> None:
 
 def _parallel_payload(
     lane_a: list[int], lane_b: list[int]
-) -> dict[str, object]:
+) -> PlanPayloadDict:
     """Build a two-lane informational plan payload with one issue node per entry."""
-    nodes: list[dict[str, object]] = []
+    nodes: list[PlanNodeDict] = []
     for position, issue_id in enumerate(lane_a):
         nodes.append(
             {
@@ -190,6 +214,8 @@ def _parallel_payload(
                 "ref_id": issue_id,
                 "lane_id": "era-a",
                 "position": position,
+                "is_checkpoint": False,
+                "convergence_gate": None,
             }
         )
     for position, issue_id in enumerate(lane_b):
@@ -200,6 +226,8 @@ def _parallel_payload(
                 "ref_id": issue_id,
                 "lane_id": "era-b",
                 "position": position,
+                "is_checkpoint": False,
+                "convergence_gate": None,
             }
         )
     return {
@@ -374,6 +402,440 @@ async def test_delete_lane_behavior_is_explicit(
     accepted = await auth_client.put(f"/api/v1/continuity-plans/{plan_id}", json=dropping_empty_lane)
     assert accepted.status_code == 200, accepted.text
     assert [lane["id"] for lane in accepted.json()["lanes"]] == ["era-b"]
+
+
+def _parallel_payload_with_gates(
+    lane_a: list[int],
+    lane_b: list[int],
+    *,
+    checkpoint_index: int | None = None,
+    convergence_from_b_to_a: int | None = None,
+) -> PlanPayloadDict:
+    """Build a two-lane informational plan with optional checkpoint/convergence."""
+    nodes: list[PlanNodeDict] = []
+    for position, issue_id in enumerate(lane_a):
+        node: PlanNodeDict = {
+            "id": f"a-{issue_id}",
+            "node_type": "issue",
+            "ref_id": issue_id,
+            "lane_id": "era-a",
+            "position": position,
+            "is_checkpoint": position == checkpoint_index,
+            "convergence_gate": None,
+        }
+        nodes.append(node)
+    for position, issue_id in enumerate(lane_b):
+        gate: list[dict[str, str]] = []
+        if convergence_from_b_to_a is not None and position == 0:
+            gate = [{"node_type": "issue", "node_id": f"a-{convergence_from_b_to_a}"}]
+        nodes.append({
+            "id": f"b-{issue_id}",
+            "node_type": "issue",
+            "ref_id": issue_id,
+            "lane_id": "era-b",
+            "position": position,
+            "is_checkpoint": False,
+            "convergence_gate": gate,
+        })
+    return {
+        "name": "Gated plan",
+        "ordering_mode": "informational",
+        "lanes": [
+            {"id": "era-a", "name": "Era A", "order": 0},
+            {"id": "era-b", "name": "Era B", "order": 1},
+        ],
+        "nodes": nodes,
+    }
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_node_compiles_lane_blocking_rule(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A checkpoint node compiles a checkpoint rule that blocks the next node in the lane."""
+    user = await get_or_create_user_async(async_db)
+    issues = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(3)]
+    await async_db.commit()
+    payload = _plan_payload([issue.id for issue in issues])
+    payload["nodes"][1]["is_checkpoint"] = True
+
+    created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+
+    rules = (
+        await async_db.execute(
+            select(ContinuityRule)
+            .where(ContinuityRule.user_id == user.id)
+            .order_by(ContinuityRule.id)
+        )
+    ).scalars().all()
+    checkpoint_rules = [r for r in rules if r.satisfaction_type == "checkpoint"]
+    assert len(checkpoint_rules) == 1
+    rule = checkpoint_rules[0]
+    assert rule.source_id == issues[1].id
+    assert rule.target_id == issues[2].id
+    assert rule.checkpoint_issue_id == issues[1].id
+    assert rule.note == f"continuity-plan:{plan_id}"
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_on_last_node_compiles_no_rule(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A checkpoint on the last node in a lane has no downstream node and compiles no rule."""
+    user = await get_or_create_user_async(async_db)
+    issues = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2)]
+    await async_db.commit()
+    payload = _plan_payload([issue.id for issue in issues])
+    payload["nodes"][1]["is_checkpoint"] = True
+
+    created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert created.status_code == 201, created.text
+
+    rules = (
+        await async_db.execute(select(ContinuityRule).where(ContinuityRule.user_id == user.id))
+    ).scalars().all()
+    checkpoint_rules = [r for r in rules if r.satisfaction_type == "checkpoint"]
+    assert checkpoint_rules == []
+
+
+@pytest.mark.asyncio
+async def test_convergence_gate_compiles_converged_rule(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A convergence gate on a node compiles a converged rule waiting for the gate targets."""
+    user = await get_or_create_user_async(async_db)
+    lane_a = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2)]
+    lane_b = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2, 4)]
+    await async_db.commit()
+    payload = _parallel_payload_with_gates(
+        [issue.id for issue in lane_a],
+        [issue.id for issue in lane_b],
+        convergence_from_b_to_a=lane_a[1].id,
+    )
+
+    created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+
+    rules = (
+        await async_db.execute(
+            select(ContinuityRule)
+            .where(ContinuityRule.user_id == user.id)
+            .order_by(ContinuityRule.id)
+        )
+    ).scalars().all()
+    converged_rules = [r for r in rules if r.satisfaction_type == "converged"]
+    assert len(converged_rules) == 1
+    rule = converged_rules[0]
+    assert rule.source_id == lane_b[0].id
+    assert rule.target_id == lane_b[0].id
+    assert rule.convergence_targets is not None
+    assert len(rule.convergence_targets) == 1
+    assert rule.convergence_targets[0]["type"] == "issue"
+    assert rule.convergence_targets[0]["id"] == lane_a[1].id
+    assert rule.note == f"continuity-plan:{plan_id}"
+
+
+@pytest.mark.asyncio
+async def test_convergence_gate_edit_save_reload_persists(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Editing convergence gates persists across save and reload."""
+    user = await get_or_create_user_async(async_db)
+    lane_a = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(3)]
+    lane_b = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(3, 5)]
+    await async_db.commit()
+    payload = _parallel_payload_with_gates(
+        [issue.id for issue in lane_a],
+        [issue.id for issue in lane_b],
+        convergence_from_b_to_a=lane_a[1].id,
+    )
+
+    created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+
+    # Edit: add convergence from second B node to first A node
+    updated_nodes = created.json()["nodes"]
+    for node in updated_nodes:
+        if node["id"] == f"b-{lane_b[1].id}":
+            node["convergence_gate"] = [{"node_type": "issue", "node_id": f"a-{lane_a[0].id}"}]
+    update_payload = {
+        "name": "Gated plan",
+        "ordering_mode": "informational",
+        "lanes": created.json()["lanes"],
+        "nodes": updated_nodes,
+    }
+    updated = await auth_client.put(f"/api/v1/continuity-plans/{plan_id}", json=update_payload)
+    assert updated.status_code == 200, updated.text
+
+    # Verify two converged rules exist
+    rules = (
+        await async_db.execute(
+            select(ContinuityRule)
+            .where(
+                ContinuityRule.user_id == user.id,
+                ContinuityRule.satisfaction_type == "converged",
+            )
+        )
+    ).scalars().all()
+    assert len(rules) == 2
+
+    # Reload and verify the plan data persists
+    fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
+    assert fetched.status_code == 200
+    b_node = next(n for n in fetched.json()["nodes"] if n["id"] == f"b-{lane_b[1].id}")
+    assert len(b_node["convergence_gate"]) == 1
+    assert b_node["convergence_gate"][0]["node_id"] == f"a-{lane_a[0].id}"
+
+
+@pytest.mark.asyncio
+async def test_removing_convergence_gate_removes_only_plan_owned_rules(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Removing all convergence gates removes only the plan-owned converged rules."""
+    user = await get_or_create_user_async(async_db)
+    lane_a = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2)]
+    lane_b = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2, 4)]
+    await async_db.commit()
+    payload = _parallel_payload_with_gates(
+        [issue.id for issue in lane_a],
+        [issue.id for issue in lane_b],
+        convergence_from_b_to_a=lane_a[1].id,
+    )
+
+    created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+
+    # Verify converged rule exists
+    converged = (
+        await async_db.execute(
+            select(ContinuityRule).where(
+                ContinuityRule.user_id == user.id,
+                ContinuityRule.satisfaction_type == "converged",
+            )
+        )
+    ).scalars().all()
+    assert len(converged) == 1
+
+    # Update: remove convergence gate from all nodes
+    updated_nodes = [
+        {k: v for k, v in node.items() if k != "convergence_gate"}
+        for node in created.json()["nodes"]
+    ]
+    for node in updated_nodes:
+        node["convergence_gate"] = []
+    update_payload = {
+        "name": "Gated plan",
+        "ordering_mode": "informational",
+        "lanes": created.json()["lanes"],
+        "nodes": updated_nodes,
+    }
+    updated = await auth_client.put(f"/api/v1/continuity-plans/{plan_id}", json=update_payload)
+    assert updated.status_code == 200, updated.text
+
+    # Verify converged rules are removed
+    converged_after = (
+        await async_db.execute(
+            select(ContinuityRule).where(
+                ContinuityRule.user_id == user.id,
+                ContinuityRule.satisfaction_type == "converged",
+            )
+        )
+    ).scalars().all()
+    assert converged_after == []
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_convergence_idempotent_recompile(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Re-saving a plan with checkpoints and convergence produces the same rules."""
+    user = await get_or_create_user_async(async_db)
+    issues = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(3)]
+    await async_db.commit()
+    payload = _plan_payload([issue.id for issue in issues])
+    payload["nodes"][0]["is_checkpoint"] = True
+
+    created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+
+    first_rules = (
+        await async_db.execute(
+            select(ContinuityRule).where(ContinuityRule.user_id == user.id).order_by(ContinuityRule.id)
+        )
+    ).scalars().all()
+    first_count = len(first_rules)
+
+    # Re-save with same payload
+    updated = await auth_client.put(f"/api/v1/continuity-plans/{plan_id}", json=payload)
+    assert updated.status_code == 200, updated.text
+
+    second_rules = (
+        await async_db.execute(
+            select(ContinuityRule).where(ContinuityRule.user_id == user.id).order_by(ContinuityRule.id)
+        )
+    ).scalars().all()
+    assert len(second_rules) == first_count
+    assert [(r.source_id, r.target_id, r.satisfaction_type) for r in second_rules] == [
+        (r.source_id, r.target_id, r.satisfaction_type) for r in first_rules
+    ]
+
+
+@pytest.mark.asyncio
+async def test_convergence_self_wait_rejected_by_schema(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A convergence gate that references itself is rejected by schema validation."""
+    user = await get_or_create_user_async(async_db)
+    issues = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2)]
+    await async_db.commit()
+    payload = _plan_payload([issue.id for issue in issues])
+    payload["nodes"][0]["convergence_gate"] = [
+        {"node_type": "issue", "node_id": "issue-" + str(issues[0].id)}
+    ]
+
+    response = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert response.status_code == 422
+    assert "cannot wait for itself" in response.text
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_on_non_issue_rejected_by_schema(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A checkpoint on a non-issue node is rejected by schema validation."""
+    user = await get_or_create_user_async(async_db)
+    issues = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2)]
+    await async_db.commit()
+    payload = _plan_payload([issue.id for issue in issues])
+    payload["nodes"][0]["node_type"] = "crossover"
+    payload["nodes"][0]["is_checkpoint"] = True
+
+    response = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert response.status_code == 422
+    assert "only allowed on issue nodes" in response.text
+
+
+@pytest.mark.asyncio
+async def test_convergence_gate_thread_target_rejected_by_schema(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A convergence gate targeting a thread node is rejected before save."""
+    user = await get_or_create_user_async(async_db)
+    issue = await _make_issue(async_db, user_id=user.id, suffix="0")
+    thread = Thread(
+        title="Series target",
+        format="comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+        reading_progress="unstarted",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    payload = {
+        "name": "Thread gate plan",
+        "ordering_mode": "informational",
+        "lanes": [{"id": "main", "name": "Main", "order": 0}],
+        "nodes": [
+            {
+                "id": "a-1",
+                "node_type": "issue",
+                "ref_id": issue.id,
+                "lane_id": "main",
+                "position": 0,
+                "is_checkpoint": False,
+                "convergence_gate": [{"node_type": "thread", "node_id": "t-1"}],
+            },
+            {
+                "id": "t-1",
+                "node_type": "thread",
+                "ref_id": thread.id,
+                "lane_id": "main",
+                "position": 1,
+                "is_checkpoint": False,
+                "convergence_gate": [],
+            },
+        ],
+    }
+
+    response = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert response.status_code == 422
+    assert "convergence targets must be issue/crossover nodes" in response.text
+
+
+@pytest.mark.asyncio
+async def test_convergence_cycle_rejected_before_save(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A convergence gate that closes a dependency cycle is rejected before save."""
+    user = await get_or_create_user_async(async_db)
+    issues = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2)]
+    await async_db.commit()
+    payload = {
+        "name": "Cycle plan",
+        "ordering_mode": "informational",
+        "lanes": [{"id": "main", "name": "Main", "order": 0}],
+        "nodes": [
+            {
+                "id": "n-1",
+                "node_type": "issue",
+                "ref_id": issues[0].id,
+                "lane_id": "main",
+                "position": 0,
+                "is_checkpoint": False,
+                "convergence_gate": [{"node_type": "issue", "node_id": "n-2"}],
+            },
+            {
+                "id": "n-2",
+                "node_type": "issue",
+                "ref_id": issues[1].id,
+                "lane_id": "main",
+                "position": 1,
+                "is_checkpoint": False,
+                "convergence_gate": [{"node_type": "issue", "node_id": "n-1"}],
+            },
+        ],
+    }
+
+    response = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "plan_convergence_cycle"
+
+
+@pytest.mark.asyncio
+async def test_convergence_gate_not_false_cyclic_in_readiness(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A convergence gate node is not falsely reported as a self cycle in readiness."""
+    user = await get_or_create_user_async(async_db)
+    lane_a = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2)]
+    lane_b = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2, 4)]
+    await async_db.commit()
+    payload = _parallel_payload_with_gates(
+        [issue.id for issue in lane_a],
+        [issue.id for issue in lane_b],
+        convergence_from_b_to_a=lane_a[1].id,
+    )
+
+    created = await auth_client.post("/api/v1/continuity-plans/", json=payload)
+    assert created.status_code == 201, created.text
+    plan_id = created.json()["id"]
+
+    readiness = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/readiness")
+    assert readiness.status_code == 200, readiness.text
+    body = readiness.json()
+    assert [d for d in body["plan_diagnostics"] if d["code"] == "plan_cycle_detected"] == []
+    conv_node = next(n for n in body["nodes"] if n["node_id"] == f"b-{lane_b[0].id}")
+    assert not any(d["code"] == "plan_cycle_detected" for d in conv_node.get("diagnostics", []))
 
 
 @pytest.mark.asyncio

@@ -19,7 +19,7 @@
     "vitest": "^4.1.10"
   },
   "scripts": {
-    "build": "pnpm --dir frontend build",
+    "build": "pnpm --filter frontend run build",
     "lint:js": "echo No JavaScript files to lint",
     "lint:html": "pnpm exec htmlhint app/templates/*.html",
     "lint": "pnpm run lint:js && pnpm run lint:html",

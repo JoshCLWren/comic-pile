@@ -14,7 +14,7 @@ const { routeLoaderKeys, routeLoaders } = vi.hoisted(() => {
     'history',
     'session',
     'crossovers',
-    'help',
+    'glossary',
     'whatsNew',
     'login',
     'register',

@@ -103,6 +103,8 @@ def candidate_is_live_executable(candidate: Candidate) -> bool:
         return not issue_has_open_blocker(candidate.number)
     target = target_json(candidate.number)
     labels = {label['name'] for label in target.get('labels', [])}
+    if 'factory:ready' in labels:
+        return False
     if candidate.conflicted:
         return True
     if 'factory:ci' in labels:

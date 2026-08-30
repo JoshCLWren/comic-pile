@@ -258,6 +258,31 @@ def test_capacity_report_does_not_count_repeated_slots_as_distinct_candidates():
     ]
 
 
+def test_batch_executability_reads_each_candidate_once():
+    """Repeated worker ranking reuses one live read per candidate."""
+    calls: list[int] = []
+
+    class FakeController:
+        @staticmethod
+        def candidate_is_live_executable(candidate):
+            calls.append(candidate.number)
+            return candidate.number != 42
+
+    class FakeCandidate:
+        def __init__(self, number: int) -> None:
+            self.number = number
+
+    cache: dict[int, bool] = {}
+    allowed = FakeCandidate(41)
+    blocked = FakeCandidate(42)
+
+    assert controller.candidate_is_batch_executable(FakeController, allowed, cache)
+    assert controller.candidate_is_batch_executable(FakeController, allowed, cache)
+    assert not controller.candidate_is_batch_executable(FakeController, blocked, cache)
+    assert not controller.candidate_is_batch_executable(FakeController, blocked, cache)
+    assert calls == [41, 42]
+
+
 def test_catalog_success_makes_peer_capability_slots_executable():
     """A real model success proves capacity for idle slots sharing its catalog."""
     comments = [

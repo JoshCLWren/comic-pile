@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   continuityReadinessApi,
   type ContinuityReadinessResponse,
 } from '../services/api-continuity-readiness'
+import { queryKeys } from '../query/queryKeys'
 
 export interface ContinuityReadinessState {
   readiness: ContinuityReadinessResponse | null
@@ -28,37 +29,26 @@ export function useContinuityReadiness(
   options: UseContinuityReadinessOptions = {},
 ): ContinuityReadinessState {
   const { skip = false } = options
-  const [state, setState] = useState(EMPTY_STATE)
-  const [attempt, setAttempt] = useState(0)
-  const refetch = useCallback(() => setAttempt((value) => value + 1), [])
+  const { data, isPending, error, refetch } = useQuery({
+    queryKey: issueId ? queryKeys.continuity.readiness('issue', issueId) : [],
+    queryFn: async () => {
+      try {
+        return await continuityReadinessApi.evaluate('issue', issueId!)
+      } catch (reason) {
+        throw reason instanceof Error ? reason : new Error('Unable to load readiness')
+      }
+    },
+    enabled: issueId != null && !skip,
+  })
 
-  useEffect(() => {
-    if (issueId == null || skip) {
-      setState({ ...EMPTY_STATE, refetch })
-      return
-    }
+  if (issueId == null || skip) return EMPTY_STATE
 
-    let isCurrent = true
-    setState({ readiness: null, isLoading: true, error: null, refetch })
-
-    continuityReadinessApi.evaluate('issue', issueId).then(
-      (readiness) => {
-        if (isCurrent) {
-          setState({ readiness, isLoading: false, error: null, refetch })
-        }
-      },
-      (reason: unknown) => {
-        if (isCurrent) {
-          const error = reason instanceof Error ? reason : new Error('Unable to load readiness')
-          setState({ readiness: null, isLoading: false, error, refetch })
-        }
-      },
-    )
-
-    return () => {
-      isCurrent = false
-    }
-  }, [attempt, issueId, refetch, skip])
-
-  return state
+  return {
+    readiness: data ?? null,
+    isLoading: isPending,
+    error: (error as Error | null) ?? null,
+    refetch: () => {
+      void refetch()
+    },
+  }
 }

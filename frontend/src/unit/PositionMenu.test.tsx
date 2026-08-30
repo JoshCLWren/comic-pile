@@ -1,4 +1,4 @@
-import { act, render as baseRender, screen } from '@testing-library/react'
+import { act, fireEvent, render as baseRender, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import PositionMenu from '../components/PositionMenu'
@@ -454,7 +454,11 @@ describe('PositionMenu', () => {
     const trigger = screen.getByRole('button', { name: /thread actions/i })
     trigger.focus()
     await user.keyboard('{Enter}')
-    await user.click(trigger)
+    // Dispatch the keyboard-generated click synchronously so the component's
+    // Enter/Space dedup guard is always active when it arrives, mirroring how a
+    // browser emits the click in the same activation as the key. An await here
+    // lets real time race the guard's reset window and flakes CI.
+    fireEvent.click(trigger)
     expect(screen.getByRole('menu')).toBeInTheDocument()
   })
 

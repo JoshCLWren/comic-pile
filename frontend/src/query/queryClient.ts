@@ -1,25 +1,27 @@
 import { QueryClient } from '@tanstack/react-query'
 
+export const queryRetryPolicy = (failureCount: number, error: unknown): boolean => {
+    const e = error as {
+        response?: { status?: number; data?: { detail?: string } }
+        data?: { detail?: string }
+    }
+    if (e?.response?.status === 401) return false
+    if (
+        e?.response?.status === 403
+        && e?.response?.data?.detail === 'Not authenticated'
+    ) {
+        return false
+    }
+    return failureCount < 3
+}
+
 export const queryClient = new QueryClient({
     defaultOptions: {
         queries: {
             staleTime: 30_000,
             gcTime: 5 * 60_000,
             refetchOnWindowFocus: false,
-            retry: (failureCount, error) => {
-                const e = error as {
-                    response?: { status?: number; data?: { detail?: string } }
-                    data?: { detail?: string }
-                }
-                if (e?.response?.status === 401) return false
-                if (
-                    e?.response?.status === 403
-                    && e?.response?.data?.detail === 'Not authenticated'
-                ) {
-                    return false
-                }
-                return failureCount < 3
-            },
+            retry: queryRetryPolicy,
         },
         mutations: {
             retry: false,

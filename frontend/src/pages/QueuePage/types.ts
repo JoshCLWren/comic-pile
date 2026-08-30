@@ -21,11 +21,11 @@ export type QueueFormState = {
 
 export const DEFAULT_CREATE_STATE: QueueFormState = {
   title: '',
-  format: 'Comics',
+  format: 'Comic',
   issuesRemaining: 1,
   notes: '',
   issues: '',
   lastIssueRead: 0,
 }
 
-export const FORMAT_OPTIONS = ['Comics', 'Manga', 'Trade Paperback', 'Graphic Novel', 'Other'] as const
+export const FORMAT_OPTIONS = ['Comic', 'Manga', 'Trade Paperback', 'Graphic Novel', 'Digital', 'Other'] as const

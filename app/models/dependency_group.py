@@ -46,7 +46,16 @@ class DependencyGroup(Base):
 
 
 class DependencyGroupMembership(Base):
-    """Thread- or issue-level membership in a named dependency group."""
+    """Thread- or issue-level membership in a named dependency group.
+
+    ``sequence_order`` holds the authoritative reading-sequence position of an
+    issue-level membership within the crossover. It is nullable: a member with
+    ``None`` has no declared order and does not participate in crossover
+    sequencing.
+    ``sequence_order`` is the canonical crossover reading order and must never be
+    derived from ``id``, per-series ``Issue.position``, publication date, or issue
+    number.
+    """
 
     __tablename__ = "dependency_group_memberships"
 
@@ -60,6 +69,7 @@ class DependencyGroupMembership(Base):
     issue_id: Mapped[int | None] = mapped_column(
         ForeignKey("issues.id", ondelete="CASCADE"), nullable=True
     )
+    sequence_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     group: Mapped[DependencyGroup] = relationship(
         "DependencyGroup", back_populates="memberships"
@@ -76,4 +86,9 @@ class DependencyGroupMembership(Base):
         Index("ix_dependency_group_memberships_group_id", "group_id"),
         Index("ix_dependency_group_memberships_thread_id", "thread_id"),
         Index("ix_dependency_group_memberships_issue_id", "issue_id"),
+        Index(
+            "ix_dependency_group_memberships_group_order",
+            "group_id",
+            "sequence_order",
+        ),
     )

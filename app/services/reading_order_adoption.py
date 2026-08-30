@@ -123,6 +123,7 @@ async def adopt_reading_order_to_plan(
                 ref_id=item.thread_id,
                 lane_id=lane.id,
                 position=idx,
+                convergence_gate=[],
             )
         )
     payload = ContinuityPlanWrite(name=resolved_name, ordering_mode="informational", lanes=[lane], nodes=nodes)

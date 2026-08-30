@@ -1,6 +1,6 @@
 import { expect, test, vi, beforeEach, describe, afterEach } from 'vitest'
 import { render, screen, waitFor, act, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
 import type { AuthContextValue } from '../App'
 
@@ -151,7 +151,7 @@ test('loads each retained authenticated lazy route', async () => {
     '/queue': 'queue-page',
     '/history': 'history-page',
     '/sessions/1': 'session-page',
-    '/help': 'help-page',
+    '/glossary': 'help-page',
     '/thread/1': 'thread-detail-page',
   }
   for (const [path, testId] of Object.entries(routes)) {
@@ -159,6 +159,30 @@ test('loads each retained authenticated lazy route', async () => {
     await waitFor(() => expect(screen.getByTestId(testId)).toBeInTheDocument())
     unmount()
   }
+})
+
+test('redirects the retired /help route to the canonical /glossary route', async () => {
+  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+  const LocationProbe = () => {
+    const location = useLocation()
+    return <div data-testid="location-path">{location.pathname}</div>
+  }
+  render(
+    <MemoryRouter initialEntries={['/help']}>
+      <AuthProvider>
+        <BugReportRestoreProvider>
+          <ToastProvider>
+            <TestAuthConsumer />
+            <LocationProbe />
+            <AppRoutes />
+          </ToastProvider>
+        </BugReportRestoreProvider>
+      </AuthProvider>
+    </MemoryRouter>,
+  )
+
+  await waitFor(() => expect(screen.getByTestId('help-page')).toBeInTheDocument())
+  expect(screen.getByTestId('location-path')).toHaveTextContent('/glossary')
 })
 
 test('redirects the retired analytics route to Roll', async () => {

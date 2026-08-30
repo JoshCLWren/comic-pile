@@ -50,6 +50,7 @@ from app.schemas.roll import (
 from app.schemas.recommendation_context import (
     RecommendationContextCreate,
     RecommendationContextResponse,
+    RollingRecommendationContext,
 )
 from app.schemas.session import (
     ActiveThreadInfo,
@@ -57,6 +58,7 @@ from app.schemas.session import (
     SessionBandwidthState,
     SessionDetailsResponse,
     SessionHistoryListResponse,
+    SessionIntentState,
     SessionListItem,
     SessionListResponse,
     SessionMode,
@@ -125,6 +127,7 @@ __all__ = [
     # Recommendation Context
     "RecommendationContextCreate",
     "RecommendationContextResponse",
+    "RollingRecommendationContext",
     # Rate
     "RateRequest",
     # Session
@@ -137,6 +140,7 @@ __all__ = [
     "EventDetail",
     "SessionMode",
     "SessionBandwidthState",
+    "SessionIntentState",
     # Snapshot
     "SnapshotResponse",
     "SnapshotsListResponse",

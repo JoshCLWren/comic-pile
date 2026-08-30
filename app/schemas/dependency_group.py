@@ -24,6 +24,15 @@ class DependencyGroupMemberCreate(BaseModel):
 
     thread_id: int | None = Field(default=None, gt=0)
     issue_id: int | None = Field(default=None, gt=0)
+    sequence_order: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Authoritative position of an issue-level member within the "
+            "crossover's reading order. Only issue-level memberships participate "
+            "in crossover sequencing; thread memberships ignore this field."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_one_target(self) -> DependencyGroupMemberCreate:
@@ -38,6 +47,19 @@ class DependencyGroupMemberCreate(BaseModel):
         if (self.thread_id is None) == (self.issue_id is None):
             raise ValueError("Exactly one of thread_id or issue_id is required")
         return self
+
+
+class DependencyGroupOrderItem(BaseModel):
+    """One crossover membership assigned a reading-sequence position."""
+
+    issue_id: int = Field(gt=0)
+    sequence_order: int = Field(gt=0)
+
+
+class DependencyGroupOrderUpdate(BaseModel):
+    """Set the authoritative ordered reading sequence of a crossover."""
+
+    items: list[DependencyGroupOrderItem] = Field(min_length=1, max_length=1000)
 
 
 class DependencyGroupIssueRangeCreate(BaseModel):
@@ -75,6 +97,7 @@ class DependencyGroupMemberResponse(BaseModel):
     issue_id: int | None
     series_title: str | None = None
     issue_number: str | None = None
+    sequence_order: int | None = None
 
 
 class DependencyGroupIssueRangeResponse(BaseModel):

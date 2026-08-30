@@ -1,5 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from '../query/queryClient'
 
 const { listForThreads } = vi.hoisted(() => ({
   listForThreads: vi.fn(),
@@ -38,16 +40,25 @@ describe('useCrossoverGroups', () => {
     expect(result.current.groupsByThreadId[3]).toEqual([])
   })
 
-  it('coalesces simultaneous hooks into one request', async () => {
-    listForThreads.mockResolvedValueOnce({ 1: [], 2: [] })
+  it('fires independent requests for different thread id sets', async () => {
+    listForThreads.mockResolvedValue({})
 
-    const first = renderHook(() => useCrossoverGroups([1]))
-    const second = renderHook(() => useCrossoverGroups([2]))
+    const first = renderHook(() => useCrossoverGroups([1]), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    })
+    const second = renderHook(() => useCrossoverGroups([2]), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    })
 
     await waitFor(() => expect(first.result.current.isPending).toBe(false))
     await waitFor(() => expect(second.result.current.isPending).toBe(false))
-    expect(listForThreads).toHaveBeenCalledTimes(1)
-    expect(listForThreads).toHaveBeenCalledWith([1, 2])
+    expect(listForThreads).toHaveBeenCalledTimes(2)
+    expect(listForThreads).toHaveBeenCalledWith([1])
+    expect(listForThreads).toHaveBeenCalledWith([2])
   })
 
   it('chunks requests larger than the backend limit', async () => {
