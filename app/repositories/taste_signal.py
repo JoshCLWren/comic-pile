@@ -13,7 +13,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.taste_signal import TasteSignal
-from app.services.taste_inference import SignalMetrics
 
 if TYPE_CHECKING:
     from app.services.taste_inference import SignalMetrics
