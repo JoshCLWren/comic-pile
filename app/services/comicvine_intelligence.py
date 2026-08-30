@@ -93,14 +93,50 @@ def _image(metadata: dict[str, object]) -> str | None:
 
 
 def _creators(metadata: dict[str, object]) -> list[ComicVineCreator]:
-    creators: list[ComicVineCreator] = []
+    """Build creator list grouped by stable provider ID.
+
+    Credits sharing the same ``id`` are merged into a single creator
+    identity with a combined, deduplicated role list.  Duplicate
+    provider rows (same person, same role) do not produce extra entries.
+    Credits without a usable stable ``id`` are returned as name-only
+    rows with ``creator_id=None`` so they are not mistaken for
+    analytics-addressable identities.
+    """
+    by_id: dict[int, tuple[str, list[str]]] = {}
+    order: list[int] = []
+    no_id: list[ComicVineCreator] = []
+
     for credit in _reference_list(metadata, "person_credits", "creator_credits"):
         name = _string(credit.get("name"))
         if not name:
             continue
+        creator_id = _integer(credit.get("id"))
         role_value = _string(credit.get("role")) or ""
         roles = [role.strip() for role in role_value.split(",") if role.strip()]
-        creators.append(ComicVineCreator(name=name, roles=roles))
+
+        if creator_id is None:
+            no_id.append(ComicVineCreator(name=name, roles=roles))
+            continue
+
+        existing = by_id.get(creator_id)
+        if existing is None:
+            by_id[creator_id] = (name, list(roles))
+            order.append(creator_id)
+        else:
+            _, existing_roles = existing
+            for role in roles:
+                if role not in existing_roles:
+                    existing_roles.append(role)
+
+    creators: list[ComicVineCreator] = [
+        ComicVineCreator(
+            creator_id=cid,
+            name=by_id[cid][0],
+            roles=by_id[cid][1],
+        )
+        for cid in order
+    ]
+    creators.extend(no_id)
     return creators
 
 

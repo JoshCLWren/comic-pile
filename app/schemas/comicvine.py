@@ -4,8 +4,15 @@ from pydantic import BaseModel, Field
 
 
 class ComicVineCreator(BaseModel):
-    """One credited creator and their provider-supplied roles."""
+    """One credited creator and their provider-supplied roles.
 
+    ``creator_id`` is the stable external provider person identifier
+    (e.g. the ComicVine person ID).  When the source metadata lacks a
+    usable stable ID the field is ``None`` and the row must not be
+    treated as analytics-addressable.
+    """
+
+    creator_id: int | None = None
     name: str
     roles: list[str] = Field(default_factory=list)
 

@@ -133,7 +133,9 @@ async def test_comicvine_intelligence_normalizes_metadata_and_matches_arc_member
     body = response.json()
     assert body["description"] == "A bold beginning."
     assert body["image_url"] == "https://images.example/100.jpg"
-    assert body["creators"] == [{"name": "Writer One", "roles": ["writer", "cover"]}]
+    assert body["creators"] == [
+        {"creator_id": None, "name": "Writer One", "roles": ["writer", "cover"]}
+    ]
     related_issues = body["story_arcs"][0]["related_issues"]
     assert [item["comicvine_issue_id"] for item in related_issues] == ["101", "102"]
     assert [item["name"] for item in related_issues] == ["Middle", "Finale"]
@@ -240,3 +242,376 @@ async def test_comicvine_intelligence_stays_usable_when_hydration_scheduling_fai
     assert body is not None
     assert body["comicvine_issue_id"] == "555"
     assert body["name"] == "Partial"
+
+
+@pytest.mark.asyncio
+async def test_comicvine_creator_stable_id_propagation(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Creator credits with stable provider IDs expose creator_id in the API response."""
+
+    async def _noop_refresh(_identity_id: int) -> bool:
+        return False
+
+    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", _noop_refresh)
+
+    thread = Thread(
+        user_id=default_user.id,
+        title="Creator ID Test",
+        format="issue",
+        issues_remaining=1,
+        total_issues=1,
+        queue_position=1,
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
+    async_db.add(issue)
+    await async_db.flush()
+
+    identity = _identity(
+        "200",
+        {
+            "name": "Test Issue",
+            "issue_number": "1",
+            "person_credits": [
+                {"id": 12345, "name": "Alan Moore", "role": "writer"},
+                {"id": 67890, "name": "Frank Miller", "role": "artist"},
+            ],
+        },
+    )
+    async_db.add(identity)
+    await async_db.flush()
+    async_db.add(
+        IssueExternalIdentityMapping(
+            issue_id=issue.id,
+            external_identity_id=identity.id,
+            status="confirmed",
+            confidence=1,
+        )
+    )
+    await async_db.flush()
+
+    response = await auth_client.get(f"/api/v1/issues/{issue.id}/comicvine")
+
+    assert response.status_code == 200
+    body = response.json()
+    creators = body["creators"]
+    assert len(creators) == 2
+    by_name = {c["name"]: c for c in creators}
+    assert by_name["Alan Moore"]["creator_id"] == 12345
+    assert by_name["Frank Miller"]["creator_id"] == 67890
+
+
+@pytest.mark.asyncio
+async def test_comicvine_creator_same_name_different_id_distinct(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two creators with the same display name but different IDs remain distinct."""
+
+    async def _noop_refresh(_identity_id: int) -> bool:
+        return False
+
+    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", _noop_refresh)
+
+    thread = Thread(
+        user_id=default_user.id,
+        title="Same Name Test",
+        format="issue",
+        issues_remaining=1,
+        total_issues=1,
+        queue_position=1,
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
+    async_db.add(issue)
+    await async_db.flush()
+
+    identity = _identity(
+        "300",
+        {
+            "name": "Same Name Issue",
+            "issue_number": "1",
+            "person_credits": [
+                {"id": 100, "name": "John Smith", "role": "writer"},
+                {"id": 200, "name": "John Smith", "role": "artist"},
+            ],
+        },
+    )
+    async_db.add(identity)
+    await async_db.flush()
+    async_db.add(
+        IssueExternalIdentityMapping(
+            issue_id=issue.id,
+            external_identity_id=identity.id,
+            status="confirmed",
+            confidence=1,
+        )
+    )
+    await async_db.flush()
+
+    response = await auth_client.get(f"/api/v1/issues/{issue.id}/comicvine")
+
+    assert response.status_code == 200
+    body = response.json()
+    creators = body["creators"]
+    assert len(creators) == 2
+    ids = [c["creator_id"] for c in creators]
+    assert ids == [100, 200]
+
+
+@pytest.mark.asyncio
+async def test_comicvine_creator_multi_role_grouping(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One creator credited in multiple roles on the same issue is grouped into one identity."""
+
+    async def _noop_refresh(_identity_id: int) -> bool:
+        return False
+
+    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", _noop_refresh)
+
+    thread = Thread(
+        user_id=default_user.id,
+        title="Multi-Role Test",
+        format="issue",
+        issues_remaining=1,
+        total_issues=1,
+        queue_position=1,
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
+    async_db.add(issue)
+    await async_db.flush()
+
+    identity = _identity(
+        "400",
+        {
+            "name": "Multi-Role Issue",
+            "issue_number": "1",
+            "person_credits": [
+                {"id": 42, "name": "Grant Morrison", "role": "writer"},
+                {"id": 42, "name": "Grant Morrison", "role": "cover"},
+            ],
+        },
+    )
+    async_db.add(identity)
+    await async_db.flush()
+    async_db.add(
+        IssueExternalIdentityMapping(
+            issue_id=issue.id,
+            external_identity_id=identity.id,
+            status="confirmed",
+            confidence=1,
+        )
+    )
+    await async_db.flush()
+
+    response = await auth_client.get(f"/api/v1/issues/{issue.id}/comicvine")
+
+    assert response.status_code == 200
+    body = response.json()
+    creators = body["creators"]
+    assert len(creators) == 1
+    creator = creators[0]
+    assert creator["creator_id"] == 42
+    assert creator["name"] == "Grant Morrison"
+    assert sorted(creator["roles"]) == ["cover", "writer"]
+
+
+@pytest.mark.asyncio
+async def test_comicvine_creator_duplicate_credits_deduplicated(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Duplicate provider credit rows for the same person/role do not duplicate identities."""
+
+    async def _noop_refresh(_identity_id: int) -> bool:
+        return False
+
+    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", _noop_refresh)
+
+    thread = Thread(
+        user_id=default_user.id,
+        title="Duplicate Credits Test",
+        format="issue",
+        issues_remaining=1,
+        total_issues=1,
+        queue_position=1,
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
+    async_db.add(issue)
+    await async_db.flush()
+
+    identity = _identity(
+        "500",
+        {
+            "name": "Duplicate Issue",
+            "issue_number": "1",
+            "person_credits": [
+                {"id": 99, "name": "Duplicate Person", "role": "writer"},
+                {"id": 99, "name": "Duplicate Person", "role": "writer"},
+                {"id": 99, "name": "Duplicate Person", "role": "writer"},
+            ],
+        },
+    )
+    async_db.add(identity)
+    await async_db.flush()
+    async_db.add(
+        IssueExternalIdentityMapping(
+            issue_id=issue.id,
+            external_identity_id=identity.id,
+            status="confirmed",
+            confidence=1,
+        )
+    )
+    await async_db.flush()
+
+    response = await auth_client.get(f"/api/v1/issues/{issue.id}/comicvine")
+
+    assert response.status_code == 200
+    body = response.json()
+    creators = body["creators"]
+    assert len(creators) == 1
+    assert creators[0]["creator_id"] == 99
+    assert creators[0]["roles"] == ["writer"]
+
+
+@pytest.mark.asyncio
+async def test_comicvine_creator_missing_id_not_fabricated(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Credits without a usable stable ID produce creator_id=None, not a fabricated key."""
+
+    async def _noop_refresh(_identity_id: int) -> bool:
+        return False
+
+    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", _noop_refresh)
+
+    thread = Thread(
+        user_id=default_user.id,
+        title="Missing ID Test",
+        format="issue",
+        issues_remaining=1,
+        total_issues=1,
+        queue_position=1,
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
+    async_db.add(issue)
+    await async_db.flush()
+
+    identity = _identity(
+        "600",
+        {
+            "name": "Missing ID Issue",
+            "issue_number": "1",
+            "person_credits": [
+                {"name": "No ID Creator", "role": "writer"},
+                {"id": 42, "name": "Has ID Creator", "role": "artist"},
+            ],
+        },
+    )
+    async_db.add(identity)
+    await async_db.flush()
+    async_db.add(
+        IssueExternalIdentityMapping(
+            issue_id=issue.id,
+            external_identity_id=identity.id,
+            status="confirmed",
+            confidence=1,
+        )
+    )
+    await async_db.flush()
+
+    response = await auth_client.get(f"/api/v1/issues/{issue.id}/comicvine")
+
+    assert response.status_code == 200
+    body = response.json()
+    creators = body["creators"]
+    assert len(creators) == 2
+    by_name = {c["name"]: c for c in creators}
+    assert by_name["No ID Creator"]["creator_id"] is None
+    assert by_name["Has ID Creator"]["creator_id"] == 42
+    assert by_name["No ID Creator"]["roles"] == ["writer"]
+
+
+@pytest.mark.asyncio
+async def test_comicvine_creator_comma_separated_roles_split_and_grouped(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Comma-separated role strings are split into individual roles and grouped."""
+
+    async def _noop_refresh(_identity_id: int) -> bool:
+        return False
+
+    monkeypatch.setattr(comicvine_intelligence, "refresh_issue_metadata", _noop_refresh)
+
+    thread = Thread(
+        user_id=default_user.id,
+        title="Comma Roles Test",
+        format="issue",
+        issues_remaining=1,
+        total_issues=1,
+        queue_position=1,
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
+    async_db.add(issue)
+    await async_db.flush()
+
+    identity = _identity(
+        "700",
+        {
+            "name": "Comma Roles Issue",
+            "issue_number": "1",
+            "person_credits": [
+                {"id": 55, "name": "Multi Role Person", "role": "writer, cover, editor"},
+            ],
+        },
+    )
+    async_db.add(identity)
+    await async_db.flush()
+    async_db.add(
+        IssueExternalIdentityMapping(
+            issue_id=issue.id,
+            external_identity_id=identity.id,
+            status="confirmed",
+            confidence=1,
+        )
+    )
+    await async_db.flush()
+
+    response = await auth_client.get(f"/api/v1/issues/{issue.id}/comicvine")
+
+    assert response.status_code == 200
+    body = response.json()
+    creators = body["creators"]
+    assert len(creators) == 1
+    creator = creators[0]
+    assert creator["creator_id"] == 55
+    assert creator["name"] == "Multi Role Person"
+    assert sorted(creator["roles"]) == ["cover", "editor", "writer"]

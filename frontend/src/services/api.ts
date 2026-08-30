@@ -400,6 +400,7 @@ export const dependenciesApi = {
 }
 
 export interface ComicVineCreator {
+  creator_id?: number | null
   name: string
   roles: string[]
 }
