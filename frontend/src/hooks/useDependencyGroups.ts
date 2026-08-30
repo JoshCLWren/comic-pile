@@ -28,6 +28,7 @@ export function useDependencyGroups(threadId: number | null | undefined): Depend
       }
     },
     enabled: threadId != null,
+    retry: false,
   })
 
   if (threadId == null) return EMPTY_STATE

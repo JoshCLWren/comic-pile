@@ -61,7 +61,7 @@ async def test_roll_creates_recommendation_context(
     assert context.random_bypass is True
     # Verify balanced neutrality is explicit
     assert context.balanced_neutrality is True
-    # Verify schema version
+    # Verify schema version bumped to 2 for weighted context (issue #1718)
     assert context.schema_version == 2
     # Verify intent is balanced (default for random selection)
     assert context.intent == "balanced"
@@ -237,7 +237,7 @@ async def test_recommendation_context_schema_versioning(
     context = result.scalar_one_or_none()
     assert context is not None
 
-    # Verify schema version is recorded
+    # Verify schema version is recorded (bumped to 2, older v1 still readable)
     assert context.schema_version == 2
 
     # Verify the context can be read as a response schema
