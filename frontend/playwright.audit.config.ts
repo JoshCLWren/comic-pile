@@ -19,6 +19,8 @@ export default defineConfig({
     actionTimeout: 30000,
     navigationTimeout: 30000,
     reducedMotion: 'reduce',
+    locale: 'en-US',
+    timezoneId: 'UTC',
   },
   expect: {
     timeout: 15000,

@@ -14,10 +14,12 @@ export type AuditFinding = {
     | 'chrome-overlap'
     | 'container-escape'
     | 'clipped-action'
+    | 'unreachable-action'
     | 'dialog-scroll-path'
     | 'element-collision'
     | 'large-blank-region'
   severity: 'warning'
+  confidence: 'high' | 'medium'
   message: string
   elements: string[]
   measurements: Record<string, string | number | boolean | null>
@@ -106,6 +108,7 @@ export async function captureRenderedAudit(
 
     const addFinding = (
       kind: AuditFinding['kind'],
+      confidence: AuditFinding['confidence'],
       message: string,
       elements: HTMLElement[],
       measurements: AuditFinding['measurements'],
@@ -114,6 +117,7 @@ export async function captureRenderedAudit(
       findings.push({
         kind,
         severity: 'warning',
+        confidence,
         message,
         elements: elements.map(describe),
         measurements,
@@ -121,7 +125,7 @@ export async function captureRenderedAudit(
     }
 
     if (documentElement.scrollWidth > viewportWidth + 2) {
-      addFinding('horizontal-overflow', 'The rendered document is wider than the viewport.', [document.body], {
+      addFinding('horizontal-overflow', 'high', 'The rendered document is wider than the viewport.', [document.body], {
         scrollWidth: documentElement.scrollWidth,
         viewportWidth,
         overflowPx: documentElement.scrollWidth - viewportWidth,
@@ -146,7 +150,7 @@ export async function captureRenderedAudit(
         if (overlay === target || overlay.contains(target) || target.contains(overlay)) continue
         const overlap = intersection(overlayRect, target.getBoundingClientRect())
         if (overlap.area < 64) continue
-        addFinding('chrome-overlap', 'Fixed or sticky chrome intersects meaningful page content.', [overlay, target], {
+        addFinding('chrome-overlap', 'high', 'Fixed or sticky chrome intersects meaningful page content.', [overlay, target], {
           overlapWidth: round(overlap.width),
           overlapHeight: round(overlap.height),
           overlapArea: Math.round(overlap.area),
@@ -162,11 +166,30 @@ export async function captureRenderedAudit(
 
     for (const element of controls) {
       const elementRect = element.getBoundingClientRect()
+      const elementStyle = window.getComputedStyle(element)
+      const fixedToViewport = elementStyle.position === 'fixed' || elementStyle.position === 'sticky'
+      const outsideHorizontalViewport = elementRect.right <= 0 || elementRect.left >= viewportWidth
+      const outsideVerticalViewport = elementRect.bottom <= 0 || elementRect.top >= viewportHeight
+      const outsideDocumentWidth = elementRect.right <= 0 || elementRect.left >= documentElement.scrollWidth
+
+      if (outsideDocumentWidth || (fixedToViewport && (outsideHorizontalViewport || outsideVerticalViewport))) {
+        addFinding('unreachable-action', 'high', 'An interactive control is rendered outside its reachable viewport or document width.', [element], {
+          elementLeft: round(elementRect.left),
+          elementTop: round(elementRect.top),
+          elementRight: round(elementRect.right),
+          elementBottom: round(elementRect.bottom),
+          viewportWidth,
+          viewportHeight,
+          documentScrollWidth: documentElement.scrollWidth,
+          position: elementStyle.position,
+        })
+      }
+
       const container = element.parentElement?.closest<HTMLElement>('main, section, article, form, [role="dialog"]') ?? null
       if (container && isVisible(container)) {
         const containerRect = container.getBoundingClientRect()
         if (elementRect.left < containerRect.left - 2 || elementRect.right > containerRect.right + 2) {
-          addFinding('container-escape', 'An interactive element extends beyond its nearest semantic container.', [element, container], {
+          addFinding('container-escape', 'medium', 'An interactive element extends beyond its nearest semantic container.', [element, container], {
             elementLeft: round(elementRect.left),
             elementRight: round(elementRect.right),
             containerLeft: round(containerRect.left),
@@ -185,7 +208,7 @@ export async function captureRenderedAudit(
           const clippedX = clipsX && (elementRect.left < ancestorRect.left - 1 || elementRect.right > ancestorRect.right + 1)
           const clippedY = clipsY && (elementRect.top < ancestorRect.top - 1 || elementRect.bottom > ancestorRect.bottom + 1)
           if (clippedX || clippedY) {
-            addFinding('clipped-action', 'An interactive control is clipped by an ancestor without a scrolling path on that axis.', [element, ancestor], {
+            addFinding('clipped-action', 'high', 'An interactive control is clipped by an ancestor without a scrolling path on that axis.', [element, ancestor], {
               clippedX,
               clippedY,
               ancestorOverflowX: style.overflowX,
@@ -212,7 +235,7 @@ export async function captureRenderedAudit(
           && element.scrollHeight > element.clientHeight + 1
       })
       if (!hasScrollPath) {
-        addFinding('dialog-scroll-path', 'A dialog exceeds the usable viewport without an internal vertical scrolling path.', [dialog], {
+        addFinding('dialog-scroll-path', 'high', 'A dialog exceeds the usable viewport without an internal vertical scrolling path.', [dialog], {
           dialogTop: round(dialogRect.top),
           dialogBottom: round(dialogRect.bottom),
           dialogHeight: round(dialogRect.height),
@@ -233,7 +256,7 @@ export async function captureRenderedAudit(
         const overlap = intersection(firstRect, secondRect)
         const smallerArea = Math.min(firstRect.width * firstRect.height, secondRect.width * secondRect.height)
         if (smallerArea <= 0 || overlap.area / smallerArea < 0.3) continue
-        addFinding('element-collision', 'Two independent interactive controls substantially overlap.', [first, second], {
+        addFinding('element-collision', 'medium', 'Two independent interactive controls substantially overlap.', [first, second], {
           overlapArea: Math.round(overlap.area),
           smallerElementArea: Math.round(smallerArea),
           overlapRatio: Math.round((overlap.area / smallerArea) * 1000) / 1000,
@@ -256,7 +279,7 @@ export async function captureRenderedAudit(
         const current = blocks[index]
         const gap = current.rect.top - previous.rect.bottom
         if (gap <= threshold) continue
-        addFinding('large-blank-region', 'Stable fixture content contains a large vertical gap between primary page blocks.', [previous.element, current.element], {
+        addFinding('large-blank-region', 'medium', 'Stable fixture content contains a large vertical gap between primary page blocks.', [previous.element, current.element], {
           gapPx: Math.round(gap),
           thresholdPx: Math.round(threshold),
           viewportHeight,
@@ -369,7 +392,7 @@ export function renderAuditMarkdown(report: AuditReport): string {
     for (const result of report.results.filter((entry) => entry.findings.length > 0)) {
       lines.push(`### ${result.scenario} at ${result.viewport.name}`, '')
       for (const finding of result.findings) {
-        lines.push(`- **${finding.kind}**: ${finding.message}`)
+        lines.push(`- **${finding.kind}** (${finding.confidence} confidence): ${finding.message}`)
         lines.push(`  - route: \`${result.route}\``)
         lines.push(`  - elements: ${finding.elements.map((element) => `\`${element}\``).join(', ')}`)
         lines.push(`  - measurements: \`${JSON.stringify(finding.measurements)}\``)
