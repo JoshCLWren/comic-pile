@@ -351,7 +351,6 @@ function AppRoutes() {
         <Route path="/whats-new" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><WhatsNewPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/help" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/identity-inbox" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><IdentityInboxPage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/glossary" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
       </Routes>
       {isAuthenticated && <BugReportConnected onSubmit={submit} />}
     </Suspense>

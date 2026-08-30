@@ -43,7 +43,6 @@ export default function HelpPage() {
   return (
     <section aria-label="Help and glossary" className="pt-4 pb-12 w-full" data-testid="glossary-list">
       <h1 className="text-2xl font-bold mb-4">Help / Glossary</h1>
-        <a href="/glossary" className="text-blue-600 hover:underline mb-4 block">Glossary</a>
       <p className="text-sm text-stone-600 mb-6">Definitions for core concepts used in Comic Pile. 1–2 sentence explanations, mobile-friendly layout.</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {DEFINITIONS.map((d) => (

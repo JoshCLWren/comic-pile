@@ -88,7 +88,7 @@ test('renders retained navigation links when authenticated', async () => {
 })
 
 test('marks More as the only active destination on submenu routes', async () => {
-  renderWithAuth('/glossary')
+  renderWithAuth('/help')
 
   const moreButton = await screen.findByRole('button', { name: /more pages/i })
   expect(moreButton).toHaveClass('active')
@@ -205,6 +205,5 @@ test('renders all secondary nav links inline on a desktop viewport', async () =>
   expect(within(desktopNav).getByRole('link', { name: /continuity planner page/i })).toBeInTheDocument()
   expect(within(desktopNav).getByRole('link', { name: /what's new page/i })).toBeInTheDocument()
   expect(within(desktopNav).getByRole('link', { name: /help page/i })).toBeInTheDocument()
-  expect(within(desktopNav).getByRole('link', { name: /glossary page/i })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /more pages/i })).not.toBeInTheDocument()
 })

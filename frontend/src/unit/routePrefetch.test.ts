@@ -134,7 +134,7 @@ describe('scheduleRoutePrefetch scoping', () => {
   })
 
   it('does not prefetch anything from retained low-frequency screens', () => {
-    for (const path of ['/crossovers', '/whats-new', '/help', '/glossary']) {
+    for (const path of ['/crossovers', '/whats-new', '/help']) {
       scheduleRoutePrefetch(path)
       flushIdleWork()
     }
