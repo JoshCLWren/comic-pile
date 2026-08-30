@@ -4,9 +4,15 @@ from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Session as SessionModel, Thread
+from app.models import (
+    Event,
+    RecommendationContext,
+    Session as SessionModel,
+    Thread,
+)
 from tests.conftest import get_or_create_user_async
 
 
@@ -177,3 +183,87 @@ async def test_update_session_mode_invalid_value_rejected(
         json={"bandwidth": "ultra_light"},
     )
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_random_intent_activates_unweighted_bypass(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A manual 'random' intent makes the next roll use unweighted control."""
+    user = await get_or_create_user_async(async_db)
+    for i in range(3):
+        async_db.add(
+            Thread(
+                user_id=user.id,
+                title=f"Random Thread {i}",
+                format="Comic",
+                issues_remaining=3,
+                queue_position=i + 1,
+                status="active",
+                created_at=datetime.now(UTC),
+            )
+        )
+    await async_db.commit()
+
+    response = await auth_client.patch(
+        "/api/roll/session-mode",
+        json={"intent": "random"},
+    )
+    assert response.status_code == 200
+    assert response.json()["active_intent"] == "random"
+
+    roll_response = await auth_client.post("/api/v1/roll/")
+    assert roll_response.status_code == 200
+
+    # The decision must honor the session mode: the roll is flagged as the
+    # documented unweighted random bypass and the recorded intent is "random".
+    rec_context = (
+        await async_db.execute(
+            select(RecommendationContext).order_by(RecommendationContext.id.desc()).limit(1)
+        )
+    ).scalar_one()
+    assert rec_context.intent == "random"
+    assert rec_context.random_bypass is True
+
+    roll_event = (
+        await async_db.execute(
+            select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1)
+        )
+    ).scalar_one()
+    assert roll_event.selection_method == "random"
+
+
+@pytest.mark.asyncio
+async def test_session_mode_event_records_manual_source(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """The mode-change event records a manual source so history stays separable."""
+    user = await get_or_create_user_async(async_db)
+    async_db.add(
+        Thread(
+            user_id=user.id,
+            title="Mode Event Thread",
+            format="Comic",
+            issues_remaining=3,
+            queue_position=1,
+            status="active",
+            created_at=datetime.now(UTC),
+        )
+    )
+    await async_db.commit()
+
+    response = await auth_client.patch(
+        "/api/roll/session-mode",
+        json={"bandwidth": "deep"},
+    )
+    assert response.status_code == 200
+
+    event = (
+        await async_db.execute(
+            select(Event).where(Event.type == "session_mode").order_by(Event.id.desc()).limit(1)
+        )
+    ).scalar_one()
+    assert event.context is not None
+    assert event.context.get("source") == "manual"
+    assert event.context.get("changed") == ["bandwidth"]
+    assert event.context.get("bandwidth") == "deep"

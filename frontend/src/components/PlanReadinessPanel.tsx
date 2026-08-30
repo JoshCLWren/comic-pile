@@ -47,6 +47,8 @@ function blockerReason(node: ContinuityPlanNodeReadiness): string | null {
   if (node.is_readable) return 'Ready to read now.'
   const blocker = node.blockers[0]
   if (!blocker) return 'The server reported this step as blocked without prerequisite details.'
+  if (blocker.satisfaction_type === 'checkpoint') return 'Waiting on checkpoint to be read.'
+  if (blocker.satisfaction_type === 'converged') return 'Waiting on convergence gate prerequisites.'
   if (blocker.unread_issue_details && blocker.unread_issue_details.length > 0) {
     return `Waiting on ${blocker.unread_issue_details.map((detail) => detail.label).join(', ')}.`
   }
@@ -190,6 +192,16 @@ export default function PlanReadinessPanel({ planId, refreshKey = 0 }: PlanReadi
                     <span className="min-w-0 flex-1 truncate text-sm font-bold text-stone-100">
                       {node.label}
                     </span>
+                    {node.blockers.some((b) => b.satisfaction_type === 'checkpoint') && (
+                      <span className="inline-flex shrink-0 items-center rounded-full border border-amber-600/50 bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                        Checkpoint
+                      </span>
+                    )}
+                    {node.blockers.some((b) => b.satisfaction_type === 'converged') && (
+                      <span className="inline-flex shrink-0 items-center rounded-full border border-violet-600/50 bg-violet-950/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-300">
+                        Convergence
+                      </span>
+                    )}
                     <span className="w-full text-[11px] leading-relaxed text-stone-400 sm:w-auto">
                       {blockerReason(node)}
                     </span>

@@ -14,8 +14,10 @@ from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.models import Event, Issue, Snapshot, Thread
 from app.models import Session as SessionModel
+from app.models.thread import normalize_format_value
 from app.models.user import User
 from app.schemas import ActiveThreadInfo, SessionResponse
+from app.schemas.session import build_session_intent_state
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
     QUEUE_CHANGES_KEY,
@@ -155,7 +157,7 @@ async def _restore_thread_from_state(
         thread = Thread(
             id=thread_id,
             title=state.get("title", "Unknown Thread"),
-            format=state.get("format", "comic"),
+            format=normalize_format_value(state.get("format", "comic")),
             issues_remaining=state.get("issues_remaining", 0),
             last_rating=state.get("last_rating"),
             queue_position=state.get("queue_position", 1),
@@ -174,7 +176,7 @@ async def _restore_thread_from_state(
         if "title" in state:
             thread.title = state["title"]
         if "format" in state:
-            thread.format = state["format"]
+            thread.format = normalize_format_value(state["format"])
         if "issues_remaining" in state:
             thread.issues_remaining = state["issues_remaining"]
         if "last_rating" in state:
@@ -546,7 +548,7 @@ async def undo_to_snapshot(
                     pre_active_info = ActiveThreadInfo(
                         id=pre_thread.id,
                         title=pre_thread.title,
-                        format=pre_thread.format,
+                        format=normalize_format_value(pre_thread.format),
                         issues_remaining=pre_thread.issues_remaining,
                         queue_position=pre_thread.queue_position,
                         last_rolled_result=pre_active_event.result,
@@ -572,6 +574,13 @@ async def undo_to_snapshot(
                 snapshot_count=pre_snapshot_count,
                 pending_thread_id=session.pending_thread_id,
                 timezone=session.timezone,
+                intent=build_session_intent_state(
+                    predicted_intent=session.predicted_intent,
+                    active_intent=session.active_intent,
+                    confidence=session.intent_confidence,
+                    source=session.intent_source,
+                    mode_version=session.intent_version,
+                ),
             )
         except OperationalError as error:
             if "deadlock" not in str(error).lower():

@@ -296,7 +296,9 @@ describe('data hooks', () => {
     let refetchResult: unknown
     await act(async () => { refetchResult = await hook.result.current.refetch() })
     expect(refetchResult).toEqual(refetchData)
-    expect(hook.result.current.data).toEqual(refetchData)
+    await waitFor(() => {
+      expect(hook.result.current.data).toEqual(refetchData)
+    })
 
     bootstrapApi.get.mockRejectedValueOnce(new Error('bootstrap failed'))
     const failedHook = renderHook(() => useRollBootstrap(), { wrapper: createWrapper() })

@@ -144,7 +144,7 @@
         "type": "object"
       },
       "BatchBlockingExplanationResponse": {
-        "description": "Schema for batch blocking-info response — keyed by thread ID.",
+        "description": "Schema for batch blocking-info response \u2014 keyed by thread ID.",
         "properties": {
           "threads": {
             "additionalProperties": {
@@ -6144,6 +6144,181 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "SessionModeUpdateRequest": {
+        "description": "Canonical request to update active session bandwidth and/or intent.\n\nOnly the supplied dimensions are changed; the other dimension is left\nuntouched. Omitting both is a no-op and returns the current mode unchanged.",
+        "properties": {
+          "bandwidth": {
+            "anyOf": [
+              {
+                "enum": [
+                  "light",
+                  "balanced",
+                  "deep"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Active bandwidth to set. Omit to leave unchanged.",
+            "title": "Bandwidth"
+          },
+          "intent": {
+            "anyOf": [
+              {
+                "enum": [
+                  "balanced",
+                  "momentum",
+                  "familiar",
+                  "explore",
+                  "random"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Active intent to set. Omit to leave unchanged. Setting to 'random' bypasses contextual weighting.",
+            "title": "Intent"
+          }
+        },
+        "title": "SessionModeUpdateRequest",
+        "type": "object"
+      },
+      "SessionModeResponse": {
+        "description": "Canonical session mode returned from manual change and bootstrap endpoints.",
+        "properties": {
+          "active_bandwidth": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Bandwidth"
+          },
+          "predicted_bandwidth": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Bandwidth"
+          },
+          "bandwidth_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bandwidth Confidence"
+          },
+          "bandwidth_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bandwidth Source"
+          },
+          "bandwidth_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bandwidth Version"
+          },
+          "active_intent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Intent"
+          },
+          "predicted_intent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Intent"
+          },
+          "intent_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent Confidence"
+          },
+          "intent_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "manual",
+                  "inferred"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent Source"
+          },
+          "intent_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent Version"
+          },
+          "session_mode_correction_guidance": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Mode Correction Guidance"
+          }
+        },
+        "title": "SessionModeResponse",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -9624,7 +9799,7 @@
     },
     "/api/v1/threads/": {
       "get": {
-        "description": "List threads with deterministic cursor-based pagination.\n\nEvery retained sort has a deterministic cursor contract with stable\ntie-breakers so that search results remain correct across multiple\npages.  Changing ``search`` or ``sort`` invalidates any prior cursor.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    search: Optional case-insensitive title search filter.\n    sort: Sort order – ``position`` (default), ``title``, or ``created``.\n    page_size: Number of threads to return per page (default 50, max 200).\n    page_token: Opaque cursor token for pagination continuation.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    QueueThreadListResponse with paginated threads and next_page_token if more exist.\n\nRaises:\n    HTTPException: If a retired ``collection_id`` query parameter is present,\n        the sort value is unsupported, or the page token is stale/malformed.",
+        "description": "List threads with deterministic cursor-based pagination.\n\nEvery retained sort has a deterministic cursor contract with stable\ntie-breakers so that search results remain correct across multiple\npages.  Changing ``search`` or ``sort`` invalidates any prior cursor.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    search: Optional case-insensitive title search filter.\n    sort: Sort order \u2013 ``position`` (default), ``title``, or ``created``.\n    page_size: Number of threads to return per page (default 50, max 200).\n    page_token: Opaque cursor token for pagination continuation.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    QueueThreadListResponse with paginated threads and next_page_token if more exist.\n\nRaises:\n    HTTPException: If a retired ``collection_id`` query parameter is present,\n        the sort value is unsupported, or the page token is stale/malformed.",
         "operationId": "list_threads_api_v1_threads__get",
         "parameters": [
           {
@@ -11301,6 +11476,44 @@
           }
         },
         "summary": "Serve React Spa"
+      }
+    },
+    "/api/v1/roll/session-mode": {
+      "patch": {
+        "description": "Update the active session's bandwidth and/or intent.\n\nOnly the supplied dimensions are changed. Omitting both is a no-op and\nreturns the current mode state. Changed dimensions are marked with source\n``manual`` and a call-level version tag so the frontend can distinguish\nuser overrides from algorithm predictions.",
+        "operationId": "update_session_mode_api_v1_roll_session_mode_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionModeUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionModeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        }
       }
     }
   }

@@ -1392,6 +1392,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/roll/session-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Session Mode
+         * @description Update the active session's bandwidth and/or intent.
+         *
+         *     Only the supplied dimensions are changed. Omitting both is a no-op and
+         *     returns the current mode state. Changed dimensions are marked with source
+         *     ``manual`` and a call-level version tag so the frontend can distinguish
+         *     user overrides from algorithm predictions.
+         */
+        patch: operations["update_session_mode_api_v1_roll_session_mode_patch"];
+        trace?: never;
+    };
     "/api/v1/roll/switch-prerequisite": {
         parameters: {
             query?: never;
@@ -4603,6 +4628,52 @@ export interface components {
             total_issues?: number | null;
         };
         /**
+         * SessionModeResponse
+         * @description Canonical session mode returned from manual change and bootstrap endpoints.
+         */
+        SessionModeResponse: {
+            /** Active Bandwidth */
+            active_bandwidth?: string | null;
+            /** Predicted Bandwidth */
+            predicted_bandwidth?: string | null;
+            /** Bandwidth Confidence */
+            bandwidth_confidence?: number | null;
+            /** Bandwidth Source */
+            bandwidth_source?: string | null;
+            /** Bandwidth Version */
+            bandwidth_version?: string | null;
+            /** Active Intent */
+            active_intent?: string | null;
+            /** Predicted Intent */
+            predicted_intent?: string | null;
+            /** Intent Confidence */
+            intent_confidence?: number | null;
+            /** Intent Source */
+            intent_source?: ("manual" | "inferred") | null;
+            /** Intent Version */
+            intent_version?: string | null;
+            /** Session Mode Correction Guidance */
+            session_mode_correction_guidance?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * SessionModeUpdateRequest
+         * @description Canonical request to update active session bandwidth and/or intent.
+         *
+         *     Only the supplied dimensions are changed; the other dimension is left
+         *     untouched. Omitting both is a no-op and returns the current mode unchanged.
+         */
+        SessionModeUpdateRequest: {
+            /** Active bandwidth to set. Omit to leave unchanged. */
+            bandwidth?: ("light" | "balanced" | "deep") | null;
+            /**
+             * Active intent to set. Omit to leave unchanged. Setting to 'random'
+             * bypasses contextual weighting.
+             */
+            intent?: ("balanced" | "momentum" | "familiar" | "explore" | "random") | null;
+        };
+        /**
          * SessionDetailsResponse
          * @description Schema for session details with all events.
          */
@@ -7009,6 +7080,39 @@ export interface operations {
                 };
                 content: {
                     "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_session_mode_api_v1_roll_session_mode_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionModeUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionModeResponse"];
                 };
             };
             /** @description Validation Error */

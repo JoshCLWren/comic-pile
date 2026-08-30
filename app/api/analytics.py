@@ -10,13 +10,13 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models import Event, Thread
 from app.models import Session as SessionModel
+from app.models.thread import normalize_format_value
 from app.models.user import User
 
 router = APIRouter(tags=["analytics"])
 
 
-@router.get("/analytics/metrics", include_in_schema=False)
-@router.get("/v1/analytics/metrics")
+@router.get("/analytics/metrics")
 async def get_metrics(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -136,7 +136,7 @@ async def get_metrics(
                 "id": thread.id,
                 "title": thread.title,
                 "rating": thread.last_rating,
-                "format": thread.format,
+                "format": normalize_format_value(thread.format),
             }
             for thread in top_threads
         ],

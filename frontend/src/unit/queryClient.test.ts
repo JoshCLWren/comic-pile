@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { queryClient } from '../query/queryClient'
+import { queryClient, queryRetryPolicy } from '../query/queryClient'
 
 function responseError(status: number, detail?: string) {
   return Object.assign(new Error(`HTTP ${status}`), {
@@ -21,7 +21,7 @@ describe('queryClient defaults', () => {
   })
 
   it('suppresses auth retries and bounds transient retries', () => {
-    const retry = queryClient.getDefaultOptions().queries?.retry
+    const retry = queryRetryPolicy
     expect(typeof retry).toBe('function')
     if (typeof retry !== 'function') {
       throw new Error('Expected query retry policy to be a function')

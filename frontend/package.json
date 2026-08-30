@@ -17,6 +17,7 @@
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
     "test:ui": "vitest --ui",
+    "audit:ui": "pnpm run build && playwright test --config=playwright.audit.config.ts --workers=1",
     "test:e2e": "pnpm run build && sh -c 'if [ -n \"$PLAYWRIGHT_WORKERS\" ]; then playwright test --workers=\"$PLAYWRIGHT_WORKERS\"; else playwright test; fi'",
     "test:e2e:smoke": "node scripts/e2e-mode.mjs smoke",
     "test:e2e:affected": "node scripts/e2e-mode.mjs affected",

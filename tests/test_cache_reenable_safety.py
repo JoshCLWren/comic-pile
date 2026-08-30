@@ -61,9 +61,16 @@ async def test_generation_invalidation_is_visible_across_application_clients(
     source = {"title": "before"}
     executions = 0
 
-    # Create a mock backend with the shared client
     from app.cache import UpstashCache
-    mock_backend = UpstashCache()
+
+    # UpstashCache is a process-wide singleton. This test needs a fake backend,
+    # but constructing it through UpstashCache() would mutate the live singleton's
+    # client and leak SharedUpstashClient into every later test. Bypass __new__ so
+    # the fake transport is genuinely isolated from the process cache backend.
+    process_backend = UpstashCache()
+    process_client = process_backend._client
+    mock_backend = object.__new__(UpstashCache)
+    UpstashCache.__init__(mock_backend)
     mock_backend._initialized = True
     mock_backend._client = instance_a
     mock_backend._is_upstash = True
@@ -91,6 +98,9 @@ async def test_generation_invalidation_is_visible_across_application_clients(
     mock_backend._client = instance_a
     assert await load_issue(7) == {"title": "after"}
     assert executions == 2
+
+    # The process-wide backend must remain untouched by this fake-client test.
+    assert UpstashCache()._client is process_client
 
 
 def test_remote_cache_remains_explicitly_disabled_by_default() -> None:

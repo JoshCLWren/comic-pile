@@ -488,6 +488,10 @@ class UpstashCache:
         self._circuit_breaker = CircuitBreaker(name="redis")
         self._initialized = False
         self._is_upstash = False
+        # Smoke-test write-drop throttle is instance-scoped (set from settings at
+        # configure time) so the process-wide guardrail state can never leak across
+        # callers or test sessions and silently drop value writes.
+        self._throttle_enabled = False
 
     @property
     def is_initialized(self) -> bool:
@@ -498,6 +502,9 @@ class UpstashCache:
         url: str | None = None,
         token: str | None = None,
         local_url: str | None = None,
+        *,
+        allow_local: bool = False,
+        throttle_enabled: bool = False,
     ) -> None:
         """Configure a Redis client without opening a network connection.
 
@@ -508,12 +515,21 @@ class UpstashCache:
         Supports two modes:
         - Upstash cloud: provide url (REST URL) and token
         - Local Redis: provide local_url (e.g., redis://localhost:6379/0)
+
+        The local Redis path is dev-only. Callers must pass ``allow_local=True``
+        (the startup wiring does so only when ``CACHE_LOCAL_REDIS_DEV`` is set) so
+        a stray local URL can never enable caching in a deployed environment.
         """
         if self._initialized:
             logger.warning("Cache already initialized")
             return
 
         if local_url:
+            if not allow_local:
+                raise ValueError(
+                    "Local Redis client path is disabled unless CACHE_LOCAL_REDIS_DEV "
+                    "is set; use Upstash credentials or enable the dev flag."
+                )
             self._client = aioredis.Redis.from_url(
                 local_url,
                 decode_responses=True,
@@ -523,6 +539,7 @@ class UpstashCache:
             self._circuit_breaker.reset()
             self._initialized = True
             self._is_upstash = False
+            self._throttle_enabled = throttle_enabled
             logger.info("Local Redis cache configured for lazy connection")
             return
 
@@ -531,19 +548,29 @@ class UpstashCache:
             self._circuit_breaker.reset()
             self._initialized = True
             self._is_upstash = True
+            self._throttle_enabled = throttle_enabled
             logger.info("Upstash Redis cache configured for lazy connection")
             return
 
         logger.warning("No Redis configuration provided - caching disabled")
 
     async def close(self) -> None:
-        """Close the Redis connection."""
-        if self._client is not None:
-            client = self._client
-            self._client = None
-            self._initialized = False
+        """Close the Redis connection and reset singleton state.
+
+        Always clears the initialized flag even when no client is present, so a
+        previously-initialized singleton can always be reconfigured from scratch.
+        """
+        client = self._client
+        self._client = None
+        self._initialized = False
+        if client is not None:
             if not self._is_upstash:
-                await client.aclose()
+                try:
+                    await client.aclose()
+                except RuntimeError:
+                    # Event loop may have been closed during test teardown;
+                    # ignore as the client resources will be GC'd.
+                    pass
             logger.info("Redis cache closed")
 
     async def ping(self) -> None:
@@ -656,6 +683,18 @@ class UpstashCache:
 
         if self._client is None:
             return False
+
+        from app.cache_quota import evaluate_cache_quota, should_throttle_cache_write
+
+        evaluate_cache_quota(fire_alert=True)
+
+        if should_throttle_cache_write(throttle_enabled=self._throttle_enabled):
+            logger.warning(
+                "Cache write smoke-test throttled: monthly budget reached; "
+                "serving from the database path for key %s",
+                key,
+            )
+            return True
 
         try:
             prepared = _prepare_value(value)
@@ -800,10 +839,15 @@ class PostgresCache:
         logger.info("Postgres cache configured")
 
     async def close(self) -> None:
-        if self._engine is not None:
-            engine = self._engine
-            self._engine = None
-            self._initialized = False
+        """Close the engine and reset singleton state.
+
+        Always clears the initialized flag even when no engine is present, so a
+        previously-initialized singleton can always be reconfigured from scratch.
+        """
+        engine = self._engine
+        self._engine = None
+        self._initialized = False
+        if engine is not None:
             await engine.dispose()
             logger.info("Postgres cache closed")
 
@@ -836,7 +880,7 @@ class PostgresCache:
             async with engine.connect() as conn:
                 result = await conn.execute(
                     text(
-                        "SELECT value FROM cache_entries "
+                        "SELECT value::text FROM cache_entries "
                         "WHERE namespace = :ns AND cache_key = :k AND expires_at > now()"
                     ),
                     {"ns": _CACHE_NAMESPACE, "k": key},
@@ -845,10 +889,10 @@ class PostgresCache:
             self._circuit_breaker.record_success()
             if row is None:
                 return None
-            if isinstance(row, str):
-                return _reconstruct_value(json.loads(row))
-            # SQLAlchemy+asyncpg may return already-decoded JSONB (dict/list)
-            return _reconstruct_value(row)
+            # value::text always yields canonical JSON text regardless of how
+            # SQLAlchemy+asyncpg decodes JSONB, so json.loads is unambiguous
+            # for plain-string payloads too.
+            return _reconstruct_value(json.loads(row))
         except Exception as e:
             self._circuit_breaker.record_failure()
             self._maybe_demote()
@@ -1006,9 +1050,8 @@ class PostgresCache:
         """Read the active generation and matching value atomically (Postgres).
 
         Mirrors the Redis Lua path: returns ``[generation, raw_value]`` where
-        ``raw_value`` is the stored JSON payload (or ``None`` on a miss).
-        The payload may be returned as decoded JSONB (dict/list) or as text,
-        depending on the asyncpg/SQLAlchemy decoding.
+        ``raw_value`` is the stored JSON payload as canonical text (or ``None``
+        on a miss), ready for the shared ``decode_value`` path.
         """
         engine = self._engine
         if engine is None or not self.is_initialized:
@@ -1024,19 +1067,12 @@ class PostgresCache:
                 value_key = f"{value_prefix}{generation}:{normalized}"
                 val_row = await conn.execute(
                     text(
-                        "SELECT value FROM cache_entries "
+                        "SELECT value::text FROM cache_entries "
                         "WHERE namespace = :ns AND cache_key = :k AND expires_at > now()"
                     ),
                     {"ns": _CACHE_NAMESPACE, "k": value_key},
                 )
                 raw = val_row.scalar_one_or_none()
-                # Normalize JSONB payload to text for the shared decode path:
-                # Postgres may return already-decoded dict/list; callers expect
-                # a JSON text string akin to the Redis transport.
-                if isinstance(raw, (dict, list)):
-                    raw = json.dumps(raw)
-                elif isinstance(raw, bytes):
-                    raw = raw.decode()
             self._circuit_breaker.record_success()
             return [generation, raw]
         except Exception as e:
@@ -1102,6 +1138,8 @@ class CacheRouter:
                 url=kwargs.get("url"),
                 token=kwargs.get("token"),
                 local_url=kwargs.get("local_url"),
+                allow_local=kwargs.get("allow_local", False),
+                throttle_enabled=kwargs.get("throttle_enabled", False),
             )
             return backend
         raise ValueError(f"Unknown cache provider: {provider}")
@@ -1125,10 +1163,21 @@ class CacheRouter:
         url: str | None = None,
         token: str | None = None,
         local_url: str | None = None,
+        *,
+        allow_local: bool = False,
     ) -> None:
-        """Backward-compatible redis initialization used by tests/fixtures."""
+        """Backward-compatible redis initialization used by tests/fixtures.
+
+        Test harnesss may exercise the local Redis path directly, so this helper
+        passes ``allow_local=True``; production wiring goes through
+        :meth:`configure` and honors ``CACHE_LOCAL_REDIS_DEV``.
+        """
         await self.configure(
-            "redis", url=url, token=token, local_url=local_url
+            "redis",
+            url=url,
+            token=token,
+            local_url=local_url,
+            allow_local=allow_local,
         )
 
     async def demote(self) -> None:

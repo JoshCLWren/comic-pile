@@ -81,7 +81,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   if (!issueId || (!isLoading && !metadata)) return null
   if (isLoading) {
     return (
-      <div className="w-full aspect-[2/3] rounded-xl bg-white/5 animate-pulse" aria-label="Loading comic details" />
+      <div className="w-full aspect-[2/3] max-h-[min(70vh,45vh)] rounded-xl bg-white/5 animate-pulse" aria-label="Loading comic details" />
     )
   }
   if (!metadata) return null
@@ -99,7 +99,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     >
       <div
         data-testid="comic-cover"
-        className="relative mx-auto aspect-[2/3] w-full max-w-full max-h-[70vh] rounded-xl overflow-hidden bg-stone-900"
+        className="relative mx-auto aspect-[2/3] w-full max-w-full max-h-[min(70vh,45vh)] rounded-xl overflow-hidden bg-stone-900"
         style={{ border: '1px solid var(--theme-border)' }}
       >
         {metadata.image_url && metadata.image_url !== failedImageUrl ? (
