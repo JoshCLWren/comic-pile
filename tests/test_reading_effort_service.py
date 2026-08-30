@@ -14,6 +14,7 @@ from app.services.reading_effort import (
     ERA_PRIOR_TRANSITION_MINUTES,
     MAX_OBSERVED_CONFIDENCE,
     MIN_OBSERVED_SAMPLES,
+    RECOMMENDATION_CONTEXT_VERSION,
     UNKNOWN_CONFIDENCE,
     EffortAggregate,
     EffortEstimate,
@@ -365,7 +366,7 @@ class TestBuildRecommendationContext:
         context = build_recommendation_context(
             estimate, thread_id=1, issue_id=2, issue_number="3"
         )
-        assert context["context_version"] == 1
+        assert context["context_version"] == RECOMMENDATION_CONTEXT_VERSION
 
     def test_candidate_payload_fields(self) -> None:
         """Candidate payload contains all expected fields."""
