@@ -1,9 +1,16 @@
+import { type ReactNode } from 'react'
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
-import { queryClient } from '../query/queryClient'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
+
+let client: QueryClient
+
+function wrapper({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+}
 
 const snoozeApi = vi.hoisted(() => ({ snooze: vi.fn(), unsnooze: vi.fn() }))
 const protectedRollMutationApi = vi.hoisted(() => ({
@@ -56,6 +63,7 @@ const bootstrapState = (
 
 describe('snooze hooks', () => {
   beforeEach(() => {
+    client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
     vi.clearAllMocks()
     invalidateCurrentSessionAfterSnooze.mockReset()
     protectedRollMutationApi.snooze.mockResolvedValue(undefined)
@@ -68,20 +76,20 @@ describe('snooze hooks', () => {
     window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
 
     try {
-      const snooze = renderHook(() => useSnooze())
+      const snooze = renderHook(() => useSnooze(), { wrapper })
       await act(async () => await snooze.result.current.mutate(7))
 
       expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
       expect(rollBootstrapApi.get).toHaveBeenCalledTimes(1)
       expect(reconciled).toHaveBeenCalledTimes(1)
-      expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledWith(queryClient)
+      expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledWith(client)
       expect(snooze.result.current.isError).toBe(false)
 
-      const unsnooze = renderHook(() => useUnsnooze())
+      const unsnooze = renderHook(() => useUnsnooze(), { wrapper })
       await act(async () => await unsnooze.result.current.mutate(7))
       expect(snoozeApi.unsnooze).toHaveBeenCalledWith(7)
       expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledTimes(2)
-      expect(invalidateCurrentSessionAfterSnooze).toHaveBeenLastCalledWith(queryClient)
+      expect(invalidateCurrentSessionAfterSnooze).toHaveBeenLastCalledWith(client)
     } finally {
       window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
     }
@@ -93,7 +101,7 @@ describe('snooze hooks', () => {
       resolveRequest = () => resolve(undefined)
     }))
 
-    const snooze = renderHook(() => useSnooze())
+    const snooze = renderHook(() => useSnooze(), { wrapper })
     let firstRequest: Promise<unknown> | undefined
     let secondRequest: Promise<unknown> | undefined
 
@@ -124,7 +132,7 @@ describe('snooze hooks', () => {
     window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
 
     try {
-      const snooze = renderHook(() => useSnooze())
+      const snooze = renderHook(() => useSnooze(), { wrapper })
       await act(async () => await snooze.result.current.mutate(7))
 
       expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
@@ -140,7 +148,7 @@ describe('snooze hooks', () => {
   it('exposes exhausted refresh recovery and retries without repeating the snooze', async () => {
     const refreshFailure = new Error('bootstrap unavailable')
     rollBootstrapApi.get.mockRejectedValue(refreshFailure)
-    const snooze = renderHook(() => useSnooze())
+    const snooze = renderHook(() => useSnooze(), { wrapper })
 
     await act(async () => await snooze.result.current.mutate(7))
 
@@ -164,7 +172,7 @@ describe('snooze hooks', () => {
   it('blocks duplicate snooze submission while an explicit refresh retry is pending', async () => {
     const refreshFailure = new Error('bootstrap unavailable')
     rollBootstrapApi.get.mockRejectedValue(refreshFailure)
-    const snooze = renderHook(() => useSnooze())
+    const snooze = renderHook(() => useSnooze(), { wrapper })
 
     await act(async () => await snooze.result.current.mutate(7))
 
@@ -204,7 +212,7 @@ describe('snooze hooks', () => {
     rollBootstrapApi.get.mockResolvedValue(bootstrapState(null, 20))
 
     try {
-      const snooze = renderHook(() => useSnooze())
+      const snooze = renderHook(() => useSnooze(), { wrapper })
       let request: Promise<unknown> | undefined
 
       act(() => {
@@ -236,7 +244,7 @@ describe('snooze hooks', () => {
     rollBootstrapApi.get.mockResolvedValue(bootstrapState(7, 10))
 
     try {
-      const snooze = renderHook(() => useSnooze())
+      const snooze = renderHook(() => useSnooze(), { wrapper })
       let request!: Promise<unknown>
 
       act(() => {
@@ -259,12 +267,12 @@ describe('snooze hooks', () => {
 
   it('tracks and rethrows ordinary failures', async () => {
     protectedRollMutationApi.snooze.mockRejectedValueOnce(new Error('snooze failed'))
-    const snooze = renderHook(() => useSnooze())
+    const snooze = renderHook(() => useSnooze(), { wrapper })
     await act(async () => await expect(snooze.result.current.mutate(7)).rejects.toThrow('snooze failed'))
     await waitFor(() => expect(snooze.result.current.isError).toBe(true))
 
     snoozeApi.unsnooze.mockRejectedValueOnce(new Error('unsnooze failed'))
-    const unsnooze = renderHook(() => useUnsnooze())
+    const unsnooze = renderHook(() => useUnsnooze(), { wrapper })
     await act(async () => await expect(unsnooze.result.current.mutate(7)).rejects.toThrow('unsnooze failed'))
     await waitFor(() => expect(unsnooze.result.current.isError).toBe(true))
 

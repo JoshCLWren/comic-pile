@@ -183,7 +183,7 @@ export function ReadingRouteExplanation({
             </p>
             <button
               type="button"
-              onClick={chainsState.refetch}
+              onClick={() => chainsState.refetch()}
               className="mt-3 min-h-11 rounded-xl border border-rose-700/40 px-4 text-xs font-black text-rose-200"
             >
               Retry continuity detail

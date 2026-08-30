@@ -1,4 +1,6 @@
+import { type ReactNode } from 'react'
 import { act, renderHook } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
   useClearManualDie,
@@ -10,6 +12,11 @@ import {
 } from '../hooks/useRoll'
 import { rollApi } from '../services/api'
 import type { OverrideRollPayload } from '../types'
+
+function wrapper({ children }: { children: ReactNode }) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+}
 
 vi.mock('../services/api', () => ({
   rollApi: {
@@ -35,7 +42,7 @@ async function setupMutation<TArg>(
   hook: () => { mutate: (args?: TArg) => Promise<unknown> },
   args?: TArg,
 ): Promise<void> {
-  const { result } = renderHook(() => hook())
+  const { result } = renderHook(() => hook(), { wrapper })
 
   await act(async () => {
     await result.current.mutate(args as never)

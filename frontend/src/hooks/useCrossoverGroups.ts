@@ -53,6 +53,7 @@ export function useCrossoverGroups(threadIds: number[]): CrossoverGroupsState {
       }
     },
     enabled: requestedThreadIds.length > 0,
+    retry: false,
   })
 
   if (requestedThreadIds.length === 0) {
