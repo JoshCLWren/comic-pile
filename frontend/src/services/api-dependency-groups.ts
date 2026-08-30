@@ -1,4 +1,5 @@
 import api from './api'
+import type { Thread, Issue } from '../types'
 
 export interface DependencyGroupMember {
   id: number
@@ -20,6 +21,44 @@ export interface DependencyGroup {
 export interface DependencyGroupSummary {
   id: number
   name: string
+}
+
+export interface DependencyGroupDetailMember {
+  membership: DependencyGroupMember
+  thread: Thread | null
+  issue: Issue | null
+  otherCrossovers: string[]
+}
+
+export interface DependencyGroupDetail {
+  id: number
+  name: string
+  created_at: string
+  memberships: DependencyGroupDetailMember[]
+  readiness?: {
+    node_type: string
+    node_id: number
+    is_readable: boolean
+    evaluated_issue_id: number | null
+    blockers: Array<{
+      rule_id: number | null
+      source_type: string
+      source_id: number
+      source_label: string
+      satisfaction_type: string
+      satisfied: boolean
+      causing_issue_ids: number[]
+      causing_member_issue_ids: number[]
+      unread_issue_details: Array<{
+        issue_id: number
+        label: string
+      }>
+      note: string | null
+      crossover_id?: number | null
+      sequence_position?: number | null
+    }>
+  } | null
+  linkedPlans: DependencyGroupSummary[]
 }
 
 export interface DependencyGroupIssueRangeResult {
@@ -45,6 +84,10 @@ export const dependencyGroupsApi = {
 
   get: async (groupId: number): Promise<DependencyGroup> => {
     return api.get<DependencyGroup>(`/v1/reading-order-groups/${groupId}`)
+  },
+
+  getDetail: async (groupId: number): Promise<DependencyGroupDetail> => {
+    return api.get<DependencyGroupDetail>(`/v1/reading-order-groups/${groupId}/detail`)
   },
 
   rename: async (groupId: number, name: string): Promise<DependencyGroup> => {

@@ -18,6 +18,8 @@ from app.models.continuity_plan import ContinuityPlan
 from app.models.user import User
 from app.schemas.dependency_group import (
     DependencyGroupCreate,
+    DependencyGroupDetailMemberResponse,
+    DependencyGroupDetailResponse,
     DependencyGroupIssueRangeCreate,
     DependencyGroupIssueRangeResponse,
     DependencyGroupMemberCreate,
@@ -28,6 +30,9 @@ from app.schemas.dependency_group import (
     DependencyGroupUpdate,
 )
 from comic_pile.dependencies import refresh_user_blocked_status
+
+from app.continuity_readiness import evaluate_continuity_readiness
+from app.schemas.continuity_readiness import ContinuityReadinessResponse
 
 router = APIRouter(prefix="/reading-order-groups", tags=["reading-order-groups"])
 MAX_RANGE_SIZE = 250
@@ -118,6 +123,203 @@ async def _group_response(
         name=group.name,
         created_at=group.created_at,
         memberships=await _member_responses(db, memberships),
+    )
+
+
+async def _group_detail_response(
+    db: AsyncSession,
+    group: DependencyGroup,
+    user_id: int,
+) -> DependencyGroupDetailResponse:
+    """Serialize one group with enriched member display metadata for detail view.
+
+    Performs batched queries for thread, issue, and other-crossover data to
+    avoid N+1 request waterfalls.
+
+    Args:
+        db: The asynchronous database session.
+        group: The owned group whose memberships should be described.
+        user_id: The authenticated user identifier.
+
+    Returns:
+        The group payload with enriched members, readiness, and linked plans.
+    """
+    # Fetch memberships
+    result = await db.execute(
+        select(DependencyGroupMembership)
+        .where(DependencyGroupMembership.group_id == group.id)
+        .order_by(DependencyGroupMembership.id)
+    )
+    memberships = list(result.scalars())
+
+    # Collect thread IDs and issue IDs
+    thread_ids: set[int] = set()
+    issue_ids: set[int] = set()
+    for member in memberships:
+        if member.thread_id is not None:
+            thread_ids.add(member.thread_id)
+        elif member.issue_id is not None:
+            issue_ids.add(member.issue_id)
+
+    # For issue-level memberships, also need the parent thread ID
+    issue_to_thread: dict[int, int] = {}
+    if issue_ids:
+        issue_result = await db.execute(
+            select(Issue.id, Issue.thread_id).where(Issue.id.in_(issue_ids))
+        )
+        issue_to_thread = {row.id: row.thread_id for row in issue_result}
+        thread_ids.update(issue_to_thread.values())
+
+    # Batch fetch threads
+    threads: dict[int, Thread] = {}
+    if thread_ids:
+        thread_result = await db.execute(
+            select(Thread).where(Thread.id.in_(thread_ids))
+        )
+        threads = {t.id: t for t in thread_result.scalars()}
+
+    # Batch fetch issues
+    issues: dict[int, Issue] = {}
+    if issue_ids:
+        issue_result = await db.execute(
+            select(Issue).where(Issue.id.in_(issue_ids))
+        )
+        issues = {i.id: i for i in issue_result.scalars()}
+
+    # Batch fetch other crossovers for each thread
+    other_crossovers: dict[int, list[str]] = {}
+    if thread_ids:
+        # Find all groups (excluding current) that contain any of these threads or issues
+        # via thread membership or issue membership (via issue->thread mapping)
+        # We'll use a union of two subqueries
+        thread_subquery = (
+            select(DependencyGroupMembership.group_id.label("group_id"))
+            .where(
+                DependencyGroupMembership.thread_id.in_(thread_ids),
+                DependencyGroupMembership.group_id != group.id,
+            )
+            .distinct()
+        )
+        # For issue-level membership, we need to map issue_id to thread_id
+        # but we can just join Issue table
+        issue_subquery = (
+            select(DependencyGroupMembership.group_id.label("group_id"))
+            .join(Issue, Issue.id == DependencyGroupMembership.issue_id)
+            .where(
+                Issue.thread_id.in_(thread_ids),
+                DependencyGroupMembership.group_id != group.id,
+            )
+            .distinct()
+        )
+        # Combine with UNION
+        from sqlalchemy import union_all
+        combined = union_all(thread_subquery, issue_subquery).subquery()
+        # Fetch group names
+        group_result = await db.execute(
+            select(DependencyGroup.id, DependencyGroup.name)
+            .where(DependencyGroup.id.in_(select(combined.c.group_id)))
+            .order_by(DependencyGroup.name)
+        )
+        # Build mapping from group id to name
+        group_name_map = {row.id: row.name for row in group_result}
+        # Now we need to map each thread_id to list of group names
+        # We need to know which groups contain each thread.
+        # Let's fetch group memberships with thread_id or issue thread mapping.
+        # Simpler: for each thread, we can fetch groups via a query similar to list_thread_groups
+        # but we can do batch.
+        # We'll fetch all memberships that reference these threads (directly or via issues)
+        membership_result = await db.execute(
+            select(
+                DependencyGroupMembership.group_id,
+                DependencyGroupMembership.thread_id,
+                Issue.thread_id.label("issue_thread_id"),
+            )
+            .outerjoin(Issue, Issue.id == DependencyGroupMembership.issue_id)
+            .where(
+                or_(
+                    DependencyGroupMembership.thread_id.in_(thread_ids),
+                    Issue.thread_id.in_(thread_ids),
+                ),
+                DependencyGroupMembership.group_id != group.id,
+            )
+        )
+        # Initialize list for each thread
+        for tid in thread_ids:
+            other_crossovers[tid] = []
+        for row in membership_result:
+            # Determine which thread this membership refers to
+            if row.thread_id is not None:
+                tid = row.thread_id
+            elif row.issue_thread_id is not None:
+                tid = row.issue_thread_id
+            else:
+                continue
+            if tid in other_crossovers and row.group_id in group_name_map:
+                name = group_name_map[row.group_id]
+                if name not in other_crossovers[tid]:
+                    other_crossovers[tid].append(name)
+
+    # Build enriched members
+    enriched_members: list[DependencyGroupDetailMemberResponse] = []
+    for member in memberships:
+        thread = None
+        issue = None
+        other: list[str] = []
+        if member.thread_id is not None:
+            thread = threads.get(member.thread_id)
+            other = other_crossovers.get(member.thread_id, [])
+        elif member.issue_id is not None:
+            issue = issues.get(member.issue_id)
+            if issue is not None:
+                thread = threads.get(issue.thread_id)
+                other = other_crossovers.get(issue.thread_id, [])
+        # Build membership response (reuse existing logic)
+        membership_resp = DependencyGroupMemberResponse(
+            id=member.id,
+            thread_id=member.thread_id,
+            issue_id=member.issue_id,
+            series_title=thread.title if thread else None,
+            issue_number=issue.issue_number if issue else None,
+            sequence_order=member.sequence_order,
+        )
+        # Serialize thread and issue using their response schemas
+        thread_resp = ThreadResponse.model_validate(thread) if thread else None
+        issue_resp = IssueResponse.model_validate(issue) if issue else None
+        enriched_members.append(
+            DependencyGroupDetailMemberResponse(
+                membership=membership_resp,
+                thread=thread_resp,
+                issue=issue_resp,
+                other_crossovers=other,
+            )
+        )
+
+    # Evaluate continuity readiness for crossover
+    readiness = await evaluate_continuity_readiness(
+        db, user_id=user_id, node_type="crossover", node_id=group.id
+    )
+
+    # Fetch linked plans (same as list_crossover_plans)
+    crossover_node = {"node_type": "crossover", "ref_id": group.id}
+    plan_result = await db.execute(
+        select(ContinuityPlan.id, ContinuityPlan.name)
+        .where(
+            ContinuityPlan.user_id == user_id,
+            func.cast(ContinuityPlan.nodes_json, JSONB).contains([crossover_node]),
+        )
+        .order_by(ContinuityPlan.name, ContinuityPlan.id)
+    )
+    linked_plans = [
+        DependencyGroupSummary(id=row.id, name=row.name) for row in plan_result
+    ]
+
+    return DependencyGroupDetailResponse(
+        id=group.id,
+        name=group.name,
+        created_at=group.created_at,
+        memberships=enriched_members,
+        readiness=readiness,
+        linked_plans=linked_plans,
     )
 
 
@@ -260,6 +462,31 @@ async def get_group(
         The requested owned group with memberships resolved to comic metadata.
     """
     return await _group_response(db, await _owned_group(db, group_id, current_user.id))
+
+
+@router.get(
+    "/{group_id}/detail",
+    response_model=DependencyGroupDetailResponse,
+    description="Return one owned group with enriched member, readiness, and plan data.",
+)
+async def get_group_detail(
+    group_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> DependencyGroupDetailResponse:
+    """Return one owned group with enriched detail for crossover view.
+
+    Args:
+        group_id: The dependency group identifier.
+        current_user: The authenticated group owner.
+        db: The asynchronous database session.
+
+    Returns:
+        The requested owned group with enriched member data, continuity
+        readiness, and linked plans, avoiding per-member N+1 requests.
+    """
+    group = await _owned_group(db, group_id, current_user.id)
+    return await _group_detail_response(db, group, current_user.id)
 
 
 @router.patch(
