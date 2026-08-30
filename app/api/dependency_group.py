@@ -22,6 +22,7 @@ from app.schemas.dependency_group import (
     DependencyGroupIssueRangeResponse,
     DependencyGroupMemberCreate,
     DependencyGroupMemberResponse,
+    DependencyGroupOrderUpdate,
     DependencyGroupResponse,
     DependencyGroupSummary,
     DependencyGroupUpdate,
@@ -88,6 +89,7 @@ async def _member_responses(
                 issue_id=member.issue_id,
                 series_title=series_title,
                 issue_number=issue_number,
+                sequence_order=member.sequence_order,
             )
         )
     return responses
@@ -431,6 +433,7 @@ async def add_member(
         group_id=group_id,
         thread_id=payload.thread_id,
         issue_id=payload.issue_id,
+        sequence_order=payload.sequence_order if payload.issue_id is not None else None,
     )
     db.add(member)
     try:
@@ -442,6 +445,84 @@ async def add_member(
     response = (await _member_responses(db, [member]))[0]
     await _refresh_crossover_blocked_state(current_user.id, db)
     return response
+
+
+@router.put(
+    "/{group_id}/order",
+    response_model=DependencyGroupResponse,
+    description=(
+        "Set the authoritative ordered reading sequence of a crossover's "
+        "issue-level members."
+    ),
+)
+async def set_group_order(
+    group_id: int,
+    payload: DependencyGroupOrderUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> DependencyGroupResponse:
+    """Replace the authoritative reading order of one owned crossover.
+
+    The payload enumerates issue-level members in their intended reading order;
+    each listed issue's ``sequence_order`` is persisted verbatim (the provided
+    order is the canonical source, never re-derived from membership ids or
+    per-series issue positions). Any issue-level member not listed is cleared to
+    unordered. Thread-level memberships are never sequence entries and are left
+    untouched.
+
+    Args:
+        group_id: The dependency group identifier.
+        payload: The ordered issue list for the crossover.
+        current_user: The authenticated owner of the group and referenced issues.
+        db: The asynchronous database session.
+
+    Returns:
+        The updated group with memberships resolved to comic metadata.
+
+    Raises:
+        HTTPException: 404 when the group, a referenced issue, or a referenced
+            issue-level membership does not exist or is not owned.
+    """
+    await _owned_group(db, group_id, current_user.id)
+
+    ordered_issue_ids = {item.issue_id for item in payload.items}
+    ordered_positions: dict[int, int] = {
+        item.issue_id: item.sequence_order for item in payload.items
+    }
+    if len(ordered_issue_ids) != len(payload.items):
+        raise HTTPException(
+            status_code=422,
+            detail="Each crossover issue may appear at most once in the order",
+        )
+
+    result = await db.execute(
+        select(DependencyGroupMembership)
+        .where(DependencyGroupMembership.group_id == group_id)
+        .where(DependencyGroupMembership.issue_id.isnot(None))
+    )
+    memberships = list(result.scalars())
+    member_by_issue = {
+        membership.issue_id: membership
+        for membership in memberships
+        if membership.issue_id is not None
+    }
+
+    for issue_id in ordered_issue_ids:
+        issue = await db.get(Issue, issue_id)
+        thread = await db.get(Thread, issue.thread_id) if issue else None
+        if issue is None or thread is None or thread.user_id != current_user.id:
+            raise HTTPException(status_code=404, detail=f"Issue {issue_id} not found")
+        if issue_id not in member_by_issue:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Issue {issue_id} is not a member of this crossover",
+            )
+
+    for issue_id, membership in member_by_issue.items():
+        membership.sequence_order = ordered_positions.get(issue_id)
+    await db.commit()
+    await _refresh_crossover_blocked_state(current_user.id, db)
+    return await _group_response(db, await _owned_group(db, group_id, current_user.id))
 
 
 @router.get(

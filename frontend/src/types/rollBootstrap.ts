@@ -13,7 +13,7 @@ export interface RollBootstrapThread {
 
 /** One direct continuity blocker for a pending roll. */
 export interface RollRecoveryBlocker {
-  rule_id: number
+  rule_id: number | null
   source_type: 'issue' | 'crossover'
   source_id: number
   source_label: string
@@ -22,6 +22,8 @@ export interface RollRecoveryBlocker {
   causing_issue_ids: number[]
   causing_member_issue_ids: number[]
   note: string | null
+  crossover_id?: number | null
+  sequence_position?: number | null
 }
 
 /** One currently readable prerequisite recommended by continuity traversal. */

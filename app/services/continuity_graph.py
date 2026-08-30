@@ -60,6 +60,8 @@ class GraphSnapshot:
     rules_by_target: dict[tuple[str, int], tuple[ContinuityRule, ...]]
     thread_issue_ids: dict[int, tuple[int, ...]]
     selected_member_issue_ids: dict[int, tuple[int, ...]]
+    crossover_ordered_issue_ids: dict[int, tuple[int, ...]]
+    issue_crossover_positions: dict[int, tuple[tuple[int, int], ...]]
     query_count: int = 0
     rows_loaded: int = 0
 
@@ -240,6 +242,29 @@ async def load_snapshot(db: AsyncSession, user_id: int) -> GraphSnapshot:
         ).items()
     }
 
+    crossover_ordered_issue_ids = {
+        group_id: tuple(
+            membership.issue_id
+            for membership in sorted(
+                (
+                    row
+                    for row in rows
+                    if row.issue_id is not None and row.sequence_order is not None
+                ),
+                key=lambda membership: (membership.sequence_order, membership.id),
+            )
+        )
+        for group_id, rows in group_memberships.items()
+    }
+    issue_crossover_positions: dict[int, list[tuple[int, int]]] = {}
+    for group_id, ordered_ids in crossover_ordered_issue_ids.items():
+        for position, issue_id in enumerate(ordered_ids, start=1):
+            issue_crossover_positions.setdefault(issue_id, []).append((group_id, position))
+    normalized_positions = {
+        issue_id: tuple(sorted(groups))
+        for issue_id, groups in issue_crossover_positions.items()
+    }
+
     snapshot = GraphSnapshot(
         threads=threads,
         issues=issues,
@@ -249,6 +274,8 @@ async def load_snapshot(db: AsyncSession, user_id: int) -> GraphSnapshot:
         rules_by_target=rules_by_target,
         thread_issue_ids=thread_issue_ids,
         selected_member_issue_ids=selected_member_issue_ids,
+        crossover_ordered_issue_ids=crossover_ordered_issue_ids,
+        issue_crossover_positions=normalized_positions,
         query_count=query_count,
         rows_loaded=rows_loaded,
     )
@@ -402,17 +429,71 @@ def _direct_blockers(
     return blockers
 
 
+def crossover_order_blockers(issue_id: int, snapshot: GraphSnapshot) -> list[ContinuityBlocker]:
+    """Return crossover ordering blockers for one issue, AND-composed across crossovers.
+
+    For every active crossover that contains the issue as an ordered entry, the
+    issue is blocked while any earlier unread ordered entry remains. An issue
+    belonging to multiple ordered crossovers must satisfy every one of them, so
+    any unsatisfied earlier prerequisite produces a blocker.
+
+    Args:
+        issue_id: The owned issue to evaluate against crossover reading order.
+        snapshot: Loaded continuity graph snapshot.
+
+    Returns:
+        One ``crossover_order`` blocker per active ordered crossover with an
+        earlier unread entry, each naming the crossover and the earliest earlier
+        unread issue.
+    """
+    if snapshot.issues.get(issue_id) is None:
+        return []
+    target_label = _issue_detail(issue_id, snapshot).label
+    markers: list[ContinuityBlocker] = []
+    for group_id, position in snapshot.issue_crossover_positions.get(issue_id, ()):
+        ordered_ids = snapshot.crossover_ordered_issue_ids.get(group_id, ())
+        if position <= 1:
+            continue
+        for earlier_id in ordered_ids[: position - 1]:
+            if is_read(earlier_id, snapshot):
+                continue
+            group = snapshot.groups[group_id]
+            earlier_label = _issue_detail(earlier_id, snapshot).label
+            markers.append(
+                ContinuityBlocker(
+                    rule_id=None,
+                    source_type="crossover",
+                    source_id=group_id,
+                    source_label=group.name,
+                    satisfaction_type="all_members_read",
+                    blocker_type="crossover_order",
+                    causing_member_issue_ids=[earlier_id],
+                    unread_issue_details=[UnreadIssueDetail(issue_id=earlier_id, label=earlier_label)],
+                    note=(
+                        f"Read {earlier_label} before {target_label} in {group.name}."
+                    ),
+                    crossover_id=group_id,
+                    sequence_position=position,
+                )
+            )
+            break
+    return markers
+
+
 def issue_readiness(issue_id: int, snapshot: GraphSnapshot) -> list[ContinuityBlocker]:
-    """Return direct blockers for one issue.
+    """Return direct blockers for one issue, including crossover ordering.
 
     Args:
         issue_id: Issue identifier.
         snapshot: Loaded continuity graph snapshot.
 
     Returns:
-        Direct blockers that prevent the issue from being readable.
+        Direct continuity-rule blockers plus any crossover ordering blockers that
+        prevent the issue from being read before earlier ordered entries.
     """
-    return _direct_blockers("issue", issue_id, snapshot)
+    return _direct_blockers("issue", issue_id, snapshot) + crossover_order_blockers(
+        issue_id, snapshot
+    )
 
 
 def crossover_readiness(group_id: int, snapshot: GraphSnapshot) -> list[ContinuityBlocker]:
@@ -427,13 +508,17 @@ def crossover_readiness(group_id: int, snapshot: GraphSnapshot) -> list[Continui
         its unread member issues, sorted by rule id.
     """
     blockers = _direct_blockers("crossover", group_id, snapshot)
-    seen_rule_ids = {blocker.rule_id for blocker in blockers}
+    seen = {
+        (blocker.rule_id, blocker.source_type, blocker.source_id)
+        for blocker in blockers
+    }
     for issue_id in group_issue_ids(group_id, snapshot):
         if is_read(issue_id, snapshot):
             continue
         for blocker in issue_readiness(issue_id, snapshot):
-            if blocker.rule_id not in seen_rule_ids:
+            key = (blocker.rule_id, blocker.source_type, blocker.source_id)
+            if key not in seen:
                 blockers.append(blocker)
-                seen_rule_ids.add(blocker.rule_id)
-    blockers.sort(key=lambda blocker: blocker.rule_id)
+                seen.add(key)
+    blockers.sort(key=lambda blocker: blocker.rule_id if blocker.rule_id is not None else -1)
     return blockers
