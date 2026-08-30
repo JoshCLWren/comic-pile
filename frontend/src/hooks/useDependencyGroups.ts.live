@@ -5,22 +5,15 @@ import {
 import { queryKeys } from '../query/queryKeys'
 
 export function useDependencyGroups(threadId: number | null | undefined) {
-  if (threadId == null) {
-    return {
-      groups: [],
-      isLoading: false,
-      error: null,
-    };
-  }
   const { data, isPending, isError } = useQuery({
-    queryKey: queryKeys.dependencyGroups.forThread(threadId),
-    queryFn: () => dependencyGroupsApi.listForThread(threadId),
-    enabled: true,
+    queryKey: threadId != null ? queryKeys.dependencyGroups.forThread(threadId) : [],
+    queryFn: () => dependencyGroupsApi.listForThread(threadId!),
+    enabled: threadId != null,
   })
 
   return {
     groups: data ?? [],
     isLoading: isPending,
-    error: isError ? new Error('Unable to load reading-order groups') : null
-  };
+    error: isError ? new Error('Unable to load reading-order groups') : null,
+  }
 }

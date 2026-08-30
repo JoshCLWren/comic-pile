@@ -1,4 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { type ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
@@ -54,12 +56,19 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-function renderBootstrap() {
-  return renderHook(() => useRollBootstrap(), {
-    wrapper: ({ children }: { children: React.ReactNode }) => (
+function createTestWrapper() {
+  const client = new QueryClient()
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>
       <ToastProvider>{children}</ToastProvider>
-    ),
-  })
+    </QueryClientProvider>
+  )
+  return { client, wrapper }
+}
+
+function renderBootstrap() {
+  const { wrapper } = createTestWrapper()
+  return renderHook(() => useRollBootstrap(), { wrapper })
 }
 
 beforeEach(() => {
