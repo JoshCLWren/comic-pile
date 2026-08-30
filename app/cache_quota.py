@@ -1,21 +1,25 @@
 """Cache quota guardrail: budget alerting and smoke-test throttling.
 
-This module protects the configured Upstash free-tier monthly command budget
-with two reactive boundaries:
+This module protects the configured monthly provider command budget (see
+``docs/CACHE_COMMAND_BUDGET.md``) with two reactive boundaries:
 
-* an *alert* band that fires once when observed application command usage
-  crosses a configured fraction of the operating budget; and
+* an *alert* band that fires a visible one-shot alert when observed application
+  command usage crosses a configured fraction (default 80%) of the operating
+  budget; and
 * a *smoke-test throttle* band that, once usage reaches the hard budget,
-  suppresses a bounded fraction of best-effort cache writes so a runaway
-  rollout degrades gracefully instead of exhausting the provider and causing
-  a hard cache outage. Critical invalidations (generation ``INCR`` commands)
-  are never throttled; only non-essential value writes are subject to the
-  smoke test.
+  suppresses a bounded fraction of best-effort value writes so scheduled
+  production smoke traffic and runaway rollouts cannot silently drain the
+  provider quota and turn optional caching into a hard cache outage.
+
+Critical generation invalidations (``INCR`` commands) are never throttled; only
+non-essential value writes are subject to the smoke test.
 
 The guardrail is transport-agnostic and privacy-safe: callers feed it the
 observed command count from :mod:`app.cache_metrics`, and it reports policy
 decisions. It never touches the network, cache keys, or user data, so it is
-safe to consult on every request.
+safe to consult on every request. Operators can surface the live snapshot
+through :func:`observe_cache_quota` and the bounded ``/api/v1/health/cache-quota``
+operational endpoint.
 """
 
 from __future__ import annotations
@@ -25,15 +29,13 @@ import random
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from app.cache_metrics import (
-    CONSERVATIVE_MONTHLY_COMMAND_BUDGET,
-    cache_command_metrics,
-)
+from app.cache_metrics import CONSERVATIVE_MONTHLY_COMMAND_BUDGET
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_ALERT_FRACTION = 0.8
 DEFAULT_SMOKE_TEST_DROP_RATE = 0.5
+
 
 
 @dataclass(slots=True)
@@ -221,8 +223,24 @@ def evaluate_cache_quota(used: int | None = None, *, fire_alert: bool = True) ->
         The resulting :class:`QuotaState`.
     """
     if used is None:
+        # Lazy import keeps this guardrail importable without the cache stack so
+        # operator tooling and focused tests can load its pure policy logic.
+        from app.cache_metrics import cache_command_metrics
+
         used = cache_command_metrics.total()
     return quota_guardrail.assess(used, fire_alert=fire_alert)
+
+
+def observe_cache_quota(used: int | None = None) -> QuotaState:
+    """Read-only quota assessment for monitoring; never fires the alert sink.
+
+    Args:
+        used: Observed monthly command count; defaults to live metrics.
+
+    Returns:
+        The current :class:`QuotaState` without alert side effects.
+    """
+    return evaluate_cache_quota(used, fire_alert=False)
 
 
 def should_throttle_cache_write(

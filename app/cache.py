@@ -680,11 +680,9 @@ class UpstashCache:
         if self._client is None:
             return False
 
-        # Smoke-test throttle: once the monthly Upstash budget is exhausted, drop a
-        # bounded fraction of best-effort value writes so a runaway rollout degrades
-        # gracefully instead of exhausting the provider. Critical invalidations
-        # (generation INCRs) are never throttled; only value writes are subject.
-        from app.cache_quota import should_throttle_cache_write
+        from app.cache_quota import evaluate_cache_quota, should_throttle_cache_write
+
+        evaluate_cache_quota(fire_alert=True)
 
         if should_throttle_cache_write(throttle_enabled=self._throttle_enabled):
             logger.warning(
