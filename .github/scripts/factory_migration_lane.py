@@ -185,7 +185,11 @@ def ensure_wait_label() -> None:
             "color": "D4C5F9",
             "description": "Migration PR waiting for the serialized finalization lane",
         },
+        check=False,
     )
+    # A concurrent reconciler may have won the label-create race. Re-read the
+    # authoritative label instead of treating a duplicate-create response as fatal.
+    run_gh(["api", f"repos/{REPO}/labels/{WAIT_LABEL}"])
 
 
 def open_pull_requests() -> list[dict[str, Any]]:
@@ -280,7 +284,7 @@ def issue_labels_for_wait(current: set[str]) -> set[str]:
         if not OWNER_RE.fullmatch(label)
         and label not in STAGE_LABELS
         and label != "factory"
-        and not RALPH_STATUS_RE.fullmatch(label)
+        and not RALPH_STATUS_RE.match(label)
     }
     labels.update(
         {
@@ -301,7 +305,7 @@ def issue_labels_for_review(current: set[str]) -> set[str]:
         if not OWNER_RE.fullmatch(label)
         and label not in STAGE_LABELS
         and label not in {"factory", WAIT_LABEL}
-        and not RALPH_STATUS_RE.fullmatch(label)
+        and not RALPH_STATUS_RE.match(label)
     }
     labels.update(
         {
@@ -359,9 +363,10 @@ def reconcile() -> dict[str, Any]:
         holder = release
 
     waiting = sorted(
-        pr.number
-        for pr in migration_prs
-        if pr.is_waiting and pr.number != release
+        {
+            *(pr.number for pr in migration_prs if pr.is_waiting and pr.number != release),
+            *park,
+        }
     )
     result = {
         "holder": holder,
