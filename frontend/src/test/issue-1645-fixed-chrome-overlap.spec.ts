@@ -4,7 +4,9 @@
  *
  * Checks bounding-box intersection of navigation/header elements vs main
  * content on Roll, Queue, History, Crossovers, and Planner pages at
- * 900x900 and 1280x800 viewports.
+ * 900x900, 1280x800, and 1920x1080 viewports (large-desktop regression
+ * from 2026-08-23 dogfood: elementFromPoint at bottom must not resolve
+ * to fixed nav).
  */
 import { expect } from '@playwright/test'
 import { test } from './fixtures'
@@ -12,6 +14,7 @@ import { test } from './fixtures'
 const VIEWPORTS = [
   { width: 900, height: 900, label: '900x900' },
   { width: 1280, height: 800, label: '1280x800' },
+  { width: 1920, height: 1080, label: '1920x1080' },
 ] as const
 
 const ROUTES = [
@@ -281,6 +284,64 @@ test.describe('Fixed chrome overlap (#1645)', () => {
     expect(
       overlap.hasOverlap,
       `Planner: ${overlap.detail ?? 'no overlap'}`,
+    ).toBe(false)
+  })
+
+  test('Large-desktop bottom hit target not occluded by fixed nav at 1920x1080', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+    await page.setViewportSize({ width: 1920, height: 1080 })
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    const main = page.locator('[data-authenticated-shell] > main')
+    await expect(main).toBeVisible()
+
+    // Scroll to bottom so last content row is near viewport bottom
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+    await page.waitForTimeout(200)
+
+    const result = await page.evaluate(() => {
+      const mainEl = document.querySelector<HTMLElement>(
+        '[data-authenticated-shell] > main',
+      )
+      if (!mainEl) return { hitNav: true, detail: 'main not found' }
+      const mainRect = mainEl.getBoundingClientRect()
+      // Sample a point near the bottom-center of main content (just above viewport bottom)
+      const x = Math.floor(mainRect.left + mainRect.width / 2)
+      const y = window.innerHeight - 25
+      const el = document.elementFromPoint(x, y)
+      if (!el) return { hitNav: false }
+      const nav = el.closest('nav')
+      if (nav) {
+        return {
+          hitNav: true,
+          detail: `elementFromPoint(${x},${y}) hit nav ${nav.getAttribute('aria-label') ?? ''}`,
+        }
+      }
+      // Also ensure main content not scrolled beneath a fixed bottom bar
+      const mobileNav = document.querySelector<HTMLElement>(
+        'nav[aria-label="Mobile navigation"]',
+      )
+      if (mobileNav) {
+        const style = window.getComputedStyle(mobileNav)
+        if (style.display !== 'none') {
+          const navRect = mobileNav.getBoundingClientRect()
+          // If mobile nav is unexpectedly visible at 1920, main bottom should be above it
+          if (mainRect.bottom > navRect.top + 10) {
+            return {
+              hitNav: true,
+              detail: `main bottom (${mainRect.bottom}) occluded by mobile nav top (${navRect.top}) at 1920`,
+            }
+          }
+        }
+      }
+      return { hitNav: false }
+    })
+
+    expect(
+      result.hitNav,
+      `1920x1080 hit-test: ${result.detail ?? 'nav occludes content'}`,
     ).toBe(false)
   })
 })
