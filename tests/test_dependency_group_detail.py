@@ -85,7 +85,7 @@ async def test_detail_endpoint_returns_enriched_members(
         assert "membership" in member
         assert "thread" in member
         assert "issue" in member
-        assert "otherCrossovers" in member
+        assert "other_crossovers" in member
 
     # Issue-level membership should have issue and thread populated
     issue_member = next(
@@ -133,10 +133,10 @@ async def test_detail_endpoint_includes_other_crossovers(
     response = await auth_client.get(f"/api/v1/reading-order-groups/{group1.id}/detail")
     assert response.status_code == 200
     data = response.json()
-    # Each member should list the other group's name in otherCrossovers
+    # Each member should list the other group's name in other_crossovers
     for member in data["memberships"]:
-        assert group2.name in member["otherCrossovers"]
-        assert group1.name not in member["otherCrossovers"]
+        assert group2.name in member["other_crossovers"]
+        assert group1.name not in member["other_crossovers"]
 
 
 @pytest.mark.asyncio
@@ -203,6 +203,6 @@ async def test_detail_endpoint_readiness_and_plans(
     data = response.json()
     # readiness may be None if no rules defined, but field should exist
     assert "readiness" in data
-    assert "linkedPlans" in data
-    # linkedPlans is a list
-    assert isinstance(data["linkedPlans"], list)
+    assert "linked_plans" in data
+    # linked_plans is a list
+    assert isinstance(data["linked_plans"], list)

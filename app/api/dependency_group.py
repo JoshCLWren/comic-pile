@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, union_all
 from sqlalchemy.dialects.postgresql import JSONB, insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +32,6 @@ from app.schemas.dependency_group import (
 from comic_pile.dependencies import refresh_user_blocked_status
 
 from app.continuity_readiness import evaluate_continuity_readiness
-from app.schemas.continuity_readiness import ContinuityReadinessResponse
 
 router = APIRouter(prefix="/reading-order-groups", tags=["reading-order-groups"])
 MAX_RANGE_SIZE = 250
@@ -212,7 +211,6 @@ async def _group_detail_response(
             .distinct()
         )
         # Combine with UNION
-        from sqlalchemy import union_all
         combined = union_all(thread_subquery, issue_subquery).subquery()
         # Fetch group names
         group_result = await db.execute(

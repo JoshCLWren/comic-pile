@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { dependencyGroupsApi, type DependencyGroup, type DependencyGroupMember, type DependencyGroupSummary, type DependencyGroupDetail } from '../services/api-dependency-groups'
+import { dependencyGroupsApi, type DependencyGroup, type DependencyGroupMember, type DependencyGroupSummary } from '../services/api-dependency-groups'
 import type { ContinuityReadinessResponse, ContinuityBlocker } from '../services/api-continuity-readiness'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { Thread, Issue } from '../types'
@@ -9,7 +9,7 @@ interface CrossoverMember {
   membership: DependencyGroupMember
   thread: Thread | null
   issue: Issue | null
-  otherCrossovers: string[]
+  other_crossovers: string[]
 }
 
 interface BlockedMember {
@@ -46,11 +46,11 @@ export default function CrossoverDetailPage() {
           membership: m.membership,
           thread: m.thread,
           issue: m.issue,
-          otherCrossovers: m.otherCrossovers,
+          other_crossovers: m.other_crossovers,
         })),
       )
       setReadiness(detail.readiness ?? null)
-      setLinkedPlans(detail.linkedPlans ?? [])
+      setLinkedPlans(detail.linked_plans ?? [])
     } catch (err) {
       setError(getApiErrorDetail(err))
     } finally {
@@ -306,11 +306,11 @@ export default function CrossoverDetailPage() {
                       </p>
                       <p className={`truncate text-sm ${isRead ? 'text-stone-500' : 'text-stone-400'}`}>
                         Issue {issueNumber}
-                        {member.otherCrossovers.length > 0 && (
+                        {member.other_crossovers.length > 0 && (
                           <>
                             {' • '}
                             <span className="text-violet-400">
-                              Also in: {member.otherCrossovers.join(', ')}
+                              Also in: {member.other_crossovers.join(', ')}
                             </span>
                           </>
                         )}

@@ -27,7 +27,7 @@ export interface DependencyGroupDetailMember {
   membership: DependencyGroupMember
   thread: Thread | null
   issue: Issue | null
-  otherCrossovers: string[]
+  other_crossovers: string[]
 }
 
 export interface DependencyGroupDetail {
@@ -58,7 +58,7 @@ export interface DependencyGroupDetail {
       sequence_position?: number | null
     }>
   } | null
-  linkedPlans: DependencyGroupSummary[]
+  linked_plans: DependencyGroupSummary[]
 }
 
 export interface DependencyGroupIssueRangeResult {
