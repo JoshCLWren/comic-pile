@@ -270,7 +270,7 @@ describe('ReadingContextPillar navigation (issue #1877)', () => {
 
     const chip = await screen.findByRole('button', { name: 'Open Animal Man crossover' })
     await userEvent.setup().click(chip)
-    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers?group=9')
+    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers/9')
   })
 
   it('labels incoming dependency edges "Blocked by:" without counts', async () => {
