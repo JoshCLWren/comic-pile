@@ -5,6 +5,12 @@ import {
 import { queryKeys } from '../query/queryKeys'
 
 export function useDependencyGroups(threadId: number | null | undefined) {
+  const { data, isPending, isError } = useQuery({
+    queryKey: queryKeys.dependencyGroups.forThread(threadId ?? 0),
+    queryFn: () => dependencyGroupsApi.listForThread(threadId!),
+    enabled: threadId != null,
+  })
+
   if (threadId == null) {
     return {
       groups: [],
@@ -12,11 +18,6 @@ export function useDependencyGroups(threadId: number | null | undefined) {
       error: null,
     };
   }
-  const { data, isPending, isError } = useQuery({
-    queryKey: queryKeys.dependencyGroups.forThread(threadId),
-    queryFn: () => dependencyGroupsApi.listForThread(threadId),
-    enabled: true,
-  })
 
   return {
     groups: data ?? [],
