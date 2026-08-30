@@ -93,6 +93,9 @@ jobs:
       - name: Run frontend typecheck
         run: pnpm --filter frontend run typecheck
 
+      - name: Run production frontend build through root package
+        run: pnpm run build
+
   python-lint:
     name: Python Lint (ruff)
     runs-on: ubuntu-latest
