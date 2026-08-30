@@ -2,12 +2,12 @@
  * Issue #2023 acceptance: the authenticated shell owns the space consumed by
  * persistent navigation instead of letting individual pages guess an offset.
  *
- * The regression was introduced when the desktop sidebar grew from 14rem to
- * 18rem while the authenticated main content kept its old 14rem left margin.
- * At wide and intermediate desktop widths the fixed sidebar therefore covered
- * the first 4rem of every page. These checks exercise rendered geometry across
- * the supported viewport matrix so a future navigation width change cannot
- * silently reintroduce the same class of clipping bug.
+ * The original regression was introduced when the desktop sidebar grew from
+ * 14rem to 18rem while the authenticated main content kept its old 14rem left
+ * margin. PR #2002 later reintroduced that stale offset after #2025 fixed it.
+ * These checks exercise rendered geometry across the supported viewport matrix
+ * and verify that changing the rendered navigation width automatically reflows
+ * the main column without a second matching offset.
  */
 import { expect } from '@playwright/test'
 import { test } from './fixtures'
@@ -31,7 +31,7 @@ const ROUTES = [
   { path: '/crossovers', label: 'Crossovers' },
   { path: '/continuity-plans', label: 'Planner' },
   { path: '/whats-new', label: 'New' },
-  { path: '/help', label: 'Help' },
+  { path: '/glossary', label: 'Glossary' },
 ] as const
 
 test.describe('Responsive authenticated app shell (#2023)', () => {
@@ -105,4 +105,40 @@ test.describe('Responsive authenticated app shell (#2023)', () => {
       }
     })
   }
+
+  test('main reflows from the rendered desktop navigation width', async ({ authenticatedPage }) => {
+    const page = authenticatedPage
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    const shell = page.locator('[data-authenticated-shell]')
+    const main = page.locator('[data-authenticated-shell] > main')
+    const desktopNav = page.getByRole('navigation', { name: 'Desktop navigation' })
+
+    await expect(shell).toBeVisible()
+    await expect(main).toBeVisible()
+    await expect(desktopNav).toBeVisible()
+
+    await desktopNav.evaluate((nav) => {
+      nav.style.width = '20rem'
+    })
+
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const mainRect = document
+          .querySelector<HTMLElement>('[data-authenticated-shell] > main')
+          ?.getBoundingClientRect()
+        const navRect = document
+          .querySelector<HTMLElement>('nav[aria-label="Desktop navigation"]')
+          ?.getBoundingClientRect()
+        return (mainRect?.left ?? Number.NEGATIVE_INFINITY) >= (navRect?.right ?? Number.POSITIVE_INFINITY)
+      })
+    }).toBe(true)
+
+    const overflow = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth,
+    }))
+    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.innerWidth)
+  })
 })
