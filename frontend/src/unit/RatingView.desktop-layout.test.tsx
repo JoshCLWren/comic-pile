@@ -206,7 +206,7 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     expect(grid!.className).not.toMatch(/minmax\(0,\d+fr\)/)
 
     const expectedRegionCount = state.expectReadingContextRegion ? 3 : 2
-    expect(cells.length).toBe(expectedRegionCount + 1)
+    expect(cells.length).toBe(expectedRegionCount)
 
     expect(cells[0].dataset.testid).toBe('rating-region-comic')
     if (state.expectReadingContextRegion) {
@@ -215,7 +215,12 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     } else {
       expect(cells[1].dataset.testid).toBe('rating-region-your-context')
     }
-    expect(cells[cells.length - 1].dataset.testid).toBe('rating-actions-grid-cell')
+    // Actions are packed inside the Your Context region so they sit beside
+    // cover-heavy content without forcing a separate full-width row below the fold.
+    const yourContextCell = container.querySelector('[data-testid="rating-region-your-context"]')
+    const actionsInside = yourContextCell?.querySelector('[data-testid="rating-actions-grid-cell"]')
+    expect(actionsInside).not.toBeNull()
+    expect(cells.some((cell) => cell.dataset.testid === 'rating-actions-grid-cell')).toBe(false)
 
     for (const cell of cells) {
       expect(cell.className).not.toMatch(/\b(?:md:|xl:)?(?:col-start|row-start|col-end|row-end|row-span)-\d+\b/)
@@ -238,7 +243,7 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     }
   })
 
-  it('places the action panel on its own full-width desktop row below every region', () => {
+  it('keeps the action panel packed inside the Your Context region beside other columns', () => {
     const { container } = render(
       ratingView({
         readingOrders: readingOrders(2),
@@ -246,10 +251,13 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
         readerContext: richReaderContext(),
       }),
     )
-    const { cells } = gridChildren(container)
-    const actions = cells[cells.length - 1]
-    expect(actions.dataset.testid).toBe('rating-actions-grid-cell')
-    expect(actions.className).toContain('xl:col-span-full')
+    const yourContext = container.querySelector('[data-testid="rating-region-your-context"]')
+    const actions = container.querySelector('[data-testid="rating-actions-grid-cell"]')
+    expect(yourContext).not.toBeNull()
+    expect(actions).not.toBeNull()
+    expect(yourContext!.contains(actions)).toBe(true)
+    expect(actions!.className).not.toContain('xl:col-span-full')
+    expect(yourContext!.className).toContain('space-y-4')
     expect(container.querySelector('[data-testid="rating-actions"]')).not.toBeNull()
   })
 

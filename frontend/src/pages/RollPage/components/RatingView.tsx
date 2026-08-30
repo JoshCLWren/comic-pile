@@ -90,7 +90,7 @@ export function RatingView({
           </div>
         )}
 
-        <div className="min-w-0" data-testid="rating-region-your-context">
+        <div className="min-w-0 space-y-4" data-testid="rating-region-your-context">
           <YourContextPillar
             activeRatingThread={activeRatingThread}
             currentDie={currentDie}
@@ -100,22 +100,19 @@ export function RatingView({
             readerContext={readerContext}
             isLoading={isReaderContextLoading}
           />
-        </div>
 
-        <div
-          className="min-w-0 xl:col-span-full"
-          data-testid="rating-actions-grid-cell"
-        >
-          <RatingActionPanel
-            errorMessage={errorMessage}
-            rateIsPending={rateIsPending}
-            snoozeIsPending={snoozeIsPending}
-            dismissIsPending={dismissIsPending}
-            issuesRemaining={issuesRemaining}
-            onSubmitRating={onSubmitRating}
-            onSnooze={onSnooze}
-            onCancel={onCancel}
-          />
+          <div className="min-w-0" data-testid="rating-actions-grid-cell">
+            <RatingActionPanel
+              errorMessage={errorMessage}
+              rateIsPending={rateIsPending}
+              snoozeIsPending={snoozeIsPending}
+              dismissIsPending={dismissIsPending}
+              issuesRemaining={issuesRemaining}
+              onSubmitRating={onSubmitRating}
+              onSnooze={onSnooze}
+              onCancel={onCancel}
+            />
+          </div>
         </div>
       </div>
 

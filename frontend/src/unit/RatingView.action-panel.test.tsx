@@ -278,14 +278,16 @@ describe('RatingView desktop layout contract (issue #1943)', () => {
     const grid = container.querySelector<HTMLElement>('[data-testid="rating-pillars-grid"]')
     expect(grid).not.toBeNull()
     const cells = Array.from(grid!.querySelectorAll<HTMLDivElement>(':scope > div'))
-    expect(cells.length).toBeGreaterThanOrEqual(4)
+    // Grid now packs three regions; actions are nested inside Your Context so they sit
+    // beside cover-heavy content without a separate full-width row.
+    expect(cells.length).toBeGreaterThanOrEqual(3)
     for (const cell of cells) {
       expect(cell.className).not.toMatch(/\b(?:md:|xl:)?(?:col-start|row-start|col-end|row-end|row-span)-\d+\b/)
       expect(cell.className).not.toContain('md:row-span-2')
     }
   })
 
-  it('spans the action panel across the full desktop grid width below the regions', () => {
+  it('keeps the action panel packed inside the Your Context column beside other regions', () => {
     const { container } = render(
       ratingView({
         readingOrders: [
@@ -302,9 +304,13 @@ describe('RatingView desktop layout contract (issue #1943)', () => {
     )
     const grid = container.querySelector<HTMLElement>('[data-testid="rating-pillars-grid"]')
     const gridCell = container.querySelector<HTMLElement>('[data-testid="rating-actions-grid-cell"]')
+    const yourContext = container.querySelector<HTMLElement>('[data-testid="rating-region-your-context"]')
     expect(gridCell).not.toBeNull()
-    expect(gridCell!.className).toContain('xl:col-span-full')
-    const regions = Array.from(grid!.querySelectorAll<HTMLDivElement>(':scope > div')).filter((cell) => cell !== gridCell)
+    expect(yourContext).not.toBeNull()
+    expect(yourContext!.contains(gridCell)).toBe(true)
+    expect(gridCell!.className).not.toContain('xl:col-span-full')
+    expect(yourContext!.className).toContain('space-y-4')
+    const regions = Array.from(grid!.querySelectorAll<HTMLDivElement>(':scope > div'))
     expect(regions[regions.length - 1].dataset.testid).toBe('rating-region-your-context')
   })
 

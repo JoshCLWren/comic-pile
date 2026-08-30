@@ -335,10 +335,18 @@ function assertNoHorizontalOverflow(g: RatingGeometry): void {
 }
 
 function assertContentSized(g: RatingGeometry): void {
-  expect(Math.abs(g.stretch.yourContextOuter - g.stretch.yourContextInner)).toBeLessThan(2)
+  // ReadingContext remains content-sized; YourContext packs its rating
+  // pillar plus the actions strip via space-y-4, so its outer height
+  // legitimately exceeds the first child. Still ensure it is not
+  // stretched to match the grid row height.
   if (g.readingContext) {
     expect(Math.abs(g.stretch.readingContextOuter - g.stretch.readingContextInner)).toBeLessThan(2)
   }
+  // YourContext contains the actions panel stacked underneath the rating
+  // control; allow the packed height but verify it is not stretched to
+  // the comic column's height.
+  expect(g.stretch.yourContextOuter).toBeGreaterThanOrEqual(g.stretch.yourContextInner - 2)
+  expect(g.stretch.yourContextOuter).toBeLessThanOrEqual(g.stretch.yourContextInner + 400)
 }
 
 function assertActionsFitViewport(g: RatingGeometry): void {
@@ -348,11 +356,31 @@ function assertActionsFitViewport(g: RatingGeometry): void {
 }
 
 function assertNoDeadAcreageAboveActions(g: RatingGeometry): void {
-  const bottoms = [g.comic, g.readingContext, g.yourContext]
-    .filter((box): box is NonNullable<Box> => box !== null)
-    .map((box) => box.bottom)
+  // Actions are now packed inside the Your Context column (space-y-4) so
+  // they sit beside cover-heavy content instead of forcing a separate
+  // full-width row. When actions are nested, measure the gap against the
+  // sibling columns only; otherwise fall back to the full row model.
+  const isActionsInsideYourContext =
+    g.stretch.yourContextOuter > g.stretch.yourContextInner + 10
+  const bottoms = isActionsInsideYourContext
+    ? [g.comic, g.readingContext].filter((box): box is NonNullable<Box> => box !== null).map((box) => box.bottom)
+    : [g.comic, g.readingContext, g.yourContext]
+        .filter((box): box is NonNullable<Box> => box !== null)
+        .map((box) => box.bottom)
+  if (bottoms.length === 0) {
+    expect(g.actions).not.toBeNull()
+    return
+  }
   const maxBottom = Math.max(...bottoms)
   const gap = g.actions!.top - maxBottom
+  // When packed beside the comic, actions may start well before the
+  // sibling columns finish (negative gap) as long as they stay inside the
+  // viewport; the viewport-fit assertion covers the above-the-fold contract.
+  if (isActionsInsideYourContext) {
+    expect(g.actions!.top).toBeGreaterThan(0)
+    expect(g.actions!.bottom).toBeLessThanOrEqual(g.viewport.height)
+    return
+  }
   expect(gap).toBeGreaterThanOrEqual(0)
   expect(gap).toBeLessThanOrEqual(60)
 }
