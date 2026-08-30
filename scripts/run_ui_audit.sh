@@ -9,10 +9,10 @@ AUDIT_BASE_URL="http://127.0.0.1:${AUDIT_API_PORT}"
 AUDIT_READY_TIMEOUT_SECONDS="${AUDIT_READY_TIMEOUT_SECONDS:-120}"
 
 export E2E_API_PORT="$AUDIT_API_PORT"
-# The audit browser only needs the API on the host. Let Docker allocate ephemeral
-# host ports for PostgreSQL and Redis so an unrelated local stack does not block it.
-export E2E_POSTGRES_PORT="${E2E_POSTGRES_PORT:-0}"
-export E2E_REDIS_PORT="${E2E_REDIS_PORT:-0}"
+# The browser needs only the API on the host. Publishing just the container
+# port asks Docker to choose ephemeral host ports for these dependencies.
+export E2E_POSTGRES_PUBLISH="${E2E_POSTGRES_PUBLISH:-5432}"
+export E2E_REDIS_PUBLISH="${E2E_REDIS_PUBLISH:-6379}"
 
 compose() {
   docker compose --project-name "$AUDIT_PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
@@ -33,6 +33,10 @@ command -v docker >/dev/null 2>&1 || {
 }
 command -v pnpm >/dev/null 2>&1 || {
   echo "UI audit requires pnpm." >&2
+  exit 1
+}
+command -v curl >/dev/null 2>&1 || {
+  echo "UI audit requires curl for backend readiness checks." >&2
   exit 1
 }
 
@@ -62,4 +66,4 @@ BASE_URL="$AUDIT_BASE_URL" \
     --config=playwright.audit.config.ts \
     --workers=1
 
-echo "Rendered UI audit completed. Evidence: dogfood-output/ui-audit/"
+echo "Rendered UI audit completed. Evidence: frontend/test-results/ui-audit/"
