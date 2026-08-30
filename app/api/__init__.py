@@ -16,7 +16,6 @@ from app.api import releases as releases
 from app.api import roll_recovery_switch as roll_recovery_switch
 from app.api import taste_signal as taste_signal
 
-analytics.router.include_router(health.router)
 dependency.router.include_router(issue_dependency_batch.router)
 dependency.router.include_router(dependency_group.router)
 dependency.router.include_router(dependency_group_batch.router)
