@@ -293,7 +293,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   return (
     <>
       <nav
-        className="fixed bottom-0 left-0 top-0 z-40 hidden w-72 flex-col border-r border-[var(--glass-border)] bg-[var(--bg-darker)] md:flex"
+        className="sticky top-0 z-40 hidden h-screen w-72 flex-col border-r border-[var(--glass-border)] bg-[var(--bg-darker)] md:flex"
         role="navigation"
         aria-label="Desktop navigation"
       >
