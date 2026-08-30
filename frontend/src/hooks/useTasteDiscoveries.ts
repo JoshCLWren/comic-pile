@@ -23,34 +23,25 @@ export function useTasteDiscoveries() {
   const { data, isPending } = useQuery({
     queryKey: queryKeys.taste.discoveries(),
     queryFn: () => tasteApi.getDiscoveries(),
+    initialData: { discoveries: [] } as { discoveries: TasteDiscovery[] },
   })
 
-  const [state, setState] = useState<TasteDiscoveriesState>({
-    discoveries: data?.discoveries ?? [],
-    isLoading: isPending,
-  })
-
-  // Sync when query data changes
-  const prevDataRef = useRef(data?.discoveries)
-  if (data?.discoveries !== prevDataRef.current) {
-    prevDataRef.current = data?.discoveries
-    setState({ discoveries: data?.discoveries ?? [], isLoading: isPending })
-  } else if (state.isLoading !== isPending) {
-    setState((prev) => ({ ...prev, isLoading: isPending }))
-  }
-
+  const [dismissed, setDismissed] = useState<Set<number>>(new Set())
   const pendingIdsRef = useRef(new Set<number>())
 
+  const discoveries = (data?.discoveries ?? []).filter((item) => !dismissed.has(item.id))
+
   const removeCurrent = useCallback((signalId: number) => {
-    setState((previous) => ({
-      ...previous,
-      discoveries: previous.discoveries.filter((item) => item.id !== signalId),
-    }))
+    setDismissed((previous) => {
+      const next = new Set(previous)
+      next.add(signalId)
+      return next
+    })
   }, [])
 
   const respond = useCallback(
     async (verdict: TasteVerdict): Promise<boolean> => {
-      const current = state.discoveries[0]
+      const current = discoveries[0]
       if (!current || pendingIdsRef.current.has(current.id)) return false
 
       pendingIdsRef.current.add(current.id)
@@ -59,33 +50,37 @@ export function useTasteDiscoveries() {
         removeCurrent(current.id)
         return true
       } catch {
+        // Keep the card visible on failure so the reader can retry later.
         return false
       } finally {
         pendingIdsRef.current.delete(current.id)
       }
     },
-    [state.discoveries, removeCurrent],
+    [discoveries, removeCurrent],
   )
 
-  const dismiss = useCallback(async (): Promise<boolean> => {
-    const current = state.discoveries[0]
-    if (!current || pendingIdsRef.current.has(current.id)) return false
+  const dismiss = useCallback(
+    async (): Promise<boolean> => {
+      const current = discoveries[0]
+      if (!current || pendingIdsRef.current.has(current.id)) return false
 
-    pendingIdsRef.current.add(current.id)
-    try {
-      await tasteApi.dismiss(current.id)
-      removeCurrent(current.id)
-      return true
-    } catch {
-      return false
-    } finally {
-      pendingIdsRef.current.delete(current.id)
-    }
-  }, [state.discoveries, removeCurrent])
+      pendingIdsRef.current.add(current.id)
+      try {
+        await tasteApi.dismiss(current.id)
+        removeCurrent(current.id)
+        return true
+      } catch {
+        return false
+      } finally {
+        pendingIdsRef.current.delete(current.id)
+      }
+    },
+    [discoveries, removeCurrent],
+  )
 
   return {
-    current: state.discoveries.length > 0 ? state.discoveries[0] : null,
-    isLoading: state.isLoading,
+    current: discoveries.length > 0 ? discoveries[0] : null,
+    isLoading: isPending,
     respond,
     dismiss,
   }

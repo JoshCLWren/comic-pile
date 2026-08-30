@@ -94,33 +94,37 @@ export const queryKeys = {
   },
   comicVine: {
     all: ['comicVine'] as const,
-    issueIntelligence: (issueId: number) => ['comicVine', 'issueIntelligence', issueId] as const,
+    issueIntelligence: (issueId: number) =>
+      ['comicVine', 'issueIntelligence', issueId] as const,
   },
   continuity: {
     all: ['continuity'] as const,
-    chains: (issueId: number) => ['continuity', 'chains', issueId] as const,
-    readiness: (issueId: number) => ['continuity', 'readiness', issueId] as const,
-  },
-  dependencyGroups: {
-    all: ['dependencyGroups'] as const,
-    forThread: (threadId: number) => ['dependencyGroups', 'thread', threadId] as const,
-    forThreads: (threadIds: number[]) =>
-      ['dependencyGroups', 'threads', [...threadIds].sort((a, b) => a - b)] as const,
+    chains: (nodeType: string, nodeId: number) =>
+      ['continuity', 'chains', nodeType, nodeId] as const,
+    readiness: (nodeType: string, nodeId: number) =>
+      ['continuity', 'readiness', nodeType, nodeId] as const,
   },
   readerContext: {
     all: ['readerContext'] as const,
-    forIssue: (issueId: number) => ['readerContext', 'issue', issueId] as const,
+    detail: (issueId: number) => ['readerContext', issueId] as const,
+  },
+  plans: {
+    all: ['plans'] as const,
+    readiness: (planId: number, refreshKey: number = 0) =>
+      ['plans', 'readiness', planId, refreshKey] as const,
   },
   taste: {
     all: ['taste'] as const,
     discoveries: () => ['taste', 'discoveries'] as const,
   },
-  plan: {
-    all: ['plan'] as const,
-    readiness: (planId: number) => ['plan', 'readiness', planId] as const,
+  crossover: {
+    all: ['crossover'] as const,
+    groups: (threadIds: number[]) =>
+      ['crossover', 'groups', [...threadIds].sort((a, b) => a - b)] as const,
   },
   undo: {
     all: ['undo'] as const,
-    snapshots: (sessionId: number | string) => ['undo', 'snapshots', sessionId] as const,
+    snapshots: (sessionId: number | string) =>
+      ['undo', 'snapshots', sessionId] as const,
   },
 } as const
