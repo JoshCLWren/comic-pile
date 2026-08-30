@@ -584,6 +584,17 @@ class ImportTargetNotFoundError(Exception):
     """A referenced import target (reading order) does not exist for the user."""
 
 
+class DuplicatePhysicalIssueError(Exception):
+    """Import would create a second logical copy of an already-known physical issue."""
+
+    def __init__(self, comicvine_issue_id: int, existing_issue_id: int) -> None:
+        super().__init__(
+            f"ComicVine issue {comicvine_issue_id} already exists as issue {existing_issue_id}"
+        )
+        self.comicvine_issue_id = comicvine_issue_id
+        self.existing_issue_id = existing_issue_id
+
+
 async def import_comicvine_issue(
     db: AsyncSession,
     *,
@@ -598,6 +609,10 @@ async def import_comicvine_issue(
     order is requested, the thread is inserted between the surrounding arc
     members using neighbor-anchored placement.
 
+    Duplicate physical-issue prevention: when the requested ComicVine issue ID
+    already has a confirmed mapping to a user-owned Issue, the import is
+    rejected so future hydrations do not recreate a second logical copy.
+
     Args:
         db: Async database session; the caller owns the transaction commit.
         user_id: Owner who will receive the imported thread.
@@ -607,6 +622,8 @@ async def import_comicvine_issue(
         The created identifiers plus final reading-order placement.
 
     Raises:
+        DuplicatePhysicalIssueError: The ComicVine issue already represents a
+            known physical comic for this user.
         ImportTargetNotFoundError: ``request.reading_order_id`` does not exist
             for this user.
     """
@@ -624,6 +641,14 @@ async def import_comicvine_issue(
             raise ImportTargetNotFoundError(
                 f"Reading order {request.reading_order_id} not found"
             )
+
+    from app.services.issue_identity_reconciliation import resolve_canonical_issue
+
+    existing_canonical = await resolve_canonical_issue(
+        db, user_id=user_id, comicvine_issue_id=str(request.comicvine_issue_id)
+    )
+    if existing_canonical.canonical_issue_id is not None:
+        raise DuplicatePhysicalIssueError(request.comicvine_issue_id, existing_canonical.canonical_issue_id)
 
     max_position = (
         await db.execute(
