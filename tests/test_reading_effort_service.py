@@ -380,6 +380,7 @@ class TestBuildRecommendationContext:
             estimate, thread_id=7, issue_id=11, issue_number="42"
         )
         candidate = context["selected_candidate"]
+        assert isinstance(candidate, dict)
         assert candidate["thread_id"] == 7
         assert candidate["issue_id"] == 11
         assert candidate["issue_number"] == "42"
@@ -396,5 +397,6 @@ class TestBuildRecommendationContext:
             estimate, thread_id=1, issue_id=None, issue_number=None
         )
         candidate = context["selected_candidate"]
+        assert isinstance(candidate, dict)
         assert candidate["effort_minutes"] is None
         assert candidate["effort_source"] == "unknown"
