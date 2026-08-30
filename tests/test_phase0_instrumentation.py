@@ -151,6 +151,8 @@ async def test_roll_nullable_issue_fields_for_non_issue_tracked(
     _ = sample_data
     monkeypatch.setattr("app.momentum.random.randint", lambda _start, _end: 0)
     monkeypatch.setattr("app.momentum.random.uniform", lambda _a, _b: 0.0)
+    monkeypatch.setattr("comic_pile.recommendation_selection.random.randint", lambda _a, _b: 0)
+    monkeypatch.setattr("comic_pile.recommendation_selection.random.random", lambda: 0.0)
 
     response = await auth_client.post("/api/v1/roll/")
     assert response.status_code == 200

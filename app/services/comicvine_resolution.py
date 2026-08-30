@@ -588,6 +588,12 @@ class DuplicatePhysicalIssueError(Exception):
     """Import would create a second logical copy of an already-known physical issue."""
 
     def __init__(self, comicvine_issue_id: int, existing_issue_id: int) -> None:
+        """Initialize the duplicate physical-issue error.
+
+        Args:
+            comicvine_issue_id: ComicVine issue ID that already exists.
+            existing_issue_id: Existing canonical Issue ID for that physical issue.
+        """
         super().__init__(
             f"ComicVine issue {comicvine_issue_id} already exists as issue {existing_issue_id}"
         )
