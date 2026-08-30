@@ -7,44 +7,6 @@ REAL_GH="${FACTORY_REAL_GH:-/usr/bin/gh}"
   exit 127
 }
 
-reconcile_migration_lane_once() {
-  [[ "${FACTORY_MIGRATION_LANE_BYPASS:-}" != '1' ]] || return 0
-
-  local workspace="${GITHUB_WORKSPACE:-$PWD}"
-  local script="$workspace/.github/scripts/factory_migration_lane.py"
-  [[ -f "$script" ]] || return 0
-  [[ -n "${RUNNER_TEMP:-}" ]] || return 0
-
-  local run_key="${GITHUB_RUN_ID:-workflow}"
-  local marker="$RUNNER_TEMP/factory-migration-lane-${run_key}.done"
-  local lock="${marker}.lock"
-  [[ ! -f "$marker" ]] || return 0
-
-  if mkdir "$lock" 2>/dev/null; then
-    if FACTORY_MIGRATION_LANE_BYPASS=1 FACTORY_REAL_GH="$REAL_GH" \
-      python3 "$script" reconcile; then
-      touch "$marker"
-      rmdir "$lock" 2>/dev/null || true
-      return 0
-    fi
-    rmdir "$lock" 2>/dev/null || true
-    echo 'factory gh REST shim: migration finalization reconciliation failed closed' >&2
-    return 2
-  fi
-
-  # A sibling gh process in this workflow run is already reconciling. Wait for
-  # its bounded result rather than racing a second label mutation.
-  for _ in $(seq 1 50); do
-    [[ -f "$marker" ]] && return 0
-    [[ -d "$lock" ]] || break
-    sleep 0.1
-  done
-  echo 'factory gh REST shim: migration finalization reconciliation did not complete' >&2
-  return 2
-}
-
-reconcile_migration_lane_once
-
 original=("$@")
 command_group="${1:-}"
 command_name="${2:-}"
