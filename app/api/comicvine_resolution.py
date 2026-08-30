@@ -211,6 +211,21 @@ async def api_import_issue(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+    except Exception as exc:
+        from app.services.comicvine_resolution import DuplicatePhysicalIssueError
+
+        if isinstance(exc, DuplicatePhysicalIssueError):
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "duplicate_physical_issue",
+                    "comicvine_issue_id": exc.comicvine_issue_id,
+                    "existing_issue_id": exc.existing_issue_id,
+                    "message": str(exc),
+                },
+            ) from exc
+        raise
     await db.commit()
     await invalidate_user_view(current_user.id)
     return result

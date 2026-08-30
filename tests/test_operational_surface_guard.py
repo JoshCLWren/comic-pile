@@ -38,11 +38,14 @@ _BARE_OPERATIONAL_ROUTES: frozenset[str] = frozenset(
 
 #: Canonical bounded health probes served under the versioned prefix via the
 #: analytics mount. Uptime tooling calls these instead of the legacy URL.
+#: ``/api/v1/health/cache-quota`` (issue #1751) is the visible near-limit /
+#: over-budget alert surface and must also stay pinned at ``/api/v1/health/*``.
 _CANONICAL_HEALTH_ROUTES: frozenset[str] = frozenset(
     {
         "GET /api/v1/health/live",
         "GET /api/v1/health/dependencies",
         "GET /api/v1/health/warmup",
+        "GET /api/v1/health/cache-quota",
     }
 )
 

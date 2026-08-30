@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   dependencyGroupsApi,
   type DependencyGroupSummary,
 } from '../services/api-dependency-groups'
+import { queryKeys } from '../query/queryKeys'
 
 interface DependencyGroupsState {
   groups: DependencyGroupSummary[]
@@ -17,35 +18,23 @@ const EMPTY_STATE: DependencyGroupsState = {
 }
 
 export function useDependencyGroups(threadId: number | null | undefined): DependencyGroupsState {
-  const [state, setState] = useState<DependencyGroupsState>(EMPTY_STATE)
+  const { data, isPending, error } = useQuery({
+    queryKey: threadId != null ? queryKeys.dependencies.forThread(threadId) : [],
+    queryFn: async () => {
+      try {
+        return await dependencyGroupsApi.listForThread(threadId!)
+      } catch (reason) {
+        throw reason instanceof Error ? reason : new Error('Unable to load reading-order groups')
+      }
+    },
+    enabled: threadId != null,
+  })
 
-  useEffect(() => {
-    if (threadId == null) {
-      setState(EMPTY_STATE)
-      return
-    }
+  if (threadId == null) return EMPTY_STATE
 
-    let isCurrent = true
-    setState({ groups: [], isLoading: true, error: null })
-
-    dependencyGroupsApi.listForThread(threadId).then(
-      (groups) => {
-        if (isCurrent) {
-          setState({ groups, isLoading: false, error: null })
-        }
-      },
-      (reason: unknown) => {
-        if (isCurrent) {
-          const error = reason instanceof Error ? reason : new Error('Unable to load reading-order groups')
-          setState({ groups: [], isLoading: false, error })
-        }
-      },
-    )
-
-    return () => {
-      isCurrent = false
-    }
-  }, [threadId])
-
-  return state
+  return {
+    groups: data ?? [],
+    isLoading: isPending,
+    error: (error as Error | null) ?? null,
+  }
 }

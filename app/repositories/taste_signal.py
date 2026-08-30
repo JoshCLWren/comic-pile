@@ -6,10 +6,16 @@ execute calls, satisfying the router-layering conformance contract.
 
 from __future__ import annotations
 
+from datetime import datetime
+from typing import TYPE_CHECKING
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.taste_signal import TasteSignal
+
+if TYPE_CHECKING:
+    from app.services.taste_inference import SignalMetrics
 
 
 async def get_user_signals(
@@ -110,3 +116,86 @@ async def upsert_signal(
         signal.verdict_at = now
 
     return signal
+
+
+async def apply_inferred_signal(
+    db: AsyncSession,
+    user_id: int,
+    signal_type: str,
+    external_key: str,
+    display_name: str,
+    metrics: SignalMetrics,
+    now: datetime,
+) -> TasteSignal:
+    """Persist a recomputed inferred signal without touching any verdict.
+
+    The inferred columns (``affinity_estimate``, ``confidence``, evidence
+    counts, observation timestamps) are always refreshed so the row stays
+    rebuildable from history. The explicit ``user_verdict`` is never written
+    here, so a ``confirmed``/``sometimes``/``rejected`` verdict survives every
+    recomputation unchanged.
+
+    Args:
+        db: Async database session.
+        user_id: Owning user id.
+        signal_type: Canonical signal type slug.
+        external_key: Stable normalized external key for the feature.
+        display_name: Current human-readable label for the feature.
+        metrics: The freshly computed inference metrics.
+        now: Current UTC timestamp for observation bookkeeping.
+
+    Returns:
+        The persisted ``TasteSignal`` row after the inferred columns are set.
+    """
+    signal = await get_signal(db, user_id, signal_type, external_key)
+    is_new = signal is None
+    if signal is None:
+        signal = TasteSignal(
+            user_id=user_id,
+            signal_type=signal_type,
+            external_key=external_key,
+            display_name=display_name,
+            evidence_count=0,
+            distinct_thread_count=0,
+        )
+        db.add(signal)
+
+    updates = merge_metrics_into_signal(metrics, display_name, now, is_new=is_new)
+    for column, value in updates.items():
+        setattr(signal, column, value)
+
+    return signal
+
+
+def merge_metrics_into_signal(
+    metrics: SignalMetrics,
+    display_name: str,
+    now: datetime,
+    *,
+    is_new: bool,
+) -> dict[str, object]:
+    """Build the inferred column updates for a TasteSignal row.
+
+    This deliberately omits ``user_verdict`` and ``verdict_at`` so an explicit
+    user verdict survives recomputation untouched.
+
+    Args:
+        metrics: The freshly computed inference metrics.
+        display_name: Current human-readable label for the feature.
+        now: Timestamp to record as ``last_observed_at``.
+        is_new: Whether the row is being created (controls ``first_observed_at``).
+
+    Returns:
+        A dict of ORM column values to assign. It never contains a verdict.
+    """
+    updates: dict[str, object] = {
+        "display_name": display_name,
+        "affinity_estimate": metrics.affinity,
+        "confidence": metrics.confidence,
+        "evidence_count": metrics.evidence_count,
+        "distinct_thread_count": metrics.distinct_thread_count,
+        "last_observed_at": now,
+    }
+    if is_new:
+        updates["first_observed_at"] = now
+    return updates

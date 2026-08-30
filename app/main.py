@@ -28,9 +28,11 @@ from app.api import (
     comicvine_resolution,
     debug,
     dependency,
+    health,
     identity_inbox,
     images,
     issue,
+    issue_identity,
     metrics,
     ping,
     queue,
@@ -242,6 +244,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(admin.router, prefix="/api", tags=["admin"])
     app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
     app.include_router(analytics.router, prefix="/api", tags=["analytics"])
+    app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
+    app.include_router(health.router, prefix="/api", tags=["health"])
+    app.include_router(health.router, prefix="/api/v1", tags=["health"])
     app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
     app.include_router(bug_report.router, prefix="/api/v1/bug-reports", tags=["bug-reports"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
@@ -275,6 +280,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
     app.include_router(catalog.router, tags=["catalog"])
     app.include_router(identity_inbox.router, tags=["identity-inbox"])
+    app.include_router(issue_identity.router, tags=["issue-identity"])
     if os.getenv("TEST_ENVIRONMENT") == "true":
         app.include_router(test_helpers.router, prefix="/api", tags=["test"])
 

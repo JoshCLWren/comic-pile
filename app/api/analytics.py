@@ -16,8 +16,7 @@ from app.models.user import User
 router = APIRouter(tags=["analytics"])
 
 
-@router.get("/analytics/metrics", include_in_schema=False)
-@router.get("/v1/analytics/metrics")
+@router.get("/analytics/metrics")
 async def get_metrics(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
