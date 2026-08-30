@@ -12,16 +12,8 @@ interface CrossoverGroupsState {
   error: Error | null
 }
 
-interface PendingCrossoverRequest {
-  threadIds: number[]
-  resolve: (groupsByThreadId: Record<number, DependencyGroupSummary[]>) => void
-  reject: (error: unknown) => void
-}
-
 const EMPTY_GROUPS: Record<number, DependencyGroupSummary[]> = {}
 const MAX_THREAD_IDS_PER_REQUEST = 200
-let pendingRequests: PendingCrossoverRequest[] = []
-let flushScheduled = false
 
 function chunkThreadIds(threadIds: number[]): number[][] {
   const chunks: number[][] = []
@@ -31,56 +23,31 @@ function chunkThreadIds(threadIds: number[]): number[][] {
   return chunks
 }
 
-async function flushPendingRequests() {
-  const requests = pendingRequests
-  pendingRequests = []
-  flushScheduled = false
-
-  const allThreadIds = [...new Set(requests.flatMap((request) => request.threadIds))]
-
-  try {
-    const responses = await Promise.all(
-      chunkThreadIds(allThreadIds).map((threadIdChunk) =>
-        dependencyGroupsApi.listForThreads(threadIdChunk),
-      ),
-    )
-    const mergedGroupsByThreadId = Object.assign({}, ...responses) as Record<number, DependencyGroupSummary[]>
-
-    requests.forEach(({ threadIds, resolve }) => {
-      const requestedGroups = Object.fromEntries(
-        threadIds.map((threadId) => [threadId, mergedGroupsByThreadId[threadId] ?? []]),
-      )
-      resolve(requestedGroups)
-    })
-  } catch (error) {
-    requests.forEach(({ reject }) => reject(error))
+async function fetchCrossoverGroups(threadIds: number[]): Promise<Record<number, DependencyGroupSummary[]>> {
+  const chunks = chunkThreadIds(threadIds)
+  const responses = await Promise.all(
+    chunks.map((threadIdChunk) => dependencyGroupsApi.listForThreads(threadIdChunk)),
+  )
+  const merged = Object.assign({}, ...responses) as Record<number, DependencyGroupSummary[]>
+  // Ensure all requested thread IDs have an entry (empty array if not in response)
+  const result: Record<number, DependencyGroupSummary[]> = {}
+  for (const threadId of threadIds) {
+    result[threadId] = merged[threadId] ?? []
   }
-}
-
-function requestCrossoverGroups(threadIds: number[]): Promise<Record<number, DependencyGroupSummary[]>> {
-  return new Promise((resolve, reject) => {
-    pendingRequests.push({ threadIds, resolve, reject })
-    if (!flushScheduled) {
-      flushScheduled = true
-      queueMicrotask(() => {
-        void flushPendingRequests()
-      })
-    }
-  })
+  return result
 }
 
 export function useCrossoverGroups(threadIds: number[]): CrossoverGroupsState {
-  const requestKey = useMemo(
-    () => [...new Set(threadIds)].sort((a, b) => a - b).join(','),
+  const requestedThreadIds = useMemo(
+    () => [...new Set(threadIds)].sort((a, b) => a - b),
     [threadIds],
   )
-  const requestedThreadIds = requestKey ? requestKey.split(',').map((threadId) => Number(threadId)) : []
 
   const { data, isPending, error } = useQuery({
     queryKey: requestedThreadIds.length > 0 ? queryKeys.crossover.groups(requestedThreadIds) : [],
     queryFn: async () => {
       try {
-        return await requestCrossoverGroups(requestedThreadIds)
+        return await fetchCrossoverGroups(requestedThreadIds)
       } catch (err) {
         throw err instanceof Error ? err : new Error('Failed to load crossovers')
       }
