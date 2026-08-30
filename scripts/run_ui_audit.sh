@@ -7,6 +7,8 @@ AUDIT_API_PORT="${AUDIT_API_PORT:-8002}"
 AUDIT_PROJECT_NAME="${AUDIT_PROJECT_NAME:-comic-pile-ui-audit-$$}"
 AUDIT_BASE_URL="http://127.0.0.1:${AUDIT_API_PORT}"
 AUDIT_READY_TIMEOUT_SECONDS="${AUDIT_READY_TIMEOUT_SECONDS:-120}"
+AUDIT_EVIDENCE_DIR="$ROOT_DIR/frontend/test-results/ui-audit"
+AUDIT_RUNNER_LOG="$AUDIT_EVIDENCE_DIR/runner.log"
 
 export E2E_API_PORT="$AUDIT_API_PORT"
 # The browser needs only the API on the host. Publishing just the container
@@ -21,8 +23,8 @@ compose() {
 cleanup() {
   local exit_code=$?
   trap - EXIT INT TERM
-  echo "Stopping UI audit test stack ($AUDIT_PROJECT_NAME)..."
-  compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+  echo "Stopping UI audit test stack ($AUDIT_PROJECT_NAME)..." | tee -a "$AUDIT_RUNNER_LOG"
+  compose down --volumes --remove-orphans >>"$AUDIT_RUNNER_LOG" 2>&1 || true
   exit "$exit_code"
 }
 trap cleanup EXIT INT TERM
@@ -41,6 +43,9 @@ command -v curl >/dev/null 2>&1 || {
 }
 
 cd "$ROOT_DIR"
+mkdir -p "$AUDIT_EVIDENCE_DIR"
+: > "$AUDIT_RUNNER_LOG"
+exec > >(tee -a "$AUDIT_RUNNER_LOG") 2>&1
 
 echo "Starting isolated UI audit backend at $AUDIT_BASE_URL..."
 compose up -d --build
@@ -49,14 +54,17 @@ echo "Waiting for UI audit backend readiness..."
 deadline=$((SECONDS + AUDIT_READY_TIMEOUT_SECONDS))
 until curl --fail --silent --show-error "$AUDIT_BASE_URL/health" >/dev/null 2>&1; do
   if (( SECONDS >= deadline )); then
-    echo "UI audit backend did not become ready within ${AUDIT_READY_TIMEOUT_SECONDS}s." >&2
-    compose ps >&2 || true
-    compose logs api-test >&2 || true
+    echo "UI audit backend did not become ready within ${AUDIT_READY_TIMEOUT_SECONDS}s."
+    echo "Compose status:"
+    compose ps || true
+    echo "API logs:"
+    compose logs api-test || true
     exit 1
   fi
   sleep 2
 done
 
+echo "UI audit backend is ready."
 echo "Building frontend..."
 pnpm --filter frontend run build
 
