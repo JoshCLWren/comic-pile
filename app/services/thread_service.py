@@ -194,7 +194,7 @@ def to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
 
 
 async def list_stale_thread_responses(
-    db: AsyncSession, user_id: int, days: int
+    db: AsyncSession, user_id: int, days: int, snoozed_ids: list[int] | None = None
 ) -> list[ThreadResponse]:
     """Build responses for threads not read in the given number of days.
 
@@ -202,12 +202,16 @@ async def list_stale_thread_responses(
         db: Database session.
         user_id: Owner of the threads.
         days: Number of days to consider threads stale.
+        snoozed_ids: Thread IDs currently snoozed in the session; these are
+            excluded from the stale result.
 
     Returns:
         Responses for stale threads ordered by oldest activity first.
     """
     cutoff_date = datetime.now(UTC) - timedelta(days=days)
-    threads = await thread_repository.fetch_stale_threads(db, user_id, cutoff_date)
+    threads = await thread_repository.fetch_stale_threads(
+        db, user_id, cutoff_date, snoozed_ids=snoozed_ids
+    )
     return await threads_to_responses(threads, db)
 
 

@@ -96,7 +96,10 @@ async def max_queue_position(db: AsyncSession, user_id: int) -> int:
 
 
 async def fetch_stale_threads(
-    db: AsyncSession, user_id: int, cutoff_date: datetime
+    db: AsyncSession,
+    user_id: int,
+    cutoff_date: datetime,
+    snoozed_ids: list[int] | None = None,
 ) -> list[Thread]:
     """Fetch active, unblocked threads whose last activity predates a cutoff.
 
@@ -104,11 +107,13 @@ async def fetch_stale_threads(
         db: Database session.
         user_id: Owner of the threads.
         cutoff_date: Threads last read before this instant are stale.
+        snoozed_ids: Thread IDs currently snoozed in the session; these are
+            excluded from the stale result.
 
     Returns:
         Stale threads ordered oldest activity first (nulls first).
     """
-    result = await db.execute(
+    query = (
         select(Thread)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
@@ -116,6 +121,9 @@ async def fetch_stale_threads(
         .where((Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None)))
         .order_by(Thread.last_activity_at.asc().nullsfirst())
     )
+    if snoozed_ids:
+        query = query.where(Thread.id.not_in(snoozed_ids))
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 
