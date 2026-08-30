@@ -289,11 +289,10 @@ interface RatingGeometry {
   comic: Box
   readingContext: Box
   yourContext: Box
+  yourContextPanel: Box
   actions: Box
   cover: Box
   stretch: {
-    yourContextOuter: number
-    yourContextInner: number
     readingContextOuter: number
     readingContextInner: number
   }
@@ -308,6 +307,7 @@ async function readRatingGeometry(page: Page): Promise<RatingGeometry> {
     }
     const grid = document.querySelector('[data-testid="rating-pillars-grid"]')
     const readingContext = document.querySelector('[data-testid="rating-region-reading-context"]')
+    const yourContext = document.querySelector('[data-testid="rating-region-your-context"]')
     return {
       viewport: { width: window.innerWidth, height: window.innerHeight },
       scrollWidth: document.documentElement.scrollWidth,
@@ -316,12 +316,11 @@ async function readRatingGeometry(page: Page): Promise<RatingGeometry> {
       grid: box(grid),
       comic: box(document.querySelector('[data-testid="rating-region-comic"]')),
       readingContext: box(readingContext),
-      yourContext: box(document.querySelector('[data-testid="rating-region-your-context"]')),
+      yourContext: box(yourContext),
+      yourContextPanel: box(yourContext?.firstElementChild ?? null),
       actions: box(document.querySelector('[data-testid="rating-actions-grid-cell"]')),
       cover: box(document.querySelector('[data-testid="comic-cover"]')),
       stretch: {
-        yourContextOuter: document.querySelector('[data-testid="rating-region-your-context"]')?.getBoundingClientRect().height ?? 0,
-        yourContextInner: document.querySelector('[data-testid="rating-region-your-context"]')?.firstElementChild?.getBoundingClientRect().height ?? 0,
         readingContextOuter: readingContext?.getBoundingClientRect().height ?? 0,
         readingContextInner: readingContext?.firstElementChild?.getBoundingClientRect().height ?? 0,
       },
@@ -335,7 +334,6 @@ function assertNoHorizontalOverflow(g: RatingGeometry): void {
 }
 
 function assertContentSized(g: RatingGeometry): void {
-  expect(Math.abs(g.stretch.yourContextOuter - g.stretch.yourContextInner)).toBeLessThan(2)
   if (g.readingContext) {
     expect(Math.abs(g.stretch.readingContextOuter - g.stretch.readingContextInner)).toBeLessThan(2)
   }
@@ -347,14 +345,15 @@ function assertActionsFitViewport(g: RatingGeometry): void {
   expect(g.actions!.bottom).toBeLessThanOrEqual(g.viewport.height)
 }
 
-function assertNoDeadAcreageAboveActions(g: RatingGeometry): void {
-  const bottoms = [g.comic, g.readingContext, g.yourContext]
-    .filter((box): box is NonNullable<Box> => box !== null)
-    .map((box) => box.bottom)
-  const maxBottom = Math.max(...bottoms)
-  const gap = g.actions!.top - maxBottom
-  expect(gap).toBeGreaterThanOrEqual(0)
-  expect(gap).toBeLessThanOrEqual(60)
+function assertActionsPackWithYourContext(g: RatingGeometry): void {
+  expect(g.yourContext).not.toBeNull()
+  expect(g.yourContextPanel).not.toBeNull()
+  expect(g.actions).not.toBeNull()
+  expect(g.actions!.top).toBeGreaterThanOrEqual(g.yourContextPanel!.bottom)
+  expect(g.actions!.top - g.yourContextPanel!.bottom).toBeLessThanOrEqual(32)
+  expect(Math.abs(g.actions!.left - g.yourContext!.left)).toBeLessThanOrEqual(2)
+  expect(Math.abs(g.actions!.right - g.yourContext!.right)).toBeLessThanOrEqual(2)
+  expect(g.actions!.bottom).toBeLessThanOrEqual(g.yourContext!.bottom + 2)
 }
 
 test.describe('Roll desktop layout packs regions into the viewport (issue #1943)', () => {
@@ -385,14 +384,14 @@ test.describe('Roll desktop layout packs regions into the viewport (issue #1943)
     // Cards are content-sized, not stretched to a shared equal-height row.
     assertContentSized(g)
 
-    // Primary roll info + actions fit a 1920x1080 viewport with no giant
-    // reserved hole between the regions and the action strip.
-    assertNoDeadAcreageAboveActions(g)
+    // Primary actions stay with Your Context instead of waiting for the
+    // tallest Comic/Reading Context column to finish.
+    assertActionsPackWithYourContext(g)
     assertActionsFitViewport(g)
     assertNoHorizontalOverflow(g)
   })
 
-  test('sparse continuity keeps actions right below compact content with no reserved blanks', async ({
+  test('sparse continuity keeps actions with compact user context and no reserved blanks', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
@@ -412,10 +411,10 @@ test.describe('Roll desktop layout packs regions into the viewport (issue #1943)
     expect(g.stretch.readingContextOuter).toBeLessThanOrEqual(600)
     assertContentSized(g)
 
-    // The entire dashboard (including actions) fits the viewport and the
-    // regions pack tightly against the actions row.
+    // The dashboard actions pack with user context instead of being delayed by
+    // another column's height.
+    assertActionsPackWithYourContext(g)
     assertActionsFitViewport(g)
-    assertNoDeadAcreageAboveActions(g)
     assertNoHorizontalOverflow(g)
 
     // Narrow desktop/tablet reflows without horizontal overflow.
@@ -445,14 +444,14 @@ test.describe('Roll desktop layout packs regions into the viewport (issue #1943)
     expect(g.comic).not.toBeNull()
     expect(g.yourContext).not.toBeNull()
 
-    // Without Reading Context the dashboard is a compact two-column layout
-    // that packs straight into the actions row.
+    // Without Reading Context the dashboard stays compact and primary actions
+    // remain attached to the user workflow rather than the comic column height.
+    assertActionsPackWithYourContext(g)
     assertActionsFitViewport(g)
-    assertNoDeadAcreageAboveActions(g)
     assertNoHorizontalOverflow(g)
   })
 
-  test('a cover-heavy column caps the cover so the actions strip stays above the fold', async ({
+  test('a cover-heavy column cannot push the action controls below the fold', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
@@ -469,7 +468,10 @@ test.describe('Roll desktop layout packs regions into the viewport (issue #1943)
     expect(g.cover).not.toBeNull()
     expect(g.cover!.height).toBeLessThanOrEqual(g.viewport.height * 0.5)
 
-    // The actions strip is reachable without scrolling even with a tall cover.
+    // Regression guard for the production failure: a tall cover may make the
+    // Comic column long, but it must not make the independent action controls
+    // wait below that column before they become reachable.
+    assertActionsPackWithYourContext(g)
     assertActionsFitViewport(g)
     assertNoHorizontalOverflow(g)
   })
