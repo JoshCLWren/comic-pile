@@ -174,7 +174,7 @@ def _overall_status(
     return "healthy"
 
 
-@router.get("/v1/health/live", include_in_schema=False)
+@router.get("/health/live", include_in_schema=False)
 async def liveness() -> dict[str, str]:
     """Confirm that the FastAPI process can serve requests without dependencies.
 
@@ -185,7 +185,7 @@ async def liveness() -> dict[str, str]:
 
 
 @router.get(
-    "/v1/health/dependencies",
+    "/health/dependencies",
     response_model=DependencyHealthResponse,
     include_in_schema=False,
 )
@@ -238,7 +238,7 @@ async def dependency_health(
 
 
 @router.get(
-    "/v1/health/warmup",
+    "/health/warmup",
     response_model=DependencyHealthResponse,
     include_in_schema=False,
 )
@@ -382,7 +382,7 @@ async def warm_endpoint(
 
 if _is_warm_endpoint_enabled():
     router.add_api_route(
-        "/v1/instance/warm",
+        "/instance/warm",
         warm_endpoint,
         response_model=WarmResponse,
         include_in_schema=False,
