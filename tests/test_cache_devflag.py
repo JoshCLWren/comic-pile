@@ -111,8 +111,8 @@ def test_create_local_redis_client_imports_redis_lazily(monkeypatch) -> None:
     fake_redis = types.ModuleType("redis")
     fake_asyncio = types.ModuleType("redis.asyncio")
     fake_client = type("Redis", (), {"from_url": staticmethod(from_url)})
-    fake_asyncio.Redis = fake_client
-    fake_redis.asyncio = fake_asyncio
+    fake_asyncio.__dict__["Redis"] = fake_client
+    fake_redis.__dict__["asyncio"] = fake_asyncio
     monkeypatch.setitem(sys.modules, "redis", fake_redis)
     monkeypatch.setitem(sys.modules, "redis.asyncio", fake_asyncio)
 
