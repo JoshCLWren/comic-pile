@@ -156,10 +156,20 @@ async def test_local_redis_initialization_does_not_ping_service(monkeypatch) -> 
 
     local_client = AsyncMock()
     from_url = Mock(return_value=local_client)
+
+    def _fake_factory(local_url: str) -> AsyncMock:
+        from_url(
+            local_url,
+            decode_responses=True,
+            socket_connect_timeout=5.0,
+            socket_timeout=5.0,
+        )
+        return local_client
+
     monkeypatch.setattr(cache_module.cache, "_initialized", False)
     monkeypatch.setattr(cache_module.cache, "_client", None)
     monkeypatch.setattr(cache_module.cache, "_backend", None)
-    monkeypatch.setattr(cache_module.aioredis.Redis, "from_url", from_url)
+    monkeypatch.setattr(cache_module, "_create_local_redis_client", _fake_factory)
 
     await cache_module.cache.initialize(local_url="redis://localhost:6379/0", allow_local=True)
 
