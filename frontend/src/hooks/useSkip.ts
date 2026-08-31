@@ -145,7 +145,7 @@ export function useSkip() {
 export function useUnskip() {
   const queryClient = useQueryClient()
   const mutation = useMutation({
-    mutationFn: (threadId: number) => skipApi.unsskip(threadId),
+    mutationFn: (threadId: number) => skipApi.unskip(threadId),
     onSuccess: async () => {
       await invalidateCurrentSessionAfterSnooze(queryClient)
     },
