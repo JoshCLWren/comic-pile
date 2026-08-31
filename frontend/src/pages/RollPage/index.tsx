@@ -188,7 +188,7 @@ export default function RollPage() {
   }
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
-  const skippedThreads = bootstrap?.skipped_thread_ids ?? []
+  const skippedThreads = bootstrap?.skipped_threads ?? []
   const blockedThreads = bootstrap?.blocked_threads ?? []
   const dieSize = state.currentDie || 6
   const filteredThreads = rollPool.filter(

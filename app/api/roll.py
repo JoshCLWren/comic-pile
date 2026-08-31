@@ -15,6 +15,7 @@ from typing import Annotated, Any
 
 from app.api.session import (
     _invalidate_session_caches,
+    build_ladder_path,
     get_session_with_thread_safe,
 )
 from app.api.snooze import build_session_response
@@ -538,10 +539,10 @@ async def skip_thread(
         HTTPException: If no active session exists or no pending thread to skip.
     """
     result = await db.execute(
-        select(SessionModel)
-        .where(SessionModel.user_id == current_user.id)
-        .where(SessionModel.ended_at.is_(None))
-        .order_by(SessionModel.started_at.desc())
+        select(Session)
+        .where(Session.user_id == current_user.id)
+        .where(Session.ended_at.is_(None))
+        .order_by(Session.started_at.desc())
     )
     current_session = result.scalars().first()
 
@@ -591,10 +592,6 @@ async def skip_thread(
     )
     pre_snapshot_count = pre_snapshot_count_result.scalar() or 0
 
-    # Pre-fetch snoozed thread info before commit
-    pre_snoozed_ids = list(skipped_ids)  # Use skipped_ids for pre-fetch
-    pre_snoozed_threads: list[SnoozedThreadInfo] = []
-
     # Pre-fetch session attributes before commit
     session_id = current_session.id
     session_started_at = current_session.started_at
@@ -620,6 +617,7 @@ async def skip_thread(
     session_snoozed_thread_ids = list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
 
     # Pre-fetch snoozed thread info
+    pre_snoozed_threads: list[SnoozedThreadInfo] = []
     if session_snoozed_thread_ids:
         snooze_result = await db.execute(select(Thread).where(Thread.id.in_(session_snoozed_thread_ids)))
         threads_by_id = {t.id: t for t in snooze_result.scalars().all()}
@@ -723,10 +721,10 @@ async def unskip_thread(
     """
     _ = request
     result = await db.execute(
-        select(SessionModel)
-        .where(SessionModel.user_id == current_user.id)
-        .where(SessionModel.ended_at.is_(None))
-        .order_by(SessionModel.started_at.desc())
+        select(Session)
+        .where(Session.user_id == current_user.id)
+        .where(Session.ended_at.is_(None))
+        .order_by(Session.started_at.desc())
     )
     current_session = result.scalars().first()
 
@@ -1262,8 +1260,11 @@ async def roll_bootstrap(
     )
 
     snoozed_ids = list(current_session.snoozed_thread_ids or [])
+    skipped_ids = list(current_session.skipped_thread_ids or [])
     if snoozed_ids:
         pool_query = pool_query.where(Thread.id.not_in(snoozed_ids))
+    if skipped_ids:
+        pool_query = pool_query.where(Thread.id.not_in(skipped_ids))
 
     pool_result = await db.execute(pool_query)
     pool_rows = pool_result.all()
@@ -1294,6 +1295,20 @@ async def roll_bootstrap(
             for row in snoozed_result.all()
         ]
 
+    skipped_threads: list[RollBootstrapThread] = []
+    if skipped_ids:
+        skipped_result = await db.execute(
+            select(Thread.id, Thread.title, Thread.format)
+            .where(Thread.user_id == user_id)
+            .where(Thread.id.in_(skipped_ids))
+        )
+        skipped_threads = [
+            RollBootstrapThread(
+                id=row.id, title=row.title, format=normalize_format_value(row.format)
+            )
+            for row in skipped_result.all()
+        ]
+
     blocked_count_result = await db.execute(
         select(func.count())
         .select_from(Thread)
@@ -1320,6 +1335,7 @@ async def roll_bootstrap(
     snoozed_count = len(snoozed_threads)
     snoozed_threads = snoozed_threads[:RollBootstrapResponse.summary_limit]
     blocked_threads = blocked_threads[:RollBootstrapResponse.summary_limit]
+    skipped_threads = skipped_threads[:RollBootstrapResponse.summary_limit]
 
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
     effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
@@ -1381,6 +1397,8 @@ async def roll_bootstrap(
         roll_pool=roll_pool,
         snoozed_threads=snoozed_threads,
         snoozed_count=snoozed_count,
+        skipped_thread_ids=skipped_ids,
+        skipped_threads=skipped_threads,
         blocked_count=blocked_count,
         blocked_threads=blocked_threads,
         stale_thread_count=stale_thread_count,

@@ -47,6 +47,7 @@ export interface RollPageStateSetters {
   setOverrideThreadId: (value: string) => void
   setOverrideErrorMessage: (value: string) => void
   setSnoozedExpanded: (value: boolean) => void
+  setSkippedExpanded: (value: boolean) => void
   setBlockedExpanded: (value: boolean) => void
   setIsDieModalOpen: (value: boolean) => void
   setIsSetCurrentIssueOpen: (value: boolean) => void
