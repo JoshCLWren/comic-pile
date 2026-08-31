@@ -196,7 +196,7 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/roll/clear-manual-die",
             "/api/roll/dismiss-pending",
             "/api/roll/override",
-            "/api/roll/skip/",
+            "/api/roll/skip",
             "/api/roll/skip/{thread_id}/unskip",
             "/api/roll/session-mode",
             "/api/roll/set-die",
