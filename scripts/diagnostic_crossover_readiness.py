@@ -15,18 +15,16 @@ import argparse
 import asyncio
 import json
 import logging
-import os
 import sys
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import get_database_settings
 from app.services.continuity_graph import (
-    GROUP_ISSUE_IDS_SUMMARY,
     GraphSnapshot,
     crossover_readiness,
     group_issue_ids,
+    is_read,
     load_snapshot,
 )
 from app.safe_logging import safe_exception_metadata
@@ -113,22 +111,25 @@ async def _run_diagnostic(mode: str, group_id: int, user_id: int) -> dict:
     # Add summary of unread issues
     unread_issues: list[dict] = []
     for issue_id in issue_ids:
-        if not is_read(issue_id, snapshot):
-            thread = snapshot.threads.get(snapshot.issues[issue_id].thread_id) if issue_id in [
-                issue.id for issue in snapshot.issues.values()
-            ] else None
-            thread_title = thread.title if thread else "unknown"
-            issue_num = snapshot.issues[issue_id].issue_number if issue_id in {
-                issue.id for issue in snapshot.issues.values()
-            } else None
-            unread_issues.append(
-                {
-                    "issue_id": issue_id,
-                    "issue_number": issue_num,
-                    "thread_title": thread_title,
-                    "label": f"{thread_title} #{issue_num}" if thread_title != "unknown" else f"Issue {issue_id}",
-                }
-            )
+        if is_read(issue_id, snapshot):
+            continue
+        issue = snapshot.issues.get(issue_id)
+        thread = snapshot.threads.get(issue.thread_id) if issue is not None else None
+        issue_num = issue.issue_number if issue is not None else None
+        thread_title = thread.title if thread is not None else "unknown"
+        label = (
+            f"{thread_title} #{issue_num}"
+            if thread is not None and issue_num is not None
+            else f"Issue {issue_id}"
+        )
+        unread_issues.append(
+            {
+                "issue_id": issue_id,
+                "issue_number": issue_num,
+                "thread_title": thread_title,
+                "label": label,
+            }
+        )
 
     result["unread_issues"] = unread_issues
 
@@ -178,7 +179,7 @@ def _main(argv: list[str] | None = None) -> int:
             total_issues = result["total_issues_in_group"]
             blocker_count = result["blocker_count"]
 
-            print(f"=== Crossover Readiness Diagnostic ===")
+            print("=== Crossover Readiness Diagnostic ===")
             print(f"Group: {group_name} (ID: {group_id})")
             print(f"User ID: {user_id}")
             print(f"Total issues in group: {total_issues}")
@@ -188,7 +189,7 @@ def _main(argv: list[str] | None = None) -> int:
             if blocker_count > 0:
                 print("Blockers:")
                 for blocker in result["blockers"]:
-                    note = blocker.get("note", "No note available")
+                    note = blocker.get("note")
                     causing = blocker.get("causing_issue_ids", [])
                     causing_members = blocker.get("causing_member_issue_ids", [])
                     source_label = blocker.get("source_label", "unknown source")
@@ -199,6 +200,8 @@ def _main(argv: list[str] | None = None) -> int:
                     print(f"    Satisfaction type: {sat_type}")
                     print(f"    Blocker type: {btype}")
                     print(f"    Source: {source_label}")
+                    if note:
+                        print(f"    Note: {note}")
                     if causing:
                         print(f"    Causing unread issues: {causing}")
                     if causing_members:
@@ -225,16 +228,3 @@ def _main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(_main())
-
-
-def _make_parser_help() -> str:
-    """Return the parser help text (for documentation generation)."""
-    parser = argparse.ArgumentParser(
-        description="Crossover readiness diagnostic (read-only).",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("--mode", required=True, choices=["crossover-readiness"], help="Diagnostic mode")
-    parser.add_argument("--group_id", required=True, type=int, help="Crossover group ID")
-    parser.add_argument("--user_id", type=int, default=1, help="Owning user ID")
-    parser.add_argument("--json", action="store_true", help="Output JSON")
-    return parser.format_help()
