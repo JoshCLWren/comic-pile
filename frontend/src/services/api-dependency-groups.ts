@@ -1,5 +1,6 @@
 import api from './api'
 import type { Thread, Issue } from '../types'
+import type { ContinuityReadinessResponse } from './api-continuity-readiness'
 
 export interface DependencyGroupMember {
   id: number
@@ -35,29 +36,7 @@ export interface DependencyGroupDetail {
   name: string
   created_at: string
   memberships: DependencyGroupDetailMember[]
-  readiness?: {
-    node_type: string
-    node_id: number
-    is_readable: boolean
-    evaluated_issue_id: number | null
-    blockers: Array<{
-      rule_id: number | null
-      source_type: string
-      source_id: number
-      source_label: string
-      satisfaction_type: string
-      satisfied: boolean
-      causing_issue_ids: number[]
-      causing_member_issue_ids: number[]
-      unread_issue_details: Array<{
-        issue_id: number
-        label: string
-      }>
-      note: string | null
-      crossover_id?: number | null
-      sequence_position?: number | null
-    }>
-  } | null
+  readiness: ContinuityReadinessResponse | null
   linked_plans: DependencyGroupSummary[]
 }
 

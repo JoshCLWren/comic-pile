@@ -29,6 +29,8 @@ from app.schemas.dependency_group import (
     DependencyGroupSummary,
     DependencyGroupUpdate,
 )
+from app.schemas.issue import IssueResponse
+from app.schemas.thread import ThreadResponse
 from comic_pile.dependencies import refresh_user_blocked_status
 
 from app.continuity_readiness import evaluate_continuity_readiness
@@ -215,7 +217,10 @@ async def _group_detail_response(
         # Fetch group names
         group_result = await db.execute(
             select(DependencyGroup.id, DependencyGroup.name)
-            .where(DependencyGroup.id.in_(select(combined.c.group_id)))
+            .where(
+                DependencyGroup.user_id == user_id,
+                DependencyGroup.id.in_(select(combined.c.group_id)),
+            )
             .order_by(DependencyGroup.name)
         )
         # Build mapping from group id to name
