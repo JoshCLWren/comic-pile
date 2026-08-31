@@ -222,6 +222,7 @@ async def test_reconcile_surfaces_unresolved_and_extra_members(
     assert report.entries[0]["resolution_status"] in (
         "comicvine_identity_not_known",
         "ambiguous_no_comicvine_id",
+        "no_owned_issue_for_comicvine_id",
         "unresolved",
     )
     assert report.unresolved_count == 1
