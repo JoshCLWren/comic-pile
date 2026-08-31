@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -232,7 +233,7 @@ async def reconcile_cbl_source_list(
             entry.get("read_status") == "unread"
             and entry.get("resolved_issue_id") is not None
         ):
-            first_unread_position = int(entry["cbl_position"])  # type: ignore[arg-type]
+            first_unread_position = cast(int, entry["cbl_position"])
             first_unread_entry = entry
             break
         if entry.get("resolved_issue_id") is None:
@@ -244,7 +245,7 @@ async def reconcile_cbl_source_list(
     duplicate_identity_issues: set[int] = set()
     for entry in report_entries:
         status = entry.get("resolution_status")
-        pos = int(entry["cbl_position"])  # type: ignore[arg-type]
+        pos = cast(int, entry["cbl_position"])
         if status in (
             "ambiguous_no_comicvine_id",
             "comicvine_identity_not_known",
@@ -270,14 +271,14 @@ async def reconcile_cbl_source_list(
             and entry.get("canonical_issue_id") is not None
         ):
             resolved_ids.add(
-                int(entry["canonical_issue_id"])  # type: ignore[arg-type]
+                cast(int, entry["canonical_issue_id"])
             )
     extra = tuple(
         sorted(issue_id for issue_id in baseline_member_issue_ids if issue_id not in resolved_ids)
     )
 
     first_unread_issue_id = (
-        int(first_unread_entry["resolved_issue_id"])  # type: ignore[arg-type]
+        cast(int, first_unread_entry["resolved_issue_id"])
         if first_unread_entry
         and first_unread_entry.get("resolved_issue_id") is not None
         else None
