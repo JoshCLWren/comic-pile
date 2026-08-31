@@ -33,7 +33,7 @@ def migration_pr(
     created_at: str,
     owner: str = "factory:unowned",
     waiting: bool = False,
-) -> Any:
+) -> object:
     labels = {"factory", owner, stage}
     if waiting:
         labels.add(module.WAIT_LABEL)
@@ -147,7 +147,7 @@ def test_multiple_active_leases_fail_closed() -> None:
         owner="factory:58",
     )
 
-    with pytest.raises(module.LaneConflict, match="multiple migration finalizers"):
+    with pytest.raises(module.LaneConflictError, match="multiple migration finalizers"):
         module.plan_lane([first, second])
 
 
