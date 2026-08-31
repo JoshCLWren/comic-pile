@@ -29,6 +29,7 @@ _BARE_API_EXCEPTIONS = frozenset(
         "/api/metrics",
         "/api/test/sessions/expire",
         "/api/test/reading-orders",
+        "/api/test/issue-identity",
     }
 )
 
@@ -49,7 +50,6 @@ async def test_api_v1_alias_session_endpoint_matches_legacy(auth_client: AsyncCl
         assert resp_v1.json() == resp_legacy.json()
     else:
         assert resp_v1.text == resp_legacy.text
-
 
 
 def _collect_routes(app) -> dict[str, frozenset[str]]:
@@ -152,6 +152,7 @@ def test_v1_debug_alias_matches_legacy_route_methods_outside_production() -> Non
 
     assert "/api/v1/debug/log" in methods_by_path
     assert methods_by_path["/api/v1/debug/log"] == methods_by_path["/api/debug/log"]
+
 
 def test_no_new_bare_api_client_routes() -> None:
     """Regression guard: no client-facing routes under bare /api/* (non-v1)."""
