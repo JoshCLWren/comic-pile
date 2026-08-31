@@ -15,8 +15,9 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = 120
@@ -43,7 +44,7 @@ RALPH_STATUS_RE = re.compile(r"^ralph-status:")
 BRANCH_ISSUE_RE = re.compile(r"^factory/\d+-(\d+)-")
 
 
-class LaneConflict(RuntimeError):
+class LaneConflictError(RuntimeError):
     """Raised when more than one migration finalizer still has an active lease."""
 
 
@@ -109,7 +110,7 @@ def plan_lane(prs: Iterable[MigrationPr]) -> tuple[int | None, tuple[int, ...], 
 
     if len(leased) > 1:
         numbers = ", ".join(f"#{pr.number}" for pr in sorted(leased, key=lambda row: row.number))
-        raise LaneConflict(f"multiple migration finalizers still have active leases: {numbers}")
+        raise LaneConflictError(f"multiple migration finalizers still have active leases: {numbers}")
 
     if leased:
         holder = leased[0]
@@ -355,7 +356,7 @@ def reconcile() -> dict[str, Any]:
     for number in park:
         pr = by_number[number]
         if pr.active_owner is not None:
-            raise LaneConflict(f"refusing to park actively leased migration PR #{number}")
+            raise LaneConflictError(f"refusing to park actively leased migration PR #{number}")
         park_pr(pr)
 
     if release is not None:
@@ -390,6 +391,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except LaneConflict as exc:
+    except LaneConflictError as exc:
         print(f"migration finalization lane conflict: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
