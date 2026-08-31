@@ -171,8 +171,9 @@ export default function RollPage() {
     }
   }
 
-  const snoozedThreads = bootstrap?.snoozed_threads ?? []
-  const blockedThreads = bootstrap?.blocked_threads ?? []
+const snoozedThreads = bootstrap?.snoozed_threads ?? []
+    const skippedThreads = bootstrap?.skipped_thread_ids ?? []
+    const blockedThreads = bootstrap?.blocked_threads ?? []
   const dieSize = state.currentDie || 6
   const filteredThreads = rollPool.filter(
     (thread) =>
@@ -305,29 +306,34 @@ export default function RollPage() {
               />
             )}
 
-            <ThreadPool
-              pool={pool}
-              blockedThreads={blockedThreads}
-              blockingDependencyMap={state.blockingDependencyMap}
-              dieSize={dieSize}
-              isRatingView={state.isRatingView}
-              isRolling={state.isRolling}
-              rolledResult={state.rolledResult}
-              selectedThreadId={state.selectedThreadId}
-              staleThread={state.staleThread}
-              staleThreadCount={state.staleThreadCount}
-              snoozedThreads={snoozedThreads}
-              snoozedExpanded={state.snoozedExpanded}
-              blockedExpanded={state.blockedExpanded}
-              onThreadClick={actions.handleThreadClick}
-              onUnsnooze={snooze.handleUnsnooze}
-              onReadStale={actions.handleReadStale}
-              onToggleSnoozed={() => state.setSnoozedExpanded(!state.snoozedExpanded)}
-              onToggleBlocked={dependencies.handleToggleBlocked}
-              onShuffle={actions.handleShufflePool}
-              unsnoozeIsPending={unsnoozeMutation.isPending}
-              shuffleIsPending={shuffleQueueMutation.isPending}
-            />
+<ThreadPool
+               pool={pool}
+               blockedThreads={blockedThreads}
+               blockingDependencyMap={state.blockingDependencyMap}
+               dieSize={dieSize}
+               isRatingView={state.isRatingView}
+               isRolling={state.isRolling}
+               rolledResult={state.rolledResult}
+               selectedThreadId={state.selectedThreadId}
+               staleThread={state.staleThread}
+               staleThreadCount={state.staleThreadCount}
+               snoozedThreads={snoozedThreads}
+               snoozedExpanded={state.snoozedExpanded}
+               blockedExpanded={state.blockedExpanded}
+               skippedThreads={skippedThreads}
+               skippedExpanded={state.skippedExpanded}
+               onThreadClick={actions.handleThreadClick}
+               onUnsnooze={snooze.handleUnsnooze}
+               onUnskip={skip.handleUnskip}
+               onReadStale={actions.handleReadStale}
+               onToggleSnoozed={() => state.setSnoozedExpanded(!state.snoozedExpanded)}
+               onToggleSkipped={() => state.setSkippedExpanded(!state.skippedExpanded)}
+               onToggleBlocked={dependencies.handleToggleBlocked}
+               onShuffle={actions.handleShufflePool}
+               unsnoozeIsPending={unsnoozeMutation.isPending}
+               unskipIsPending={skipMutation.isPending}
+               shuffleIsPending={shuffleQueueMutation.isPending}
+             />
           </div>
         </div>
 

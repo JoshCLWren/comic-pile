@@ -15,6 +15,7 @@ export interface RollPageState {
   overrideThreadId: string
   overrideErrorMessage: string
   snoozedExpanded: boolean
+  skippedExpanded: boolean
   blockedExpanded: boolean
   isDieModalOpen: boolean
   isSetCurrentIssueOpen: boolean
@@ -74,6 +75,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [overrideThreadId, setOverrideThreadId] = useState('')
   const [overrideErrorMessage, setOverrideErrorMessage] = useState('')
   const [snoozedExpanded, setSnoozedExpanded] = useState(false)
+  const [skippedExpanded, setSkippedExpanded] = useState(false)
   const [blockedExpanded, setBlockedExpanded] = useState(false)
   const [isDieModalOpen, setIsDieModalOpen] = useState(false)
   const [isSetCurrentIssueOpen, setIsSetCurrentIssueOpen] = useState(false)
@@ -116,6 +118,8 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setOverrideErrorMessage,
     snoozedExpanded,
     setSnoozedExpanded,
+    skippedExpanded,
+    setSkippedExpanded,
     blockedExpanded,
     setBlockedExpanded,
     isDieModalOpen,

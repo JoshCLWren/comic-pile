@@ -14,6 +14,8 @@ interface RollMutations {
   rollMutation: { mutate: () => Promise<RollResponse>; isPending: boolean }
   snoozeMutation: { mutate: (expectedPendingThreadId?: number) => Promise<unknown>; isPending: boolean }
   unsnoozeMutation: { mutate: (threadId: number) => Promise<unknown>; isPending: boolean }
+  skipMutation: { mutate: (expectedPendingThreadId?: number) => Promise<unknown>; isPending: boolean }
+  unskipMutation: { mutate: (threadId: number) => Promise<unknown>; isPending: boolean }
   moveToFrontMutation: { mutate: (id: number) => Promise<unknown>; isPending: boolean }
   moveToBackMutation: { mutate: (id: number) => Promise<unknown>; isPending: boolean }
   shuffleQueueMutation: { mutate: () => Promise<unknown>; isPending: boolean }
@@ -66,16 +68,18 @@ export function useRollActions({
     setIsRolling,
     setDiceState,
   } = state
-  const {
-    setDieMutation,
-    clearManualDieMutation,
-    rollMutation,
-    snoozeMutation,
-    unsnoozeMutation,
-    moveToFrontMutation,
-    moveToBackMutation,
-    shuffleQueueMutation,
-  } = mutations
+const {
+     setDieMutation,
+     clearManualDieMutation,
+     rollMutation,
+     snoozeMutation,
+     unsnoozeMutation,
+     skipMutation,
+     unskipMutation,
+     moveToFrontMutation,
+     moveToBackMutation,
+     shuffleQueueMutation,
+   } = mutations
 
   function handleThreadClick(thread: RollBootstrapThread) {
     setSelectedThread(thread)
@@ -165,15 +169,25 @@ export function useRollActions({
           await moveToBackMutation.mutate(selectedThread!.id)
           await refetchBootstrap()
           break
-        case 'snooze':
-          if (isSnoozed) {
-            await unsnoozeMutation.mutate(selectedThread!.id)
-          } else {
-            await snoozeMutation.mutate()
-          }
-          await refetchBootstrap()
-          break
-        case 'edit':
+case 'snooze':
+           if (isSnoozed) {
+             await unsnoozeMutation.mutate(selectedThread!.id)
+           } else {
+             await snoozeMutation.mutate()
+           }
+           await refetchBootstrap()
+           break
+         case 'skip':
+           const isSkipped =
+             bootstrap?.skipped_thread_ids?.includes(selectedThread!.id) ?? false
+           if (isSkipped) {
+             await unskipMutation.mutate(selectedThread!.id)
+           } else {
+             await skipMutation.mutate()
+           }
+           await refetchBootstrap()
+           break
+         case 'edit':
           navigate('/queue', { state: { editThreadId: selectedThread!.id } })
           break
       }

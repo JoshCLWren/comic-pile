@@ -44,6 +44,7 @@ from app.schemas import (
     SessionMode,
     SessionModeResponse,
     SessionModeUpdateRequest,
+    SessionResponse,
 )
 from app.schemas.recommendation_context import (
     CandidateFactor,
@@ -180,8 +181,9 @@ async def roll_dice(
     current_die = await get_current_die_for_session(current_session, db)
 
     snoozed_ids = current_session.snoozed_thread_ids or []
+    skipped_ids = current_session.skipped_thread_ids or []
 
-    bounded_rows = await get_bounded_roll_pool_rows(user_id, db, current_die, snoozed_ids)
+    bounded_rows = await get_bounded_roll_pool_rows(user_id, db, current_die, snoozed_ids, skipped_ids)
     if not bounded_rows:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -499,6 +501,188 @@ async def dismiss_pending_roll(
     await db.commit()
 
     await _invalidate_session_caches(current_user.id)
+
+
+@router.post("/skip", response_model=SessionResponse)
+@limiter.limit("30/minute")
+async def skip_thread(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SessionResponse:
+    """Skip the pending thread for the current session.
+
+    This endpoint:
+    1. Gets the current session (must exist with a pending_thread_id)
+    2. Adds the pending_thread_id to skipped_thread_ids
+    3. Records a "skip" event
+    4. Clears pending_thread_id
+    5. Returns the updated session
+
+    The skipped thread's durable queue position is NOT changed.
+    The thread remains in its original queue position and returns to the pool
+    when the session skipped state expires (at session end).
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SessionResponse containing the updated session with skipped_thread_ids,
+        cleared pending_thread_id, and current die state.
+
+    Raises:
+        HTTPException: If no active session exists or no pending thread to skip.
+    """
+    result = await db.execute(
+        select(SessionModel)
+        .where(SessionModel.user_id == current_user.id)
+        .where(SessionModel.ended_at.is_(None))
+        .order_by(SessionModel.started_at.desc())
+    )
+    current_session = result.scalars().first()
+
+    if not current_session:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active session. Please roll the dice first.",
+        )
+
+    if not current_session.pending_thread_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No pending thread to skip. Please roll the dice first.",
+        )
+
+    pending_thread_id = current_session.pending_thread_id
+    current_session_id = current_session.id
+
+    # Get current die for the event record
+    current_die = await get_current_die_for_session(current_session, db)
+
+    # Add to skipped list
+    skipped_ids = (
+        list(current_session.skipped_thread_ids) if current_session.skipped_thread_ids else []
+    )
+    if pending_thread_id not in skipped_ids:
+        skipped_ids.append(pending_thread_id)
+        current_session.skipped_thread_ids = skipped_ids
+
+    # Record skip event
+    skip_event = Event(
+        type="skip",
+        session_id=current_session_id,
+        thread_id=pending_thread_id,
+        die=current_die,
+    )
+    db.add(skip_event)
+
+    # Clear pending thread
+    current_session.pending_thread_id = None
+    current_session.pending_thread_updated_at = None
+
+    await db.commit()
+    await _invalidate_session_caches(current_user.id)
+
+    # Build and return session response
+    from app.api.session import build_ladder_path
+    from app.models.thread import normalize_format_value
+    from app.schemas import ActiveThreadInfo, SessionResponse
+    from app.schemas.session import build_session_bandwidth_state, build_session_intent_state
+
+    ladder_path = await build_ladder_path(current_session.id, db)
+    current_die = await get_current_die_for_session(current_session, db)
+    manual_die = current_session.manual_die
+    pending_thread_id = current_session.pending_thread_id
+    session_mode = SessionMode(
+        active_bandwidth=current_session.active_bandwidth,
+        predicted_bandwidth=current_session.predicted_bandwidth,
+        bandwidth_confidence=current_session.bandwidth_confidence,
+        bandwidth_source=current_session.bandwidth_source,
+        bandwidth_version=current_session.bandwidth_version,
+        active_intent=current_session.active_intent,
+        predicted_intent=current_session.predicted_intent,
+        intent_confidence=current_session.intent_confidence,
+        intent_source=current_session.intent_source,
+        intent_version=current_session.intent_version,
+        session_mode_correction_guidance=current_session.session_mode_correction_guidance,
+    )
+    last_rolled_result = None
+    if current_session.events:
+        roll_events = [e for e in current_session.events if e.type == "roll"]
+        if roll_events:
+            last_rolled_result = roll_events[-1].result
+
+    # Get active thread info if there's a pending thread
+    active_thread_info = None
+    if pending_thread_id is not None:
+        active_thread = await db.get(Thread, pending_thread_id)
+        if active_thread:
+            # Find the roll event result for this thread
+            roll_result = None
+            for event in reversed(current_session.events):
+                if event.type == "roll" and event.selected_thread_id == pending_thread_id:
+                    roll_result = event.result
+                    break
+            active_thread_info = ActiveThreadInfo(
+                id=active_thread.id,
+                title=active_thread.title,
+                format=normalize_format_value(active_thread.format),
+                issues_remaining=active_thread.issues_remaining,
+                queue_position=active_thread.queue_position,
+                last_rolled_result=roll_result,
+            )
+
+    # Get snoozed thread info
+    snoozed_ids = list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
+    snoozed_threads = []
+    if snoozed_ids:
+        snoozed_result = await db.execute(select(Thread).where(Thread.id.in_(snoozed_ids)))
+        threads_by_id = {t.id: t for t in snoozed_result.scalars().all()}
+        snoozed_threads = [
+            SnoozedThreadInfo(id=sid, title=threads_by_id[sid].title)
+            for sid in snoozed_ids
+            if sid in threads_by_id
+        ]
+
+    return SessionResponse(
+        id=current_session.id,
+        started_at=current_session.started_at,
+        ended_at=current_session.ended_at,
+        start_die=current_session.start_die,
+        manual_die=manual_die,
+        user_id=current_user.id,
+        ladder_path=ladder_path,
+        active_thread=active_thread_info,
+        current_die=current_die,
+        last_rolled_result=last_rolled_result,
+        has_restore_point=False,  # Skip doesn't create a restore point
+        snapshot_count=0,
+        snoozed_thread_ids=snoozed_ids,
+        snoozed_threads=snoozed_threads,
+        skipped_thread_ids=skipped_ids,
+        pending_thread_id=pending_thread_id,
+        timezone=current_session.timezone,
+        reading_bandwidth=current_session.reading_bandwidth,
+        reading_intent=current_session.reading_intent,
+        reading_mode_source=current_session.reading_mode_source,
+        reading_mode_suggested=current_session.reading_mode_suggested,
+        bandwidth=build_session_bandwidth_state(
+            predicted_bandwidth=current_session.predicted_bandwidth,
+            active_bandwidth=current_session.active_bandwidth,
+            confidence=current_session.bandwidth_confidence,
+            source=current_session.bandwidth_source,
+            mode_version=current_session.bandwidth_version,
+        ),
+        intent=build_session_intent_state(
+            predicted_intent=current_session.predicted_intent,
+            active_intent=current_session.active_intent,
+            confidence=current_session.intent_confidence,
+            source=current_session.intent_source,
+            mode_version=current_session.intent_version,
+        ),
+    )
 
 
 @router.post("/override", response_model=RollResponse)
