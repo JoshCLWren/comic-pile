@@ -21,6 +21,8 @@ class RecommendationContext(Base):
     reason codes/factors such as ``recent_high_rating``,
     ``same_thread_momentum``, ``confirmed_creator``, ``novel_candidate``,
     ``taste_adjacent``.  Also records the final combined weight after caps.
+    Additionally, records the reading-effort estimate for the selected
+    candidate and effort estimates for all candidates in the bounded pool.
     Full Taste Bank records or raw ComicVine metadata are NOT serialized.
     Random intent records an explicit contextual bypass; balanced records
     neutrality explicitly.
@@ -32,7 +34,7 @@ class RecommendationContext(Base):
     event_id: Mapped[int] = mapped_column(
         ForeignKey("events.id", ondelete="CASCADE"), nullable=False, unique=True
     )
-    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
@@ -56,6 +58,13 @@ class RecommendationContext(Base):
     candidate_factors: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
     # The final combined weight after caps for the selected candidate
     final_weight: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Reading-effort estimate for the selected candidate at decision time
+    effort_minutes: Mapped[float | None] = mapped_column(Float, nullable=True)
+    effort_band: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    effort_source: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    effort_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    effort_sample_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Explicit flags for special cases
     random_bypass: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

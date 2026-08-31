@@ -297,14 +297,20 @@ async def roll_dice(
                 selected_thread_issue_id = next_issue.id
                 selected_thread_issue_number = next_issue.issue_number
 
-    # Decision-time context is purely observational: it records the estimate
-    # that existed when this roll happened and never changes the selection.
-    effort_estimate = await compute_effort_estimate(
-        db,
-        user_id=user_id,
-        thread_id=selected_thread_id,
-        issue_id=selected_thread_issue_id,
-    )
+    # Compute effort estimates for all candidates in the bounded pool
+    effort_estimates = []
+    for thread, _unread_count, _issue_number in bounded_rows:
+        issue_id = thread.next_unread_issue_id if thread.uses_issue_tracking() else None
+        effort_estimate = await compute_effort_estimate(
+            db,
+            user_id=user_id,
+            thread_id=thread.id,
+            issue_id=issue_id,
+        )
+        effort_estimates.append(effort_estimate)
+
+    # Use the selected candidate's effort estimate for the Event context
+    selected_effort_estimate = effort_estimates[selected_index]
     # Build bounded per-candidate weight snapshot for the versioned JSON
     # context (issue #1718). Keep payload bounded to the die pool and record
     # the exact weights passed to the chooser plus compact reason codes.
@@ -323,7 +329,7 @@ async def roll_dice(
         ]
         json_selected_weight = float(candidate_weights[selected_index].weight)
     recommendation_context = build_recommendation_context(
-        effort_estimate,
+        selected_effort_estimate,
         thread_id=selected_thread_id,
         issue_id=selected_thread_issue_id,
         issue_number=selected_thread_issue_number,
@@ -337,7 +343,7 @@ async def roll_dice(
     )
 
     # Extract effort estimate band as string for JSON serialization
-    effort_estimate_str = effort_estimate.band if isinstance(effort_estimate, EffortEstimate) else effort_estimate
+    effort_estimate_str = selected_effort_estimate.band if isinstance(selected_effort_estimate, EffortEstimate) else selected_effort_estimate
 
     if resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
         selection_method = (
@@ -397,8 +403,13 @@ async def roll_dice(
                 candidate_id=breakdown.candidate_id,
                 factors=list(breakdown.factors),
                 weight=breakdown.weight,
+                effort_minutes=round(effort_estimate.minutes, 2) if effort_estimate.minutes is not None else None,
+                effort_band=effort_estimate.band,
+                effort_source=effort_estimate.source.value,
+                effort_confidence=round(effort_estimate.confidence, 3),
+                effort_sample_count=effort_estimate.sample_count,
             )
-            for breakdown in candidate_weights
+            for breakdown, effort_estimate in zip(candidate_weights, effort_estimates, strict=True)
         ]
         if candidate_weights
         else None,
@@ -407,6 +418,13 @@ async def roll_dice(
         else None,
         random_bypass=not weights_applied,
         balanced_neutrality=not weights_applied,
+        effort_minutes=round(selected_effort_estimate.minutes, 2)
+        if selected_effort_estimate.minutes is not None
+        else None,
+        effort_band=selected_effort_estimate.band,
+        effort_source=selected_effort_estimate.source.value,
+        effort_confidence=round(selected_effort_estimate.confidence, 3),
+        effort_sample_count=selected_effort_estimate.sample_count,
     )
 
     # Flush event to get its ID for the recommendation context FK
@@ -427,6 +445,11 @@ async def roll_dice(
         final_weight=context_data.final_weight,
         random_bypass=context_data.random_bypass,
         balanced_neutrality=context_data.balanced_neutrality,
+        effort_minutes=context_data.effort_minutes,
+        effort_band=context_data.effort_band,
+        effort_source=context_data.effort_source,
+        effort_confidence=context_data.effort_confidence,
+        effort_sample_count=context_data.effort_sample_count,
     )
     db.add(rec_context)
     if current_session:
@@ -633,6 +656,11 @@ async def override_roll(
         final_weight=1.0,
         random_bypass=False,
         balanced_neutrality=True,
+        effort_minutes=round(effort_estimate.minutes, 2) if effort_estimate.minutes is not None else None,
+        effort_band=effort_estimate.band,
+        effort_source=effort_estimate.source.value,
+        effort_confidence=round(effort_estimate.confidence, 3),
+        effort_sample_count=effort_estimate.sample_count,
     )
 
     # Flush event to get its ID for the recommendation context FK
@@ -653,6 +681,11 @@ async def override_roll(
         final_weight=context_data.final_weight,
         random_bypass=context_data.random_bypass,
         balanced_neutrality=context_data.balanced_neutrality,
+        effort_minutes=context_data.effort_minutes,
+        effort_band=context_data.effort_band,
+        effort_source=context_data.effort_source,
+        effort_confidence=context_data.effort_confidence,
+        effort_sample_count=context_data.effort_sample_count,
     )
     db.add(rec_context)
 
