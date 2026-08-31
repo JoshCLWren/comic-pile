@@ -1,4 +1,7 @@
+import { memo, useEffect, useRef, useState } from 'react'
 import type { QueueSortBy } from './useQueueFilters'
+
+const SEARCH_DEBOUNCE_MS = 300
 
 interface QueueControlsProps {
   activeCount: number
@@ -17,8 +20,12 @@ interface QueueControlsProps {
  * the Queue page. Receives only presentational props and renders the
  * well-known selectors (`Shuffle`, sort buttons, search box, etc.) without
  * owning any of the underlying query or mutation state.
+ *
+ * Search input is locally owned and debounced so that every keystroke does
+ * not trigger a parent re-render or a new queue query. The parent only
+ * receives the committed value after {@link SEARCH_DEBOUNCE_MS}.
  */
-export function QueueControls({
+function QueueControlsInner({
   activeCount,
   shuffleDisabled,
   shufflePending,
@@ -29,6 +36,18 @@ export function QueueControls({
   searchQuery,
   onSearchChange,
 }: QueueControlsProps) {
+  const [localValue, setLocalValue] = useState(searchQuery)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    setLocalValue(searchQuery)
+  }, [searchQuery])
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [])
   return (
     <header className="space-y-3 md:space-y-4 px-2">
       <div className="flex flex-wrap justify-between items-start gap-2 md:gap-4">
@@ -78,8 +97,25 @@ export function QueueControls({
         </div>
         <input
           type="text"
-          value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
+          value={localValue}
+          onChange={(e) => {
+            const next = e.target.value
+            setLocalValue(next)
+            if (debounceRef.current) clearTimeout(debounceRef.current)
+            debounceRef.current = setTimeout(() => onSearchChange(next), SEARCH_DEBOUNCE_MS)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              if (debounceRef.current) clearTimeout(debounceRef.current)
+              onSearchChange(localValue)
+            }
+          }}
+          onBlur={() => {
+            if (localValue !== searchQuery) {
+              if (debounceRef.current) clearTimeout(debounceRef.current)
+              onSearchChange(localValue)
+            }
+          }}
           placeholder="Search..."
           className="h-9 px-3 bg-white/5 border border-white/10 rounded-lg text-xs text-stone-300 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors w-full md:w-auto"
         />
@@ -88,3 +124,5 @@ export function QueueControls({
     </header>
   )
 }
+
+export const QueueControls = memo(QueueControlsInner)

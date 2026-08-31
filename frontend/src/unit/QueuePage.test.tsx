@@ -406,7 +406,8 @@ describe('Keyboard Accessibility', () => {
     const cards = screen.getAllByTestId('queue-thread-item')
     expect(cards[0]).toHaveTextContent('Alpha')
     await user.type(screen.getByPlaceholderText('Search...'), 'missing')
-    expect(screen.getByText('No active threads match your search')).toBeInTheDocument()
+    // Search is debounced (300ms) so the parent query only commits after the delay.
+    await waitFor(() => expect(screen.getByText('No active threads match your search')).toBeInTheDocument(), { timeout: 2000 })
   })
 
   it('shows correct empty state when search matches only completed threads', async () => {
@@ -429,7 +430,7 @@ describe('Keyboard Accessibility', () => {
     })
     render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
     await user.type(screen.getByPlaceholderText('Search...'), 'done')
-    expect(screen.getByText('No active threads match your search')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('No active threads match your search')).toBeInTheDocument(), { timeout: 2000 })
   })
 
   it('creates a simple issue range and marks the requested issues read', async () => {
