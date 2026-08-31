@@ -39,6 +39,31 @@ async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> se
     return legacy_blocked_ids | continuity_blocked_ids
 
 
+async def _get_legacy_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
+    """Read dependency-based blocked thread IDs directly from the current transaction."""
+    source_issue = Issue.__table__.alias("source_issue")
+    next_unread_issue = Issue.__table__.alias("next_unread_issue")
+    target_thread = Thread.__table__.alias("target_thread")
+    source = Thread.__table__.alias("source_thread")
+
+    issue_result = await db.execute(
+        select(target_thread.c.id)
+        .join(
+            next_unread_issue,
+            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
+        )
+        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(source, source_issue.c.thread_id == source.c.id)
+        .where(target_thread.c.user_id == user_id)
+        .where(source.c.user_id == user_id)
+        .where(source_issue.c.status != "read")
+        .where(target_thread.c.next_unread_issue_id.isnot(None))
+        .distinct()
+    )
+    return {row[0] for row in issue_result.all()}
+
+
 @cached(ttl=TTL.SHORT)
 async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
     """Return cached blocked thread IDs for non-transactional reads."""
@@ -326,6 +351,58 @@ async def refresh_user_blocked_status(
         Mapping of changed thread IDs to their previous blocked flag.
     """
     blocked_ids = await _get_blocked_thread_ids_uncached(user_id, db)
+
+    candidate_filter = Thread.is_blocked.is_(True)
+    if blocked_ids:
+        candidate_filter = or_(candidate_filter, Thread.id.in_(blocked_ids))
+
+    result = await db.execute(
+        select(Thread.id, Thread.is_blocked)
+        .where(Thread.user_id == user_id)
+        .where(candidate_filter)
+    )
+    prior_values = {row.id: row.is_blocked for row in result.all()}
+    changes = {
+        thread_id: old_value
+        for thread_id, old_value in prior_values.items()
+        if old_value != (thread_id in blocked_ids)
+    }
+
+    to_unblock = [thread_id for thread_id in changes if thread_id not in blocked_ids]
+    if to_unblock:
+        await db.execute(
+            update(Thread)
+            .where(Thread.user_id == user_id)
+            .where(Thread.id.in_(to_unblock))
+            .values(is_blocked=False)
+        )
+
+    to_block = [thread_id for thread_id in changes if thread_id in blocked_ids]
+    if to_block:
+        await db.execute(
+            update(Thread)
+            .where(Thread.user_id == user_id)
+            .where(Thread.id.in_(to_block))
+            .values(is_blocked=True)
+        )
+
+    return changes
+
+
+async def refresh_legacy_blocked_status(
+    user_id: int,
+    db: AsyncSession,
+) -> dict[int, bool]:
+    """Recalculate dependency-based blocked flags and return prior values that changed.
+
+    Args:
+        user_id: Thread owner.
+        db: Database session.
+
+    Returns:
+        Mapping of changed thread IDs to their previous blocked flag.
+    """
+    blocked_ids = await _get_legacy_blocked_thread_ids_uncached(user_id, db)
 
     candidate_filter = Thread.is_blocked.is_(True)
     if blocked_ids:
