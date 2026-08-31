@@ -16,10 +16,10 @@ from app.api.test_helpers import (
 
 
 def _query_result(value: object) -> Mock:
-    """Build a query result whose scalar/scalars accessors expose one value."""
+    """Build a query result whose scalar/scalars accessors expose query values."""
     result = Mock()
     result.scalar_one_or_none.return_value = value
-    result.scalars.return_value = [value]
+    result.scalars.return_value = value if isinstance(value, list) else [value]
     return result
 
 
