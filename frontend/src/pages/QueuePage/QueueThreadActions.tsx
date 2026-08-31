@@ -43,18 +43,41 @@ export default function QueueThreadActions({
 
   return (
     <div
-      className="pl-8 md:pl-[2.75rem] flex flex-wrap gap-2"
+      className="flex flex-wrap items-center gap-2"
       role="group"
       aria-label={`Actions for ${title}`}
     >
       {readDisabled ? (
         <Tooltip content={readDisabledReason ?? 'Blocked by dependency'}>
-          <button type="button" aria-label="Read" disabled title={readDisabledReason ?? 'Blocked by dependency'} onClick={(event: React.MouseEvent<HTMLButtonElement>) => event.stopPropagation()} className="px-3 py-2 rounded-lg bg-amber-600/20 text-amber-300 text-xs font-bold hover:bg-amber-600/30 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-amber-600/20">📖 Read</button>
+          <button
+            type="button"
+            aria-label="Read"
+            disabled
+            title={readDisabledReason ?? 'Blocked by dependency'}
+            onClick={(event: React.MouseEvent<HTMLButtonElement>) => event.stopPropagation()}
+            className="inline-flex h-11 md:h-9 items-center justify-center rounded-lg bg-[var(--theme-primary-action)]/25 px-4 text-sm font-bold text-white/60 hover:bg-[var(--theme-primary-action)]/25 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Read
+          </button>
         </Tooltip>
       ) : (
-        <button type="button" aria-label="Read" onClick={stopCardClick(onRead)} className="px-3 py-2 rounded-lg bg-amber-600/20 text-amber-300 text-xs font-bold hover:bg-amber-600/30">📖 Read</button>
+        <button
+          type="button"
+          aria-label="Read"
+          onClick={stopCardClick(onRead)}
+          className="inline-flex h-11 md:h-9 items-center justify-center rounded-lg bg-[var(--theme-primary-action)] px-4 text-sm font-bold text-white hover:bg-[var(--theme-primary-action-hover)] transition-colors"
+        >
+          Read
+        </button>
       )}
-      <button type="button" aria-label="Edit" onClick={stopCardClick(onEdit)} className="px-3 py-2 rounded-lg bg-white/5 text-stone-300 text-xs font-bold hover:bg-white/10">✏️ Edit</button>
+      <button
+        type="button"
+        aria-label="Edit"
+        onClick={stopCardClick(onEdit)}
+        className="inline-flex h-11 md:h-9 items-center justify-center rounded-lg bg-white/5 px-3 text-sm font-semibold text-[var(--theme-text-muted)] hover:bg-white/10 hover:text-[var(--theme-text-primary)] transition-colors"
+      >
+        Edit
+      </button>
       <Tooltip content={snoozeTooltip}>
         <button
           type="button"
@@ -68,9 +91,10 @@ export default function QueueThreadActions({
               ? (event: React.MouseEvent<HTMLButtonElement>) => event.stopPropagation()
               : stopCardClick(onSnooze)
           }
-          className={`px-3 py-2 rounded-lg bg-teal-600/15 text-teal-300 text-xs font-bold hover:bg-teal-600/25 ${snoozeDisabled ? 'opacity-40 cursor-not-allowed hover:bg-teal-600/15' : ''}`}
+          className={`inline-flex h-11 md:h-9 items-center justify-center gap-1.5 rounded-lg bg-white/5 px-3 text-sm font-semibold text-[var(--theme-text-muted)] hover:bg-white/10 hover:text-[var(--theme-text-primary)] transition-colors ${snoozeDisabled ? 'cursor-not-allowed opacity-40 hover:bg-white/5 hover:text-[var(--theme-text-muted)]' : ''}`}
         >
-          {snoozeIcon} {snoozeLabel}
+          <span aria-hidden="true" className="text-xs">{snoozeIcon}</span>
+          {snoozeLabel}
         </button>
       </Tooltip>
       {snoozeDisabled && (
@@ -78,7 +102,14 @@ export default function QueueThreadActions({
           Only the comic currently waiting to be read can be snoozed.
         </span>
       )}
-      <button type="button" aria-label="Delete" onClick={stopCardClick(onDelete)} className="px-3 py-2 rounded-lg bg-red-600/15 text-red-300 text-xs font-bold hover:bg-red-600/25">🗑 Delete</button>
+      <button
+        type="button"
+        aria-label="Delete"
+        onClick={stopCardClick(onDelete)}
+        className="inline-flex h-11 md:h-9 items-center justify-center rounded-lg px-3 text-sm font-medium text-[var(--theme-text-dim)] hover:bg-[var(--theme-danger)]/10 hover:text-[var(--theme-danger)] transition-colors"
+      >
+        Delete
+      </button>
     </div>
   )
 }
