@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ThreadCreate(BaseModel):
@@ -28,6 +28,8 @@ class ThreadUpdate(BaseModel):
 
 class ThreadResponse(BaseModel):
     """Schema for thread response."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     title: str

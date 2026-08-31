@@ -1,4 +1,6 @@
 import api from './api'
+import type { Thread, Issue } from '../types'
+import type { ContinuityReadinessResponse } from './api-continuity-readiness'
 
 export interface DependencyGroupMember {
   id: number
@@ -20,6 +22,22 @@ export interface DependencyGroup {
 export interface DependencyGroupSummary {
   id: number
   name: string
+}
+
+export interface DependencyGroupDetailMember {
+  membership: DependencyGroupMember
+  thread: Thread | null
+  issue: Issue | null
+  other_crossovers: string[]
+}
+
+export interface DependencyGroupDetail {
+  id: number
+  name: string
+  created_at: string
+  memberships: DependencyGroupDetailMember[]
+  readiness: ContinuityReadinessResponse | null
+  linked_plans: DependencyGroupSummary[]
 }
 
 export interface DependencyGroupIssueRangeResult {
@@ -45,6 +63,10 @@ export const dependencyGroupsApi = {
 
   get: async (groupId: number): Promise<DependencyGroup> => {
     return api.get<DependencyGroup>(`/v1/reading-order-groups/${groupId}`)
+  },
+
+  getDetail: async (groupId: number): Promise<DependencyGroupDetail> => {
+    return api.get<DependencyGroupDetail>(`/v1/reading-order-groups/${groupId}/detail`)
   },
 
   rename: async (groupId: number, name: string): Promise<DependencyGroup> => {

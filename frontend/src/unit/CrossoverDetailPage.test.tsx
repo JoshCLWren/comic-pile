@@ -2,19 +2,22 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoverDetailPage from '../pages/CrossoverDetailPage'
-import { dependencyGroupsApi } from '../services/api-dependency-groups'
+import {
+  dependencyGroupsApi,
+  type DependencyGroupDetail,
+  type DependencyGroupDetailMember,
+  type DependencyGroupSummary,
+} from '../services/api-dependency-groups'
 import { threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
-import {
-  continuityReadinessApi,
-  type ContinuityReadinessResponse,
-} from '../services/api-continuity-readiness'
-import type { DependencyGroup } from '../services/api-dependency-groups'
+import { continuityReadinessApi } from '../services/api-continuity-readiness'
+import type { ContinuityReadinessResponse } from '../services/api-continuity-readiness'
 import type { Issue, Thread } from '../types'
 
 vi.mock('../services/api-dependency-groups', () => ({
   dependencyGroupsApi: {
     get: vi.fn(),
+    getDetail: vi.fn(),
     listForThread: vi.fn(),
     plansForGroup: vi.fn(),
   },
@@ -72,12 +75,44 @@ function makeIssue(id: number, threadId: number, issueNumber: string, status: Is
   }
 }
 
-function makeGroup(memberships: DependencyGroup['memberships']): DependencyGroup {
+function makeDetailMember(
+  id: number,
+  opts: {
+    thread?: Thread | null
+    issue?: Issue | null
+    otherCrossovers?: string[]
+  } = {},
+): DependencyGroupDetailMember {
+  const thread = opts.thread ?? null
+  const issue = opts.issue ?? null
+  return {
+    membership: {
+      id,
+      thread_id: thread?.id ?? null,
+      issue_id: issue?.id ?? null,
+      series_title: thread?.title ?? null,
+      issue_number: issue?.issue_number ?? null,
+    },
+    thread,
+    issue,
+    other_crossovers: opts.otherCrossovers ?? [],
+  }
+}
+
+function makeDetail(
+  members: DependencyGroupDetailMember[],
+  opts: {
+    readiness?: ContinuityReadinessResponse | null
+    linkedPlans?: DependencyGroupSummary[]
+  } = {},
+): DependencyGroupDetail {
   return {
     id: 7,
     name: 'Annihilation',
     created_at: '2026-08-01T00:00:00Z',
-    memberships,
+    memberships: members,
+    readiness: opts.readiness ?? null,
+    linked_plans: opts.linkedPlans ?? [],
   }
 }
 
@@ -85,10 +120,10 @@ const novaThread = makeThread(22, 'Nova: Origin')
 const warlockThread = makeThread(101, 'Warlock: Rebirth')
 const warlockIssue = makeIssue(11, 101, '3', 'unread')
 
-const populatedGroup = makeGroup([
-  { id: 1, thread_id: 22, issue_id: null },
-  { id: 2, thread_id: null, issue_id: 11 },
-])
+const populatedMembers = [
+  makeDetailMember(1, { thread: novaThread, otherCrossovers: ['X of Swords'] }),
+  makeDetailMember(2, { issue: warlockIssue, thread: warlockThread }),
+]
 
 const readableReadiness: ContinuityReadinessResponse = {
   node_type: 'crossover',
@@ -134,17 +169,10 @@ function renderPage() {
   )
 }
 
-function mockPopulatedData() {
-  mockedGroups.get.mockResolvedValue(populatedGroup)
-  mockedThreads.get.mockImplementation(async (id: number) =>
-    id === 22 ? novaThread : warlockThread,
+function mockPopulatedData(opts: { readiness?: ContinuityReadinessResponse | null } = {}) {
+  mockedGroups.getDetail.mockResolvedValue(
+    makeDetail(populatedMembers, { readiness: opts.readiness ?? readableReadiness }),
   )
-  mockedIssues.get.mockResolvedValue(warlockIssue)
-  mockedGroups.listForThread.mockImplementation(async (threadId: number) =>
-    threadId === 22 ? [{ id: 9, name: 'X of Swords' }] : [],
-  )
-  mockedGroups.plansForGroup.mockResolvedValue([])
-  mockedReadiness.evaluate.mockResolvedValue(readableReadiness)
 }
 
 beforeEach(() => {
@@ -153,18 +181,16 @@ beforeEach(() => {
 
 describe('CrossoverDetailPage', () => {
   it('shows a loading state while the crossover request is pending', async () => {
-    let resolveGet: ((group: DependencyGroup) => void) | undefined
-    mockedGroups.get.mockImplementation(
-      () => new Promise<DependencyGroup>((resolve) => { resolveGet = resolve }),
+    let resolveGet: ((detail: DependencyGroupDetail) => void) | undefined
+    mockedGroups.getDetail.mockImplementation(
+      () => new Promise<DependencyGroupDetail>((resolve) => { resolveGet = resolve }),
     )
-    mockedGroups.plansForGroup.mockResolvedValue([])
-    mockedReadiness.evaluate.mockResolvedValue(readableReadiness)
 
     renderPage()
     expect(screen.getByText('Loading crossover…')).toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: /Back to Crossovers/ }).length).toBeGreaterThan(0)
 
-    resolveGet?.(makeGroup([]))
+    resolveGet?.(makeDetail([]))
     expect(await screen.findByText('No members in this crossover yet.')).toBeInTheDocument()
   })
 
@@ -196,20 +222,33 @@ describe('CrossoverDetailPage', () => {
       'href',
       '/threads/22',
     )
-    expect(mockedReadiness.evaluate).toHaveBeenCalledWith('crossover', 7)
+  })
+
+  it('loads the whole crossover with a single bounded request (no per-member waterfall)', async () => {
+    mockPopulatedData()
+
+    renderPage()
+
+    expect(await screen.findByRole('heading', { name: 'Annihilation' })).toBeInTheDocument()
+    expect(mockedGroups.getDetail).toHaveBeenCalledTimes(1)
+    expect(mockedGroups.getDetail).toHaveBeenCalledWith(7)
+    expect(mockedGroups.get).not.toHaveBeenCalled()
+    expect(mockedGroups.listForThread).not.toHaveBeenCalled()
+    expect(mockedGroups.plansForGroup).not.toHaveBeenCalled()
+    expect(mockedThreads.get).not.toHaveBeenCalled()
+    expect(mockedIssues.get).not.toHaveBeenCalled()
+    expect(mockedReadiness.evaluate).not.toHaveBeenCalled()
   })
 
   it('sorts the reading order by issue position and marks read entries', async () => {
     const firstIssue = { ...warlockIssue, id: 11, issue_number: '3', position: 2, status: 'read' as const }
     const secondIssue = { ...warlockIssue, id: 12, issue_number: '4', position: 9, status: 'unread' as const }
-    mockedGroups.get.mockResolvedValue(makeGroup([
-      { id: 2, thread_id: null, issue_id: 12 },
-      { id: 1, thread_id: null, issue_id: 11 },
-    ]))
-    mockedIssues.get.mockImplementation(async (id: number) => (id === 11 ? firstIssue : secondIssue))
-    mockedThreads.get.mockResolvedValue(warlockThread)
-    mockedGroups.listForThread.mockResolvedValue([])
-    mockedReadiness.evaluate.mockResolvedValue(readableReadiness)
+    mockedGroups.getDetail.mockResolvedValue(
+      makeDetail([
+        makeDetailMember(2, { issue: secondIssue, thread: warlockThread }),
+        makeDetailMember(1, { issue: firstIssue, thread: warlockThread }),
+      ]),
+    )
 
     renderPage()
 
@@ -228,11 +267,11 @@ describe('CrossoverDetailPage', () => {
 
   it('shows blocked readiness with human-readable blocking reasons per member', async () => {
     const readIssue = { ...warlockIssue, status: 'read' as const }
-    mockedGroups.get.mockResolvedValue(makeGroup([{ id: 2, thread_id: null, issue_id: 11 }]))
-    mockedIssues.get.mockResolvedValue(readIssue)
-    mockedThreads.get.mockResolvedValue(warlockThread)
-    mockedGroups.listForThread.mockResolvedValue([])
-    mockedReadiness.evaluate.mockResolvedValue(blockedReadiness)
+    mockedGroups.getDetail.mockResolvedValue(
+      makeDetail([makeDetailMember(2, { issue: readIssue, thread: warlockThread })], {
+        readiness: blockedReadiness,
+      }),
+    )
 
     renderPage()
 
@@ -253,8 +292,7 @@ describe('CrossoverDetailPage', () => {
   })
 
   it('renders the no-members state without next-up or member actions', async () => {
-    mockedGroups.get.mockResolvedValue(makeGroup([]))
-    mockedReadiness.evaluate.mockResolvedValue(readableReadiness)
+    mockedGroups.getDetail.mockResolvedValue(makeDetail([]))
 
     renderPage()
 
@@ -269,11 +307,12 @@ describe('CrossoverDetailPage', () => {
   })
 
   it('falls back to Unknown Series for a membership without thread or issue metadata', async () => {
-    mockedGroups.get.mockResolvedValue(makeGroup([
-      { id: 5, thread_id: null, issue_id: null },
-      { id: 6, thread_id: null, issue_id: null },
-    ]))
-    mockedReadiness.evaluate.mockResolvedValue(readableReadiness)
+    mockedGroups.getDetail.mockResolvedValue(
+      makeDetail([
+        makeDetailMember(5, { thread: null, issue: null }),
+        makeDetailMember(6, { thread: null, issue: null }),
+      ]),
+    )
 
     renderPage()
 
@@ -286,13 +325,11 @@ describe('CrossoverDetailPage', () => {
   })
 
   it('surfaces load errors and retries successfully', async () => {
-    mockedGroups.get
+    mockedGroups.getDetail
       .mockRejectedValueOnce({ response: { status: 404, data: { detail: 'Crossover not found' } } })
-      .mockResolvedValueOnce(populatedGroup)
-    mockedThreads.get.mockResolvedValue(novaThread)
-    mockedIssues.get.mockResolvedValue(warlockIssue)
-    mockedGroups.listForThread.mockResolvedValue([])
-    mockedReadiness.evaluate.mockResolvedValue(readableReadiness)
+      .mockResolvedValueOnce(
+        makeDetail(populatedMembers, { readiness: readableReadiness }),
+      )
 
     renderPage()
 
@@ -304,7 +341,7 @@ describe('CrossoverDetailPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Annihilation' })).toBeInTheDocument()
     })
-    expect(mockedGroups.get).toHaveBeenCalledTimes(2)
+    expect(mockedGroups.getDetail).toHaveBeenCalledTimes(2)
   })
 
   it('navigates back through history when the Back action is used', async () => {
@@ -319,11 +356,15 @@ describe('CrossoverDetailPage', () => {
   })
 
   it('shows linked reading plans and navigates to the plan page', async () => {
-    mockPopulatedData()
-    mockedGroups.plansForGroup.mockResolvedValue([
-      { id: 12, name: 'Annihilation Reading Order' },
-      { id: 15, name: 'Cosmic Marvel' },
-    ])
+    mockedGroups.getDetail.mockResolvedValue(
+      makeDetail(populatedMembers, {
+        readiness: readableReadiness,
+        linkedPlans: [
+          { id: 12, name: 'Annihilation Reading Order' },
+          { id: 15, name: 'Cosmic Marvel' },
+        ],
+      }),
+    )
 
     renderPage()
 
@@ -337,12 +378,11 @@ describe('CrossoverDetailPage', () => {
     const planLink2 = screen.getByRole('link', { name: 'Reading Plan: Cosmic Marvel' })
     expect(planLink2).toHaveAttribute('href', '/continuity-plans/15')
 
-    expect(mockedGroups.plansForGroup).toHaveBeenCalledWith(7)
+    expect(mockedGroups.plansForGroup).not.toHaveBeenCalled()
   })
 
   it('omits reading plan links when no plans reference the crossover', async () => {
     mockPopulatedData()
-    mockedGroups.plansForGroup.mockResolvedValue([])
 
     renderPage()
 

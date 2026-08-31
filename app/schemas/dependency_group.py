@@ -6,6 +6,10 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.schemas.continuity_readiness import ContinuityReadinessResponse
+from app.schemas.issue import IssueResponse
+from app.schemas.thread import ThreadResponse
+
 
 class DependencyGroupCreate(BaseModel):
     """Create a named dependency group."""
@@ -126,3 +130,23 @@ class DependencyGroupSummary(BaseModel):
 
     id: int
     name: str
+
+
+class DependencyGroupDetailMemberResponse(BaseModel):
+    """Enriched member with thread and issue objects for crossover detail view."""
+
+    membership: DependencyGroupMemberResponse
+    thread: ThreadResponse | None = None
+    issue: IssueResponse | None = None
+    other_crossovers: list[str] = []
+
+
+class DependencyGroupDetailResponse(BaseModel):
+    """Full crossover detail with enriched members, readiness, and linked plans."""
+
+    id: int
+    name: str
+    created_at: datetime
+    memberships: list[DependencyGroupDetailMemberResponse]
+    readiness: ContinuityReadinessResponse | None = None
+    linked_plans: list[DependencyGroupSummary] = []
