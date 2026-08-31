@@ -42,6 +42,7 @@ def _mode_session(**kwargs):
         "manual_die": None,
         "pending_thread_id": None,
         "snoozed_thread_ids": [],
+        "skipped_thread_ids": [],
         "active_bandwidth": None,
         "predicted_bandwidth": None,
         "bandwidth_confidence": None,

@@ -23,6 +23,8 @@ vi.mock('../hooks/useRollBootstrap', () => ({
       roll_pool: [{ id: 1, title: 'Saga', format: 'Comic' }],
       snoozed_threads: [{ id: 2, title: 'Watchmen', format: 'Comic' }],
       snoozed_count: 1,
+      skipped_thread_ids: [],
+      skipped_threads: [],
       blocked_threads: [],
       blocked_count: 0,
       stale_thread: null,

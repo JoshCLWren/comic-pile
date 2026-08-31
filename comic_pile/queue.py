@@ -505,7 +505,7 @@ async def get_roll_pool_rows(
 
     if snoozed_ids:
         query = query.where(Thread.id.not_in(snoozed_ids))
-    
+
     if skipped_ids:
         query = query.where(Thread.id.not_in(skipped_ids))
 

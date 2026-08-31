@@ -25,13 +25,14 @@ const mockPool: RollBootstrapThread[] = [
 const mockBlockedThreads: RollBootstrapThread[] = []
 const mockBlockingDependencyMap: Record<number, BlockingDependency[]> = {}
 const mockSnoozedThreads: Array<{ id: number; title: string; format: string }> = []
+const mockSkippedThreads: Array<{ id: number; title: string; format: string }> = []
 
 function renderPool(overrides: Partial<{
   pool: RollBootstrapThread[]
   blockedThreads: RollBootstrapThread[]
   blockingDependencyMap: Record<number, BlockingDependency[]>
   blockedExpanded: boolean
-}> = {}) {
+}>) {
   const {
     pool = mockPool,
     blockedThreads = mockBlockedThreads,
@@ -54,14 +55,19 @@ function renderPool(overrides: Partial<{
         staleThreadCount={0}
         snoozedThreads={mockSnoozedThreads}
         snoozedExpanded={false}
+        skippedThreads={mockSkippedThreads}
+        skippedExpanded={false}
         blockedExpanded={blockedExpanded}
         onThreadClick={() => {}}
         onUnsnooze={() => {}}
+        onUnskip={() => {}}
         onReadStale={() => {}}
         onToggleSnoozed={() => {}}
+        onToggleSkipped={() => {}}
         onToggleBlocked={() => {}}
         onShuffle={() => {}}
         unsnoozeIsPending={false}
+        unskipIsPending={false}
         shuffleIsPending={false}
       />
     </MemoryRouter>,
@@ -133,14 +139,19 @@ describe('ThreadPool Component', () => {
           staleThreadCount={0}
           snoozedThreads={mockSnoozedThreads}
           snoozedExpanded={false}
+          skippedThreads={mockSkippedThreads}
+          skippedExpanded={false}
           blockedExpanded={false}
           onThreadClick={() => {}}
           onUnsnooze={() => {}}
+          onUnskip={() => {}}
           onReadStale={() => {}}
           onToggleSnoozed={() => {}}
+          onToggleSkipped={() => {}}
           onToggleBlocked={onToggleBlocked}
           onShuffle={() => {}}
           unsnoozeIsPending={false}
+          unskipIsPending={false}
           shuffleIsPending={false}
         />
       </MemoryRouter>,
