@@ -14,6 +14,11 @@ Transport specifics live below the interface and are implementation details:
 Upstash REST and local redis-py clients, lazy connection lifecycle, the
 circuit breaker, and JSON value codecs.
 
+Upstash is the only supported client path in deployed environments. The local
+``redis-py`` client is a dev-only escape hatch gated by ``allow_local`` /
+``CACHE_LOCAL_REDIS_DEV``; the ``redis`` package is a dev dependency, so the
+import stays lazy and deployed images never load it (issue #1752).
+
 Usage:
     from app.cache import cached, cache, TTL
 
@@ -28,8 +33,8 @@ Usage:
     settings = get_redis_settings()
     if settings.is_configured:
         await cache.initialize(settings.upstash_redis_rest_url, settings.upstash_redis_rest_token)
-    elif settings.redis_url:
-        await cache.initialize(local_url=settings.redis_url)
+    elif settings.redis_url and settings.cache_local_redis_dev:
+        await cache.initialize(local_url=settings.redis_url, allow_local=True)
 """
 
 from __future__ import annotations
@@ -44,7 +49,6 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any, ParamSpec, Protocol, TypeVar, cast
 
-import redis.asyncio as aioredis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from upstash_redis.asyncio import Redis as UpstashRedis
@@ -465,6 +469,31 @@ def _has_user_cache_scope(
     return False
 
 
+def _create_local_redis_client(local_url: str) -> Any:
+    """Build the dev-only local redis-py client, importing the package lazily.
+
+    The ``redis`` package is intentionally not a deployment dependency: Upstash
+    is the only supported client path in deployed environments (issue #1752).
+    The local path is a dev escape hatch gated by ``allow_local`` /
+    ``CACHE_LOCAL_REDIS_DEV``, so the import is deferred until the path is
+    actually exercised and deployed images never import it.
+
+    Args:
+        local_url: ``redis://`` connection string for a local Redis server.
+
+    Returns:
+        A configured ``redis.asyncio.Redis`` client with lazy connection startup.
+    """
+    import redis.asyncio as aioredis
+
+    return aioredis.Redis.from_url(
+        local_url,
+        decode_responses=True,
+        socket_connect_timeout=_CONNECT_TIMEOUT_SECONDS,
+        socket_timeout=_CONNECT_TIMEOUT_SECONDS,
+    )
+
+
 class UpstashCache:
     """Internal transport implementing CacheClient over Upstash REST or local Redis.
 
@@ -530,12 +559,7 @@ class UpstashCache:
                     "Local Redis client path is disabled unless CACHE_LOCAL_REDIS_DEV "
                     "is set; use Upstash credentials or enable the dev flag."
                 )
-            self._client = aioredis.Redis.from_url(
-                local_url,
-                decode_responses=True,
-                socket_connect_timeout=_CONNECT_TIMEOUT_SECONDS,
-                socket_timeout=_CONNECT_TIMEOUT_SECONDS,
-            )
+            self._client = _create_local_redis_client(local_url)
             self._circuit_breaker.reset()
             self._initialized = True
             self._is_upstash = False
