@@ -501,6 +501,297 @@ async def dismiss_pending_roll(
     await _invalidate_session_caches(current_user.id)
 
 
+@router.post("/skip", response_model=RollResponse)
+@limiter.limit("30/minute")
+async def skip_roll(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> RollResponse:
+    """Skip the current pending roll and advance to another eligible thread.
+
+    The skipped thread is not marked read, its read_at and ratings remain
+    unchanged, and dependencies are not rewritten. The skip applies only to
+    the current roll/session by excluding the pending thread from the
+    immediate candidate pool; a later session may roll it again. Blocked and
+    otherwise ineligible threads remain excluded via the standard pool rules.
+
+    Args:
+        request: FastAPI request for rate limiting.
+        current_user: The authenticated user making the request.
+        db: Async database session.
+
+    Returns:
+        RollResponse for the newly selected thread.
+
+    Raises:
+        HTTPException: 409 when no pending roll exists, 400 when no
+            alternative threads are available.
+    """
+    user_id = current_user.id
+    current_session = await get_or_create(db, user_id=user_id, existing_user=current_user)
+
+    skipped_thread_id = current_session.pending_thread_id
+    if skipped_thread_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No pending roll to skip. Roll first.",
+        )
+    current_session_id = current_session.id
+    current_die = await get_current_die_for_session(current_session, db)
+
+    snoozed_ids = current_session.snoozed_thread_ids or []
+    excluded_ids = list(snoozed_ids) + [skipped_thread_id]
+
+    bounded_rows = await get_bounded_roll_pool_rows(user_id, db, current_die, excluded_ids)
+    if not bounded_rows:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No alternative threads available to skip to",
+        )
+
+    pool_size = len(bounded_rows)
+    selection_bandwidth = current_session.active_bandwidth or DEFAULT_BANDWIDTH
+    selection_intent = current_session.active_intent or DEFAULT_INTENT
+    resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent)
+
+    max_bonus = 0.0
+    weights_applied = False
+    candidate_weights: list = []
+    if resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
+        selection = select_from_pool(
+            pool_size,
+            bandwidth=selection_bandwidth,
+            intent=selection_intent,
+        )
+        selected_index = selection.index
+        candidate_weights = [
+            MomentumCandidateWeight(
+                candidate_id=row[0].id if isinstance(row, tuple) else row.id,
+                weight=1.0,
+                factors=(),
+            )
+            for row in bounded_rows
+        ]
+    else:
+        session_events_result = await db.execute(
+            select(Event).where(Event.session_id == current_session_id)
+        )
+        session_events = list(session_events_result.scalars().all())
+        selected = await select_bandwidth_weighted(
+            db=db,
+            bounded_rows=bounded_rows,
+            user_id=user_id,
+            session_events=session_events,
+            bandwidth=selection_bandwidth,
+            intent=selection_intent,
+            now=datetime.now(UTC),
+        )
+        selected_index = selected.selected_index
+        max_bonus = selected.max_bonus
+        candidate_weights = selected.weights
+        weights_applied = selected.weights_applied
+
+    if resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
+        if selection_bandwidth in ("light", "deep"):
+            recommendation_reason_codes = ["bandwidth_weighted"]
+        else:
+            recommendation_reason_codes = ["momentum_weighted"]
+    else:
+        recommendation_reason_codes = ["pure_random"]
+
+    selected_thread, unread_count, issue_number = bounded_rows[selected_index]
+    selected_thread_id = selected_thread.id
+    selected_thread_title = selected_thread.title
+    selected_thread_format = normalize_format_value(selected_thread.format)
+    selected_thread_queue_position = selected_thread.queue_position
+    bounded_candidate_ids = [row[0].id if isinstance(row, tuple) else row.id for row in bounded_rows]
+    selected_thread_issues_remaining = unread_count
+    selected_thread_total_issues = selected_thread.total_issues
+    selected_thread_reading_progress = selected_thread.reading_progress
+    selected_thread_next_unread_issue_id = selected_thread.next_unread_issue_id
+
+    selected_thread_issue_id = None
+    selected_thread_issue_number = None
+    if selected_thread.uses_issue_tracking() and selected_thread_next_unread_issue_id:
+        if unread_count > 0 and issue_number is not None:
+            selected_thread_issue_id = selected_thread_next_unread_issue_id
+            selected_thread_issue_number = issue_number
+        else:
+            issue_result = await db.execute(
+                select(Issue).where(Issue.id == selected_thread_next_unread_issue_id)
+            )
+            next_issue = issue_result.scalar_one_or_none()
+            if next_issue and next_issue.status == "unread":
+                selected_thread_issue_id = next_issue.id
+                selected_thread_issue_number = next_issue.issue_number
+
+    effort_estimates = []
+    for thread, _unread_count, _issue_number in bounded_rows:
+        issue_id = thread.next_unread_issue_id if thread.uses_issue_tracking() else None
+        effort_estimate = await compute_effort_estimate(
+            db,
+            user_id=user_id,
+            thread_id=thread.id,
+            issue_id=issue_id,
+        )
+        effort_estimates.append(effort_estimate)
+    selected_effort_estimate = effort_estimates[selected_index]
+    json_candidate_weights: list[dict[str, object]] | None = None
+    json_selected_weight: float | None = None
+    if candidate_weights:
+        json_candidate_weights = [
+            {
+                "candidate_id": entry.candidate_id,
+                "weight": round(float(entry.weight), 4),
+                "reasons": list(entry.factors),
+                "factors": list(entry.factors),
+            }
+            for entry in candidate_weights
+        ]
+        json_selected_weight = float(candidate_weights[selected_index].weight)
+    recommendation_context = build_recommendation_context(
+        selected_effort_estimate,
+        thread_id=selected_thread_id,
+        issue_id=selected_thread_issue_id,
+        issue_number=selected_thread_issue_number,
+        candidate_weights=json_candidate_weights,
+        bandwidth=normalize_bandwidth(selection_bandwidth).value,
+        bandwidth_source=current_session.bandwidth_source or "default",
+        bandwidth_confidence=current_session.bandwidth_confidence or 0.0,
+        random_bypass=not weights_applied,
+        balanced_neutrality=not weights_applied,
+        selected_weight=json_selected_weight,
+    )
+    effort_estimate_str = selected_effort_estimate.band if isinstance(selected_effort_estimate, EffortEstimate) else selected_effort_estimate
+    # Skipped roll is still a roll selection; record selection method as "skip"
+    # to distinguish it from ordinary random/momentum draws while preserving
+    # the underlying weighting reason codes.
+    if resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
+        selection_method = "skip"
+    else:
+        selection_method = "skip"
+
+    event = Event(
+        type="roll",
+        session_id=current_session_id,
+        selected_thread_id=selected_thread_id,
+        die=current_die,
+        result=selected_index + 1,
+        selection_method=selection_method,
+        recommendation_reason_codes=recommendation_reason_codes,
+        recommendation_context=recommendation_context,
+        issue_id=selected_thread_issue_id,
+        issue_number=selected_thread_issue_number,
+        rolling_recommendation_context=_build_rolling_recommendation_context(
+            die_size=current_die,
+            selected_queue_position=selected_thread_queue_position,
+            bounded_candidate_ids=bounded_candidate_ids,
+            selected_index=selected_index,
+            selection_method=selection_method,
+            session_timezone=current_session.timezone,
+            selected_thread_last_rating=selected_thread.last_rating,
+            selected_thread_last_activity_at=selected_thread.last_activity_at,
+            effort_estimate=effort_estimate_str,
+        ),
+    )
+    db.add(event)
+
+    logger.info(
+        "skip selection mode=%s bandwidth=%s intent=%s max_bonus=%.3f pool_size=%s skipped=%s",
+        resolved_mode.value,
+        normalize_bandwidth(selection_bandwidth).value,
+        normalize_intent(selection_intent).value,
+        max_bonus,
+        pool_size,
+        skipped_thread_id,
+    )
+
+    has_explicit_mode = bool(current_session.active_intent)
+    context_data = RecommendationContextCreate(
+        schema_version=2,
+        intent=normalize_intent(selection_intent).value,
+        intent_source=current_session.intent_source or "default",
+        intent_confidence=1.0 if has_explicit_mode else 0.0,
+        bandwidth=normalize_bandwidth(selection_bandwidth).value,
+        bandwidth_source=current_session.bandwidth_source or "default",
+        bandwidth_confidence=current_session.bandwidth_confidence or 0.0,
+        candidate_factors=[
+            CandidateFactor(
+                candidate_id=breakdown.candidate_id,
+                factors=list(breakdown.factors),
+                weight=breakdown.weight,
+                effort_minutes=round(effort_estimate.minutes, 2) if effort_estimate.minutes is not None else None,
+                effort_band=effort_estimate.band,
+                effort_source=effort_estimate.source.value,
+                effort_confidence=round(effort_estimate.confidence, 3),
+                effort_sample_count=effort_estimate.sample_count,
+            )
+            for breakdown, effort_estimate in zip(candidate_weights, effort_estimates, strict=True)
+        ]
+        if candidate_weights
+        else None,
+        final_weight=candidate_weights[selected_index].weight if candidate_weights else None,
+        random_bypass=not weights_applied,
+        balanced_neutrality=not weights_applied,
+        effort_minutes=round(selected_effort_estimate.minutes, 2) if selected_effort_estimate.minutes is not None else None,
+        effort_band=selected_effort_estimate.band,
+        effort_source=selected_effort_estimate.source.value,
+        effort_confidence=round(selected_effort_estimate.confidence, 3),
+        effort_sample_count=selected_effort_estimate.sample_count,
+    )
+    await db.flush()
+    rec_context = RecommendationContext(
+        event_id=event.id,
+        schema_version=context_data.schema_version,
+        intent=context_data.intent,
+        intent_source=context_data.intent_source,
+        intent_confidence=context_data.intent_confidence,
+        bandwidth=context_data.bandwidth,
+        bandwidth_source=context_data.bandwidth_source,
+        bandwidth_confidence=context_data.bandwidth_confidence,
+        candidate_factors=[f.model_dump() for f in context_data.candidate_factors] if context_data.candidate_factors else None,
+        final_weight=context_data.final_weight,
+        random_bypass=context_data.random_bypass,
+        balanced_neutrality=context_data.balanced_neutrality,
+        effort_minutes=context_data.effort_minutes,
+        effort_band=context_data.effort_band,
+        effort_source=context_data.effort_source,
+        effort_confidence=context_data.effort_confidence,
+        effort_sample_count=context_data.effort_sample_count,
+    )
+    db.add(rec_context)
+    # Advance pending to the newly selected thread; do not mark the skipped
+    # issue/thread as read and do not mutate dependencies.
+    current_session.pending_thread_id = selected_thread_id
+    current_session.pending_thread_updated_at = datetime.now(UTC)
+
+    await db.commit()
+    await _invalidate_session_caches(current_user.id)
+
+    snoozed_count = len(snoozed_ids)
+    offset = snoozed_count
+
+    return RollResponse(
+        thread_id=selected_thread_id,
+        title=selected_thread_title,
+        format=selected_thread_format,
+        issues_remaining=selected_thread_issues_remaining,
+        queue_position=selected_thread_queue_position,
+        die_size=current_die,
+        result=selected_index + 1,
+        offset=offset,
+        snoozed_count=snoozed_count,
+        issue_id=selected_thread_issue_id,
+        issue_number=selected_thread_issue_number,
+        next_issue_id=selected_thread_issue_id,
+        next_issue_number=selected_thread_issue_number,
+        total_issues=selected_thread_total_issues,
+        reading_progress=selected_thread_reading_progress,
+        explanation=get_primary_explanation(recommendation_reason_codes),
+    )
+
+
 @router.post("/override", response_model=RollResponse)
 async def override_roll(
     request: OverrideRequest,

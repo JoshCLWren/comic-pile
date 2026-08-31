@@ -73,3 +73,15 @@ export function useReroll() {
     isError: mutation.isError,
   }
 }
+
+export function useSkipRoll() {
+  const mutation = useMutation({
+    mutationFn: () => rollApi.skip(),
+  })
+
+  return {
+    mutate: mutation.mutateAsync,
+    isPending: mutation.isPending,
+    isError: mutation.isError,
+  }
+}

@@ -21,11 +21,13 @@ interface RatingViewProps {
   rateIsPending: boolean
   snoozeIsPending: boolean
   dismissIsPending: boolean
+  skipIsPending?: boolean
   readingOrders: ReadingOrder[]
   connectedThreads: ConnectedThreadInfo[]
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze: () => void
+  onSkip?: () => void
   onCancel: () => void
   onRefreshThread: () => void
   readerContext?: ReaderContextResponse | null
@@ -43,11 +45,13 @@ export function RatingView({
   rateIsPending,
   snoozeIsPending,
   dismissIsPending,
+  skipIsPending = false,
   readingOrders,
   connectedThreads,
   onUpdateRating,
   onSubmitRating,
   onSnooze,
+  onSkip,
   onCancel,
   onRefreshThread,
   readerContext = null,
@@ -107,9 +111,11 @@ export function RatingView({
               rateIsPending={rateIsPending}
               snoozeIsPending={snoozeIsPending}
               dismissIsPending={dismissIsPending}
+              skipIsPending={skipIsPending}
               issuesRemaining={issuesRemaining}
               onSubmitRating={onSubmitRating}
               onSnooze={onSnooze}
+              onSkip={onSkip}
               onCancel={onCancel}
             />
           </div>
