@@ -2,8 +2,8 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-   ContinuityIssueSelector,
-   ContinuityThreadSelector,
+  ContinuityIssueSelector,
+  ContinuityThreadSelector,
 } from '../components/continuity'
 import { continuityPlansApi, type ContinuityPlanNode, type ContinuityPlanNodeType, type ContinuityPlanOrderingMode } from '../services/api-continuity-plans'
 import { dependencyGroupsApi, type DependencyGroup } from '../services/api-dependency-groups'
@@ -161,28 +161,30 @@ export default function ContinuityPlannerPage() {
   const navigate = useNavigate()
   const parsedId = id ? Number(id) : null
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
+  const isInvalidRoute = id !== undefined && parsedId !== null && (!Number.isInteger(parsedId) || parsedId <= 0)
 
 const [name, setName] = useState(DEFAULT_PLAN_NAME)
-   const [lanes, setLanes] = useState<PlannerLane[]>([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
-   const [nodes, setNodes] = useState<PlannerNode[]>([])
-   const [activeLaneId, setActiveLaneId] = useState(DEFAULT_LANE_ID)
-   const [savedName, setSavedName] = useState('')
-   const [savedLanes, setSavedLanes] = useState<PlannerLane[]>([])
-   const [savedNodes, setSavedNodes] = useState<PlannerNode[]>([])
-   const [threads, setThreads] = useState<Thread[]>([])
-   const [groups, setGroups] = useState<DependencyGroup[]>([])
-   const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
-   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
-   const [selectedGroupId, setSelectedGroupId] = useState('')
-   const [isLoading, setIsLoading] = useState(Boolean(planId))
-   const [isLoadingIssues, setIsLoadingIssues] = useState(false)
-   const [isSaving, setIsSaving] = useState(false)
-   const [loadError, setLoadError] = useState<string | null>(null)
-   const [issueLoadError, setIssueLoadError] = useState<string | null>(null)
-   const [saveError, setSaveError] = useState<string | null>(null)
-   const [isProjectionOpen, setIsProjectionOpen] = useState(false)
-   const [laneSeq, setLaneSeq] = useState(0)
-   const [editingGateNodeId, setEditingGateNodeId] = useState<string | null>(null)
+  const [lanes, setLanes] = useState<PlannerLane[]>([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
+  const [nodes, setNodes] = useState<PlannerNode[]>([])
+  const [activeLaneId, setActiveLaneId] = useState(DEFAULT_LANE_ID)
+  const [savedName, setSavedName] = useState('')
+  const [savedLanes, setSavedLanes] = useState<PlannerLane[]>([])
+  const [savedNodes, setSavedNodes] = useState<PlannerNode[]>([])
+  const [threads, setThreads] = useState<Thread[]>([])
+  const [groups, setGroups] = useState<DependencyGroup[]>([])
+  const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
+  const [issues, setIssues] = useState<Issue[]>([])
+  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
+  const [selectedGroupId, setSelectedGroupId] = useState('')
+  const [isLoading, setIsLoading] = useState(Boolean(planId))
+  const [isLoadingIssues, setIsLoadingIssues] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [issueLoadError, setIssueLoadError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [isProjectionOpen, setIsProjectionOpen] = useState(false)
+  const [laneSeq, setLaneSeq] = useState(0)
+  const [editingGateNodeId, setEditingGateNodeId] = useState<string | null>(null)
   const lastPlanId = typeof window === 'undefined' ? null : window.localStorage.getItem(LAST_PLAN_KEY)
   const issueRequestRef = useRef<AbortController | null>(null)
 
@@ -221,6 +223,11 @@ const [name, setName] = useState(DEFAULT_PLAN_NAME)
         if (!active) return
         setThreads(loadedThreads)
         setGroups(loadedGroups)
+        if (isInvalidRoute) {
+          active && setLoadError('Invalid continuity plan ID.')
+          active && setIsLoading(false)
+          return
+        }
 
         if (!planId) {
           setSavedName(DEFAULT_PLAN_NAME)
@@ -268,7 +275,7 @@ const [name, setName] = useState(DEFAULT_PLAN_NAME)
       .catch((error) => active && setLoadError(errorMessage(error, 'Unable to load the continuity planner.')))
       .finally(() => active && setIsLoading(false))
     return () => { active = false }
-  }, [hydrateLabels, planId])
+  }, [hydrateLabels, planId, isInvalidRoute])
 
   const selectThread = async (thread: Thread | null) => {
     setSelectedThread(thread)
@@ -428,37 +435,37 @@ const [name, setName] = useState(DEFAULT_PLAN_NAME)
   }
 
 const save = async () => {
-     if (!name.trim()) {
-       setSaveError('Enter a plan name.')
-       return
-     }
-     setIsSaving(true)
-     setSaveError(null)
-     try {
-       const payload = buildPayload(name, lanes, nodes)
-       const saved = planId
-         ? await continuityPlansApi.update(planId, payload)
-         : await continuityPlansApi.create(payload)
-       const savedLanes = (saved.lanes.length > 0
-         ? saved.lanes
-         : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
-       ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
-         .sort((a, b) => a.order - b.order)
-       const normalized = normalizePositions(nodes)
-       setName(saved.name)
-       setLanes(savedLanes)
-       setNodes(normalized)
-       setSavedName(saved.name)
-       setSavedLanes(savedLanes)
-       setSavedNodes(normalized)
-       window.localStorage.setItem(LAST_PLAN_KEY, String(saved.id))
-       if (!planId) navigate(`/continuity-plans/${saved.id}`, { replace: true })
-     } catch (error) {
-       setSaveError(getConflictMessage(error, nodes))
-     } finally {
-       setIsSaving(false)
-     }
-   }
+    if (!name.trim()) {
+      setSaveError('Enter a plan name.')
+      return
+    }
+    setIsSaving(true)
+    setSaveError(null)
+    try {
+      const payload = buildPayload(name, lanes, nodes)
+      const saved = planId
+        ? await continuityPlansApi.update(planId, payload)
+        : await continuityPlansApi.create(payload)
+      const savedLanes = (saved.lanes.length > 0
+        ? saved.lanes
+        : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
+      ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
+        .sort((a, b) => a.order - b.order)
+      const normalized = normalizePositions(nodes)
+      setName(saved.name)
+      setLanes(savedLanes)
+      setNodes(normalized)
+      setSavedName(saved.name)
+      setSavedLanes(savedLanes)
+      setSavedNodes(normalized)
+      window.localStorage.setItem(LAST_PLAN_KEY, String(saved.id))
+      if (!planId) navigate(`/continuity-plans/${saved.id}`, { replace: true })
+    } catch (error) {
+      setSaveError(getConflictMessage(error, nodes))
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const cancel = () => {
     setName(savedName || DEFAULT_PLAN_NAME)
@@ -555,7 +562,6 @@ const save = async () => {
                 Project to reading order
               </button>
             )}
-            {statusText && <p role="status" className={`text-xs font-bold ${isDirty ? 'text-[var(--theme-text-muted)]' : 'text-emerald-300'}`}>{statusText}</p>}
           </div>
         </div>
 
@@ -759,10 +765,9 @@ const save = async () => {
       <div className="flex flex-col-reverse gap-3 border-t border-[var(--theme-border)] pt-5 sm:flex-row sm:items-center sm:justify-between">
         <button type="button" onClick={cancel} disabled={!isDirty || isSaving} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-5 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] disabled:opacity-40">Cancel changes</button>
         <div className="flex items-center gap-3 sm:ml-auto">
-          {statusText && <p role="status" className="hidden text-xs font-bold text-[var(--theme-text-muted)] sm:block" aria-live="polite">{statusText}</p>}
+          {statusText && <p role="status" className={`text-xs font-bold ${isDirty ? 'text-[var(--theme-text-muted)]' : 'text-emerald-300'}`} aria-live="polite">{statusText}</p>}
           <button type="button" onClick={() => void save()} disabled={!isDirty || isSaving} className="min-h-11 min-w-[11rem] rounded-xl bg-[var(--theme-primary-action)] px-8 font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-40 sm:flex-none">{isSaving ? 'Saving…' : 'Save plan'}</button>
         </div>
-        {statusText && <p role="status" className="text-center text-xs font-bold text-[var(--theme-text-muted)] sm:hidden" aria-live="polite">{statusText}</p>}
       </div>
 
       {planId && (
