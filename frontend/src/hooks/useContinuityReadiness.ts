@@ -1,9 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
-import {
-  continuityReadinessApi,
-  type ContinuityReadinessResponse,
-} from '../services/api-continuity-readiness'
-import { queryKeys } from '../query/queryKeys'
+import type { ContinuityReadinessResponse } from '../services/api-continuity-readiness'
 
 export interface ContinuityReadinessState {
   readiness: ContinuityReadinessResponse | null
@@ -20,35 +15,19 @@ const EMPTY_STATE: ContinuityReadinessState = {
 }
 
 export interface UseContinuityReadinessOptions {
-  /** Skip fetching because a parent already shares this exact readiness state. */
+  /** Retained temporarily for call-site compatibility while readiness is removed. */
   skip?: boolean
 }
 
+/**
+ * Compatibility shim while the standalone readiness product surface is removed.
+ *
+ * Roll selection is authoritative. This hook intentionally performs no network
+ * request and returns no second eligibility verdict for an already-selected issue.
+ */
 export function useContinuityReadiness(
-  issueId: number | null | undefined,
-  options: UseContinuityReadinessOptions = {},
+  _issueId: number | null | undefined,
+  _options: UseContinuityReadinessOptions = {},
 ): ContinuityReadinessState {
-  const { skip = false } = options
-  const { data, isPending, error, refetch } = useQuery({
-    queryKey: issueId ? queryKeys.continuity.readiness('issue', issueId) : [],
-    queryFn: async () => {
-      try {
-        return await continuityReadinessApi.evaluate('issue', issueId!)
-      } catch (reason) {
-        throw reason instanceof Error ? reason : new Error('Unable to load readiness')
-      }
-    },
-    enabled: issueId != null && !skip,
-  })
-
-  if (issueId == null || skip) return EMPTY_STATE
-
-  return {
-    readiness: data ?? null,
-    isLoading: isPending,
-    error: (error as Error | null) ?? null,
-    refetch: () => {
-      void refetch()
-    },
-  }
+  return EMPTY_STATE
 }
