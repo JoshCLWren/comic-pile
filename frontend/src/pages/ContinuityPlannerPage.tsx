@@ -5,7 +5,7 @@ import {
    ContinuityIssueSelector,
    ContinuityThreadSelector,
 } from '../components/continuity'
-import { continuityPlansApi, type ContinuityPlanNode, type ContinuityPlanNodeType } from '../services/api-continuity-plans'
+import { continuityPlansApi, type ContinuityPlanNode, type ContinuityPlanNodeType, type ContinuityPlanOrderingMode } from '../services/api-continuity-plans'
 import { dependencyGroupsApi, type DependencyGroup } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api'
@@ -133,7 +133,7 @@ function normalizePositions(nodeList: PlannerNode[]): PlannerNode[] {
 function buildPayload(name: string, lanes: PlannerLane[], nodeList: PlannerNode[]) {
   const normalized = normalizePositions(nodeList)
   const orderedLanes = [...lanes].sort((a, b) => a.order - b.order)
-  const orderingMode: import('../services/api-continuity-plans').ContinuityPlanOrderingMode =
+  const orderingMode: ContinuityPlanOrderingMode =
     orderedLanes.length === 1 ? 'strict_sequential' : 'informational'
   return {
     name: name.trim(),
@@ -161,7 +161,7 @@ export default function ContinuityPlannerPage() {
   const navigate = useNavigate()
   const parsedId = id ? Number(id) : null
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
-  const isInvalidRoute = id !== undefined && parsedId !== null && (!Number.isInteger(parsedId) || parsedId <= 0)
+
 const [name, setName] = useState(DEFAULT_PLAN_NAME)
    const [lanes, setLanes] = useState<PlannerLane[]>([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
    const [nodes, setNodes] = useState<PlannerNode[]>([])
@@ -221,11 +221,7 @@ const [name, setName] = useState(DEFAULT_PLAN_NAME)
         if (!active) return
         setThreads(loadedThreads)
         setGroups(loadedGroups)
-        if (isInvalidRoute) {
-          active && setLoadError('Invalid continuity plan ID.')
-          active && setIsLoading(false)
-          return
-        }
+
         if (!planId) {
           setSavedName(DEFAULT_PLAN_NAME)
           setSavedLanes([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
@@ -272,7 +268,7 @@ const [name, setName] = useState(DEFAULT_PLAN_NAME)
       .catch((error) => active && setLoadError(errorMessage(error, 'Unable to load the continuity planner.')))
       .finally(() => active && setIsLoading(false))
     return () => { active = false }
-  }, [hydrateLabels, planId, isInvalidRoute])
+  }, [hydrateLabels, planId])
 
   const selectThread = async (thread: Thread | null) => {
     setSelectedThread(thread)
