@@ -15,16 +15,18 @@ export default function HistoryPage() {
   if (!sessions || sessions.length === 0) {
     return (
       <div className="space-y-6 md:space-y-8 pb-20">
-        <header className="px-2">
-          <div className="flex items-center gap-3 md:gap-4">
-            <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">History</h1>
-            <a href="/admin/export/summary/"
-               className="h-9 md:h-10 px-3 md:px-4 glass-button text-[10px] font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
-               download>
-              Export Summary
-            </a>
+        <header className="flex flex-wrap items-end justify-between gap-3 px-2">
+          <div>
+            <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
+            <p className="mt-2 text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your reading session history</p>
           </div>
-          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your reading session history</p>
+          <a
+            href="/admin/export/summary/"
+            download
+            className="py-1 text-[10px] font-bold uppercase tracking-widest text-stone-500 hover:text-stone-300 underline decoration-dotted underline-offset-4"
+          >
+            Export Summary
+          </a>
         </header>
         <div className="text-center text-stone-500">No sessions yet</div>
       </div>
@@ -66,110 +68,107 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="space-y-8 pb-20">
-      <header className="px-2">
-        <div className="flex items-center gap-4">
-          <h1 className="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">History</h1>
-          <a href="/admin/export/summary/"
-             className="h-10 px-4 glass-button text-[10px] font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
-             download>
-            Export Summary
-          </a>
+    <div className="space-y-6 md:space-y-8 pb-20">
+      <header className="flex flex-wrap items-end justify-between gap-3 px-2">
+        <div>
+          <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
+          <p className="mt-2 text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your reading session history</p>
         </div>
-        <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your reading session history</p>
+        <a
+          href="/admin/export/summary/"
+          download
+          className="py-1 text-[10px] font-bold uppercase tracking-widest text-stone-500 hover:text-stone-300 underline decoration-dotted underline-offset-4"
+        >
+          Export Summary
+        </a>
       </header>
 
-      <div id="sessions-list" className="space-y-4" role="list" aria-label="Session history">
+      <div id="sessions-list" className="border-y border-[var(--theme-border)] divide-y divide-[var(--theme-border)]" role="list" aria-label="Session history">
         {sessions.map((session) => {
           const duration = formatDuration(session.started_at, session.ended_at)
           return (
-            <div key={session.id} role="listitem" className="glass-card p-4 md:p-6 group transition-all hover:border-white/20 relative overflow-hidden">
-              <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3 md:gap-6 relative z-10">
-                <div className="space-y-3 md:space-y-4 flex-1 min-w-0">
-                  <div className="flex items-center gap-3">
-                    <div className="px-2 py-0.5 bg-white/5 rounded-lg border border-white/5 text-[9px] font-black uppercase tracking-widest text-stone-400">
-                      {formatDate(session.started_at)}
-                    </div>
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-stone-600">
-                      {formatTime(session.started_at)}
-                    </span>
-                  </div>
+            <div key={session.id} role="listitem" className="flex gap-3 md:gap-4 py-4 px-2 md:px-3">
+              <div className="w-16 md:w-20 shrink-0">
+                <div className="text-xs font-bold leading-none text-stone-200">
+                  {formatDate(session.started_at)}
+                </div>
+                <div className="mt-1 text-[10px] font-bold uppercase tracking-widest leading-none text-stone-500">
+                  {formatTime(session.started_at)}
+                </div>
+              </div>
 
-                  {session.active_thread && (
-                    <div className="space-y-2">
-                      <p className="font-black text-stone-300 truncate">{session.active_thread.title}</p>
-                      <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">
-                        {session.active_thread.format}
-                        {session.active_thread.next_issue_number ? (
-                          <span> · #{session.active_thread.next_issue_number}</span>
-                        ) : null}
-                      </p>
-                      {(session.active_thread.issues_read != null && session.active_thread.issues_read > 0) || (
-                        session.active_thread.last_rating != null
-                      ) ? (
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[8px] font-black uppercase tracking-widest text-stone-400">
-                          {session.active_thread.issues_read != null && session.active_thread.issues_read > 0 && (
-                            <span>{session.active_thread.issues_read} read</span>
-                          )}
-                          {session.active_thread.last_rating != null && (
-                            <span className="text-amber-400">Rated {session.active_thread.last_rating.toFixed(1)}</span>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">
-                          {session.active_thread.issues_remaining != null
-                            ? `${session.active_thread.issues_remaining} left in queue`
-                            : null}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {session.ladder_path && (
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[8px] font-black uppercase tracking-widest text-stone-500">
-                        <span>Die size</span>
-                        <span className="text-stone-300">
-                          {formatDiceProgression(session.ladder_path)}
-                        </span>
+              <div className="min-w-0 flex-1 space-y-2">
+                {session.active_thread && (
+                  <div className="space-y-1">
+                    <p className="font-bold text-sm leading-tight text-stone-200 truncate">{session.active_thread.title}</p>
+                    <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+                      {session.active_thread.format}
+                      {session.active_thread.next_issue_number ? (
+                        <span> · #{session.active_thread.next_issue_number}</span>
+                      ) : null}
+                    </p>
+                    {(session.active_thread.issues_read != null && session.active_thread.issues_read > 0) || (
+                      session.active_thread.last_rating != null
+                    ) ? (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                        {session.active_thread.issues_read != null && session.active_thread.issues_read > 0 && (
+                          <span>{session.active_thread.issues_read} read</span>
+                        )}
+                        {session.active_thread.last_rating != null && (
+                          <span className="text-amber-400">Rated {session.active_thread.last_rating.toFixed(1)}</span>
+                        )}
                       </div>
-                      {session.last_rolled_result != null && session.last_rolled_result > 0 && (
-                        <p className="text-[9px] font-black text-amber-400/70 uppercase tracking-widest">
-                          Rolled {session.last_rolled_result}
-                        </p>
-                      )}
-                    </div>
-                  )}
+                    ) : (
+                      <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+                        {session.active_thread.issues_remaining != null
+                          ? `${session.active_thread.issues_remaining} left in queue`
+                          : null}
+                      </p>
+                    )}
+                  </div>
+                )}
 
-                  {session.ended_at && (
-                    <div className="flex items-center gap-2 text-[9px] font-black text-stone-500 uppercase tracking-widest">
-                      {duration && (
-                        <span>Duration: {duration}</span>
-                      )}
-                      {duration && (session.snapshot_count ?? 0) > 0 && (
-                        <span> · </span>
-                      )}
-                      {(session.snapshot_count ?? 0) > 0 && (
-                        <Link
-                          to={`/sessions/${session.id}`}
-                          className="underline decoration-dotted underline-offset-2 hover:text-stone-300"
-                        >
-                          Snapshots ({session.snapshot_count})
-                        </Link>
-                      )}
+                {session.ladder_path && (
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                      <span>Die size</span>
+                      <span className="text-stone-300">
+                        {formatDiceProgression(session.ladder_path)}
+                      </span>
                     </div>
-                  )}
-                </div>
+                    {session.last_rolled_result != null && session.last_rolled_result > 0 && (
+                      <p className="text-[10px] font-bold text-amber-400/70 uppercase tracking-widest">
+                        Rolled {session.last_rolled_result}
+                      </p>
+                    )}
+                  </div>
+                )}
 
-                <div className="flex gap-2 shrink-0">
-                  <Link
-                    to={`/sessions/${session.id}`}
-                    className="h-9 md:h-12 px-4 md:px-6 glass-button text-[10px] md:text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl flex items-center"
-                  >
-                    <span className="md:hidden">View</span>
-                    <span className="hidden md:inline">View Full Session</span>
-                  </Link>
-                </div>
+                {session.ended_at && (
+                  <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+                    {duration && (
+                      <span>Duration: {duration}</span>
+                    )}
+                    {duration && (session.snapshot_count ?? 0) > 0 && (
+                      <span aria-hidden>·</span>
+                    )}
+                    {(session.snapshot_count ?? 0) > 0 && (
+                      <Link
+                        to={`/sessions/${session.id}`}
+                        className="underline decoration-dotted underline-offset-2 hover:text-stone-300"
+                      >
+                        Snapshots ({session.snapshot_count})
+                      </Link>
+                    )}
+                  </div>
+                )}
+
+                <Link
+                  to={`/sessions/${session.id}`}
+                  className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-stone-400 hover:text-stone-200 underline decoration-dotted underline-offset-4"
+                >
+                  View full session <span aria-hidden>→</span>
+                </Link>
               </div>
             </div>
           )
