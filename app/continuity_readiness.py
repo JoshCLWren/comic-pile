@@ -38,18 +38,18 @@ async def evaluate_continuity_readiness(
     user_id: int,
     node_type: ContinuityReadinessNodeType,
     node_id: int,
-) -> ContinuityReadinessResponse:
-    """Evaluate direct readiness for an owned issue, thread, or crossover.
+    expose_result: bool = False,
+) -> ContinuityReadinessResponse | None:
+    """Evaluate legacy direct readiness only for an explicit API compatibility caller.
 
-    Args:
-        db: Database session used to load the authenticated user's continuity graph.
-        user_id: Authenticated user whose owned graph should be evaluated.
-        node_type: Type of owned node to evaluate.
-        node_id: Identifier of the owned node to evaluate.
-
-    Returns:
-        Structured readiness state and any unsatisfied direct blockers.
+    Standalone readiness is no longer part of normal product rendering. Internal
+    callers such as crossover detail therefore receive ``None`` without loading
+    the account-wide continuity snapshot. The temporary public compatibility
+    endpoint opts in with ``expose_result=True`` until dead API cleanup lands.
     """
+    if not expose_result:
+        return None
+
     snapshot = await load_snapshot(db, user_id)
     evaluated_issue_id: int | None = None
 
