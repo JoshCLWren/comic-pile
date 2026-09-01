@@ -50,7 +50,7 @@ export function ReadingRouteExplanation({
         Why this issue is next
       </p>
       <p className="mt-2 text-[11px] leading-relaxed text-stone-400">
-        Roll already selected this issue. The context below describes recorded reading-order and dependency relationships without running a second eligibility check.
+        Roll already selected this issue. The context below describes recorded reading-order and dependency relationships without running a second verification request.
       </p>
 
       {upstreamThreads.length > 0 ? (
