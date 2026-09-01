@@ -30,18 +30,35 @@ def test_production_workflow_migrates_before_deploying() -> None:
     assert "branches:\n      - main" in workflow
 
 
-def test_production_workflow_reconciles_factory_merges_without_push_events() -> None:
-    """Factory-token merges must still trigger migration-gated production deploys."""
+def test_production_workflow_deduplicates_automatic_triggers_by_main_sha() -> None:
+    """Recovery triggers must not deploy a SHA that is already READY."""
     workflow = (
         REPOSITORY_ROOT / ".github" / "workflows" / "deploy-production.yml"
     ).read_text(encoding="utf-8")
 
+    # Factory-token merges do not reliably emit a second push-triggered workflow,
+    # so completion and scheduled recovery triggers remain necessary.
     assert "workflow_run:" in workflow
     assert "Factory Ready Merge Drain" in workflow
     assert "Factory Completion Drain" in workflow
     assert "schedule:" in workflow
     assert "cron: '*/5 * * * *'" in workflow
-    assert "ref: main" in workflow
+    assert "workflow_dispatch:" in workflow
+
+    # Automatic recovery triggers serialize, then skip once the exact main SHA
+    # has a READY production deployment. Manual dispatch remains a force-recovery path.
+    assert "group: vercel-production" in workflow
+    assert "cancel-in-progress: false" in workflow
+    assert "vercel list comic-pile" in workflow
+    assert "--prod" in workflow
+    assert "--status READY" in workflow
+    assert '--meta "githubCommitSha=$deploy_sha"' in workflow
+    assert "jq '.deployments | length'" in workflow
+    assert 'GITHUB_EVENT_NAME" == "workflow_dispatch"' in workflow
+    assert "deployment_required=false" in workflow
+    assert "needs: preflight" in workflow
+    assert "if: needs.preflight.outputs.deployment_required == 'true'" in workflow
+    assert "ref: ${{ needs.preflight.outputs.deploy_sha }}" in workflow
 
 
 def test_session_context_migration_has_unique_revision_and_complete_event_columns() -> None:
