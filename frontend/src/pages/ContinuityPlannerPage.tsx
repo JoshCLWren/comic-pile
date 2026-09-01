@@ -2,15 +2,14 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  ContinuityIssueSelector,
-  ContinuityThreadSelector,
+   ContinuityIssueSelector,
+   ContinuityThreadSelector,
 } from '../components/continuity'
 import { continuityPlansApi, type ContinuityPlanNode, type ContinuityPlanNodeType } from '../services/api-continuity-plans'
 import { dependencyGroupsApi, type DependencyGroup } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api'
 import PlanProjectionDialog from '../components/PlanProjectionDialog'
-import PlanReadinessPanel from '../components/PlanReadinessPanel'
 import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
 
