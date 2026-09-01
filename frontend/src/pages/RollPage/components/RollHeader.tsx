@@ -6,6 +6,10 @@ import type { DiceSide } from '../../../components/diceTypes'
 import type { RollBootstrapResponse, RollBootstrapThread, SessionModeState } from '../../../types/rollBootstrap'
 import { ReadingModeControl } from './ReadingModeControl'
 
+const DIE_SEELECTOR_CLASS = "die-selector-btn flex min-h-11 min-w-11 items-center justify-center px-2 text-[10px] font-black rounded-lg border transition-colors"
+const DIE_SEELECTOR_SELECTED_CLASS = "bg-amber-600/20 border-amber-600 text-amber-500"
+const DIE_SEELECTOR_UNSELECTED_CLASS = "bg-white/5 border-white/10 hover:bg-white/10"
+
 interface RollHeaderProps {
   bootstrap: RollBootstrapResponse
   currentDie: number
