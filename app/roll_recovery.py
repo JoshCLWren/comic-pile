@@ -1,5 +1,7 @@
 """Build structured recovery context for blocked pending rolls."""
 
+import logging
+
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +12,8 @@ from app.schemas.roll import (
     RollRecoveryInfo,
     RollRecoveryPrerequisite,
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def build_roll_recovery(
@@ -48,6 +52,18 @@ async def build_roll_recovery(
         )
     except HTTPException as exc:
         if exc.status_code == 404:
+            return None
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        if exc.status_code == 422 and detail.get("code") == "continuity_graph_too_large":
+            logger.warning(
+                "Roll recovery unavailable because continuity graph exceeded capacity",
+                extra={
+                    "user_id": user_id,
+                    "pending_thread_id": pending_thread_id,
+                    "continuity_error_code": detail.get("code"),
+                    "continuity_error_limit": detail.get("limit"),
+                },
+            )
             return None
         raise
 
