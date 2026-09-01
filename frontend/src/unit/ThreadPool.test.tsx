@@ -32,7 +32,7 @@ function renderPool(overrides: Partial<{
   blockedThreads: RollBootstrapThread[]
   blockingDependencyMap: Record<number, BlockingDependency[]>
   blockedExpanded: boolean
-}>) {
+}> = {}) {
   const {
     pool = mockPool,
     blockedThreads = mockBlockedThreads,
