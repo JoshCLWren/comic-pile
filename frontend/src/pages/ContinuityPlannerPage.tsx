@@ -162,29 +162,27 @@ export default function ContinuityPlannerPage() {
   const parsedId = id ? Number(id) : null
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
   const isInvalidRoute = id !== undefined && parsedId !== null && (!Number.isInteger(parsedId) || parsedId <= 0)
-  const [name, setName] = useState(DEFAULT_PLAN_NAME)
-  const [lanes, setLanes] = useState<PlannerLane[]>([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
-  const [nodes, setNodes] = useState<PlannerNode[]>([])
-  const [activeLaneId, setActiveLaneId] = useState(DEFAULT_LANE_ID)
-  const [savedName, setSavedName] = useState('')
-  const [savedLanes, setSavedLanes] = useState<PlannerLane[]>([])
-  const [savedNodes, setSavedNodes] = useState<PlannerNode[]>([])
-  const [threads, setThreads] = useState<Thread[]>([])
-  const [groups, setGroups] = useState<DependencyGroup[]>([])
-  const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
-  const [issues, setIssues] = useState<Issue[]>([])
-  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
-  const [selectedGroupId, setSelectedGroupId] = useState('')
-  const [isLoading, setIsLoading] = useState(Boolean(planId))
-  const [isLoadingIssues, setIsLoadingIssues] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [issueLoadError, setIssueLoadError] = useState<string | null>(null)
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [isProjectionOpen, setIsProjectionOpen] = useState(false)
-  const [laneSeq, setLaneSeq] = useState(0)
-  const [readinessRefreshKey, setReadinessRefreshKey] = useState(0)
-  const [editingGateNodeId, setEditingGateNodeId] = useState<string | null>(null)
+const [name, setName] = useState(DEFAULT_PLAN_NAME)
+   const [lanes, setLanes] = useState<PlannerLane[]>([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
+   const [nodes, setNodes] = useState<PlannerNode[]>([])
+   const [activeLaneId, setActiveLaneId] = useState(DEFAULT_LANE_ID)
+   const [savedName, setSavedName] = useState('')
+   const [savedLanes, setSavedLanes] = useState<PlannerLane[]>([])
+   const [savedNodes, setSavedNodes] = useState<PlannerNode[]>([])
+   const [threads, setThreads] = useState<Thread[]>([])
+   const [groups, setGroups] = useState<DependencyGroup[]>([])
+   const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
+   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
+   const [selectedGroupId, setSelectedGroupId] = useState('')
+   const [isLoading, setIsLoading] = useState(Boolean(planId))
+   const [isLoadingIssues, setIsLoadingIssues] = useState(false)
+   const [isSaving, setIsSaving] = useState(false)
+   const [loadError, setLoadError] = useState<string | null>(null)
+   const [issueLoadError, setIssueLoadError] = useState<string | null>(null)
+   const [saveError, setSaveError] = useState<string | null>(null)
+   const [isProjectionOpen, setIsProjectionOpen] = useState(false)
+   const [laneSeq, setLaneSeq] = useState(0)
+   const [editingGateNodeId, setEditingGateNodeId] = useState<string | null>(null)
   const lastPlanId = typeof window === 'undefined' ? null : window.localStorage.getItem(LAST_PLAN_KEY)
   const issueRequestRef = useRef<AbortController | null>(null)
 
@@ -433,39 +431,38 @@ export default function ContinuityPlannerPage() {
     setActiveLaneId((current) => (current === laneId ? lanes.find((lane) => lane.id !== laneId)?.id ?? '' : current))
   }
 
-  const save = async () => {
-    if (!name.trim()) {
-      setSaveError('Enter a plan name.')
-      return
-    }
-    setIsSaving(true)
-    setSaveError(null)
-    try {
-      const payload = buildPayload(name, lanes, nodes)
-      const saved = planId
-        ? await continuityPlansApi.update(planId, payload)
-        : await continuityPlansApi.create(payload)
-      const savedLanes = (saved.lanes.length > 0
-        ? saved.lanes
-        : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
-      ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
-        .sort((a, b) => a.order - b.order)
-      const normalized = normalizePositions(nodes)
-      setName(saved.name)
-      setLanes(savedLanes)
-      setNodes(normalized)
-      setSavedName(saved.name)
-      setSavedLanes(savedLanes)
-      setSavedNodes(normalized)
-      window.localStorage.setItem(LAST_PLAN_KEY, String(saved.id))
-      setReadinessRefreshKey((key) => key + 1)
-      if (!planId) navigate(`/continuity-plans/${saved.id}`, { replace: true })
-    } catch (error) {
-      setSaveError(getConflictMessage(error, nodes))
-    } finally {
-      setIsSaving(false)
-    }
-  }
+const save = async () => {
+     if (!name.trim()) {
+       setSaveError('Enter a plan name.')
+       return
+     }
+     setIsSaving(true)
+     setSaveError(null)
+     try {
+       const payload = buildPayload(name, lanes, nodes)
+       const saved = planId
+         ? await continuityPlansApi.update(planId, payload)
+         : await continuityPlansApi.create(payload)
+       const savedLanes = (saved.lanes.length > 0
+         ? saved.lanes
+         : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
+       ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
+         .sort((a, b) => a.order - b.order)
+       const normalized = normalizePositions(nodes)
+       setName(saved.name)
+       setLanes(savedLanes)
+       setNodes(normalized)
+       setSavedName(saved.name)
+       setSavedLanes(savedLanes)
+       setSavedNodes(normalized)
+       window.localStorage.setItem(LAST_PLAN_KEY, String(saved.id))
+       if (!planId) navigate(`/continuity-plans/${saved.id}`, { replace: true })
+     } catch (error) {
+       setSaveError(getConflictMessage(error, nodes))
+     } finally {
+       setIsSaving(false)
+     }
+   }
 
   const cancel = () => {
     setName(savedName || DEFAULT_PLAN_NAME)
@@ -760,8 +757,6 @@ export default function ContinuityPlannerPage() {
           })}
         </div>
       </section>
-
-      <PlanReadinessPanel planId={planId} refreshKey={readinessRefreshKey} />
 
       {saveError && <p role="alert" className="rounded-xl border border-[var(--theme-danger)] bg-[var(--theme-bg-panel)] p-3 text-[var(--theme-danger)]">{saveError}</p>}
 
