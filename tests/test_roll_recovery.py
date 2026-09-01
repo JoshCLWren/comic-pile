@@ -76,6 +76,52 @@ async def test_roll_recovery_ignores_stale_pending_thread(
 
 
 @pytest.mark.asyncio
+async def test_roll_recovery_fails_open_for_continuity_capacity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep bootstrap usable when optional continuity recovery exceeds its graph cap."""
+    resolver = AsyncMock(
+        side_effect=HTTPException(
+            status_code=422,
+            detail={"code": "continuity_graph_too_large", "limit": 5000},
+        )
+    )
+    monkeypatch.setattr("app.roll_recovery.resolve_continuity_chains", resolver)
+
+    recovery = await build_roll_recovery(
+        AsyncMock(),
+        user_id=1,
+        pending_thread_id=42,
+        pending_thread_title="Original Roll",
+    )
+
+    assert recovery is None
+    resolver.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_roll_recovery_preserves_other_422_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Do not hide unrelated validation failures behind the incident fallback."""
+    resolver = AsyncMock(
+        side_effect=HTTPException(status_code=422, detail={"code": "different_problem"})
+    )
+    monkeypatch.setattr("app.roll_recovery.resolve_continuity_chains", resolver)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await build_roll_recovery(
+            AsyncMock(),
+            user_id=1,
+            pending_thread_id=42,
+            pending_thread_title="Original Roll",
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == {"code": "different_problem"}
+
+
+@pytest.mark.asyncio
 async def test_roll_recovery_preserves_non_stale_resolver_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
