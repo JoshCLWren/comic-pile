@@ -260,7 +260,7 @@ describe('QueuePage callback coverage', () => {
     // Search is debounced (300ms) so the parent query only commits after the delay.
     await waitFor(() => expect(screen.getByText('No active threads match your search')).toBeInTheDocument(), { timeout: 2000 })
     await user.clear(screen.getByPlaceholderText('Search...'))
-    expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument(), { timeout: 2000 })
 
     render(<MemoryRouter initialEntries={[{ pathname: '/queue', state: { editThreadId: 1 } }]}><QueuePage /></MemoryRouter>)
     await waitFor(() => expect(screen.getByRole('heading', { name: /edit thread/i })).toBeInTheDocument())
