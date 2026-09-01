@@ -10,7 +10,6 @@ import { dependencyGroupsApi, type DependencyGroup } from '../services/api-depen
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api'
 import PlanProjectionDialog from '../components/PlanProjectionDialog'
-import PlanReadinessPanel from '../components/PlanReadinessPanel'
 import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
 
