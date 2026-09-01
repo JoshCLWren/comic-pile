@@ -27,15 +27,80 @@ env:
   VERCEL_TEAM_SLUG: joshclwrens-projects
 
 jobs:
+  preflight:
+    name: Deduplicate exact main SHA
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      deploy_sha: ${{ steps.deployment.outputs.deploy_sha }}
+      deployment_required: ${{ steps.deployment.outputs.deployment_required }}
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Require Vercel token
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [[ -z "$VERCEL_TOKEN" ]]; then
+            echo "Repository secret VERCEL_TOKEN is required for production deployment." >&2
+            exit 1
+          fi
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@58.1.0
+
+      - name: Check for an existing production deployment
+        id: deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deploy_sha="$(git rev-parse HEAD)"
+          echo "deploy_sha=$deploy_sha" >> "$GITHUB_OUTPUT"
+
+          # A manual run is an explicit recovery request and may intentionally
+          # redeploy a SHA that Vercel already considers READY.
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "deployment_required=true" >> "$GITHUB_OUTPUT"
+            echo "Manual recovery requested for $deploy_sha"
+            exit 0
+          fi
+
+          deployments_json="$(vercel list comic-pile \
+            --prod \
+            --status READY \
+            --meta "githubCommitSha=$deploy_sha" \
+            --limit 1 \
+            --json \
+            --yes \
+            --scope "$VERCEL_TEAM_SLUG" \
+            --token "$VERCEL_TOKEN")"
+          ready_count="$(jq '.deployments | length' <<< "$deployments_json")"
+
+          if [[ "$ready_count" -gt 0 ]]; then
+            echo "deployment_required=false" >> "$GITHUB_OUTPUT"
+            echo "Production already has a READY deployment for $deploy_sha; skipping duplicate trigger."
+          else
+            echo "deployment_required=true" >> "$GITHUB_OUTPUT"
+            echo "No READY production deployment exists for $deploy_sha."
+          fi
+
   deploy:
     name: Migrate Neon and deploy exact main SHA
+    needs: preflight
+    if: needs.preflight.outputs.deployment_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - name: Check out deployment commit
         uses: actions/checkout@v7
         with:
-          ref: main
+          ref: ${{ needs.preflight.outputs.deploy_sha }}
           fetch-depth: 1
           persist-credentials: false
 
