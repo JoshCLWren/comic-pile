@@ -1,11 +1,12 @@
 import { getApiErrorDetail } from '../../utils/apiError'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
+import type { SnoozeCorrectionInfo } from '../../types'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 
 interface UseRollSnoozeParams {
   state: RollPageState & RollPageStateSetters
   snoozeMutation: {
-    mutate: (expectedPendingThreadId?: number) => Promise<{ correction: { suggest_clarification: boolean; reason_code: string; active_bandwidth: string | null; active_confidence: number | null; predicted_bandwidth: string | null; bandwidth_changed: boolean } | null } | undefined>
+    mutate: (expectedPendingThreadId?: number) => Promise<{ correction: SnoozeCorrectionInfo | null } | undefined>
   }
   unsnoozeMutation: { mutate: (threadId: number) => Promise<unknown> }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>

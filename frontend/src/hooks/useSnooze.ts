@@ -66,7 +66,10 @@ export function useSnooze() {
   }, [refreshAuthoritativeState])
 
   const mutate = async (expectedPendingThreadId?: number): Promise<{ correction: SnoozeCorrectionInfo | null } | undefined> => {
-    if (inFlightRequest.current) return inFlightRequest.current
+    if (inFlightRequest.current) {
+      const result = await inFlightRequest.current
+      return result ? { correction: result.correction } : undefined
+    }
     if (refreshRequest.current) {
       await refreshRequest.current
       return undefined
