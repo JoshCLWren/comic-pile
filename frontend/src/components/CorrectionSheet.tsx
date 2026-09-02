@@ -114,7 +114,7 @@ export default function CorrectionSheet({
         )}
       </section>
 
-      <fieldset className="space-y-2" disabled={submitting}>
+      <fieldset className="space-y-2" {...(submitting ? { disabled: true } : {})}>
         <legend className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
           What would you prefer?
         </legend>
@@ -146,7 +146,7 @@ export default function CorrectionSheet({
         type="button"
         onClick={handleDismiss}
         className="w-full mt-4 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-black uppercase tracking-wider text-stone-300 transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-amber-500"
-        disabled={submitting}
+        {...(submitting ? { disabled: true } : {})}
         data-testid="correction-sheet-dismiss"
       >
         {submitting ? 'Applying…' : 'Dismiss'}

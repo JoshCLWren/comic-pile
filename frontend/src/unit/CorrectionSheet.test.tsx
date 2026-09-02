@@ -200,7 +200,7 @@ describe('CorrectionSheet', () => {
   it('shows applying text on dismiss button while submitting', async () => {
     let resolveUpdate: (() => void) | undefined
     updateMode.mockImplementationOnce(
-      () => new Promise<void>((resolve) => { resolveUpdate = resolve }),
+      () => new Promise<void>((resolve) => { resolveUpdate = resolve }) as never,
     )
     const { user } = renderSheet()
     await user.click(screen.getByTestId('correction-choice-even_easier'))
