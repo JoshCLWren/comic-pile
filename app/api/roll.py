@@ -696,6 +696,12 @@ async def skip_thread(
         snoozed_thread_ids=session_snoozed_thread_ids,
         snoozed_threads=pre_snoozed_threads,
         skipped_thread_ids=skipped_ids,
+        skipped_threads=[
+            SnoozedThreadInfo(
+                id=pending_thread_id,
+                title=pre_active_thread_title or "",
+            )
+        ] if pending_thread_id is not None else [],
         pending_thread_id=None,  # Cleared by skip
         timezone=session_timezone,
         reading_bandwidth=session_reading_bandwidth,
