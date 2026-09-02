@@ -80,7 +80,7 @@ TERMINAL_OUTCOME_FILE="${RUNNER_TEMP:-/tmp}/factory-discovery-outcome"
 record_terminal_outcome() {
   local outcome="$1" detail="$2"
   case "$outcome" in
-    success|no_work|work_failure|provider_failure|provider_throttle|model_unavailable|model_policy_violation|environment_failure|control_plane_failure|unknown_failure) ;;
+    success|no_work|work_failure|provider_failure|provider_throttle|model_unavailable|model_retired_410|model_policy_violation|environment_failure|control_plane_failure|unknown_failure) ;;
     *)
       echo "unsupported terminal factory outcome: ${outcome}" >&2
       return 2
@@ -95,7 +95,9 @@ record_agent_failure_outcome() {
   local status="$1" log_file="/tmp/opencode-factory-${WORKER}.log"
   if [[ -f "$log_file" ]] && grep -Eqi '429|too many requests|rate.?limit|quota|throttl|capacity' "$log_file"; then
     record_terminal_outcome provider_throttle "pinned provider/model session was throttled (agent exit ${status})"
-  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*(404|410)|404 Not Found|410 Gone' "$log_file"; then
+  elif [[ -f "$log_file" ]] && grep -Eqi 'HTTP[^0-9]*410|410 Gone' "$log_file"; then
+    record_terminal_outcome model_retired_410 "pinned model has been permanently retired by the provider (agent exit ${status})"
+  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found' "$log_file"; then
     record_terminal_outcome model_unavailable "pinned model became unavailable during execution (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'model[^\n]*(policy|guard)[^\n]*(blocked|rejected|denied)|model[^\n]*(blocked|rejected|denied)[^\n]*(policy|guard)' "$log_file"; then
     record_terminal_outcome model_policy_violation "pinned model was rejected by provider/model policy (agent exit ${status})"
