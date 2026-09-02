@@ -180,7 +180,7 @@ describe('CorrectionSheet', () => {
   it('disables choice buttons while submitting', async () => {
     let resolveUpdate: (() => void) | undefined
     updateMode.mockImplementationOnce(
-      () => new Promise<void>((resolve) => { resolveUpdate = resolve }),
+      () => new Promise<void>((resolve) => { resolveUpdate = resolve }) as never,
     )
     const { user } = renderSheet()
     await user.click(screen.getByTestId('correction-choice-even_easier'))

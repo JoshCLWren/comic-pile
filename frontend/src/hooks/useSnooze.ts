@@ -13,7 +13,7 @@ import {
 } from './rollMutationReconciliation'
 import type { SnoozeCorrectionInfo } from '../types'
 
-type SnoozeResult = Awaited<ReturnType<typeof protectedRollMutationApi.snooze>> | undefined
+type SnoozeResult = { correction: SnoozeCorrectionInfo | null } | undefined
 
 const SNOOZE_REFRESH_ATTEMPTS = 2
 
@@ -126,7 +126,7 @@ export function useSnooze() {
       }
     })()
 
-    inFlightRequest.current = request as Promise<SnoozeResult>
+    inFlightRequest.current = request
 
     try {
       return await request
