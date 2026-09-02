@@ -4,6 +4,7 @@ const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
   patch: vi.fn(),
+  put: vi.fn(),
   delete: vi.fn(),
 }))
 
@@ -147,6 +148,23 @@ describe('dependencyGroupsApi', () => {
     )
     expect(apiMock.delete).toHaveBeenCalledWith(
       '/v1/reading-order-groups/7/members/10',
+    )
+  })
+
+  it('sets authoritative order via PUT', async () => {
+    const updated = { id: 7, name: 'Annihilation', created_at: '2026-01-01T00:00:00Z', memberships: [] }
+    apiMock.put.mockResolvedValueOnce(updated)
+
+    await expect(
+      dependencyGroupsApi.setOrder(7, [
+        { issue_id: 11, sequence_order: 1 },
+        { issue_id: 12, sequence_order: 2 },
+      ]),
+    ).resolves.toEqual(updated)
+
+    expect(apiMock.put).toHaveBeenCalledWith(
+      '/v1/reading-order-groups/7/order',
+      { items: [{ issue_id: 11, sequence_order: 1 }, { issue_id: 12, sequence_order: 2 }] },
     )
   })
 })

@@ -394,4 +394,65 @@ describe('CrossoverDetailPage', () => {
 
     expect(screen.queryByRole('link', { name: /Reading Plan/ })).not.toBeInTheDocument()
   })
+
+  it('renders unordered members last with fallback position marker', async () => {
+    const orderedIssue = { ...warlockIssue, id: 11, issue_number: '3', position: 9, status: 'read' as const }
+    const unorderedIssue = { ...warlockIssue, id: 99, issue_number: '½', position: 1, status: 'unread' as const }
+    mockedGroups.getDetail.mockResolvedValue(
+      makeDetail([
+        {
+          membership: {
+            id: 20,
+            thread_id: null,
+            issue_id: 99,
+            sequence_order: null,
+            series_title: warlockThread.title,
+            issue_number: '½',
+          },
+          thread: warlockThread,
+          issue: unorderedIssue,
+          other_crossovers: [],
+        },
+        makeDetailMember(1, { issue: orderedIssue, thread: warlockThread }),
+      ]),
+    )
+
+    renderPage()
+
+    const rows = await screen.findAllByTestId('crossover-member-row')
+    expect(rows).toHaveLength(2)
+    // Ordered entry (position 1) must sort first; unordered last with fallback marker
+    expect(within(rows[0]).getByText(/Issue 3/)).toBeInTheDocument()
+    expect(within(rows[1]).getByText(/Issue ½/)).toBeInTheDocument()
+    expect(within(rows[1]).getByText('—.')).toBeInTheDocument()
+  })
+
+  it('applies id tie-breaker when sequence_order values are equal', async () => {
+    const issueA = { ...warlockIssue, id: 50, issue_number: '5', status: 'unread' as const }
+    const issueB = { ...warlockIssue, id: 51, issue_number: '6', status: 'unread' as const }
+    mockedGroups.getDetail.mockResolvedValue(
+      makeDetail([
+        {
+          membership: { id: 10, thread_id: null, issue_id: 51, sequence_order: 1, series_title: warlockThread.title, issue_number: '6' },
+          thread: warlockThread,
+          issue: issueB,
+          other_crossovers: [],
+        },
+        {
+          membership: { id: 5, thread_id: null, issue_id: 50, sequence_order: 1, series_title: warlockThread.title, issue_number: '5' },
+          thread: warlockThread,
+          issue: issueA,
+          other_crossovers: [],
+        },
+      ]),
+    )
+
+    renderPage()
+
+    const rows = await screen.findAllByTestId('crossover-member-row')
+    expect(rows).toHaveLength(2)
+    // Lower membership id must sort first when sequence_order ties
+    expect(within(rows[0]).getByText(/Issue 5/)).toBeInTheDocument()
+    expect(within(rows[1]).getByText(/Issue 6/)).toBeInTheDocument()
+  })
 })
