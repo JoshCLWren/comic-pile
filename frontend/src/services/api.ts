@@ -573,7 +573,7 @@ export const snoozeApi = {
 }
 
 export const skipApi = {
-  skip: () => api.post<void>('/v1/roll/skip/'),
+  skip: () => api.post<RollResponse>('/v1/roll/skip'),
   unskip: (threadId: number) => api.post<void>(`/v1/roll/skip/${threadId}/unskip`),
 }
 
