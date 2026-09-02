@@ -667,10 +667,7 @@ async def skip_roll(
     # Skipped roll is still a roll selection; record selection method as "skip"
     # to distinguish it from ordinary random/momentum draws while preserving
     # the underlying weighting reason codes.
-    if resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
-        selection_method = "skip"
-    else:
-        selection_method = "skip"
+    selection_method = "skip"
 
     event = Event(
         type="roll",
