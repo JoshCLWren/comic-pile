@@ -91,14 +91,14 @@ def test_opencode_uses_project_available_cli_catalog() -> None:
     assert result.candidates[0].discovered_by == "opencode_models"
 
 
-def test_omniroute_exposes_only_factory_owned_free_combo() -> None:
-    """OmniRoute contributes the factory-owned validated combo."""
+def test_omniroute_exposes_only_validated_free_cascade() -> None:
+    """OmniRoute contributes the validated free cascade."""
     result = CANDIDATES.discover(
         "omniroute-free",
         json.dumps(
             {
                 "data": [
-                    {"id": "factory-free"},
+                    {"id": "free-cascade-small"},
                     {"id": "auto/best-coding"},
                     {"id": "provider/backing-model"},
                 ]
@@ -108,9 +108,9 @@ def test_omniroute_exposes_only_factory_owned_free_combo() -> None:
 
     assert result.status == "available"
     assert [candidate.model for candidate in result.candidates] == [
-        "factory-free"
+        "free-cascade-small"
     ]
-    assert result.candidates[0].runtime_model == "omniroute/factory-free"
+    assert result.candidates[0].runtime_model == "omniroute/free-cascade-small"
 
 
 

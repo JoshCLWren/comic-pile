@@ -185,7 +185,7 @@ class OpenCodeFreeAdapter:
 
 
 class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
-    """Expose the factory-owned, health-validated OmniRoute free combo."""
+    """Expose the health-validated OmniRoute free cascade."""
 
     def __init__(self) -> None:
         """Configure the external OmniRoute OpenAI-compatible adapter."""
@@ -196,9 +196,9 @@ class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
         raw_catalog: str,
         configured_models: Sequence[str] = (),
     ) -> Discovery:
-        """Expose only the factory-owned free combo advertised by OmniRoute."""
+        """Expose only the validated free cascade advertised by OmniRoute."""
         del configured_models
-        return super().discover(raw_catalog, ("factory-free",))
+        return super().discover(raw_catalog, ("free-cascade-small",))
 
 
 
@@ -261,8 +261,8 @@ ADAPTERS: dict[str, ProviderAdapter] = {
         free_only=True,
     ),
     # OmniRoute owns discovery and routing across its underlying providers.
-    # The factory consumes a locally maintained, health-validated combo rather
-    # than the broader synthetic route whose candidates may go stale.
+    # The factory consumes the locally maintained, health-validated free cascade
+    # rather than the broader synthetic route whose candidates may go stale.
     "omniroute-free": OmniRouteFreeAdapter(),
     # Kilo documents a changing free model set exposed through interactive model
     # selection, but no reliable non-interactive enumeration contract. Keep that
