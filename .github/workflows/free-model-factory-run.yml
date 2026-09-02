@@ -14,6 +14,8 @@ on:
         required: false
       OMNIROUTE_API_KEY:
         required: false
+      OMNIROUTE_MANAGEMENT_API_KEY:
+        required: false
       PR_REBASE_TOKEN:
         required: true
 
@@ -48,6 +50,7 @@ jobs:
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
+      OMNIROUTE_MANAGEMENT_API_KEY: ${{ secrets.OMNIROUTE_MANAGEMENT_API_KEY }}
       OMNIROUTE_BASE_URL: ${{ vars.OMNIROUTE_BASE_URL }}
     steps:
       - name: Require trusted push credential
@@ -634,7 +637,7 @@ jobs:
           MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
-          [[ -n "${OMNIROUTE_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]] || {
+          [[ -n "${OMNIROUTE_MANAGEMENT_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]] || {
             echo 'OmniRoute routing summary unavailable: gateway credentials missing' >&2
             exit 0
           }
@@ -645,7 +648,7 @@ jobs:
           analytics="$RUNNER_TEMP/omniroute-analytics.json"
           code="$(curl --silent --show-error --output "$analytics" --write-out '%{http_code}' \
             --connect-timeout 5 --max-time 30 \
-            --header "Authorization: Bearer ${OMNIROUTE_API_KEY}" \
+            --header "Authorization: Bearer ${OMNIROUTE_MANAGEMENT_API_KEY}" \
             "${gateway_base_url}/api/usage/analytics?period=session" || true)"
           if [[ "$code" != 200 ]]; then
             message="OmniRoute routing summary unavailable (HTTP ${code})"
