@@ -72,6 +72,349 @@ router = APIRouter(tags=["roll"])
 logger = logging.getLogger(__name__)
 
 
+class _SelectionArtifacts:
+    """Bundle the per-selection work shared between ``roll_dice`` and ``skip_roll``.
+
+    Holds the bounded-pool selection, effort estimates, recommendation
+    snapshot, and the ``Event``/``RecommendationContext`` rows that both
+    endpoints write. Callers commit and wire the result into a
+    ``RollResponse`` after the helper returns.
+    """
+
+    def __init__(
+        self,
+        *,
+        selected_thread: Thread,
+        unread_count: int,
+        issue_number: str | None,
+        selected_thread_issue_id: int | None,
+        selected_thread_issue_number: str | None,
+        bounded_rows: list[tuple[Thread, int, str | None]],
+        selected_index: int,
+        bounded_candidate_ids: list[int],
+        candidate_weights: list,
+        selected_effort_estimate: EffortEstimate,
+        json_candidate_weights: list[dict[str, object]] | None,
+        json_selected_weight: float | None,
+        recommendation_context: dict[str, object],
+        recommendation_reason_codes: list[str],
+        selection_method: str,
+        event: Event,
+        rec_context_create: RecommendationContextCreate,
+    ) -> None:
+        self.selected_thread = selected_thread
+        self.unread_count = unread_count
+        self.issue_number = issue_number
+        self.selected_thread_issue_id = selected_thread_issue_id
+        self.selected_thread_issue_number = selected_thread_issue_number
+        self.bounded_rows = bounded_rows
+        self.selected_index = selected_index
+        self.bounded_candidate_ids = bounded_candidate_ids
+        self.candidate_weights = candidate_weights
+        self.selected_effort_estimate = selected_effort_estimate
+        self.json_candidate_weights = json_candidate_weights
+        self.json_selected_weight = json_selected_weight
+        self.recommendation_context = recommendation_context
+        self.recommendation_reason_codes = recommendation_reason_codes
+        self.selection_method = selection_method
+        self.event = event
+        self.rec_context_create = rec_context_create
+
+
+async def _select_pending_thread(
+    *,
+    db: AsyncSession,
+    user_id: int,
+    current_session: Session,
+    current_die: int,
+    excluded_ids: list[int],
+    selection_bandwidth: str,
+    selection_intent: str,
+    selection_method_override: str | None,
+    empty_pool_detail: str = "No active threads available to roll",
+) -> _SelectionArtifacts:
+    """Run the weighted bounded-pool selection shared by roll and skip endpoints.
+
+    Computes the bounded pool, runs pure-random / bandwidth / momentum
+    selection, builds the per-candidate effort estimates, the JSON snapshot
+    payload, the bounded-pool rolling context, and the ``Event`` and
+    ``RecommendationContextCreate`` records. Returns the bundled artifacts
+    without committing; the caller assigns ``pending_thread_id`` and commits.
+
+    Args:
+        db: Async database session.
+        user_id: Owner of the bounded pool.
+        current_session: Active session used for event linkage and stored mode.
+        current_die: Current die size from the dice ladder.
+        excluded_ids: Thread IDs to exclude from the bounded pool.
+        selection_bandwidth: Bandwidth value to resolve a selection mode with.
+        selection_intent: Intent value to resolve a selection mode with.
+        selection_method_override: When set, write this as the ``Event.selection_method``
+            instead of deriving it from the resolved mode. Skip uses this to label
+            its draw as ``"skip"`` while preserving the underlying reason codes.
+        empty_pool_detail: 400 detail message when the bounded pool is empty.
+            Callers customize this for the roll vs. skip user-facing language.
+
+    Returns:
+        ``_SelectionArtifacts`` ready for the caller to commit and convert into a
+        ``RollResponse``.
+
+    Raises:
+        HTTPException: 400 when the bounded pool is empty.
+    """
+    bounded_rows = await get_bounded_roll_pool_rows(user_id, db, current_die, excluded_ids)
+    if not bounded_rows:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=empty_pool_detail,
+        )
+
+    pool_size = len(bounded_rows)
+    resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent)
+
+    max_bonus = 0.0
+    weights_applied = False
+    candidate_weights: list = []
+    if resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
+        selection = select_from_pool(
+            pool_size,
+            bandwidth=selection_bandwidth,
+            intent=selection_intent,
+        )
+        selected_index = selection.index
+        candidate_weights = [
+            MomentumCandidateWeight(
+                candidate_id=row[0].id if isinstance(row, tuple) else row.id,
+                weight=1.0,
+                factors=(),
+            )
+            for row in bounded_rows
+        ]
+    else:
+        session_events_result = await db.execute(
+            select(Event).where(Event.session_id == current_session.id)
+        )
+        session_events = list(session_events_result.scalars().all())
+        selected = await select_bandwidth_weighted(
+            db=db,
+            bounded_rows=bounded_rows,
+            user_id=user_id,
+            session_events=session_events,
+            bandwidth=selection_bandwidth,
+            intent=selection_intent,
+            now=datetime.now(UTC),
+        )
+        selected_index = selected.selected_index
+        max_bonus = selected.max_bonus
+        candidate_weights = selected.weights
+        weights_applied = selected.weights_applied
+
+    if resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
+        if selection_bandwidth in ("light", "deep"):
+            recommendation_reason_codes = ["bandwidth_weighted"]
+        else:
+            recommendation_reason_codes = ["momentum_weighted"]
+    else:
+        recommendation_reason_codes = ["pure_random"]
+
+    selected_thread, unread_count, issue_number = bounded_rows[selected_index]
+    bounded_candidate_ids = [
+        row[0].id if isinstance(row, tuple) else row.id for row in bounded_rows
+    ]
+
+    selected_thread_issue_id = None
+    selected_thread_issue_number = None
+    if selected_thread.uses_issue_tracking() and selected_thread.next_unread_issue_id:
+        if unread_count > 0 and issue_number is not None:
+            selected_thread_issue_id = selected_thread.next_unread_issue_id
+            selected_thread_issue_number = issue_number
+        else:
+            issue_result = await db.execute(
+                select(Issue).where(Issue.id == selected_thread.next_unread_issue_id)
+            )
+            next_issue = issue_result.scalar_one_or_none()
+            if next_issue and next_issue.status == "unread":
+                selected_thread_issue_id = next_issue.id
+                selected_thread_issue_number = next_issue.issue_number
+
+    effort_estimates: list[EffortEstimate] = []
+    for thread, _unread_count, _issue_number in bounded_rows:
+        issue_id = thread.next_unread_issue_id if thread.uses_issue_tracking() else None
+        effort_estimate = await compute_effort_estimate(
+            db,
+            user_id=user_id,
+            thread_id=thread.id,
+            issue_id=issue_id,
+        )
+        effort_estimates.append(effort_estimate)
+    selected_effort_estimate = effort_estimates[selected_index]
+
+    json_candidate_weights: list[dict[str, object]] | None = None
+    json_selected_weight: float | None = None
+    if candidate_weights:
+        json_candidate_weights = [
+            {
+                "candidate_id": entry.candidate_id,
+                "weight": round(float(entry.weight), 4),
+                "reasons": list(entry.factors),
+                "factors": list(entry.factors),
+            }
+            for entry in candidate_weights
+        ]
+        json_selected_weight = float(candidate_weights[selected_index].weight)
+    recommendation_context = build_recommendation_context(
+        selected_effort_estimate,
+        thread_id=selected_thread.id,
+        issue_id=selected_thread_issue_id,
+        issue_number=selected_thread_issue_number,
+        candidate_weights=json_candidate_weights,
+        bandwidth=normalize_bandwidth(selection_bandwidth).value,
+        bandwidth_source=current_session.bandwidth_source or "default",
+        bandwidth_confidence=current_session.bandwidth_confidence or 0.0,
+        random_bypass=not weights_applied,
+        balanced_neutrality=not weights_applied,
+        selected_weight=json_selected_weight,
+    )
+
+    if selection_method_override is not None:
+        selection_method = selection_method_override
+    elif resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
+        selection_method = "bandwidth" if selection_bandwidth in ("light", "deep") else "momentum"
+    else:
+        selection_method = "random"
+
+    effort_estimate_str = (
+        selected_effort_estimate.band
+        if isinstance(selected_effort_estimate, EffortEstimate)
+        else selected_effort_estimate
+    )
+    event = Event(
+        type="roll",
+        session_id=current_session.id,
+        selected_thread_id=selected_thread.id,
+        die=current_die,
+        result=selected_index + 1,
+        selection_method=selection_method,
+        recommendation_reason_codes=recommendation_reason_codes,
+        recommendation_context=recommendation_context,
+        issue_id=selected_thread_issue_id,
+        issue_number=selected_thread_issue_number,
+        rolling_recommendation_context=_build_rolling_recommendation_context(
+            die_size=current_die,
+            selected_queue_position=selected_thread.queue_position,
+            bounded_candidate_ids=bounded_candidate_ids,
+            selected_index=selected_index,
+            selection_method=selection_method,
+            session_timezone=current_session.timezone,
+            selected_thread_last_rating=selected_thread.last_rating,
+            selected_thread_last_activity_at=selected_thread.last_activity_at,
+            effort_estimate=effort_estimate_str,
+        ),
+    )
+    db.add(event)
+
+    logger.info(
+        "roll selection mode=%s bandwidth=%s intent=%s max_bonus=%.3f pool_size=%s",
+        resolved_mode.value,
+        normalize_bandwidth(selection_bandwidth).value,
+        normalize_intent(selection_intent).value,
+        max_bonus,
+        pool_size,
+    )
+
+    has_explicit_mode = bool(current_session.active_intent)
+    rec_context_create = RecommendationContextCreate(
+        schema_version=2,
+        intent=normalize_intent(selection_intent).value,
+        intent_source=current_session.intent_source or "default",
+        intent_confidence=1.0 if has_explicit_mode else 0.0,
+        bandwidth=normalize_bandwidth(selection_bandwidth).value,
+        bandwidth_source=current_session.bandwidth_source or "default",
+        bandwidth_confidence=current_session.bandwidth_confidence or 0.0,
+        candidate_factors=[
+            CandidateFactor(
+                candidate_id=breakdown.candidate_id,
+                factors=list(breakdown.factors),
+                weight=breakdown.weight,
+                effort_minutes=(
+                    round(effort_estimate.minutes, 2)
+                    if effort_estimate.minutes is not None
+                    else None
+                ),
+                effort_band=effort_estimate.band,
+                effort_source=effort_estimate.source.value,
+                effort_confidence=round(effort_estimate.confidence, 3),
+                effort_sample_count=effort_estimate.sample_count,
+            )
+            for breakdown, effort_estimate in zip(candidate_weights, effort_estimates, strict=True)
+        ]
+        if candidate_weights
+        else None,
+        final_weight=(
+            candidate_weights[selected_index].weight if candidate_weights else None
+        ),
+        random_bypass=not weights_applied,
+        balanced_neutrality=not weights_applied,
+        effort_minutes=(
+            round(selected_effort_estimate.minutes, 2)
+            if selected_effort_estimate.minutes is not None
+            else None
+        ),
+        effort_band=selected_effort_estimate.band,
+        effort_source=selected_effort_estimate.source.value,
+        effort_confidence=round(selected_effort_estimate.confidence, 3),
+        effort_sample_count=selected_effort_estimate.sample_count,
+    )
+
+    return _SelectionArtifacts(
+        selected_thread=selected_thread,
+        unread_count=unread_count,
+        issue_number=issue_number,
+        selected_thread_issue_id=selected_thread_issue_id,
+        selected_thread_issue_number=selected_thread_issue_number,
+        bounded_rows=bounded_rows,
+        selected_index=selected_index,
+        bounded_candidate_ids=bounded_candidate_ids,
+        candidate_weights=candidate_weights,
+        selected_effort_estimate=selected_effort_estimate,
+        json_candidate_weights=json_candidate_weights,
+        json_selected_weight=json_selected_weight,
+        recommendation_context=recommendation_context,
+        recommendation_reason_codes=recommendation_reason_codes,
+        selection_method=selection_method,
+        event=event,
+        rec_context_create=rec_context_create,
+    )
+
+
+def _build_roll_response(
+    *,
+    artifacts: _SelectionArtifacts,
+    current_die: int,
+    snoozed_count: int,
+) -> RollResponse:
+    """Convert shared selection artifacts into the public ``RollResponse``."""
+    selected_thread = artifacts.selected_thread
+    return RollResponse(
+        thread_id=selected_thread.id,
+        title=selected_thread.title,
+        format=normalize_format_value(selected_thread.format),
+        issues_remaining=artifacts.unread_count,
+        queue_position=selected_thread.queue_position,
+        die_size=current_die,
+        result=artifacts.selected_index + 1,
+        offset=snoozed_count,
+        snoozed_count=snoozed_count,
+        issue_id=artifacts.selected_thread_issue_id,
+        issue_number=artifacts.selected_thread_issue_number,
+        next_issue_id=artifacts.selected_thread_issue_id,
+        next_issue_number=artifacts.selected_thread_issue_number,
+        total_issues=selected_thread.total_issues,
+        reading_progress=selected_thread.reading_progress,
+        explanation=get_primary_explanation(artifacts.recommendation_reason_codes),
+    )
+
+
 def _get_local_hour_from_timezone(timezone: str | None) -> int | None:
     """Derive local hour from session timezone for recommendation context.
 
@@ -162,7 +505,6 @@ async def roll_dice(
     """
     user_id = current_user.id
     current_session = await get_or_create(db, user_id=user_id, existing_user=current_user)
-    current_session_id = current_session.id
 
     if current_session.pending_thread_id is not None:
         pending_thread_result = await db.execute(
@@ -185,14 +527,6 @@ async def roll_dice(
     snoozed_ids = current_session.snoozed_thread_ids or []
     skipped_ids = current_session.skipped_thread_ids or []
 
-    bounded_rows = await get_bounded_roll_pool_rows(user_id, db, current_die, snoozed_ids, skipped_ids)
-    if not bounded_rows:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No active threads available to roll",
-        )
-
-    pool_size = len(bounded_rows)
     # The active session mode is the durable, user-controlled override. A per-roll
     # request value wins when supplied; otherwise the session's canonical
     # active_bandwidth/active_intent drives selection so a manual "random" intent
@@ -209,280 +543,50 @@ async def roll_dice(
         else (current_session.active_intent or DEFAULT_INTENT)
     )
 
-    resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent)
-
-    max_bonus = 0.0
-    weights_applied = False
-    candidate_weights: list = []
-    if resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
-        selection = select_from_pool(
-            pool_size,
-            bandwidth=selection_bandwidth,
-            intent=selection_intent,
-        )
-        selected_index = selection.index
-        # Populate candidate_weights for pure-random bypass so recommendation
-        # context records uniform weights for all bounded candidates.
-        candidate_weights = [
-            MomentumCandidateWeight(
-                candidate_id=row[0].id if isinstance(row, tuple) else row.id,
-                weight=1.0,
-                factors=(),
-            )
-            for row in bounded_rows
-        ]
-    else:
-        # get_bounded_roll_pool_rows already applied the die cap, so the contextual
-        # weighting below cannot draw from outside the active die pool.
-
-        # Apply momentum + bandwidth weighting. Bandwidth contributes a neutral
-        # (1.0) factor for balanced/default rolls and for unknown effort, so
-        # those draws stay byte-for-byte identical to the legacy momentum
-        # behavior; light/deep bandwidth reweights candidates inside the pool.
-        session_events_result = await db.execute(
-            select(Event).where(Event.session_id == current_session_id)
-        )
-        session_events = list(session_events_result.scalars().all())
-
-        selected = await select_bandwidth_weighted(
-            db=db,
-            bounded_rows=bounded_rows,
-            user_id=user_id,
-            session_events=session_events,
-            bandwidth=selection_bandwidth,
-            intent=selection_intent,
-            now=datetime.now(UTC),
-        )
-        selected_index = selected.selected_index
-        max_bonus = selected.max_bonus
-        candidate_weights = selected.weights
-        weights_applied = selected.weights_applied
-
-    # Derive concise, user-facing reason codes from the actual decision-time
-    # selection context. A bandwidth-aware draw (light/deep with known effort)
-    # is labeled bandwidth_weighted; a momentum-only draw is momentum_weighted;
-    # otherwise the selection is genuinely unweighted/pure-random.
-    if resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
-        if selection_bandwidth in ("light", "deep"):
-            recommendation_reason_codes = ["bandwidth_weighted"]
-        else:
-            recommendation_reason_codes = ["momentum_weighted"]
-    else:
-        recommendation_reason_codes = ["pure_random"]
-
-    selected_thread, unread_count, issue_number = bounded_rows[selected_index]
-
-    selected_thread_id = selected_thread.id
-    selected_thread_title = selected_thread.title
-    selected_thread_format = normalize_format_value(selected_thread.format)
-    selected_thread_queue_position = selected_thread.queue_position
-
-    # Capture bounded candidate IDs in exact selection order for recommendation context
-    bounded_candidate_ids = [row[0].id if isinstance(row, tuple) else row.id for row in bounded_rows]
-
-    selected_thread_issues_remaining = unread_count
-
-    selected_thread_total_issues = selected_thread.total_issues
-    selected_thread_reading_progress = selected_thread.reading_progress
-    selected_thread_next_unread_issue_id = selected_thread.next_unread_issue_id
-
-    selected_thread_issue_id = None
-    selected_thread_issue_number = None
-    if selected_thread.uses_issue_tracking() and selected_thread_next_unread_issue_id:
-        if unread_count > 0 and issue_number is not None:
-            selected_thread_issue_id = selected_thread_next_unread_issue_id
-            selected_thread_issue_number = issue_number
-        else:
-            issue_result = await db.execute(
-                select(Issue).where(Issue.id == selected_thread_next_unread_issue_id)
-            )
-            next_issue = issue_result.scalar_one_or_none()
-            if next_issue and next_issue.status == "unread":
-                selected_thread_issue_id = next_issue.id
-                selected_thread_issue_number = next_issue.issue_number
-
-    # Compute effort estimates for all candidates in the bounded pool
-    effort_estimates = []
-    for thread, _unread_count, _issue_number in bounded_rows:
-        issue_id = thread.next_unread_issue_id if thread.uses_issue_tracking() else None
-        effort_estimate = await compute_effort_estimate(
-            db,
-            user_id=user_id,
-            thread_id=thread.id,
-            issue_id=issue_id,
-        )
-        effort_estimates.append(effort_estimate)
-
-    # Use the selected candidate's effort estimate for the Event context
-    selected_effort_estimate = effort_estimates[selected_index]
-    # Build bounded per-candidate weight snapshot for the versioned JSON
-    # context (issue #1718). Keep payload bounded to the die pool and record
-    # the exact weights passed to the chooser plus compact reason codes.
-    json_candidate_weights: list[dict[str, object]] | None = None
-    json_selected_weight: float | None = None
-    if candidate_weights:
-        json_candidate_weights = [
-            {
-                "candidate_id": entry.candidate_id,
-                "weight": round(float(entry.weight), 4),
-                "reasons": list(entry.factors),
-                # Keep "factors" alias for compatibility with RecommendationContext table naming.
-                "factors": list(entry.factors),
-            }
-            for entry in candidate_weights
-        ]
-        json_selected_weight = float(candidate_weights[selected_index].weight)
-    recommendation_context = build_recommendation_context(
-        selected_effort_estimate,
-        thread_id=selected_thread_id,
-        issue_id=selected_thread_issue_id,
-        issue_number=selected_thread_issue_number,
-        candidate_weights=json_candidate_weights,
-        bandwidth=normalize_bandwidth(selection_bandwidth).value,
-        bandwidth_source=current_session.bandwidth_source or "default",
-        bandwidth_confidence=current_session.bandwidth_confidence or 0.0,
-        random_bypass=not weights_applied,
-        balanced_neutrality=not weights_applied,
-        selected_weight=json_selected_weight,
+    artifacts = await _select_pending_thread(
+        db=db,
+        user_id=user_id,
+        current_session=current_session,
+        current_die=current_die,
+        excluded_ids=[*snoozed_ids, *skipped_ids],
+        selection_bandwidth=selection_bandwidth,
+        selection_intent=selection_intent,
+        selection_method_override=None,
     )
 
-    # Extract effort estimate band as string for JSON serialization
-    effort_estimate_str = selected_effort_estimate.band if isinstance(selected_effort_estimate, EffortEstimate) else selected_effort_estimate
-
-    if resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
-        selection_method = (
-            "bandwidth" if selection_bandwidth in ("light", "deep") else "momentum"
-        )
-    else:
-        selection_method = "random"
-
-    event = Event(
-        type="roll",
-        session_id=current_session_id,
-        selected_thread_id=selected_thread_id,
-        die=current_die,
-        result=selected_index + 1,
-        selection_method=selection_method,
-        recommendation_reason_codes=recommendation_reason_codes,
-        recommendation_context=recommendation_context,
-        issue_id=selected_thread_issue_id,
-        issue_number=selected_thread_issue_number,
-        rolling_recommendation_context=_build_rolling_recommendation_context(
-            die_size=current_die,
-            selected_queue_position=selected_thread_queue_position,
-            bounded_candidate_ids=bounded_candidate_ids,
-            selected_index=selected_index,
-            selection_method=selection_method,
-            session_timezone=current_session.timezone,
-            selected_thread_last_rating=selected_thread.last_rating,
-            selected_thread_last_activity_at=selected_thread.last_activity_at,
-            effort_estimate=effort_estimate_str,
-        ),
-    )
-    db.add(event)
-
-    logger.info(
-        "roll selection mode=%s bandwidth=%s intent=%s max_bonus=%.3f pool_size=%s",
-        resolved_mode.value,
-        normalize_bandwidth(selection_bandwidth).value,
-        normalize_intent(selection_intent).value,
-        max_bonus,
-        pool_size,
-    )
-
-    # Record recommendation context for auditability: capture the active
-    # session reading mode so any roll can be reproduced and explained
-    # from persisted data alone.
-    has_explicit_mode = bool(current_session.active_intent)
-    context_data = RecommendationContextCreate(
-        schema_version=2,
-        intent=normalize_intent(selection_intent).value,
-        intent_source=current_session.intent_source or "default",
-        intent_confidence=1.0 if has_explicit_mode else 0.0,
-        bandwidth=normalize_bandwidth(selection_bandwidth).value,
-        bandwidth_source=current_session.bandwidth_source or "default",
-        bandwidth_confidence=current_session.bandwidth_confidence or 0.0,
-        candidate_factors=[
-            CandidateFactor(
-                candidate_id=breakdown.candidate_id,
-                factors=list(breakdown.factors),
-                weight=breakdown.weight,
-                effort_minutes=round(effort_estimate.minutes, 2) if effort_estimate.minutes is not None else None,
-                effort_band=effort_estimate.band,
-                effort_source=effort_estimate.source.value,
-                effort_confidence=round(effort_estimate.confidence, 3),
-                effort_sample_count=effort_estimate.sample_count,
-            )
-            for breakdown, effort_estimate in zip(candidate_weights, effort_estimates, strict=True)
-        ]
-        if candidate_weights
-        else None,
-        final_weight=candidate_weights[selected_index].weight
-        if candidate_weights
-        else None,
-        random_bypass=not weights_applied,
-        balanced_neutrality=not weights_applied,
-        effort_minutes=round(selected_effort_estimate.minutes, 2)
-        if selected_effort_estimate.minutes is not None
-        else None,
-        effort_band=selected_effort_estimate.band,
-        effort_source=selected_effort_estimate.source.value,
-        effort_confidence=round(selected_effort_estimate.confidence, 3),
-        effort_sample_count=selected_effort_estimate.sample_count,
-    )
-
-    # Flush event to get its ID for the recommendation context FK
     await db.flush()
-
     rec_context = RecommendationContext(
-        event_id=event.id,
-        schema_version=context_data.schema_version,
-        intent=context_data.intent,
-        intent_source=context_data.intent_source,
-        intent_confidence=context_data.intent_confidence,
-        bandwidth=context_data.bandwidth,
-        bandwidth_source=context_data.bandwidth_source,
-        bandwidth_confidence=context_data.bandwidth_confidence,
-        candidate_factors=[f.model_dump() for f in context_data.candidate_factors]
-        if context_data.candidate_factors
+        event_id=artifacts.event.id,
+        schema_version=artifacts.rec_context_create.schema_version,
+        intent=artifacts.rec_context_create.intent,
+        intent_source=artifacts.rec_context_create.intent_source,
+        intent_confidence=artifacts.rec_context_create.intent_confidence,
+        bandwidth=artifacts.rec_context_create.bandwidth,
+        bandwidth_source=artifacts.rec_context_create.bandwidth_source,
+        bandwidth_confidence=artifacts.rec_context_create.bandwidth_confidence,
+        candidate_factors=[f.model_dump() for f in artifacts.rec_context_create.candidate_factors]
+        if artifacts.rec_context_create.candidate_factors
         else None,
-        final_weight=context_data.final_weight,
-        random_bypass=context_data.random_bypass,
-        balanced_neutrality=context_data.balanced_neutrality,
-        effort_minutes=context_data.effort_minutes,
-        effort_band=context_data.effort_band,
-        effort_source=context_data.effort_source,
-        effort_confidence=context_data.effort_confidence,
-        effort_sample_count=context_data.effort_sample_count,
+        final_weight=artifacts.rec_context_create.final_weight,
+        random_bypass=artifacts.rec_context_create.random_bypass,
+        balanced_neutrality=artifacts.rec_context_create.balanced_neutrality,
+        effort_minutes=artifacts.rec_context_create.effort_minutes,
+        effort_band=artifacts.rec_context_create.effort_band,
+        effort_source=artifacts.rec_context_create.effort_source,
+        effort_confidence=artifacts.rec_context_create.effort_confidence,
+        effort_sample_count=artifacts.rec_context_create.effort_sample_count,
     )
     db.add(rec_context)
-    if current_session:
-        current_session.pending_thread_id = selected_thread_id
-        current_session.pending_thread_updated_at = datetime.now(UTC)
+    current_session.pending_thread_id = artifacts.selected_thread.id
+    current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
     await _invalidate_session_caches(current_user.id)
 
-    snoozed_count = len(snoozed_ids)
-    offset = snoozed_count
-
-    return RollResponse(
-        thread_id=selected_thread_id,
-        title=selected_thread_title,
-        format=selected_thread_format,
-        issues_remaining=selected_thread_issues_remaining,
-        queue_position=selected_thread_queue_position,
-        die_size=current_die,
-        result=selected_index + 1,
-        offset=offset,
-        snoozed_count=snoozed_count,
-        issue_id=selected_thread_issue_id,
-        issue_number=selected_thread_issue_number,
-        next_issue_id=selected_thread_issue_id,
-        next_issue_number=selected_thread_issue_number,
-        total_issues=selected_thread_total_issues,
-        reading_progress=selected_thread_reading_progress,
-        explanation=get_primary_explanation(recommendation_reason_codes),
+    return _build_roll_response(
+        artifacts=artifacts,
+        current_die=current_die,
+        snoozed_count=len(snoozed_ids),
     )
 
 
@@ -541,255 +645,58 @@ async def skip_roll(
             status_code=status.HTTP_409_CONFLICT,
             detail="No pending roll to skip. Roll first.",
         )
-    current_session_id = current_session.id
+
     current_die = await get_current_die_for_session(current_session, db)
 
     snoozed_ids = current_session.snoozed_thread_ids or []
-    excluded_ids = list(snoozed_ids) + [skipped_thread_id]
 
-    bounded_rows = await get_bounded_roll_pool_rows(user_id, db, current_die, excluded_ids)
-    if not bounded_rows:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No alternative threads available to skip to",
-        )
-
-    pool_size = len(bounded_rows)
-    selection_bandwidth = current_session.active_bandwidth or DEFAULT_BANDWIDTH
-    selection_intent = current_session.active_intent or DEFAULT_INTENT
-    resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent)
-
-    max_bonus = 0.0
-    weights_applied = False
-    candidate_weights: list = []
-    if resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
-        selection = select_from_pool(
-            pool_size,
-            bandwidth=selection_bandwidth,
-            intent=selection_intent,
-        )
-        selected_index = selection.index
-        candidate_weights = [
-            MomentumCandidateWeight(
-                candidate_id=row[0].id if isinstance(row, tuple) else row.id,
-                weight=1.0,
-                factors=(),
-            )
-            for row in bounded_rows
-        ]
-    else:
-        session_events_result = await db.execute(
-            select(Event).where(Event.session_id == current_session_id)
-        )
-        session_events = list(session_events_result.scalars().all())
-        selected = await select_bandwidth_weighted(
-            db=db,
-            bounded_rows=bounded_rows,
-            user_id=user_id,
-            session_events=session_events,
-            bandwidth=selection_bandwidth,
-            intent=selection_intent,
-            now=datetime.now(UTC),
-        )
-        selected_index = selected.selected_index
-        max_bonus = selected.max_bonus
-        candidate_weights = selected.weights
-        weights_applied = selected.weights_applied
-
-    if resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
-        if selection_bandwidth in ("light", "deep"):
-            recommendation_reason_codes = ["bandwidth_weighted"]
-        else:
-            recommendation_reason_codes = ["momentum_weighted"]
-    else:
-        recommendation_reason_codes = ["pure_random"]
-
-    selected_thread, unread_count, issue_number = bounded_rows[selected_index]
-    selected_thread_id = selected_thread.id
-    selected_thread_title = selected_thread.title
-    selected_thread_format = normalize_format_value(selected_thread.format)
-    selected_thread_queue_position = selected_thread.queue_position
-    bounded_candidate_ids = [row[0].id if isinstance(row, tuple) else row.id for row in bounded_rows]
-    selected_thread_issues_remaining = unread_count
-    selected_thread_total_issues = selected_thread.total_issues
-    selected_thread_reading_progress = selected_thread.reading_progress
-    selected_thread_next_unread_issue_id = selected_thread.next_unread_issue_id
-
-    selected_thread_issue_id = None
-    selected_thread_issue_number = None
-    if selected_thread.uses_issue_tracking() and selected_thread_next_unread_issue_id:
-        if unread_count > 0 and issue_number is not None:
-            selected_thread_issue_id = selected_thread_next_unread_issue_id
-            selected_thread_issue_number = issue_number
-        else:
-            issue_result = await db.execute(
-                select(Issue).where(Issue.id == selected_thread_next_unread_issue_id)
-            )
-            next_issue = issue_result.scalar_one_or_none()
-            if next_issue and next_issue.status == "unread":
-                selected_thread_issue_id = next_issue.id
-                selected_thread_issue_number = next_issue.issue_number
-
-    effort_estimates = []
-    for thread, _unread_count, _issue_number in bounded_rows:
-        issue_id = thread.next_unread_issue_id if thread.uses_issue_tracking() else None
-        effort_estimate = await compute_effort_estimate(
-            db,
-            user_id=user_id,
-            thread_id=thread.id,
-            issue_id=issue_id,
-        )
-        effort_estimates.append(effort_estimate)
-    selected_effort_estimate = effort_estimates[selected_index]
-    json_candidate_weights: list[dict[str, object]] | None = None
-    json_selected_weight: float | None = None
-    if candidate_weights:
-        json_candidate_weights = [
-            {
-                "candidate_id": entry.candidate_id,
-                "weight": round(float(entry.weight), 4),
-                "reasons": list(entry.factors),
-                "factors": list(entry.factors),
-            }
-            for entry in candidate_weights
-        ]
-        json_selected_weight = float(candidate_weights[selected_index].weight)
-    recommendation_context = build_recommendation_context(
-        selected_effort_estimate,
-        thread_id=selected_thread_id,
-        issue_id=selected_thread_issue_id,
-        issue_number=selected_thread_issue_number,
-        candidate_weights=json_candidate_weights,
-        bandwidth=normalize_bandwidth(selection_bandwidth).value,
-        bandwidth_source=current_session.bandwidth_source or "default",
-        bandwidth_confidence=current_session.bandwidth_confidence or 0.0,
-        random_bypass=not weights_applied,
-        balanced_neutrality=not weights_applied,
-        selected_weight=json_selected_weight,
-    )
-    effort_estimate_str = selected_effort_estimate.band if isinstance(selected_effort_estimate, EffortEstimate) else selected_effort_estimate
-    # Skipped roll is still a roll selection; record selection method as "skip"
-    # to distinguish it from ordinary random/momentum draws while preserving
-    # the underlying weighting reason codes.
-    selection_method = "skip"
-
-    event = Event(
-        type="roll",
-        session_id=current_session_id,
-        selected_thread_id=selected_thread_id,
-        die=current_die,
-        result=selected_index + 1,
-        selection_method=selection_method,
-        recommendation_reason_codes=recommendation_reason_codes,
-        recommendation_context=recommendation_context,
-        issue_id=selected_thread_issue_id,
-        issue_number=selected_thread_issue_number,
-        rolling_recommendation_context=_build_rolling_recommendation_context(
-            die_size=current_die,
-            selected_queue_position=selected_thread_queue_position,
-            bounded_candidate_ids=bounded_candidate_ids,
-            selected_index=selected_index,
-            selection_method=selection_method,
-            session_timezone=current_session.timezone,
-            selected_thread_last_rating=selected_thread.last_rating,
-            selected_thread_last_activity_at=selected_thread.last_activity_at,
-            effort_estimate=effort_estimate_str,
-        ),
-    )
-    db.add(event)
-
-    logger.info(
-        "skip selection mode=%s bandwidth=%s intent=%s max_bonus=%.3f pool_size=%s skipped=%s",
-        resolved_mode.value,
-        normalize_bandwidth(selection_bandwidth).value,
-        normalize_intent(selection_intent).value,
-        max_bonus,
-        pool_size,
-        skipped_thread_id,
+    artifacts = await _select_pending_thread(
+        db=db,
+        user_id=user_id,
+        current_session=current_session,
+        current_die=current_die,
+        excluded_ids=[*snoozed_ids, skipped_thread_id],
+        selection_bandwidth=current_session.active_bandwidth or DEFAULT_BANDWIDTH,
+        selection_intent=current_session.active_intent or DEFAULT_INTENT,
+        selection_method_override="skip",
+        empty_pool_detail="No alternative threads available to skip to",
     )
 
-    has_explicit_mode = bool(current_session.active_intent)
-    context_data = RecommendationContextCreate(
-        schema_version=2,
-        intent=normalize_intent(selection_intent).value,
-        intent_source=current_session.intent_source or "default",
-        intent_confidence=1.0 if has_explicit_mode else 0.0,
-        bandwidth=normalize_bandwidth(selection_bandwidth).value,
-        bandwidth_source=current_session.bandwidth_source or "default",
-        bandwidth_confidence=current_session.bandwidth_confidence or 0.0,
-        candidate_factors=[
-            CandidateFactor(
-                candidate_id=breakdown.candidate_id,
-                factors=list(breakdown.factors),
-                weight=breakdown.weight,
-                effort_minutes=round(effort_estimate.minutes, 2) if effort_estimate.minutes is not None else None,
-                effort_band=effort_estimate.band,
-                effort_source=effort_estimate.source.value,
-                effort_confidence=round(effort_estimate.confidence, 3),
-                effort_sample_count=effort_estimate.sample_count,
-            )
-            for breakdown, effort_estimate in zip(candidate_weights, effort_estimates, strict=True)
-        ]
-        if candidate_weights
-        else None,
-        final_weight=candidate_weights[selected_index].weight if candidate_weights else None,
-        random_bypass=not weights_applied,
-        balanced_neutrality=not weights_applied,
-        effort_minutes=round(selected_effort_estimate.minutes, 2) if selected_effort_estimate.minutes is not None else None,
-        effort_band=selected_effort_estimate.band,
-        effort_source=selected_effort_estimate.source.value,
-        effort_confidence=round(selected_effort_estimate.confidence, 3),
-        effort_sample_count=selected_effort_estimate.sample_count,
-    )
     await db.flush()
     rec_context = RecommendationContext(
-        event_id=event.id,
-        schema_version=context_data.schema_version,
-        intent=context_data.intent,
-        intent_source=context_data.intent_source,
-        intent_confidence=context_data.intent_confidence,
-        bandwidth=context_data.bandwidth,
-        bandwidth_source=context_data.bandwidth_source,
-        bandwidth_confidence=context_data.bandwidth_confidence,
-        candidate_factors=[f.model_dump() for f in context_data.candidate_factors] if context_data.candidate_factors else None,
-        final_weight=context_data.final_weight,
-        random_bypass=context_data.random_bypass,
-        balanced_neutrality=context_data.balanced_neutrality,
-        effort_minutes=context_data.effort_minutes,
-        effort_band=context_data.effort_band,
-        effort_source=context_data.effort_source,
-        effort_confidence=context_data.effort_confidence,
-        effort_sample_count=context_data.effort_sample_count,
+        event_id=artifacts.event.id,
+        schema_version=artifacts.rec_context_create.schema_version,
+        intent=artifacts.rec_context_create.intent,
+        intent_source=artifacts.rec_context_create.intent_source,
+        intent_confidence=artifacts.rec_context_create.intent_confidence,
+        bandwidth=artifacts.rec_context_create.bandwidth,
+        bandwidth_source=artifacts.rec_context_create.bandwidth_source,
+        bandwidth_confidence=artifacts.rec_context_create.bandwidth_confidence,
+        candidate_factors=[f.model_dump() for f in artifacts.rec_context_create.candidate_factors]
+        if artifacts.rec_context_create.candidate_factors
+        else None,
+        final_weight=artifacts.rec_context_create.final_weight,
+        random_bypass=artifacts.rec_context_create.random_bypass,
+        balanced_neutrality=artifacts.rec_context_create.balanced_neutrality,
+        effort_minutes=artifacts.rec_context_create.effort_minutes,
+        effort_band=artifacts.rec_context_create.effort_band,
+        effort_source=artifacts.rec_context_create.effort_source,
+        effort_confidence=artifacts.rec_context_create.effort_confidence,
+        effort_sample_count=artifacts.rec_context_create.effort_sample_count,
     )
     db.add(rec_context)
     # Advance pending to the newly selected thread; do not mark the skipped
     # issue/thread as read and do not mutate dependencies.
-    current_session.pending_thread_id = selected_thread_id
+    current_session.pending_thread_id = artifacts.selected_thread.id
     current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
     await _invalidate_session_caches(current_user.id)
 
-    snoozed_count = len(snoozed_ids)
-    offset = snoozed_count
-
-    return RollResponse(
-        thread_id=selected_thread_id,
-        title=selected_thread_title,
-        format=selected_thread_format,
-        issues_remaining=selected_thread_issues_remaining,
-        queue_position=selected_thread_queue_position,
-        die_size=current_die,
-        result=selected_index + 1,
-        offset=offset,
-        snoozed_count=snoozed_count,
-        issue_id=selected_thread_issue_id,
-        issue_number=selected_thread_issue_number,
-        next_issue_id=selected_thread_issue_id,
-        next_issue_number=selected_thread_issue_number,
-        total_issues=selected_thread_total_issues,
-        reading_progress=selected_thread_reading_progress,
-        explanation=get_primary_explanation(recommendation_reason_codes),
+    return _build_roll_response(
+        artifacts=artifacts,
+        current_die=current_die,
+        snoozed_count=len(snoozed_ids),
     )
 
 
