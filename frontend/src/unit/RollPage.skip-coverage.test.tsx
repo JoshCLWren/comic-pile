@@ -146,4 +146,29 @@ describe('RollPage skip coverage', () => {
     expect(screen.getByText('Skipping…')).toBeInTheDocument()
     expect(screen.getByTestId('skip-roll')).toBeDisabled()
   })
+
+  it('covers skip response with nullable optional fields', async () => {
+    const sparseRoll = {
+      thread_id: 3,
+      title: 'Sparse Saga',
+      format: 'Comic',
+      issues_remaining: 0,
+      queue_position: 5,
+      total_issues: undefined,
+      reading_progress: undefined,
+      issue_id: undefined,
+      issue_number: undefined,
+      next_issue_id: undefined,
+      next_issue_number: undefined,
+      result: null,
+      die_size: 6,
+    }
+    spies.skip.mockResolvedValue(sparseRoll)
+    const user = userEvent.setup()
+    render(<RollPage />)
+    await waitFor(() => expect(screen.getByTestId('skip-roll')).toBeInTheDocument())
+    await user.click(screen.getByTestId('skip-roll'))
+    await waitFor(() => expect(spies.skip).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(spies.refetch).toHaveBeenCalled())
+  })
 })

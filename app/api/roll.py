@@ -649,13 +649,14 @@ async def skip_roll(
     current_die = await get_current_die_for_session(current_session, db)
 
     snoozed_ids = current_session.snoozed_thread_ids or []
+    existing_skipped_ids = list(current_session.skipped_thread_ids or [])
 
     artifacts = await _select_pending_thread(
         db=db,
         user_id=user_id,
         current_session=current_session,
         current_die=current_die,
-        excluded_ids=[*snoozed_ids, skipped_thread_id],
+        excluded_ids=[*snoozed_ids, *existing_skipped_ids, skipped_thread_id],
         selection_bandwidth=current_session.active_bandwidth or DEFAULT_BANDWIDTH,
         selection_intent=current_session.active_intent or DEFAULT_INTENT,
         selection_method_override="skip",
@@ -687,6 +688,11 @@ async def skip_roll(
     db.add(rec_context)
     # Advance pending to the newly selected thread; do not mark the skipped
     # issue/thread as read and do not mutate dependencies.
+    # Persist the skipped thread for the current session so the Roll pool
+    # continues to exclude it and the UI can offer an explicit unskip.
+    if skipped_thread_id not in existing_skipped_ids:
+        existing_skipped_ids.append(skipped_thread_id)
+        current_session.skipped_thread_ids = existing_skipped_ids
     current_session.pending_thread_id = artifacts.selected_thread.id
     current_session.pending_thread_updated_at = datetime.now(UTC)
 

@@ -338,4 +338,38 @@ describe('skip hooks', () => {
     )
     errorSpy.mockRestore()
   })
+
+  it('shares one in-flight authoritative refresh across concurrent retryRefresh calls', async () => {
+    const refreshFailure = new Error('bootstrap unavailable')
+    rollBootstrapApi.get.mockRejectedValue(refreshFailure)
+    const skip = renderHook(() => useSkip(), { wrapper })
+
+    await act(async () => await skip.result.current.mutate(7))
+
+    expect(skip.result.current.hasRefreshError).toBe(true)
+
+    let resolveRefresh: ((value: RollBootstrapResponse) => void) | undefined
+    rollBootstrapApi.get.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRefresh = resolve
+      }),
+    )
+
+    let first: Promise<boolean> | undefined
+    let second: Promise<boolean> | undefined
+    act(() => {
+      first = skip.result.current.retryRefresh()
+      second = skip.result.current.retryRefresh()
+    })
+
+    expect(rollBootstrapApi.get).toHaveBeenCalledTimes(3)
+
+    await act(async () => {
+      resolveRefresh?.(bootstrapState(null, 20))
+      await Promise.all([first, second])
+    })
+
+    expect(skip.result.current.hasRefreshError).toBe(false)
+    expect(skip.result.current.isPending).toBe(false)
+  })
 })
