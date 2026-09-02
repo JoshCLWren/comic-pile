@@ -417,12 +417,23 @@ jobs:
             --arg model "$MODEL" \
             --arg key "$OMNIROUTE_API_KEY" \
             --arg base_url "${OMNIROUTE_BASE_URL%/}" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg job "$GITHUB_JOB" \
+            --arg workflow "$GITHUB_WORKFLOW" \
             '{
               provider: {
                 omniroute: {
                   npm: "@ai-sdk/openai-compatible",
                   name: "OmniRoute free capacity",
-                  options: {baseURL: $base_url, apiKey: $key},
+                  options: {
+                    baseURL: $base_url,
+                    apiKey: $key,
+                    headers: {
+                      "X-GitHub-Run-ID": $run_id,
+                      "X-GitHub-Job": $job,
+                      "X-GitHub-Workflow": $workflow
+                    }
+                  },
                   models: {($model): {name: $model}}
                 }
               }
@@ -615,6 +626,36 @@ jobs:
           # forge the trusted wrapper's source classification.
           printf '%s\n' "$worker_status" > "$RUNNER_TEMP/factory-worker-status"
           exit "$worker_status"
+
+      - name: Report OmniRoute routing summary
+        if: always() && steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-free'
+        shell: bash
+        env:
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${OMNIROUTE_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]] || {
+            echo 'OmniRoute routing summary unavailable: gateway credentials missing' >&2
+            exit 0
+          }
+          analytics="$RUNNER_TEMP/omniroute-analytics.json"
+          code="$(curl --silent --show-error --output "$analytics" --write-out '%{http_code}' \
+            --connect-timeout 5 --max-time 30 \
+            --header "Authorization: Bearer ${OMNIROUTE_API_KEY}" \
+            "${OMNIROUTE_BASE_URL%/}/api/usage/analytics?period=session" || true)"
+          [[ "$code" == 200 ]] || { echo "OmniRoute routing summary unavailable (HTTP ${code})" >&2; exit 0; }
+          summary="$(jq -r '.summary | "requests=\(.totalRequests) successful=\(.successfulRequests) success_rate_pct=\(.successRatePct) avg_latency_ms=\(.avgLatencyMs)"' "$analytics")"
+          echo "OmniRoute routing summary (session-wide): ${summary}"
+          {
+            echo '### OmniRoute routing summary'
+            echo
+            echo "Requested model: `${MODEL}`"
+            echo
+            echo '```text'
+            echo "$summary"
+            jq -r '.byModel[] | "provider=\(.provider) model=\(.model) requests=\(.requests) success_rate_pct=\(.successRatePct) avg_latency_ms=\(.avgLatencyMs)"' "$analytics"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Report terminal heartbeat
         if: always()
