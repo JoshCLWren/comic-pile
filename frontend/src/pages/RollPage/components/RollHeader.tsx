@@ -27,6 +27,13 @@ interface RollHeaderProps {
  * Active-session header: die ladder controls, the automatic/manual die label,
  * and the manual-override entry point. Purely presentational; all mutation
  * and data ownership stays in the page feature modules.
+ *
+ * Visual hierarchy (issue #2087 deslop):
+ *   1. die-size selection  - one segmented-control group; items have no border
+ *   2. automatic / mode    - "Auto" lives inside the segmented group; the
+ *                            ladder readout collapses to plain text; the
+ *                            ReadingModeControl remains a quiet status chip
+ *   3. primary manual pick - the lone solid primary action in the row
  */
 export function RollHeader({
   bootstrap,
@@ -54,106 +61,119 @@ export function RollHeader({
         version: rawMode.bandwidth_version,
       }
     : null
+  const manualDie = bootstrap.manual_die
   return (
-    <header className="flex flex-wrap justify-between items-center px-2 md:px-3 py-2 shrink-0 z-10 gap-2">
+    <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-2 py-2 shrink-0 z-10 md:px-3">
       <div className="min-w-0">
-        <h1 className="text-xl md:text-2xl font-black tracking-tighter text-glow uppercase">
+        <h1 className="text-xl font-black uppercase tracking-tighter text-glow md:text-2xl">
           Pile Roller
         </h1>
         {snoozedThreads.length > 0 && currentDie >= DICE_LADDER[DICE_LADDER.length - 1] && (
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-[9px] text-stone-500 uppercase tracking-wider">
+          <div className="mt-1 flex items-center gap-2">
+            <span className="text-[9px] uppercase tracking-wider text-stone-500">
               pool at max size (d{dieSize}) - snoozing won&apos;t increase it further
             </span>
           </div>
         )}
         {snoozedThreads.length > 0 && pool.length + snoozedThreads.length > dieSize && (
-          <div className="flex items-center gap-2 mt-1">
+          <div className="mt-1 flex items-center gap-2">
             <Tooltip content="Snoozed offset">
-              <span className="modifier-badge text-[10px] font-black text-amber-500 cursor-help border-b border-dashed border-stone-600">
+              <span className="modifier-badge cursor-help border-b border-dashed border-stone-600 text-[10px] font-black text-amber-500">
                 +{snoozedThreads.length}
               </span>
             </Tooltip>
             <Tooltip content="Snoozed offset active">
-              <span className="text-[9px] text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">
+              <span className="cursor-help border-b border-dashed border-stone-600 text-[9px] uppercase tracking-wider text-stone-500">
                 offset active
               </span>
             </Tooltip>
           </div>
         )}
       </div>
-      <div className={`items-center gap-1 md:gap-2 shrink-0 ${isRatingView ? 'hidden' : 'flex'}`}>
-        <div id="die-selector">
-          <div className="hidden md:flex flex-wrap gap-1">
-            {DICE_LADDER.map((die) => (
-              <button
-                key={die}
-                onClick={() => onSetDie(die)}
-                disabled={setDiePending}
-                aria-pressed={die === currentDie}
-                className={`die-btn flex min-h-11 min-w-11 items-center justify-center px-2 text-[10px] font-black rounded-lg border transition-colors ${
-                  die === currentDie
-                    ? 'bg-amber-600/20 border-amber-600 text-amber-500'
-                    : 'bg-white/5 border-white/10 hover:bg-white/10'
-                }`}
-              >
-                d{die}
-              </button>
-            ))}
+      <div
+        className={`flex shrink-0 flex-wrap items-center gap-x-2 gap-y-2 ${isRatingView ? 'hidden' : 'flex'}`}
+      >
+        <div id="die-selector" data-roll-die-selector="primary" className="flex items-center gap-2">
+          <div
+            className="hidden items-center gap-0 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-0.5 md:flex"
+            role="group"
+            aria-label="Dice ladder"
+          >
+            {DICE_LADDER.map((die) => {
+              const selected = die === currentDie && manualDie === null
+              return (
+                <button
+                  key={die}
+                  type="button"
+                  onClick={() => onSetDie(die)}
+                  disabled={setDiePending}
+                  aria-pressed={selected}
+                  className={`die-btn min-h-11 min-w-11 rounded-lg px-2 text-[10px] font-black transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${selected
+                    ? 'bg-[var(--theme-primary-action)]/15 text-[var(--theme-comic-accent)]'
+                    : 'text-stone-400 hover:bg-white/5 hover:text-stone-200'}`}
+                >
+                  d{die}
+                </button>
+              )
+            })}
+            <span
+              aria-hidden="true"
+              className="mx-0.5 h-5 w-px bg-[var(--theme-border)]"
+            />
             <button
+              type="button"
               onClick={onClearManualDie}
               disabled={clearManualDiePending}
-              aria-pressed={Boolean(bootstrap.manual_die)}
-              className={`flex min-h-11 min-w-11 items-center justify-center px-2 text-[10px] font-black rounded-lg border transition-colors ${
-                bootstrap.manual_die
-                  ? 'bg-amber-500/20 border-amber-500 text-amber-400'
-                  : 'bg-white/5 border-white/10 hover:bg-white/10'
-              }`}
+              aria-pressed={manualDie !== null}
               title={
-                bootstrap.manual_die
-                  ? `Exit manual mode (currently d${bootstrap.manual_die})`
+                manualDie
+                  ? `Exit manual mode (currently d${manualDie})`
                   : 'Return to automatic dice ladder mode'
               }
+              className={`min-h-11 min-w-11 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${manualDie !== null
+                ? 'bg-[var(--theme-primary-action)]/15 text-[var(--theme-comic-accent)]'
+                : 'text-stone-400 hover:bg-white/5 hover:text-stone-200'}`}
             >
               Auto
             </button>
           </div>
           <div className="md:hidden">
             <button
+              type="button"
               onClick={onOpenDieModal}
-              aria-label={`Current die d${currentDie}, ${bootstrap.manual_die ? 'manual mode' : 'automatic mode'}`}
-              className="flex min-h-11 flex-col items-center justify-center rounded-lg border border-amber-600 bg-amber-600/20 px-3 py-1 text-amber-500 transition-colors"
+              aria-label={`Current die d${currentDie}, ${manualDie ? 'manual mode' : 'automatic mode'}`}
+              className="min-h-11 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-1 text-[var(--theme-comic-accent)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
             >
-              <span className="text-[11px] font-black">d{currentDie}</span>
-              <span className="text-[8px] font-bold uppercase tracking-wide">
-                {bootstrap.manual_die ? 'Manual' : 'Auto'}
+              <span className="block text-[11px] font-black">d{currentDie}</span>
+              <span className="block text-[8px] font-bold uppercase tracking-wide">
+                {manualDie ? 'Manual' : 'Auto'}
               </span>
             </button>
           </div>
-        </div>
-        <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
-          <div className="relative flex items-center justify-center" style={{ width: '40px', height: '40px' }}>
-            <div className="w-full h-full">
-              <LazyDice3D
-                sides={displayDie}
-                value={1}
-                isRolling={false}
-                showValue={false}
-                color={0xffffff}
-              />
+          <div className="hidden items-center gap-2 md:flex">
+            <div className="relative flex items-center justify-center" style={{ width: '40px', height: '40px' }}>
+              <div className="h-full w-full">
+                <LazyDice3D
+                  sides={displayDie}
+                  value={1}
+                  isRolling={false}
+                  showValue={false}
+                  color={0xffffff}
+                />
+              </div>
             </div>
-          </div>
-          <div className="text-right">
-            <Tooltip content="Dice ladder: d4→d6→d8→d10→d12→d20→d30→d50→d100. Promotes automatically based on ratings (5→up, 1-2→down)">
-              <GlossaryLink id="die-ladder">
-                <span className="block text-[8px] font-black text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">
-                  Ladder
-                </span>
-              </GlossaryLink>
-            </Tooltip>
-            <span id="header-die-label" className="text-[10px] font-black text-amber-500">
-              d{currentDie}
-            </span>
+            <div className="text-right">
+              <Tooltip content="Dice ladder: d4→d6→d8→d10→d12→d20→d30→d50→d100. Promotes automatically based on ratings (5→up, 1-2→down)">
+                <GlossaryLink id="die-ladder">
+                  <span className="cursor-help border-b border-dashed border-stone-600 text-[8px] font-black uppercase tracking-wider text-stone-500">
+                    Ladder
+                  </span>
+                </GlossaryLink>
+              </Tooltip>
+              <span id="header-die-label" className="block text-[10px] font-black text-[var(--theme-comic-accent)]">
+                d{currentDie}
+              </span>
+            </div>
           </div>
         </div>
         <ReadingModeControl mode={sessionMode} onOpenSelector={onOpenModeSelector} />
@@ -161,7 +181,8 @@ export function RollHeader({
           <button
             type="button"
             onClick={onOpenOverride}
-            className="min-h-11 px-2 md:px-3 py-1.5 md:py-2 bg-white/5 border border-white/10 text-stone-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+            data-roll-primary-action="pick-manually"
+            className="min-h-11 rounded-xl bg-[var(--theme-primary-action)] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-stone-900 hover:bg-[var(--theme-primary-action-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] md:px-4 md:py-2"
           >
             Pick manually
           </button>
