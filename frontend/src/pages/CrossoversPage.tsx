@@ -336,14 +336,14 @@ export default function CrossoversPage() {
 
       {mutationError && <p role="alert" className="rounded-xl border border-red-800 bg-red-950/40 p-3 text-sm text-red-300">{mutationError}</p>}
       {isLoading ? <p role="status">Loading crossovers…</p> : loadError ? <div role="alert"><p>{loadError}</p><button type="button" onClick={() => void loadGroups()}>Try again</button></div> : groups.length === 0 ? <p className="max-w-xl text-sm text-stone-500">No crossovers yet. Create your first one above to get started.</p> : (
-        <ul className="grid gap-3" aria-label="Your crossovers">
-          {groups.map((group) => {
-            const isEditing = editingId === group.id
-            const isBusy = busyId === group.id
-            const hasPendingMutation = busyId !== null
-            const isExpanded = expandedId === group.id
-            return (
-              <li key={group.id} className="rounded-2xl border border-stone-700 bg-stone-900/60 p-4">
+<div className="grid gap-3" aria-label="Your crossovers" role="list">
+  {groups.map((group) => {
+    const isEditing = editingId === group.id
+    const isBusy = busyId === group.id
+    const hasPendingMutation = busyId !== null
+    const isExpanded = expandedId === group.id
+    return (
+      <div key={group.id} className="rounded-2xl border border-stone-700 bg-stone-900/60 p-4">
                 {isEditing ? (
                   <div className="flex gap-2">
                     <input aria-label={`Rename ${group.name}`} value={editingName} onChange={(event) => setEditingName(event.target.value)} disabled={isBusy} className="min-w-0 flex-1 rounded-xl border border-stone-600 bg-stone-950 px-3 py-2" />
@@ -370,17 +370,17 @@ export default function CrossoversPage() {
                       <p role="status" className="text-xs font-bold text-amber-500">Starts at #{startsAtParam}</p>
                     )}
                     {group.memberships.length === 0 ? <p>This crossover has no comics yet.</p> : (
-                      <ul className="grid gap-2" aria-label={`${group.name} members`}>
-                        {group.memberships.map((member) => {
-                          const label = memberLabel(member)
-                          return (
-                            <li key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-stone-800 px-3 py-2">
-                              <span>{label}</span>
+                      <div className="grid gap-2" aria-label={`${group.name} members`} role="list">
+{group.memberships.map((member) => {
+  const label = memberLabel(member)
+  return (
+    <div key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-stone-800 px-3 py-2" role="listitem">
+<span>{label}</span>
                               <button type="button" onClick={() => void removeMember(group.id, member.id)} disabled={hasPendingMutation} aria-label={`Remove ${label} from ${group.name}`}>Remove</button>
-                            </li>
-                          )
-                        })}
-                      </ul>
+    </div>
+  )
+})}
+</div>
                     )}
 
                     <form onSubmit={(event) => void addThreadMember(event, group.id)} aria-label={`Add thread to ${group.name}`} className="grid gap-2 rounded-xl border border-stone-800 bg-stone-950/50 p-3 sm:grid-cols-[1fr_auto]">
@@ -401,10 +401,10 @@ export default function CrossoversPage() {
                     {membershipMessage && <p role="status" className="text-emerald-400">{membershipMessage}</p>}
                   </div>
                 )}
-              </li>
+              </div>
             )
           })}
-        </ul>
+        </div>
       )}
     </section>
   )
