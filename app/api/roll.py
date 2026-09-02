@@ -650,11 +650,6 @@ async def skip_roll(
 
     snoozed_ids = current_session.snoozed_thread_ids or []
 
-    # Fetch the skipped thread to get its rating and activity timestamp
-    skipped_thread = await db.get(Thread, skipped_thread_id)
-    selected_thread_last_rating = skipped_thread.last_rating
-    selected_thread_last_activity_at = skipped_thread.last_activity_at
-
     artifacts = await _select_pending_thread(
         db=db,
         user_id=user_id,
@@ -663,10 +658,6 @@ async def skip_roll(
         excluded_ids=[*snoozed_ids, skipped_thread_id],
         selection_bandwidth=current_session.active_bandwidth or DEFAULT_BANDWIDTH,
         selection_intent=current_session.active_intent or DEFAULT_INTENT,
-        session_timezone=current_session.timezone,
-        selected_thread_last_rating=selected_thread_last_rating,
-        selected_thread_last_activity_at=selected_thread_last_activity_at,
-        effort_estimate=None,
         selection_method_override="skip",
         empty_pool_detail="No alternative threads available to skip to",
     )

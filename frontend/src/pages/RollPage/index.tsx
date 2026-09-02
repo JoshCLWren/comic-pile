@@ -376,7 +376,7 @@ export default function RollPage() {
               onToggleBlocked={dependencies.handleToggleBlocked}
               onShuffle={actions.handleShufflePool}
               unsnoozeIsPending={unsnoozeMutation.isPending}
-              unskipIsPending={skipMutation.isPending}
+              unskipIsPending={unskipMutation.isPending}
               shuffleIsPending={shuffleQueueMutation.isPending}
             />
           </div>
