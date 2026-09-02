@@ -96,7 +96,6 @@ async def _member_responses(
                 sequence_order=member.sequence_order,
                 series_title=series_title,
                 issue_number=issue_number,
-                sequence_order=member.sequence_order,
             )
         )
     return responses

@@ -107,7 +107,6 @@ class DependencyGroupMemberResponse(BaseModel):
     sequence_order: int
     series_title: str | None = None
     issue_number: str | None = None
-    sequence_order: int | None = None
 
 
 class DependencyGroupIssueRangeResponse(BaseModel):
