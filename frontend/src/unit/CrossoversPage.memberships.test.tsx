@@ -319,6 +319,58 @@ describe('CrossoversPage membership editing', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Uncanny X-Men added to crossover as 1 thread member.')
   })
 
+  it('places a thread member with no sequence_order after ordered memberships', async () => {
+    api.addMember.mockResolvedValue({ id: 3, issue_id: null, thread_id: 44, sequence_order: null, series_title: 'Uncanny X-Men', issue_number: null })
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
+
+    selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
+    fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
+
+    const items = await screen.findAllByRole('listitem')
+    const labels = items.map((item) => item.textContent ?? '')
+    expect(labels[0]).toMatch(/Nova #2/)
+    expect(labels[1]).toMatch(/Nova \(whole series\)/)
+    expect(labels[2]).toMatch(/Uncanny X-Men \(whole series\)/)
+  })
+
+  it('breaks sequence_order ties by membership id when adding a thread member', async () => {
+    api.addMember.mockResolvedValue({ id: 5, issue_id: null, thread_id: 44, sequence_order: 2, series_title: 'Uncanny X-Men', issue_number: null })
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
+
+    selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
+    fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
+
+    const items = await screen.findAllByRole('listitem')
+    const labels = items.map((item) => item.textContent ?? '')
+    expect(labels[0]).toMatch(/Nova #2/)
+    expect(labels[1]).toMatch(/Nova \(whole series\)/)
+    expect(labels[2]).toMatch(/Uncanny X-Men \(whole series\)/)
+  })
+
+  it('appends an unordered thread member when no sequence_order is provided anywhere', async () => {
+    api.list.mockResolvedValue([{
+      ...crossover,
+      memberships: [
+        { id: 1, issue_id: 31, thread_id: null, sequence_order: null, series_title: 'Nova', issue_number: '2' },
+        { id: 2, issue_id: null, thread_id: 22, sequence_order: null, series_title: 'Nova', issue_number: null },
+      ],
+    }])
+    api.addMember.mockResolvedValue({ id: 3, issue_id: null, thread_id: 44, sequence_order: null, series_title: 'Uncanny X-Men', issue_number: null })
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
+
+    selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
+    fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
+
+    const items = await screen.findAllByRole('listitem')
+    const labels = items.map((item) => item.textContent ?? '')
+    expect(labels[0]).toMatch(/Nova #2/)
+    expect(labels[1]).toMatch(/Nova \(whole series\)/)
+    expect(labels[2]).toMatch(/Uncanny X-Men \(whole series\)/)
+  })
+
   it('shows no unfiltered dump on empty series search and requires typing', async () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
