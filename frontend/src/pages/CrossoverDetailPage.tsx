@@ -1,17 +1,15 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { dependencyGroupsApi, type DependencyGroup, type DependencyGroupMember, type DependencyGroupSummary } from '../services/api-dependency-groups'
-import { threadsApi } from '../services/api'
-import { issuesApi } from '../services/api-issues'
-import { continuityReadinessApi, type ContinuityReadinessResponse, type ContinuityBlocker } from '../services/api-continuity-readiness'
+import { dependencyGroupsApi, type DependencyGroup, type DependencyGroupMember, type DependencyGroupSummary, type DependencyGroupDetail, type DependencyGroupDetailMember } from '../services/api-dependency-groups'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { Thread, Issue } from '../types'
+import type { ContinuityReadinessResponse, ContinuityBlocker } from '../services/api-continuity-readiness'
 
 interface CrossoverMember {
   membership: DependencyGroupMember
   thread: Thread | null
   issue: Issue | null
-  otherCrossovers: string[]
+  other_crossovers: string[]
 }
 
 interface BlockedMember {
@@ -36,46 +34,23 @@ export default function CrossoverDetailPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const groupData = await dependencyGroupsApi.get(groupId)
-      setCrossover(groupData)
-
-      const enrichedMembers: CrossoverMember[] = []
-
-      for (const membership of groupData.memberships) {
-        let thread: Thread | null = null
-        let issue: Issue | null = null
-        let otherCrossovers: string[] = []
-
-        if (membership.thread_id) {
-          thread = await threadsApi.get(membership.thread_id)
-          const threadGroups = await dependencyGroupsApi.listForThread(membership.thread_id)
-          otherCrossovers = threadGroups
-            .filter((g) => g.id !== groupId)
-            .map((g) => g.name)
-        } else if (membership.issue_id) {
-          issue = await issuesApi.get(membership.issue_id)
-          thread = await threadsApi.get(issue.thread_id)
-          const threadGroups = await dependencyGroupsApi.listForThread(issue.thread_id)
-          otherCrossovers = threadGroups
-            .filter((g) => g.id !== groupId)
-            .map((g) => g.name)
-        }
-
-        enrichedMembers.push({
-          membership,
-          thread,
-          issue,
-          otherCrossovers,
-        })
-      }
-
-      setMembers(enrichedMembers)
-
-      const readinessData = await continuityReadinessApi.evaluate('crossover', groupId)
-      setReadiness(readinessData)
-
-      const plans = await dependencyGroupsApi.plansForGroup(groupId)
-      setLinkedPlans(plans ?? [])
+      const detail = await dependencyGroupsApi.getDetail(groupId)
+      setCrossover({
+        id: detail.id,
+        name: detail.name,
+        created_at: detail.created_at,
+        memberships: detail.memberships.map((m) => m.membership),
+      })
+      setMembers(
+        detail.memberships.map((m) => ({
+          membership: m.membership,
+          thread: m.thread,
+          issue: m.issue,
+          other_crossovers: m.other_crossovers,
+        })),
+      )
+      setReadiness(detail.readiness ?? null)
+      setLinkedPlans(detail.linked_plans ?? [])
     } catch (err) {
       setError(getApiErrorDetail(err))
     } finally {
@@ -152,7 +127,7 @@ export default function CrossoverDetailPage() {
 
   const sortedMembers = [...members].sort(
     (a, b) =>
-      a.membership.position - b.membership.position ||
+      a.membership.sequence_order - b.membership.sequence_order ||
       a.membership.id - b.membership.id,
   )
 
@@ -299,7 +274,7 @@ export default function CrossoverDetailPage() {
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {sortedMembers.map((member) => {
                 const isRead = member.issue?.status === 'read'
-                const position = member.membership.position
+                const position = member.membership.sequence_order
                 const threadTitle = member.thread?.title ?? 'Unknown Series'
                 const issueNumber = member.issue?.issue_number ?? '?'
                 const blockedInfo = blockedMemberMap.get(member.membership.id)
@@ -330,11 +305,11 @@ export default function CrossoverDetailPage() {
                       </p>
                       <p className={`truncate text-sm ${isRead ? 'text-stone-500' : 'text-stone-400'}`}>
                         Issue {issueNumber}
-                        {member.otherCrossovers.length > 0 && (
+                        {member.other_crossovers.length > 0 && (
                           <>
                             {' • '}
                             <span className="text-violet-400">
-                              Also in: {member.otherCrossovers.join(', ')}
+                              Also in: {member.other_crossovers.join(', ')}
                             </span>
                           </>
                         )}

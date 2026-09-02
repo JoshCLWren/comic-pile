@@ -1,4 +1,4 @@
-"""Add authoritative crossover membership positions.
+"""Add authoritative crossover membership sequence order.
 
 Revision ID: c86100000001
 Revises: 05f8245be922
@@ -6,9 +6,9 @@ Create Date: 2026-08-30 00:00:00.000000
 
 Crossover detail previously rendered an invented order built from each
 issue's series-local ``position``. This revision gives dependency-group
-memberships their own authoritative cross-series ``position`` slot. Existing
-rows are backfilled in insertion order (the only preserved historical
-sequence), and every future add gets an explicit sequential slot.
+memberships their own authoritative cross-series ``sequence_order`` slot.
+Existing rows are backfilled in insertion order (the only preserved
+historical sequence), and every future add gets an explicit sequential slot.
 """
 
 from collections.abc import Sequence
@@ -24,16 +24,16 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Add and backfill the membership position column."""
+    """Add and backfill the membership sequence_order column."""
     op.add_column(
         "dependency_group_memberships",
-        sa.Column("position", sa.Integer(), nullable=True),
+        sa.Column("sequence_order", sa.Integer(), nullable=True),
     )
     op.execute(
         sa.text(
             """
             UPDATE dependency_group_memberships AS dgm
-            SET position = ranked.rn
+            SET sequence_order = ranked.rn
             FROM (
                 SELECT
                     id,
@@ -46,21 +46,21 @@ def upgrade() -> None:
     )
     op.alter_column(
         "dependency_group_memberships",
-        "position",
+        "sequence_order",
         existing_type=sa.Integer(),
         nullable=False,
     )
     op.create_index(
-        "ix_dependency_group_memberships_group_position",
+        "ix_dependency_group_memberships_group_order",
         "dependency_group_memberships",
-        ["group_id", "position"],
+        ["group_id", "sequence_order"],
     )
 
 
 def downgrade() -> None:
-    """Drop the membership position column and its index."""
+    """Drop the membership sequence_order column and its index."""
     op.drop_index(
-        "ix_dependency_group_memberships_group_position",
+        "ix_dependency_group_memberships_group_order",
         table_name="dependency_group_memberships",
     )
-    op.drop_column("dependency_group_memberships", "position")
+    op.drop_column("dependency_group_memberships", "sequence_order")

@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, union_all
 from sqlalchemy.dialects.postgresql import JSONB, insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,15 +18,22 @@ from app.models.continuity_plan import ContinuityPlan
 from app.models.user import User
 from app.schemas.dependency_group import (
     DependencyGroupCreate,
+    DependencyGroupDetailMemberResponse,
+    DependencyGroupDetailResponse,
     DependencyGroupIssueRangeCreate,
     DependencyGroupIssueRangeResponse,
     DependencyGroupMemberCreate,
     DependencyGroupMemberResponse,
+    DependencyGroupOrderUpdate,
     DependencyGroupResponse,
     DependencyGroupSummary,
     DependencyGroupUpdate,
 )
+from app.schemas.issue import IssueResponse
+from app.schemas.thread import ThreadResponse
 from comic_pile.dependencies import refresh_user_blocked_status
+
+from app.continuity_readiness import evaluate_continuity_readiness
 
 router = APIRouter(prefix="/reading-order-groups", tags=["reading-order-groups"])
 MAX_RANGE_SIZE = 250
@@ -86,7 +93,7 @@ async def _member_responses(
                 id=member.id,
                 thread_id=member.thread_id,
                 issue_id=member.issue_id,
-                position=member.position,
+                sequence_order=member.sequence_order,
                 series_title=series_title,
                 issue_number=issue_number,
             )
@@ -109,7 +116,7 @@ async def _group_response(
     result = await db.execute(
         select(DependencyGroupMembership)
         .where(DependencyGroupMembership.group_id == group.id)
-        .order_by(DependencyGroupMembership.position, DependencyGroupMembership.id)
+        .order_by(DependencyGroupMembership.sequence_order, DependencyGroupMembership.id)
     )
     memberships = list(result.scalars())
     return DependencyGroupResponse(
@@ -117,6 +124,189 @@ async def _group_response(
         name=group.name,
         created_at=group.created_at,
         memberships=await _member_responses(db, memberships),
+    )
+
+
+async def _group_detail_response(
+    db: AsyncSession,
+    group: DependencyGroup,
+    user_id: int,
+) -> DependencyGroupDetailResponse:
+    """Serialize one group with enriched member display metadata for detail view.
+
+    Performs batched queries for thread, issue, and other-crossover data to
+    avoid N+1 request waterfalls.
+
+    Args:
+        db: The asynchronous database session.
+        group: The owned group whose memberships should be described.
+        user_id: The authenticated user identifier.
+
+    Returns:
+        The group payload with enriched members, readiness, and linked plans.
+    """
+    # Fetch memberships ordered by authoritative sequence_order
+    result = await db.execute(
+        select(DependencyGroupMembership)
+        .where(DependencyGroupMembership.group_id == group.id)
+        .order_by(DependencyGroupMembership.sequence_order, DependencyGroupMembership.id)
+    )
+    memberships = list(result.scalars())
+
+    # Collect thread IDs and issue IDs
+    thread_ids: set[int] = set()
+    issue_ids: set[int] = set()
+    for member in memberships:
+        if member.thread_id is not None:
+            thread_ids.add(member.thread_id)
+        elif member.issue_id is not None:
+            issue_ids.add(member.issue_id)
+
+    # For issue-level memberships, also need the parent thread ID
+    issue_to_thread: dict[int, int] = {}
+    if issue_ids:
+        issue_result = await db.execute(
+            select(Issue.id, Issue.thread_id).where(Issue.id.in_(issue_ids))
+        )
+        issue_to_thread = {row.id: row.thread_id for row in issue_result}
+        thread_ids.update(issue_to_thread.values())
+
+    # Batch fetch threads
+    threads: dict[int, Thread] = {}
+    if thread_ids:
+        thread_result = await db.execute(
+            select(Thread).where(Thread.id.in_(thread_ids))
+        )
+        threads = {t.id: t for t in thread_result.scalars()}
+
+    # Batch fetch issues
+    issues: dict[int, Issue] = {}
+    if issue_ids:
+        issue_result = await db.execute(
+            select(Issue).where(Issue.id.in_(issue_ids))
+        )
+        issues = {i.id: i for i in issue_result.scalars()}
+
+    # Batch fetch other crossovers for each thread
+    other_crossovers: dict[int, list[str]] = {}
+    if thread_ids:
+        # Find all groups (excluding current) that contain any of these threads or issues
+        # via thread membership or issue membership (via issue->thread mapping)
+        thread_subquery = (
+            select(DependencyGroupMembership.group_id.label("group_id"))
+            .where(
+                DependencyGroupMembership.thread_id.in_(thread_ids),
+                DependencyGroupMembership.group_id != group.id,
+            )
+            .distinct()
+        )
+        issue_subquery = (
+            select(DependencyGroupMembership.group_id.label("group_id"))
+            .join(Issue, Issue.id == DependencyGroupMembership.issue_id)
+            .where(
+                Issue.thread_id.in_(thread_ids),
+                DependencyGroupMembership.group_id != group.id,
+            )
+            .distinct()
+        )
+        combined = union_all(thread_subquery, issue_subquery).subquery()
+        group_result = await db.execute(
+            select(DependencyGroup.id, DependencyGroup.name)
+            .where(
+                DependencyGroup.user_id == user_id,
+                DependencyGroup.id.in_(select(combined.c.group_id)),
+            )
+            .order_by(DependencyGroup.name)
+        )
+        group_name_map = {row.id: row.name for row in group_result}
+        membership_result = await db.execute(
+            select(
+                DependencyGroupMembership.group_id,
+                DependencyGroupMembership.thread_id,
+                Issue.thread_id.label("issue_thread_id"),
+            )
+            .outerjoin(Issue, Issue.id == DependencyGroupMembership.issue_id)
+            .where(
+                or_(
+                    DependencyGroupMembership.thread_id.in_(thread_ids),
+                    Issue.thread_id.in_(thread_ids),
+                ),
+                DependencyGroupMembership.group_id != group.id,
+            )
+        )
+        for tid in thread_ids:
+            other_crossovers[tid] = []
+        for row in membership_result:
+            if row.thread_id is not None:
+                tid = row.thread_id
+            elif row.issue_thread_id is not None:
+                tid = row.issue_thread_id
+            else:
+                continue
+            if tid in other_crossovers and row.group_id in group_name_map:
+                name = group_name_map[row.group_id]
+                if name not in other_crossovers[tid]:
+                    other_crossovers[tid].append(name)
+
+    # Build enriched members
+    enriched_members: list[DependencyGroupDetailMemberResponse] = []
+    for member in memberships:
+        thread = None
+        issue = None
+        other: list[str] = []
+        if member.thread_id is not None:
+            thread = threads.get(member.thread_id)
+            other = other_crossovers.get(member.thread_id, [])
+        elif member.issue_id is not None:
+            issue = issues.get(member.issue_id)
+            if issue is not None:
+                thread = threads.get(issue.thread_id)
+                other = other_crossovers.get(issue.thread_id, [])
+        membership_resp = DependencyGroupMemberResponse(
+            id=member.id,
+            thread_id=member.thread_id,
+            issue_id=member.issue_id,
+            sequence_order=member.sequence_order,
+            series_title=thread.title if thread else None,
+            issue_number=issue.issue_number if issue else None,
+        )
+        thread_resp = ThreadResponse.model_validate(thread) if thread else None
+        issue_resp = IssueResponse.model_validate(issue) if issue else None
+        enriched_members.append(
+            DependencyGroupDetailMemberResponse(
+                membership=membership_resp,
+                thread=thread_resp,
+                issue=issue_resp,
+                other_crossovers=other,
+            )
+        )
+
+    # Evaluate continuity readiness for crossover
+    readiness = await evaluate_continuity_readiness(
+        db, user_id=user_id, node_type="crossover", node_id=group.id
+    )
+
+    # Fetch linked plans
+    crossover_node = {"node_type": "crossover", "ref_id": group.id}
+    plan_result = await db.execute(
+        select(ContinuityPlan.id, ContinuityPlan.name)
+        .where(
+            ContinuityPlan.user_id == user_id,
+            func.cast(ContinuityPlan.nodes_json, JSONB).contains([crossover_node]),
+        )
+        .order_by(ContinuityPlan.name, ContinuityPlan.id)
+    )
+    linked_plans = [
+        DependencyGroupSummary(id=row.id, name=row.name) for row in plan_result
+    ]
+
+    return DependencyGroupDetailResponse(
+        id=group.id,
+        name=group.name,
+        created_at=group.created_at,
+        memberships=enriched_members,
+        readiness=readiness,
+        linked_plans=linked_plans,
     )
 
 
@@ -128,14 +318,14 @@ async def _next_group_position(db: AsyncSession, group_id: int) -> int:
         group_id: The owned group whose memberships are being extended.
 
     Returns:
-        One greater than the current maximum membership position (or ``1``
+        One greater than the current maximum membership sequence_order (or ``1``
         when the group has no memberships yet).
     """
     await db.execute(
         select(DependencyGroup.id).where(DependencyGroup.id == group_id).with_for_update()
     )
     result = await db.execute(
-        select(func.max(DependencyGroupMembership.position)).where(
+        select(func.max(DependencyGroupMembership.sequence_order)).where(
             DependencyGroupMembership.group_id == group_id
         )
     )
@@ -284,6 +474,31 @@ async def get_group(
     return await _group_response(db, await _owned_group(db, group_id, current_user.id))
 
 
+@router.get(
+    "/{group_id}/detail",
+    response_model=DependencyGroupDetailResponse,
+    description="Return one owned group with enriched member, readiness, and plan data.",
+)
+async def get_group_detail(
+    group_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> DependencyGroupDetailResponse:
+    """Return one owned group with enriched detail for crossover view.
+
+    Args:
+        group_id: The dependency group identifier.
+        current_user: The authenticated group owner.
+        db: The asynchronous database session.
+
+    Returns:
+        The requested owned group with enriched member data, continuity
+        readiness, and linked plans, avoiding per-member N+1 requests.
+    """
+    group = await _owned_group(db, group_id, current_user.id)
+    return await _group_detail_response(db, group, current_user.id)
+
+
 @router.patch(
     "/{group_id}",
     response_model=DependencyGroupResponse,
@@ -406,7 +621,7 @@ async def add_issue_range(
                 {
                     "group_id": group_id,
                     "issue_id": issue_id,
-                    "position": base_position + index,
+                    "sequence_order": base_position + index,
                 }
                 for index, issue_id in enumerate(issue_ids)
             ]
@@ -466,7 +681,7 @@ async def add_member(
         group_id=group_id,
         thread_id=payload.thread_id,
         issue_id=payload.issue_id,
-        position=position,
+        sequence_order=position,
     )
     db.add(member)
     try:
@@ -478,6 +693,89 @@ async def add_member(
     response = (await _member_responses(db, [member]))[0]
     await _refresh_crossover_blocked_state(current_user.id, db)
     return response
+
+
+@router.put(
+    "/{group_id}/order",
+    response_model=DependencyGroupResponse,
+    description=(
+        "Set the authoritative ordered reading sequence of a crossover's "
+        "issue-level members."
+    ),
+)
+async def set_group_order(
+    group_id: int,
+    payload: DependencyGroupOrderUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> DependencyGroupResponse:
+    """Replace the authoritative reading order of one owned crossover.
+
+    The payload enumerates issue-level members in their intended reading order;
+    each listed issue's ``sequence_order`` is persisted verbatim (the provided
+    order is the canonical source, never re-derived from membership ids or
+    per-series issue positions). Any issue-level member not listed is cleared to
+    unordered. Thread-level memberships are never sequence entries and are left
+    untouched.
+
+    Args:
+        group_id: The dependency group identifier.
+        payload: The ordered issue list for the crossover.
+        current_user: The authenticated owner of the group and referenced issues.
+        db: The asynchronous database session.
+
+    Returns:
+        The updated group with memberships resolved to comic metadata.
+
+    Raises:
+        HTTPException: 404 when the group, a referenced issue, or a referenced
+            issue-level membership does not exist or is not owned.
+    """
+    await _owned_group(db, group_id, current_user.id)
+
+    ordered_issue_ids = {item.issue_id for item in payload.items}
+    ordered_positions: dict[int, int] = {
+        item.issue_id: item.sequence_order for item in payload.items
+    }
+    if len(ordered_issue_ids) != len(payload.items):
+        raise HTTPException(
+            status_code=422,
+            detail="Each crossover issue may appear at most once in the order",
+        )
+    if len(set(ordered_positions.values())) != len(ordered_positions):
+        raise HTTPException(
+            status_code=422,
+            detail="Each sequence_order position may appear at most once in the order",
+        )
+
+    result = await db.execute(
+        select(DependencyGroupMembership)
+        .where(DependencyGroupMembership.group_id == group_id)
+        .where(DependencyGroupMembership.issue_id.isnot(None))
+    )
+    memberships = list(result.scalars())
+    member_by_issue = {
+        membership.issue_id: membership
+        for membership in memberships
+        if membership.issue_id is not None
+    }
+
+    for issue_id in ordered_issue_ids:
+        issue = await db.get(Issue, issue_id)
+        thread = await db.get(Thread, issue.thread_id) if issue else None
+        if issue is None or thread is None or thread.user_id != current_user.id:
+            raise HTTPException(status_code=404, detail=f"Issue {issue_id} not found")
+        if issue_id not in member_by_issue:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Issue {issue_id} is not a member of this crossover",
+            )
+
+    for issue_id, membership in member_by_issue.items():
+        membership.sequence_order = ordered_positions.get(issue_id)
+    await db.commit()
+    await _refresh_crossover_blocked_state(current_user.id, db)
+    return await _group_response(db, await _owned_group(db, group_id, current_user.id))
 
 
 @router.get(
