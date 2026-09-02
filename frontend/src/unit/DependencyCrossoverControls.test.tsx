@@ -27,7 +27,7 @@ describe('DependencyCrossoverControls', () => {
     vi.clearAllMocks()
     listGroups.mockResolvedValue([existingGroup])
     createGroup.mockResolvedValue({ ...existingGroup, id: 8, name: 'Inferno' })
-    addMember.mockResolvedValue({ id: 11, issue_id: 101, thread_id: null, position: 1 })
+    addMember.mockResolvedValue({ id: 11, issue_id: 101, thread_id: null, sequence_order: 1 })
   })
 
   it('keeps dependency creation independent when no crossover is selected', () => {
@@ -109,7 +109,7 @@ describe('DependencyCrossoverControls', () => {
   it('reports partial failure without claiming both memberships succeeded', async () => {
     const onMembershipChanged = vi.fn()
     addMember
-      .mockResolvedValueOnce({ id: 11, issue_id: 101, thread_id: null, position: 1 })
+      .mockResolvedValueOnce({ id: 11, issue_id: 101, thread_id: null, sequence_order: 1 })
       .mockRejectedValueOnce(new Error('membership unavailable'))
 
     render(

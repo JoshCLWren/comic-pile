@@ -92,11 +92,6 @@ class DependencyGroupMemberResponse(BaseModel):
     kinds. For issue-level memberships, ``issue_number`` identifies the exact
     issue inside that series. A missing value means the target could not be
     resolved and the client must render a readable fallback instead of raw IDs.
-
-    ``sequence_order`` is the authoritative cross-series reading-order slot for the
-    membership inside its group. It is never derived from each issue's
-    series-local position, so the crossover sequence stays stable even when
-    several series reuse the same local position.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -104,9 +99,9 @@ class DependencyGroupMemberResponse(BaseModel):
     id: int
     thread_id: int | None
     issue_id: int | None
-    sequence_order: int
     series_title: str | None = None
     issue_number: str | None = None
+    sequence_order: int | None = None
 
 
 class DependencyGroupIssueRangeResponse(BaseModel):

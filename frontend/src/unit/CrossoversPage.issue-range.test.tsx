@@ -153,9 +153,9 @@ describe('CrossoversPage issue ranges', () => {
     groupsApi.get.mockResolvedValue({
       ...crossover,
       memberships: [
-        { id: 1, issue_id: 31, thread_id: null, position: 1 },
-        { id: 2, issue_id: 32, thread_id: null, position: 2 },
-        { id: 3, issue_id: 33, thread_id: null, position: 3 },
+        { id: 1, issue_id: 31, thread_id: null, sequence_order: 1 },
+        { id: 2, issue_id: 32, thread_id: null, sequence_order: 2 },
+        { id: 3, issue_id: 33, thread_id: null, sequence_order: 3 },
       ],
     })
 

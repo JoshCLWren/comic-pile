@@ -90,6 +90,7 @@ function makeDetailMember(
       id,
       thread_id: thread?.id ?? null,
       issue_id: issue?.id ?? null,
+      sequence_order: id,
       series_title: thread?.title ?? null,
       issue_number: issue?.issue_number ?? null,
     },

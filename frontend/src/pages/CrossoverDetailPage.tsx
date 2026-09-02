@@ -125,11 +125,11 @@ export default function CrossoverDetailPage() {
     )
   }
 
-  const sortedMembers = [...members].sort(
-    (a, b) =>
-      a.membership.sequence_order - b.membership.sequence_order ||
-      a.membership.id - b.membership.id,
-  )
+  const sortedMembers = [...members].sort((a, b) => {
+    const orderA = a.membership.sequence_order ?? Number.MAX_SAFE_INTEGER
+    const orderB = b.membership.sequence_order ?? Number.MAX_SAFE_INTEGER
+    return orderA - orderB || a.membership.id - b.membership.id
+  })
 
   const readCount = sortedMembers.filter(m => m.issue?.status === 'read').length
   const totalCount = sortedMembers.filter(m => m.issue).length
@@ -274,7 +274,7 @@ export default function CrossoverDetailPage() {
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {sortedMembers.map((member) => {
                 const isRead = member.issue?.status === 'read'
-                const position = member.membership.sequence_order
+                const position = member.membership.sequence_order ?? '—'
                 const threadTitle = member.thread?.title ?? 'Unknown Series'
                 const issueNumber = member.issue?.issue_number ?? '?'
                 const blockedInfo = blockedMemberMap.get(member.membership.id)

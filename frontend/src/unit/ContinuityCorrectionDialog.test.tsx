@@ -66,7 +66,7 @@ describe('ContinuityCorrectionDialog', () => {
     vi.clearAllMocks()
     listGroups.mockResolvedValue([existingGroup])
     createGroup.mockResolvedValue({ ...existingGroup, id: 8, name: 'Inferno' })
-    addMember.mockResolvedValue({ id: 1, thread_id: null, issue_id: 42, position: 1 })
+    addMember.mockResolvedValue({ id: 1, thread_id: null, issue_id: 42, sequence_order: 1 })
   })
 
   afterEach(() => {

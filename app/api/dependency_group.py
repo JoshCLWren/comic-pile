@@ -116,7 +116,11 @@ async def _group_response(
     result = await db.execute(
         select(DependencyGroupMembership)
         .where(DependencyGroupMembership.group_id == group.id)
-        .order_by(DependencyGroupMembership.sequence_order, DependencyGroupMembership.id)
+        .order_by(
+            DependencyGroupMembership.sequence_order.is_(None),
+            DependencyGroupMembership.sequence_order,
+            DependencyGroupMembership.id,
+        )
     )
     memberships = list(result.scalars())
     return DependencyGroupResponse(
@@ -145,11 +149,15 @@ async def _group_detail_response(
     Returns:
         The group payload with enriched members, readiness, and linked plans.
     """
-    # Fetch memberships ordered by authoritative sequence_order
+    # Fetch memberships ordered by authoritative sequence_order (nulls last)
     result = await db.execute(
         select(DependencyGroupMembership)
         .where(DependencyGroupMembership.group_id == group.id)
-        .order_by(DependencyGroupMembership.sequence_order, DependencyGroupMembership.id)
+        .order_by(
+            DependencyGroupMembership.sequence_order.is_(None),
+            DependencyGroupMembership.sequence_order,
+            DependencyGroupMembership.id,
+        )
     )
     memberships = list(result.scalars())
 
@@ -690,12 +698,27 @@ async def add_member(
         thread = await db.get(Thread, issue.thread_id) if issue else None
         if issue is None or thread is None or thread.user_id != current_user.id:
             raise HTTPException(status_code=404, detail=f"Issue {payload.issue_id} not found")
-    position = await _next_group_position(db, group_id)
+    proposed_sequence: int | None
+    if payload.sequence_order is not None:
+        existing = await db.execute(
+            select(DependencyGroupMembership.id).where(
+                DependencyGroupMembership.group_id == group_id,
+                DependencyGroupMembership.sequence_order == payload.sequence_order,
+            )
+        )
+        if existing.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Each sequence_order position may appear at most once in the crossover",
+            )
+        proposed_sequence = payload.sequence_order
+    else:
+        proposed_sequence = await _next_group_position(db, group_id)
     member = DependencyGroupMembership(
         group_id=group_id,
         thread_id=payload.thread_id,
         issue_id=payload.issue_id,
-        sequence_order=position,
+        sequence_order=proposed_sequence,
     )
     db.add(member)
     try:
@@ -786,8 +809,7 @@ async def set_group_order(
             )
 
     for issue_id, membership in member_by_issue.items():
-        # Clear unlisted members to unordered (0); non-nullable column requires an integer.
-        membership.sequence_order = ordered_positions.get(issue_id, 0)
+        membership.sequence_order = ordered_positions.get(issue_id)
     await db.commit()
     await _refresh_crossover_blocked_state(current_user.id, db)
     return await _group_response(db, await _owned_group(db, group_id, current_user.id))
