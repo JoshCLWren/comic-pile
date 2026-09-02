@@ -4,7 +4,9 @@ import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 
 interface UseRollSnoozeParams {
   state: RollPageState & RollPageStateSetters
-  snoozeMutation: { mutate: (expectedPendingThreadId?: number) => Promise<unknown> }
+  snoozeMutation: {
+    mutate: (expectedPendingThreadId?: number) => Promise<{ correction: { suggest_clarification: boolean; reason_code: string; active_bandwidth: string | null; active_confidence: number | null; predicted_bandwidth: string | null; bandwidth_changed: boolean } | null } | undefined>
+  }
   unsnoozeMutation: { mutate: (threadId: number) => Promise<unknown> }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
 }
@@ -13,7 +15,8 @@ interface UseRollSnoozeParams {
  * Owns the retained snooze feature. Snoozing from the rating view closes the
  * rating session, while unsnoozing from the pool restores an eligible thread.
  * Both refresh the bounded bootstrap once, keeping the snoozed set truthful
- * without broad refetches.
+ * without broad refetches. When the backend signals clarification is needed,
+ * opens the correction sheet.
  */
 export function useRollSnooze({
   state,
@@ -28,6 +31,8 @@ export function useRollSnooze({
     setSelectedThreadId,
     setActiveRatingThread,
     setErrorMessage,
+    setShowCorrectionSheet,
+    setCorrectionData,
   } = state
 
   async function handleUnsnooze(threadId: number) {
@@ -41,13 +46,18 @@ export function useRollSnooze({
 
   async function handleSnooze() {
     try {
-      await snoozeMutation.mutate()
+      const result = await snoozeMutation.mutate()
       await refetchBootstrap()
       setIsRolling(false)
       setIsRatingView(false)
       setRolledResult(null)
       setSelectedThreadId(null)
       setActiveRatingThread(null)
+
+      if (result?.correction?.suggest_clarification) {
+        setCorrectionData(result.correction)
+        setShowCorrectionSheet(true)
+      }
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error))
     }

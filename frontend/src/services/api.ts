@@ -20,9 +20,11 @@ import type {
   SessionDetails,
   SessionModeResponse,
   SessionListResponse,
+  SessionResponse,
   SessionSnapshotsResponse,
   SessionSummary,
   SetCurrentIssueResponse,
+  SnoozeCorrectionInfo,
   Thread,
   ThreadCreatePayload,
   ThreadDependenciesResponse,
@@ -569,8 +571,8 @@ export const tasksApi = {
 }
 
 export const snoozeApi = {
-  snooze: () => api.post<void>('/v1/snooze/'),
-  unsnooze: (threadId: number) => api.post<void>(`/v1/snooze/${threadId}/unsnooze`),
+  snooze: () => api.post<SessionResponse>('/v1/snooze/'),
+  unsnooze: (threadId: number) => api.post<SessionResponse>(`/v1/snooze/${threadId}/unsnooze`),
 }
 
 export const migrationApi = {

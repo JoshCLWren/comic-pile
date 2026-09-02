@@ -11,6 +11,7 @@ import {
   reconcileAmbiguousRollMutation,
   recoverProtectedRollMutation,
 } from './rollMutationReconciliation'
+import type { SnoozeCorrectionInfo } from '../types'
 
 type SnoozeResult = Awaited<ReturnType<typeof protectedRollMutationApi.snooze>> | undefined
 
@@ -64,7 +65,7 @@ export function useSnooze() {
     }
   }, [refreshAuthoritativeState])
 
-  const mutate = async (expectedPendingThreadId?: number): Promise<SnoozeResult> => {
+  const mutate = async (expectedPendingThreadId?: number): Promise<{ correction: SnoozeCorrectionInfo | null } | undefined> => {
     if (inFlightRequest.current) return inFlightRequest.current
     if (refreshRequest.current) {
       await refreshRequest.current
@@ -75,12 +76,12 @@ export function useSnooze() {
     setIsError(false)
     setRefreshError(null)
 
-    const request: Promise<SnoozeResult> = (async () => {
+    const request: Promise<{ correction: SnoozeCorrectionInfo | null } | undefined> = (async () => {
       try {
         const result = await protectedRollMutationApi.snooze()
         await invalidateCurrentSessionAfterSnooze(queryClient)
         await refreshAuthoritativeState()
-        return result
+        return { correction: result.correction }
       } catch (error: unknown) {
         if (
           expectedPendingThreadId !== undefined
@@ -94,7 +95,7 @@ export function useSnooze() {
             if (recovery.status === 'retried') {
               await invalidateCurrentSessionAfterSnooze(queryClient)
               await refreshAuthoritativeState()
-              return recovery.value
+              return { correction: recovery.value.correction }
             }
           } catch (recoveryError: unknown) {
             console.error(

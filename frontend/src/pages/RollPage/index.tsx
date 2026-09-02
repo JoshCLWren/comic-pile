@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LazyDice3D from '../../components/LazyDice3D'
+import CorrectionSheet from '../../components/CorrectionSheet'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
@@ -367,6 +368,12 @@ export default function RollPage() {
           isSetCurrentIssueOpen={state.isSetCurrentIssueOpen}
           onCloseSetCurrentIssue={() => state.setIsSetCurrentIssueOpen(false)}
           onSetCurrentIssue={handleSetCurrentIssue}
+        />
+
+        <CorrectionSheet
+          isOpen={state.showCorrectionSheet}
+          onClose={() => state.setShowCorrectionSheet(false)}
+          correction={state.correctionData!}
         />
       </div>
     </div>

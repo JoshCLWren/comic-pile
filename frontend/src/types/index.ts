@@ -135,6 +135,53 @@ export interface SessionThread {
   last_rating?: number | null;
 }
 
+export interface SnoozeCorrectionInfo {
+  bandwidth_changed: boolean;
+  active_bandwidth: string | null;
+  active_confidence: number | null;
+  predicted_bandwidth: string | null;
+  reason_code: 'heavy_snooze_shift' | 'light_snooze_deflate' | 'confidence_degrade' | 'no_correction' | 'clarification_needed';
+  suggest_clarification: boolean;
+}
+
+export interface SessionResponse {
+  id: number;
+  started_at: string;
+  ended_at: string | null;
+  start_die: number;
+  manual_die: number | null;
+  user_id: number;
+  ladder_path: string;
+  active_thread: SessionThread | null;
+  current_die: number;
+  last_rolled_result: number | null;
+  has_restore_point: boolean;
+  snapshot_count: number;
+  snoozed_thread_ids: number[];
+  snoozed_threads: SessionThread[];
+  pending_thread_id: number | null;
+  timezone: string | null;
+  reading_bandwidth: string | null;
+  reading_intent: string | null;
+  reading_mode_source: string | null;
+  reading_mode_suggested: boolean;
+  bandwidth: {
+    predicted_bandwidth: string | null;
+    active_bandwidth: string | null;
+    confidence: number | null;
+    source: 'inferred' | 'manual' | 'snooze' | 'quiz' | null;
+    mode_version: string | null;
+  } | null;
+  intent: {
+    predicted_intent: string | null;
+    active_intent: string | null;
+    confidence: number | null;
+    source: 'inferred' | 'manual' | 'snooze' | 'quiz' | null;
+    mode_version: string | null;
+  } | null;
+  correction: SnoozeCorrectionInfo | null;
+}
+
 export interface SessionCurrent {
   id: number;
   current_die: number;

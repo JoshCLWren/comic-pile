@@ -29,6 +29,15 @@ export interface RollPageState {
   rating: number
   predictedDie: number
   errorMessage: string
+  showCorrectionSheet: boolean
+  correctionData: {
+    reason_code: string
+    active_bandwidth: string | null
+    active_confidence: number | null
+    predicted_bandwidth: string | null
+    bandwidth_changed: boolean
+    suggest_clarification: boolean
+  } | null
   suppressPendingAutoOpenRef: React.MutableRefObject<boolean>
   rollIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>
   rollTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>
@@ -60,6 +69,15 @@ export interface RollPageStateSetters {
   setRating: (value: number) => void
   setPredictedDie: (value: number) => void
   setErrorMessage: (value: string) => void
+  setShowCorrectionSheet: (value: boolean) => void
+  setCorrectionData: (value: {
+    reason_code: string
+    active_bandwidth: string | null
+    active_confidence: number | null
+    predicted_bandwidth: string | null
+    bandwidth_changed: boolean
+    suggest_clarification: boolean
+  } | null) => void
 }
 
 export function useRollPageState(): RollPageState & RollPageStateSetters {
@@ -88,6 +106,15 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [rating, setRating] = useState(4.0)
   const [predictedDie, setPredictedDie] = useState(6)
   const [errorMessage, setErrorMessage] = useState('')
+  const [showCorrectionSheet, setShowCorrectionSheet] = useState(false)
+  const [correctionData, setCorrectionData] = useState<{
+    reason_code: string
+    active_bandwidth: string | null
+    active_confidence: number | null
+    predicted_bandwidth: string | null
+    bandwidth_changed: boolean
+    suggest_clarification: boolean
+  } | null>(null)
 
   const suppressPendingAutoOpenRef = useRef(false)
   const rollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -144,6 +171,10 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setPredictedDie,
     errorMessage,
     setErrorMessage,
+    showCorrectionSheet,
+    setShowCorrectionSheet,
+    correctionData,
+    setCorrectionData,
     suppressPendingAutoOpenRef,
     rollIntervalRef,
     rollTimeoutRef,
