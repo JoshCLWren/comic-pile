@@ -23,6 +23,8 @@ def test_omniroute_lane_publishes_routing_summary() -> None:
     assert "/api/usage/analytics?period=session" in workflow
     assert "OMNIROUTE_MANAGEMENT_API_KEY" in workflow
     assert 'Authorization: Bearer ${OMNIROUTE_MANAGEMENT_API_KEY}' in workflow
+    assert 'echo "Requested model: ${MODEL}"' in workflow
+    assert 'echo "Requested model: `${MODEL}`"' not in workflow
     assert 'gateway_base_url="${OMNIROUTE_BASE_URL%/}"' in workflow
     assert 'gateway_base_url="${gateway_base_url%/v1}"' in workflow
     assert 'echo "::warning::$message"' in workflow

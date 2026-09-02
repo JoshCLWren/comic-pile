@@ -666,7 +666,7 @@ jobs:
           {
             echo '### OmniRoute routing summary'
             echo
-            echo "Requested model: `${MODEL}`"
+            echo "Requested model: ${MODEL}"
             echo
             echo '```text'
             echo "$summary"
