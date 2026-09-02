@@ -17,7 +17,8 @@ def test_catalog_backed_providers_use_central_adapter() -> None:
     assert "opencode models opencode --refresh" in selector
     assert "https://openrouter.ai/api/v1/models" in selector
     assert ".github/scripts/factory_provider_candidates.py" in selector
-    assert ".github/free-model-factories.tsv | sort -u" in selector
+    assert "--configured-model" not in selector
+    assert "free-model-factories.tsv" not in selector
     assert ".github/scripts/factory_candidate_health.py" in selector
     assert "factory-attempt-comments.json" in selector
     assert "--worker \"$WORKER\"" in selector
@@ -44,7 +45,8 @@ def test_runtime_only_providers_keep_real_probe_authority() -> None:
         "- name: Select execution candidate at dispatch time", maxsplit=1
     )[1].split("- name: Report selected executor heartbeat", maxsplit=1)[0]
 
-    assert "nvidia|kilo-auto|omniroute-opencode)" in selector
+    assert "nvidia|kilo-auto)" in selector
+    assert "omniroute-opencode" not in selector
     assert "selected-by-runtime-evidence" in selector
 
 
@@ -91,3 +93,13 @@ def test_discovery_failures_publish_normalized_outcomes() -> None:
     assert 'discovery_record="$(cat "$DISCOVERY_OUTCOME_FILE"' in workflow
     assert "attempt_outcome attempt_detail" in workflow
     assert "outcome='selection-failed'" in workflow
+
+
+def test_nvidia_410_is_persisted_and_skipped_before_future_probes() -> None:
+    """A known NVIDIA 410 is durable and avoids another provider request."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "factory-model-retired-410:v1" in workflow
+    assert "Skipping permanently retired NVIDIA model" in workflow
+    assert "code\" == \"410\"" in workflow
+    assert "model_retired_410" in workflow

@@ -84,5 +84,9 @@ class DependencyGroupMembership(Base):
         Index("ix_dependency_group_memberships_group_id", "group_id"),
         Index("ix_dependency_group_memberships_thread_id", "thread_id"),
         Index("ix_dependency_group_memberships_issue_id", "issue_id"),
-        Index("ix_dependency_group_memberships_group_order", "group_id", "sequence_order"),
+        Index(
+            "ix_dependency_group_memberships_group_order",
+            "group_id",
+            "sequence_order",
+        ),
     )

@@ -116,7 +116,7 @@ beforeEach(() => {
   mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseSession.mockReturnValue({
-    data: { snoozed_threads: [] },
+    data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
     refetch: vi.fn(),
   })
   mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
@@ -252,7 +252,7 @@ describe('Visible action Snooze/Unsnooze', () => {
 
   it('calls snooze mutation when the pending comic Snooze action is clicked', async () => {
     mockedUseSession.mockReturnValue({
-      data: { snoozed_threads: [], pending_thread_id: 1 },
+      data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [], pending_thread_id: 1 },
       refetch: vi.fn(),
     })
 
@@ -275,7 +275,9 @@ describe('Visible action Snooze/Unsnooze', () => {
   it('calls unsnooze mutation when the Unsnooze action is clicked', async () => {
     mockedUseSession.mockReturnValue({
       data: {
-        snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }]
+        snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
+        skipped_thread_ids: [],
+        skipped_threads: [],
       },
       refetch: vi.fn(),
     })
@@ -300,7 +302,7 @@ describe('Visible action Snooze/Unsnooze', () => {
     const mockRefetchSession = vi.fn()
     const mockRefetch = vi.fn()
     mockedUseSession.mockReturnValue({
-      data: { snoozed_threads: [], pending_thread_id: 1 },
+      data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [], pending_thread_id: 1 },
       refetch: mockRefetchSession,
     })
     mockedUseQueueThreads.mockReturnValue({
@@ -335,6 +337,8 @@ describe('Visible action Snooze/Unsnooze', () => {
     mockedUseSession.mockReturnValue({
       data: {
         snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
+        skipped_thread_ids: [],
+        skipped_threads: [],
       },
       refetch: mockRefetchSession,
     })
@@ -406,7 +410,8 @@ describe('Keyboard Accessibility', () => {
     const cards = screen.getAllByTestId('queue-thread-item')
     expect(cards[0]).toHaveTextContent('Alpha')
     await user.type(screen.getByPlaceholderText('Search...'), 'missing')
-    expect(screen.getByText('No active threads match your search')).toBeInTheDocument()
+    // Search is debounced (300ms) so the parent query only commits after the delay.
+    await waitFor(() => expect(screen.getByText('No active threads match your search')).toBeInTheDocument(), { timeout: 2000 })
   })
 
   it('shows correct empty state when search matches only completed threads', async () => {
@@ -429,7 +434,7 @@ describe('Keyboard Accessibility', () => {
     })
     render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
     await user.type(screen.getByPlaceholderText('Search...'), 'done')
-    expect(screen.getByText('No active threads match your search')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('No active threads match your search')).toBeInTheDocument(), { timeout: 2000 })
   })
 
   it('creates a simple issue range and marks the requested issues read', async () => {

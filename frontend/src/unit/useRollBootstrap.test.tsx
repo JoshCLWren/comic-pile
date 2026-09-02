@@ -1,8 +1,10 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
+import { queryClient } from '../query/queryClient'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { ToastProvider } from '../contexts/ToastProvider'
 
@@ -38,6 +40,8 @@ const bootstrapResponse: RollBootstrapResponse = {
   roll_pool: [],
   snoozed_threads: [],
   snoozed_count: 0,
+  skipped_thread_ids: [],
+  skipped_threads: [],
   blocked_count: 0,
   blocked_threads: [],
   stale_thread_count: 0,
@@ -57,7 +61,9 @@ function deferred<T>() {
 function renderBootstrap() {
   return renderHook(() => useRollBootstrap(), {
     wrapper: ({ children }: { children: React.ReactNode }) => (
-      <ToastProvider>{children}</ToastProvider>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>{children}</ToastProvider>
+      </QueryClientProvider>
     ),
   })
 }
@@ -105,7 +111,9 @@ describe('useRollBootstrap', () => {
       await result.current.refetch()
     })
 
-    expect(result.current.data).toBe(bootstrapResponse)
+    // React Query transitions an errored observer back to success asynchronously
+    // after a successful refetch; await that transition before asserting.
+    await waitFor(() => expect(result.current.data).toBe(bootstrapResponse))
     expect(result.current.isError).toBe(false)
     expect(result.current.error).toBeNull()
     expect(result.current.isPending).toBe(false)
@@ -251,15 +259,16 @@ describe('useRollBootstrap', () => {
       )
     })
 
-    expect(result.current.data).toEqual(reconciled)
-    expect(result.current.isPending).toBe(false)
-
+    // The reconciled value is authoritative in the cache, but React Query keeps a
+    // query with an in-flight fetch at pending, so the observer only reflects it
+    // once the older request settles. Resolve it; the generation guard must keep
+    // the reconciled value instead of letting the stale request overwrite it.
     await act(async () => {
       initialRequest.resolve(bootstrapResponse)
       await initialRequest.promise
     })
 
-    expect(result.current.data).toEqual(reconciled)
+    await waitFor(() => expect(result.current.data).toEqual(reconciled))
     expect(result.current.isPending).toBe(false)
     expect(result.current.isError).toBe(false)
     expect(result.current.error).toBeNull()
@@ -279,12 +288,15 @@ describe('useRollBootstrap', () => {
       )
     })
 
+    // An older bootstrap failure must not erase the reconciled state. React Query
+    // keeps the fetching observer at pending, so assert the final cache-driven state
+    // once the stale request settles.
     await act(async () => {
       initialRequest.reject(new Error('stale bootstrap failure'))
       await expect(initialRequest.promise).rejects.toThrow('stale bootstrap failure')
     })
 
-    expect(result.current.data).toEqual(reconciled)
+    await waitFor(() => expect(result.current.data).toEqual(reconciled))
     expect(result.current.isPending).toBe(false)
     expect(result.current.isError).toBe(false)
     expect(result.current.error).toBeNull()

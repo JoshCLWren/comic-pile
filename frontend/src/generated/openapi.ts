@@ -2751,6 +2751,8 @@ export interface components {
          * @description One credited creator and their provider-supplied roles.
          */
         ComicVineCreator: {
+            /** Creator Id */
+            creator_id?: number | null;
             /** Name */
             name: string;
             /** Roles */

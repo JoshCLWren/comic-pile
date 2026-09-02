@@ -454,6 +454,7 @@ async def get_roll_pool_rows(
     user_id: int,
     db: AsyncSession,
     snoozed_ids: list[int] | None = None,
+    skipped_ids: list[int] | None = None,
 ) -> list[tuple[Thread, int, str | None]]:
     """Get the active roll pool enriched with issue-tracking read state.
 
@@ -470,6 +471,7 @@ async def get_roll_pool_rows(
         user_id: The user ID to filter threads by.
         db: The database session.
         snoozed_ids: Optional list of thread IDs to exclude from the pool.
+        skipped_ids: Optional list of thread IDs to exclude from the pool (skipped during current session).
 
     Returns:
         List of ``(Thread, unread_count, next_issue_number)`` tuples ordered by
@@ -504,6 +506,9 @@ async def get_roll_pool_rows(
     if snoozed_ids:
         query = query.where(Thread.id.not_in(snoozed_ids))
 
+    if skipped_ids:
+        query = query.where(Thread.id.not_in(skipped_ids))
+
     result = await db.execute(query)
     return [(row[0], row[1], row[2]) for row in result]
 
@@ -513,6 +518,7 @@ async def get_bounded_roll_pool_rows(
     db: AsyncSession,
     current_die: int,
     snoozed_ids: list[int] | None = None,
+    skipped_ids: list[int] | None = None,
 ) -> list[tuple[Thread, int, str | None]]:
     """Return the bounded roll-candidate pool for weighted chooser integration.
 
@@ -526,20 +532,38 @@ async def get_bounded_roll_pool_rows(
         db: The database session.
         current_die: The current die size from the dice ladder; caps pool size.
         snoozed_ids: Optional list of thread IDs to exclude from the pool.
+        skipped_ids: Optional list of thread IDs to exclude from the pool (skipped during current session).
 
     Returns:
         List of ``(Thread, unread_count, next_issue_number)`` tuples, in
         queue-position order, truncated to ``current_die`` entries.
     """
-    rows = await get_roll_pool_rows(user_id, db, snoozed_ids)
+    rows = await get_roll_pool_rows(user_id, db, snoozed_ids, skipped_ids)
     return rows[:current_die]
 
 
-async def get_stale_threads(user_id: int, db: AsyncSession, days: int = 7) -> list[Thread]:
-    """Get threads not read in the specified number of days."""
+async def get_stale_threads(
+    user_id: int,
+    db: AsyncSession,
+    days: int = 7,
+    snoozed_ids: list[int] | None = None,
+) -> list[Thread]:
+    """Get threads not read in the specified number of days.
+
+    Args:
+        user_id: Owner of the threads.
+        db: Async database session.
+        days: Number of days after which a thread is considered stale.
+        snoozed_ids: Thread IDs currently snoozed in the session; these are
+            excluded from the stale result.
+
+    Returns:
+        Active, unblocked threads whose last activity predates the cutoff,
+        ordered oldest activity first (nulls first).
+    """
     cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
-    result = await db.execute(
+    query = (
         select(Thread)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
@@ -547,4 +571,8 @@ async def get_stale_threads(user_id: int, db: AsyncSession, days: int = 7) -> li
         .where((Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None)))
         .order_by(Thread.last_activity_at.asc().nullsfirst())
     )
+    if snoozed_ids:
+        query = query.where(Thread.id.not_in(snoozed_ids))
+
+    result = await db.execute(query)
     return list(result.scalars().all())

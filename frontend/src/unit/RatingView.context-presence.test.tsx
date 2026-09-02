@@ -193,7 +193,7 @@ describe('Reading Context content-driven presence (#1942)', () => {
     expect(screen.getByText('Dependency & Continuity Edges')).toBeInTheDocument()
     expect(screen.getByText('Rolled 5 on d6')).toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
-    expect(grid!.className).toContain('xl:grid-cols-[minmax(0,26fr)_minmax(0,46fr)_minmax(0,28fr)]')
+    expect(grid!.className).toContain('xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]')
   })
 
   it('renders reading routes when reading orders populate the region', () => {

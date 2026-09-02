@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { dependencyGroupsApi, type DependencyGroup, type DependencyGroupMember, type DependencyGroupSummary, type DependencyGroupDetail, type DependencyGroupDetailMember } from '../services/api-dependency-groups'
+import { dependencyGroupsApi, type DependencyGroup, type DependencyGroupMember, type DependencyGroupSummary } from '../services/api-dependency-groups'
+import type { ContinuityReadinessResponse, ContinuityBlocker } from '../services/api-continuity-readiness'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { Thread, Issue } from '../types'
-import type { ContinuityReadinessResponse, ContinuityBlocker } from '../services/api-continuity-readiness'
 
 interface CrossoverMember {
   membership: DependencyGroupMember

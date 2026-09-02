@@ -227,34 +227,18 @@ describe('RatingView action panel (issue #1406)', () => {
   })
 })
 
-describe('RatingView responsive pillar contract', () => {
-  it('uses two columns at xl when Reading Context has no content', () => {
+describe('RatingView desktop layout contract (issue #1943)', () => {
+  it('uses an algorithmic auto-fit desktop grid instead of fixed fractional templates', () => {
     const { container } = render(ratingView())
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     expect(grid).not.toBeNull()
     expect(grid!.className).toContain('grid')
-    expect(grid!.className).toContain('md:grid-cols-2')
-    expect(grid!.className).toContain('xl:grid-cols-[minmax(0,50fr)_minmax(0,50fr)]')
+    expect(grid!.className).toContain('items-start')
+    expect(grid!.className).toContain('xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]')
+    expect(grid!.className).not.toMatch(/minmax\(0,\d+fr\)/)
   })
 
-  it('spans The Comic across both rows at md so Your Context sits below Reading Context on the right', () => {
-    const { container } = render(ratingView())
-    const comicWrapper = container.querySelector('[data-testid="rating-pillars-grid"] > div')
-    expect(comicWrapper).not.toBeNull()
-    expect(comicWrapper!.className).toContain('md:row-span-2')
-    expect(comicWrapper!.className).toContain('xl:row-span-1')
-  })
-
-  it('places action panel beside Your Context on xl when Reading Context has no content (issue #1676)', () => {
-    const { container } = render(ratingView())
-    const gridCell = container.querySelector('[data-testid="rating-actions-grid-cell"]')
-    expect(gridCell).not.toBeNull()
-    expect(gridCell!.className).toContain('xl:col-start-2')
-    expect(gridCell!.className).toContain('xl:row-start-2')
-    expect(gridCell!.className).not.toContain('xl:col-span-2')
-  })
-
-  it('spans action panel under Reading and Your Context on xl when Reading Context has content (issue #1676)', () => {
+  it('keeps region cards content-sized instead of stretching to equal-height rows', () => {
     const { container } = render(
       ratingView({
         readingOrders: [
@@ -269,11 +253,59 @@ describe('RatingView responsive pillar contract', () => {
         ],
       }),
     )
-    const gridCell = container.querySelector('[data-testid="rating-actions-grid-cell"]')
-    expect(gridCell).not.toBeNull()
-    expect(gridCell!.className).toContain('xl:col-start-2')
-    expect(gridCell!.className).toContain('xl:col-span-2')
-    expect(gridCell!.className).toContain('xl:row-start-2')
+    const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
+    expect(grid!.className).toContain('items-start')
+    for (const testId of ['rating-region-comic', 'rating-region-reading-context', 'rating-region-your-context']) {
+      expect(container.querySelector(`[data-testid="${testId}"]`)!.className).toContain('min-w-0')
+    }
+  })
+
+  it('avoids fixed grid-row/grid-column placement that reserves holes when regions shrink', () => {
+    const { container } = render(
+      ratingView({
+        readingOrders: [
+          {
+            id: 7,
+            name: 'Main route',
+            description: null,
+            total_items: 2,
+            completed_items: 1,
+            items: [],
+          },
+        ],
+      }),
+    )
+    const grid = container.querySelector<HTMLElement>('[data-testid="rating-pillars-grid"]')
+    expect(grid).not.toBeNull()
+    const cells = Array.from(grid!.querySelectorAll<HTMLDivElement>(':scope > div'))
+    expect(cells.length).toBeGreaterThanOrEqual(3)
+    for (const cell of cells) {
+      expect(cell.className).not.toMatch(/\b(?:md:|xl:)?(?:col-start|row-start|col-end|row-end|row-span)-\d+\b/)
+      expect(cell.className).not.toContain('md:row-span-2')
+    }
+  })
+
+  it('stacks the action panel with Your Context instead of spanning the full grid width', () => {
+    const { container } = render(
+      ratingView({
+        readingOrders: [
+          {
+            id: 7,
+            name: 'Main route',
+            description: null,
+            total_items: 2,
+            completed_items: 1,
+            items: [],
+          },
+        ],
+      }),
+    )
+    const yourContext = container.querySelector<HTMLElement>('[data-testid="rating-region-your-context"]')
+    const actions = container.querySelector<HTMLElement>('[data-testid="rating-actions-grid-cell"]')
+    expect(yourContext).not.toBeNull()
+    expect(actions).not.toBeNull()
+    expect(yourContext!.contains(actions)).toBe(true)
+    expect(actions!.className).not.toContain('xl:col-span-full')
   })
 
   it('does not render Reading Context or a YOUR CONTEXT heading when empty - rating form follows The Comic directly', () => {

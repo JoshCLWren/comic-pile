@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { ToastProvider } from '../contexts/ToastProvider'
 import {
   isAmbiguousNetworkFailure,
@@ -9,6 +10,7 @@ import {
 } from '../hooks/rollMutationReconciliation'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
+import { queryClient } from '../query/queryClient'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
 vi.mock('../services/rollBootstrapApi', () => ({
@@ -19,7 +21,9 @@ vi.mock('../services/rollBootstrapApi', () => ({
 
 const mockedBootstrap = vi.mocked(rollBootstrapApi.get)
 const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <ToastProvider>{children}</ToastProvider>
+  <QueryClientProvider client={queryClient}>
+    <ToastProvider>{children}</ToastProvider>
+  </QueryClientProvider>
 )
 
 const bootstrapState = (
@@ -49,6 +53,8 @@ const bootstrapState = (
   roll_pool: [],
   snoozed_threads: [],
   snoozed_count: 0,
+  skipped_thread_ids: [],
+  skipped_threads: [],
   blocked_count: 0,
   blocked_threads: [],
   stale_thread_count: 0,
@@ -130,7 +136,9 @@ describe('Roll mutation reconciliation', () => {
 
     expect(reused).toBe(reconciled)
     expect(mockedBootstrap).toHaveBeenCalledTimes(1)
-    expect(result.current.data).toBe(reconciled)
+    // React Query applies the reconciled cache value to the observer asynchronously
+    // and structurally shares it, so compare by content.
+    await waitFor(() => expect(result.current.data).toStrictEqual(reconciled))
     expect(result.current.data?.current_die).toBe(8)
     expect(result.current.data?.pending_thread_id).toBeNull()
     expect(result.current.isPending).toBe(false)
@@ -161,9 +169,14 @@ describe('Roll mutation reconciliation', () => {
         refreshed = await result.current.refetch()
       })
 
-      expect(refreshed).toBe(later)
+      // React Query structurally shares data, so compare by content rather than
+      // reference. Flush the refetch's observer update before asserting it.
+      expect(refreshed).toStrictEqual(later)
       expect(mockedBootstrap).toHaveBeenCalledTimes(2)
-      expect(result.current.data).toBe(later)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      expect(result.current.data).toStrictEqual(later)
     } finally {
       vi.useRealTimers()
     }

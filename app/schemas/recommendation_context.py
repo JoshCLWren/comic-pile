@@ -14,6 +14,11 @@ class CandidateFactor(BaseModel):
     candidate_id: int
     factors: list[str] = Field(default_factory=list)
     weight: float = Field(..., ge=0.0, description="Final combined weight after caps")
+    effort_minutes: float | None = None
+    effort_band: str | None = None
+    effort_source: str | None = None
+    effort_confidence: float | None = None
+    effort_sample_count: int | None = None
 
 
 class RecommendationContextResponse(BaseModel):
@@ -34,6 +39,11 @@ class RecommendationContextResponse(BaseModel):
     final_weight: float | None = None
     random_bypass: bool
     balanced_neutrality: bool
+    effort_minutes: float | None = None
+    effort_band: str | None = None
+    effort_source: str | None = None
+    effort_confidence: float | None = None
+    effort_sample_count: int | None = None
 
 
 class RecommendationContextCreate(BaseModel):
@@ -41,7 +51,7 @@ class RecommendationContextCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: int = Field(default=1, ge=1)
+    schema_version: int = Field(default=2, ge=1)
     intent: Literal["momentum", "familiar", "explore", "random", "balanced"]
     intent_source: str = Field(..., min_length=1, max_length=30)
     intent_confidence: float = Field(..., ge=0.0, le=1.0)
@@ -52,6 +62,11 @@ class RecommendationContextCreate(BaseModel):
     final_weight: float | None = Field(default=None, ge=0.0)
     random_bypass: bool = False
     balanced_neutrality: bool = False
+    effort_minutes: float | None = None
+    effort_band: str | None = None
+    effort_source: str | None = None
+    effort_confidence: float | None = None
+    effort_sample_count: int | None = None
 
 
 class RollingRecommendationContext(BaseModel):

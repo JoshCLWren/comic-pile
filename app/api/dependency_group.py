@@ -96,6 +96,7 @@ async def _member_responses(
                 sequence_order=member.sequence_order,
                 series_title=series_title,
                 issue_number=issue_number,
+                sequence_order=member.sequence_order,
             )
         )
     return responses
@@ -192,6 +193,7 @@ async def _group_detail_response(
     if thread_ids:
         # Find all groups (excluding current) that contain any of these threads or issues
         # via thread membership or issue membership (via issue->thread mapping)
+        # We'll use a union of two subqueries
         thread_subquery = (
             select(DependencyGroupMembership.group_id.label("group_id"))
             .where(
@@ -200,6 +202,8 @@ async def _group_detail_response(
             )
             .distinct()
         )
+        # For issue-level membership, we need to map issue_id to thread_id
+        # but we can just join Issue table
         issue_subquery = (
             select(DependencyGroupMembership.group_id.label("group_id"))
             .join(Issue, Issue.id == DependencyGroupMembership.issue_id)
@@ -209,7 +213,9 @@ async def _group_detail_response(
             )
             .distinct()
         )
+        # Combine with UNION
         combined = union_all(thread_subquery, issue_subquery).subquery()
+        # Fetch group names
         group_result = await db.execute(
             select(DependencyGroup.id, DependencyGroup.name)
             .where(
@@ -218,7 +224,13 @@ async def _group_detail_response(
             )
             .order_by(DependencyGroup.name)
         )
+        # Build mapping from group id to name
         group_name_map = {row.id: row.name for row in group_result}
+        # Now we need to map each thread_id to list of group names
+        # We need to know which groups contain each thread.
+        # Simpler: for each thread, we can fetch groups via a query similar to list_thread_groups
+        # but we can do batch.
+        # We'll fetch all memberships that reference these threads (directly or via issues)
         membership_result = await db.execute(
             select(
                 DependencyGroupMembership.group_id,
@@ -234,9 +246,11 @@ async def _group_detail_response(
                 DependencyGroupMembership.group_id != group.id,
             )
         )
+        # Initialize list for each thread
         for tid in thread_ids:
             other_crossovers[tid] = []
         for row in membership_result:
+            # Determine which thread this membership refers to
             if row.thread_id is not None:
                 tid = row.thread_id
             elif row.issue_thread_id is not None:
@@ -262,6 +276,7 @@ async def _group_detail_response(
             if issue is not None:
                 thread = threads.get(issue.thread_id)
                 other = other_crossovers.get(issue.thread_id, [])
+        # Build membership response (reuse existing logic)
         membership_resp = DependencyGroupMemberResponse(
             id=member.id,
             thread_id=member.thread_id,
@@ -286,7 +301,7 @@ async def _group_detail_response(
         db, user_id=user_id, node_type="crossover", node_id=group.id
     )
 
-    # Fetch linked plans
+    # Fetch linked plans (same as list_crossover_plans)
     crossover_node = {"node_type": "crossover", "ref_id": group.id}
     plan_result = await db.execute(
         select(ContinuityPlan.id, ContinuityPlan.name)

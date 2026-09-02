@@ -9,6 +9,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/fixed-model-factory-capacity-refill.yml'
+      - '.github/scripts/factory_migration_lane.py'
 
 permissions:
   actions: write
@@ -41,6 +42,14 @@ jobs:
           chmod +x "$shim_dir/gh"
           echo "FACTORY_REAL_GH=$real_gh" >> "$GITHUB_ENV"
           echo "$shim_dir" >> "$GITHUB_PATH"
+
+      - name: Reconcile serialized migration finalization lane
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/factory_migration_lane.py reconcile
 
       - name: Refill work-conserving factory capacity
         shell: bash

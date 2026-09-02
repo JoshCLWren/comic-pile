@@ -442,6 +442,6 @@ describe('ReadingContextPillar crossover membership chips', () => {
     const chip = screen.getByRole('button', { name: 'Open Annihilation crossover' })
     expect(chip).toBeVisible()
     await userEvent.setup().click(chip)
-    expect(navigateSpy).toHaveBeenCalledWith('/crossovers?group=3')
+    expect(navigateSpy).toHaveBeenCalledWith('/crossovers/3')
   })
 })

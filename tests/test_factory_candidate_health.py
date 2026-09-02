@@ -114,6 +114,29 @@ def test_permanently_unavailable_model_is_excluded() -> None:
     assert result.selected.model == "vendor/b:free"
 
 
+def test_http_410_retirement_marker_remains_excluded_after_newer_success() -> None:
+    """A provider's 410 retirement marker permanently blacklists that model."""
+    retired = evidence("vendor/a:free", "success", age=60)
+    retired["body"] = (
+        "<!-- factory-model-retired-410:v1 -->\n"
+        "Model: vendor/a:free\n"
+        "Source: openrouter-free\n"
+        "Reason: provider returned HTTP 410 Gone\n"
+        "Updated: 1970-01-23T03:33:20Z\n"
+    )
+    result = HEALTH.select_candidate(
+        CANDIDATES,
+        [retired, evidence("vendor/a:free", "success")],
+        worker=1,
+        now_epoch=NOW,
+    )
+
+    states = {candidate.model: candidate.health_state for candidate in result.candidates}
+    assert states["vendor/a:free"] == "unavailable"
+    assert result.selected is not None
+    assert result.selected.model == "vendor/b:free"
+
+
 def test_model_policy_violation_is_model_scoped() -> None:
     """A permanent model policy failure does not blacklist sibling provider models."""
     result = HEALTH.select_candidate(

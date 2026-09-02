@@ -1,4 +1,6 @@
 import { renderHook, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { type ReactNode } from 'react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { resolveBrowserTimezone, useRollBootstrap } from '../hooks/useRollBootstrap'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
@@ -37,18 +39,27 @@ const bootstrapResponse = {
   roll_pool: [],
   snoozed_threads: [],
   snoozed_count: 0,
+  skipped_thread_ids: [],
+  skipped_threads: [],
   blocked_count: 0,
   blocked_threads: [],
   stale_thread_count: 0,
   stale_thread: null,
 } as RollBootstrapResponse
 
-function renderBootstrap() {
-  return renderHook(() => useRollBootstrap(), {
-    wrapper: ({ children }: { children: React.ReactNode }) => (
+function createTestWrapper() {
+  const client = new QueryClient()
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>
       <ToastProvider>{children}</ToastProvider>
-    ),
-  })
+    </QueryClientProvider>
+  )
+  return { client, wrapper }
+}
+
+function renderBootstrap() {
+  const { wrapper } = createTestWrapper()
+  return renderHook(() => useRollBootstrap(), { wrapper })
 }
 
 beforeEach(() => {

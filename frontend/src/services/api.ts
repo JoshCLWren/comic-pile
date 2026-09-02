@@ -400,6 +400,7 @@ export const dependenciesApi = {
 }
 
 export interface ComicVineCreator {
+  creator_id?: number | null
   name: string
   roles: string[]
 }
@@ -568,6 +569,11 @@ export const tasksApi = {
 export const snoozeApi = {
   snooze: () => api.post<void>('/v1/snooze/'),
   unsnooze: (threadId: number) => api.post<void>(`/v1/snooze/${threadId}/unsnooze`),
+}
+
+export const skipApi = {
+  skip: () => api.post<void>('/v1/roll/skip/'),
+  unskip: (threadId: number) => api.post<void>(`/v1/roll/skip/${threadId}/unskip`),
 }
 
 export const migrationApi = {

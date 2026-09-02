@@ -2,11 +2,13 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class IssueResponse(BaseModel):
     """Schema for issue response."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     thread_id: int

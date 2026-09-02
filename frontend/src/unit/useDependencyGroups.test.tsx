@@ -1,4 +1,6 @@
 import { renderHook, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { type ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDependencyGroups } from '../hooks/useDependencyGroups'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
@@ -11,13 +13,22 @@ vi.mock('../services/api-dependency-groups', () => ({
 
 const mockedDependencyGroupsApi = vi.mocked(dependencyGroupsApi)
 
+function createTestWrapper() {
+  const client = new QueryClient()
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  )
+  return { client, wrapper }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
 
 describe('useDependencyGroups', () => {
   it('does not request groups without an active thread', () => {
-    const { result } = renderHook(() => useDependencyGroups(null))
+    const { wrapper } = createTestWrapper()
+    const { result } = renderHook(() => useDependencyGroups(null), { wrapper })
 
     expect(result.current).toEqual({ groups: [], isLoading: false, error: null })
     expect(mockedDependencyGroupsApi.listForThread).not.toHaveBeenCalled()
@@ -28,7 +39,8 @@ describe('useDependencyGroups', () => {
       { id: 7, name: 'Annihilation' },
     ])
 
-    const { result } = renderHook(() => useDependencyGroups(42))
+    const { wrapper } = createTestWrapper()
+    const { result } = renderHook(() => useDependencyGroups(42), { wrapper })
 
     expect(result.current.isLoading).toBe(true)
     await waitFor(() => expect(result.current.groups).toEqual([{ id: 7, name: 'Annihilation' }]))
@@ -46,9 +58,11 @@ describe('useDependencyGroups', () => {
       )
       .mockResolvedValueOnce([{ id: 9, name: 'Infinity' }])
 
+    const { wrapper } = createTestWrapper()
     const { result, rerender } = renderHook(
       ({ threadId }) => useDependencyGroups(threadId),
-      { initialProps: { threadId: 42 } },
+      { wrapper,
+        initialProps: { threadId: 42 } },
     )
 
     rerender({ threadId: 99 })
@@ -70,9 +84,11 @@ describe('useDependencyGroups', () => {
       )
       .mockRejectedValueOnce(new Error('current request failed'))
 
+    const { wrapper } = createTestWrapper()
     const { result, rerender } = renderHook(
       ({ threadId }) => useDependencyGroups(threadId),
-      { initialProps: { threadId: 42 } },
+      { wrapper,
+        initialProps: { threadId: 42 } },
     )
 
     rerender({ threadId: 99 })
@@ -89,7 +105,8 @@ describe('useDependencyGroups', () => {
   it('returns a normalized error when loading fails', async () => {
     mockedDependencyGroupsApi.listForThread.mockRejectedValue('offline')
 
-    const { result } = renderHook(() => useDependencyGroups(42))
+    const { wrapper } = createTestWrapper()
+    const { result } = renderHook(() => useDependencyGroups(42), { wrapper })
 
     await waitFor(() => expect(result.current.error?.message).toBe('Unable to load reading-order groups'))
     expect(result.current.groups).toEqual([])

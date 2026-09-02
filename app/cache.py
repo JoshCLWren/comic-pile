@@ -14,6 +14,11 @@ Transport specifics live below the interface and are implementation details:
 Upstash REST and local redis-py clients, lazy connection lifecycle, the
 circuit breaker, and JSON value codecs.
 
+Upstash is the only supported client path in deployed environments. The local
+``redis-py`` client is a dev-only escape hatch gated by ``allow_local`` /
+``CACHE_LOCAL_REDIS_DEV``; the ``redis`` package is a dev dependency, so the
+import stays lazy and deployed images never load it (issue #1752).
+
 Usage:
     from app.cache import cached, cache, TTL
 
@@ -28,8 +33,8 @@ Usage:
     settings = get_redis_settings()
     if settings.is_configured:
         await cache.initialize(settings.upstash_redis_rest_url, settings.upstash_redis_rest_token)
-    elif settings.redis_url:
-        await cache.initialize(local_url=settings.redis_url)
+    elif settings.redis_url and settings.cache_local_redis_dev:
+        await cache.initialize(local_url=settings.redis_url, allow_local=True)
 """
 
 from __future__ import annotations
@@ -44,7 +49,6 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any, ParamSpec, Protocol, TypeVar, cast
 
-import redis.asyncio as aioredis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from upstash_redis.asyncio import Redis as UpstashRedis
@@ -465,6 +469,31 @@ def _has_user_cache_scope(
     return False
 
 
+def _create_local_redis_client(local_url: str) -> Any:
+    """Build the dev-only local redis-py client, importing the package lazily.
+
+    The ``redis`` package is intentionally not a deployment dependency: Upstash
+    is the only supported client path in deployed environments (issue #1752).
+    The local path is a dev escape hatch gated by ``allow_local`` /
+    ``CACHE_LOCAL_REDIS_DEV``, so the import is deferred until the path is
+    actually exercised and deployed images never import it.
+
+    Args:
+        local_url: ``redis://`` connection string for a local Redis server.
+
+    Returns:
+        A configured ``redis.asyncio.Redis`` client with lazy connection startup.
+    """
+    import redis.asyncio as aioredis
+
+    return aioredis.Redis.from_url(
+        local_url,
+        decode_responses=True,
+        socket_connect_timeout=_CONNECT_TIMEOUT_SECONDS,
+        socket_timeout=_CONNECT_TIMEOUT_SECONDS,
+    )
+
+
 class UpstashCache:
     """Internal transport implementing CacheClient over Upstash REST or local Redis.
 
@@ -530,12 +559,7 @@ class UpstashCache:
                     "Local Redis client path is disabled unless CACHE_LOCAL_REDIS_DEV "
                     "is set; use Upstash credentials or enable the dev flag."
                 )
-            self._client = aioredis.Redis.from_url(
-                local_url,
-                decode_responses=True,
-                socket_connect_timeout=_CONNECT_TIMEOUT_SECONDS,
-                socket_timeout=_CONNECT_TIMEOUT_SECONDS,
-            )
+            self._client = _create_local_redis_client(local_url)
             self._circuit_breaker.reset()
             self._initialized = True
             self._is_upstash = False
@@ -555,11 +579,15 @@ class UpstashCache:
         logger.warning("No Redis configuration provided - caching disabled")
 
     async def close(self) -> None:
-        """Close the Redis connection."""
-        if self._client is not None:
-            client = self._client
-            self._client = None
-            self._initialized = False
+        """Close the Redis connection and reset singleton state.
+
+        Always clears the initialized flag even when no client is present, so a
+        previously-initialized singleton can always be reconfigured from scratch.
+        """
+        client = self._client
+        self._client = None
+        self._initialized = False
+        if client is not None:
             if not self._is_upstash:
                 try:
                     await client.aclose()
@@ -680,11 +708,9 @@ class UpstashCache:
         if self._client is None:
             return False
 
-        # Smoke-test throttle: once the monthly Upstash budget is exhausted, drop a
-        # bounded fraction of best-effort value writes so a runaway rollout degrades
-        # gracefully instead of exhausting the provider. Critical invalidations
-        # (generation INCRs) are never throttled; only value writes are subject.
-        from app.cache_quota import should_throttle_cache_write
+        from app.cache_quota import evaluate_cache_quota, should_throttle_cache_write
+
+        evaluate_cache_quota(fire_alert=True)
 
         if should_throttle_cache_write(throttle_enabled=self._throttle_enabled):
             logger.warning(
@@ -837,10 +863,15 @@ class PostgresCache:
         logger.info("Postgres cache configured")
 
     async def close(self) -> None:
-        if self._engine is not None:
-            engine = self._engine
-            self._engine = None
-            self._initialized = False
+        """Close the engine and reset singleton state.
+
+        Always clears the initialized flag even when no engine is present, so a
+        previously-initialized singleton can always be reconfigured from scratch.
+        """
+        engine = self._engine
+        self._engine = None
+        self._initialized = False
+        if engine is not None:
             await engine.dispose()
             logger.info("Postgres cache closed")
 
@@ -873,7 +904,7 @@ class PostgresCache:
             async with engine.connect() as conn:
                 result = await conn.execute(
                     text(
-                        "SELECT value FROM cache_entries "
+                        "SELECT value::text FROM cache_entries "
                         "WHERE namespace = :ns AND cache_key = :k AND expires_at > now()"
                     ),
                     {"ns": _CACHE_NAMESPACE, "k": key},
@@ -882,10 +913,10 @@ class PostgresCache:
             self._circuit_breaker.record_success()
             if row is None:
                 return None
-            if isinstance(row, str):
-                return _reconstruct_value(json.loads(row))
-            # SQLAlchemy+asyncpg may return already-decoded JSONB (dict/list)
-            return _reconstruct_value(row)
+            # value::text always yields canonical JSON text regardless of how
+            # SQLAlchemy+asyncpg decodes JSONB, so json.loads is unambiguous
+            # for plain-string payloads too.
+            return _reconstruct_value(json.loads(row))
         except Exception as e:
             self._circuit_breaker.record_failure()
             self._maybe_demote()
@@ -1043,9 +1074,8 @@ class PostgresCache:
         """Read the active generation and matching value atomically (Postgres).
 
         Mirrors the Redis Lua path: returns ``[generation, raw_value]`` where
-        ``raw_value`` is the stored JSON payload (or ``None`` on a miss).
-        The payload may be returned as decoded JSONB (dict/list) or as text,
-        depending on the asyncpg/SQLAlchemy decoding.
+        ``raw_value`` is the stored JSON payload as canonical text (or ``None``
+        on a miss), ready for the shared ``decode_value`` path.
         """
         engine = self._engine
         if engine is None or not self.is_initialized:
@@ -1061,19 +1091,12 @@ class PostgresCache:
                 value_key = f"{value_prefix}{generation}:{normalized}"
                 val_row = await conn.execute(
                     text(
-                        "SELECT value FROM cache_entries "
+                        "SELECT value::text FROM cache_entries "
                         "WHERE namespace = :ns AND cache_key = :k AND expires_at > now()"
                     ),
                     {"ns": _CACHE_NAMESPACE, "k": value_key},
                 )
                 raw = val_row.scalar_one_or_none()
-                # Normalize JSONB payload to text for the shared decode path:
-                # Postgres may return already-decoded dict/list; callers expect
-                # a JSON text string akin to the Redis transport.
-                if isinstance(raw, (dict, list)):
-                    raw = json.dumps(raw)
-                elif isinstance(raw, bytes):
-                    raw = raw.decode()
             self._circuit_breaker.record_success()
             return [generation, raw]
         except Exception as e:

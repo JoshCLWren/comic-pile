@@ -29,6 +29,7 @@ _BARE_API_EXCEPTIONS = frozenset(
         "/api/metrics",
         "/api/test/sessions/expire",
         "/api/test/reading-orders",
+        "/api/test/issue-identity",
     }
 )
 
@@ -49,7 +50,6 @@ async def test_api_v1_alias_session_endpoint_matches_legacy(auth_client: AsyncCl
         assert resp_v1.json() == resp_legacy.json()
     else:
         assert resp_v1.text == resp_legacy.text
-
 
 
 def _collect_routes(app) -> dict[str, frozenset[str]]:
@@ -153,6 +153,7 @@ def test_v1_debug_alias_matches_legacy_route_methods_outside_production() -> Non
     assert "/api/v1/debug/log" in methods_by_path
     assert methods_by_path["/api/v1/debug/log"] == methods_by_path["/api/debug/log"]
 
+
 def test_no_new_bare_api_client_routes() -> None:
     """Regression guard: no client-facing routes under bare /api/* (non-v1)."""
     app = create_app(serve_frontend=False)
@@ -179,6 +180,11 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/auth/register",
             "/api/bug-reports/",
             "/api/health",
+            "/api/health/cache-quota",
+            "/api/health/dependencies",
+            "/api/health/live",
+            "/api/health/warmup",
+            "/api/instance/warm",
             "/api/ping",
             "/api/queue/shuffle/",
             "/api/queue/threads/{thread_id}/back/",
@@ -190,6 +196,8 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/roll/clear-manual-die",
             "/api/roll/dismiss-pending",
             "/api/roll/override",
+            "/api/roll/skip",
+            "/api/roll/skip/{thread_id}/unskip",
             "/api/roll/session-mode",
             "/api/roll/set-die",
             "/api/roll/events/{event_id}/recommendation-explanation",

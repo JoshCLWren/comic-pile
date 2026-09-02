@@ -29,6 +29,7 @@ on:
       - '.github/scripts/factory-review-controller.py'
       - '.github/scripts/factory_work_policy.py'
       - '.github/scripts/factory_review_policy.py'
+      - '.github/scripts/factory_migration_lane.py'
       - '.github/scripts/factory-gh-rest-shim.sh'
       - '.github/scripts/free-model-factory-worker.sh'
       - '.github/scripts/free-model-factory-worker-primitives.sh'
@@ -95,6 +96,14 @@ jobs:
           chmod +x "$shim_dir/gh"
           echo "FACTORY_REAL_GH=$real_gh" >> "$GITHUB_ENV"
           echo "$shim_dir" >> "$GITHUB_PATH"
+
+      - name: Reconcile serialized migration finalization lane
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/factory_migration_lane.py reconcile
 
       - name: Check main health (block merges onto red main)
         id: main_health

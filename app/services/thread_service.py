@@ -12,6 +12,7 @@ import os
 from typing import cast
 from datetime import UTC, datetime, timedelta
 
+from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -194,7 +195,7 @@ def to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
 
 
 async def list_stale_thread_responses(
-    db: AsyncSession, user_id: int, days: int
+    db: AsyncSession, user_id: int, days: int, snoozed_ids: list[int] | None = None
 ) -> list[ThreadResponse]:
     """Build responses for threads not read in the given number of days.
 
@@ -202,12 +203,16 @@ async def list_stale_thread_responses(
         db: Database session.
         user_id: Owner of the threads.
         days: Number of days to consider threads stale.
+        snoozed_ids: Thread IDs currently snoozed in the session; these are
+            excluded from the stale result.
 
     Returns:
         Responses for stale threads ordered by oldest activity first.
     """
     cutoff_date = datetime.now(UTC) - timedelta(days=days)
-    threads = await thread_repository.fetch_stale_threads(db, user_id, cutoff_date)
+    threads = await thread_repository.fetch_stale_threads(
+        db, user_id, cutoff_date, snoozed_ids=snoozed_ids
+    )
     return await threads_to_responses(threads, db)
 
 
@@ -524,9 +529,18 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
                 db, user_id, deleted_issue_ids
             )
 
-        from comic_pile.dependencies import refresh_user_blocked_status
+        from comic_pile.dependencies import refresh_legacy_blocked_status, refresh_user_blocked_status
 
-        await refresh_user_blocked_status(user_id, db)
+        try:
+            await refresh_user_blocked_status(user_id, db)
+        except HTTPException as exc:
+            if exc.status_code == 422 and isinstance(exc.detail, dict) and exc.detail.get("code") == "continuity_graph_too_large":
+                # Continuity graph is too large (user has too many threads/issues/etc.)
+                # Skip continuity-based blocking refresh and use only dependency-based blocking
+                # since we've already cleaned up continuity data related to the deleted thread
+                await refresh_legacy_blocked_status(user_id, db)
+            else:
+                raise
 
         await thread_repository.delete_thread(db, thread)
         await db.commit()

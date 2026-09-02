@@ -14,6 +14,10 @@ Design goals from the issue contract:
 - **Sparse evidence stays weak**: Confidence grows slowly with distinct issue
   evidence and is further discounted for single-thread clusters, so one or two
   isolated issues remain low-confidence.
+- **Contradictory evidence stays weak**: When reads are split above and below
+  the reader's baseline, their affinity cancels but the reads are not neutral;
+  confidence is discounted by directional consistency so a split pattern is
+  not mistaken for a settled preference.
 - **No intra-issue double counting**: Each distinct issue contributes at most
   one observation per feature, even when highly correlated metadata points to
   the same underlying person or team.
@@ -162,6 +166,37 @@ def compute_confidence(evidence_count: int, distinct_thread_count: int) -> float
     return max(0.0, min(1.0, raw))
 
 
+def _directional_consistency(
+    evidence: list[RatingEvidence],
+    baseline: float,
+) -> float:
+    """Return how much evidence agrees on a single above/below direction.
+
+    A feature whose reads are split above and below the reader's baseline is
+    contradictory: the mean affinity cancels while the individual reads are
+    not neutral. Consistency is ``abs(mean delta) / mean(abs delta)``, which
+    is ``1.0`` when every observation points the same way and trends toward
+    ``0.0`` as positive and negative evidence cancel. Evidence that is
+    entirely at baseline has no direction and is treated as fully consistent
+    so truly neutral reads are not penalized.
+
+    Args:
+        evidence: Deduplicated observations for one feature (non-empty).
+        baseline: The reader's baseline rating.
+
+    Returns:
+        A consistency value in ``[0, 1]``.
+    """
+    deltas = [observation.rating - baseline for observation in evidence]
+    if not deltas:
+        return 1.0
+    mean_abs = sum(abs(delta) for delta in deltas) / len(deltas)
+    if mean_abs == 0:
+        return 1.0
+    mean_delta = sum(deltas) / len(deltas)
+    return max(0.0, min(1.0, abs(mean_delta) / mean_abs))
+
+
 def compute_signal_metrics(
     evidence: list[RatingEvidence],
     *,
@@ -169,6 +204,10 @@ def compute_signal_metrics(
     rating_span: float = 4.0,
 ) -> SignalMetrics:
     """Infer affinity, confidence, and evidence metadata for one feature.
+
+    Confidence grows with evidence count and diversity, then is discounted by
+    directional consistency (see :func:`_directional_consistency`) so mixed
+    above/below-baseline reads are not treated as a settled preference.
 
     Args:
         evidence: Per-read rating observations for the feature. May contain
@@ -217,9 +256,12 @@ def compute_signal_metrics(
     evidence_count = len(deduped)
     distinct_thread_count = len({observation.thread_id for observation in deduped})
 
+    confidence = compute_confidence(evidence_count, distinct_thread_count)
+    confidence *= _directional_consistency(deduped, baseline)
+
     return SignalMetrics(
         affinity=affinity,
-        confidence=compute_confidence(evidence_count, distinct_thread_count),
+        confidence=confidence,
         evidence_count=evidence_count,
         distinct_thread_count=distinct_thread_count,
     )

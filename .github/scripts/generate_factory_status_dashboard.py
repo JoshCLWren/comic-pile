@@ -40,6 +40,7 @@ ATTENTION_OUTCOMES = {
     "provider_unavailable",
     "provider_throttled",
     "model_unavailable",
+    "model_retired_410",
     "model_policy_violation",
     "environment_failure",
     "control_plane_failure",

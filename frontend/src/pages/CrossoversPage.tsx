@@ -310,28 +310,28 @@ export default function CrossoversPage() {
   }
 
   return (
-    <section className="space-y-6" aria-labelledby="crossovers-heading">
-      <header>
+    <section className="space-y-6 pb-28" aria-labelledby="crossovers-heading">
+      <header className="space-y-2">
         <p className="text-xs font-bold uppercase tracking-[0.25em] text-amber-500">Continuity</p>
-        <h1 id="crossovers-heading" className="mt-1 text-3xl font-black text-stone-100">Crossovers</h1>
-        <p className="mt-2 max-w-2xl text-sm text-stone-400">
+        <h1 id="crossovers-heading" className="text-3xl font-black text-stone-100">Crossovers</h1>
+        <p className="max-w-2xl text-sm text-stone-400">
           Name connected comics so their continuity is easy to recognize across ComicPile.
           Membership labels the group — it does not create a reading block by itself.{' '}
           <GlossaryLink id="crossover">What is a crossover?</GlossaryLink>
         </p>
       </header>
 
-      <form onSubmit={createGroup} className="rounded-2xl border border-stone-700 bg-stone-900/70 p-4" aria-label="Create crossover">
+      <form onSubmit={createGroup} className="max-w-xl space-y-2" aria-label="Create crossover">
         <label htmlFor="crossover-name" className="block text-sm font-bold text-stone-200">New crossover</label>
-        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <input id="crossover-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className="min-w-0 flex-1 rounded-xl border border-stone-600 bg-stone-950 px-3 py-2.5 text-stone-100" placeholder="Age of Apocalypse" disabled={isCreating || isLoading} />
           <button type="submit" disabled={isCreating || isLoading} className="rounded-xl bg-amber-500 px-4 py-2.5 font-bold text-stone-950 disabled:opacity-50">{isCreating ? 'Creating…' : 'Create crossover'}</button>
         </div>
-        {createError && <p role="alert" className="mt-2 text-sm text-red-400">{createError}</p>}
+        {createError && <p role="alert" className="text-sm text-red-400">{createError}</p>}
       </form>
 
       {mutationError && <p role="alert" className="rounded-xl border border-red-800 bg-red-950/40 p-3 text-sm text-red-300">{mutationError}</p>}
-      {isLoading ? <p role="status">Loading crossovers…</p> : loadError ? <div role="alert"><p>{loadError}</p><button type="button" onClick={() => void loadGroups()}>Try again</button></div> : groups.length === 0 ? <p>No crossovers yet. <GlossaryLink id="crossover">What is a crossover?</GlossaryLink></p> : (
+      {isLoading ? <p role="status">Loading crossovers…</p> : loadError ? <div role="alert"><p>{loadError}</p><button type="button" onClick={() => void loadGroups()}>Try again</button></div> : groups.length === 0 ? <p className="max-w-xl text-sm text-stone-500">No crossovers yet. Create your first one above to get started.</p> : (
         <ul className="grid gap-3" aria-label="Your crossovers">
           {groups.map((group) => {
             const isEditing = editingId === group.id

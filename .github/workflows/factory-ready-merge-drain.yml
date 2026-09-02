@@ -14,6 +14,7 @@ on:
       - '.github/scripts/factory-review-controller.py'
       - '.github/scripts/factory_review_policy.py'
       - '.github/scripts/factory_post_merge_closure.py'
+      - '.github/scripts/factory_migration_lane.py'
 
 permissions:
   actions: write
@@ -58,6 +59,14 @@ jobs:
         shell: bash
         run: |
           python3 .github/scripts/factory_post_merge_closure.py --self-test
+
+      - name: Reconcile serialized migration finalization lane
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/factory_migration_lane.py reconcile
 
       - name: Recover held or missing workflow runs on factory PR heads
         shell: bash

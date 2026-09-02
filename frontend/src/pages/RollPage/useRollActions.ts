@@ -14,6 +14,8 @@ interface RollMutations {
   rollMutation: { mutate: () => Promise<RollResponse>; isPending: boolean }
   snoozeMutation: { mutate: (expectedPendingThreadId?: number) => Promise<unknown>; isPending: boolean }
   unsnoozeMutation: { mutate: (threadId: number) => Promise<unknown>; isPending: boolean }
+  skipMutation: { mutate: (expectedPendingThreadId?: number) => Promise<unknown>; isPending: boolean }
+  unskipMutation: { mutate: (threadId: number) => Promise<unknown>; isPending: boolean }
   moveToFrontMutation: { mutate: (id: number) => Promise<unknown>; isPending: boolean }
   moveToBackMutation: { mutate: (id: number) => Promise<unknown>; isPending: boolean }
   shuffleQueueMutation: { mutate: () => Promise<unknown>; isPending: boolean }
@@ -72,6 +74,8 @@ export function useRollActions({
     rollMutation,
     snoozeMutation,
     unsnoozeMutation,
+    skipMutation,
+    unskipMutation,
     moveToFrontMutation,
     moveToBackMutation,
     shuffleQueueMutation,
@@ -170,6 +174,16 @@ export function useRollActions({
             await unsnoozeMutation.mutate(selectedThread!.id)
           } else {
             await snoozeMutation.mutate()
+          }
+          await refetchBootstrap()
+          break
+        case 'skip':
+          const isSkipped =
+            bootstrap?.skipped_thread_ids?.includes(selectedThread!.id) ?? false
+          if (isSkipped) {
+            await unskipMutation.mutate(selectedThread!.id)
+          } else {
+            await skipMutation.mutate()
           }
           await refetchBootstrap()
           break

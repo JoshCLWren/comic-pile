@@ -1,4 +1,4 @@
-"""Continuity readiness evaluation endpoint."""
+"""Legacy continuity readiness compatibility endpoints."""
 
 from typing import Annotated
 
@@ -21,14 +21,6 @@ router = APIRouter(tags=["continuity"])
 
 
 def _chain_node_to_schema(node: ContinuityTraversalNode) -> ContinuityChainNode:
-    """Convert one traversal dataclass node into the API response schema.
-
-    Args:
-        node: ``ContinuityTraversalNode`` produced by the bounded traversal.
-
-    Returns:
-        Pydantic node representation suitable for JSON serialization.
-    """
     return ContinuityChainNode(
         node_type=node.node_type,
         node_id=node.node_id,
@@ -40,55 +32,36 @@ def _chain_node_to_schema(node: ContinuityTraversalNode) -> ContinuityChainNode:
 @router.post(
     "/continuity/readiness",
     response_model=ContinuityReadinessResponse,
-    description="Evaluate direct continuity readiness for one owned issue, thread, or crossover.",
+    description="Legacy direct continuity readiness compatibility endpoint.",
 )
 async def get_continuity_readiness(
     request: ContinuityReadinessRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ContinuityReadinessResponse:
-    """Return a structured direct-readiness result for the requested owned node.
-
-    Args:
-        request: Node type and identifier requested by the authenticated client.
-        current_user: Authenticated owner resolved by the API dependency.
-        db: Database session supplied by the API dependency.
-
-    Returns:
-        Structured readiness state and any unsatisfied blockers for the owned node.
-    """
-    return await evaluate_continuity_readiness(
+    """Serve the temporary compatibility API; normal product UI does not call it."""
+    result = await evaluate_continuity_readiness(
         db,
         user_id=current_user.id,
         node_type=request.node_type,
         node_id=request.node_id,
+        expose_result=True,
     )
+    assert result is not None
+    return result
 
 
 @router.post(
     "/continuity/chains",
     response_model=ContinuityChainResponse,
-    description=(
-        "Resolve bounded transitive prerequisite chains, currently readable "
-        "prerequisites, and structured traversal diagnostics for one owned node."
-    ),
+    description="Legacy bounded continuity-chain compatibility endpoint.",
 )
 async def get_continuity_chains(
     request: ContinuityReadinessRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ContinuityChainResponse:
-    """Return bounded prerequisite chains for one owned issue, thread, or crossover.
-
-    Args:
-        request: Node type and identifier requested by the authenticated client.
-        current_user: Authenticated owner resolved by the API dependency.
-        db: Database session supplied by the API dependency.
-
-    Returns:
-        Direct blockers, deterministic full chains, currently readable prerequisites,
-        and structured diagnostics for any cycles, depth, or node-budget failures.
-    """
+    """Serve legacy chain consumers while the removed product surface is cleaned up."""
     result = await resolve_continuity_chains(
         db,
         user_id=current_user.id,

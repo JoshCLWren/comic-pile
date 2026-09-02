@@ -23,6 +23,7 @@ from factory_work_policy import comment_is_trusted
 
 PROVIDER_RE = re.compile(r"(?m)^Source:\s*(?P<provider>\S+)\s*$")
 MODEL_RE = re.compile(r"(?m)^Model:\s*(?P<model>\S+)\s*$")
+RETIREMENT_MARKER = "<!-- factory-model-retired-410:v1 -->"
 OUTCOME_RE = re.compile(
     r"(?m)^Attempt outcome:\s*(?P<outcome>[a-z][a-z0-9_]+)\s*$"
 )
@@ -51,6 +52,7 @@ PROVIDER_FAILURE_OUTCOMES = {
 PERMANENT_MODEL_OUTCOMES = {
     "model_unavailable",
     "model_policy_violation",
+    "model_retired_410",
 }
 TRANSIENT_MODEL_OUTCOMES = {
     "unknown_failure",
@@ -114,6 +116,24 @@ def latest_attempt_evidence(
         body = str(comment.get("body") or "")
         provider_match = PROVIDER_RE.search(body)
         model_match = MODEL_RE.search(body)
+        if RETIREMENT_MARKER in body:
+            updated_match = UPDATED_RE.search(body)
+            if provider_match is None or model_match is None or updated_match is None:
+                continue
+            updated = parse_time(updated_match.group("updated"))
+            if updated is None:
+                continue
+            evidence = AttemptEvidence(
+                provider=provider_match.group("provider"),
+                model=model_match.group("model"),
+                outcome="model_retired_410",
+                updated=updated,
+            )
+            key = (evidence.provider, evidence.model)
+            previous = latest.get(key)
+            if previous is None or previous.outcome != "model_retired_410":
+                latest[key] = evidence
+            continue
         outcome_match = OUTCOME_RE.search(body)
         updated_match = UPDATED_RE.search(body)
         if (
@@ -137,6 +157,8 @@ def latest_attempt_evidence(
         )
         key = (evidence.provider, evidence.model)
         previous = latest.get(key)
+        if previous is not None and previous.outcome == "model_retired_410":
+            continue
         if previous is None or evidence.updated > previous.updated:
             latest[key] = evidence
     return latest
