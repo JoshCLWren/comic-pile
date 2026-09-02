@@ -44,7 +44,6 @@ export function useSkip() {
           }
         }
       }
-      return false
     })()
 
     refreshRequest.current = request

@@ -660,13 +660,10 @@ async def skip_thread(
                 queue_position=active_thread.queue_position,
                 last_rolled_result=roll_result,
             )
-        # Extract attributes before commit
-        if active_thread:
-            pre_active_thread_title = active_thread.title
-        else:
-            pre_active_thread_title = None
+        # Extract attributes before commit (not needed separately for skip path)
+        pass
     else:
-        pre_active_thread_title = None
+        pass
 
     await db.commit()
     await _invalidate_session_caches(current_user.id)
