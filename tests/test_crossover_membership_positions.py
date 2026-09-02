@@ -85,7 +85,7 @@ async def test_add_members_assign_sequential_authoritative_positions(
     follow_up = await auth_client.get(f"/api/v1/reading-order-groups/{group.id}")
     assert follow_up.status_code == 200
     members = follow_up.json()["memberships"]
-    assert [member["position"] for member in members] == [1, 2, 3]
+    assert [member["sequence_order"] for member in members] == [1, 2, 3]
     assert [member["issue_id"] for member in members] == [issues[0].id, issues[1].id, issues[2].id]
 
 
@@ -114,19 +114,19 @@ async def test_order_is_never_derived_from_series_local_positions(
         json={"issue_id": alpha_issues[2].id},
     )
     assert order.status_code == 201
-    assert order.json()["position"] == 1
+    assert order.json()["sequence_order"] == 1
 
     second = await auth_client.post(
         f"/api/v1/reading-order-groups/{group.id}/members",
         json={"issue_id": beta_issues[0].id},
     )
     assert second.status_code == 201
-    assert second.json()["position"] == 2
+    assert second.json()["sequence_order"] == 2
 
     follow_up = await auth_client.get(f"/api/v1/reading-order-groups/{group.id}")
     assert follow_up.status_code == 200
     members = follow_up.json()["memberships"]
-    assert [member["position"] for member in members] == [1, 2]
+    assert [member["sequence_order"] for member in members] == [1, 2]
     assert [member["issue_id"] for member in members] == [
         alpha_issues[2].id,  # series-local position 3
         beta_issues[0].id,  # series-local position 1, but authored later
@@ -163,7 +163,7 @@ async def test_issue_range_assigns_positions_in_authoritative_source_order(
     follow_up = await auth_client.get(f"/api/v1/reading-order-groups/{group.id}")
     assert follow_up.status_code == 200
     members = follow_up.json()["memberships"]
-    assert [member["position"] for member in members] == [1, 2, 3]
+    assert [member["sequence_order"] for member in members] == [1, 2, 3]
     assert [member["issue_id"] for member in members] == [
         issues[2].id,
         issues[0].id,
@@ -198,7 +198,7 @@ async def test_memberships_return_ordered_by_authoritative_position(
         json={"thread_id": thread_a.id},
     )
     assert pivot.status_code == 201
-    assert pivot.json()["position"] == 3
+    assert pivot.json()["sequence_order"] == 3
 
     follow_up = await auth_client.get(f"/api/v1/reading-order-groups/{group.id}")
     assert follow_up.status_code == 200
@@ -206,8 +206,8 @@ async def test_memberships_return_ordered_by_authoritative_position(
     assert lists.status_code == 200
 
     members = follow_up.json()["memberships"]
-    assert [member["position"] for member in members] == [1, 2, 3]
+    assert [member["sequence_order"] for member in members] == [1, 2, 3]
     listed = next(
         entry for entry in lists.json() if entry["id"] == group.id
     )["memberships"]
-    assert [member["position"] for member in listed] == [1, 2, 3]
+    assert [member["sequence_order"] for member in listed] == [1, 2, 3]

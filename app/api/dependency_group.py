@@ -772,7 +772,8 @@ async def set_group_order(
             )
 
     for issue_id, membership in member_by_issue.items():
-        membership.sequence_order = ordered_positions.get(issue_id)
+        # Clear unlisted members to unordered (0); non-nullable column requires an integer.
+        membership.sequence_order = ordered_positions.get(issue_id, 0)
     await db.commit()
     await _refresh_crossover_blocked_state(current_user.id, db)
     return await _group_response(db, await _owned_group(db, group_id, current_user.id))
