@@ -85,10 +85,6 @@ export default function CorrectionSheet({
     onClose()
   }, [onClose])
 
-  const reasonLabel = correction.reason_code === 'clarification_needed'
-    ? 'Repeated snoozes suggest uncertainty'
-    : 'Snooze shifted your reading mode'
-
   return (
     <Modal
       isOpen={isOpen}
@@ -97,6 +93,12 @@ export default function CorrectionSheet({
       data-testid="correction-sheet"
       overlayClassName="bg-black/70 backdrop-blur-sm"
     >
+      {isOpen && (() => {
+        const reasonLabel = correction.reason_code === 'clarification_needed'
+          ? 'Repeated snoozes suggest uncertainty'
+          : 'Snooze shifted your reading mode'
+        return (
+        <>
       <section className="rounded-2xl border border-amber-800/30 bg-amber-950/15 p-4">
         <h3 className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-400">
           {reasonLabel}
@@ -149,6 +151,9 @@ export default function CorrectionSheet({
       >
         {submitting ? 'Applying…' : 'Dismiss'}
       </button>
+        </>
+        )
+      })()}
     </Modal>
   )
 }

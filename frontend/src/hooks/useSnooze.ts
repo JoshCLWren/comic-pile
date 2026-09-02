@@ -76,12 +76,12 @@ export function useSnooze() {
     setIsError(false)
     setRefreshError(null)
 
-    const request: Promise<{ correction: SnoozeCorrectionInfo | null } | undefined> = (async () => {
+    const request = (async () => {
       try {
         const result = await protectedRollMutationApi.snooze()
         await invalidateCurrentSessionAfterSnooze(queryClient)
         await refreshAuthoritativeState()
-        return { correction: result.correction }
+        return result ? { correction: result.correction } : undefined
       } catch (error: unknown) {
         if (
           expectedPendingThreadId !== undefined
@@ -95,7 +95,7 @@ export function useSnooze() {
             if (recovery.status === 'retried') {
               await invalidateCurrentSessionAfterSnooze(queryClient)
               await refreshAuthoritativeState()
-              return { correction: recovery.value.correction }
+              return recovery.value ? { correction: recovery.value.correction } : undefined
             }
           } catch (recoveryError: unknown) {
             console.error(
@@ -123,7 +123,7 @@ export function useSnooze() {
       }
     })()
 
-    inFlightRequest.current = request
+    inFlightRequest.current = request as Promise<SnoozeResult>
 
     try {
       return await request
