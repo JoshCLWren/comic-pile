@@ -773,10 +773,105 @@ async def unskip_thread(
     )
     db.add(event)
 
-    await db.commit()
-    await _invalidate_session_caches(current_user.id)
+    # Extract all session attributes before commit to avoid MissingGreenlet.
+    session_id = current_session.id
+    session_started_at = current_session.started_at
+    session_ended_at = current_session.ended_at
+    session_start_die = current_session.start_die
+    session_manual_die = current_session.manual_die
+    session_timezone = current_session.timezone
+    session_reading_bandwidth = current_session.reading_bandwidth
+    session_reading_intent = current_session.reading_intent
+    session_reading_mode_source = current_session.reading_mode_source
+    session_reading_mode_suggested = current_session.reading_mode_suggested
+    session_active_bandwidth = current_session.active_bandwidth
+    session_predicted_bandwidth = current_session.predicted_bandwidth
+    session_bandwidth_confidence = current_session.bandwidth_confidence
+    session_bandwidth_source = current_session.bandwidth_source
+    session_bandwidth_version = current_session.bandwidth_version
+    session_active_intent = current_session.active_intent
+    session_predicted_intent = current_session.predicted_intent
+    session_intent_confidence = current_session.intent_confidence
+    session_intent_source = current_session.intent_source
+    session_intent_version = current_session.intent_version
+    session_pending_thread_id = current_session.pending_thread_id
+    user_id = current_user.id
 
-    return await build_session_response(current_session, db)
+    # Pre-fetch ladder and snapshot count before commit
+    pre_ladder_path = await build_ladder_path(session_id, db)
+    result = await db.execute(
+        select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session_id)
+    )
+    pre_snapshot_count = result.scalar() or 0
+
+    # Pre-fetch current die before commit
+    pre_current_die = await get_current_die_for_session(current_session, db)
+
+    # Pre-fetch skipped threads info before commit
+    pre_skipped_ids = list(skipped_ids)
+    pre_skipped_threads: list[SnoozedThreadInfo] = []
+    if pre_skipped_ids:
+        skipped_result = await db.execute(select(Thread).where(Thread.id.in_(pre_skipped_ids)))
+        threads_by_id = {t.id: t for t in skipped_result.scalars().all()}
+        pre_skipped_threads = [
+            SnoozedThreadInfo(id=sid, title=threads_by_id[sid].title)
+            for sid in pre_skipped_ids
+            if sid in threads_by_id
+        ]
+
+    # Pre-fetch snoozed threads info before commit
+    pre_snoozed_ids = list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
+    pre_snoozed_threads: list[SnoozedThreadInfo] = []
+    if pre_snoozed_ids:
+        snooze_result = await db.execute(select(Thread).where(Thread.id.in_(pre_snoozed_ids)))
+        threads_by_id = {t.id: t for t in snooze_result.scalars().all()}
+        pre_snoozed_threads = [
+            SnoozedThreadInfo(id=sid, title=threads_by_id[sid].title)
+            for sid in pre_snoozed_ids
+            if sid in threads_by_id
+        ]
+
+    await db.commit()
+    await _invalidate_session_caches(user_id)
+
+    return SessionResponse(
+        id=session_id,
+        started_at=session_started_at,
+        ended_at=session_ended_at,
+        start_die=session_start_die,
+        manual_die=session_manual_die,
+        user_id=user_id,
+        ladder_path=pre_ladder_path,
+        active_thread=None,
+        current_die=pre_current_die,
+        last_rolled_result=None,
+        has_restore_point=pre_snapshot_count > 0,
+        snapshot_count=pre_snapshot_count,
+        snoozed_thread_ids=pre_snoozed_ids,
+        snoozed_threads=pre_snoozed_threads,
+        skipped_thread_ids=pre_skipped_ids,
+        skipped_threads=pre_skipped_threads,
+        pending_thread_id=session_pending_thread_id,
+        timezone=session_timezone,
+        reading_bandwidth=session_reading_bandwidth,
+        reading_intent=session_reading_intent,
+        reading_mode_source=session_reading_mode_source,
+        reading_mode_suggested=session_reading_mode_suggested,
+        bandwidth=build_session_bandwidth_state(
+            predicted_bandwidth=session_predicted_bandwidth,
+            active_bandwidth=session_active_bandwidth,
+            confidence=session_bandwidth_confidence,
+            source=session_bandwidth_source,
+            mode_version=session_bandwidth_version,
+        ),
+        intent=build_session_intent_state(
+            predicted_intent=session_predicted_intent,
+            active_intent=session_active_intent,
+            confidence=session_intent_confidence,
+            source=session_intent_source,
+            mode_version=session_intent_version,
+        ),
+    )
 
 
 @router.post("/override", response_model=RollResponse)
