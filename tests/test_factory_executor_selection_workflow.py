@@ -93,3 +93,13 @@ def test_discovery_failures_publish_normalized_outcomes() -> None:
     assert 'discovery_record="$(cat "$DISCOVERY_OUTCOME_FILE"' in workflow
     assert "attempt_outcome attempt_detail" in workflow
     assert "outcome='selection-failed'" in workflow
+
+
+def test_nvidia_410_is_persisted_and_skipped_before_future_probes() -> None:
+    """A known NVIDIA 410 is durable and avoids another provider request."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "factory-model-retired-410:v1" in workflow
+    assert "Skipping permanently retired NVIDIA model" in workflow
+    assert "code\" == \"410\"" in workflow
+    assert "model_retired_410" in workflow

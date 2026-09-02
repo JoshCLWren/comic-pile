@@ -440,6 +440,16 @@ jobs:
           request="$(jq -nc --arg model "$MODEL" '{model:$model,messages:[{role:"user",content:"Reply with exactly FIXED_MODEL_OK"}],max_tokens:16}')"
           response="$RUNNER_TEMP/nvidia-probe.json"
           headers="$RUNNER_TEMP/nvidia-probe-headers.txt"
+          retirement_marker='<!-- factory-model-retired-410:v1 -->'
+          retirement_comments="$RUNNER_TEMP/factory-retired-model-comments.json"
+          if gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" > "$retirement_comments" \
+            && jq -e --arg marker "$retirement_marker" --arg model "$MODEL" \
+              'any(.[]; ((.body // "") | split("\n")) as $lines | ($lines | index($marker)) != null and ($lines | index("Source: nvidia")) != null and ($lines | index("Model: " + $model)) != null)' \
+              "$retirement_comments" >/dev/null; then
+            echo "Skipping permanently retired NVIDIA model: ${MODEL}" >&2
+            printf 'model_retired_410\tNVIDIA previously returned HTTP 410 Gone for %s\n' "$MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
+            exit 1
+          fi
           attempt=0
           max_attempts=3
           code=""
@@ -455,6 +465,15 @@ jobs:
               echo "Pinned NVIDIA model is not currently invokable for this account: ${MODEL}" >&2
               echo 'No fallback is allowed for a fixed-model lane.' >&2
               cat "$response" >&2 || true
+              exit 1
+            fi
+            if [[ "$code" == "410" ]]; then
+              echo "NVIDIA permanently retired model: ${MODEL}" >&2
+              retirement_body="$(printf '%s\nSource: nvidia\nModel: %s\nReason: provider returned HTTP 410 Gone\nUpdated: %s' \
+                "$retirement_marker" "$MODEL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
+                -f body="$retirement_body" >/dev/null
+              printf 'model_retired_410\tNVIDIA returned HTTP 410 Gone for %s; model is permanently retired\n' "$MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
               exit 1
             fi
             [[ "$code" =~ ^2 ]] && break

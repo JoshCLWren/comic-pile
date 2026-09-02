@@ -43,7 +43,7 @@ def test_worker_emits_only_canonical_terminal_outcomes() -> None:
     text = _worker_text()
 
     assert (
-        'success|no_work|work_failure|provider_failure|provider_throttle|model_unavailable|'
+        'success|no_work|work_failure|provider_failure|provider_throttle|model_unavailable|model_retired_410|'
         'model_policy_violation|environment_failure|control_plane_failure|unknown_failure'
     ) in text
     assert 'TERMINAL_OUTCOME_FILE="${RUNNER_TEMP:-/tmp}/factory-discovery-outcome"' in text
@@ -77,7 +77,8 @@ def test_throttle_and_model_missing_remain_distinct() -> None:
 
     assert 'record_terminal_outcome provider_throttle' in text
     assert 'record_terminal_outcome model_unavailable' in text
-    assert 'HTTP[^0-9]*(404|410)' in text
+    assert 'HTTP[^0-9]*404' in text
+    assert 'HTTP[^0-9]*410' in text
 
 
 def test_review_controller_failure_is_control_plane_failure() -> None:
