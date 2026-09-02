@@ -228,7 +228,11 @@ export default function CrossoversPage() {
         ? {
             ...group,
             memberships: [...group.memberships, member].sort(
-              (a, b) => a.sequence_order - b.sequence_order || a.id - b.id,
+              (a, b) => {
+                const orderA = a.sequence_order ?? Number.MAX_SAFE_INTEGER
+                const orderB = b.sequence_order ?? Number.MAX_SAFE_INTEGER
+                return orderA - orderB || a.id - b.id
+              },
             ),
           }
         : group))
