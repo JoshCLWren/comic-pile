@@ -181,6 +181,8 @@ class RollBootstrapResponse(BaseModel):
     roll_pool: list[RollBootstrapThread]
     snoozed_threads: list[RollBootstrapThread]
     snoozed_count: int
+    skipped_thread_ids: list[int] = []
+    skipped_threads: list[RollBootstrapThread] = []
     blocked_count: int
     blocked_threads: list[RollBootstrapThread]
     stale_thread_count: int
@@ -194,7 +196,7 @@ class RollBootstrapResponse(BaseModel):
         if not isinstance(data, dict):
             return data
 
-        for field_name in ("snoozed_threads", "blocked_threads"):
+        for field_name in ("snoozed_threads", "skipped_threads", "blocked_threads"):
             values = data.get(field_name)
             if isinstance(values, list):
                 data[field_name] = values[: cls.summary_limit]

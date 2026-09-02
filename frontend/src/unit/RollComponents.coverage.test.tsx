@@ -27,25 +27,25 @@ vi.mock('../hooks/useReaderContext', () => ({
 
 const thread = { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5, total_issues: 10, next_unread_issue_number: '3' } as Thread
 const callbacks = () => ({
-  onThreadClick: vi.fn(), onUnsnooze: vi.fn(), onReadStale: vi.fn(), onToggleSnoozed: vi.fn(),
-  onToggleBlocked: vi.fn(), onShuffle: vi.fn(),
+  onThreadClick: vi.fn(), onUnsnooze: vi.fn(), onUnskip: vi.fn(), onReadStale: vi.fn(), onToggleSnoozed: vi.fn(),
+  onToggleSkipped: vi.fn(), onToggleBlocked: vi.fn(), onShuffle: vi.fn(),
 })
 
 describe('ThreadPool', () => {
   it('renders empty, blocked, pool, stale, and snoozed states', async () => {
     const empty = callbacks()
-    const { rerender } = render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={null} staleThreadCount={0} snoozedThreads={[]} snoozedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} shuffleIsPending={false} {...empty} /></MemoryRouter>)
+    const { rerender } = render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={null} staleThreadCount={0} snoozedThreads={[]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...empty} /></MemoryRouter>)
     expect(screen.getByText('Nothing to roll yet')).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: /add a thread/i }))
     expect(empty.onShuffle).not.toHaveBeenCalled()
 
     const actions = callbacks()
-    rerender(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Read Saga first' }] }} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={{ ...thread, days: 4 } as never} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    rerender(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Read Saga first' }] }} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={{ ...thread, days: 4 } as never} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
     expect(screen.getByText(/All threads are blocked/)).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: /go to queue/i }))
     expect(actions.onToggleBlocked).not.toHaveBeenCalled()
 
-    rerender(<MemoryRouter><ThreadPool pool={[thread]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={1} staleThread={{ ...thread, days: 2 } as never} staleThreadCount={1} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    rerender(<MemoryRouter><ThreadPool pool={[thread]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={1} staleThread={{ ...thread, days: 2 } as never} staleThreadCount={1} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
     await userEvent.setup().click(screen.getByRole('button', { name: /snoozed/i }))
     await userEvent.setup().click(screen.getAllByText('Saga')[0]!)
     expect(actions.onThreadClick).toHaveBeenCalledWith(thread)
@@ -56,7 +56,7 @@ describe('ThreadPool', () => {
   it('covers expanded blocked, stale, snoozed, selected, rolling, and disabled controls', async () => {
     const actions = callbacks()
     const stale = { ...thread, title: 'Stale Saga', days: 9 } as never
-    render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Prerequisite' }] }} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={stale} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={true} blockedExpanded={true} unsnoozeIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Prerequisite' }] }} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={stale} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={true} skippedThreads={[]} skippedExpanded={false} blockedExpanded={true} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
     await userEvent.setup().click(screen.getByRole('button', { name: /hidden \(blocked/i }))
     expect(screen.getByText('Prerequisite')).toBeInTheDocument()
     const hiddenBlockerLink = screen.getByRole('link', { name: 'Open Saga' })
@@ -85,8 +85,11 @@ describe('ThreadPool', () => {
       staleThreadCount={1}
       snoozedThreads={[{ id: 6, title: 'Snoozed', format: 'Comic' }]}
       snoozedExpanded
+      skippedThreads={[]}
+      skippedExpanded
       blockedExpanded
       unsnoozeIsPending
+      unskipIsPending
       shuffleIsPending
       {...actions}
     /></MemoryRouter>)
@@ -111,8 +114,11 @@ describe('ThreadPool', () => {
       staleThreadCount={1}
       snoozedThreads={[]}
       snoozedExpanded={false}
+      skippedThreads={[]}
+      skippedExpanded={false}
       blockedExpanded
       unsnoozeIsPending={false}
+      unskipIsPending={false}
       shuffleIsPending={false}
       {...actions}
     /></MemoryRouter>)

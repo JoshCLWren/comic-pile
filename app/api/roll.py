@@ -15,13 +15,15 @@ from typing import Annotated, Any
 
 from app.api.session import (
     _invalidate_session_caches,
+    build_ladder_path,
     get_session_with_thread_safe,
 )
+from app.api.snooze import build_session_response
 from app.auth import get_current_user
 
 from app.database import get_db
 from app.middleware import limiter
-from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Session, Thread
+from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Session, Snapshot, Thread
 from app.models.recommendation_context import RecommendationContext
 from app.models.thread import normalize_format_value
 from app.models.user import User
@@ -34,6 +36,7 @@ from app.services.reading_effort import (
 )
 from app.services.recommendation_explanation import RecommendationExplanationProjection
 from app.schemas import (
+    ActiveThreadInfo,
     ExplainableFactorResponse,
     OverrideRequest,
     RecommendationExplanationResponse,
@@ -44,12 +47,13 @@ from app.schemas import (
     SessionMode,
     SessionModeResponse,
     SessionModeUpdateRequest,
+    SessionResponse,
 )
 from app.schemas.recommendation_context import (
     CandidateFactor,
     RecommendationContextCreate,
 )
-from app.schemas.session import build_session_bandwidth_state
+from app.schemas.session import build_session_bandwidth_state, build_session_intent_state, SnoozedThreadInfo
 from app.momentum import MomentumCandidateWeight
 from app.services.bandwidth_selection import select_bandwidth_weighted
 from comic_pile.queue import get_bounded_roll_pool_rows
@@ -180,8 +184,9 @@ async def roll_dice(
     current_die = await get_current_die_for_session(current_session, db)
 
     snoozed_ids = current_session.snoozed_thread_ids or []
+    skipped_ids = current_session.skipped_thread_ids or []
 
-    bounded_rows = await get_bounded_roll_pool_rows(user_id, db, current_die, snoozed_ids)
+    bounded_rows = await get_bounded_roll_pool_rows(user_id, db, current_die, snoozed_ids, skipped_ids)
     if not bounded_rows:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -499,6 +504,374 @@ async def dismiss_pending_roll(
     await db.commit()
 
     await _invalidate_session_caches(current_user.id)
+
+
+@router.post("/skip", response_model=SessionResponse)
+@limiter.limit("30/minute")
+async def skip_thread(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SessionResponse:
+    """Skip the pending thread for the current session.
+
+    This endpoint:
+    1. Gets the current session (must exist with a pending_thread_id)
+    2. Adds the pending_thread_id to skipped_thread_ids
+    3. Records a "skip" event
+    4. Clears pending_thread_id
+    5. Returns the updated session
+
+    The skipped thread's durable queue position is NOT changed.
+    The thread remains in its original queue position and returns to the pool
+    when the session skipped state expires (at session end).
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SessionResponse containing the updated session with skipped_thread_ids,
+        cleared pending_thread_id, and current die state.
+
+    Raises:
+        HTTPException: If no active session exists or no pending thread to skip.
+    """
+    result = await db.execute(
+        select(Session)
+        .where(Session.user_id == current_user.id)
+        .where(Session.ended_at.is_(None))
+        .order_by(Session.started_at.desc())
+    )
+    current_session = result.scalars().first()
+
+    if not current_session:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active session. Please roll the dice first.",
+        )
+
+    if not current_session.pending_thread_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No pending thread to skip. Please roll the dice first.",
+        )
+
+    pending_thread_id = current_session.pending_thread_id
+    current_session_id = current_session.id
+
+    # Get current die for the event record
+    current_die = await get_current_die_for_session(current_session, db)
+
+    # Add to skipped list
+    skipped_ids = (
+        list(current_session.skipped_thread_ids) if current_session.skipped_thread_ids else []
+    )
+    if pending_thread_id not in skipped_ids:
+        skipped_ids.append(pending_thread_id)
+        current_session.skipped_thread_ids = skipped_ids
+
+    # Record skip event
+    skip_event = Event(
+        type="skip",
+        session_id=current_session_id,
+        thread_id=pending_thread_id,
+        die=current_die,
+    )
+    db.add(skip_event)
+
+    # Clear pending thread
+    current_session.pending_thread_id = None
+    current_session.pending_thread_updated_at = None
+
+    # Extract all needed attributes before commit to avoid MissingGreenlet
+    pre_ladder_path = await build_ladder_path(current_session.id, db)
+    pre_snapshot_count_result = await db.execute(
+        select(func.count()).select_from(Snapshot).where(Snapshot.session_id == current_session.id)
+    )
+    pre_snapshot_count = pre_snapshot_count_result.scalar() or 0
+
+    # Pre-fetch session attributes before commit
+    session_id = current_session.id
+    session_started_at = current_session.started_at
+    session_ended_at = current_session.ended_at
+    session_start_die = current_session.start_die
+    session_manual_die = current_session.manual_die
+    session_timezone = current_session.timezone
+    session_reading_bandwidth = current_session.reading_bandwidth
+    session_reading_intent = current_session.reading_intent
+    session_reading_mode_source = current_session.reading_mode_source
+    session_reading_mode_suggested = current_session.reading_mode_suggested
+    session_active_bandwidth = current_session.active_bandwidth
+    session_predicted_bandwidth = current_session.predicted_bandwidth
+    session_bandwidth_confidence = current_session.bandwidth_confidence
+    session_bandwidth_source = current_session.bandwidth_source
+    session_bandwidth_version = current_session.bandwidth_version
+    session_active_intent = current_session.active_intent
+    session_predicted_intent = current_session.predicted_intent
+    session_intent_confidence = current_session.intent_confidence
+    session_intent_source = current_session.intent_source
+    session_intent_version = current_session.intent_version
+    session_events = list(current_session.events) if current_session.events else []
+    session_snoozed_thread_ids = list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
+
+    # Pre-fetch snoozed thread info
+    pre_snoozed_threads: list[SnoozedThreadInfo] = []
+    if session_snoozed_thread_ids:
+        snooze_result = await db.execute(select(Thread).where(Thread.id.in_(session_snoozed_thread_ids)))
+        threads_by_id = {t.id: t for t in snooze_result.scalars().all()}
+        pre_snoozed_threads = [
+            SnoozedThreadInfo(id=sid, title=threads_by_id[sid].title)
+            for sid in session_snoozed_thread_ids
+            if sid in threads_by_id
+        ]
+
+    # Pre-fetch skipped thread info for ALL skipped threads before commit
+    pre_skipped_threads: list[SnoozedThreadInfo] = []
+    if skipped_ids:
+        skipped_result = await db.execute(select(Thread).where(Thread.id.in_(skipped_ids)))
+        threads_by_id = {t.id: t for t in skipped_result.scalars().all()}
+        pre_skipped_threads = [
+            SnoozedThreadInfo(id=sid, title=threads_by_id[sid].title)
+            for sid in skipped_ids
+            if sid in threads_by_id
+        ]
+
+    # Pre-fetch the pending (skipped) thread info before commit to avoid MissingGreenlet
+    pre_active_thread_info = None
+    if pending_thread_id is not None:
+        active_thread_result = await db.execute(
+            select(Thread).where(Thread.id == pending_thread_id)
+        )
+        active_thread = active_thread_result.scalar_one_or_none()
+        if active_thread:
+            roll_result = None
+            # Find the roll event result for this thread from pre-fetched events
+            for event in reversed(session_events):
+                if event.type == "roll" and getattr(event, "selected_thread_id", None) == pending_thread_id:
+                    roll_result = event.result
+                    break
+            pre_active_thread_info = ActiveThreadInfo(
+                id=active_thread.id,
+                title=active_thread.title,
+                format=normalize_format_value(active_thread.format),
+                issues_remaining=active_thread.issues_remaining,
+                queue_position=active_thread.queue_position,
+                last_rolled_result=roll_result,
+            )
+        # Extract attributes before commit (not needed separately for skip path)
+        pass
+    else:
+        pass
+
+    await db.commit()
+    await _invalidate_session_caches(current_user.id)
+
+    # Build and return session response using pre-fetched values
+    # Find last rolled result from pre-fetched events
+    last_rolled_result = None
+    if session_events:
+        roll_events = [e for e in session_events if e.type == "roll"]
+        if roll_events:
+            last_rolled_result = roll_events[-1].result
+
+    # Get active thread info if there's a pending thread (pre-fetched before commit)
+    active_thread_info = pre_active_thread_info
+
+    return SessionResponse(
+        id=session_id,
+        started_at=session_started_at,
+        ended_at=session_ended_at,
+        start_die=session_start_die,
+        manual_die=session_manual_die,
+        user_id=current_user.id,
+        ladder_path=pre_ladder_path,
+        active_thread=active_thread_info,
+        current_die=current_die,
+        last_rolled_result=last_rolled_result,
+        has_restore_point=False,  # Skip doesn't create a restore point
+        snapshot_count=pre_snapshot_count,
+        snoozed_thread_ids=session_snoozed_thread_ids,
+        snoozed_threads=pre_snoozed_threads,
+        skipped_thread_ids=skipped_ids,
+        skipped_threads=pre_skipped_threads,
+        pending_thread_id=None,  # Cleared by skip
+        timezone=session_timezone,
+        reading_bandwidth=session_reading_bandwidth,
+        reading_intent=session_reading_intent,
+        reading_mode_source=session_reading_mode_source,
+        reading_mode_suggested=session_reading_mode_suggested,
+        bandwidth=build_session_bandwidth_state(
+            predicted_bandwidth=session_predicted_bandwidth,
+            active_bandwidth=session_active_bandwidth,
+            confidence=session_bandwidth_confidence,
+            source=session_bandwidth_source,
+            mode_version=session_bandwidth_version,
+        ),
+        intent=build_session_intent_state(
+            predicted_intent=session_predicted_intent,
+            active_intent=session_active_intent,
+            confidence=session_intent_confidence,
+            source=session_intent_source,
+            mode_version=session_intent_version,
+        ),
+    )
+
+
+@router.post("/skip/{thread_id}/unskip", response_model=SessionResponse)
+@limiter.limit("30/minute")
+async def unskip_thread(
+    thread_id: int,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SessionResponse:
+    """Remove a thread from the skipped list for the current session.
+
+    Args:
+        thread_id: The ID of the thread to unskip.
+        request: FastAPI request object for rate limiting.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SessionResponse containing the updated session.
+
+    Raises:
+        HTTPException: If no active session exists.
+    """
+    _ = request
+    result = await db.execute(
+        select(Session)
+        .where(Session.user_id == current_user.id)
+        .where(Session.ended_at.is_(None))
+        .order_by(Session.started_at.desc())
+    )
+    current_session = result.scalars().first()
+
+    if not current_session:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active session",
+        )
+
+    skipped_ids = (
+        list(current_session.skipped_thread_ids) if current_session.skipped_thread_ids else []
+    )
+
+    if thread_id not in skipped_ids:
+        return await build_session_response(current_session, db)
+
+    skipped_ids.remove(thread_id)
+    current_session.skipped_thread_ids = skipped_ids
+
+    event = Event(
+        type="unskip",
+        session_id=current_session.id,
+        thread_id=thread_id,
+    )
+    db.add(event)
+
+    # Extract all session attributes before commit to avoid MissingGreenlet.
+    session_id = current_session.id
+    session_started_at = current_session.started_at
+    session_ended_at = current_session.ended_at
+    session_start_die = current_session.start_die
+    session_manual_die = current_session.manual_die
+    session_timezone = current_session.timezone
+    session_reading_bandwidth = current_session.reading_bandwidth
+    session_reading_intent = current_session.reading_intent
+    session_reading_mode_source = current_session.reading_mode_source
+    session_reading_mode_suggested = current_session.reading_mode_suggested
+    session_active_bandwidth = current_session.active_bandwidth
+    session_predicted_bandwidth = current_session.predicted_bandwidth
+    session_bandwidth_confidence = current_session.bandwidth_confidence
+    session_bandwidth_source = current_session.bandwidth_source
+    session_bandwidth_version = current_session.bandwidth_version
+    session_active_intent = current_session.active_intent
+    session_predicted_intent = current_session.predicted_intent
+    session_intent_confidence = current_session.intent_confidence
+    session_intent_source = current_session.intent_source
+    session_intent_version = current_session.intent_version
+    session_pending_thread_id = current_session.pending_thread_id
+    user_id = current_user.id
+
+    # Pre-fetch ladder and snapshot count before commit
+    pre_ladder_path = await build_ladder_path(session_id, db)
+    result = await db.execute(
+        select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session_id)
+    )
+    pre_snapshot_count = result.scalar() or 0
+
+    # Pre-fetch current die before commit
+    pre_current_die = await get_current_die_for_session(current_session, db)
+
+    # Pre-fetch skipped threads info before commit
+    pre_skipped_ids = list(skipped_ids)
+    pre_skipped_threads: list[SnoozedThreadInfo] = []
+    if pre_skipped_ids:
+        skipped_result = await db.execute(select(Thread).where(Thread.id.in_(pre_skipped_ids)))
+        threads_by_id = {t.id: t for t in skipped_result.scalars().all()}
+        pre_skipped_threads = [
+            SnoozedThreadInfo(id=sid, title=threads_by_id[sid].title)
+            for sid in pre_skipped_ids
+            if sid in threads_by_id
+        ]
+
+    # Pre-fetch snoozed threads info before commit
+    pre_snoozed_ids = list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
+    pre_snoozed_threads: list[SnoozedThreadInfo] = []
+    if pre_snoozed_ids:
+        snooze_result = await db.execute(select(Thread).where(Thread.id.in_(pre_snoozed_ids)))
+        threads_by_id = {t.id: t for t in snooze_result.scalars().all()}
+        pre_snoozed_threads = [
+            SnoozedThreadInfo(id=sid, title=threads_by_id[sid].title)
+            for sid in pre_snoozed_ids
+            if sid in threads_by_id
+        ]
+
+    await db.commit()
+    await _invalidate_session_caches(user_id)
+
+    return SessionResponse(
+        id=session_id,
+        started_at=session_started_at,
+        ended_at=session_ended_at,
+        start_die=session_start_die,
+        manual_die=session_manual_die,
+        user_id=user_id,
+        ladder_path=pre_ladder_path,
+        active_thread=None,
+        current_die=pre_current_die,
+        last_rolled_result=None,
+        has_restore_point=pre_snapshot_count > 0,
+        snapshot_count=pre_snapshot_count,
+        snoozed_thread_ids=pre_snoozed_ids,
+        snoozed_threads=pre_snoozed_threads,
+        skipped_thread_ids=pre_skipped_ids,
+        skipped_threads=pre_skipped_threads,
+        pending_thread_id=session_pending_thread_id,
+        timezone=session_timezone,
+        reading_bandwidth=session_reading_bandwidth,
+        reading_intent=session_reading_intent,
+        reading_mode_source=session_reading_mode_source,
+        reading_mode_suggested=session_reading_mode_suggested,
+        bandwidth=build_session_bandwidth_state(
+            predicted_bandwidth=session_predicted_bandwidth,
+            active_bandwidth=session_active_bandwidth,
+            confidence=session_bandwidth_confidence,
+            source=session_bandwidth_source,
+            mode_version=session_bandwidth_version,
+        ),
+        intent=build_session_intent_state(
+            predicted_intent=session_predicted_intent,
+            active_intent=session_active_intent,
+            confidence=session_intent_confidence,
+            source=session_intent_source,
+            mode_version=session_intent_version,
+        ),
+    )
 
 
 @router.post("/override", response_model=RollResponse)
@@ -1004,8 +1377,11 @@ async def roll_bootstrap(
     )
 
     snoozed_ids = list(current_session.snoozed_thread_ids or [])
+    skipped_ids = list(current_session.skipped_thread_ids or [])
     if snoozed_ids:
         pool_query = pool_query.where(Thread.id.not_in(snoozed_ids))
+    if skipped_ids:
+        pool_query = pool_query.where(Thread.id.not_in(skipped_ids))
 
     pool_result = await db.execute(pool_query)
     pool_rows = pool_result.all()
@@ -1036,6 +1412,20 @@ async def roll_bootstrap(
             for row in snoozed_result.all()
         ]
 
+    skipped_threads: list[RollBootstrapThread] = []
+    if skipped_ids:
+        skipped_result = await db.execute(
+            select(Thread.id, Thread.title, Thread.format)
+            .where(Thread.user_id == user_id)
+            .where(Thread.id.in_(skipped_ids))
+        )
+        skipped_threads = [
+            RollBootstrapThread(
+                id=row.id, title=row.title, format=normalize_format_value(row.format)
+            )
+            for row in skipped_result.all()
+        ]
+
     blocked_count_result = await db.execute(
         select(func.count())
         .select_from(Thread)
@@ -1062,6 +1452,7 @@ async def roll_bootstrap(
     snoozed_count = len(snoozed_threads)
     snoozed_threads = snoozed_threads[:RollBootstrapResponse.summary_limit]
     blocked_threads = blocked_threads[:RollBootstrapResponse.summary_limit]
+    skipped_threads = skipped_threads[:RollBootstrapResponse.summary_limit]
 
     stale_cutoff = datetime.now(UTC) - timedelta(days=7)
     effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
@@ -1123,6 +1514,8 @@ async def roll_bootstrap(
         roll_pool=roll_pool,
         snoozed_threads=snoozed_threads,
         snoozed_count=snoozed_count,
+        skipped_thread_ids=skipped_ids,
+        skipped_threads=skipped_threads,
         blocked_count=blocked_count,
         blocked_threads=blocked_threads,
         stale_thread_count=stale_thread_count,

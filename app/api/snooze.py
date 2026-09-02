@@ -111,6 +111,8 @@ async def build_session_response(
     snapshot_count: int | None = None,
     snoozed_threads: list[SnoozedThreadInfo] | None = None,
     snoozed_thread_ids: list[int] | None = None,
+    skipped_threads: list[SnoozedThreadInfo] | None = None,
+    skipped_thread_ids: list[int] | None = None,
     correction: SnoozeCorrectionInfo | None = None,
 ) -> SessionResponse:
     """Build a SessionResponse from a session model.
@@ -129,6 +131,8 @@ async def build_session_response(
         snapshot_count: Pre-computed snapshot count (skips COUNT query).
         snoozed_threads: Pre-fetched snoozed thread info (skips snoozed thread query).
         snoozed_thread_ids: Pre-fetched snoozed thread IDs (avoids expired session read).
+        skipped_threads: Pre-fetched skipped thread info (skips skipped thread query).
+        skipped_thread_ids: Pre-fetched skipped thread IDs (avoids expired session read).
         correction: Structured correction result from the most recent Snooze.
 
     Returns:
@@ -167,6 +171,22 @@ async def build_session_response(
                 if thread_id in threads_by_id
             ]
 
+    if skipped_threads is not None and skipped_thread_ids is not None:
+        resolved_skipped_ids = skipped_thread_ids
+        resolved_skipped_threads = skipped_threads
+    else:
+        skipped_ids_list = session.skipped_thread_ids or []
+        resolved_skipped_ids = [sid for sid in skipped_ids_list if isinstance(sid, int)]
+        resolved_skipped_threads = []
+        if resolved_skipped_ids:
+            result = await db.execute(select(Thread).where(Thread.id.in_(resolved_skipped_ids)))
+            threads_by_id = {thread.id: thread for thread in result.scalars().all()}
+            resolved_skipped_threads = [
+                SnoozedThreadInfo(id=thread_id, title=threads_by_id[thread_id].title)
+                for thread_id in resolved_skipped_ids
+                if thread_id in threads_by_id
+            ]
+
     if current_die is None:
         current_die = await get_current_die_for_session(session, db)
     if ladder_path is None:
@@ -187,6 +207,8 @@ async def build_session_response(
         snapshot_count=snapshot_count,
         snoozed_thread_ids=resolved_ids,
         snoozed_threads=snoozed_threads,
+        skipped_thread_ids=resolved_skipped_ids,
+        skipped_threads=resolved_skipped_threads,
         pending_thread_id=session.pending_thread_id,
         timezone=session.timezone,
         reading_bandwidth=session.reading_bandwidth,
