@@ -36,7 +36,6 @@ from app.services.reading_effort import (
 )
 from app.services.recommendation_explanation import RecommendationExplanationProjection
 from app.schemas import (
-    ActiveThreadInfo,
     ExplainableFactorResponse,
     OverrideRequest,
     RecommendationExplanationResponse,
