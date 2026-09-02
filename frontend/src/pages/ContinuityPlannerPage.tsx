@@ -163,7 +163,7 @@ export default function ContinuityPlannerPage() {
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
   const isInvalidRoute = id !== undefined && parsedId !== null && (!Number.isInteger(parsedId) || parsedId <= 0)
 
-const [name, setName] = useState(DEFAULT_PLAN_NAME)
+  const [name, setName] = useState(DEFAULT_PLAN_NAME)
   const [lanes, setLanes] = useState<PlannerLane[]>([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
   const [nodes, setNodes] = useState<PlannerNode[]>([])
   const [activeLaneId, setActiveLaneId] = useState(DEFAULT_LANE_ID)
@@ -434,7 +434,7 @@ const [name, setName] = useState(DEFAULT_PLAN_NAME)
     setActiveLaneId((current) => (current === laneId ? lanes.find((lane) => lane.id !== laneId)?.id ?? '' : current))
   }
 
-const save = async () => {
+  const save = async () => {
     if (!name.trim()) {
       setSaveError('Enter a plan name.')
       return

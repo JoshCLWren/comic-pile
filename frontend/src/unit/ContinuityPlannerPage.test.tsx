@@ -1747,7 +1747,7 @@ describe('ContinuityPlannerPage', () => {
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeVisible())
     // Modal content is portaled to document.body
-    expect(await screen.findByText('Projection plan')).toBeVisible()
+    expect(await screen.findByText(/Projection plan/)).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: 'Close modal' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
