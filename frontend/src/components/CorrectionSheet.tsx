@@ -69,15 +69,21 @@ export default function CorrectionSheet({
     setError(null)
     setSubmitting(true)
 
+    let didFail = false
     try {
       const modeUpdate = CHOICE_TO_MODE[choice]
       if (Object.keys(modeUpdate).length > 0) {
         await sessionApi.updateMode(modeUpdate)
       }
-      onClose()
     } catch (err) {
+      didFail = true
       setError(getApiErrorDetail(err))
+    } finally {
       setSubmitting(false)
+    }
+
+    if (!didFail) {
+      onClose()
     }
   }, [onClose])
 

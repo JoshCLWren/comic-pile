@@ -17,13 +17,18 @@ interface ThreadPoolProps {
   snoozedThreads: Array<{ id: number; title: string; format: string }>
   snoozedExpanded: boolean
   blockedExpanded: boolean
+  skippedThreads: Array<{ id: number; title: string; format: string }>
+  skippedExpanded: boolean
   onThreadClick: (thread: RollBootstrapThread) => void
   onUnsnooze: (threadId: number) => void
+  onUnskip: (threadId: number) => void
   onReadStale: () => void
   onToggleSnoozed: () => void
+  onToggleSkipped: () => void
   onToggleBlocked: () => void
   onShuffle: () => void
   unsnoozeIsPending: boolean
+  unskipIsPending: boolean
   shuffleIsPending: boolean
 }
 
@@ -41,13 +46,18 @@ export function ThreadPool({
   snoozedThreads,
   snoozedExpanded,
   blockedExpanded,
+  skippedThreads,
+  skippedExpanded,
   onThreadClick,
   onUnsnooze,
+  onUnskip,
   onReadStale,
   onToggleSnoozed,
+  onToggleSkipped,
   onToggleBlocked,
   onShuffle,
   unsnoozeIsPending,
+  unskipIsPending,
   shuffleIsPending,
 }: ThreadPoolProps) {
   const navigate = useNavigate()
@@ -280,6 +290,47 @@ export function ThreadPool({
                     className="inline-flex min-h-7 min-w-7 items-center justify-center px-2 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50 focus:ring-2 focus:ring-rose-500"
                     title="Unsnooze this comic"
                     aria-label="Unsnooze this comic"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {skippedThreads && skippedThreads.length > 0 && !isRatingView && (
+        <div className="mt-4 md:mt-8">
+          <button
+            type="button"
+            onClick={onToggleSkipped}
+            className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
+          >
+            <span
+              className={`text-stone-400 text-xs transition-transform ${skippedExpanded ? 'rotate-90' : ''}`}
+            >
+              ▶
+            </span>
+            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest cursor-help border-b border-dashed border-stone-600">
+              Skipped ({skippedThreads.length})
+            </span>
+          </button>
+          {skippedExpanded && (
+            <div className="mt-2 space-y-1">
+              {skippedThreads.map((thread) => (
+                <div
+                  key={thread.id}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+                >
+                  <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
+                  <button
+                    type="button"
+                    onClick={() => onUnskip(thread.id)}
+                    disabled={unskipIsPending}
+                    className="inline-flex min-h-7 min-w-7 items-center justify-center px-2 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50 focus:ring-2 focus:ring-rose-500"
+                    title="Unskip this comic"
+                    aria-label="Unskip this comic"
                   >
                     ✕
                   </button>

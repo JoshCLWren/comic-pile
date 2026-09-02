@@ -143,6 +143,8 @@ export interface RollBootstrapResponse {
   roll_pool: RollBootstrapThread[]
   snoozed_threads: RollBootstrapThread[]
   snoozed_count: number
+  skipped_thread_ids: number[]
+  skipped_threads: RollBootstrapThread[]
   blocked_count: number
   blocked_threads: RollBootstrapThread[]
   stale_thread_count: number

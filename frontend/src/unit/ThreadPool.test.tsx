@@ -25,6 +25,7 @@ const mockPool: RollBootstrapThread[] = [
 const mockBlockedThreads: RollBootstrapThread[] = []
 const mockBlockingDependencyMap: Record<number, BlockingDependency[]> = {}
 const mockSnoozedThreads: Array<{ id: number; title: string; format: string }> = []
+const mockSkippedThreads: Array<{ id: number; title: string; format: string }> = []
 
 function renderPool(overrides: Partial<{
   pool: RollBootstrapThread[]
@@ -54,14 +55,19 @@ function renderPool(overrides: Partial<{
         staleThreadCount={0}
         snoozedThreads={mockSnoozedThreads}
         snoozedExpanded={false}
+        skippedThreads={mockSkippedThreads}
+        skippedExpanded={false}
         blockedExpanded={blockedExpanded}
         onThreadClick={() => {}}
         onUnsnooze={() => {}}
+        onUnskip={() => {}}
         onReadStale={() => {}}
         onToggleSnoozed={() => {}}
+        onToggleSkipped={() => {}}
         onToggleBlocked={() => {}}
         onShuffle={() => {}}
         unsnoozeIsPending={false}
+        unskipIsPending={false}
         shuffleIsPending={false}
       />
     </MemoryRouter>,
@@ -133,14 +139,19 @@ describe('ThreadPool Component', () => {
           staleThreadCount={0}
           snoozedThreads={mockSnoozedThreads}
           snoozedExpanded={false}
+          skippedThreads={mockSkippedThreads}
+          skippedExpanded={false}
           blockedExpanded={false}
           onThreadClick={() => {}}
           onUnsnooze={() => {}}
+          onUnskip={() => {}}
           onReadStale={() => {}}
           onToggleSnoozed={() => {}}
+          onToggleSkipped={() => {}}
           onToggleBlocked={onToggleBlocked}
           onShuffle={() => {}}
           unsnoozeIsPending={false}
+          unskipIsPending={false}
           shuffleIsPending={false}
         />
       </MemoryRouter>,
@@ -159,5 +170,90 @@ describe('ThreadPool Component', () => {
     renderPool({ pool: [], blockedThreads: [], blockingDependencyMap: {} })
 
     expect(screen.getByText(/Nothing to roll yet/i)).toBeInTheDocument()
+  })
+
+  it('shows skipped threads when expanded and calls onUnskip', () => {
+    const onUnskip = vi.fn()
+    const onToggleSkipped = vi.fn()
+
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          pool={[]}
+          blockedThreads={[]}
+          blockingDependencyMap={{}}
+          dieSize={6}
+          isRatingView={false}
+          isRolling={false}
+          rolledResult={null}
+          selectedThreadId={null}
+          staleThread={null}
+          staleThreadCount={0}
+          snoozedThreads={[]}
+          snoozedExpanded={false}
+          skippedThreads={[{ id: 10, title: 'Skipped Saga', format: 'Comic' }]}
+          skippedExpanded={true}
+          blockedExpanded={false}
+          onThreadClick={() => {}}
+          onUnsnooze={() => {}}
+          onUnskip={onUnskip}
+          onReadStale={() => {}}
+          onToggleSnoozed={() => {}}
+          onToggleSkipped={onToggleSkipped}
+          onToggleBlocked={() => {}}
+          onShuffle={() => {}}
+          unsnoozeIsPending={false}
+          unskipIsPending={false}
+          shuffleIsPending={false}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('Skipped Saga')).toBeInTheDocument()
+    const unskipBtn = screen.getByRole('button', { name: /unskip this comic/i })
+    fireEvent.click(unskipBtn)
+    expect(onUnskip).toHaveBeenCalledWith(10)
+  })
+
+  it('hides skipped threads when collapsed and toggles expansion', () => {
+    const onToggleSkipped = vi.fn()
+
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          pool={[]}
+          blockedThreads={[]}
+          blockingDependencyMap={{}}
+          dieSize={6}
+          isRatingView={false}
+          isRolling={false}
+          rolledResult={null}
+          selectedThreadId={null}
+          staleThread={null}
+          staleThreadCount={0}
+          snoozedThreads={[]}
+          snoozedExpanded={false}
+          skippedThreads={[{ id: 10, title: 'Skipped Saga', format: 'Comic' }]}
+          skippedExpanded={false}
+          blockedExpanded={false}
+          onThreadClick={() => {}}
+          onUnsnooze={() => {}}
+          onUnskip={() => {}}
+          onReadStale={() => {}}
+          onToggleSnoozed={() => {}}
+          onToggleSkipped={onToggleSkipped}
+          onToggleBlocked={() => {}}
+          onShuffle={() => {}}
+          unsnoozeIsPending={false}
+          unskipIsPending={false}
+          shuffleIsPending={false}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(screen.queryByText('Skipped Saga')).not.toBeInTheDocument()
+    const toggle = screen.getByText(/Skipped \(1\)/i)
+    fireEvent.click(toggle)
+    expect(onToggleSkipped).toHaveBeenCalledTimes(1)
   })
 })
