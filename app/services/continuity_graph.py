@@ -400,7 +400,13 @@ def _evaluate_rule(rule: ContinuityRule, snapshot: GraphSnapshot) -> ContinuityB
             blocker_type = "members_unread"
     else:
         blocker_type = "item_unread"
-    all_unread_ids = sorted(set(causing_issue_ids + causing_member_issue_ids))
+    all_unread_ids = (
+        issue_id
+        for issue_id in set(causing_idea_ids + causing_member_idea_ids)
+        if not is_read(idea_id, snapshot)
+    )
+    if not all_unread_ids:
+        return None
     return ContinuityBlocker(
         rule_id=rule.id,
         source_type=rule.source_type,
