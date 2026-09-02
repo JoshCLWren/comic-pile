@@ -627,6 +627,45 @@ async def skip_thread(
             if sid in threads_by_id
         ]
 
+    # Pre-fetch the pending (skipped) thread info before commit to avoid MissingGreenlet
+    pre_active_thread_info = None
+    if pending_thread_id is not None:
+        active_thread_result = await db.execute(
+            select(Thread).where(Thread.id == pending_thread_id)
+        )
+        active_thread = active_thread_result.scalar_one_or_none()
+        if active_thread:
+            roll_result = None
+            # Find the roll event result for this thread from pre-fetched events
+            for event in reversed(session_events):
+                if event.type == "roll" and getattr(event, "selected_thread_id", None) == pending_thread_id:
+                    roll_result = event.result
+                    break
+            pre_active_thread_info = ActiveThreadInfo(
+                id=active_thread.id,
+                title=active_thread.title,
+                format=normalize_format_value(active_thread.format),
+                issues_remaining=active_thread.issues_remaining,
+                queue_position=active_thread.queue_position,
+                last_rolled_result=roll_result,
+            )
+        # Extract attributes before commit
+        if active_thread:
+            pre_active_thread_title = active_thread.title
+            pre_active_thread_format = normalize_format_value(active_thread.format)
+            pre_active_thread_issues_remaining = active_thread.issues_remaining
+            pre_active_thread_queue_position = active_thread.queue_position
+        else:
+            pre_active_thread_title = None
+            pre_active_thread_format = None
+            pre_active_thread_issues_remaining = None
+            pre_active_thread_queue_position = None
+    else:
+        pre_active_thread_title = None
+        pre_active_thread_format = None
+        pre_active_thread_issues_remaining = None
+        pre_active_thread_queue_position = None
+
     await db.commit()
     await _invalidate_session_caches(current_user.id)
 
@@ -638,25 +677,8 @@ async def skip_thread(
         if roll_events:
             last_rolled_result = roll_events[-1].result
 
-    # Get active thread info if there's a pending thread
-    active_thread_info = None
-    if pending_thread_id is not None:
-        active_thread = await db.get(Thread, pending_thread_id)
-        if active_thread:
-            # Find the roll event result for this thread
-            roll_result = None
-            for event in reversed(session_events):
-                if event.type == "roll" and event.selected_thread_id == pending_thread_id:
-                    roll_result = event.result
-                    break
-            active_thread_info = ActiveThreadInfo(
-                id=active_thread.id,
-                title=active_thread.title,
-                format=normalize_format_value(active_thread.format),
-                issues_remaining=active_thread.issues_remaining,
-                queue_position=active_thread.queue_position,
-                last_rolled_result=roll_result,
-            )
+    # Get active thread info if there's a pending thread (pre-fetched before commit)
+    active_thread_info = pre_active_thread_info
 
     return SessionResponse(
         id=session_id,
