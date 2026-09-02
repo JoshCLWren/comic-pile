@@ -9,7 +9,6 @@ import {
   useOverrideRoll,
   useRoll,
   useSetDie,
-  useSkipRoll,
 } from '../../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { useSkip, useUnskip } from '../../hooks/useSkip'
@@ -76,11 +75,10 @@ export default function RollPage() {
   const rollMutation = useRoll()
   const dismissPendingMutation = useDismissPending()
   const overrideMutation = useOverrideRoll()
-  const skipMutation = useSkipRoll()
-  const snoozeMutation = useSnooze()
-  const unsnoozeMutation = useUnsnooze()
   const skipMutation = useSkip()
   const unskipMutation = useUnskip()
+  const snoozeMutation = useSnooze()
+  const unsnoozeMutation = useUnsnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
   const shuffleQueueMutation = useShuffleQueue()
@@ -192,6 +190,7 @@ export default function RollPage() {
   const handleSkip = useCallback(async () => {
     try {
       const response = await skipMutation.mutate()
+      if (!response) return
       await refetchBootstrap()
       const threadMetadata: ThreadMetadata = {
         id: response.thread_id,
