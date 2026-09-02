@@ -455,4 +455,74 @@ describe('CrossoverDetailPage', () => {
     expect(within(rows[0]).getByText(/Issue 5/)).toBeInTheDocument()
     expect(within(rows[1]).getByText(/Issue 6/)).toBeInTheDocument()
   })
+
+  it('renders the unresolved Continue Reading fallback when no member has a thread', async () => {
+    const unresolvedA = { ...warlockIssue, id: 31, issue_number: '3', status: 'read' as const }
+    const unresolvedB = { ...warlockIssue, id: 32, issue_number: '4', status: 'unread' as const }
+    mockedGroups.getDetail.mockResolvedValue(
+      makeDetail([
+        {
+          membership: {
+            id: 70,
+            thread_id: null,
+            issue_id: 31,
+            sequence_order: 1,
+            series_title: null,
+            issue_number: '3',
+          },
+          thread: null,
+          issue: unresolvedA,
+          other_crossovers: [],
+        },
+        {
+          membership: {
+            id: 71,
+            thread_id: null,
+            issue_id: 32,
+            sequence_order: 2,
+            series_title: null,
+            issue_number: '4',
+          },
+          thread: null,
+          issue: unresolvedB,
+          other_crossovers: [],
+        },
+      ]),
+    )
+
+    renderPage()
+
+    expect(await screen.findByText('No readable issue')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Continue Reading' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'View First Series' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Open' })).not.toBeInTheDocument()
+  })
+
+  it('renders the unresolved Next Up fallback when next unread has no thread', async () => {
+    mockedGroups.getDetail.mockResolvedValue(
+      makeDetail([
+        {
+          membership: {
+            id: 80,
+            thread_id: null,
+            issue_id: 41,
+            sequence_order: 1,
+            series_title: null,
+            issue_number: '1',
+          },
+          thread: null,
+          issue: { ...warlockIssue, id: 41, issue_number: '1', status: 'unread' as const },
+          other_crossovers: [],
+        },
+      ]),
+    )
+
+    renderPage()
+
+    expect(await screen.findByText('Next Up')).toBeInTheDocument()
+    expect(screen.getByText('Unresolved')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Read Now' })).not.toBeInTheDocument()
+    expect(screen.getByText('No readable issue')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Continue Reading' })).not.toBeInTheDocument()
+  })
 })
