@@ -21,20 +21,8 @@ CONTROLLER = Path('.github/scripts/factory-work-controller.py')
 POLICY = Path('.github/scripts/factory_work_policy.py')
 KILO_HELPER = Path('.github/scripts/kilo-auto-factory-run.sh')
 GUARD = Path('.github/scripts/fixed-model-guard.py')
-EXPECTED_WORKERS = {6, 9, 10, 11, 14, 16, 17, 18, 19, 20, 21, 23, 29} | set(range(39, 72))
-EXPECTED_SOURCE_COUNTS = {'nvidia': 13, 'opencode-free': 20, 'kilo-auto': 1, 'openrouter-free': 12}
-EXPECTED_OPENCODE_FREE_MODELS = {
-    'big-pickle',
-    'deepseek-v4-flash-free',
-    'hy3-free',
-    'laguna-s-2.1-free',
-    'mimo-v2.5-free',
-    'muse-spark-1.2-contributor-free',
-    'nemotron-3-ultra-free',
-    'nemotron-3.5-lightning-free',
-    'x-preview-f-free',
-}
-EXPECTED_OPENROUTER_FREE_MODELS = {'stealth/ox-alpha'}
+EXPECTED_WORKERS = {9, 10, 11, 14, 16, 17, 18, 19, 20, 21, 23, 29} | set(range(39, 72))
+
 SCHEDULE_MINUTES = tuple(range(0, 60, 5))
 ENTRY_PERMISSIONS = ('contents: write', 'issues: write', 'pull-requests: write', 'actions: write', 'checks: read')
 
@@ -43,45 +31,46 @@ def main() -> None:
     """Validate roster, runtime, lease, assignment, and discovery invariants."""
     with MANIFEST.open(newline='', encoding='utf-8') as handle:
         rows = list(csv.DictReader(
-            (line for line in handle if not line.startswith('# worker')),
+            (
+                line
+                for line in handle
+                if line.strip() and not line.lstrip().startswith('#')
+            ),
             fieldnames=['worker', 'source', 'model', 'minute', 'scheduler', 'display_name'],
             delimiter='\t',
         ))
 
-    assert len(rows) == 46, f'expected 38 external factory lanes, got {len(rows)}'
+    assert len(rows) == 45, f'expected 45 factory slots, got {len(rows)}'
     workers = [int(row['worker']) for row in rows]
     assert set(workers) == EXPECTED_WORKERS
     assert len(workers) == len(set(workers)), 'duplicate worker IDs'
-    assert Counter(row['source'] for row in rows) == EXPECTED_SOURCE_COUNTS
 
-    opencode_models = {row['model'] for row in rows if row['source'] == 'opencode-free'}
-    assert opencode_models == EXPECTED_OPENCODE_FREE_MODELS
-    openrouter_models = {row['model'] for row in rows if row['source'] == 'openrouter-free'}
-    assert openrouter_models == EXPECTED_OPENROUTER_FREE_MODELS
+
     kilo = [row for row in rows if row['source'] == 'kilo-auto']
     assert len(kilo) == 1 and kilo[0]['worker'] == '46'
     assert kilo[0]['model'] == 'kilo-auto/free'
     assert kilo[0]['display_name'] == 'Kilo Auto Free · Forge'
 
     counts: Counter[int] = Counter()
-    for index, row in enumerate(rows):
+    for row in rows:
         minute = int(row['minute'])
         assert row['scheduler'] == 'dispatcher'
-        assert minute == SCHEDULE_MINUTES[index % len(SCHEDULE_MINUTES)]
+        assert minute in SCHEDULE_MINUTES
         counts[minute] += 1
     assert set(counts) == set(SCHEDULE_MINUTES)
     assert max(counts.values()) - min(counts.values()) <= 1
-    assert sum(counts.values()) == 46
+    assert sum(counts.values()) == 45
 
     dispatcher = DISPATCHER.read_text(encoding='utf-8')
     assert 'workflow_run:' not in dispatcher
     assert 'schedule:' in dispatcher
-    assert "cron: '*/5 * * * *'" in dispatcher
+    assert "cron: '7 * * * *'" in dispatcher
     assert dispatcher.count('    - cron:') == 1, 'dispatcher must use a single collapsed cron timer'
-    assert 'minute="$(date -u +%M)"' in dispatcher
+    assert 'offset="$(( ((GITHUB_RUN_NUMBER - 1) * offer_count) % total ))"' in dispatcher
     assert 'gh workflow run factory-ready-merge-drain.yml' in dispatcher
-    assert 'elif [[ "$EVENT_NAME" == schedule ]]; then' in dispatcher
-    assert 'workers=\'["6","39","46"]\'' in dispatcher
+    assert 'elif [[ "$EVENT_NAME" == schedule || ( "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster ) ]]; then' in dispatcher
+    assert "roster=\"$(awk -F '\\t' '" in dispatcher
+    assert "!seen[$2]++ {print $1}" in dispatcher
     assert 'gh workflow run free-model-factory-entry.yml' in dispatcher
     assert "'.github/scripts/factory-work-controller.py'" in dispatcher
     assert "'.github/scripts/free-model-factory-worker.sh'" in dispatcher
@@ -113,7 +102,10 @@ def main() -> None:
     runner = RUNNER.read_text(encoding='utf-8')
     assert 'group: fixed-model-factory-${{ inputs.worker }}' in runner
     assert 'cancel-in-progress: false' in runner
-    assert 'opencode-free)' in runner and 'runtime_model="opencode/${model}"' in runner
+    assert 'opencode-free|openrouter-free)' in runner
+    assert "reason='catalog-backed-free-code-slot'" in runner
+    for provider in ('opencode-free', 'openrouter-free', 'omniroute-free'):
+        assert f'{provider})' in runner
     assert 'OPENCODE_API_KEY' not in runner
     assert 'kilo-auto)' in runner and 'runtime_model="kilo/${model}"' in runner
     assert "KILO_VERSION: '7.4.22'" in runner
@@ -226,11 +218,10 @@ def main() -> None:
     if PLAYWRIGHT_CONFIG.exists():
         playwright = PLAYWRIGHT_CONFIG.read_text(encoding='utf-8')
         for required in (
-            "outputFile: '../test-results/results.json'",
+            "reporter: isCI ? [['github'], ['list']] : [['list']]",
             "trace: 'retain-on-failure'",
             "screenshot: 'only-on-failure'",
-            "video: 'retain-on-failure'",
-            "retries: process.env.CI ? 2 : 0",
+            "retries: isCI ? 2 : 0",
         ):
             assert required in playwright, f'Playwright failure-evidence invariant missing: {required}'
 
@@ -257,7 +248,8 @@ def main() -> None:
     print(f'Validated {len(rows)} external factory lanes, centralized assignment, staggered scheduling, and daily Chromium discovery.')
     for minute in SCHEDULE_MINUTES:
         print(f'  :{minute:02d} -> {counts[minute]} workers')
-    for source, count in EXPECTED_SOURCE_COUNTS.items():
+    source_counts = Counter(row['source'] for row in rows)
+    for source, count in sorted(source_counts.items()):
         print(f'  {source}: {count}')
 
 

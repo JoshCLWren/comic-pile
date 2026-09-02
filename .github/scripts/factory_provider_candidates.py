@@ -184,6 +184,24 @@ class OpenCodeFreeAdapter:
         )
 
 
+class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
+    """Expose OmniRoute's stable free coding route as factory capacity."""
+
+    def __init__(self) -> None:
+        """Configure the external OmniRoute OpenAI-compatible adapter."""
+        super().__init__("omniroute-free", "omniroute")
+
+    def discover(
+        self,
+        raw_catalog: str,
+        configured_models: Sequence[str] = (),
+    ) -> Discovery:
+        """Expose only the durable free coding route advertised by OmniRoute."""
+        del configured_models
+        return super().discover(raw_catalog, ("auto/coding:free",))
+
+
+
 class RuntimeOnlyAdapter:
     """Adapter for a provider route that cannot be enumerated reliably."""
 
@@ -242,6 +260,10 @@ ADAPTERS: dict[str, ProviderAdapter] = {
         "openrouter",
         free_only=True,
     ),
+    # OmniRoute owns discovery and routing across its underlying providers.
+    # The factory consumes its stable free coding route rather than coupling
+    # workers to whichever backing models happen to be available today.
+    "omniroute-free": OmniRouteFreeAdapter(),
     # Kilo documents a changing free model set exposed through interactive model
     # selection, but no reliable non-interactive enumeration contract. Keep that
     # limitation here and require actual attempt evidence before counting it.

@@ -72,12 +72,12 @@ test('fixed-model worker tokens map across the complete fleet range', () => {
   assert.equal(ownerFor('opencode-nvidia-factory-6'), 'factory:6');
   assert.equal(ownerFor('opencode-free-model-factory-32'), 'factory:32');
   assert.equal(ownerFor('opencode-free-model-factory-46'), 'factory:46');
-  assert.equal(ownerFor('opencode-free-model-factory-47'), 'factory:47');
-  assert.equal(ownerFor('opencode-free-model-factory-48'), 'factory:48');
-  assert.equal(ownerFor('opencode-free-model-factory-49'), 'factory:unowned');
+  assert.equal(ownerFor('opencode-free-model-factory-49'), 'factory:49');
+  assert.equal(ownerFor('opencode-free-model-factory-71'), 'factory:71');
+  assert.equal(ownerFor('opencode-free-model-factory-72'), 'factory:unowned');
 });
 
-test('fixed-model label metadata is recognized without being rewritten', async () => {
+test('legacy model-specific label metadata is normalized', async () => {
   const updates = [];
   const github = githubFor({
     extraDefinitions: [{
@@ -90,7 +90,9 @@ test('fixed-model label metadata is recognized without being rewritten', async (
 
   await reconcile({ github, context: contextFor('workflow_dispatch', {}) });
 
-  assert.ok(!updates.some(update => update.name === 'factory:32'));
+  const update = updates.find(candidate => candidate.name === 'factory:32');
+  assert.ok(update);
+  assert.equal(update.description, 'Current next-action owner is ComicPile Factory 32');
 });
 
 test('label reconciliation replaces both groups with one atomic call', async () => {
