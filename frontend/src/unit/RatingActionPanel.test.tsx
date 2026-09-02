@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { RatingActionPanel } from '../pages/RollPage/components/RatingActionPanel'
 
 describe('RatingActionPanel', () => {
