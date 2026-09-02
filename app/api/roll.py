@@ -652,19 +652,10 @@ async def skip_thread(
         # Extract attributes before commit
         if active_thread:
             pre_active_thread_title = active_thread.title
-            pre_active_thread_format = normalize_format_value(active_thread.format)
-            pre_active_thread_issues_remaining = active_thread.issues_remaining
-            pre_active_thread_queue_position = active_thread.queue_position
         else:
             pre_active_thread_title = None
-            pre_active_thread_format = None
-            pre_active_thread_issues_remaining = None
-            pre_active_thread_queue_position = None
     else:
         pre_active_thread_title = None
-        pre_active_thread_format = None
-        pre_active_thread_issues_remaining = None
-        pre_active_thread_queue_position = None
 
     await db.commit()
     await _invalidate_session_caches(current_user.id)

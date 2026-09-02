@@ -266,6 +266,33 @@ describe('skip hooks', () => {
     }
   })
 
+  it('recovers skip after authentication failure and retries', async () => {
+    const authError = Object.assign(new Error('Not authenticated'), {
+      response: { status: 403, data: { detail: 'Not authenticated' } },
+    })
+    protectedRollMutationApi.skip.mockRejectedValueOnce(authError)
+    protectedRollMutationApi.skip.mockResolvedValueOnce(undefined)
+    protectedRollMutationApi.bootstrap.mockResolvedValue(bootstrapState(7, 12))
+
+    const skipHook = renderHook(() => useSkip(), { wrapper })
+    await act(async () => await skipHook.result.current.mutate(7))
+
+    expect(protectedRollMutationApi.skip).toHaveBeenCalledTimes(2)
+    expect(skipHook.result.current.isError).toBe(false)
+  })
+
+  it('reconciles ambiguous skip after network timeout when thread is no longer pending', async () => {
+    const timeoutError = Object.assign(new Error('timeout'), { code: 'ECONNABORTED' })
+    protectedRollMutationApi.skip.mockRejectedValueOnce(timeoutError)
+    rollBootstrapApi.get.mockResolvedValue(bootstrapState(null, 20))
+
+    const skipHook = renderHook(() => useSkip(), { wrapper })
+    await act(async () => await skipHook.result.current.mutate(7))
+
+    expect(protectedRollMutationApi.skip).toHaveBeenCalledTimes(1)
+    expect(skipHook.result.current.isError).toBe(false)
+  })
+
   it('tracks and rethrows ordinary failures', async () => {
     protectedRollMutationApi.skip.mockRejectedValueOnce(new Error('skip failed'))
     const skip = renderHook(() => useSkip(), { wrapper })

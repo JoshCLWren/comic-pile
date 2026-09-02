@@ -131,6 +131,8 @@ async def build_session_response(
         snapshot_count: Pre-computed snapshot count (skips COUNT query).
         snoozed_threads: Pre-fetched snoozed thread info (skips snoozed thread query).
         snoozed_thread_ids: Pre-fetched snoozed thread IDs (avoids expired session read).
+        skipped_threads: Pre-fetched skipped thread info (skips skipped thread query).
+        skipped_thread_ids: Pre-fetched skipped thread IDs (avoids expired session read).
         correction: Structured correction result from the most recent Snooze.
 
     Returns:
