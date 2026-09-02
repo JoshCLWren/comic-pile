@@ -58,6 +58,8 @@ class Session(Base):
     )
     # Thread IDs temporarily excluded from roll selection during this session
     snoozed_thread_ids: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
+    # Thread IDs skipped for the current session (one-click skip during roll)
+    skipped_thread_ids: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
     # Browser-resolved IANA timezone captured once per active reading session
     timezone: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # Ephemeral session bandwidth state (Phase 2). Nullable so legacy sessions stay valid.

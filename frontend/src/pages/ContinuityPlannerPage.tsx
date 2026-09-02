@@ -5,12 +5,11 @@ import {
   ContinuityIssueSelector,
   ContinuityThreadSelector,
 } from '../components/continuity'
-import { continuityPlansApi, type ContinuityPlanNode, type ContinuityPlanNodeType } from '../services/api-continuity-plans'
+import { continuityPlansApi, type ContinuityPlanNode, type ContinuityPlanNodeType, type ContinuityPlanOrderingMode } from '../services/api-continuity-plans'
 import { dependencyGroupsApi, type DependencyGroup } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api'
 import PlanProjectionDialog from '../components/PlanProjectionDialog'
-import PlanReadinessPanel from '../components/PlanReadinessPanel'
 import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
 
@@ -134,7 +133,7 @@ function normalizePositions(nodeList: PlannerNode[]): PlannerNode[] {
 function buildPayload(name: string, lanes: PlannerLane[], nodeList: PlannerNode[]) {
   const normalized = normalizePositions(nodeList)
   const orderedLanes = [...lanes].sort((a, b) => a.order - b.order)
-  const orderingMode: import('../services/api-continuity-plans').ContinuityPlanOrderingMode =
+  const orderingMode: ContinuityPlanOrderingMode =
     orderedLanes.length === 1 ? 'strict_sequential' : 'informational'
   return {
     name: name.trim(),
@@ -163,6 +162,7 @@ export default function ContinuityPlannerPage() {
   const parsedId = id ? Number(id) : null
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
   const isInvalidRoute = id !== undefined && parsedId !== null && (!Number.isInteger(parsedId) || parsedId <= 0)
+
   const [name, setName] = useState(DEFAULT_PLAN_NAME)
   const [lanes, setLanes] = useState<PlannerLane[]>([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
   const [nodes, setNodes] = useState<PlannerNode[]>([])
@@ -184,7 +184,6 @@ export default function ContinuityPlannerPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isProjectionOpen, setIsProjectionOpen] = useState(false)
   const [laneSeq, setLaneSeq] = useState(0)
-  const [readinessRefreshKey, setReadinessRefreshKey] = useState(0)
   const [editingGateNodeId, setEditingGateNodeId] = useState<string | null>(null)
   const lastPlanId = typeof window === 'undefined' ? null : window.localStorage.getItem(LAST_PLAN_KEY)
   const issueRequestRef = useRef<AbortController | null>(null)
@@ -229,6 +228,7 @@ export default function ContinuityPlannerPage() {
           active && setIsLoading(false)
           return
         }
+
         if (!planId) {
           setSavedName(DEFAULT_PLAN_NAME)
           setSavedLanes([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
@@ -459,7 +459,6 @@ export default function ContinuityPlannerPage() {
       setSavedLanes(savedLanes)
       setSavedNodes(normalized)
       window.localStorage.setItem(LAST_PLAN_KEY, String(saved.id))
-      setReadinessRefreshKey((key) => key + 1)
       if (!planId) navigate(`/continuity-plans/${saved.id}`, { replace: true })
     } catch (error) {
       setSaveError(getConflictMessage(error, nodes))
@@ -494,11 +493,11 @@ export default function ContinuityPlannerPage() {
   }
 
   return (
-    <section className="space-y-5 pb-28" aria-labelledby="planner-heading">
+    <section className="space-y-6 pb-8" aria-labelledby="planner-heading">
       <header>
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-500">Continuity</p>
-        <h1 id="planner-heading" className="mt-1 text-3xl font-black text-stone-100">Sequential planner</h1>
-        <p className="mt-2 text-sm text-stone-400">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--theme-text-muted)]">Continuity</p>
+        <h1 id="planner-heading" className="mt-1 text-3xl font-black text-[var(--theme-text-primary)]">Sequential planner</h1>
+        <p className="mt-2 text-sm text-[var(--theme-text-muted)]">
           Arrange issues and crossovers in one or more parallel reading lanes. Saving creates only the continuity rules you chose.{' '}
           <GlossaryLink id="continuity-plan">Continuity Plan</GlossaryLink>,{' '}
           <GlossaryLink id="lane">Lane</GlossaryLink>, and{' '}
@@ -507,65 +506,72 @@ export default function ContinuityPlannerPage() {
       </header>
 
       {!planId && lastPlanId && (
-        <button type="button" onClick={() => navigate(`/continuity-plans/${lastPlanId}`)} className="min-h-11 rounded-xl border border-amber-700 px-4 font-bold text-amber-200">
+        <button type="button" onClick={() => navigate(`/continuity-plans/${lastPlanId}`)} className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]">
           Reopen last saved plan
         </button>
       )}
 
-      <label className="block text-xs font-bold uppercase tracking-widest text-stone-500">
+      <label className="block text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
         Plan name
-        <input value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className="mt-1 w-full rounded-xl border border-stone-700 bg-stone-950 px-3 py-3 text-stone-100" />
+        <input value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className="mt-1 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-3 text-[var(--theme-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--theme-focus-ring)]" />
       </label>
 
-      <div className="grid gap-4 rounded-2xl border border-stone-800 bg-stone-900/50 p-4 md:grid-cols-2">
-        <form onSubmit={addIssue} className="space-y-3" aria-label="Add an issue">
-          <h2 className="font-black text-stone-100">Add an issue</h2>
-          <ContinuityThreadSelector threads={threads} value={selectedThread} onChange={(thread) => void selectThread(thread)} label="Comic series" />
-          <ContinuityIssueSelector issues={issues} value={selectedIssue} onChange={setSelectedIssue} isLoading={isLoadingIssues} disabled={!selectedThread || orderedLanes.length === 0} error={issueLoadError} />
-          <button type="submit" disabled={!selectedIssue || orderedLanes.length === 0} className="min-h-11 w-full rounded-xl bg-amber-500 px-4 font-black text-stone-950 disabled:opacity-50">Add issue</button>
-          {orderedLanes.length === 0 && <p className="text-xs text-stone-500">Add a lane first to add issues.</p>}
-        </form>
-
-        <div className="space-y-3">
-          <h2 className="font-black text-stone-100">Add a crossover</h2>
-          <label className="block text-xs font-bold uppercase tracking-widest text-stone-500">
-            Crossover
-            <select value={selectedGroupId} onChange={(event) => setSelectedGroupId(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-stone-700 bg-stone-950 px-3 text-stone-100" disabled={orderedLanes.length === 0}>
-              <option value="">Select a crossover</option>
-              {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-            </select>
-          </label>
-          <button type="button" onClick={addCrossover} disabled={!selectedGroupId || orderedLanes.length === 0} className="min-h-11 w-full rounded-xl bg-violet-500 px-4 font-black text-stone-950 disabled:opacity-50">Add crossover</button>
-          {orderedLanes.length === 0 && <p className="text-xs text-stone-500">Add a lane first to add crossovers.</p>}
+      <section aria-labelledby="add-steps-heading" className="border-t border-[var(--theme-border)] pt-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="add-steps-heading" className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-primary)]">Add steps</h2>
+          <p className="text-xs text-[var(--theme-text-muted)]">
+            {orderedLanes.length === 0 ? 'Add a lane first' : `To ${orderedLanes.find((lane) => lane.id === targetLaneId)?.name ?? orderedLanes[0]?.name ?? 'lane'} · issue or crossover`}
+          </p>
         </div>
-      </div>
+        <div className="mt-4 grid gap-6 md:grid-cols-2 md:divide-x md:divide-[var(--theme-border)]">
+          <form onSubmit={addIssue} className="space-y-3 md:pr-6" aria-label="Add an issue">
+            <h3 className="text-sm font-bold text-[var(--theme-text-primary)]">Issue</h3>
+            <ContinuityThreadSelector threads={threads} value={selectedThread} onChange={(thread) => void selectThread(thread)} label="Comic series" />
+            <ContinuityIssueSelector issues={issues} value={selectedIssue} onChange={setSelectedIssue} isLoading={isLoadingIssues} disabled={!selectedThread || orderedLanes.length === 0} error={issueLoadError} />
+            <button type="submit" disabled={!selectedIssue || orderedLanes.length === 0} className="min-h-11 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-panel)] disabled:opacity-50">Add issue</button>
+            {orderedLanes.length === 0 && <p className="text-xs text-[var(--theme-text-muted)]">Add a lane first to add issues.</p>}
+          </form>
 
-      <section aria-labelledby="lanes-heading">
+          <div className="space-y-3 border-t border-[var(--theme-border)] pt-6 md:border-t-0 md:pt-0 md:pl-6">
+            <h3 className="text-sm font-bold text-[var(--theme-text-primary)]">Crossover</h3>
+            <label className="block text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
+              Crossover
+              <select value={selectedGroupId} onChange={(event) => setSelectedGroupId(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-[var(--theme-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--theme-focus-ring)]" disabled={orderedLanes.length === 0}>
+                <option value="">Select a crossover</option>
+                {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+              </select>
+            </label>
+            <button type="button" onClick={addCrossover} disabled={!selectedGroupId || orderedLanes.length === 0} className="min-h-11 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-panel)] disabled:opacity-50">Add crossover</button>
+            {orderedLanes.length === 0 && <p className="text-xs text-[var(--theme-text-muted)]">Add a lane first to add crossovers.</p>}
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="lanes-heading" className="border-t border-[var(--theme-border)] pt-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 id="lanes-heading" className="text-xl font-black text-stone-100">Reading lanes</h2>
-            <p className="text-xs text-stone-500">{orderedLanes.length} {orderedLanes.length === 1 ? 'lane' : 'lanes'} · {nodes.length} {nodes.length === 1 ? 'step' : 'steps'}</p>
+            <h2 id="lanes-heading" className="text-sm font-black uppercase tracking-widest text-[var(--theme-text-primary)]">Reading lanes</h2>
+            <p className="text-xs text-[var(--theme-text-muted)]">{orderedLanes.length} {orderedLanes.length === 1 ? 'lane' : 'lanes'} · {nodes.length} {nodes.length === 1 ? 'step' : 'steps'}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={addLane} className="min-h-11 rounded-xl border border-stone-700 px-3 font-bold text-stone-100">
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={addLane} className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-transparent px-3 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]">
               Add lane
             </button>
             {planId && (
-              <button type="button" onClick={() => setIsProjectionOpen(true)} className="min-h-11 rounded-xl border border-amber-700 px-4 font-bold text-amber-200">
+              <button type="button" onClick={() => setIsProjectionOpen(true)} className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-transparent px-3 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]">
                 Project to reading order
               </button>
             )}
-            {statusText && <p role="status" className={isDirty ? 'text-amber-300' : 'text-emerald-300'}>{statusText}</p>}
           </div>
         </div>
 
         {orderedLanes.length > 1 && (
-          <label className="mt-3 block text-xs font-bold uppercase tracking-widest text-stone-500 md:hidden">
+          <label className="mt-3 block text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)] md:hidden">
             Viewing lane
             <select
               value={targetLaneId}
               onChange={(event) => setActiveLaneId(event.target.value)}
-              className="mt-1 min-h-11 w-full rounded-xl border border-stone-700 bg-stone-950 px-3 text-stone-100"
+              className="mt-1 min-h-11 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-[var(--theme-text-primary)]"
             >
               {orderedLanes.map((lane) => (
                 <option key={lane.id} value={lane.id}>{lane.name}</option>
@@ -574,7 +580,7 @@ export default function ContinuityPlannerPage() {
           </label>
         )}
 
-        <div className="mt-3 space-y-4">
+        <div className="mt-4 space-y-6">
           {orderedLanes.map((lane) => {
             const laneNodes = nodes
               .filter((node) => node.lane_id === lane.id)
@@ -584,7 +590,7 @@ export default function ContinuityPlannerPage() {
               <div
                 key={lane.id}
                 data-testid={`lane-${lane.id}`}
-                className={`rounded-2xl border border-stone-800 bg-stone-900/40 p-4 ${isMobileHidden ? 'hidden' : 'block'} md:block`}
+                className={`${isMobileHidden ? 'hidden' : 'block'} space-y-3 border-t border-[var(--theme-border)] pt-4 md:block`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <input
@@ -592,7 +598,7 @@ export default function ContinuityPlannerPage() {
                     onChange={(event) => renameLane(lane.id, event.target.value)}
                     maxLength={120}
                     aria-label={`Lane ${lane.name} name`}
-                    className="min-w-[10rem] flex-1 rounded-xl border border-stone-700 bg-stone-950 px-3 py-2 font-bold text-stone-100"
+                    className="min-w-[10rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2 text-sm font-bold text-[var(--theme-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--theme-focus-ring)]"
                   />
                   <div className="flex gap-1">
                     <button
@@ -600,7 +606,7 @@ export default function ContinuityPlannerPage() {
                       onClick={() => moveLane(lane.id, -1)}
                       disabled={lane.order === 0}
                       aria-label={`Move lane ${lane.name} earlier`}
-                      className="min-h-9 min-w-9 rounded-lg border border-stone-700 disabled:opacity-30"
+                      className="min-h-9 min-w-9 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-muted)] disabled:opacity-30"
                     >
                       ↑
                     </button>
@@ -609,7 +615,7 @@ export default function ContinuityPlannerPage() {
                       onClick={() => moveLane(lane.id, 1)}
                       disabled={lane.order === orderedLanes.length - 1}
                       aria-label={`Move lane ${lane.name} later`}
-                      className="min-h-9 min-w-9 rounded-lg border border-stone-700 disabled:opacity-30"
+                      className="min-h-9 min-w-9 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-muted)] disabled:opacity-30"
                     >
                       ↓
                     </button>
@@ -619,40 +625,40 @@ export default function ContinuityPlannerPage() {
                       disabled={laneNodeCount(nodes, lane.id) > 0}
                       aria-label={`Remove lane ${lane.name}`}
                       title={laneNodeCount(nodes, lane.id) > 0 ? 'Move all steps out of this lane before removing it' : undefined}
-                      className="min-h-9 rounded-lg border border-red-900 px-3 text-red-300 disabled:opacity-30"
+                      className="min-h-9 rounded-lg px-3 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-danger)] disabled:opacity-30"
                     >
                       Remove
                     </button>
                   </div>
                 </div>
                 {laneNodeCount(nodes, lane.id) > 0 ? (
-                  <ol className="mt-3 grid gap-2">
+                  <ol className="grid gap-2">
                     {laneNodes.map((node) => {
                       const index = laneNodes.findIndex((candidate) => candidate.id === node.id)
                       const otherLanes = orderedLanes.filter((candidate) => candidate.id !== lane.id)
                       return (
-                        <li key={node.id} data-testid={`lane-item-${globalIndex.get(node.id)}`} className="flex items-center gap-3 rounded-2xl border border-stone-700 bg-stone-900 p-3">
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-800 font-black text-amber-300">{index + 1}</span>
+                        <li key={node.id} data-testid={`lane-item-${globalIndex.get(node.id)}`} className="flex items-center gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--theme-bg-panel)] font-black text-[var(--theme-text-muted)]">{index + 1}</span>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate font-bold text-stone-100">{node.label}</p>
-                            <p className="text-xs uppercase tracking-wider text-stone-500">{node.node_type}</p>
+                            <p className="truncate font-bold text-[var(--theme-text-primary)]">{node.label}</p>
+                            <p className="text-xs uppercase tracking-wider text-[var(--theme-text-dim)]">{node.node_type}</p>
                             {(node.is_checkpoint || (node.convergence_gate && node.convergence_gate.length > 0)) && (
                               <div className="mt-1 flex flex-wrap gap-1">
                                 {node.is_checkpoint && (
-                                  <span className="inline-flex items-center rounded-full border border-amber-600/50 bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                                  <span className="inline-flex items-center rounded-full border border-[var(--theme-comic-accent)]/50 bg-[var(--theme-bg-panel)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--theme-comic-accent)]">
                                     Checkpoint
                                   </span>
                                 )}
                                 {node.convergence_gate && node.convergence_gate.length > 0 && (
-                                  <span className="inline-flex items-center rounded-full border border-violet-600/50 bg-violet-950/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-300">
+                                  <span className="inline-flex items-center rounded-full border border-[var(--theme-continuity-accent)]/50 bg-[var(--theme-bg-panel)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--theme-continuity-accent)]">
                                     Convergence ({node.convergence_gate.length})
                                   </span>
                                 )}
                               </div>
                             )}
                             {editingGateNodeId === node.id && (
-                              <div className="mt-2 w-full rounded-xl border border-violet-800/50 bg-violet-950/20 p-3" data-testid={`convergence-editor-${node.id}`}>
-                                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-violet-300">
+                              <div className="mt-2 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3" data-testid={`convergence-editor-${node.id}`}>
+                                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">
                                   Wait for these steps before reading:
                                 </p>
                                 <div className="grid gap-1">
@@ -675,17 +681,17 @@ export default function ContinuityPlannerPage() {
                                       return (
                                         <label
                                           key={other.id}
-                                          className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm ${isSelected ? 'bg-violet-900/40 text-violet-200' : 'text-stone-400 hover:bg-stone-800/50'}`}
+                                          className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm ${isSelected ? 'bg-[var(--theme-bg-panel)] text-[var(--theme-text-primary)]' : 'text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-panel)]'}`}
                                         >
                                           <input
                                             type="checkbox"
                                             checked={isSelected}
                                             onChange={() => toggleConvergenceGate(node.id, other.id)}
-                                            className="accent-violet-500"
+                                            className="accent-[var(--theme-continuity-accent)]"
                                           />
                                           <span className="truncate">{other.label}</span>
                                           {otherLane && (
-                                            <span className="ml-auto shrink-0 text-[10px] text-stone-500">{otherLane.name}</span>
+                                            <span className="ml-auto shrink-0 text-[10px] text-[var(--theme-text-dim)]">{otherLane.name}</span>
                                           )}
                                         </label>
                                       )
@@ -694,7 +700,7 @@ export default function ContinuityPlannerPage() {
                                 <button
                                   type="button"
                                   onClick={() => setEditingGateNodeId(null)}
-                                  className="mt-2 min-h-9 rounded-lg border border-stone-700 px-3 text-xs font-bold text-stone-300"
+                                  className="mt-2 min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]"
                                 >
                                   Done
                                 </button>
@@ -708,7 +714,7 @@ export default function ContinuityPlannerPage() {
                                 onClick={() => toggleCheckpoint(node.id)}
                                 title={node.is_checkpoint ? 'Remove checkpoint' : 'Mark as checkpoint (blocks next step)'}
                                 aria-label={node.is_checkpoint ? `Remove checkpoint from ${node.label}` : `Mark ${node.label} as checkpoint`}
-                                className={`min-h-9 rounded-lg border px-2 text-[10px] font-bold uppercase tracking-wider ${node.is_checkpoint ? 'border-amber-600 bg-amber-950/40 text-amber-300' : 'border-stone-700 text-stone-400 hover:border-amber-700 hover:text-amber-300'}`}
+                                className={`min-h-9 rounded-lg border px-2 text-[10px] font-bold uppercase tracking-wider ${node.is_checkpoint ? 'border-[var(--theme-comic-accent)] bg-[var(--theme-bg-panel)] text-[var(--theme-comic-accent)]' : 'border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]'}`}
                               >
                                 {node.is_checkpoint ? '⚑' : '⚐'}
                               </button>
@@ -719,7 +725,7 @@ export default function ContinuityPlannerPage() {
                                 onClick={() => setEditingGateNodeId(editingGateNodeId === node.id ? null : node.id)}
                                 title={editingGateNodeId === node.id ? 'Close convergence editor' : 'Edit convergence gate'}
                                 aria-label={editingGateNodeId === node.id ? `Close convergence editor for ${node.label}` : `Edit convergence gate for ${node.label}`}
-                                className={`min-h-9 rounded-lg border px-2 text-[10px] font-bold uppercase tracking-wider ${(node.convergence_gate ?? []).length > 0 ? 'border-violet-600 bg-violet-950/40 text-violet-300' : 'border-stone-700 text-stone-400 hover:border-violet-700 hover:text-violet-300'}`}
+                                className={`min-h-9 rounded-lg border px-2 text-[10px] font-bold uppercase tracking-wider ${(node.convergence_gate ?? []).length > 0 ? 'border-[var(--theme-continuity-accent)] bg-[var(--theme-bg-panel)] text-[var(--theme-continuity-accent)]' : 'border-[var(--theme-border)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]'}`}
                               >
                                 ⇄
                               </button>
@@ -729,7 +735,7 @@ export default function ContinuityPlannerPage() {
                                 aria-label={`Move ${node.label} to another lane`}
                                 value={node.lane_id}
                                 onChange={(event) => moveToLane(node.id, event.target.value)}
-                                className="min-h-11 rounded-lg border border-stone-700 bg-stone-950 px-2 text-stone-100"
+                                className="min-h-11 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 text-sm text-[var(--theme-text-primary)]"
                               >
                                 <option value={node.lane_id}>In {lane.name}</option>
                                 {otherLanes.map((target) => (
@@ -737,16 +743,16 @@ export default function ContinuityPlannerPage() {
                                 ))}
                               </select>
                             )}
-                            <button type="button" onClick={() => moveInLane(node.id, -1)} disabled={index === 0} aria-label={`Move ${node.label} earlier`} className="min-h-11 min-w-11 rounded-lg border border-stone-700 disabled:opacity-30">↑</button>
-                            <button type="button" onClick={() => moveInLane(node.id, 1)} disabled={index === laneNodes.length - 1} aria-label={`Move ${node.label} later`} className="min-h-11 min-w-11 rounded-lg border border-stone-700 disabled:opacity-30">↓</button>
-                            <button type="button" onClick={() => removeNode(node.id)} aria-label={`Remove ${node.label}`} className="min-h-11 rounded-lg border border-red-900 px-3 text-red-300">Remove</button>
+                            <button type="button" onClick={() => moveInLane(node.id, -1)} disabled={index === 0} aria-label={`Move ${node.label} earlier`} className="min-h-11 min-w-11 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-muted)] disabled:opacity-30">↑</button>
+                            <button type="button" onClick={() => moveInLane(node.id, 1)} disabled={index === laneNodes.length - 1} aria-label={`Move ${node.label} later`} className="min-h-11 min-w-11 rounded-lg border border-[var(--theme-border)] text-[var(--theme-text-muted)] disabled:opacity-30">↓</button>
+                            <button type="button" onClick={() => removeNode(node.id)} aria-label={`Remove ${node.label}`} className="min-h-11 rounded-lg px-3 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-danger)]">Remove</button>
                           </div>
                         </li>
                       )
                     })}
                   </ol>
                 ) : (
-                  <p className="mt-3 rounded-2xl border border-dashed border-stone-700 p-4 text-center text-stone-500">No steps in this lane yet.</p>
+                  <p className="rounded-xl border border-dashed border-[var(--theme-border)] p-4 text-center text-sm text-[var(--theme-text-dim)]">No steps in this lane yet.</p>
                 )}
               </div>
             )
@@ -754,13 +760,14 @@ export default function ContinuityPlannerPage() {
         </div>
       </section>
 
-      <PlanReadinessPanel planId={planId} refreshKey={readinessRefreshKey} />
+      {saveError && <p role="alert" className="rounded-xl border border-[var(--theme-danger)] bg-[var(--theme-bg-panel)] p-3 text-[var(--theme-danger)]">{saveError}</p>}
 
-      {saveError && <p role="alert" className="rounded-xl border border-red-800 bg-red-950/30 p-3 text-red-200">{saveError}</p>}
-
-      <div className="sticky bottom-16 flex gap-3 rounded-2xl border border-stone-800 bg-stone-950/95 p-3 backdrop-blur md:bottom-24">
-        <button type="button" onClick={cancel} disabled={!isDirty || isSaving} className="min-h-11 flex-1 rounded-xl border border-stone-700 font-bold disabled:opacity-40">Cancel changes</button>
-        <button type="button" onClick={() => void save()} disabled={!isDirty || isSaving} className="min-h-11 flex-1 rounded-xl bg-amber-500 font-black text-stone-950 disabled:opacity-40">{isSaving ? 'Saving…' : 'Save plan'}</button>
+      <div className="flex flex-col-reverse gap-3 border-t border-[var(--theme-border)] pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <button type="button" onClick={cancel} disabled={!isDirty || isSaving} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-5 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] disabled:opacity-40">Cancel changes</button>
+        <div className="flex items-center gap-3 sm:ml-auto">
+          {statusText && <p role="status" className={`text-xs font-bold ${isDirty ? 'text-[var(--theme-text-muted)]' : 'text-emerald-300'}`} aria-live="polite">{statusText}</p>}
+          <button type="button" onClick={() => void save()} disabled={!isDirty || isSaving} className="min-h-11 min-w-[11rem] rounded-xl bg-[var(--theme-primary-action)] px-8 font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-40 sm:flex-none">{isSaving ? 'Saving…' : 'Save plan'}</button>
+        </div>
       </div>
 
       {planId && (

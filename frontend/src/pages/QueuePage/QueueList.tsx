@@ -57,7 +57,7 @@ export function QueueList({
           id="queue-container"
           role="list"
           aria-label="Thread queue"
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
+          className="overflow-hidden rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] divide-y divide-[var(--theme-border)]"
         >
           {filteredThreads.map((thread, index) => renderItem(thread, index))}
         </div>

@@ -79,6 +79,8 @@ const bootstrapWithRecovery = {
   roll_pool: [],
   snoozed_threads: [],
   snoozed_count: 0,
+  skipped_thread_ids: [],
+  skipped_threads: [],
   blocked_count: 1,
   blocked_threads: [],
   stale_thread_count: 0,

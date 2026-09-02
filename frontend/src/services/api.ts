@@ -572,6 +572,11 @@ export const snoozeApi = {
   unsnooze: (threadId: number) => api.post<void>(`/v1/snooze/${threadId}/unsnooze`),
 }
 
+export const skipApi = {
+  skip: () => api.post<void>('/v1/roll/skip/'),
+  unskip: (threadId: number) => api.post<void>(`/v1/roll/skip/${threadId}/unskip`),
+}
+
 export const migrationApi = {
   migrateThread: (threadId: number, data: { last_issue_read: number; total_issues: number }) =>
     api.post<Thread, { last_issue_read: number; total_issues: number }>(`/v1/threads/${threadId}:migrateToIssues`, data),

@@ -47,6 +47,8 @@ function bootstrapWith(
     roll_pool: [],
     snoozed_threads: [],
     snoozed_count: 0,
+    skipped_thread_ids: [],
+    skipped_threads: [],
     blocked_count: blockedThreads.length,
     blocked_threads: blockedThreads,
     stale_thread_count: 0,

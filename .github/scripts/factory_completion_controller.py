@@ -103,6 +103,7 @@ def cooldown_seconds(outcome: str | None) -> int:
         return 0
     if normalized in {
         "model_unavailable",
+        "model_retired_410",
         "model_policy_violation",
         "model missing",
     } or "model missing" in normalized:
@@ -283,6 +284,7 @@ def worker_health_state(
         return "healthy"
     if normalized in {
         "model_unavailable",
+        "model_retired_410",
         "model_policy_violation",
         "model missing",
     } or "model missing" in normalized:

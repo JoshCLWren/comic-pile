@@ -238,6 +238,8 @@ class SessionResponse(BaseModel):
     snapshot_count: int
     snoozed_thread_ids: list[int] = []
     snoozed_threads: list[SnoozedThreadInfo] = []
+    skipped_thread_ids: list[int] = []
+    skipped_threads: list[SnoozedThreadInfo] = []
     pending_thread_id: int | None = None
     timezone: str | None = None
     reading_bandwidth: str | None = None

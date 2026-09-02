@@ -91,6 +91,29 @@ def test_opencode_uses_project_available_cli_catalog() -> None:
     assert result.candidates[0].discovered_by == "opencode_models"
 
 
+def test_omniroute_exposes_only_validated_free_cascade() -> None:
+    """OmniRoute contributes the validated free cascade."""
+    result = CANDIDATES.discover(
+        "omniroute-free",
+        json.dumps(
+            {
+                "data": [
+                    {"id": "free-cascade-small"},
+                    {"id": "auto/best-coding"},
+                    {"id": "provider/backing-model"},
+                ]
+            }
+        ),
+    )
+
+    assert result.status == "available"
+    assert [candidate.model for candidate in result.candidates] == [
+        "free-cascade-small"
+    ]
+    assert result.candidates[0].runtime_model == "omniroute/free-cascade-small"
+
+
+
 def test_invalid_catalog_fails_closed() -> None:
     """Malformed catalog responses produce no executable candidates."""
     result = CANDIDATES.discover("openrouter-free", "service unavailable")

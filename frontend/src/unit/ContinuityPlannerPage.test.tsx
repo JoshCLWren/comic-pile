@@ -1674,4 +1674,82 @@ describe('ContinuityPlannerPage', () => {
     expect(screen.getByRole('checkbox', { name: /New Gods #2/i })).toBeInTheDocument()
     expect(screen.queryByRole('checkbox', { name: /New Gods Series/i })).not.toBeInTheDocument()
   })
+
+  it('sorts convergence targets across lanes including missing lanes', async () => {
+    mocks.get.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Convergence sort plan',
+      ordering_mode: 'informational',
+      lanes: [
+        { id: 'main', name: 'Main Lane', order: 0 },
+        { id: 'lane-2', name: 'Second Lane', order: 1 },
+      ],
+      nodes: [
+        { id: 'target-1', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0, label: 'Main Lane Issue' },
+        { id: 'target-2', node_type: 'issue', ref_id: 41, lane_id: 'lane-2', position: 0, label: 'Second Lane Issue' },
+        { id: 'target-3', node_type: 'crossover', ref_id: 8, lane_id: 'ghost-lane', position: 0, label: 'Ghost Lane Crossover' },
+        { id: 'source', node_type: 'issue', ref_id: 42, lane_id: 'main', position: 1, label: 'Source Node' },
+      ],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/12']}>
+        <Routes>
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Source Node')).toBeVisible())
+
+    const convergenceButton = screen.getByRole('button', { name: /Edit convergence gate for Source Node/i })
+    await user.click(convergenceButton)
+
+    expect(screen.getByTestId('convergence-editor-source')).toBeVisible()
+
+    const checkboxes = screen.getAllByRole('checkbox')
+    expect(checkboxes).toHaveLength(3)
+
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+  })
+
+  it('opens and closes the plan projection dialog', async () => {
+    mocks.get.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Projection plan',
+      ordering_mode: 'strict_sequential',
+      lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
+      nodes: [
+        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0, label: 'Mister Miracle #1' },
+      ],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/12']}>
+        <Routes>
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Mister Miracle #1')).toBeVisible())
+
+    const projectButton = screen.getByRole('button', { name: 'Project to reading order' })
+    await user.click(projectButton)
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeVisible())
+    // Modal content is portaled to document.body
+    expect(await screen.findByText(/Projection plan/)).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Close modal' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
 })
