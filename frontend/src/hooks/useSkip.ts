@@ -28,11 +28,13 @@ export function useSkip() {
     if (refreshRequest.current) return refreshRequest.current
 
     const request = (async () => {
+      let result = false
       for (let attempt = 1; attempt <= SKIP_REFRESH_ATTEMPTS; attempt += 1) {
         try {
           await fetchAndPublishRollBootstrap()
           setRefreshError(null)
-          return true
+          result = true
+          return result
         } catch (error: unknown) {
           if (attempt === SKIP_REFRESH_ATTEMPTS) {
             setRefreshError(error)
@@ -40,10 +42,11 @@ export function useSkip() {
               'Skip saved but authoritative Roll state failed to refresh:',
               getApiErrorDetail(error),
             )
-            return false
+            result = false
           }
         }
       }
+      return result
     })()
 
     refreshRequest.current = request
