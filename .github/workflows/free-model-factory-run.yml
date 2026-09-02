@@ -638,12 +638,26 @@ jobs:
             echo 'OmniRoute routing summary unavailable: gateway credentials missing' >&2
             exit 0
           }
+          gateway_base_url="${OMNIROUTE_BASE_URL%/}"
+          case "$gateway_base_url" in
+            */v1) gateway_base_url="${gateway_base_url%/v1}" ;;
+          esac
           analytics="$RUNNER_TEMP/omniroute-analytics.json"
           code="$(curl --silent --show-error --output "$analytics" --write-out '%{http_code}' \
             --connect-timeout 5 --max-time 30 \
             --header "Authorization: Bearer ${OMNIROUTE_API_KEY}" \
-            "${OMNIROUTE_BASE_URL%/}/api/usage/analytics?period=session" || true)"
-          [[ "$code" == 200 ]] || { echo "OmniRoute routing summary unavailable (HTTP ${code})" >&2; exit 0; }
+            "${gateway_base_url}/api/usage/analytics?period=session" || true)"
+          if [[ "$code" != 200 ]]; then
+            message="OmniRoute routing summary unavailable (HTTP ${code})"
+            echo "::warning::$message"
+            echo "$message" >&2
+            {
+              echo '### OmniRoute routing summary'
+              echo
+              echo "> ⚠️ ${message}"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           summary="$(jq -r '.summary | "requests=\(.totalRequests) successful=\(.successfulRequests) success_rate_pct=\(.successRatePct) avg_latency_ms=\(.avgLatencyMs)"' "$analytics")"
           echo "OmniRoute routing summary (session-wide): ${summary}"
           {
