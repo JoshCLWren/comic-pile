@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
@@ -43,7 +43,6 @@ const bootstrapData: any = {
   skipped_thread_ids: [],
   skipped_threads: [],
 }
-const threadData: any[] = [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }]
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
 vi.mock('../contexts/useBugReportRestore', () => ({
