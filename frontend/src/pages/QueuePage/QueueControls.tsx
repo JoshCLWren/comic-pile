@@ -106,13 +106,13 @@ function QueueControlsInner({
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
-              if (debounceRef.current) clearTimeout(debounceRef.current)
+              clearTimeout(debounceRef.current as ReturnType<typeof setTimeout> | undefined)
               onSearchChange(localValue)
             }
           }}
           onBlur={() => {
             if (localValue !== searchQuery) {
-              if (debounceRef.current) clearTimeout(debounceRef.current)
+              clearTimeout(debounceRef.current as ReturnType<typeof setTimeout> | undefined)
               onSearchChange(localValue)
             }
           }}
