@@ -167,12 +167,18 @@ export default function CrossoverDetailPage() {
             <p className="text-sm text-stone-500">ID: {crossover.id} • {crossover.memberships.length} member{crossover.memberships.length !== 1 ? 's' : ''}</p>
           </div>
           <div className="flex gap-2">
-            <Link
-              to={'/threads/' + (nextUnread?.thread?.id ?? sortedMembers[0]?.thread?.id)}
-              className="rounded-lg bg-amber-500 px-4 py-2 font-bold text-stone-950 text-sm"
-            >
-              Continue Reading
-            </Link>
+            {(nextUnread?.thread?.id ?? sortedMembers[0]?.thread?.id) ? (
+              <Link
+                to={'/threads/' + (nextUnread?.thread?.id ?? sortedMembers[0]?.thread?.id)}
+                className="rounded-lg bg-amber-500 px-4 py-2 font-bold text-stone-950 text-sm"
+              >
+                Continue Reading
+              </Link>
+            ) : (
+              <span className="rounded-lg bg-stone-800 px-4 py-2 text-sm font-medium text-stone-500">
+                No readable issue
+              </span>
+            )}
           </div>
         </div>
 
@@ -256,12 +262,18 @@ export default function CrossoverDetailPage() {
                   </p>
                 </div>
               </div>
-              <Link
-                to={'/threads/' + nextUnread.thread?.id}
-                className="rounded-lg bg-amber-500 px-3 py-1.5 font-bold text-stone-950 text-sm"
-              >
-                Read Now
-              </Link>
+              {nextUnread.thread?.id ? (
+                <Link
+                  to={'/threads/' + nextUnread.thread.id}
+                  className="rounded-lg bg-amber-500 px-3 py-1.5 font-bold text-stone-950 text-sm"
+                >
+                  Read Now
+                </Link>
+              ) : (
+                <span className="rounded-lg bg-stone-800 px-3 py-1.5 text-sm font-medium text-stone-500">
+                  Unresolved
+                </span>
+              )}
             </div>
           </div>
         )}
