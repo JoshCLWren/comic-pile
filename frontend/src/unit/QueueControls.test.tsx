@@ -84,7 +84,6 @@ describe('QueueControls', () => {
   })
 
   it('does nothing on Enter when the field is empty (non-Enter branch coverage)', async () => {
-    const user = userEvent.setup()
     render(<QueueControls {...baseProps} />)
     const input = screen.getByPlaceholderText('Search...')
 
