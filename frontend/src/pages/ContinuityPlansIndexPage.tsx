@@ -64,7 +64,7 @@ export default function ContinuityPlansIndexPage() {
       </header>
 
       {!plans || plans.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-stone-700 p-8 text-center">
+        <div className="text-center py-8">
           <p className="text-lg font-bold text-stone-100">No reading plans yet</p>
           <p className="mt-2 text-sm text-stone-500">Create your first plan from the sequential planner.</p>
           <button
