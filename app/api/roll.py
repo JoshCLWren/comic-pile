@@ -627,6 +627,17 @@ async def skip_thread(
             if sid in threads_by_id
         ]
 
+    # Pre-fetch skipped thread info for ALL skipped threads before commit
+    pre_skipped_threads: list[SnoozedThreadInfo] = []
+    if skipped_ids:
+        skipped_result = await db.execute(select(Thread).where(Thread.id.in_(skipped_ids)))
+        threads_by_id = {t.id: t for t in skipped_result.scalars().all()}
+        pre_skipped_threads = [
+            SnoozedThreadInfo(id=sid, title=threads_by_id[sid].title)
+            for sid in skipped_ids
+            if sid in threads_by_id
+        ]
+
     # Pre-fetch the pending (skipped) thread info before commit to avoid MissingGreenlet
     pre_active_thread_info = None
     if pending_thread_id is not None:
@@ -687,12 +698,7 @@ async def skip_thread(
         snoozed_thread_ids=session_snoozed_thread_ids,
         snoozed_threads=pre_snoozed_threads,
         skipped_thread_ids=skipped_ids,
-        skipped_threads=[
-            SnoozedThreadInfo(
-                id=pending_thread_id,
-                title=pre_active_thread_title or "",
-            )
-        ] if pending_thread_id is not None else [],
+        skipped_threads=pre_skipped_threads,
         pending_thread_id=None,  # Cleared by skip
         timezone=session_timezone,
         reading_bandwidth=session_reading_bandwidth,
