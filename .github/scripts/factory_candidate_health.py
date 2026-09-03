@@ -59,6 +59,10 @@ TRANSIENT_MODEL_OUTCOMES = {
     # Historical alias. New classifiers emit provider_failure instead.
     "model_interruption",
 }
+# OmniRoute is the GitHub execution gateway, but it exposes independent model
+# routes. Keep throttle/failure evidence scoped to the affected route so one
+# busy upstream model does not suppress the rest of the fleet.
+MODEL_SCOPED_PROVIDERS = {"omniroute-free"}
 
 
 @dataclass(frozen=True)
@@ -213,6 +217,15 @@ def _model_state(
             return "cooling"
         return "degraded"
     if item.outcome in PROVIDER_FAILURE_OUTCOMES:
+        if provider in MODEL_SCOPED_PROVIDERS:
+            cooldown = (
+                RATE_LIMIT_COOLDOWN_SECONDS
+                if item.outcome in {"provider_throttle", "provider_unavailable", "provider_throttled"}
+                else FAILURE_COOLDOWN_SECONDS
+            )
+            if now_epoch < item.updated + cooldown:
+                return "cooling"
+            return "degraded"
         return "unknown"
     return "unknown"
 
@@ -235,7 +248,11 @@ def rank_candidates(
         if not all((provider, model, runtime_model, discovered_by)):
             continue
 
-        provider_state = _provider_state(provider, attempts, now_epoch=now_epoch)
+        provider_state = (
+            "unknown"
+            if provider in MODEL_SCOPED_PROVIDERS
+            else _provider_state(provider, attempts, now_epoch=now_epoch)
+        )
         model_state = _model_state(
             provider,
             model,

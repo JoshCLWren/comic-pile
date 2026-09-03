@@ -106,6 +106,62 @@ def test_preferred_provider_lane_uses_usable_provider_before_global_rank() -> No
     assert result.selected.provider == "omniroute-free"
 
 
+def test_omniroute_throttle_is_scoped_to_one_model_route() -> None:
+    """A throttled OmniRoute model must not suppress alternate gateway routes."""
+    candidates = [
+        {
+            "provider": "omniroute-free",
+            "model": "free-cascade-small",
+            "runtime_model": "omniroute/free-cascade-small",
+            "discovered_by": "provider_catalog",
+        },
+        {
+            "provider": "omniroute-free",
+            "model": "free-cascade-big",
+            "runtime_model": "omniroute/free-cascade-big",
+            "discovered_by": "provider_catalog",
+        },
+    ]
+    result = HEALTH.select_candidate(
+        candidates,
+        [evidence("free-cascade-small", "provider_throttle", provider="omniroute-free")],
+        worker=45,
+        now_epoch=NOW,
+        preferred_provider="omniroute-free",
+    )
+
+    assert result.selected is not None
+    assert result.selected.model == "free-cascade-big"
+
+
+def test_omniroute_410_still_retires_only_that_model() -> None:
+    """Permanent retirement remains model-specific behind the shared gateway."""
+    candidates = [
+        {
+            "provider": "omniroute-free",
+            "model": "free-cascade-small",
+            "runtime_model": "omniroute/free-cascade-small",
+            "discovered_by": "provider_catalog",
+        },
+        {
+            "provider": "omniroute-free",
+            "model": "free-cascade-big",
+            "runtime_model": "omniroute/free-cascade-big",
+            "discovered_by": "provider_catalog",
+        },
+    ]
+    result = HEALTH.select_candidate(
+        candidates,
+        [evidence("free-cascade-small", "model_retired_410", provider="omniroute-free")],
+        worker=45,
+        now_epoch=NOW,
+        preferred_provider="omniroute-free",
+    )
+
+    assert result.selected is not None
+    assert result.selected.model == "free-cascade-big"
+
+
 def test_no_work_keeps_candidate_healthy() -> None:
     """Canonical no_work proves executor health without requiring a diff."""
     result = HEALTH.select_candidate(
