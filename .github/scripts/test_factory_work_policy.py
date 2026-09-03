@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression coverage for completion-first factory queue policy."""
+"""Regression coverage for completion-aware factory queue policy."""
 from __future__ import annotations
 
 import unittest
@@ -51,8 +51,8 @@ def issue(number: int, *extra_labels: str) -> dict[str, object]:
     }
 
 
-class CompletionFirstOrderingTests(unittest.TestCase):
-    def test_conflicted_pr_beats_ci_changes_and_review(self) -> None:
+class CompletionAwareOrderingTests(unittest.TestCase):
+    def test_review_first_worker_prioritizes_review_before_repair(self) -> None:
         candidates = [
             Candidate("pr", 1, 3, 0, "", stage="factory:review"),
             Candidate("pr", 2, 3, 0, "", stage="factory:changes-requested"),
@@ -61,7 +61,7 @@ class CompletionFirstOrderingTests(unittest.TestCase):
         ]
         self.assertEqual(
             [item.number for item in order_candidates_for_worker(candidates, "10")],
-            [4, 3, 2, 1],
+            [1, 4, 3, 2],
         )
 
     def test_build_candidates_marks_github_conflict_state(self) -> None:
@@ -109,7 +109,7 @@ class CompletionFirstOrderingTests(unittest.TestCase):
         ]
         self.assertEqual(order_candidates_for_worker(candidates, "10")[0].number, 2)
 
-    def test_pr_stage_order_is_ci_then_changes_then_review(self) -> None:
+    def test_review_first_worker_orders_review_then_ci_then_changes(self) -> None:
         candidates = [
             Candidate("pr", 1, 3, 0, "", stage="factory:review"),
             Candidate("pr", 2, 3, 0, "", stage="factory:changes-requested"),
@@ -117,15 +117,15 @@ class CompletionFirstOrderingTests(unittest.TestCase):
         ]
         self.assertEqual(
             [item.number for item in order_candidates_for_worker(candidates, "10")],
-            [3, 2, 1],
+            [1, 3, 2],
         )
 
-    def test_urgent_issue_still_waits_behind_repair_work(self) -> None:
+    def test_non_review_worker_preserves_fresh_issue_capacity(self) -> None:
         candidates = [
             Candidate("issue", 1, 1, 4, "", stage="factory:building"),
             Candidate("pr", 2, 5, 0, "", stage="factory:changes-requested"),
         ]
-        self.assertEqual(order_candidates_for_worker(candidates, "9")[0].number, 2)
+        self.assertEqual(order_candidates_for_worker(candidates, "9")[0].number, 1)
 
     def test_producer_cannot_semantically_review_own_pr(self) -> None:
         candidates = [

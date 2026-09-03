@@ -4,6 +4,11 @@ on:
   pull_request_target:
     types: [opened, reopened, closed]
   workflow_dispatch:
+  schedule:
+    # PR events cannot repair issues whose last canonical PR was closed before
+    # this reconciler existed. Periodically recompute every open factory issue
+    # so stale ready/review/building labels cannot permanently block intake.
+    - cron: '*/15 * * * *'
 
 permissions:
   contents: read
