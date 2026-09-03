@@ -25,7 +25,7 @@ BLOCKED_LABELS = {'factory:blocked', 'ralph-status:blocked', 'wontfix', 'invalid
 TRUSTED_ASSOCIATIONS = {'OWNER', 'MEMBER', 'COLLABORATOR'}
 TRUSTED_FACTORY_APP_SLUGS = {'github-actions'}
 REQUIRED_CHECK_FAILURE_STATES = frozenset({'CANCELLED', 'ERROR', 'FAILURE', 'STALE', 'STARTUP_FAILURE', 'TIMED_OUT'})
-NO_DIFF_ATTEMPT_RE = re.compile(r'<!--\s*comic-pile-factory-claim-released-v3:issue-(?P<issue>\d+):(?P<worker>[^:>\s]+):(?P<epoch>\d{10}):no-persisted-change-handoff\s*-->')
+NO_DIFF_ATTEMPT_RE = re.compile(r'<!--\s*comic-pile-factory-claim-released-v3:(?P<kind>issue|pr)-(?P<number>\d+):(?P<worker>[^:>\s]+):(?P<epoch>\d{10}):(?:repair-)?no-persisted-change-handoff\s*-->')
 
 
 def comment_is_trusted(comment: Mapping[str, Any]) -> bool:
@@ -369,6 +369,9 @@ def build_candidates(
     for pr in prs:
         if not pr_is_static_candidate(pr, issue_map):
             continue
+        if no_diff_attempts_by_issue and int(pr['number']) in no_diff_attempts_by_issue:
+            if no_diff_attempts_by_issue[int(pr['number'])] >= FACTORY_NO_DIFF_RETRY_LIMIT:
+                continue
         linked = linked_issue_from_branch(pr.get('headRefName'))
         pr_labels = labels_of(pr)
         labels = set(pr_labels)
@@ -481,8 +484,8 @@ def no_diff_attempts_from_comments(comments: Iterable[dict[str, Any]], *, now_ep
             epoch = int(match.group('epoch'))
             if epoch <= cutoff or epoch > now_epoch:
                 continue
-            issue = int(match.group('issue'))
-            counts[issue] = counts.get(issue, 0) + 1
+            number = int(match.group('number'))
+            counts[number] = counts.get(number, 0) + 1
     return counts
 
 
