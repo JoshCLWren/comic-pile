@@ -383,8 +383,10 @@ async def test_search_series_without_comicvine_client(
     auth_client,
     async_db: AsyncSession,
     default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Search returns empty results when ComicVine is not configured."""
+    monkeypatch.delenv("COMICVINE_API_KEY", raising=False)
     response = await auth_client.get(
         "/api/v1/comicvine/search/series",
         params={"q": "Batman"},
@@ -401,8 +403,10 @@ async def test_get_series_issues_without_client(
     auth_client,
     async_db: AsyncSession,
     default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Series issues endpoint returns empty when ComicVine is not configured."""
+    monkeypatch.delenv("COMICVINE_API_KEY", raising=False)
     response = await auth_client.get(
         "/api/v1/comicvine/series/12345/issues",
     )
