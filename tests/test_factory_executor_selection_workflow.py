@@ -114,3 +114,11 @@ def test_smoke_persists_permanent_model_failures() -> None:
     assert "model_retired_410\\t%s\\n" in workflow
     assert "model_unavailable\\t%s\\n" in workflow
     assert "Model is unavailable" in workflow
+
+
+def test_smoke_timeout_reaches_gateway_retry_path() -> None:
+    """A CLI timeout is transient and must reach the worker retry loop."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "status == 124 || status == 137 || status == 143" in workflow
+    assert "allowing worker to proceed with built-in retry handling" in workflow
