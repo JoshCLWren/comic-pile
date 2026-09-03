@@ -106,11 +106,13 @@ def test_sanitizer_redacts_git_and_bearer_credentials(tmp_path: Path) -> None:
     assert "[REDACTED]" in safe
 
 
-def test_worker_recovery_is_same_session_bounded_and_fail_closed() -> None:
+def test_worker_recovery_is_fresh_bounded_and_fail_closed() -> None:
     worker = WORKER.read_text()
     helper = HELPER.read_text()
 
-    assert "opencode run --continue" in helper
+    assert "opencode run -m \"$runtime_model\"" in helper
+    assert "gh pr status <number>" in helper
+    assert "Return exactly one bare line" in helper
     assert "FACTORY_GATE_BLOCKED" in helper
     assert "recovery_timeout=90" in worker
     assert "current_head" in worker
