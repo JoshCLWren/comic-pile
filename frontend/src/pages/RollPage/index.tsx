@@ -392,11 +392,13 @@ export default function RollPage() {
           onSetCurrentIssue={handleSetCurrentIssue}
         />
 
-        <CorrectionSheet
-          isOpen={state.showCorrectionSheet}
-          onClose={() => state.setShowCorrectionSheet(false)}
-          correction={state.correctionData!}
-        />
+        {state.correctionData && (
+          <CorrectionSheet
+            isOpen={state.showCorrectionSheet}
+            onClose={() => state.setShowCorrectionSheet(false)}
+            correction={state.correctionData}
+          />
+        )}
       </div>
     </div>
   )
