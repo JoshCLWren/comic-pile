@@ -10,6 +10,8 @@ export interface DependencyGroupMember {
   series_title?: string | null
   /** Exact issue number for issue-level memberships; null for thread memberships. */
   issue_number?: string | null
+  /** Authoritative position of an issue-level membership within the crossover's reading order. Thread memberships ignore this field. */
+  sequence_order?: number | null
 }
 
 export interface DependencyGroup {

@@ -81,6 +81,7 @@ function makeDetailMember(
     thread?: Thread | null
     issue?: Issue | null
     otherCrossovers?: string[]
+    sequence_order?: number | null
   } = {},
 ): DependencyGroupDetailMember {
   const thread = opts.thread ?? null
@@ -92,6 +93,7 @@ function makeDetailMember(
       issue_id: issue?.id ?? null,
       series_title: thread?.title ?? null,
       issue_number: issue?.issue_number ?? null,
+      sequence_order: opts.sequence_order ?? null,
     },
     thread,
     issue,
@@ -121,8 +123,8 @@ const warlockThread = makeThread(101, 'Warlock: Rebirth')
 const warlockIssue = makeIssue(11, 101, '3', 'unread')
 
 const populatedMembers = [
-  makeDetailMember(1, { thread: novaThread, otherCrossovers: ['X of Swords'] }),
-  makeDetailMember(2, { issue: warlockIssue, thread: warlockThread }),
+  makeDetailMember(1, { thread: novaThread, otherCrossovers: ['X of Swords'], sequence_order: 1 }),
+  makeDetailMember(2, { issue: warlockIssue, thread: warlockThread, sequence_order: 2 }),
 ]
 
 const readableReadiness: ContinuityReadinessResponse = {
@@ -210,7 +212,7 @@ describe('CrossoverDetailPage', () => {
     expect(screen.getByText('Issues Tracked')).toBeInTheDocument()
     expect(screen.getByText((_, element) => element?.textContent === '0%')).toBeInTheDocument()
     expect(screen.getByText('Next Up')).toBeInTheDocument()
-    expect(screen.getByText(/Position 5/)).toBeInTheDocument()
+    expect(screen.getByText(/Position 2/)).toBeInTheDocument()
     expect(screen.getAllByText('Readable').length).toBeGreaterThan(0)
     expect(screen.getByText('This crossover is ready to read.'))
     expect(screen.getByText('Evaluated issue: 55')).toBeInTheDocument()
@@ -240,13 +242,13 @@ describe('CrossoverDetailPage', () => {
     expect(mockedReadiness.evaluate).not.toHaveBeenCalled()
   })
 
-  it('sorts the reading order by issue position and marks read entries', async () => {
+  it('sorts the reading order by sequence_order and marks read entries', async () => {
     const firstIssue = { ...warlockIssue, id: 11, issue_number: '3', position: 2, status: 'read' as const }
     const secondIssue = { ...warlockIssue, id: 12, issue_number: '4', position: 9, status: 'unread' as const }
     mockedGroups.getDetail.mockResolvedValue(
       makeDetail([
-        makeDetailMember(2, { issue: secondIssue, thread: warlockThread }),
-        makeDetailMember(1, { issue: firstIssue, thread: warlockThread }),
+        makeDetailMember(2, { issue: secondIssue, thread: warlockThread, sequence_order: 5 }),
+        makeDetailMember(1, { issue: firstIssue, thread: warlockThread, sequence_order: 1 }),
       ]),
     )
 

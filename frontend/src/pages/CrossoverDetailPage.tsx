@@ -126,9 +126,9 @@ export default function CrossoverDetailPage() {
   }
 
   const sortedMembers = [...members].sort((a, b) => {
-    const posA = a.issue?.position ?? 0
-    const posB = b.issue?.position ?? 0
-    return posA - posB
+    const orderA = a.membership?.sequence_order ?? 0
+    const orderB = b.membership?.sequence_order ?? 0
+    return orderA - orderB
   })
 
   const readCount = sortedMembers.filter(m => m.issue?.status === 'read').length
@@ -253,7 +253,7 @@ export default function CrossoverDetailPage() {
                   </p>
                   <p className="text-sm text-stone-400">
                     Issue {nextUnread.issue?.issue_number ?? '?'}
-                    {nextUnread.issue?.position && ' • Position ' + nextUnread.issue.position}
+                    {nextUnread.membership?.sequence_order && ' • Position ' + nextUnread.membership.sequence_order}
                   </p>
                 </div>
               </div>
@@ -273,12 +273,12 @@ export default function CrossoverDetailPage() {
             <p className="text-stone-500 text-center py-8">No members in this crossover yet.</p>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {sortedMembers.map((member, index) => {
-                const isRead = member.issue?.status === 'read'
-                const position = member.issue?.position ?? index + 1
-                const threadTitle = member.thread?.title ?? 'Unknown Series'
-                const issueNumber = member.issue?.issue_number ?? '?'
-                const blockedInfo = blockedMemberMap.get(member.membership.id)
+                {sortedMembers.map((member, index) => {
+                  const isRead = member.issue?.status === 'read'
+                  const position = member.membership?.sequence_order ?? index + 1
+                  const threadTitle = member.thread?.title ?? 'Unknown Series'
+                  const issueNumber = member.issue?.issue_number ?? '?'
+                  const blockedInfo = blockedMemberMap.get(member.membership.id)
 
                 return (
                   <div
