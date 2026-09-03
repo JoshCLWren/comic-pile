@@ -33,14 +33,22 @@ const CBLAdoption = () => {
     previewAdoption(cblId);
   };
 
-  const handleToggleSeries = (seriesId, exclude) => {
-    setSelections((prev) => ({ ...prev, [seriesId]: exclude }));
-    // Update adoption plan based on selections
-  };
+const handleToggleSeries = (seriesId: number, exclude: boolean) => {
+     setSelections((prev) => ({ ...prev, [seriesId]: exclude }));
+     // Update adoption plan based on selections
+   };
 
-  const handleToggleEntry = (entryId, exclude) => {
-    // Update individual entry selection
-  };
+   const handleToggleEntry = (_entryId: number, exclude: boolean) => {
+     setSelections((prev) => ({ ...prev, [_entryId]: exclude }));
+   };
+
+   const isEntryExcluded = (entry: { id: number; seriesId: number }) => {
+     const entryExcluded = selections[entry.id];
+     if (entryExcluded !== undefined) {
+       return entryExcluded;
+     }
+     return selections[entry.seriesId]?.exclude ?? false;
+   };
 
   const handleAdopt = () => {
     adoptCBL({ cblId: selectedCBL, selections });
@@ -74,14 +82,14 @@ const CBLAdoption = () => {
               <div key={entry.id} className="flex justify-between items-center p-2 border-b">
                 <span>{entry.title}</span>
                 <div>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={!selections[entry.seriesId]?.exclude}
-                      onChange={(e) => handleToggleEntry(entry.id, !e.target.checked)}
-                    />
-                    Include
-                  </label>
+<label>
+                   <input
+                     type="checkbox"
+                     checked={!isEntryExcluded(entry)}
+                     onChange={(e) => handleToggleEntry(entry.id, !e.target.checked)}
+                   />
+                     Include
+                   </label>
                 </div>
               </div>
             ))}

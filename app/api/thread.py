@@ -6,7 +6,7 @@ lives in ``app/services/thread_service.py``; query construction lives in
 ``app/repositories/``.
 """
 
-from typing import Annotated
+from typing import Annotated, Any, dict, list
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
@@ -388,3 +388,71 @@ async def set_current_issue(
         )
     except ServiceError as exc:
         raise _map_service_error(exc) from exc
+
+
+@router.get("/cbls", response_model=list[dict[str, Any]])
+async def list_cbls(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    """List available CBL (Comic Book List) sources for the authenticated user."""
+    try:
+        return await thread_service.list_cbl_sources(db, current_user.id)
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
+
+
+@router.post("/previewAdoption", response_model=dict[str, Any])
+async def preview_cbl_adoption(
+    request: dict[str, Any],
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Preview the adoption of a CBL (Comic Book List) for the authenticated user."""
+    try:
+        cbl_id = request.get("cbl_id")
+        if cbl_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing cbl_id parameter"
+            )
+        return await thread_service.preview_cbl_adoption(db, current_user.id, cbl_id)
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
+    except Exception as exc:
+        # Re-raise HTTPException to let FastAPI handle it
+        if isinstance(exc, HTTPException):
+            raise exc
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc)
+        )
+
+
+@router.post("/adoptCBL", status_code=status.HTTP_201_CREATED)
+async def adopt_cbl(
+    request: Dict[str, Any],
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+):
+    """Adopt a CBL (Comic Book List) for the authenticated user."""
+    try:
+        cbl_id = request.get("cbl_id")
+        selections = request.get("selections", {})
+        if cbl_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing cbl_id parameter"
+            )
+        await thread_service.adopt_cbl(db, current_user.id, cbl_id, selections)
+        return None
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
+    except Exception as exc:
+        # Re-raise HTTPException to let FastAPI handle it
+        if isinstance(exc, HTTPException):
+            raise exc
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc)
+        )

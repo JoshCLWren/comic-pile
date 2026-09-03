@@ -306,28 +306,33 @@ rawApi.interceptors.response.use(
 export default api
 
 export const threadsApi = {
-  list: async (params?: ThreadQueryParams, pageToken?: string | null): Promise<ThreadListResponse> => {
-    const queryParams = {
-      ...(params ?? {}),
-      ...(pageToken ? { page_token: pageToken } : {}),
-    }
-    const response = await api.get<ThreadListResponse>('/v1/threads/', {
-      params: Object.keys(queryParams).length ? queryParams : undefined,
-    })
-    return response
-  },
-  get: (id: number) => api.get<Thread>(`/v1/threads/${id}`),
-  create: (data: ThreadCreatePayload) => api.post<Thread, ThreadCreatePayload>('/v1/threads/', data),
-  update: (id: number, data: ThreadUpdatePayload) =>
-    api.put<Thread, ThreadUpdatePayload>(`/v1/threads/${id}`, data),
-  delete: (id: number) => api.delete<void>(`/v1/threads/${id}`),
-  reactivate: (data: ReactivateThreadPayload) =>
-    api.post<Thread, ReactivateThreadPayload>('/v1/threads/reactivate', data),
-  listStale: (days = 30) => api.get<Thread[]>('/v1/threads/stale', { params: { days } }),
-  setPending: (id: number) => api.post<RollResponse>(`/v1/threads/${id}/set-pending`),
-  setCurrentIssue: (id: number, issueNumber: string) =>
-    api.post<SetCurrentIssueResponse, { issue_number: string }>(`/v1/threads/${id}:setCurrentIssue`, { issue_number: issueNumber }),
-}
+   list: async (params?: ThreadQueryParams, pageToken?: string | null): Promise<ThreadListResponse> => {
+     const queryParams = {
+       ...(params ?? {}),
+       ...(pageToken ? { page_token: pageToken } : {}),
+     }
+     const response = await api.get<ThreadListResponse>('/v1/threads/', {
+       params: Object.keys(queryParams).length ? queryParams : undefined,
+     })
+     return response
+   },
+   get: (id: number) => api.get<Thread>(`/v1/threads/${id}`),
+   create: (data: ThreadCreatePayload) => api.post<Thread, ThreadCreatePayload>('/v1/threads/', data),
+   update: (id: number, data: ThreadUpdatePayload) =>
+     api.put<Thread, ThreadUpdatePayload>(`/v1/threads/${id}`, data),
+   delete: (id: number) => api.delete<void>(`/v1/threads/${id}`),
+   reactivate: (data: ReactivateThreadPayload) =>
+     api.post<Thread, ReactivateThreadPayload>('/v1/threads/reactivate', data),
+   listStale: (days = 30) => api.get<Thread[]>('/v1/threads/stale', { params: { days } }),
+   setPending: (id: number) => api.post<RollResponse>(`/v1/threads/${id}/set-pending`),
+   setCurrentIssue: (id: number, issueNumber: string) =>
+     api.post<SetCurrentIssueResponse, { issue_number: string }>(`/v1/threads/${id}:setCurrentIssue`, { issue_number: issueNumber }),
+   previewAdoption: (cblId: number) =>
+     api.post<any>(`/v1/threads/previewAdoption`, { cbl_id: cblId }),
+   adoptCBL: (data: { cblId: number; selections: Record<number, { exclude: boolean }> }) =>
+     api.post<void>(`/v1/threads/adoptCBL`, data),
+   listCBLs: () => api.get<{ id: number; name: string }[]>(`/v1/threads/cbls`),
+ }
 
 export const rollApi = {
   roll: () => api.post<RollResponse>('/v1/roll/'),

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache_invalidation import invalidate_user_view
 from app.models import Event, Issue, Thread
+from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.thread import normalize_format_value
 from app.repositories import (
     continuity_repository,
@@ -36,6 +37,7 @@ from app.schemas import (
     ThreadResponse,
     ThreadUpdate,
 )
+from sqlalchemy import select
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
 from app.services.queue_pagination import (
     QueueCursor,
@@ -1008,6 +1010,87 @@ async def set_current_issue(
         total_issues=total_issues,
         reading_progress=reading_progress,
     )
+
+    async def list_cbl_sources(
+        self,
+        db: AsyncSession,
+        user_id: int,
+    ) -> List[Dict[str, Any]]:
+        """List available CBL sources for a user.
+        
+        Returns a list of CBL sources with their id and name.
+        """
+        # Query CBL sources that have been synced for the user
+        # For now, we'll return a placeholder implementation
+        # In a real implementation, this would join with user permissions
+        result = await db.execute(
+            select(CBLSource.id, CBLSource.repository.label("name"))
+        )
+        return [{"id": row.id, "name": row.name} for row in result]
+
+    async def preview_cbl_adoption(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        cbl_id: int,
+    ) -> Any:
+        """Preview the adoption of a CBL for a user.
+        
+        Returns a preview of what would be adopted without making changes.
+        """
+        # Placeholder implementation - in reality this would:
+        # 1. Get the CBL source by ID
+        # 2. Verify user has access to it
+        # 3. Get the CBL source list and entries
+        # 4. Generate a preview of how it would integrate with user's threads
+        # 5. Return the preview data
+        
+        # For now, return a mock preview structure
+        return {
+            "entries": [
+                {
+                    "id": 1,
+                    "title": "Sample Comic Issue #1",
+                    "seriesId": 101
+                },
+                {
+                    "id": 2,
+                    "title": "Sample Comic Issue #2",
+                    "seriesId": 101
+                }
+            ],
+            "series": [
+                {
+                    "id": 101,
+                    "name": "Sample Comic Series"
+                }
+            ],
+            "existingCount": 0,
+            "missingCount": 2,
+            "excludedCount": 0,
+            "unresolvedCount": 0
+        }
+
+    async def adopt_cbl(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        cbl_id: int,
+        selections: Dict[int, Dict[str, bool]],
+    ) -> None:
+        """Adopt a CBL for a user.
+        
+        Processes the selected CBL entries and creates/updates threads accordingly.
+        """
+        # Placeholder implementation - in reality this would:
+        # 1. Get the CBL source by ID
+        # 2. Verify user has access to it
+        # 3. Get the CBL source list and entries
+        # 4. Process selections to determine which entries to include/exclude
+        # 5. Create new threads for missing comics
+        # 6. Link existing threads for comics the user already has
+        # 7. Update reading positions and continuity information
+        pass
 
 
 
