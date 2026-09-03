@@ -1,16 +1,16 @@
 """Shared types for source-backed adoption."""
 
-from enum import Enum
+from enum import StrEnum
 
 
-class SourceBackedDecision(str, Enum):
+class SourceBackedDecision(StrEnum):
     """Decision values for source-backed adoption."""
 
     INCLUDE = "include"
     EXCLUDE = "exclude"
 
 
-class SourceBackedStatus(str, Enum):
+class SourceBackedStatus(StrEnum):
     """Status values for source-backed entries."""
 
     EXISTING = "existing"
