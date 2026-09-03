@@ -274,12 +274,20 @@ def select_candidate(
     *,
     worker: int,
     now_epoch: int,
+    preferred_provider: str | None = None,
 ) -> Selection:
-    """Prefer healthy, then degraded, then unknown probe candidates."""
+    """Prefer a usable provider lane, then healthy, degraded, and unknown candidates."""
     comment_list = tuple(comments)
     ranked = rank_candidates(candidates, comment_list, now_epoch=now_epoch)
     priority = {"healthy": 0, "degraded": 1, "unknown": 2}
     usable = [candidate for candidate in ranked if candidate.health_state in priority]
+    preferred = [
+        candidate
+        for candidate in usable
+        if preferred_provider and candidate.provider == preferred_provider
+    ]
+    if preferred:
+        usable = preferred
     if usable:
         best_priority = min(priority[candidate.health_state] for candidate in usable)
         best = sorted(
@@ -296,7 +304,9 @@ def select_candidate(
             candidates=ranked,
             failure_outcome="",
             detail=(
-                f"selected {selected.health_state} candidate from "
+                f"selected {selected.health_state} candidate"
+                f"{f' from preferred provider {preferred_provider}' if preferred else ''}"
+                " from "
                 f"{len(best)} best-tier option(s)"
             ),
         )
@@ -357,6 +367,7 @@ def main() -> int:
     parser.add_argument("--discovery", type=Path, required=True)
     parser.add_argument("--comments", type=Path, required=True)
     parser.add_argument("--worker", type=int, required=True)
+    parser.add_argument("--preferred-provider", default=None)
     parser.add_argument("--now", type=int, default=None)
     args = parser.parse_args()
 
@@ -370,6 +381,7 @@ def main() -> int:
         flatten_comments(comments_payload),
         worker=args.worker,
         now_epoch=args.now if args.now is not None else int(time.time()),
+        preferred_provider=args.preferred_provider,
     )
     print(json.dumps(asdict(selection), sort_keys=True))
     return 0

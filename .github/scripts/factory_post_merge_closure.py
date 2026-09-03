@@ -73,20 +73,19 @@ def linked_issue(branch: str, body: str | None) -> int | None:
     """Resolve the issue a delivered PR closes.
 
     Args:
-        branch: The PR head branch name; factory branches encode the issue.
+        branch: The PR head branch name; factory branches usually encode the issue.
         body: The PR body text, or None when unavailable.
 
     Returns:
-        The issue number the PR claims to complete, or None when the branch
-        does not match the factory shape and the body carries no closing
-        keyword.
+        The explicit closing-reference issue when present, otherwise the issue
+        encoded by the factory branch, or None when neither is available.
     """
-    match = BRANCH_ISSUE_RE.match(branch or "")
-    if match is not None:
-        return int(match.group("issue"))
     closing = CLOSING_RE.search(body or "")
     if closing is not None:
         return int(closing.group("issue"))
+    match = BRANCH_ISSUE_RE.match(branch or "")
+    if match is not None:
+        return int(match.group("issue"))
     return None
 
 
@@ -466,7 +465,10 @@ class FactoryPostMergeClosureTests(unittest.TestCase):
     def test_branch_shape_resolves_issue(self) -> None:
         """Parse the issue encoded in a factory branch name."""
         self.assertEqual(linked_issue("factory/39-1566-opencode-free", ""), 1566)
-        self.assertEqual(linked_issue("factory/45-1399-opencode-free", "Closes #999."), 1399)
+
+    def test_explicit_closing_reference_overrides_branch_issue(self) -> None:
+        """Honor a PR body that explicitly closes a different parent issue."""
+        self.assertEqual(linked_issue("factory/47-1612-opencode-free", "Closes #1620."), 1620)
 
     def test_non_factory_branch_falls_back_to_body_keyword(self) -> None:
         """Use the closing keyword when the branch encodes nothing."""
