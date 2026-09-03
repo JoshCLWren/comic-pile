@@ -248,7 +248,11 @@ persist_issue_pr() {
   fi
   git add -A
   git commit -m "factory: advance #${number} with OmniRoute"
-  git push --set-upstream origin "$branch"
+  local pushed_head remote_head
+  pushed_head="$(git rev-parse HEAD)"
+  git push --set-upstream origin "HEAD:$branch"
+  remote_head="$(git ls-remote origin "refs/heads/${branch}" | awk '{print $1}')"
+  [[ "$remote_head" == "$pushed_head" ]] || return 1
   pr="$(gh pr list --state open --head "$branch" --json number --jq '.[0].number // empty')"
   if [[ -z "$pr" ]]; then
     title="$(gh issue view "$number" --json title --jq .title)"
@@ -270,7 +274,11 @@ persist_pr_changes() {
   fi
   git add -A
   git commit -m "factory: advance PR #${pr} with OmniRoute"
-  git push origin "$branch"
+  local pushed_head remote_head
+  pushed_head="$(git rev-parse HEAD)"
+  git push origin "HEAD:$branch"
+  remote_head="$(git ls-remote origin "refs/heads/${branch}" | awk '{print $1}')"
+  [[ "$remote_head" == "$pushed_head" ]] || return 1
   replace_labels "$pr" "$OWNER" 'factory:review'
 }
 
