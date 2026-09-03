@@ -397,7 +397,7 @@ jobs:
               printf 'model_retired_410\t%s\n' \
                 "${RUNTIME_MODEL} returned HTTP 410 and is permanently retired" \
                 > "$RUNNER_TEMP/factory-discovery-outcome"
-            elif grep -Eiq 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found|Model is unavailable' "$smoke_log"; then
+            elif grep -Eiq 'model[^[:alnum:]]+(not found|not available|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found|Model is unavailable' "$smoke_log"; then
               printf 'model_unavailable\t%s\n' \
                 "${RUNTIME_MODEL} was rejected as unavailable by OmniRoute" \
                 > "$RUNNER_TEMP/factory-discovery-outcome"

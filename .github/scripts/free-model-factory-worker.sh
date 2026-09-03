@@ -114,7 +114,7 @@ record_agent_failure_outcome() {
     record_terminal_outcome provider_throttle "OmniRoute upstream session was throttled (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'HTTP[^0-9]*410|410 Gone' "$log_file"; then
     record_terminal_outcome model_retired_410 "OmniRoute upstream model has been permanently retired by the provider (agent exit ${status})"
-  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found' "$log_file"; then
+  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|not available|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found' "$log_file"; then
     record_terminal_outcome model_unavailable "OmniRoute upstream model became unavailable during execution (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'model[^\n]*(policy|guard)[^\n]*(blocked|rejected|denied)|model[^\n]*(blocked|rejected|denied)[^\n]*(policy|guard)' "$log_file"; then
     record_terminal_outcome model_policy_violation "OmniRoute upstream model was rejected by provider/model policy (agent exit ${status})"
