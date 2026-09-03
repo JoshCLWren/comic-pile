@@ -401,12 +401,21 @@ jobs:
               printf 'model_unavailable\t%s\n' \
                 "${RUNTIME_MODEL} was rejected as unavailable by OmniRoute" \
                 > "$RUNNER_TEMP/factory-discovery-outcome"
+            elif grep -Eiq '429|Too Many Requests|rate.?limit|cooling down' "$smoke_log"; then
+              printf 'provider_throttle\t%s\n' \
+                "${RUNTIME_MODEL} was throttled or all upstream credentials were cooling down" \
+                > "$RUNNER_TEMP/factory-discovery-outcome"
+            elif grep -Eiq 'bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$smoke_log"; then
+              printf 'provider_failure\t%s\n' \
+                "${RUNTIME_MODEL} failed with a transient gateway or upstream error" \
+                > "$RUNNER_TEMP/factory-discovery-outcome"
             fi
           }
           if (( status != 0 )); then
             if (( status == 124 || status == 137 || status == 143 )) || \
               grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/fixed-model-smoke.log"; then
-              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; allowing worker to proceed with built-in retry handling" >&2
+              record_smoke_model_outcome
+              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; quarantining this route for the next selection" >&2
               cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
               exit 0
             fi
@@ -415,7 +424,8 @@ jobs:
           fi
           if ! grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"; then
             if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/fixed-model-smoke.log"; then
-              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; allowing worker to proceed with built-in retry handling" >&2
+              record_smoke_model_outcome
+              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; quarantining this route for the next selection" >&2
               cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
               exit 0
             fi
