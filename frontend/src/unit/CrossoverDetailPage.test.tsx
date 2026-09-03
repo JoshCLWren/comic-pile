@@ -123,8 +123,8 @@ const warlockThread = makeThread(101, 'Warlock: Rebirth')
 const warlockIssue = makeIssue(11, 101, '3', 'unread')
 
 const populatedMembers = [
-  makeDetailMember(1, { thread: novaThread, otherCrossovers: ['X of Swords'] }),
-  makeDetailMember(2, { issue: warlockIssue, thread: warlockThread }),
+  makeDetailMember(1, { thread: novaThread, otherCrossovers: ['X of Swords'], sequence_order: 1 }),
+  makeDetailMember(2, { issue: warlockIssue, thread: warlockThread, sequence_order: 2 }),
 ]
 
 const readableReadiness: ContinuityReadinessResponse = {
@@ -212,7 +212,7 @@ describe('CrossoverDetailPage', () => {
     expect(screen.getByText('Issues Tracked')).toBeInTheDocument()
     expect(screen.getByText((_, element) => element?.textContent === '0%')).toBeInTheDocument()
     expect(screen.getByText('Next Up')).toBeInTheDocument()
-    expect(screen.getByText(/Position 1/)).toBeInTheDocument()
+    expect(screen.getByText(/Position 2/)).toBeInTheDocument()
     expect(screen.getAllByText('Readable').length).toBeGreaterThan(0)
     expect(screen.getByText('This crossover is ready to read.'))
     expect(screen.getByText('Evaluated issue: 55')).toBeInTheDocument()
