@@ -292,6 +292,20 @@ def test_later_success_recovers_provider() -> None:
     assert result.selected.model == "vendor/b:free"
 
 
+def test_untested_route_is_preferred_to_known_degraded_route() -> None:
+    """Selection should validate an untested route before repeating a failure."""
+    result = HEALTH.select_candidate(
+        CANDIDATES,
+        [evidence("vendor/a:free", "unknown_failure", age=HEALTH.FAILURE_COOLDOWN_SECONDS + 1)],
+        worker=1,
+        now_epoch=NOW,
+    )
+
+    assert result.selected is not None
+    assert result.selected.model == "vendor/b:free"
+    assert result.selected.health_state == "unknown"
+
+
 def test_legacy_model_interruption_cools_then_degrades() -> None:
     """Historical interruption records remain readable but emit canonical failure."""
     recent = HEALTH.select_candidate(

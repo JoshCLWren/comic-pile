@@ -293,10 +293,14 @@ def select_candidate(
     now_epoch: int,
     preferred_provider: str | None = None,
 ) -> Selection:
-    """Prefer a usable provider lane, then healthy, degraded, and unknown candidates."""
+    """Prefer healthy candidates, then untested candidates, over known failures."""
     comment_list = tuple(comments)
     ranked = rank_candidates(candidates, comment_list, now_epoch=now_epoch)
-    priority = {"healthy": 0, "degraded": 1, "unknown": 2}
+    # An unknown route has no negative evidence and can be validated by the
+    # bounded smoke. A degraded route has already produced a failure after its
+    # cooldown, so selecting it first needlessly repeats known-bad work when
+    # catalog-only routes are available.
+    priority = {"healthy": 0, "unknown": 1, "degraded": 2}
     usable = [candidate for candidate in ranked if candidate.health_state in priority]
     preferred = [
         candidate
