@@ -7,15 +7,15 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "free-model-factory-run.yml"
 
 
-def test_catalog_backed_providers_use_central_adapter() -> None:
-    """OpenCode and OpenRouter choose from live provider catalogs."""
+def test_omniroute_is_the_only_execution_gateway() -> None:
+    """GitHub agents discover and execute through OmniRoute only."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     selector = workflow.split(
         "- name: Select execution candidate at dispatch time", maxsplit=1
     )[1].split("- name: Report selected executor heartbeat", maxsplit=1)[0]
 
-    assert "opencode models opencode --refresh" in selector
-    assert "https://openrouter.ai/api/v1/models" in selector
+    assert "${OMNIROUTE_BASE_URL%/}/models" in selector
+    assert "provider == \"omniroute-free\"" in selector
     assert ".github/scripts/factory_provider_candidates.py" in selector
     assert "--configured-model" not in selector
     assert "free-model-factories.tsv" not in selector
@@ -26,14 +26,14 @@ def test_catalog_backed_providers_use_central_adapter() -> None:
     assert "preferred_provider='omniroute-free'" in selector
 
 
-def test_catalog_backed_slots_share_provider_candidates() -> None:
-    """Catalog-backed slots rank candidates across both supported providers."""
+def test_other_catalogs_cannot_be_execution_capacity() -> None:
+    """Diagnostic provider catalogs cannot bypass the OmniRoute gateway."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     selector = workflow.split(
         "- name: Select execution candidate at dispatch time", maxsplit=1
     )[1].split("- name: Report selected executor heartbeat", maxsplit=1)[0]
 
-    assert "opencode-free|openrouter-free)" in selector
+    assert "OmniRoute exposed no policy-eligible candidate" in selector
     assert "catalog_candidates='[]'" in selector
     assert "$left + $right | unique_by([.provider, .model])" in selector
     assert ".selected.provider // empty" in selector
@@ -41,15 +41,14 @@ def test_catalog_backed_slots_share_provider_candidates() -> None:
 
 
 def test_runtime_only_providers_keep_real_probe_authority() -> None:
-    """Non-enumerating providers retain their request until a real probe."""
+    """Runtime-only provider credentials cannot bypass the OmniRoute gateway."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     selector = workflow.split(
         "- name: Select execution candidate at dispatch time", maxsplit=1
     )[1].split("- name: Report selected executor heartbeat", maxsplit=1)[0]
 
-    assert "nvidia|kilo-auto)" in selector
-    assert "omniroute-opencode" not in selector
-    assert "selected-by-runtime-evidence" in selector
+    assert "GitHub execution is OmniRoute-only" in selector
+    assert "selected-by-runtime-evidence" not in selector
 
 
 def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:

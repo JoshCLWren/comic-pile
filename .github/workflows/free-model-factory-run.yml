@@ -88,29 +88,19 @@ jobs:
           IFS=$'\t' read -r worker source model minute scheduler display <<< "$row"
           [[ "$worker" == "$REQUESTED_WORKER" ]]
 
-          case "$source" in
-            nvidia)
-              runtime_model="nvidia/${model}"
-              branch_suffix='nvidia'
-              if [[ -n "${NVIDIA_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-NVIDIA_API_KEY'; fi
-              ;;
-            opencode-free|openrouter-free)
-              runtime_model="${source%-free}/${model}"
-              branch_suffix='catalog-free'
-              configured=true
-              reason='catalog-backed-free-code-slot'
-              ;;
-            kilo-auto)
-              runtime_model="kilo/${model}"
-              branch_suffix='kilo-auto'
-              configured=true
-              reason='configured-anonymous-free'
-              ;;
-            *)
-              echo "Unsupported factory source: ${source}" >&2
-              exit 1
-              ;;
-          esac
+          # GitHub agents have one execution gateway. The manifest remains the
+          # durable worker roster, while OmniRoute owns provider/model choice.
+          source='omniroute-free'
+          model='free-cascade-small'
+          runtime_model='omniroute/free-cascade-small'
+          branch_suffix='omniroute'
+          if [[ -n "${OMNIROUTE_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]]; then
+            configured=true
+            reason='omniroute-only-gateway'
+          else
+            configured=false
+            reason='missing-OMNIROUTE credentials'
+          fi
 
           {
             echo "worker=$worker"
@@ -211,26 +201,10 @@ jobs:
           set -Eeuo pipefail
           discovery_outcome="$RUNNER_TEMP/factory-discovery-outcome"
 
-          case "$SOURCE" in
-            nvidia|kilo-auto)
-              # These adapters cannot enumerate reliably. Preserve the lane
-              # request and let the existing real invocation/probe prove it.
-              {
-                echo "source=$SOURCE"
-                echo "model=$LANE_MODEL"
-                echo "runtime_model=$LANE_RUNTIME_MODEL"
-                echo "display=$LANE_DISPLAY"
-                echo "branch_suffix=$LANE_BRANCH_SUFFIX"
-                echo "reason=selected-by-runtime-evidence"
-              } >> "$GITHUB_OUTPUT"
-              exit 0
-              ;;
-            opencode-free|openrouter-free) ;;
-            *)
-              printf 'control_plane_failure\tUnsupported provider adapter: %s\n' "$SOURCE" > "$discovery_outcome"
-              exit 1
-              ;;
-          esac
+          [[ "$SOURCE" == 'omniroute-free' ]] || {
+            printf 'control_plane_failure\tGitHub execution is OmniRoute-only; got %s\n' "$SOURCE" > "$discovery_outcome"
+            exit 1
+          }
 
           discover_provider() {
             local provider="$1"
@@ -326,6 +300,15 @@ jobs:
             exit 1
           fi
 
+          # Discovery may inspect other catalogs for diagnostics, but they are
+          # never execution capacity for GitHub agents.
+          catalog_candidates="$(jq '[.[] | select(.provider == "omniroute-free")]' <<< "$catalog_candidates")"
+          candidate_count="$(jq 'length' <<< "$catalog_candidates")"
+          if (( candidate_count == 0 )); then
+            printf 'provider_unavailable\tOmniRoute exposed no policy-eligible candidate\n' > "$discovery_outcome"
+            exit 1
+          fi
+
           discovery_file="$RUNNER_TEMP/factory-provider-discovery.json"
           comments_file="$RUNNER_TEMP/factory-attempt-comments.json"
           jq -cn --argjson candidates "$catalog_candidates" \
@@ -337,10 +320,7 @@ jobs:
             exit 1
           fi
 
-          preferred_provider=''
-          # Factory 45 is the dedicated OmniRoute canary lane. It still falls
-          # back to the shared fleet if OmniRoute is unavailable or cooling.
-          [[ "$WORKER" == 45 ]] && preferred_provider='omniroute-free'
+          preferred_provider='omniroute-free'
           selection="$(python3 .github/scripts/factory_candidate_health.py \
             --discovery "$discovery_file" --comments "$comments_file" \
             --worker "$WORKER" --preferred-provider "$preferred_provider")"
