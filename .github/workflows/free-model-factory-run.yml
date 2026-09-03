@@ -417,7 +417,7 @@ jobs:
               record_smoke_model_outcome
               echo "Transient smoke failure detected for ${RUNTIME_MODEL}; quarantining this route for the next selection" >&2
               cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
-              exit 0
+              exit 1
             fi
             record_smoke_model_outcome
             exit "$status"
@@ -427,7 +427,7 @@ jobs:
               record_smoke_model_outcome
               echo "Transient smoke failure detected for ${RUNTIME_MODEL}; quarantining this route for the next selection" >&2
               cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
-              exit 0
+              exit 1
             fi
             echo "Smoke did not return FIXED_MODEL_OPENCODE_OK" >&2
             cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
