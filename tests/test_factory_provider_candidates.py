@@ -117,6 +117,20 @@ def test_omniroute_exposes_multiple_free_routes_for_independent_lanes() -> None:
     assert result.candidates[0].runtime_model == "omniroute/auto/coding:free"
 
 
+def test_omniroute_keeps_configured_cascade_when_catalog_temporarily_omits_it() -> None:
+    """A transient catalog omission cannot replace the known healthy cascade."""
+    result = CANDIDATES.discover(
+        "omniroute-free",
+        json.dumps({"data": [{"id": "auto/coding:free"}]}),
+    )
+
+    fallback = next(
+        candidate for candidate in result.candidates if candidate.model == "free-cascade-small"
+    )
+    assert fallback.runtime_model == "omniroute/free-cascade-small"
+    assert fallback.discovered_by == "configured_cascade_fallback"
+
+
 
 def test_invalid_catalog_fails_closed() -> None:
     """Malformed catalog responses produce no executable candidates."""
