@@ -24,6 +24,10 @@ function normalizedSearch(search?: string): string | null {
 }
 
 export const queryKeys = {
+  cbl: {
+    all: ['cbl'] as const,
+    list: () => ['cbl', 'list'] as const,
+  },
   queue: {
     all: ['queue'] as const,
     pages: () => ['queue', 'pages'] as const,

@@ -538,6 +538,43 @@ export interface BugReportResponse {
 }
 
 /**
+ * Represents a CBL (Comic Book List) source
+ */
+export interface CBL {
+  id: number;
+  name: string;
+}
+
+/**
+ * Represents a single entry in a CBL adoption plan
+ */
+export interface CBLAdoptionEntry {
+  id: number;
+  title: string;
+  seriesId: number;
+}
+
+/**
+ * Represents a series in a CBL adoption plan
+ */
+export interface CBLAdoptionSeries {
+  id: number;
+  name: string;
+}
+
+/**
+ * Complete CBL adoption plan with entries and series
+ */
+export interface CBLAdoptionPlan {
+  entries: CBLAdoptionEntry[];
+  series: CBLAdoptionSeries[];
+  existingCount: number;
+  missingCount: number;
+  excludedCount: number;
+  unresolvedCount: number;
+}
+
+/**
  * Reader-context response from GET /v1/issues/{issue_id}/reader-context
  * As defined in issue #1401
  */
