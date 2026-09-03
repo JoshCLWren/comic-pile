@@ -109,3 +109,15 @@ def test_shared_factory_wrapper_rejects_legacy_provider_execution() -> None:
     assert "!= 'omniroute-free'" in text
     assert "refusing to switch models" not in text
     assert "Do not switch models" not in text
+
+
+def test_factory_persistence_pushes_and_verifies_current_head() -> None:
+    """A local worktree branch mismatch must not discard a worker's commit."""
+    for path in (
+        SCRIPTS / "free-model-factory-worker-primitives.sh",
+        SCRIPTS / "omniroute-factory-worker.sh",
+        SCRIPTS / "nvidia-factory-worker.sh",
+    ):
+        text = path.read_text(encoding="utf-8")
+        assert 'git push origin "HEAD:$branch"' in text or 'git push --set-upstream origin "HEAD:$branch"' in text
+        assert 'git ls-remote origin "refs/heads/${branch}"' in text

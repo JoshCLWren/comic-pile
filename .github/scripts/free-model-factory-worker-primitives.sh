@@ -438,7 +438,17 @@ persist_issue_pr() {
   fi
   git add -A >&2
   git commit -m "factory: advance #${number} with ${DISPLAY}" >&2
-  git push --set-upstream origin "$branch" >&2
+  # The agent may be running on a local worktree branch whose name differs from
+  # the target branch. Push the exact commit we just created, then verify that
+  # GitHub's branch ref is actually at that commit before reporting success.
+  local pushed_head remote_head
+  pushed_head="$(git rev-parse HEAD)"
+  git push --set-upstream origin "HEAD:$branch" >&2
+  remote_head="$(git ls-remote origin "refs/heads/${branch}" | awk '{print $1}')"
+  if [[ "$remote_head" != "$pushed_head" ]]; then
+    log "push verification failed for ${branch}: expected ${pushed_head}, found ${remote_head:-missing}" >&2
+    return 1
+  fi
   pr="$(gh pr list --state open --head "$branch" --json number --jq '.[0].number // empty')"
   if [[ -z "$pr" ]]; then
     title="$(gh issue view "$number" --json title --jq .title)"
@@ -459,7 +469,14 @@ persist_pr_changes() {
   fi
   git add -A
   git commit -m "factory: advance PR #${pr} with ${DISPLAY}"
-  git push origin "$branch"
+  local pushed_head remote_head
+  pushed_head="$(git rev-parse HEAD)"
+  git push origin "HEAD:$branch"
+  remote_head="$(git ls-remote origin "refs/heads/${branch}" | awk '{print $1}')"
+  if [[ "$remote_head" != "$pushed_head" ]]; then
+    log "push verification failed for ${branch}: expected ${pushed_head}, found ${remote_head:-missing}" >&2
+    return 1
+  fi
   replace_labels "$pr" "$OWNER" 'factory:review'
 }
 
