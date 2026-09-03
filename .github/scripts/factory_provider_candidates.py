@@ -185,7 +185,7 @@ class OpenCodeFreeAdapter:
 
 
 class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
-    """Expose the health-validated OmniRoute free cascade."""
+    """Expose free OmniRoute coding routes for independent factory lanes."""
 
     def __init__(self) -> None:
         """Configure the external OmniRoute OpenAI-compatible adapter."""
@@ -196,9 +196,40 @@ class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
         raw_catalog: str,
         configured_models: Sequence[str] = (),
     ) -> Discovery:
-        """Expose only the validated free cascade advertised by OmniRoute."""
-        del configured_models
-        return super().discover(raw_catalog, ("free-cascade-small",))
+        """Expose routes explicitly marked free without fixing one model."""
+        items = _json_catalog(raw_catalog)
+        if items is None:
+            return Discovery(
+                provider=self.provider,
+                mode=self.mode,
+                status="invalid",
+                detail="provider catalog was not valid OpenAI-compatible JSON",
+            )
+
+        configured = _configured_filter(configured_models)
+        models = {
+            model
+            for item in items
+            if isinstance(model := item.get("id"), str)
+            and model
+            and (configured is None or model in configured)
+            and (
+                model.endswith(":free")
+                or model.endswith("-free")
+                or model.startswith("free-cascade-")
+            )
+        }
+        candidates = tuple(
+            _candidate(self.provider, model, "omniroute", "provider_catalog")
+            for model in sorted(models)
+        )
+        return Discovery(
+            provider=self.provider,
+            mode=self.mode,
+            status="available" if candidates else "empty",
+            candidates=candidates,
+            detail=f"OmniRoute exposed {len(candidates)} eligible free coding route(s)",
+        )
 
 
 
