@@ -6,7 +6,7 @@ lives in ``app/services/thread_service.py``; query construction lives in
 ``app/repositories/``.
 """
 
-from typing import Annotated, Any, dict, list
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse

@@ -61,10 +61,10 @@ const handleToggleSeries = (seriesId: number, exclude: boolean) => {
       <h1 className="text-2xl font-bold mb-4">CBL Adoption</h1>
       <div className="mb-4">
         <h2 className="text-xl font-semibold mb-2">Select CBL</h2>
-        <select
-          className="border p-2 rounded w-full"
-          onChange={(e) => handleSelectCBL(e.target.value)}
-        >
+<select
+           className="border p-2 rounded-lg w-full"
+           onChange={(e) => handleSelectCBL(e.target.value)}
+         >
           <option value="">Choose a CBL</option>
           {cbls?.map((cbl) => (
             <option key={cbl.id} value={cbl.id}>
@@ -79,7 +79,7 @@ const handleToggleSeries = (seriesId: number, exclude: boolean) => {
           <div className="mb-4">
             <h3 className="text-lg font-medium mb-2">Source Order</h3>
             {adoptionPlan?.entries.map((entry) => (
-              <div key={entry.id} className="flex justify-between items-center p-2 border-b">
+               <div key={entry.id} className="flex justify-between items-center p-2 border-b border-gray-200">
                 <span>{entry.title}</span>
                 <div>
 <label>
