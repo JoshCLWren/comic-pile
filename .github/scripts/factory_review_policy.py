@@ -107,13 +107,14 @@ def head_has_authorized_approval(
     producer: str | None,
     approvers: Iterable[str],
 ) -> bool:
-    """Return whether exact-head approvals satisfy independent review policy.
+    """Return whether exact-head approvals satisfy worker-independent review policy.
 
     Current factory PRs with durable producer provenance require one distinct
-    reviewer other than the producer. Historical PRs with genuinely missing
-    provenance still require two distinct factory reviewers; producer recovery
-    must never be replaced by an assumption that the current reviewer did not
-    create the PR.
+    reviewer other than the producer. This is a factory-identity boundary, not
+    a model or provider boundary: OmniRoute may route both workers through the
+    same upstream model. Historical PRs with genuinely missing provenance still
+    require two distinct factory reviewers; producer recovery must never be
+    replaced by an assumption that the current reviewer did not create the PR.
     """
     reviewer_set = set(approvers)
     if producer is not None:

@@ -186,7 +186,7 @@ run_agent() {
     target="issue #${number}"
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
   fi
-  prompt="You are OpenCode OmniRoute Factory ${WORKER} · ${CALL_SIGN} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Pinned model: ${MODEL}. OmniRoute provider: ${PROVIDER}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow normal ComicPile product-first factory policy and ownership rules. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not switch models or providers. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
+  prompt="You are OpenCode OmniRoute Factory ${WORKER} · ${CALL_SIGN} for JoshCLWren/comic-pile. Requested capability route: ${MODEL}. OmniRoute gateway: ${PROVIDER}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow normal ComicPile product-first factory policy and ownership rules. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. OmniRoute may switch upstream models, providers, or routes within the configured policy; do not bypass the gateway or request unconfigured capacity. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
   timeout --signal=TERM --kill-after=30s "${timeout_seconds}s" \
     opencode run -m "omniroute/${MODEL}" --agent build --auto --dir "$GITHUB_WORKSPACE" \
     --title "ComicPile OmniRoute Factory ${WORKER} · ${CALL_SIGN}" "$prompt" \
@@ -364,7 +364,7 @@ while (( $(remaining) > 480 )); do
       break
     fi
     transient_failure=1
-    log 'transient OmniRoute/upstream interruption; retaining the pinned model and retrying only if budget permits'
+    log 'transient OmniRoute/upstream interruption; allowing the gateway to adapt the route and retry if budget permits'
     [[ -z "$(git status --porcelain)" ]] || break
     (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
     (( $(remaining) > 600 )) || break
