@@ -104,3 +104,13 @@ def test_nvidia_410_is_persisted_and_skipped_before_future_probes() -> None:
     assert "Skipping permanently retired NVIDIA model" in workflow
     assert "code\" == \"410\"" in workflow
     assert "model_retired_410" in workflow
+
+
+def test_smoke_persists_permanent_model_failures() -> None:
+    """A failed smoke records exact model retirement/unavailability for rotation."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "record_smoke_model_outcome()" in workflow
+    assert "model_retired_410\\t%s\\n" in workflow
+    assert "model_unavailable\\t%s\\n" in workflow
+    assert "Model is unavailable" in workflow
