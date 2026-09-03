@@ -20,3 +20,12 @@ from . import issue_repository
 from . import session_repository
 from . import thread_repository
 from . import taste_signals
+
+__all__ = [
+    "continuity_repository",
+    "dependency_repository", 
+    "issue_repository",
+    "session_repository",
+    "thread_repository",
+    "taste_signals",
+]
