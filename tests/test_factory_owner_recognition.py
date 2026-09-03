@@ -98,4 +98,14 @@ def test_omniroute_worker_allows_gateway_route_adaptation() -> None:
     """OmniRoute may change upstream capacity without a prompt-level veto."""
     text = (SCRIPTS / "omniroute-factory-worker.sh").read_text(encoding="utf-8")
     assert "OmniRoute may switch upstream models, providers, or routes" in text
+
+
+def test_shared_factory_wrapper_rejects_legacy_provider_execution() -> None:
+    """The production wrapper must not revive direct-provider execution."""
+    text = (SCRIPTS / "free-model-factory-worker.sh").read_text(encoding="utf-8")
+    assert "GitHub factory execution is OmniRoute-only" in text
+    assert "FACTORY_SOURCE}" in text
+    assert "!= 'omniroute-free'" in text
+    assert "!= 'omniroute-free'" in text
+    assert "refusing to switch models" not in text
     assert "Do not switch models" not in text

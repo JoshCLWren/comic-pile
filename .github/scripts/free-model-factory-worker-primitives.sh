@@ -575,7 +575,7 @@ while (( $(remaining) > 480 )); do
       release_target "$pr" 'factory:review' 'pr-opened-handoff' 'pr'
       SKIP_PRS+=("$pr")
     elif (( transient_failure == 1 )); then
-      log "issue #${NUMBER} produced no changes because the pinned model was interrupted; releasing without marking the issue blocked"
+      log "issue #${NUMBER} produced no changes because the OmniRoute upstream was interrupted; releasing without marking the issue blocked"
       release_target "$NUMBER" 'factory:building' 'transient-model-interruption' 'issue'
     else
       log "issue #${NUMBER} produced no persisted change; recording a bounded retry attempt"

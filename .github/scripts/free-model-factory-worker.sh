@@ -8,6 +8,14 @@ set -Eeuo pipefail
 : "${FACTORY_MODEL:?FACTORY_MODEL is required}"
 : "${FACTORY_RUNTIME_MODEL:?FACTORY_RUNTIME_MODEL is required}"
 
+# GitHub factory execution has one production gateway. Provider-specific
+# workers are historical implementation details and must not be revived by a
+# stale dispatch payload or an old branch copy of this wrapper.
+if [[ "${FACTORY_SOURCE}" != 'omniroute-free' ]]; then
+  printf 'GitHub factory execution is OmniRoute-only; refusing source %s\n' "${FACTORY_SOURCE}" >&2
+  exit 2
+fi
+
 # Factory selection and lease handoff must keep working even when GitHub's
 # GraphQL installation bucket is exhausted. Route the small set of gh list/view
 # reads used by the wrapper through REST while forwarding every other gh command
@@ -103,53 +111,22 @@ record_terminal_outcome() {
 record_agent_failure_outcome() {
   local status="$1" log_file="/tmp/opencode-factory-${WORKER}.log"
   if [[ -f "$log_file" ]] && grep -Eqi '429|too many requests|rate.?limit|quota|throttl|capacity' "$log_file"; then
-    record_terminal_outcome provider_throttle "pinned provider/model session was throttled (agent exit ${status})"
+    record_terminal_outcome provider_throttle "OmniRoute upstream session was throttled (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'HTTP[^0-9]*410|410 Gone' "$log_file"; then
-    record_terminal_outcome model_retired_410 "pinned model has been permanently retired by the provider (agent exit ${status})"
+    record_terminal_outcome model_retired_410 "OmniRoute upstream model has been permanently retired by the provider (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found' "$log_file"; then
-    record_terminal_outcome model_unavailable "pinned model became unavailable during execution (agent exit ${status})"
+    record_terminal_outcome model_unavailable "OmniRoute upstream model became unavailable during execution (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'model[^\n]*(policy|guard)[^\n]*(blocked|rejected|denied)|model[^\n]*(blocked|rejected|denied)[^\n]*(policy|guard)' "$log_file"; then
-    record_terminal_outcome model_policy_violation "pinned model was rejected by provider/model policy (agent exit ${status})"
+    record_terminal_outcome model_policy_violation "OmniRoute upstream model was rejected by provider/model policy (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'checkout failed|dependency install failed|disk full|no space left|docker daemon|runner environment|tool installation failed' "$log_file"; then
     record_terminal_outcome environment_failure "worker environment failed during assigned execution (agent exit ${status})"
   elif (( status == 124 || status == 137 || status == 143 )); then
-    record_terminal_outcome provider_failure "pinned provider/model session timed out or was interrupted after smoke succeeded (agent exit ${status})"
+    record_terminal_outcome provider_failure "OmniRoute upstream session timed out or was interrupted after smoke succeeded (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'provider[^\n]*(error|unavailable|failed)|service unavailable|bad gateway|gateway timeout|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset|upstream[^\n]*(error|failed)' "$log_file"; then
-    record_terminal_outcome provider_failure "pinned provider/model execution failed after smoke succeeded (agent exit ${status})"
+    record_terminal_outcome provider_failure "OmniRoute upstream execution failed after smoke succeeded (agent exit ${status})"
   else
     record_terminal_outcome unknown_failure "agent exited ${status} without enough evidence for a narrower failure class"
   fi
-}
-
-nvidia_retry_after_seconds() {
-  local runtime_model="$1" provider_model request response headers http_code retry_after target now seconds
-  [[ "$SOURCE" == 'nvidia' ]] || return 1
-  provider_model="${runtime_model#nvidia/}"
-  request="$(jq -nc --arg model "$provider_model" '{model:$model,messages:[{role:"user",content:"Reply with OK"}],max_tokens:1}')"
-  response="$(mktemp)"
-  headers="$(mktemp)"
-  http_code="$(curl --silent --show-error --output "$response" --dump-header "$headers" --write-out '%{http_code}' \
-    --connect-timeout 5 --max-time 20 \
-    --header "Authorization: Bearer $NVIDIA_API_KEY" \
-    --header 'Content-Type: application/json' \
-    --data "$request" https://integrate.api.nvidia.com/v1/chat/completions || true)"
-  if [[ "$http_code" != '429' ]]; then
-    rm -f "$response" "$headers"
-    return 1
-  fi
-  retry_after="$(awk 'BEGIN{IGNORECASE=1} /^Retry-After:/ {sub(/\r$/, ""); sub(/^[^:]*:[[:space:]]*/, ""); print; exit}' "$headers")"
-  rm -f "$response" "$headers"
-  [[ -n "$retry_after" ]] || return 1
-  if [[ "$retry_after" =~ ^[0-9]+$ ]]; then
-    printf '%s\n' "$retry_after"
-    return 0
-  fi
-  target="$(date -d "$retry_after" +%s 2>/dev/null || true)"
-  [[ "$target" =~ ^[0-9]+$ ]] || return 1
-  now="$(date +%s)"
-  seconds=$((target - now))
-  (( seconds > 0 )) || return 1
-  printf '%s\n' "$seconds"
 }
 
 # A PR branch may predate the Kilo integration entirely. Stage the backend
@@ -360,19 +337,12 @@ while :; do
   fi
 
   transient_failure=1
-  log 'transient provider/runtime interruption on the pinned model; refusing to switch models'
+  log 'transient gateway/upstream interruption; allowing OmniRoute to adapt the upstream route'
   [[ -z "$(git status --porcelain)" ]] || break
   (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
   (( $(remaining) > 600 )) || break
 
   sleep_for="$TRANSIENT_BACKOFF_SECONDS"
-  if [[ "$SOURCE" == 'nvidia' ]]; then
-    retry_after="$(nvidia_retry_after_seconds "$RUNTIME_MODEL" || true)"
-    if [[ "$retry_after" =~ ^[0-9]+$ ]] && (( retry_after > sleep_for )); then
-      sleep_for="$retry_after"
-      log "honoring NVIDIA Retry-After: ${retry_after}s"
-    fi
-  fi
   max_sleep=$(( $(remaining) - 540 ))
   (( sleep_for > max_sleep )) && sleep_for="$max_sleep"
   (( sleep_for > 0 )) && sleep "$sleep_for"
