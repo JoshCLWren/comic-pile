@@ -75,10 +75,10 @@ export default function RollPage() {
   const rollMutation = useRoll()
   const dismissPendingMutation = useDismissPending()
   const overrideMutation = useOverrideRoll()
-  const snoozeMutation = useSnooze()
-  const unsnoozeMutation = useUnsnooze()
   const skipMutation = useSkip()
   const unskipMutation = useUnskip()
+  const snoozeMutation = useSnooze()
+  const unsnoozeMutation = useUnsnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
   const shuffleQueueMutation = useShuffleQueue()
@@ -186,6 +186,33 @@ export default function RollPage() {
       throw error
     }
   }
+
+  const handleSkip = useCallback(async () => {
+    try {
+      const response = await skipMutation.mutate()
+      if (!response) return
+      await refetchBootstrap()
+      const threadMetadata: ThreadMetadata = {
+        id: response.thread_id,
+        title: response.title,
+        format: response.format,
+        issues_remaining: response.issues_remaining,
+        queue_position: response.queue_position,
+        total_issues: response.total_issues ?? null,
+        reading_progress: response.reading_progress ?? null,
+        issue_id: response.issue_id ?? null,
+        issue_number: response.issue_number ?? null,
+        next_issue_id: response.next_issue_id ?? null,
+        next_issue_number: response.next_issue_number ?? null,
+        last_rolled_result: response.result ?? null,
+      }
+      state.suppressPendingAutoOpenRef.current = true
+      await rating.enterRatingView(response.thread_id, response.result ?? null, threadMetadata)
+      state.setRolledResult(response.result ?? null)
+    } catch (error) {
+      state.setErrorMessage(getApiErrorDetail(error))
+    }
+  }, [skipMutation, refetchBootstrap, rating, state])
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
   const skippedThreads = bootstrap?.skipped_threads ?? []
@@ -301,13 +328,15 @@ export default function RollPage() {
                 rateIsPending={rateMutation.isPending}
                 snoozeIsPending={snoozeMutation.isPending}
                 dismissIsPending={dismissPendingMutation.isPending}
+                skipIsPending={skipMutation.isPending}
                 readingOrders={rating.readingOrders}
                 connectedThreads={rating.connectedThreads}
                 onUpdateRating={rating.updateRatingUI}
                 onSubmitRating={rating.handleSubmitRating}
                 onSnooze={snooze.handleSnooze}
-                onRefreshThread={rating.handleRefreshThread}
+                onSkip={handleSkip}
                 onCancel={rating.handleCancelRating}
+                onRefreshThread={rating.handleRefreshThread}
                 readerContext={readerContext}
                 isReaderContextLoading={isReaderContextLoading}
                 readerContextError={readerContextError?.message ?? null}
@@ -347,7 +376,7 @@ export default function RollPage() {
               onToggleBlocked={dependencies.handleToggleBlocked}
               onShuffle={actions.handleShufflePool}
               unsnoozeIsPending={unsnoozeMutation.isPending}
-              unskipIsPending={skipMutation.isPending}
+              unskipIsPending={unskipMutation.isPending}
               shuffleIsPending={shuffleQueueMutation.isPending}
             />
           </div>

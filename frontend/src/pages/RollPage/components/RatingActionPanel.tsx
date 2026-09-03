@@ -3,9 +3,11 @@ interface RatingActionPanelProps {
   rateIsPending: boolean
   snoozeIsPending: boolean
   dismissIsPending: boolean
+  skipIsPending?: boolean
   issuesRemaining: number
   onSubmitRating: (finishSession: boolean) => void
   onSnooze: () => void
+  onSkip?: () => void
   onCancel: () => void
 }
 
@@ -14,9 +16,11 @@ export function RatingActionPanel({
   rateIsPending,
   snoozeIsPending,
   dismissIsPending,
+  skipIsPending = false,
   issuesRemaining,
   onSubmitRating,
   onSnooze,
+  onSkip,
   onCancel,
 }: RatingActionPanelProps) {
   return (
@@ -47,6 +51,18 @@ export function RatingActionPanel({
         >
           {snoozeIsPending ? 'Snoozing…' : 'Snooze'}
         </button>
+        {onSkip && (
+          <button
+            type="button"
+            onClick={onSkip}
+            disabled={skipIsPending}
+            data-testid="skip-roll"
+            aria-label="Skip current roll"
+            className="min-h-11 flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+          >
+            {skipIsPending ? 'Skipping…' : 'Skip'}
+          </button>
+        )}
         <button
           type="button"
           onClick={onCancel}
