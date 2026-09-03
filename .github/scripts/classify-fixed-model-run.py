@@ -36,6 +36,7 @@ TARGET_RE = re.compile(r"checked out (?P<kind>issue|pr) #(?P<number>\d+) on ")
 RATE_LIMIT_RE = re.compile(r"429|too many requests|rate.?limit|quota|throttl|capacity", re.I)
 MODEL_MISSING_RE = re.compile(
     r"pinned .*model is not currently (?:exposed|invokable)|unknown model|model .*not found|"
+    r"model .*not available|"
     r"model .*does not exist|(?:http(?: status)?|status(?: code)?)[ :]+(?:404|410)\b|"
     r"\b(?:404 not found|410 gone)\b",
     re.I,
@@ -353,7 +354,13 @@ class ClassifierTests(unittest.TestCase):
 
     def test_explicit_http_model_retirement_is_unavailable(self) -> None:
         """HTTP 404 and 410 permanently identify an unavailable model only."""
-        for response in ("HTTP 404", "HTTP status: 410", "410 Gone", "404 Not Found"):
+        for response in (
+            "HTTP 404",
+            "HTTP status: 410",
+            "410 Gone",
+            "404 Not Found",
+            "Model 'north-mini-code-free' is not available in the active live catalog",
+        ):
             with self.subTest(response=response):
                 result = classify(self.BASE + f"model invocation failed: {response}\n")
                 self.assertEqual(result.outcome, "MODEL MISSING")
