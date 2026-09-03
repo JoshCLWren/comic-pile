@@ -22,6 +22,8 @@ def test_catalog_backed_providers_use_central_adapter() -> None:
     assert ".github/scripts/factory_candidate_health.py" in selector
     assert "factory-attempt-comments.json" in selector
     assert "--worker \"$WORKER\"" in selector
+    assert "--preferred-provider \"$preferred_provider\"" in selector
+    assert "preferred_provider='omniroute-free'" in selector
 
 
 def test_catalog_backed_slots_share_provider_candidates() -> None:

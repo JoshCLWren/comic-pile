@@ -83,6 +83,29 @@ def test_successful_execution_is_preferred_to_unknown_candidate() -> None:
     assert result.selected.health_state == "healthy"
 
 
+def test_preferred_provider_lane_uses_usable_provider_before_global_rank() -> None:
+    """The OmniRoute canary lane stays on OmniRoute when its route is usable."""
+    candidates = [
+        *CANDIDATES,
+        {
+            "provider": "omniroute-free",
+            "model": "free-cascade-small",
+            "runtime_model": "omniroute/free-cascade-small",
+            "discovered_by": "provider_catalog",
+        },
+    ]
+    result = HEALTH.select_candidate(
+        candidates,
+        [evidence("vendor/a:free", "success")],
+        worker=45,
+        now_epoch=NOW,
+        preferred_provider="omniroute-free",
+    )
+
+    assert result.selected is not None
+    assert result.selected.provider == "omniroute-free"
+
+
 def test_no_work_keeps_candidate_healthy() -> None:
     """Canonical no_work proves executor health without requiring a diff."""
     result = HEALTH.select_candidate(

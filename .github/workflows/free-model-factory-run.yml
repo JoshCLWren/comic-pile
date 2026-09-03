@@ -337,9 +337,13 @@ jobs:
             exit 1
           fi
 
+          preferred_provider=''
+          # Factory 45 is the dedicated OmniRoute canary lane. It still falls
+          # back to the shared fleet if OmniRoute is unavailable or cooling.
+          [[ "$WORKER" == 45 ]] && preferred_provider='omniroute-free'
           selection="$(python3 .github/scripts/factory_candidate_health.py \
             --discovery "$discovery_file" --comments "$comments_file" \
-            --worker "$WORKER")"
+            --worker "$WORKER" --preferred-provider "$preferred_provider")"
           source="$(jq -r '.selected.provider // empty' <<< "$selection")"
           model="$(jq -r '.selected.model // empty' <<< "$selection")"
           runtime_model="$(jq -r '.selected.runtime_model // empty' <<< "$selection")"
