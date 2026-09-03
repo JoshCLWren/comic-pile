@@ -159,6 +159,21 @@ class RetryBudgetTests(unittest.TestCase):
         self.assertTrue(any(item.kind == "issue" and item.number == 31 for item in below_budget))
         self.assertFalse(any(item.kind == "issue" and item.number == 31 for item in exhausted))
 
+    def test_no_diff_pr_repairs_stop_after_budget_is_exhausted(self) -> None:
+        target = factory_pr(31, stage="factory:changes-requested")
+        below_budget = build_candidates(
+            [],
+            [target],
+            no_diff_attempts_by_issue={31: FACTORY_NO_DIFF_RETRY_LIMIT - 1},
+        )
+        exhausted = build_candidates(
+            [],
+            [target],
+            no_diff_attempts_by_issue={31: FACTORY_NO_DIFF_RETRY_LIMIT},
+        )
+        self.assertTrue(any(item.kind == "pr" and item.number == 31 for item in below_budget))
+        self.assertFalse(any(item.kind == "pr" and item.number == 31 for item in exhausted))
+
     def test_real_factory_blocked_label_remains_terminal(self) -> None:
         candidates = build_candidates(
             [issue(31, "factory:blocked")],

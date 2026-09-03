@@ -68,7 +68,7 @@ current_owner_is_self() {
 
 release_target() {
   local number="$1" fallback_stage="$2" reason="$3" target_kind="${4:-target}"
-  local stage epoch marker
+  local stage epoch marker no_diff_count no_diff_limit
   case "${target_kind}:${reason}" in
     pr:repair-no-change-ready-handoff|pr:repair-no-persisted-change-handoff)
       stage="$fallback_stage"
@@ -79,11 +79,18 @@ release_target() {
   esac
   epoch="$(date +%s)"
   marker="<!-- comic-pile-factory-claim-released-v3:${target_kind}-${number}:${WORKER_ID}:${epoch}:${reason} -->"
-  if [[ "$target_kind" == 'issue' && "$reason" == 'no-persisted-change-handoff' ]]; then
+  if [[ "$reason" == 'no-persisted-change-handoff' || "$reason" == 'repair-no-persisted-change-handoff' ]]; then
     if ! gh issue comment "$number" --body "$marker" >/dev/null 2>&1; then
       FACTORY_RETAIN_LEASE_ON_EXIT=1
-      log "unable to persist bounded no-diff marker for issue #${number}; retaining the lease"
+      log "unable to persist bounded no-diff marker for ${target_kind} #${number}; retaining the lease"
       return 1
+    fi
+    no_diff_limit="${FACTORY_NO_DIFF_RETRY_LIMIT:-3}"
+    no_diff_count="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${number}/comments?per_page=100" 2>/dev/null \
+      | jq --arg marker 'no-persisted-change-handoff' '[.[][]? | select((.body // "") | contains($marker))] | length' || echo 0)"
+    if [[ "$no_diff_count" =~ ^[0-9]+$ ]] && (( no_diff_count >= no_diff_limit )); then
+      stage='factory:blocked'
+      log "quarantining ${target_kind} #${number} after ${no_diff_count} bounded no-diff attempts"
     fi
     replace_labels "$number" 'factory:unowned' "$stage"
   else
