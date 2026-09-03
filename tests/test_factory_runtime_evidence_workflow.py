@@ -32,3 +32,10 @@ def test_terminal_step_preserves_newer_attempt_evidence():
 
     assert "existing_run > GITHUB_RUN_ID" in workflow
     assert "Newer attempt evidence from run" in workflow
+
+
+def test_omniroute_control_plane_requests_retry_transient_tunnel_failures():
+    """A brief Funnel/DNS interruption must not retire the gateway for one probe."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert workflow.count("--retry 5 --retry-all-errors --retry-delay 5") == 2

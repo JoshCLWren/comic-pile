@@ -214,7 +214,7 @@ jobs:
           if [[ -n "${OMNIROUTE_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]]; then
             omniroute_catalog="$RUNNER_TEMP/factory-omniroute-catalog"
             if curl --silent --show-error --fail-with-body \
-              --connect-timeout 5 --max-time 30 \
+              --connect-timeout 5 --max-time 30 --retry 5 --retry-all-errors --retry-delay 5 \
               --header "Authorization: Bearer ${OMNIROUTE_API_KEY}" \
               "${OMNIROUTE_BASE_URL%/}/models" > "$omniroute_catalog"; then
               if omniroute_discovery="$(discover_provider omniroute-free "$omniroute_catalog")" \
@@ -529,7 +529,7 @@ jobs:
           esac
           analytics="$RUNNER_TEMP/omniroute-analytics.json"
           code="$(curl --silent --show-error --output "$analytics" --write-out '%{http_code}' \
-            --connect-timeout 5 --max-time 30 \
+            --connect-timeout 5 --max-time 30 --retry 5 --retry-all-errors --retry-delay 5 \
             --header "Authorization: Bearer ${OMNIROUTE_MANAGEMENT_API_KEY}" \
             "${gateway_base_url}/api/usage/analytics?period=session" || true)"
           if [[ "$code" != 200 ]]; then
