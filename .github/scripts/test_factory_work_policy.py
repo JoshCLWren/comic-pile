@@ -80,6 +80,19 @@ class CompletionAwareOrderingTests(unittest.TestCase):
         )
         self.assertTrue(candidates[0].conflicted)
 
+    def test_existing_review_pr_survives_blocked_linked_issue(self) -> None:
+        issue_target = issue(2128, "factory:blocked")
+        review_pr = factory_pr(
+            2138,
+            linked_issue=2128,
+            stage="factory:review",
+            worker=68,
+        )
+
+        candidates = build_candidates([issue_target], [review_pr])
+
+        self.assertEqual([(item.kind, item.number) for item in candidates], [("pr", 2138)])
+
     def test_non_review_worker_prefers_fresh_issue_to_review_queue(self) -> None:
         candidates = [
             Candidate("issue", 1, 3, 4, "2026-08-17T00:00:00Z"),

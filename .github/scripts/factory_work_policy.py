@@ -296,7 +296,12 @@ def pr_is_static_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, An
     linked = linked_issue_from_branch(head)
     if linked is not None and linked in issue_map:
         issue_labels = labels_of(issue_map[linked])
-        if not item_is_unowned(issue_labels) or issue_labels & BLOCKED_LABELS:
+        # An existing canonical PR remains executable even when its linked
+        # issue carries a stale/terminal blocker from an earlier attempt. The
+        # PR's own stage and blocker labels govern whether it can be repaired
+        # or reviewed; requiring the issue to be unblocked strands
+        # factory:review and factory:changes-requested PRs permanently.
+        if not item_is_unowned(issue_labels):
             return False
     return True
 
