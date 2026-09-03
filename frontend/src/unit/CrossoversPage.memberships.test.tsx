@@ -327,7 +327,9 @@ describe('CrossoversPage membership editing', () => {
     selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
     fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
 
-    const items = await screen.findAllByRole('listitem')
+    expect(await screen.findByText('Uncanny X-Men (whole series)')).toBeInTheDocument()
+    const list = screen.getByRole('list', { name: 'Annihilation members' })
+    const items = within(list).getAllByRole('listitem')
     const labels = items.map((item) => item.textContent ?? '')
     expect(labels[0]).toMatch(/Nova #2/)
     expect(labels[1]).toMatch(/Nova \(whole series\)/)
@@ -342,7 +344,9 @@ describe('CrossoversPage membership editing', () => {
     selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
     fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
 
-    const items = await screen.findAllByRole('listitem')
+    expect(await screen.findByText('Uncanny X-Men (whole series)')).toBeInTheDocument()
+    const list = screen.getByRole('list', { name: 'Annihilation members' })
+    const items = within(list).getAllByRole('listitem')
     const labels = items.map((item) => item.textContent ?? '')
     expect(labels[0]).toMatch(/Nova #2/)
     expect(labels[1]).toMatch(/Nova \(whole series\)/)
@@ -364,7 +368,9 @@ describe('CrossoversPage membership editing', () => {
     selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
     fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
 
-    const items = await screen.findAllByRole('listitem')
+    expect(await screen.findByText('Uncanny X-Men (whole series)')).toBeInTheDocument()
+    const list = screen.getByRole('list', { name: 'Annihilation members' })
+    const items = within(list).getAllByRole('listitem')
     const labels = items.map((item) => item.textContent ?? '')
     expect(labels[0]).toMatch(/Nova #2/)
     expect(labels[1]).toMatch(/Nova \(whole series\)/)
