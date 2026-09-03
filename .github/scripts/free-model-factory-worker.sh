@@ -77,6 +77,15 @@ source .github/scripts/factory-semantic-verdict.sh
 
 TERMINAL_OUTCOME_FILE="${RUNNER_TEMP:-/tmp}/factory-discovery-outcome"
 
+# Each GitHub runner may execute the same durable worker repeatedly. Clear the
+# worker-scoped logs before leasing work so a prior model/provider failure
+# cannot be misclassified as the outcome of this attempt.
+worker_log="/tmp/opencode-factory-${WORKER}.log"
+: > "$worker_log"
+rm -f \
+  "/tmp/opencode-factory-${WORKER}.sanitized.log" \
+  "/tmp/opencode-factory-${WORKER}-verdict-recovery.log"
+
 record_terminal_outcome() {
   local outcome="$1" detail="$2"
   case "$outcome" in
