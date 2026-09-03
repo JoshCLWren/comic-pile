@@ -169,7 +169,7 @@ run_agent() {
 
   if [[ "$mode" == 'pr' ]]; then
     target="pull request #${number}"
-    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only for semantic approval, FACTORY_GATE_REJECT only when the PR is clearly unsalvageable, contaminated, obsolete, duplicate, or fundamentally incomplete, otherwise end with FACTORY_GATE_NOT_READY."
+    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Use 'gh pr view ${number} --json ...' and 'gh pr checks ${number} --required' for GitHub evidence; do not use 'gh pr status ${number}'. Fix closure-critical defects and resolve or concretely rebut actionable threads. Treat a missing local .venv, pnpm, ruff, or other optional runner tool as an environment limitation, not a code blocker; rely on the repository's required CI results unless CI itself reports a failure. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only for semantic approval, FACTORY_GATE_REJECT only when the PR is clearly unsalvageable, contaminated, obsolete, duplicate, or fundamentally incomplete, otherwise end with FACTORY_GATE_NOT_READY."
   else
     target="issue #${number}"
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
