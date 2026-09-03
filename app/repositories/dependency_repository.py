@@ -7,7 +7,7 @@ return ORM models or plain values; callers (services) own transactions.
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Dependency
+from app.models import Dependency, Issue, Thread
 
 
 async def get_dependencies_by_user_and_note_prefix(
@@ -24,9 +24,10 @@ async def get_dependencies_by_user_and_note_prefix(
         List of dependencies matching the criteria.
     """
     result = await db.execute(
-        select(Dependency).where(
-            Dependency.user_id == user_id, Dependency.note.like(f"{note_prefix}%")
-        )
+        select(Dependency)
+        .join(Issue, Dependency.source_issue_id == Issue.id)
+        .join(Thread, Issue.thread_id == Thread.id)
+        .where(Thread.user_id == user_id, Dependency.note.like(f"{note_prefix}%"))
     )
     return list(result.scalars().all())
 
@@ -42,7 +43,8 @@ async def delete_dependencies_by_user_and_note_prefix(
         note_prefix: Prefix to match on the note field.
     """
     await db.execute(
-        delete(Dependency).where(
-            Dependency.user_id == user_id, Dependency.note.like(f"{note_prefix}%")
-        )
+        delete(Dependency)
+        .join(Issue, Dependency.source_issue_id == Issue.id)
+        .join(Thread, Issue.thread_id == Thread.id)
+        .where(Thread.user_id == user_id, Dependency.note.like(f"{note_prefix}%"))
     )
