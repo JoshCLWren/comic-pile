@@ -374,8 +374,8 @@ while (( $(remaining) > 480 )); do
     transient_failure=1
     log 'transient OmniRoute/upstream interruption; allowing the gateway to adapt the route and retry if budget permits'
     [[ -z "$(git status --porcelain)" ]] || break
-    (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
-    (( $(remaining) > 600 )) || break
+(( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
+     (( $(remaining) > 540 )) || break
     sleep_for="$TRANSIENT_BACKOFF_SECONDS"
     max_sleep=$(( $(remaining) - 540 ))
     (( sleep_for > max_sleep )) && sleep_for="$max_sleep"
