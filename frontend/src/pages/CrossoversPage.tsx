@@ -73,6 +73,13 @@ function memberLabel(member: DependencyGroupMember): string {
   return 'Unavailable comic'
 }
 
+function memberSequenceOrder(member: DependencyGroupMember): string {
+  if (member.issue_id !== null && member.sequence_order !== null) {
+    return `Position ${member.sequence_order}`
+  }
+  return ''
+}
+
 export default function CrossoversPage() {
   const [groups, setGroups] = useState<DependencyGroup[]>([])
   const [threads, setThreads] = useState<Thread[]>([])
