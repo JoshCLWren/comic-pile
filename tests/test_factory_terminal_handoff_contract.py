@@ -81,6 +81,17 @@ def test_throttle_and_model_missing_remain_distinct() -> None:
     assert 'HTTP[^0-9]*410' in text
 
 
+def test_model_cooldown_ends_retry_loop_after_recording_throttle() -> None:
+    """Explicit OmniRoute cooldowns must not consume another agent retry."""
+    text = _worker_text()
+
+    assert "cooling down|model_cooldown" in text
+    assert "OmniRoute reported model cooldown; ending this assignment without another retry" in text
+    assert text.index('if is_model_cooldown_failure; then') < text.index(
+        "log 'transient gateway/upstream interruption; allowing OmniRoute to adapt the upstream route'"
+    )
+
+
 def test_review_controller_failure_is_control_plane_failure() -> None:
     """A trusted controller exception must not be attributed to the model/provider."""
     text = _worker_text()

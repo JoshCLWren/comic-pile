@@ -110,7 +110,7 @@ record_terminal_outcome() {
 
 record_agent_failure_outcome() {
   local status="$1" log_file="/tmp/opencode-factory-${WORKER}.log"
-  if [[ -f "$log_file" ]] && grep -Eqi '429|too many requests|rate.?limit|quota|throttl|capacity' "$log_file"; then
+  if [[ -f "$log_file" ]] && grep -Eqi '429|too many requests|rate.?limit|quota|throttl|capacity|cooling down|model_cooldown' "$log_file"; then
     record_terminal_outcome provider_throttle "OmniRoute upstream session was throttled (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'HTTP[^0-9]*410|410 Gone' "$log_file"; then
     record_terminal_outcome model_retired_410 "OmniRoute upstream model has been permanently retired by the provider (agent exit ${status})"
@@ -337,6 +337,10 @@ while :; do
   fi
 
   transient_failure=1
+  if is_model_cooldown_failure; then
+    log 'OmniRoute reported model cooldown; ending this assignment without another retry'
+    break
+  fi
   log 'transient gateway/upstream interruption; allowing OmniRoute to adapt the upstream route'
   [[ -z "$(git status --porcelain)" ]] || break
   (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
