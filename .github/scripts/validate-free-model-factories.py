@@ -102,12 +102,13 @@ def main() -> None:
     runner = RUNNER.read_text(encoding='utf-8')
     assert 'group: fixed-model-factory-${{ inputs.worker }}' in runner
     assert 'cancel-in-progress: false' in runner
-    assert 'opencode-free|openrouter-free)' in runner
-    assert "reason='catalog-backed-free-code-slot'" in runner
-    for provider in ('opencode-free', 'openrouter-free', 'omniroute-free'):
-        assert f'{provider})' in runner
+    assert "source='omniroute-free'" in runner
+    assert "runtime_model='omniroute/free-cascade-small'" in runner
+    assert 'GitHub execution is OmniRoute-only' in runner
+    assert 'catalog_candidates="$(jq' in runner
+    assert 'select(.provider == "omniroute-free")' in runner
+    assert 'omniroute-free)' in runner
     assert 'OPENCODE_API_KEY' not in runner
-    assert 'kilo-auto)' in runner and 'runtime_model="kilo/${model}"' in runner
     assert "KILO_VERSION: '7.4.22'" in runner
     assert 'Smoke Kilo Auto Free through Kilo CLI' in runner
     assert 'PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}' in runner
@@ -140,7 +141,7 @@ def main() -> None:
         "[[ \"$SOURCE\" == 'kilo-auto' ]]",
         "[[ \"$SOURCE\" != 'kilo-auto' ]]",
         '.github/scripts/kilo-auto-factory-run.sh',
-        'Do not switch models',
+        'OmniRoute may switch upstream models, providers, or routes within the configured policy',
     ):
         assert required in primitives, f'inherited worker primitive missing: {required}'
 

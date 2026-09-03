@@ -299,7 +299,7 @@ run_agent() {
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
   fi
 
-  prompt="You are external-model Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Source: ${SOURCE}. Requested model or route: ${MODEL}. Runtime selector: ${RUNTIME_MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not switch models, providers, or routes. A provider failure is a result for this lane, not permission to fall back to another paid or unrequested route. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
+  prompt="You are external-model Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Source: ${SOURCE}. Requested capability route: ${MODEL}. Runtime selector: ${RUNTIME_MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. OmniRoute may switch upstream models, providers, or routes within the configured policy; do not bypass OmniRoute or request paid or unconfigured capacity. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
 
   if [[ "$SOURCE" == 'kilo-auto' ]]; then
     set +e
@@ -545,7 +545,7 @@ while (( $(remaining) > 480 )); do
     fi
 
     transient_failure=1
-    log 'transient provider/runtime interruption on the pinned model; refusing to switch models'
+    log 'transient provider/runtime interruption; allowing OmniRoute to adapt the upstream route'
     [[ -z "$(git status --porcelain)" ]] || break
     (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
     (( $(remaining) > 600 )) || break

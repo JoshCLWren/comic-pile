@@ -71,7 +71,7 @@ Factory ownership is a connection-pool lock around the next action, not a perman
 - Exactly one active owner label may hold an issue or PR at a time.
 - Cross-worker takeover and merge are allowed after the prior lease is released.
 - A factory that creates or advances a PR releases active ownership when its implementation attempt ends, including while CI or review is pending.
-- Provider failure, timeout, no useful persisted change, or another stable handoff state releases the lease so a different model can try later.
+- Provider failure, timeout, no useful persisted change, or another stable handoff state releases the lease so another worker can try later. Review independence is based on factory identity and exact-head provenance, not on requiring a different model; OmniRoute may route both workers through the same upstream model.
 - A takeover worker continues the current branch/head rather than creating a replacement solely because another model authored the existing commits.
 - Waiting on CI or review never reserves a model indefinitely.
 

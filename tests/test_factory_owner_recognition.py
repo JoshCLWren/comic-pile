@@ -92,3 +92,10 @@ def test_omniroute_worker_keeps_runtime_model_contract() -> None:
     """The OmniRoute worker must retain its environment model contract."""
     text = (SCRIPTS / "omniroute-factory-worker.sh").read_text(encoding="utf-8")
     assert 'MODEL="${OMNIROUTE_MODEL:?OMNIROUTE_MODEL is required}"' in text
+
+
+def test_omniroute_worker_allows_gateway_route_adaptation() -> None:
+    """OmniRoute may change upstream capacity without a prompt-level veto."""
+    text = (SCRIPTS / "omniroute-factory-worker.sh").read_text(encoding="utf-8")
+    assert "OmniRoute may switch upstream models, providers, or routes" in text
+    assert "Do not switch models" not in text
