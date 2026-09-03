@@ -80,11 +80,13 @@ def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
 
 
 def test_discovery_failures_publish_normalized_outcomes() -> None:
-    """Catalog transport and eligibility failures are not generic failures."""
+    """OmniRoute catalog failures are not generic failures."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
-    assert "catalog_failures+=('OpenCode model discovery command failed')" in workflow
-    assert "catalog_failures+=('OpenRouter model catalog request failed')" in workflow
+    assert "catalog_failures+=('OmniRoute model catalog request failed')" in workflow
+    assert "catalog_failures+=('OmniRoute candidate adapter failed')" in workflow
+    assert "OpenRouter_API_KEY" not in workflow
+    assert "integrate.api.nvidia.com" not in workflow
     assert "provider_unavailable\\t%s" in workflow
     assert "No catalog provider was executable" in workflow
     assert (
@@ -96,14 +98,12 @@ def test_discovery_failures_publish_normalized_outcomes() -> None:
     assert "outcome='selection-failed'" in workflow
 
 
-def test_nvidia_410_is_persisted_and_skipped_before_future_probes() -> None:
-    """A known NVIDIA 410 is durable and avoids another provider request."""
+def test_direct_provider_probes_are_removed_from_the_runner() -> None:
+    """The production runner cannot bypass OmniRoute with direct probes."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
-    assert "factory-model-retired-410:v1" in workflow
-    assert "Skipping permanently retired NVIDIA model" in workflow
-    assert "code\" == \"410\"" in workflow
-    assert "model_retired_410" in workflow
+    assert "Probe pinned NVIDIA model" not in workflow
+    assert "No fallback is allowed for a fixed-model lane" not in workflow
 
 
 def test_smoke_persists_permanent_model_failures() -> None:

@@ -49,14 +49,14 @@ def test_worker_emits_only_canonical_terminal_outcomes() -> None:
     assert 'TERMINAL_OUTCOME_FILE="${RUNNER_TEMP:-/tmp}/factory-discovery-outcome"' in text
 
 
-def test_timed_pinned_session_is_provider_failure_after_smoke() -> None:
-    """A Kilo/OpenCode session timeout must not collapse to unknown_failure."""
+def test_timed_omniroute_session_is_provider_failure_after_smoke() -> None:
+    """An OmniRoute session timeout must not collapse to unknown_failure."""
     text = _worker_text()
 
     assert 'status == 124 || status == 137 || status == 143' in text
     assert (
         'record_terminal_outcome provider_failure '
-        '"pinned provider/model session timed out or was interrupted after smoke succeeded'
+        '"OmniRoute upstream session timed out or was interrupted after smoke succeeded'
     ) in text
 
 
