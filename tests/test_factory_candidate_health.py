@@ -96,7 +96,10 @@ def test_preferred_provider_lane_uses_usable_provider_before_global_rank() -> No
     ]
     result = HEALTH.select_candidate(
         candidates,
-        [evidence("vendor/a:free", "success")],
+        [
+            evidence("vendor/a:free", "success"),
+            evidence("free-cascade-small", "success", provider="omniroute-free"),
+        ],
         worker=45,
         now_epoch=NOW,
         preferred_provider="omniroute-free",
@@ -124,7 +127,10 @@ def test_omniroute_throttle_is_scoped_to_one_model_route() -> None:
     ]
     result = HEALTH.select_candidate(
         candidates,
-        [evidence("free-cascade-small", "provider_throttle", provider="omniroute-free")],
+        [
+            evidence("free-cascade-small", "provider_throttle", provider="omniroute-free"),
+            evidence("free-cascade-big", "success", provider="omniroute-free"),
+        ],
         worker=45,
         now_epoch=NOW,
         preferred_provider="omniroute-free",
@@ -152,7 +158,10 @@ def test_omniroute_410_still_retires_only_that_model() -> None:
     ]
     result = HEALTH.select_candidate(
         candidates,
-        [evidence("free-cascade-small", "model_retired_410", provider="omniroute-free")],
+        [
+            evidence("free-cascade-small", "model_retired_410", provider="omniroute-free"),
+            evidence("free-cascade-big", "success", provider="omniroute-free"),
+        ],
         worker=45,
         now_epoch=NOW,
         preferred_provider="omniroute-free",
@@ -205,7 +214,7 @@ def test_http_410_retirement_marker_remains_excluded_after_newer_success() -> No
     )
     result = HEALTH.select_candidate(
         CANDIDATES,
-        [retired, evidence("vendor/a:free", "success")],
+        [retired, evidence("vendor/a:free", "success"), evidence("vendor/b:free", "success")],
         worker=1,
         now_epoch=NOW,
     )
@@ -292,8 +301,8 @@ def test_later_success_recovers_provider() -> None:
     assert result.selected.model == "vendor/b:free"
 
 
-def test_untested_route_is_preferred_to_known_degraded_route() -> None:
-    """Selection should validate an untested route before repeating a failure."""
+def test_unknown_route_is_rejected_instead_of_being_used_as_fallback() -> None:
+    """Selection must not spend a factory slot on an untested route."""
     result = HEALTH.select_candidate(
         CANDIDATES,
         [evidence("vendor/a:free", "unknown_failure", age=HEALTH.FAILURE_COOLDOWN_SECONDS + 1)],
@@ -302,8 +311,8 @@ def test_untested_route_is_preferred_to_known_degraded_route() -> None:
     )
 
     assert result.selected is not None
-    assert result.selected.model == "vendor/b:free"
-    assert result.selected.health_state == "unknown"
+    assert result.selected.model == "vendor/a:free"
+    assert result.selected.health_state == "degraded"
 
 
 def test_legacy_model_interruption_cools_then_degrades() -> None:
@@ -392,8 +401,8 @@ def test_environment_failure_does_not_poison_model() -> None:
     assert result.selected.health_state == "healthy"
 
 
-def test_untrusted_attempt_evidence_is_ignored() -> None:
-    """User-authored marker text cannot suppress executable capacity."""
+def test_untrusted_attempt_evidence_does_not_create_executable_capacity() -> None:
+    """User-authored marker text cannot create executable capacity."""
     result = HEALTH.select_candidate(
         [CANDIDATES[0]],
         [evidence("vendor/a:free", "model_unavailable", trusted=False)],
@@ -401,5 +410,6 @@ def test_untrusted_attempt_evidence_is_ignored() -> None:
         now_epoch=NOW,
     )
 
-    assert result.selected is not None
-    assert result.selected.health_state == "unknown"
+    assert result.selected is None
+    assert result.failure_outcome == "unknown_failure"
+    assert result.candidates[0].health_state == "unknown"

@@ -293,14 +293,13 @@ def select_candidate(
     now_epoch: int,
     preferred_provider: str | None = None,
 ) -> Selection:
-    """Prefer healthy candidates, then untested candidates, over known failures."""
+    """Prefer candidates with trusted evidence, failing closed on unknown routes."""
     comment_list = tuple(comments)
     ranked = rank_candidates(candidates, comment_list, now_epoch=now_epoch)
-    # An unknown route has no negative evidence and can be validated by the
-    # bounded smoke. A degraded route has already produced a failure after its
-    # cooldown, so selecting it first needlessly repeats known-bad work when
-    # catalog-only routes are available.
-    priority = {"healthy": 0, "unknown": 1, "degraded": 2}
+    # Catalog presence is not execution evidence. Unknown routes must be
+    # rejected before spending a factory slot on a smoke test that is likely
+    # to reveal an unavailable model.
+    priority = {"healthy": 0, "degraded": 1}
     usable = [candidate for candidate in ranked if candidate.health_state in priority]
     preferred = [
         candidate
