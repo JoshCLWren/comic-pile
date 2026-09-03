@@ -100,7 +100,12 @@ def test_omniroute_exposes_multiple_free_routes_for_independent_lanes() -> None:
                 "data": [
                     {"id": "free-cascade-small"},
                     {"id": "free-cascade-big"},
-                    {"id": "auto/coding:free"},
+                    {"id": "auto/coding:free", "capabilities": {"tool_calling": True}},
+                    {"id": "provider/no-tools:free"},
+                    {
+                        "id": "openrouter/nvidia/nemotron-3.5-content-safety:free",
+                        "capabilities": {"tool_calling": True},
+                    },
                     {"id": "auto/best-coding"},
                     {"id": "provider/backing-model"},
                 ]

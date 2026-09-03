@@ -189,6 +189,15 @@ class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
 
     FALLBACK_CASCADE_MODEL = "free-cascade-small"
 
+    @staticmethod
+    def _supports_agent_tools(item: dict[str, Any]) -> bool:
+        """Return whether catalog metadata supports OpenCode tool execution."""
+        model = str(item.get("id") or "").lower()
+        if "content-safety" in model or "moderation" in model:
+            return False
+        capabilities = item.get("capabilities")
+        return isinstance(capabilities, dict) and capabilities.get("tool_calling") is True
+
     def __init__(self) -> None:
         """Configure the external OmniRoute OpenAI-compatible adapter."""
         super().__init__("omniroute-free", "omniroute")
@@ -214,6 +223,7 @@ class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
             for item in items
             if isinstance(model := item.get("id"), str)
             and model
+            and (model.startswith("free-cascade-") or self._supports_agent_tools(item))
             and (configured is None or model in configured)
             and (
                 model.endswith(":free")
