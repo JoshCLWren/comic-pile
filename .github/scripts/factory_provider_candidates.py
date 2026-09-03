@@ -187,6 +187,8 @@ class OpenCodeFreeAdapter:
 class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
     """Expose free OmniRoute coding routes for independent factory lanes."""
 
+    FALLBACK_CASCADE_MODEL = "free-cascade-small"
+
     def __init__(self) -> None:
         """Configure the external OmniRoute OpenAI-compatible adapter."""
         super().__init__("omniroute-free", "omniroute")
@@ -219,8 +221,26 @@ class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
                 or model.startswith("free-cascade-")
             )
         }
+        # OmniRoute's model catalog is dynamic and can briefly omit the
+        # configured cascade while upstream capacity is being refreshed. Keep
+        # the known gateway-owned cascade executable as a durable fallback;
+        # candidate health still retires it permanently after a recorded 410
+        # or excludes it during its evidence-based cooldown.
+        if self.FALLBACK_CASCADE_MODEL not in models:
+            models.add(self.FALLBACK_CASCADE_MODEL)
         candidates = tuple(
-            _candidate(self.provider, model, "omniroute", "provider_catalog")
+            _candidate(
+                self.provider,
+                model,
+                "omniroute",
+                "provider_catalog"
+                if model in {
+                    str(item.get("id"))
+                    for item in items
+                    if isinstance(item.get("id"), str)
+                }
+                else "configured_cascade_fallback",
+            )
             for model in sorted(models)
         )
         return Discovery(
