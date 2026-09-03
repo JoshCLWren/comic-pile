@@ -11,4 +11,12 @@ ownership of SQLAlchemy query construction and persistence:
 Existing routers are migrated into this package incrementally; the conformance
 test ``tests/test_router_layering_conformance.py`` keeps router violations from
 growing while each migration shrinks its recorded baseline.
+
 """
+
+from . import continuity_repository
+from . import dependency_repository
+from . import issue_repository
+from . import session_repository
+from . import thread_repository
+from . import taste_signals

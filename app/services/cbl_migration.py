@@ -1,13 +1,13 @@
 from app.models.dependency import Dependency
+from app.repositories import dependency_repository
 from app.schemas.cbl_adoption import AdoptionPlan, AdoptionCommit
 from app.services.api import api_client
 
-async def audit_production_state(user_id: int) -> dict:
-    # Query dependencies for user 1 with cbl-order:source:* notes
-    cbl_dependencies = await Dependency.query.filter(
-        Dependency.user_id == user_id,
-        Dependency.note.like("cbl-order:source:%")
-    ).all()
+async def audit_production_state(user_id: int, db: AsyncSession) -> dict:
+    # Query dependencies for user with cbl-order:source:* notes
+    cbl_dependencies = await dependency_repository.get_dependencies_by_user_and_note_prefix(
+        db, user_id, "cbl-order:source:"
+    )
 
     # Count active CBL source positions
     source_positions = set()
@@ -22,7 +22,7 @@ async def audit_production_state(user_id: int) -> dict:
         # Add other required counts
     }
 
-async def migrate_ultimate_universe(user_id: int):
+async def migrate_ultimate_universe(user_id: int, db: AsyncSession):
     # Step 1: Generate adoption plan for Ultimate Universe
     plan = await api_client.post("/api/cbl/adoption-plan", json={
         "user_id": user_id,
@@ -37,10 +37,9 @@ async def migrate_ultimate_universe(user_id: int):
     # Implement verification logic here
 
     # Step 4: Remove legacy dependencies
-    await Dependency.query.filter(
-        Dependency.user_id == user_id,
-        Dependency.note.like("cbl-order:source:12:%")  # Scope to Ultimate Universe
-    ).delete()
+    await dependency_repository.delete_dependencies_by_user_and_note_prefix(
+        db, user_id, "cbl-order:source:12:"  # Scope to Ultimate Universe
+    )
 
     # Refresh blocked state
     await api_client.post("/api/roll/refresh-blocked")
