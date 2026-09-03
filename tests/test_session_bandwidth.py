@@ -455,6 +455,23 @@ def test_restore_rejects_impossible_values() -> None:
         restore_ephemeral_bandwidth(_StubSession(), {"active_bandwidth": "zzz"})
 
 
+def test_restore_rejects_invalid_source_and_confidence() -> None:
+    """AC3: Restore rejects invalid source and out-of-range confidence safely."""
+
+    class _StubSession:
+        bandwidth_source: str | None = None
+        bandwidth_confidence: float | None = None
+
+    with pytest.raises(ValueError, match="bandwidth_source"):
+        restore_ephemeral_bandwidth(_StubSession(), {"bandwidth_source": "oracle"})
+
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        restore_ephemeral_bandwidth(_StubSession(), {"bandwidth_confidence": 1.8})
+
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        restore_ephemeral_bandwidth(_StubSession(), {"bandwidth_confidence": -0.2})
+
+
 @pytest.mark.asyncio
 async def test_current_session_endpoint_exposes_bandwidth_state(
     client: AsyncClient, async_db: AsyncSession, default_user
