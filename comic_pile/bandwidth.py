@@ -225,11 +225,30 @@ def restore_ephemeral_bandwidth(session: Session, state: dict[str, object]) -> N
 
     if "bandwidth_confidence" in state:
         confidence = state["bandwidth_confidence"]
-        session.bandwidth_confidence = float(confidence) if confidence is not None else None
+        if confidence is None:
+            session.bandwidth_confidence = None
+        else:
+            try:
+                conf_val = float(confidence)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"bandwidth_confidence must be a number between 0 and 1, got {confidence!r}"
+                ) from exc
+            _validate_confidence(conf_val)
+            session.bandwidth_confidence = conf_val
 
     if "bandwidth_source" in state:
         source = state["bandwidth_source"]
-        session.bandwidth_source = str(source) if source is not None else None
+        if source is None:
+            session.bandwidth_source = None
+        else:
+            source_value = str(source)
+            if source_value not in BANDWIDTH_SOURCE_CHOICES:
+                raise ValueError(
+                    f"bandwidth_source must be one of {sorted(BANDWIDTH_SOURCE_CHOICES)}, "
+                    f"got {source!r}"
+                )
+            session.bandwidth_source = source_value
 
     if "bandwidth_version" in state:
         version = state["bandwidth_version"]
