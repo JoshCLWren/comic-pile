@@ -265,6 +265,82 @@ def test_ci_pr_with_passing_required_checks_is_not_executable(
     assert controller.candidate_is_live_executable(candidate) is False
 
 
+@pytest.mark.parametrize("stage", ["factory:review", "factory:changes-requested"])
+def test_actionable_pr_stage_is_live_executable(
+    controller: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+) -> None:
+    """Review and repair stages have an executable next action."""
+    candidate = controller.Candidate("pr", 902, 3, 2, "2026-08-16T12:00:00Z")
+    monkeypatch.setattr(
+        controller,
+        "target_json",
+        lambda number: {"labels": [{"name": stage}]},
+    )
+
+    assert controller.candidate_is_live_executable(candidate) is True
+
+
+@pytest.mark.parametrize("stage", ["factory:review", "factory:changes-requested"])
+def test_assign_returns_actionable_pr_despite_historical_no_diff_markers(
+    controller: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+) -> None:
+    """The full assignment path honors current PR lifecycle state over old comments."""
+    pr = {
+        "number": 2122,
+        "state": "OPEN",
+        "isDraft": False,
+        "labels": [
+            {"name": "factory"},
+            {"name": "factory:unowned"},
+            {"name": stage},
+        ],
+        "headRefName": "factory/50-1767-opencode-free",
+        "body": "Worker: opencode-free-model-factory-50",
+        "createdAt": "2026-09-03T00:25:29Z",
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "CLEAN",
+    }
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda worker: False)
+    monkeypatch.setattr(controller, "reconcile_stale_leases", lambda: [])
+    monkeypatch.setattr(controller, "list_issues", lambda: [])
+    monkeypatch.setattr(controller, "list_prs", lambda: [pr])
+    monkeypatch.setattr(
+        controller,
+        "load_no_diff_attempts",
+        lambda: {2122: 3},
+    )
+    monkeypatch.setattr(
+        controller,
+        "target_json",
+        lambda number: {"labels": [{"name": stage}]},
+    )
+    monkeypatch.setattr(controller, "assign_candidate", lambda candidate, worker: True)
+
+    assignment = controller.assign("13")
+
+    assert assignment is not None
+    assert (assignment.kind, assignment.number, assignment.stage) == ("pr", 2122, stage)
+
+
+def test_ci_pr_with_failed_required_checks_is_live_executable(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A required-check failure makes CI-stage work actionable for repair."""
+    candidate = controller.Candidate("pr", 903, 3, 2, "2026-08-16T12:00:00Z")
+    monkeypatch.setattr(
+        controller,
+        "target_json",
+        lambda number: {"labels": [{"name": "factory:ci"}]},
+    )
+    monkeypatch.setattr(controller, "required_checks_failed", lambda number: True)
+
+    assert controller.candidate_is_live_executable(candidate) is True
+
+
 def test_active_fixed_workers_paginates_all_active_run_states(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -346,6 +422,47 @@ def test_one_dispatch_batch_plans_distinct_targets(controller: types.ModuleType)
 
     assert plan["13"].number == 601
     assert plan["29"].number == 602
+
+
+def test_one_dispatch_batch_plans_distinct_actionable_prs(
+    controller: types.ModuleType,
+) -> None:
+    """Several offered workers can drain separate review and repair PRs."""
+    candidates = [
+        controller.Candidate(
+            "pr",
+            2122,
+            3,
+            0,
+            "2026-09-03T00:25:29Z",
+            stage="factory:changes-requested",
+            producer_worker="50",
+        ),
+        controller.Candidate(
+            "pr",
+            2132,
+            3,
+            0,
+            "2026-09-03T01:59:57Z",
+            stage="factory:review",
+            producer_worker="42",
+        ),
+        controller.Candidate(
+            "pr",
+            2133,
+            3,
+            0,
+            "2026-09-03T02:15:07Z",
+            stage="factory:review",
+            producer_worker="66",
+        ),
+    ]
+
+    plan = controller.plan_distinct_assignments(candidates, ["42", "43", "44"])
+
+    assert len(plan) == 3
+    assert len({candidate.number for candidate in plan.values()}) == 3
+    assert plan["42"].number != 2132
 
 
 def test_active_worker_no_longer_performs_repo_wide_selection_or_merging() -> None:

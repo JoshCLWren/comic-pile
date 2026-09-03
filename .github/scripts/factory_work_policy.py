@@ -374,9 +374,12 @@ def build_candidates(
     for pr in prs:
         if not pr_is_static_candidate(pr, issue_map):
             continue
-        if no_diff_attempts_by_issue and int(pr['number']) in no_diff_attempts_by_issue:
-            if no_diff_attempts_by_issue[int(pr['number'])] >= FACTORY_NO_DIFF_RETRY_LIMIT:
-                continue
+        # PR retry exhaustion is represented by the explicit factory:blocked
+        # lifecycle stage written by the worker that records the final bounded
+        # no-diff attempt. Historical comments are evidence for deciding when
+        # to quarantine, but they are not an independent hidden queue state.
+        # If an operator truthfully restores the PR to review or repair, its
+        # current lifecycle labels must make it executable again.
         linked = linked_issue_from_branch(pr.get('headRefName'))
         pr_labels = labels_of(pr)
         labels = set(pr_labels)
