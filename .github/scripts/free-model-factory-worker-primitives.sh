@@ -291,7 +291,7 @@ machine_merge_gates_pass() {
 is_transient_agent_failure() {
   local status="$1"
   [[ "$status" == "124" ]] && return 0
-  grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|cooling down|model_cooldown|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' \
+  grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|cooling down|model_cooldown|stream[^[:space:]]*[[:space:]]+timeout|stream_timeout|STREAM_READINESS_TIMEOUT|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' \
     "/tmp/opencode-factory-${WORKER}.log"
 }
 

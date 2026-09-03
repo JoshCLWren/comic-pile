@@ -92,6 +92,14 @@ def test_model_cooldown_ends_retry_loop_after_recording_throttle() -> None:
     )
 
 
+def test_stream_readiness_timeout_is_provider_failure_evidence() -> None:
+    """OmniRoute stream readiness failures must enter the provider taxonomy."""
+    text = _worker_text()
+
+    assert 'STREAM_READINESS_TIMEOUT' in text
+    assert 'stream[^\\n]*(timeout|readiness)' in text
+
+
 def test_review_controller_failure_is_control_plane_failure() -> None:
     """A trusted controller exception must not be attributed to the model/provider."""
     text = _worker_text()

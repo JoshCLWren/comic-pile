@@ -122,7 +122,7 @@ record_agent_failure_outcome() {
     record_terminal_outcome environment_failure "worker environment failed during assigned execution (agent exit ${status})"
   elif (( status == 124 || status == 137 || status == 143 )); then
     record_terminal_outcome provider_failure "OmniRoute upstream session timed out or was interrupted after smoke succeeded (agent exit ${status})"
-  elif [[ -f "$log_file" ]] && grep -Eqi 'provider[^\n]*(error|unavailable|failed)|service unavailable|bad gateway|gateway timeout|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset|upstream[^\n]*(error|failed)' "$log_file"; then
+  elif [[ -f "$log_file" ]] && grep -Eqi 'provider[^\n]*(error|unavailable|failed)|service unavailable|bad gateway|gateway timeout|stream[^\n]*(timeout|readiness)|STREAM_READINESS_TIMEOUT|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset|upstream[^\n]*(error|failed)' "$log_file"; then
     record_terminal_outcome provider_failure "OmniRoute upstream execution failed after smoke succeeded (agent exit ${status})"
   else
     record_terminal_outcome unknown_failure "agent exited ${status} without enough evidence for a narrower failure class"
