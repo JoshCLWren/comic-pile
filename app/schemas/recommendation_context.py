@@ -44,6 +44,8 @@ class RecommendationContextResponse(BaseModel):
     effort_source: str | None = None
     effort_confidence: float | None = None
     effort_sample_count: int | None = None
+    algorithm_version: str | None = None
+    control_mode: str | None = None
 
 
 class RecommendationContextCreate(BaseModel):
@@ -67,6 +69,8 @@ class RecommendationContextCreate(BaseModel):
     effort_source: str | None = None
     effort_confidence: float | None = None
     effort_sample_count: int | None = None
+    algorithm_version: str | None = Field(default=None, max_length=50)
+    control_mode: str | None = Field(default=None, max_length=20)
 
 
 class RollingRecommendationContext(BaseModel):
@@ -86,7 +90,11 @@ class RollingRecommendationContext(BaseModel):
     schema_version: int = Field(default=1, ge=1, description="Version of the context schema")
     algorithm_version: str = Field(
         default="legacy",
-        description="Identifying today's legacy/unweighted selector",
+        description="Canonical algorithm version identifier at decision time",
+    )
+    control_mode: str | None = Field(
+        default=None,
+        description="Active control mode (contextual or legacy) at decision time",
     )
     die_size: int = Field(..., gt=0, description="Current die size at roll time")
     selected_queue_position: int = Field(..., ge=1, description="Selected thread queue position at roll time")
@@ -95,8 +103,8 @@ class RollingRecommendationContext(BaseModel):
         description="Bounded candidate thread IDs in exact selection order",
     )
     selected_index: int = Field(..., ge=0, description="Selected candidate index/result")
-    selection_method: Literal["random", "momentum", "override"] = Field(
-        ..., description="Selection method (random, momentum-weighted, or override)"
+    selection_method: str = Field(
+        ..., description="Selection method (random, momentum, legacy_forced, override, etc.)"
     )
     session_timezone: str | None = Field(
         default=None, description="Session timezone if available from browser"

@@ -29,6 +29,7 @@ from app.models.thread import normalize_format_value
 from app.models.user import User
 from app.roll_recovery import build_roll_recovery
 from app.services.explanation_projection import get_primary_explanation
+from app.config import get_recommendation_settings
 from app.services.reading_effort import (
     EffortEstimate,
     build_recommendation_context,
@@ -172,10 +173,25 @@ async def _select_pending_thread(
     pool_size = len(bounded_rows)
     resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent)
 
+    # Canonical versioning switch: contextual vs forced legacy (kill switch).
+    # Random intent remains an independent user-level bypass regardless of control mode.
+    settings = get_recommendation_settings()
+    canonical_algorithm_version = settings.algorithm_version
+    canonical_control_mode = settings.control_mode
+    normalized_intent_for_control = normalize_intent(selection_intent)
+    is_random_bypass = normalized_intent_for_control == normalize_intent("random")
+    is_forced_legacy = canonical_control_mode == "legacy" and not is_random_bypass
+    # When forced legacy, treat any non-random draw as legacy uniform (unweighted)
+    # while keeping instrumentation active.
+    effective_resolved_mode = resolved_mode
+    if is_forced_legacy:
+        effective_resolved_mode = SelectionMode.LEGACY_UNIFORM
+
     max_bonus = 0.0
     weights_applied = False
     candidate_weights: list = []
-    if resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
+    if is_random_bypass:
+        # Pure-random user bypass - independent of control mode.
         selection = select_from_pool(
             pool_size,
             bandwidth=selection_bandwidth,
@@ -190,6 +206,26 @@ async def _select_pending_thread(
             )
             for row in bounded_rows
         ]
+    elif is_forced_legacy:
+        # Forced legacy kill switch: reproduce legacy unweighted selection inside the die pool
+        # without clearing instrumentation data. Weights are not applied even though
+        # contextual data continues to be snapshotted.
+        selection = select_from_pool(
+            pool_size,
+            bandwidth="balanced",
+            intent="balanced",
+        )
+        selected_index = selection.index
+        candidate_weights = [
+            MomentumCandidateWeight(
+                candidate_id=row[0].id if isinstance(row, tuple) else row.id,
+                weight=1.0,
+                factors=(),
+            )
+            for row in bounded_rows
+        ]
+        weights_applied = False
+        max_bonus = 0.0
     else:
         session_events_result = await db.execute(
             select(Event).where(Event.session_id == current_session.id)
@@ -209,7 +245,11 @@ async def _select_pending_thread(
         candidate_weights = selected.weights
         weights_applied = selected.weights_applied
 
-    if resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
+    if is_forced_legacy:
+        recommendation_reason_codes = ["legacy_forced"]
+    elif is_random_bypass:
+        recommendation_reason_codes = ["pure_random"]
+    elif effective_resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
         if selection_bandwidth in ("light", "deep"):
             recommendation_reason_codes = ["bandwidth_weighted"]
         else:
@@ -262,6 +302,9 @@ async def _select_pending_thread(
             for entry in candidate_weights
         ]
         json_selected_weight = float(candidate_weights[selected_index].weight)
+    # Forced legacy runs record the kill-switch state without losing instrumentation.
+    # The snapshots stay distinguishable via algorithm_version/control_mode plus a distinct selection_method.
+    is_forced_legacy_context = is_forced_legacy
     recommendation_context = build_recommendation_context(
         selected_effort_estimate,
         thread_id=selected_thread.id,
@@ -271,14 +314,20 @@ async def _select_pending_thread(
         bandwidth=normalize_bandwidth(selection_bandwidth).value,
         bandwidth_source=current_session.bandwidth_source or "default",
         bandwidth_confidence=current_session.bandwidth_confidence or 0.0,
-        random_bypass=not weights_applied,
-        balanced_neutrality=not weights_applied,
+        random_bypass=is_random_bypass or is_forced_legacy_context,
+        balanced_neutrality=not weights_applied or is_forced_legacy_context,
         selected_weight=json_selected_weight,
+        algorithm_version=canonical_algorithm_version,
+        control_mode=canonical_control_mode,
     )
 
     if selection_method_override is not None:
         selection_method = selection_method_override
-    elif resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
+    elif is_forced_legacy_context:
+        selection_method = "legacy_forced"
+    elif is_random_bypass:
+        selection_method = "random"
+    elif effective_resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
         selection_method = "bandwidth" if selection_bandwidth in ("light", "deep") else "momentum"
     else:
         selection_method = "random"
@@ -309,15 +358,19 @@ async def _select_pending_thread(
             selected_thread_last_rating=selected_thread.last_rating,
             selected_thread_last_activity_at=selected_thread.last_activity_at,
             effort_estimate=effort_estimate_str,
+            algorithm_version=canonical_algorithm_version,
+            control_mode=canonical_control_mode,
         ),
     )
     db.add(event)
 
     logger.info(
-        "roll selection mode=%s bandwidth=%s intent=%s max_bonus=%.3f pool_size=%s",
-        resolved_mode.value,
+        "roll selection mode=%s bandwidth=%s intent=%s control_mode=%s algorithm_version=%s max_bonus=%.3f pool_size=%s",
+        effective_resolved_mode.value,
         normalize_bandwidth(selection_bandwidth).value,
         normalize_intent(selection_intent).value,
+        canonical_control_mode,
+        canonical_algorithm_version,
         max_bonus,
         pool_size,
     )
@@ -353,8 +406,8 @@ async def _select_pending_thread(
         final_weight=(
             candidate_weights[selected_index].weight if candidate_weights else None
         ),
-        random_bypass=not weights_applied,
-        balanced_neutrality=not weights_applied,
+        random_bypass=is_random_bypass or is_forced_legacy,
+        balanced_neutrality=not weights_applied or is_forced_legacy,
         effort_minutes=(
             round(selected_effort_estimate.minutes, 2)
             if selected_effort_estimate.minutes is not None
@@ -364,6 +417,8 @@ async def _select_pending_thread(
         effort_source=selected_effort_estimate.source.value,
         effort_confidence=round(selected_effort_estimate.confidence, 3),
         effort_sample_count=selected_effort_estimate.sample_count,
+        algorithm_version=canonical_algorithm_version,
+        control_mode=canonical_control_mode,
     )
 
     return _SelectionArtifacts(
@@ -444,6 +499,8 @@ def _build_rolling_recommendation_context(
     selected_thread_last_rating: float | None,
     selected_thread_last_activity_at: datetime | None,
     effort_estimate: str | None = None,
+    algorithm_version: str | None = None,
+    control_mode: str | None = None,
 ) -> dict[str, object]:
     """Build the rolling recommendation context snapshot for a roll event.
 
@@ -457,15 +514,21 @@ def _build_rolling_recommendation_context(
         selected_thread_last_rating: Last rating of selected thread at decision time
         selected_thread_last_activity_at: Last activity timestamp of selected thread
         effort_estimate: Optional effort estimate if available
+        algorithm_version: Canonical algorithm version identifier at decision time.
+        control_mode: Active control mode (``contextual`` or ``legacy``) at decision time.
 
     Returns:
         Dictionary suitable for JSON storage as rolling_recommendation_context
     """
     local_hour = _get_local_hour_from_timezone(session_timezone)
+    settings = get_recommendation_settings()
+    resolved_algorithm_version = algorithm_version or settings.algorithm_version
+    resolved_control_mode = control_mode or settings.control_mode
 
     return {
         "schema_version": 1,
-        "algorithm_version": "legacy",
+        "algorithm_version": resolved_algorithm_version,
+        "control_mode": resolved_control_mode,
         "die_size": die_size,
         "selected_queue_position": selected_queue_position,
         "bounded_candidate_ids": bounded_candidate_ids,
@@ -575,6 +638,8 @@ async def roll_dice(
         effort_source=artifacts.rec_context_create.effort_source,
         effort_confidence=artifacts.rec_context_create.effort_confidence,
         effort_sample_count=artifacts.rec_context_create.effort_sample_count,
+        algorithm_version=artifacts.rec_context_create.algorithm_version,
+        control_mode=artifacts.rec_context_create.control_mode,
     )
     db.add(rec_context)
     current_session.pending_thread_id = artifacts.selected_thread.id
@@ -684,6 +749,8 @@ async def skip_roll(
         effort_source=artifacts.rec_context_create.effort_source,
         effort_confidence=artifacts.rec_context_create.effort_confidence,
         effort_sample_count=artifacts.rec_context_create.effort_sample_count,
+        algorithm_version=artifacts.rec_context_create.algorithm_version,
+        control_mode=artifacts.rec_context_create.control_mode,
     )
     db.add(rec_context)
     # Advance pending to the newly selected thread; do not mark the skipped
@@ -960,6 +1027,7 @@ async def override_roll(
             "factors": [],
         }
     ]
+    override_settings = get_recommendation_settings()
     recommendation_context = build_recommendation_context(
         effort_estimate,
         thread_id=override_thread_id,
@@ -972,6 +1040,8 @@ async def override_roll(
         random_bypass=False,
         balanced_neutrality=True,
         selected_weight=1.0,
+        algorithm_version=override_settings.algorithm_version,
+        control_mode=override_settings.control_mode,
     )
 
     # Extract effort estimate band as string for JSON serialization
@@ -998,6 +1068,8 @@ async def override_roll(
             selected_thread_last_rating=override_thread.last_rating,
             selected_thread_last_activity_at=override_thread.last_activity_at,
             effort_estimate=effort_estimate_str,
+            algorithm_version=override_settings.algorithm_version,
+            control_mode=override_settings.control_mode,
         ),
     )
     db.add(event)
@@ -1021,6 +1093,8 @@ async def override_roll(
         effort_source=effort_estimate.source.value,
         effort_confidence=round(effort_estimate.confidence, 3),
         effort_sample_count=effort_estimate.sample_count,
+        algorithm_version=override_settings.algorithm_version,
+        control_mode=override_settings.control_mode,
     )
 
     # Flush event to get its ID for the recommendation context FK
@@ -1046,6 +1120,8 @@ async def override_roll(
         effort_source=context_data.effort_source,
         effort_confidence=context_data.effort_confidence,
         effort_sample_count=context_data.effort_sample_count,
+        algorithm_version=context_data.algorithm_version,
+        control_mode=context_data.control_mode,
     )
     db.add(rec_context)
 

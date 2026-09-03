@@ -118,6 +118,8 @@ RECOMMENDATION_CONTEXT_BANDWIDTH_SOURCE_KEY: Final[str] = "bandwidth_source"
 RECOMMENDATION_CONTEXT_BANDWIDTH_CONFIDENCE_KEY: Final[str] = "bandwidth_confidence"
 RECOMMENDATION_CONTEXT_RANDOM_BYPASS_KEY: Final[str] = "random_bypass"
 RECOMMENDATION_CONTEXT_BALANCED_NEUTRALITY_KEY: Final[str] = "balanced_neutrality"
+RECOMMENDATION_CONTEXT_ALGORITHM_VERSION_KEY: Final[str] = "algorithm_version"
+RECOMMENDATION_CONTEXT_CONTROL_MODE_KEY: Final[str] = "control_mode"
 
 
 class EstimateSource(StrEnum):
@@ -538,6 +540,8 @@ def build_recommendation_context(
     random_bypass: bool | None = None,
     balanced_neutrality: bool | None = None,
     selected_weight: float | None = None,
+    algorithm_version: str | None = None,
+    control_mode: str | None = None,
 ) -> dict[str, object]:
     """Build the versioned decision-time recommendation-context payload.
 
@@ -571,6 +575,8 @@ def build_recommendation_context(
         random_bypass: Whether contextual weighting was bypassed.
         balanced_neutrality: Whether the draw was explicitly neutral.
         selected_weight: Final weight of the selected candidate.
+        algorithm_version: Canonical algorithm version identifier at decision time.
+        control_mode: Active control mode (``contextual`` or ``legacy``) at decision time.
 
     Returns:
         JSON-serializable context dict tagged with
@@ -614,4 +620,6 @@ def build_recommendation_context(
         payload[RECOMMENDATION_CONTEXT_BANDWIDTH_CONFIDENCE_KEY] = None
     payload[RECOMMENDATION_CONTEXT_RANDOM_BYPASS_KEY] = bool(random_bypass)
     payload[RECOMMENDATION_CONTEXT_BALANCED_NEUTRALITY_KEY] = bool(balanced_neutrality)
+    payload[RECOMMENDATION_CONTEXT_ALGORITHM_VERSION_KEY] = algorithm_version
+    payload[RECOMMENDATION_CONTEXT_CONTROL_MODE_KEY] = control_mode
     return payload

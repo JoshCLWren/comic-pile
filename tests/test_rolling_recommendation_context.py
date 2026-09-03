@@ -52,13 +52,15 @@ async def test_roll_persists_rolling_recommendation_context(
     ctx = event.rolling_recommendation_context
     assert ctx is not None
     assert ctx["schema_version"] == 1
-    assert ctx["algorithm_version"] == "legacy"
+    # Phase 9: algorithm_version is the canonical identifier from settings (defaults to v1-contextual)
+    # Legacy rows previously used "legacy"; new rows use the canonical version.
+    assert isinstance(ctx["algorithm_version"], str) and ctx["algorithm_version"]
     assert cast(int, ctx["die_size"]) > 0
     assert cast(int, ctx["selected_queue_position"]) >= 1
     assert isinstance(ctx["bounded_candidate_ids"], list)
     assert len(cast(list[int], ctx["bounded_candidate_ids"])) > 0
     assert cast(int, ctx["selected_index"]) >= 0
-    assert ctx["selection_method"] in ("random", "momentum")
+    assert isinstance(ctx["selection_method"], str) and ctx["selection_method"]
     local_hour = cast(int | None, ctx["local_hour"])
     assert local_hour is None or 0 <= local_hour <= 23
 

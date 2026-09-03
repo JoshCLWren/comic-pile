@@ -198,6 +198,29 @@ def _context_value(context: Mapping[str, object] | None, names: tuple[str, ...])
     return None
 
 
+def _extract_control_mode(event: Event) -> str | None:
+    """Extract the control mode recorded at roll time.
+
+    Args:
+        event: Roll event.
+
+    Returns:
+        ``contextual`` or ``legacy`` when recorded, or ``None`` for legacy rows.
+    """
+    raw = _optional_attribute(event, "control_mode")
+    if raw is None:
+        for attr in ("recommendation_context", "rolling_recommendation_context"):
+            ctx = _optional_attribute(event, attr)
+            if isinstance(ctx, Mapping):
+                raw = _context_value(ctx, ("control_mode",))
+                if isinstance(raw, str) and raw.strip():
+                    break
+                raw = None
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return None
+
+
 def _extract_algorithm_version(event: Event) -> str:
     """Extract the algorithm version recorded at roll time.
 
@@ -206,18 +229,33 @@ def _extract_algorithm_version(event: Event) -> str:
 
     Returns:
         Recorded version string, or ``LEGACY_ALGORITHM_VERSION`` when the
-        event predates version instrumentation.
+        event predates version instrumentation. When the canonical version is
+        present but the control mode is ``legacy`` (kill-switch forced), the
+        returned bucket is suffixed as ``<version>:legacy_forced`` so forced
+        legacy runs remain distinguishable in version-grouped metrics.
     """
     raw = _optional_attribute(event, "algorithm_version")
     if raw is None:
-        context = _optional_attribute(event, "recommendation_context")
-        raw = _context_value(
-            context if isinstance(context, Mapping) else None,
-            ("algorithm_version", "context_version"),
-        )
+        for attr in ("recommendation_context", "rolling_recommendation_context"):
+            ctx = _optional_attribute(event, attr)
+            if isinstance(ctx, Mapping):
+                candidate = _context_value(
+                    ctx if isinstance(ctx, Mapping) else None,
+                    ("algorithm_version", "context_version"),
+                )
+                if isinstance(candidate, str) and candidate.strip():
+                    raw = candidate
+                    break
     if isinstance(raw, str) and raw.strip():
-        return raw
-    return LEGACY_ALGORITHM_VERSION
+        base = raw.strip()
+    else:
+        base = LEGACY_ALGORITHM_VERSION
+    control = _extract_control_mode(event)
+    # Legacy context already buckets as LEGACY; only suffix the canonical version
+    # when the kill switch forced an otherwise-contextual version into legacy mode.
+    if control == "legacy" and base != LEGACY_ALGORITHM_VERSION:
+        return f"{base}:legacy_forced"
+    return base
 
 
 def _extract_bandwidth(event: Event) -> str | None:

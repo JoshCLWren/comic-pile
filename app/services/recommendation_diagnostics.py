@@ -95,6 +95,8 @@ def _control_mode_for(selection_method: str | None) -> str:
     """Classify a roll event into a distinguishable control/intent mode."""
     if selection_method is None:
         return "legacy"
+    if selection_method == "legacy_forced":
+        return "legacy_forced"
     if selection_method == "random":
         return "contextual_auto"
     if selection_method in EXPLICIT_CORRECTION_METHODS:
@@ -296,6 +298,9 @@ async def compute_recommendation_diagnostics(
         rolls = bucket["rolls"]
         if control_mode == "legacy":
             algorithm_version = "legacy-unknown"
+        elif control_mode == "legacy_forced":
+            # Forced legacy kill-switch: still versioned but distinguishable bucket
+            algorithm_version = f"{recommendation_settings.algorithm_version}:legacy_forced"
         else:
             algorithm_version = recommendation_settings.algorithm_version
         groups_by_control_mode.append(

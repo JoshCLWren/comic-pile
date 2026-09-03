@@ -70,6 +70,11 @@ class RecommendationContext(Base):
     random_bypass: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     balanced_neutrality: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
+    # Canonical algorithm versioning and control-mode switch (Phase 9, issue #1767).
+    # Nullable for pre-versioning rows; new rolls always populate both.
+    algorithm_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    control_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
     __table_args__ = (
         Index("ix_recommendation_contexts_event_id", "event_id"),
         Index("ix_recommendation_contexts_created_at", "created_at"),
