@@ -25,7 +25,7 @@ BLOCKED_LABELS = {'factory:blocked', 'ralph-status:blocked', 'wontfix', 'invalid
 TRUSTED_ASSOCIATIONS = {'OWNER', 'MEMBER', 'COLLABORATOR'}
 TRUSTED_FACTORY_APP_SLUGS = {'github-actions'}
 REQUIRED_CHECK_FAILURE_STATES = frozenset({'CANCELLED', 'ERROR', 'FAILURE', 'STALE', 'STARTUP_FAILURE', 'TIMED_OUT'})
-NO_DIFF_ATTEMPT_RE = re.compile(r'<!--\s*comic-pile-factory-claim-released-v3:(?P<kind>issue|pr)-(?P<number>\d+):(?P<worker>[^:>\s]+):(?P<epoch>\d{10}):no-persisted-change-handoff\s*-->')
+NO_DIFF_ATTEMPT_RE = re.compile(r'<!--\s*comic-pile-factory-claim-released-v3:(?P<kind>issue|pr)-(?P<number>\d+):(?P<worker>[^:>\s]+):(?P<epoch>\d{10}):(?:repair-)?no-persisted-change-handoff\s*-->')
 
 
 def comment_is_trusted(comment: Mapping[str, Any]) -> bool:

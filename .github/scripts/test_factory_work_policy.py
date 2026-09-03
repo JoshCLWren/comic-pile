@@ -8,6 +8,7 @@ from factory_work_policy import (
     FACTORY_NO_DIFF_RETRY_LIMIT,
     Candidate,
     build_candidates,
+    no_diff_attempts_from_comments,
     order_candidates_for_worker,
 )
 
@@ -144,6 +145,21 @@ class CompletionAwareOrderingTests(unittest.TestCase):
 
 
 class RetryBudgetTests(unittest.TestCase):
+    def test_no_diff_history_counts_pr_repair_markers(self) -> None:
+        comments = [
+            {
+                "author_association": "OWNER",
+                "body": (
+                    "<!-- comic-pile-factory-claim-released-v3:pr-31:worker:"
+                    "1999999999:repair-no-persisted-change-handoff -->"
+                ),
+            }
+        ]
+        self.assertEqual(
+            no_diff_attempts_from_comments(comments, now_epoch=2_000_000_000),
+            {31: 1},
+        )
+
     def test_no_diff_issue_retries_until_budget_is_exhausted(self) -> None:
         target = issue(31)
         below_budget = build_candidates(
