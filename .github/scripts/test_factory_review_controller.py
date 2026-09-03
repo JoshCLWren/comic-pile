@@ -618,5 +618,5 @@ def test_fixed_model_factory_schedules_are_active():
     dispatcher = (root / "fixed-model-factory-dispatch.yml").read_text()
     assert "    - cron: '2-57/15 * * * *'" in drain
     assert dispatcher.count("    - cron: '") == 1
-    assert "    - cron: '*/5 * * * *'" in dispatcher
+    assert "    - cron: '7 * * * *'" in dispatcher
     assert "gh workflow run factory-ready-merge-drain.yml" in dispatcher

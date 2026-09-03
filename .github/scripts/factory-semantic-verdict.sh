@@ -93,9 +93,9 @@ factory_recover_semantic_verdict() {
   local status=0
   set +e
   timeout --signal=TERM --kill-after=15s "${timeout_seconds}s" \
-    opencode run --continue -m "$runtime_model" --agent build --auto --dir "$workspace" \
+    opencode run -m "$runtime_model" --agent build --auto --dir "$workspace" \
     --title 'ComicPile semantic verdict recovery' \
-    'Your semantic review is complete but its terminal machine verdict was missing. Do not inspect files, run commands, or redo the review. Return exactly one bare line and nothing else: FACTORY_GATE_READY if your completed review found no semantic blocker, otherwise FACTORY_GATE_BLOCKED.' \
+    'Perform a fresh bounded semantic review of the assigned pull request at its exact current head. Inspect the PR and repository as needed, but do not use `gh pr status <number>`; this runner supports `gh pr view <number> --json ...` for PR details. Resolve no code in this recovery pass. Return exactly one bare line and nothing else: FACTORY_GATE_READY if no semantic blocker remains, or FACTORY_GATE_BLOCKED if any blocker remains. The final line must be the marker itself.' \
     2>&1 | tee "$recovery_log"
   status=${PIPESTATUS[0]}
   set -e
