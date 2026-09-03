@@ -15,6 +15,7 @@ from app.api import recommendation_diagnostics as recommendation_diagnostics
 from app.api import releases as releases
 from app.api import roll_recovery_switch as roll_recovery_switch
 from app.api import taste_signal as taste_signal
+from app.api import cbl_adoption as cbl_adoption
 
 dependency.router.include_router(issue_dependency_batch.router)
 dependency.router.include_router(dependency_group.router)
@@ -43,4 +44,5 @@ __all__ = [
     "releases",
     "roll_recovery_switch",
     "taste_signal",
+    "cbl_adoption",
 ]

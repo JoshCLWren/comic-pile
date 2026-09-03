@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 
 EntryState = Literal[
     "existing",
-    "missing_importable",
+    "missing",
     "ambiguous",
     "excluded",
     "skipped",
