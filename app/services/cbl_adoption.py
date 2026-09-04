@@ -18,7 +18,6 @@ from app.services.cbl_reconciliation import (
     CBLReconciliationReport,
     preview_cbl_adoption,
 )
-from app.services.issue_identity_reconciliation import resolve_cbl_entries_to_canonical
 from app.schemas.cbl_adoption import CBLSourceFingerprintResponse
 
 
@@ -61,28 +60,15 @@ async def commit_cbl_adoption(
     if source_list is None or not source_list.active:
         raise ValueError(f"CBL source list {list_id} not found or not active")
     
-    source = await db.get(
-        "cbl_sources", source_list.source_id
-    ) if hasattr(source_list, 'source_id') else None
-    # Note: We don't have direct access to the source model here, but we can get it via relationship
-    # However, to avoid circular imports, we'll fetch the source separately if needed.
-    # For now, we assume the source_list has a source_id attribute and we can get the source.
-    # Actually, from the model, CBLSourceList has source_id as a foreign key to cbl_sources.
-    # We'll fetch it properly.
-    
-    # Re-fetch source list with source to avoid lazy loading issues
-    result = await db.execute(
-        select(CBLSourceList).where(CBLSourceList.id == list_id)
-    )
-    source_list = result.scalar_one_or_none()
-    if source_list is None:
-        raise ValueError(f"CBL source list {list_id} not found")
-    
-    # Now get the source
+    # Fetch the source properly using the CBLSource model
+    from app.models.cbl_reference import CBLSource
     source_result = await db.execute(
-        select("cbl_sources").where("cbl_sources".id == source_list.source_id)
+        select(CBLSource).where(CBLSource.id == source_list.source_id)
     )
     source = source_result.scalar_one_or_none()
+    
+    if source is None:
+        raise ValueError(f"Source for CBL source list {list_id} not found")
     
     # Verify fingerprint
     if (
@@ -143,6 +129,7 @@ async def commit_cbl_adoption(
     unresolved_positions = []
     membership_ids = []
     sequence_positions = []
+    reused_details = []  # Extract details for reused issues to avoid MissingGreenlet after commit
     
     # We need to map from CBL position to entry in the plan
     plan_by_position = {entry["cbl_position"]: entry for entry in plan.entries}
@@ -180,6 +167,12 @@ async def commit_cbl_adoption(
                 continue
             reused_issue_ids.append(issue_id)
             issue = await db.get(Issue, issue_id)
+            # Extract details now to avoid MissingGreenlet after commit
+            reused_details.append({
+                "issue_id": issue.id,
+                "read_status": issue.status,
+                "read_at": issue.read_at,
+            })
         elif decision == "would_create_missing":
             # Create a new issue using the normal import path
             # We'll use the series name and issue number from the CBL entry
@@ -240,20 +233,6 @@ async def commit_cbl_adoption(
     # We'll skip the actual implementation for now but note it's required.
     
     await db.commit()
-    
-    # Extract read status, read_at, ratings, events for existing issues (reused)
-    # We'll do this after commit to avoid MissingGreenlet issues
-    reused_details = []
-    for issue_id in reused_issue_ids:
-        issue = await db.get(Issue, issue_id)
-        if issue:
-            reused_details.append({
-                "issue_id": issue.id,
-                "read_status": issue.read_status,  # Assuming we have such a field
-                "read_at": issue.read_at,
-                "rating": issue.user_rating,  # Assuming we have such a field
-                "events": issue.events,  # Assuming we have such a field
-            })
     
     return {
         "reused_issue_ids": reused_issue_ids,
