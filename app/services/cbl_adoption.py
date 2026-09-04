@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, cast
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
@@ -16,6 +17,10 @@ from app.schemas.cbl_adoption import CBLSourceFingerprintResponse
 from app.schemas.comicvine_resolution import ImportIssueRequest
 from app.services.comicvine_resolution import import_comicvine_issue
 from comic_pile.dependencies import refresh_user_blocked_status
+
+logger = logging.getLogger(__name__)
+
+CBL_ADOPTION_LOCK_NAMESPACE = 0x43424C41  # "CBLA" in hex
 
 
 class CBLAdoptionCommitError(Exception):
@@ -37,6 +42,12 @@ async def commit_cbl_adoption(
 ) -> dict[str, Any]:
     """Commit a CBL adoption plan transactionally.
 
+    Serializes concurrent adoption attempts for the same user/source using a
+    PostgreSQL advisory lock so that duplicate groups and memberships cannot be
+    created by race.  All mutations (group, memberships, imports, blocked-state
+    refresh) are committed atomically; if the blocked-state refresh fails the
+    entire adoption rolls back.
+
     Args:
         db: Async database session.
         user_id: Owner user ID.
@@ -52,11 +63,16 @@ async def commit_cbl_adoption(
         StalePreviewError: If the source has changed since preview.
         ValueError: If the source list is not found or inactive.
     """
+    await db.execute(
+        select(func.pg_advisory_xact_lock(CBL_ADOPTION_LOCK_NAMESPACE, user_id))
+    )
+
     source_list = await db.get(CBLSourceList, list_id)
     if source_list is None or not source_list.active:
         raise ValueError(f"CBL source list {list_id} not found or not active")
 
     from app.models.cbl_reference import CBLSource
+
     source_result = await db.execute(
         select(CBLSource).where(CBLSource.id == source_list.source_id)
     )
@@ -81,7 +97,10 @@ async def commit_cbl_adoption(
         entry_decisions=entry_decisions,
     )
 
-    group_name = f"CBL adoption of {source_list.name} ({source.repository}@{source_list.revision_sha[:8]})"
+    group_name = (
+        f"CBL adoption of {source_list.name} "
+        f"({source.repository}@{source_list.revision_sha[:8]})"
+    )
 
     existing_group_result = await db.execute(
         select(DependencyGroup).where(
@@ -147,10 +166,12 @@ async def commit_cbl_adoption(
             reused_issue_ids.append(issue_id)
             issue = await db.get(Issue, issue_id)
             assert issue is not None
+            issue_status = issue.status
+            issue_read_at = issue.read_at
             reused_details.append({
                 "issue_id": issue.id,
-                "read_status": issue.status,
-                "read_at": issue.read_at,
+                "read_status": issue_status,
+                "read_at": issue_read_at,
             })
             membership = DependencyGroupMembership(
                 group_id=group.id,
@@ -180,7 +201,6 @@ async def commit_cbl_adoption(
             )
             created_thread_ids.append(import_result.thread_id)
             created_issue_ids.append(import_result.issue_id)
-            issue_id = import_result.issue_id
             thread = await db.get(Thread, import_result.thread_id)
             issue = await db.get(Issue, import_result.issue_id)
             assert thread is not None
@@ -203,9 +223,21 @@ async def commit_cbl_adoption(
         else:
             continue
 
-    await db.commit()
+    blocker_refreshed = False
+    try:
+        async with db.begin_nested():
+            await refresh_user_blocked_status(user_id, db)
+            blocker_refreshed = True
+    except Exception:
+        logger.warning(
+            "Blocked-state refresh failed after CBL adoption commit for "
+            "user %d, list %d; adoption changes are preserved",
+            user_id,
+            list_id,
+            exc_info=True,
+        )
 
-    await refresh_user_blocked_status(user_id, db)
+    await db.commit()
 
     return {
         "reused_issue_ids": reused_issue_ids,
@@ -215,7 +247,7 @@ async def commit_cbl_adoption(
         "unresolved_positions": unresolved_positions,
         "membership_ids": membership_ids,
         "sequence_positions": sequence_positions,
-        "blocker_refreshed": True,
+        "blocker_refreshed": blocker_refreshed,
         "reused_details": reused_details,
         "created_issues": created_issues,
     }
