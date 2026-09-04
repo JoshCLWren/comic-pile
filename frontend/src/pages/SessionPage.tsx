@@ -3,6 +3,7 @@ import { useSessionDetails, useSessionSnapshots, useRestoreSessionStart } from '
 import { useUndo } from '../hooks/useUndo'
 import { formatDateTime } from '../utils/dateFormat'
 import LoadingSpinner from '../components/LoadingSpinner'
+import type { SessionSnapshot } from '../types'
 
 type DisplayEvent = {
   id: number
@@ -163,7 +164,7 @@ export default function SessionPage() {
           <p className="text-xs text-stone-500">No snapshots available.</p>
         ) : (
           <div className="space-y-3">
-            {snapshots.map((snapshot, index) => {
+            {snapshots.map((snapshot: SessionSnapshot, index: number) => {
               const canUndo = index === 0 && snapshot.description !== 'Session start'
 
               return (

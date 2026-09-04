@@ -25,6 +25,7 @@ from app.repositories import (
     issue_repository,
     session_repository,
     thread_repository,
+    cbl_repository,
 )
 from app.schemas import (
     QueueThreadListItem,
@@ -1024,10 +1025,8 @@ async def set_current_issue(
         # Query CBL sources that have been synced for the user
         # For now, we'll return a placeholder implementation
         # In a real implementation, this would join with user permissions
-        result = await db.execute(
-            select(CBLSource.id, CBLSource.repository.label("name"))
-        )
-        return [CBLSourceResponse(id=row.id, name=row.name) for row in result]
+        sources = await cbl_repository.list_cbl_sources(db)
+        return [CBLSourceResponse(id=source[0], name=source[1]) for source in sources]
 
     async def preview_cbl_adoption(
         self,
