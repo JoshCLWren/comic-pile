@@ -131,25 +131,6 @@ async def commit_cbl_adoption(
         )
     )
     
-    # Now process each entry in the plan
-    reused_issue_ids = []
-    created_issue_ids = []
-    created_thread_ids = []
-    excluded_positions = []
-    unresolved_positions = []
-    membership_ids = []
-    sequence_positions = []
-    reused_details = []  # Extract details for reused issues to avoid MissingGreenlet after commit
-    created_issues = []  # Store issue details for created issues
-
-    # Get all source entries for this list in order
-    entries_result = await db.execute(
-        select(CBLSourceEntry)
-        .where(CBLSourceEntry.list_id == list_id)
-        .order_by(CBLSourceEntry.position)
-    )
-    source_entries = entries_result.scalars().all()
-
     # We need to map from CBL position to entry in the plan
     plan_by_position = {entry["cbl_position"]: entry for entry in plan.entries}
 
@@ -256,6 +237,125 @@ async def commit_cbl_adoption(
     
     await db.commit()
     
+    return {
+        "reused_issue_ids": reused_issue_ids,
+        "created_issue_ids": created_issue_ids,
+        "created_thread_ids": created_thread_ids,
+        "excluded_positions": excluded_positions,
+        "unresolved_positions": unresolved_positions,
+        "membership_ids": membership_ids,
+        "sequence_positions": sequence_positions,
+        "blocker_refreshed": True,  # Placeholder
+        "reused_details": reused_details,  # Additional detail for verification
+    }
+
+    # Get all source entries for this list in order
+    entries_result = await db.execute(
+        select(CBLSourceEntry)
+        .where(CBLSourceEntry.list_id == list_id)
+        .order_by(CBLSourceEntry.position)
+    )
+    source_entries = entries_result.scalars().all()
+
+    # We need to map from CBL position to entry in the plan
+    plan_by_position = {entry["cbl_position"]: entry for entry in plan.entries}
+
+    for entry in source_entries:
+        position = entry.position
+        plan_entry = plan_by_position.get(position)
+        if plan_entry is None:
+            # This should not happen if the plan was generated from the same entries
+            continue
+            
+        decision = plan_entry.get("adoption_decision")
+        
+        if decision == "excluded":
+            excluded_positions.append(position)
+            continue
+            
+        if decision == "unresolved":
+            unresolved_positions.append(position)
+            continue
+            
+        # For adopted entries: included_existing or would_create_missing
+        if decision == "included_existing":
+            issue_id = plan_entry.get("resolved_issue_id")
+            if issue_id is None:
+                # Should not happen for included_existing
+                continue
+            reused_issue_ids.append(issue_id)
+            # Extract details IMMEDIATELY to avoid MissingGreenlet after commit
+            issue = await db.get(Issue, issue_id)
+            reused_details.append({
+                "issue_id": issue.id,
+                "read_status": issue.status,
+                "read_at": issue.read_at,
+            })
+            thread_id = issue.thread_id
+            # Create membership IMMEDIATELY to avoid MissingGreenlet after commit
+            membership = DependencyGroupMembership(
+                group_id=group.id,
+                issue_id=issue.id,
+                sequence_order=position,
+            )
+            db.add(membership)
+            await db.flush()
+            membership_ids.append(membership.id)
+            sequence_positions.append(position)
+        elif decision == "would_create_missing":
+            # Create a new issue using the normal import path
+            # We need to create a thread with the issue, using the import service
+            from app.schemas.comicvine_resolution import ImportIssueRequest
+            
+            # Prepare import request
+            import_request = ImportIssueRequest(
+                title=f"{entry.series_name} #{entry.issue_number}",
+                issue_number=str(entry.issue_number),
+                comicvine_issue_id=plan_entry.get("comicvine_issue_id"),
+                # No reading order placement for CBL adoptions
+                reading_order_id=None,
+                anchor_before_thread_id=None,
+                anchor_after_thread_id=None,
+            )
+            
+            # Use the import service to create thread and issue properly
+            import_result = await import_comicvine_issue(
+                db,
+                user_id=user_id,
+                request=import_request,
+            )
+            
+            # Extract IDs from import result
+            created_thread_ids.append(import_result.thread_id)
+            created_issue_ids.append(import_result.issue_id)
+            issue_id = import_result.issue_id
+            # Extract thread and issue details IMMEDIATELY to avoid MissingGreenlet after commit
+            thread = await db.get(Thread, import_result.thread_id)
+            issue = await db.get(Issue, import_result.issue_id)
+            issue_details = {
+                "issue_id": issue.id,
+                "thread_id": thread.id,
+                "read_status": issue.status,
+                "read_at": issue.read_at,
+            }
+            # Add membership IMMEDIATELY to avoid MissingGreenlet after commit
+            membership = DependencyGroupMembership(
+                group_id=group.id,
+                issue_id=issue.id,
+                sequence_order=position,
+            )
+            db.add(membership)
+            await db.flush()
+            membership_ids.append(membership.id)
+            sequence_positions.append(position)
+            # Store issue details for later use after commit
+            created_issues.append(issue_details)
+        else:
+            # Should not happen
+            continue
+
+    await db.commit()
+
     return {
         "reused_issue_ids": reused_issue_ids,
         "created_issue_ids": created_issue_ids,
