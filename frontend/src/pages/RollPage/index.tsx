@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
@@ -46,6 +46,7 @@ import ReadingModeLauncher from '../../components/ReadingModeLauncher'
 export default function RollPage() {
   const state = useRollPageState()
   const navigate = useNavigate()
+  const location = useLocation()
   const mainDieRef = useRef<HTMLDivElement>(null)
 
   const {
@@ -55,6 +56,44 @@ export default function RollPage() {
     isError: isBootstrapError,
     error: bootstrapError,
   } = useRollBootstrap()
+
+  // Process rollResponse state from queue page "Read Now" button
+  useEffect(() => {
+    if (location.state?.rollResponse && bootstrap) {
+      const rollResponse = location.state.rollResponse as RollResponse;
+      const threadId = rollResponse.thread_id;
+      
+      // Find the thread in roll pool or active thread
+      const threadInPool = bootstrap.roll_pool?.find(t => t.id === threadId);
+      const isActiveThread = bootstrap.active_thread?.id === threadId;
+      
+      // Prepare thread metadata
+      const threadMetadata: ThreadMetadata = {
+        id: rollResponse.thread_id,
+        title: rollResponse.title,
+        format: rollResponse.format,
+        issues_remaining: rollResponse.issues_remaining,
+        queue_position: rollResponse.queue_position,
+        total_issues: rollResponse.total_issues,
+        reading_progress: rollResponse.reading_progress ?? null,
+        issue_id: rollResponse.issue_id,
+        issue_number: rollResponse.issue_number,
+        next_issue_id: rollResponse.next_issue_id,
+        next_issue_number: rollResponse.next_issue_number,
+        last_rolled_result: rollResponse.result ?? rollResponse.last_rolled_result,
+      };
+
+      // Suppress auto-open to prevent conflicts
+      state.suppressPendingAutoOpenRef.current = true;
+      
+      // Enter rating view with the thread data
+      rating.enterRatingView(threadId, rollResponse.result ?? null, threadMetadata);
+      
+      // Clear the processed state to prevent reprocessing on subsequent renders
+      // Note: We can't actually clear location.state as it's read-only,
+      // but the effect won't re-run unless location.state changes
+    }
+  }, [location.state, bootstrap, rating, state]);
 
   const scrollToDice = useCallback(() => {
     mainDieRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
