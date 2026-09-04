@@ -39,9 +39,6 @@ import sys
 import unittest
 from datetime import datetime, timedelta, timezone
 
-# Re-export for type hints in the module
-_ = json
-
 PROTECTED_ISSUES = frozenset({679, 1093, 1109})
 
 FACTORY_LABEL = "factory"
@@ -748,11 +745,9 @@ class FactoryPostMergeClosureTests(unittest.TestCase):
 - [ ] #2129 — production cutover + incident cleanup
 """
         labels = ["enhancement", "factory"]
-        # Test that we correctly identify acceptance parents
-        # Note: "enhancement" is not in EPIC_ACCEPTANCE_LABELS, so this should be False
-        # But the issue body says "Do not treat this parent as independently executable"
-        # We need to check for epic/prd labels OR explicit "Do not treat this parent" language
-        # For now, test that we correctly extract child numbers
+        # "enhancement" is not in EPIC_ACCEPTANCE_LABELS, so this is NOT an
+        # acceptance parent — even though the body lists child checkboxes.
+        self.assertFalse(_issue_is_acceptance_parent(labels, parent_body))
         children = _child_numbers(parent_body, 1615)
         self.assertEqual(children, {2126, 2127, 2128, 2129})
 
