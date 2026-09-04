@@ -359,7 +359,11 @@ def build_candidates(
     }
     pr_wip_full = factory_pr_wip_count(prs) >= FACTORY_PR_WIP_LIMIT
     review_backlog_full = factory_review_backlog_count(prs) >= FACTORY_REVIEW_BACKLOG_LIMIT
-    open_numbers = {int(issue['number']) for issue in issues}
+    open_numbers = {
+        int(issue['number'])
+        for issue in issues
+        if str(issue.get('state') or 'OPEN').upper() == 'OPEN'
+    }
     candidates: list[Candidate] = []
     for issue in issues:
         number = int(issue['number'])

@@ -355,13 +355,6 @@ def test_issue_with_multiple_open_prerequisites_blocked_until_all_complete():
 
 def test_closing_final_prerequisite_makes_child_eligible():
     """When the last prerequisite closes, the child becomes a candidate."""
-    prereq = {
-        "number": 100,
-        "state": "CLOSED",
-        "title": "Prereq",
-        "labels": [{"name": "factory:unowned"}, {"name": "ralph-status:done"}],
-        "createdAt": "2026-08-16T00:00:00Z",
-    }
     child = {
         "number": 200,
         "state": "OPEN",
