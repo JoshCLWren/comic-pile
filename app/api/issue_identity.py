@@ -12,11 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.services.cbl_reconciliation import (
-    CBLAdoptionPlan,
-    CBLReconciliationReport,
-    preview_cbl_adoption,
-    reconcile_cbl_source_list,
+from app.services.cbl_adoption import (
+    CBLAdoptionCommitError,
+    StalePreviewError,
+    commit_cbl_adoption,
 )
 from app.services.issue_identity_reconciliation import (
     consolidate_duplicate_issues,
@@ -90,6 +89,14 @@ class CBLAdoptionPlanRequest(BaseModel):
 
     series_decisions: dict[str, bool] = Field(default_factory=dict)
     entry_decisions: dict[str, bool] = Field(default_factory=dict)
+
+
+class CBLAdoptionCommitRequest(BaseModel):
+    """Request to commit a CBL adoption plan."""
+
+    series_decisions: dict[str, bool] = Field(default_factory=dict)
+    entry_decisions: dict[str, bool] = Field(default_factory=dict)
+    source_fingerprint: CBLSourceFingerprintResponse
 
 
 class CBLSourceFingerprintResponse(BaseModel):
@@ -506,3 +513,44 @@ async def api_cbl_adoption_plan(
         entry_decisions=request.entry_decisions,
     )
     return _adoption_payload(report, plan)
+
+
+@router.post("/cbl/{list_id}/adoption-commit", response_model=dict[str, object])
+async def api_cbl_adoption_commit(
+    list_id: int,
+    request: CBLAdoptionCommitRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """Commit a CBL adoption plan transactionally.
+    
+    This endpoint consumes a reviewed plan/decision payload and applies exactly
+    the reader-approved mutations. It revalidates stale assumptions at commit
+    time and fails safely if source identity or canonical mappings changed
+    materially since preview.
+    """
+    try:
+        result = await commit_cbl_adoption(
+            db,
+            user_id=current_user.id,
+            list_id=list_id,
+            series_decisions=request.series_decisions,
+            entry_decisions=request.entry_decisions,
+            source_fingerprint=request.source_fingerprint,
+        )
+        return result
+    except StalePreviewError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except CBLAdoptionCommitError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
