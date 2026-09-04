@@ -551,7 +551,7 @@ export interface CBL {
 export interface CBLAdoptionEntry {
   id: number;
   title: string;
-  seriesId: number;
+  series_id: number;
 }
 
 /**
@@ -568,10 +568,10 @@ export interface CBLAdoptionSeries {
 export interface CBLAdoptionPlan {
   entries: CBLAdoptionEntry[];
   series: CBLAdoptionSeries[];
-  existingCount: number;
-  missingCount: number;
-  excludedCount: number;
-  unresolvedCount: number;
+  existing_count: number;
+  missing_count: number;
+  excluded_count: number;
+  unresolved_count: number;
 }
 
 /**

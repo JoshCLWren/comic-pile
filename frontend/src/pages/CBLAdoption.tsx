@@ -48,7 +48,7 @@ const CBLAdoption = () => {
     if (entryExcluded !== undefined) {
       return entryExcluded.exclude;
     }
-    return selections[entry.seriesId]?.exclude ?? false;
+    return selections[entry.series_id]?.exclude ?? false;
   };
 
   const handleAdopt = () => {
@@ -119,10 +119,10 @@ const CBLAdoption = () => {
           </div>
           <div className="mb-4">
             <h3 className="text-lg font-medium mb-2">Review Changes</h3>
-            <p>Existing comics reused: {adoptionPlan.existingCount}</p>
-            <p>Missing comics to create: {adoptionPlan.missingCount}</p>
-            <p>Excluded entries: {adoptionPlan.excludedCount}</p>
-            <p>Unresolved entries: {adoptionPlan.unresolvedCount}</p>
+            <p>Existing comics reused: {adoptionPlan.existing_count}</p>
+            <p>Missing comics to create: {adoptionPlan.missing_count}</p>
+            <p>Excluded entries: {adoptionPlan.excluded_count}</p>
+            <p>Unresolved entries: {adoptionPlan.unresolved_count}</p>
           </div>
           <button
             onClick={handleAdopt}
