@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +11,6 @@ from app.models.dependency_group import DependencyGroup, DependencyGroupMembersh
 from app.models.issue import Issue
 from app.models.cbl_reference import CBLSourceList, CBLSourceEntry
 from app.models.thread import Thread
-from app.models.user import User
 from app.services.cbl_reconciliation import preview_cbl_adoption
 from app.schemas.cbl_adoption import CBLSourceFingerprintResponse
 from app.schemas.comicvine_resolution import ImportIssueRequest
@@ -109,7 +108,10 @@ async def commit_cbl_adoption(
     )
     source_entries = entries_result.scalars().all()
 
-    plan_by_position = {entry["cbl_position"]: entry for entry in plan.entries}
+    plan_by_position: dict[int, dict[str, Any]] = {
+        int(cast(int, entry["cbl_position"])): cast(dict[str, Any], entry)
+        for entry in plan.entries
+    }
 
     reused_issue_ids: list[int] = []
     created_issue_ids: list[int] = []
@@ -139,11 +141,12 @@ async def commit_cbl_adoption(
             continue
 
         if decision == "included_existing":
-            issue_id = plan_entry.get("resolved_issue_id")
+            issue_id = cast(int | None, plan_entry.get("resolved_issue_id"))
             if issue_id is None:
                 continue
             reused_issue_ids.append(issue_id)
             issue = await db.get(Issue, issue_id)
+            assert issue is not None
             reused_details.append({
                 "issue_id": issue.id,
                 "read_status": issue.status,
@@ -180,6 +183,8 @@ async def commit_cbl_adoption(
             issue_id = import_result.issue_id
             thread = await db.get(Thread, import_result.thread_id)
             issue = await db.get(Issue, import_result.issue_id)
+            assert thread is not None
+            assert issue is not None
             created_issues.append({
                 "issue_id": issue.id,
                 "thread_id": thread.id,

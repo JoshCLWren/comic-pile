@@ -540,14 +540,14 @@ async def api_cbl_adoption_commit(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(e),
-        )
+        ) from e
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
     except CBLAdoptionCommitError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),
-        )
+        ) from e
