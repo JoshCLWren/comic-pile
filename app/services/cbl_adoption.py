@@ -3,30 +3,21 @@
 from __future__ import annotations
 
 
-from typing import cast
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.cbl_reference import CBLSourceList, CBLSource
-from app.models.external_identity import ExternalIdentity
+from app.models.cbl_reference import CBLSourceList, CBLSource, CBLSourceEntry
 from app.models.issue import Issue
-from app.models.user import User
 from app.services.cbl_reconciliation import (
     reconcile_cbl_source_list,
     calculate_cbl_adoption_plan as _calculate_cbl_adoption_plan,
-    CBLReconciliationReport,
-    cbl_series_group_id,
-    cbl_comicvine_series_id,
 )
-from app.services.issue_identity_reconciliation import resolve_cbl_entries_to_canonical
 from app.schemas.cbl_adoption import (
+    CBLPreviewEntry,
     CBLPreviewResponse,
     CBLPlanCalculationResponse,
     CBLProposedEntry,
     CBLPlannedAction,
-    SeriesDecision,
-    EntryOverride,
     SourceBackedDecision,
     SourceBackedStatus,
 )
@@ -276,23 +267,16 @@ async def commit_cbl_adoption_plan(
     preview = await preview_cbl_source_list(
         db, user_id=user_id, list_id=list_id
     )
-    plan = await calculate_cbl_adoption_plan(
-        db,
-        user_id=user_id,
-        list_id=list_id,
-        series_decisions=series_decisions,
-        entry_decisions=entry_decisions,
-    )
-
-    # Get the source list and source
-    list_result = await db.execute(
-        select(CBLSourceList).where(CBLSourceList.id == list_id)
-    )
-    cbl_source_list = list_result.scalar_one()
-    source_result = await db.execute(
-        select(CBLSource).where(CBLSource.id == cbl_source_list.source_id)
-    )
-    cbl_source = source_result.scalar_one()
+    
+    # Convert series_decisions and entry_decisions to the format expected by the loop
+    series_choices = {
+        str(series_decision.series_name): series_decision.decision.value
+        for series_decision in (series_decisions or [])
+    }
+    entry_choices = {
+        str(entry_decision.cbl_position): entry_decision.decision.value
+        for entry_decision in (entry_decisions or [])
+    }
 
     # Get all CBL source entries for this list, ordered by position
     entries_result = await db.execute(
@@ -301,9 +285,6 @@ async def commit_cbl_adoption_plan(
         .order_by(CBLSourceEntry.position)
     )
     cbl_entries = list(entries_result.scalars().all())
-
-    # Map CBL entry ID to entry for quick lookup
-    cbl_entry_by_id = {entry.id: entry for entry in cbl_entries}
 
     # We'll track created issue IDs and reused issue IDs
     created_issue_ids = []
