@@ -26,6 +26,7 @@ TRUSTED_ASSOCIATIONS = {'OWNER', 'MEMBER', 'COLLABORATOR'}
 TRUSTED_FACTORY_APP_SLUGS = {'github-actions'}
 REQUIRED_CHECK_FAILURE_STATES = frozenset({'CANCELLED', 'ERROR', 'FAILURE', 'STALE', 'STARTUP_FAILURE', 'TIMED_OUT'})
 NO_DIFF_ATTEMPT_RE = re.compile(r'<!--\s*comic-pile-factory-claim-released-v3:(?P<kind>issue|pr)-(?P<number>\d+):(?P<worker>[^:>\s]+):(?P<epoch>\d{10}):(?:repair-)?no-persisted-change-handoff\s*-->')
+DEP_ON_RE = re.compile(r"(?:[Dd]epends?\s+on)\s+(.+)", re.DOTALL)
 
 
 def comment_is_trusted(comment: Mapping[str, Any]) -> bool:
@@ -321,6 +322,24 @@ def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[
         and head.startswith('factory/')
         and linked_issue_from_branch(head) is not None
     )
+
+
+def parse_depends_on_numbers(body: str) -> set[int]:
+    """Return issue numbers declared as explicit prerequisites in the body.
+
+    Only matches the canonical ``Depends on #NNN`` / ``Depends on #N, #M``
+    format used by structured issue declarations.  Casual ``#N`` mentions
+    elsewhere in the body are not treated as blocking prerequisites.
+    """
+    numbers: set[int] = set()
+    for match in DEP_ON_RE.finditer(body):
+        numbers.update(int(num) for num in re.findall(r"#(\d+)", match.group(1)))
+    return numbers
+
+
+def body_depends_on_unresolved(body: str, open_numbers: set[int]) -> bool:
+    """Return whether the body declares a prerequisite that is still open."""
+    return bool(parse_depends_on_numbers(body) & open_numbers)
 
 
 def build_candidates(

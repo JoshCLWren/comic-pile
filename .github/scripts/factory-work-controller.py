@@ -11,7 +11,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, cast
 sys.path.insert(0, os.path.dirname(__file__))
-from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, no_diff_attempts_from_comments, order_candidates_for_worker, owner_of, plan_distinct_assignments)
+from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, Candidate, body_depends_on_unresolved, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, no_diff_attempts_from_comments, order_candidates_for_worker, owner_of, plan_distinct_assignments)
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 LEASE_ACTIVITY_PATTERNS = (
