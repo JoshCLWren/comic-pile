@@ -349,13 +349,13 @@ def _pr_info(pr_number: int) -> dict[str, str]:
 
 
 def _issue_view(issue_number: int) -> dict[str, object]:
-    """Fetch state and labels for one issue.
+    """Fetch state, body, and labels for one issue.
 
     Args:
         issue_number: The issue number.
 
     Returns:
-        A dict with ``state`` (str) and ``labels`` (list[str]).
+        A dict with ``state`` (str), ``body`` (str), and ``labels`` (list[str]).
     """
     raw = _run_gh(
         "issue",
@@ -364,11 +364,15 @@ def _issue_view(issue_number: int) -> dict[str, object]:
         "--repo",
         _repo_slug(),
         "--json",
-        "state,labels",
+        "state,body,labels",
     )
     payload = json.loads(raw)
     names = [str(label.get("name") or "") for label in payload.get("labels") or []]
-    return {"state": str(payload.get("state") or ""), "labels": names}
+    return {
+        "state": str(payload.get("state") or ""),
+        "body": str(payload.get("body") or ""),
+        "labels": names,
+    }
 
 
 def _issue_has_open_successor_pr(issue_number: int, merged_pr: int) -> bool:
@@ -510,8 +514,8 @@ def close_merged_pr_issue(
         return "already-closed"
 
     labels = list(issue["labels"])
-    body = str(info.get("body") or "")
-    if _acceptance_parent_has_incomplete_gates(labels, body, issue_number):
+    issue_body = str(issue.get("body") or "")
+    if _acceptance_parent_has_incomplete_gates(labels, issue_body, issue_number):
         return "acceptance-parent-incomplete"
     if closure_blocked_by_active_work(labels, require_quiescent):
         return "active-work"
@@ -751,6 +755,57 @@ class FactoryPostMergeClosureTests(unittest.TestCase):
         # For now, test that we correctly extract child numbers
         children = _child_numbers(parent_body, 1615)
         self.assertEqual(children, {2126, 2127, 2128, 2129})
+
+    def test_closure_reads_issue_body_not_pr_body_for_acceptance_parent(self) -> None:
+        """Closure uses the issue body, not the PR body, to detect child gates.
+
+        PR closing references live in the PR body, while the child checkboxes
+        that make an issue an acceptance parent live in the issue body. Feeding
+        the PR body into the acceptance-parent guard would miss every parent and
+        wrongly auto-close it (the #1615 incident). This test proves the guard
+        reads the issue body by mocking the API layers.
+        """
+        from unittest.mock import patch
+
+        mod = sys.modules[__name__]
+        issue_body = """
+## Executable child work
+This issue is a product contract and acceptance parent.
+- [ ] #2127 — transactional selective materialization
+- [ ] #2128 — production CBL browser/import-review UI
+- [ ] #2129 — production cutover + incident cleanup
+"""
+        # An acceptance parent is still open; children are incomplete.
+        with patch.object(
+            mod,
+            "_issue_view",
+            return_value={
+                "state": "OPEN",
+                "body": issue_body,
+                "labels": ["enhancement", "factory", "factory:ready", "factory:unowned"],
+            },
+        ):
+            with patch.object(
+                mod,
+                "_issue_has_open_successor_pr",
+                return_value=False,
+            ) as mock_successor:
+                with patch.object(
+                    mod,
+                    "_pr_info",
+                    return_value={
+                        "branch": "factory/58-2167-omniroute",
+                        # The PR body closes the issue but contains no child checkboxes.
+                        "body": "Closes #1615.",
+                        "state": "MERGED",
+                    },
+                ):
+                    result = close_merged_pr_issue(2140, dry_run=True)
+
+        self.assertEqual(result, "acceptance-parent-incomplete")
+        # The guard must halt before the successor check: the parent stays open
+        # even though the PR body carries a closing reference.
+        mock_successor.assert_not_called()
 
 
 def main() -> int:
