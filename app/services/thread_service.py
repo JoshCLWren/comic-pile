@@ -1016,7 +1016,7 @@ async def set_current_issue(
         self,
         db: AsyncSession,
         user_id: int,
-    ) -> List[Dict[str, Any]]:
+    ) -> List[CBLSourceResponse]:
         """List available CBL sources for a user.
         
         Returns a list of CBL sources with their id and name.
@@ -1027,14 +1027,14 @@ async def set_current_issue(
         result = await db.execute(
             select(CBLSource.id, CBLSource.repository.label("name"))
         )
-        return [{"id": row.id, "name": row.name} for row in result]
+        return [CBLSourceResponse(id=row.id, name=row.name) for row in result]
 
     async def preview_cbl_adoption(
         self,
         db: AsyncSession,
         user_id: int,
         cbl_id: int,
-    ) -> Any:
+    ) -> CBLadoptionPlanResponse:
         """Preview the adoption of a CBL for a user.
         
         Returns a preview of what would be adopted without making changes.
@@ -1047,30 +1047,30 @@ async def set_current_issue(
         # 5. Return the preview data
         
         # For now, return a mock preview structure
-        return {
-            "entries": [
-                {
-                    "id": 1,
-                    "title": "Sample Comic Issue #1",
-                    "seriesId": 101
-                },
-                {
-                    "id": 2,
-                    "title": "Sample Comic Issue #2",
-                    "seriesId": 101
-                }
+        return CBLadoptionPlanResponse(
+            entries=[
+                CBLAdoptionEntryResponse(
+                    id=1,
+                    title="Sample Comic Issue #1",
+                    seriesId=101
+                ),
+                CBLAdoptionEntryResponse(
+                    id=2,
+                    title="Sample Comic Issue #2",
+                    seriesId=101
+                )
             ],
-            "series": [
-                {
-                    "id": 101,
-                    "name": "Sample Comic Series"
-                }
+            series=[
+                CBLAdoptionSeriesResponse(
+                    id=101,
+                    name="Sample Comic Series"
+                )
             ],
-            "existingCount": 0,
-            "missingCount": 2,
-            "excludedCount": 0,
-            "unresolvedCount": 0
-        }
+            existingCount=0,
+            missingCount=2,
+            excludedCount=0,
+            unresolvedCount=0
+        )
 
     async def adopt_cbl(
         self,

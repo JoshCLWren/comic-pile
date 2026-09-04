@@ -6,7 +6,7 @@ lives in ``app/services/thread_service.py``; query construction lives in
 ``app/repositories/``.
 """
 
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
@@ -390,11 +390,11 @@ async def set_current_issue(
         raise _map_service_error(exc) from exc
 
 
-@router.get("/cbls", response_model=list[dict[str, Any]])
+@router.get("/cbls", response_model=list[CBLSourceResponse])
 async def list_cbls(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> list[dict[str, Any]]:
+) -> list[CBLSourceResponse]:
     """List available CBL (Comic Book List) sources for the authenticated user."""
     try:
         return await thread_service.list_cbl_sources(db, current_user.id)
@@ -402,12 +402,12 @@ async def list_cbls(
         raise _map_service_error(exc) from exc
 
 
-@router.post("/previewAdoption", response_model=dict[str, Any])
+@router.post("/previewAdoption", response_model=CBLadoptionPlanResponse)
 async def preview_cbl_adoption(
     request: dict[str, Any],
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> dict[str, Any]:
+) -> CBLadoptionPlanResponse:
     """Preview the adoption of a CBL (Comic Book List) for the authenticated user."""
     try:
         cbl_id = request.get("cbl_id")
