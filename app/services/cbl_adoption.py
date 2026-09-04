@@ -95,6 +95,15 @@ async def commit_cbl_adoption(
     
     # Start building the adoption
     # We'll create a dependency group for this adoption
+    from app.models.cbl_reference import CBLSource
+    source_result = await db.execute(
+        select(CBLSource).where(CBLSource.id == source_list.source_id)
+    )
+    source = source_result.scalar_one_or_none()
+    
+    if source is None:
+        raise ValueError(f"Source for CBL source list {list_id} not found")
+    
     group_name = f"CBL adoption of {source_list.name} ({source.repository}@{source_list.revision_sha[:8]})"
     
     # Check if a group with this name already exists for the user (for idempotency)
@@ -122,7 +131,7 @@ async def commit_cbl_adoption(
         )
     )
     
-# Now process each entry in the plan
+    # Now process each entry in the plan
     reused_issue_ids = []
     created_issue_ids = []
     created_thread_ids = []
@@ -131,9 +140,7 @@ async def commit_cbl_adoption(
     membership_ids = []
     sequence_positions = []
     reused_details = []  # Extract details for reused issues to avoid MissingGreenlet after commit
-
-    # We need to map from CBL position to entry in the plan
-    plan_by_position = {entry["cbl_position"]: entry for entry in plan.entries}
+    created_issues = []  # Store issue details for created issues
 
     # Get all source entries for this list in order
     entries_result = await db.execute(
@@ -142,6 +149,9 @@ async def commit_cbl_adoption(
         .order_by(CBLSourceEntry.position)
     )
     source_entries = entries_result.scalars().all()
+
+    # We need to map from CBL position to entry in the plan
+    plan_by_position = {entry["cbl_position"]: entry for entry in plan.entries}
 
     for entry in source_entries:
         position = entry.position
@@ -167,13 +177,24 @@ async def commit_cbl_adoption(
                 # Should not happen for included_existing
                 continue
             reused_issue_ids.append(issue_id)
+            # Extract details IMMEDIATELY to avoid MissingGreenlet after commit
             issue = await db.get(Issue, issue_id)
-            # Extract details now to avoid MissingGreenlet after commit
             reused_details.append({
                 "issue_id": issue.id,
                 "read_status": issue.status,
                 "read_at": issue.read_at,
             })
+            thread_id = issue.thread_id
+            # Create membership IMMEDIATELY to avoid MissingGreenlet after commit
+            membership = DependencyGroupMembership(
+                group_id=group.id,
+                issue_id=issue.id,
+                sequence_order=position,
+            )
+            db.add(membership)
+            await db.flush()
+            membership_ids.append(membership.id)
+            sequence_positions.append(position)
         elif decision == "would_create_missing":
             # Create a new issue using the normal import path
             # We need to create a thread with the issue, using the import service
@@ -201,24 +222,30 @@ async def commit_cbl_adoption(
             created_thread_ids.append(import_result.thread_id)
             created_issue_ids.append(import_result.issue_id)
             issue_id = import_result.issue_id
-            issue = await db.get(Issue, issue_id)  # Get issue after commit preparation
-            # Extract thread ID for membership
-            thread = await db.get(Thread, import_result.thread_id)  # Get thread after commit preparation
+            # Extract thread and issue details IMMEDIATELY to avoid MissingGreenlet after commit
+            thread = await db.get(Thread, import_result.thread_id)
+            issue = await db.get(Issue, import_result.issue_id)
+            issue_details = {
+                "issue_id": issue.id,
+                "thread_id": thread.id,
+                "read_status": issue.status,
+                "read_at": issue.read_at,
+            }
+            # Add membership IMMEDIATELY to avoid MissingGreenlet after commit
+            membership = DependencyGroupMembership(
+                group_id=group.id,
+                issue_id=issue.id,
+                sequence_order=position,
+            )
+            db.add(membership)
+            await db.flush()
+            membership_ids.append(membership.id)
+            sequence_positions.append(position)
+            # Store issue details for later use after commit
+            created_issues.append(issue_details)
         else:
             # Should not happen
             continue
-        
-        # Create membership for this issue in the dependency group
-        membership = DependencyGroupMembership(
-            group_id=group.id,
-            issue_id=issue.id,
-            sequence_order=position,  # Use CBL position as sequence order
-        )
-        db.add(membership)
-        await db.flush()  # Get the membership ID
-        
-        membership_ids.append(membership.id)
-        sequence_positions.append(position)
     
     # After committing, we need to refresh denormalized blocked state
     # We'll call the appropriate function to update blocked state
