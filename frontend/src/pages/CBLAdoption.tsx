@@ -65,7 +65,7 @@ const CBLAdoption = () => {
       <div className="mb-4">
         <h2 className="text-xl font-semibold mb-2">Select CBL</h2>
         <select
-          className="border p-2 rounded-lg w-full"
+          className="border border-theme-border bg-theme-panel p-2 rounded-lg w-full focus:border-theme-focus-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-focus-ring"
           onChange={(e) => handleSelectCBL(Number(e.target.value))}
         >
           <option value="">Choose a CBL</option>
@@ -82,14 +82,15 @@ const CBLAdoption = () => {
           <div className="mb-4">
             <h3 className="text-lg font-medium mb-2">Source Order</h3>
             {adoptionPlan.entries.map((entry) => (
-              <div key={entry.id} className="flex justify-between items-center p-2 border-b border-gray-200">
+              <div key={entry.id} className="flex justify-between items-center p-2 border-b border-theme-border">
                 <span>{entry.title}</span>
-                <div>
-                  <label>
+                <div className="flex items-center space-x-2">
+                  <label className="flex items-center space-x-1 text-theme-text-muted">
                     <input
                       type="checkbox"
                       checked={!isEntryExcluded(entry)}
                       onChange={(e) => handleToggleEntry(entry.id, !e.target.checked)}
+                      className="h-4 w-4 text-theme-primary-action border-theme-border rounded focus:ring-theme-focus-ring"
                     />
                     Include
                   </label>
@@ -100,12 +101,14 @@ const CBLAdoption = () => {
           <div className="mb-4">
             <h3 className="text-lg font-medium mb-2">Series Exclusions</h3>
             {adoptionPlan.series.map((series) => (
-              <div key={series.id} className="flex justify-between items-center p-2 border-b">
+              <div key={series.id} className="flex justify-between items-center p-2 border-b border-theme-border">
                 <span>{series.name}</span>
                 <button
                   onClick={() => handleToggleSeries(series.id, !selections[series.id]?.exclude)}
-                  className={`px-3 py-1 rounded ${
-                    selections[series.id]?.exclude ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+                  className={`px-3 py-1 rounded-md text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-focus-ring ${
+                    selections[series.id]?.exclude 
+                      ? 'bg-theme-danger hover:bg-theme-danger-hover' 
+                      : 'bg-theme-primary-action hover:bg-theme-primary-action-hover'
                   }`}
                 >
                   {selections[series.id]?.exclude ? 'Excluded' : 'Included'}
@@ -126,7 +129,7 @@ const CBLAdoption = () => {
           </div>
           <button
             onClick={handleAdopt}
-            className="bg-blue-500 text-white px-4 py-2 rounded"
+            className="w-full bg-theme-primary-action text-white px-4 py-2 rounded-md hover:bg-theme-primary-action-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-focus-ring disabled:opacity-50"
           >
             Adopt CBL
           </button>
