@@ -164,6 +164,28 @@ export type ReadingBandwidth = 'light' | 'balanced' | 'deep'
 export type ReadingIntent = 'momentum' | 'familiar' | 'explore' | 'random'
 export type ReadingModeSource = 'quiz' | 'manual'
 
+export type BandwidthSource = 'manual' | 'inferred' | 'snooze' | 'quiz' | null
+export type IntentSource = 'manual' | 'inferred' | 'snooze' | 'quiz' | null
+
+export interface SessionModeResponse {
+  active_bandwidth: ReadingBandwidth | string | null
+  predicted_bandwidth: ReadingBandwidth | string | null
+  bandwidth_confidence: number | null
+  bandwidth_source: BandwidthSource
+  bandwidth_version: string | null
+  active_intent: ReadingIntent | string | null
+  predicted_intent: ReadingIntent | string | null
+  intent_confidence: number | null
+  intent_source: IntentSource
+  intent_version: string | null
+  session_mode_correction_guidance: Record<string, unknown> | null
+}
+
+export interface SessionModeUpdateRequest {
+  bandwidth?: ReadingBandwidth | null
+  intent?: ReadingIntent | null
+}
+
 export interface ReadingModeState {
   bandwidth: ReadingBandwidth | null
   intent: ReadingIntent | null

@@ -1,105 +1,95 @@
-import { useState, useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import Modal from './Modal'
-import { sessionApi } from '../services/api'
-import type { SessionCurrent } from '../types'
+import type { SessionModeUpdateRequest } from '../types'
+
+export type CorrectionChoiceId =
+  | 'even_easier'
+  | 'keep_level_different'
+  | 'something_familiar'
+  | 'something_different'
+  | 'pure_random'
 
 interface CorrectionSheetProps {
   isOpen: boolean
   onClose: () => void
-  session: SessionCurrent | null
+  onSubmit: (choice: CorrectionChoiceId, patch: SessionModeUpdateRequest) => Promise<void>
 }
 
-export default function CorrectionSheet({
-  isOpen,
-  onClose,
-  session,
-}: CorrectionSheetProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+interface CorrectionChoice {
+  id: CorrectionChoiceId
+  label: string
+  patch: SessionModeUpdateRequest
+}
+
+const CHOICES: CorrectionChoice[] = [
+  { id: 'even_easier', label: 'Even easier', patch: { bandwidth: 'light' } },
+  { id: 'keep_level_different', label: 'Keep this level, different comic', patch: { intent: 'balanced' } },
+  { id: 'something_familiar', label: 'Something familiar', patch: { intent: 'familiar' } },
+  { id: 'something_different', label: 'Something different', patch: { intent: 'explore' } },
+  { id: 'pure_random', label: 'Pure random', patch: { intent: 'random' } },
+]
+
+/**
+ * Correction sheet surfaced after meaningful Snooze prediction failures.
+ *
+ * Triggered only when the backend signals `suggest_clarification` (repeated or
+ * contradictory snoozes). Each choice maps to a predictable bandwidth/intent
+ * patch submitted through the canonical session-mode API. Dismissing the sheet
+ * leaves the current backend mode intact — no API call fires on dismiss.
+ */
+export default function CorrectionSheet({ isOpen, onClose, onSubmit }: CorrectionSheetProps) {
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const handleChoice = useCallback(
-    async (choice: string) => {
-      if (!session) return
-      setIsSubmitting(true)
-      setError(null)
+    async (choice: CorrectionChoice) => {
+      setSubmitting(true)
+      setSubmitError(null)
       try {
-        // Map choices to session-mode API calls
-        // Based on the issue, these choices should update bandwidth/intent via the session-mode API
-        // We'll need to determine what API endpoint to call based on choice
-        // For now, we'll just close the sheet and let the backend handle the correction via normal snooze flow
-        // But according to the issue: "Choices produce predictable bandwidth/intent updates."
-        // And: "Map answers to the canonical session-mode API rather than local-only state."
-        
-        // Looking at the backend, we have session-mode API in app/api/session.py
-        // But we don't have a direct frontend API for session mode updates yet.
-        // However, the issue says to map to canonical session-mode API.
-        // Let's check if we have session mode update APIs in frontend.
-        
-        // For now, we'll just close the sheet and refetch session to see if backend updated anything
-        // In a real implementation, we would call specific APIs based on choice.
-        await sessionApi.getCurrent() // This will refresh the session
+        await onSubmit(choice.id, choice.patch)
         onClose()
-      } catch (err) {
-        console.error('Failed to update session mode:', err)
-        setError('Failed to update session. Please try again.')
+      } catch (_err) {
+        setSubmitError('Failed to update reading mode. Please try again.')
       } finally {
-        setIsSubmitting(false)
+        setSubmitting(false)
       }
     },
-    [session, onClose]
+    [onSubmit, onClose],
   )
 
   if (!isOpen) return null
 
   return (
-    <Modal isOpen={true} title="Not the vibe?" onClose={onClose} data-testid="correction-sheet">
-      {error && (
-        <div className="p-3 bg-red-800/20 border border-red-800/50 rounded-lg mb-4">
-          <p className="text-sm text-red-400 text-center">{error}</p>
-        </div>
+    <Modal isOpen title="Not the vibe?" onClose={onClose} data-testid="correction-sheet">
+      {submitError && (
+        <p role="alert" className="text-sm text-[var(--theme-danger)]" data-testid="correction-sheet-error">
+          {submitError}
+        </p>
       )}
-      <div className="space-y-3">
+
+      <fieldset className="space-y-3">
+        <legend className="sr-only">Pick a reading-mode correction</legend>
+        {CHOICES.map((choice) => (
+          <button
+            key={choice.id}
+            type="button"
+            data-testid={`correction-choice-${choice.id}`}
+            disabled={submitting}
+            onClick={() => handleChoice(choice)}
+            className="w-full text-left rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 py-3 text-[var(--theme-text-primary)] text-sm transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+          >
+            {choice.label}
+          </button>
+        ))}
+      </fieldset>
+
+      <div className="mt-4 pt-3 border-t border-[var(--theme-border)]">
         <button
-          onClick={() => handleChoice('even_easier')}
-          disabled={isSubmitting}
-          className={`w-full text-left py-2 px-3 rounded border ${isSubmitting ? 'opacity-50' : 'hover:bg-white/10'}`}
-        >
-          Even easier
-        </button>
-        <button
-          onClick={() => handleChoice('keep_level_different')}
-          disabled={isSubmitting}
-          className={`w-full text-left py-2 px-3 rounded border ${isSubmitting ? 'opacity-50' : 'hover:bg-white/10'}`}
-        >
-          Keep this level, different comic
-        </button>
-        <button
-          onClick={() => handleChoice('something_familiar')}
-          disabled={isSubmitting}
-          className={`w-full text-left py-2 px-3 rounded border ${isSubmitting ? 'opacity-50' : 'hover:bg-white/10'}`}
-        >
-          Something familiar
-        </button>
-        <button
-          onClick={() => handleChoice('something_different')}
-          disabled={isSubmitting}
-          className={`w-full text-left py-2 px-3 rounded border ${isSubmitting ? 'opacity-50' : 'hover:bg-white/10'}`}
-        >
-          Something different
-        </button>
-        <button
-          onClick={() => handleChoice('pure_random')}
-          disabled={isSubmitting}
-          className={`w-full text-left py-2 px-3 rounded border ${isSubmitting ? 'opacity-50' : 'hover:bg-white/10'}`}
-        >
-          Pure random
-        </button>
-      </div>
-      <div className="mt-4 pt-3 border-t border-white/10">
-        <button
+          type="button"
+          data-testid="correction-sheet-dismiss"
+          disabled={submitting}
           onClick={onClose}
-          disabled={isSubmitting}
-          className="w-full py-2 text-left text-sm font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+          className="w-full py-2 text-left text-sm font-bold uppercase tracking-wider text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] disabled:opacity-50"
         >
           Dismiss
         </button>
