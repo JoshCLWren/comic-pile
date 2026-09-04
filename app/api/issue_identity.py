@@ -23,6 +23,7 @@ from app.services.cbl_reconciliation import (
     preview_cbl_adoption,
     reconcile_cbl_source_list,
 )
+from app.schemas.cbl_adoption import CBLSourceFingerprintResponse
 from app.services.issue_identity_reconciliation import (
     consolidate_duplicate_issues,
     find_conflicting_provider_identities,
@@ -103,16 +104,6 @@ class CBLAdoptionCommitRequest(BaseModel):
     series_decisions: dict[str, bool] = Field(default_factory=dict)
     entry_decisions: dict[str, bool] = Field(default_factory=dict)
     source_fingerprint: CBLSourceFingerprintResponse
-
-
-class CBLSourceFingerprintResponse(BaseModel):
-    """Immutable source evidence needed to review and later accept a plan."""
-
-    source_list_id: int
-    source_repository: str
-    source_path: str
-    content_hash: str
-    revision_sha: str
 
 
 class CBLAdoptionEntryResponse(BaseModel):

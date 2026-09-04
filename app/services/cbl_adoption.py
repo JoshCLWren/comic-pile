@@ -19,6 +19,7 @@ from app.services.cbl_reconciliation import (
     preview_cbl_adoption,
 )
 from app.schemas.cbl_adoption import CBLSourceFingerprintResponse
+from app.services.comicvine_resolution import import_comicvine_issue
 
 
 class CBLAdoptionCommitError(Exception):
@@ -121,7 +122,7 @@ async def commit_cbl_adoption(
         )
     )
     
-    # Now process each entry in the plan
+# Now process each entry in the plan
     reused_issue_ids = []
     created_issue_ids = []
     created_thread_ids = []
@@ -130,10 +131,10 @@ async def commit_cbl_adoption(
     membership_ids = []
     sequence_positions = []
     reused_details = []  # Extract details for reused issues to avoid MissingGreenlet after commit
-    
+
     # We need to map from CBL position to entry in the plan
     plan_by_position = {entry["cbl_position"]: entry for entry in plan.entries}
-    
+
     # Get all source entries for this list in order
     entries_result = await db.execute(
         select(CBLSourceEntry)
@@ -141,7 +142,7 @@ async def commit_cbl_adoption(
         .order_by(CBLSourceEntry.position)
     )
     source_entries = entries_result.scalars().all()
-    
+
     for entry in source_entries:
         position = entry.position
         plan_entry = plan_by_position.get(position)
@@ -200,6 +201,9 @@ async def commit_cbl_adoption(
             created_thread_ids.append(import_result.thread_id)
             created_issue_ids.append(import_result.issue_id)
             issue_id = import_result.issue_id
+            issue = await db.get(Issue, issue_id)  # Get issue after commit preparation
+            # Extract thread ID for membership
+            thread = await db.get(Thread, import_result.thread_id)  # Get thread after commit preparation
         else:
             # Should not happen
             continue
