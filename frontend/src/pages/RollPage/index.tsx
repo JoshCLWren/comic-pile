@@ -64,8 +64,8 @@ export default function RollPage() {
       const threadId = rollResponse.thread_id;
       
       // Find the thread in roll pool or active thread
-      const threadInPool = bootstrap.roll_pool?.find(t => t.id === threadId);
-      const isActiveThread = bootstrap.active_thread?.id === threadId;
+      const _threadInPool = bootstrap.roll_pool?.find(t => t.id === threadId);
+      const _isActiveThread = bootstrap.active_thread?.id === threadId;
       
       // Prepare thread metadata
       const threadMetadata: ThreadMetadata = {

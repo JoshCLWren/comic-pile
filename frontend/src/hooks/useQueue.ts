@@ -114,7 +114,7 @@ export function useMoveToPosition() {
 export function useMoveToFront() {
   const mutation = useMutation({
     mutationFn: async (id: number) => {
-      await queueApi.markAsRead(id)
+      await queueApi.moveToFront(id)
       await invalidateAfterQueueMovement(queryClient)
     },
     onError: (error) => {
