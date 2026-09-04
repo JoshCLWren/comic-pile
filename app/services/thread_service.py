@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache_invalidation import invalidate_user_view
 from app.models import Event, Issue, Thread
-from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.thread import normalize_format_value
 from app.repositories import (
     continuity_repository,
@@ -28,6 +27,10 @@ from app.repositories import (
     cbl_repository,
 )
 from app.schemas import (
+    CBLAdoptionEntryResponse,
+    CBLAdoptionSeriesResponse,
+    CBLSourceResponse,
+    CBLadoptionPlanResponse,
     QueueThreadListItem,
     QueueThreadListResponse,
     ReactivateRequest,
@@ -38,8 +41,6 @@ from app.schemas import (
     ThreadResponse,
     ThreadUpdate,
 )
-from typing import Any, Dict, List
-from sqlalchemy import select
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
 from app.services.queue_pagination import (
     QueueCursor,
@@ -1017,7 +1018,7 @@ async def set_current_issue(
         self,
         db: AsyncSession,
         user_id: int,
-    ) -> List[CBLSourceResponse]:
+    ) -> list[CBLSourceResponse]:
         """List available CBL sources for a user.
         
         Returns a list of CBL sources with their id and name.
@@ -1051,12 +1052,12 @@ async def set_current_issue(
                 CBLAdoptionEntryResponse(
                     id=1,
                     title="Sample Comic Issue #1",
-                    seriesId=101
+                    series_id=101
                 ),
                 CBLAdoptionEntryResponse(
                     id=2,
                     title="Sample Comic Issue #2",
-                    seriesId=101
+                    series_id=101
                 )
             ],
             series=[
@@ -1065,8 +1066,8 @@ async def set_current_issue(
                     name="Sample Comic Series"
                 )
             ],
-            existingCount=0,
-            missingCount=2,
+            existing_count=0,
+            missing_count=2,
             excludedCount=0,
             unresolvedCount=0
         )
@@ -1076,7 +1077,7 @@ async def set_current_issue(
         db: AsyncSession,
         user_id: int,
         cbl_id: int,
-        selections: Dict[int, Dict[str, bool]],
+        selections: dict[int, dict[str, bool]],
     ) -> None:
         """Adopt a CBL for a user.
         

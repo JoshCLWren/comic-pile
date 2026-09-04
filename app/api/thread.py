@@ -6,7 +6,7 @@ lives in ``app/services/thread_service.py``; query construction lives in
 ``app/repositories/``.
 """
 
-from typing import Annotated
+from typing import Annotated, Any, dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
@@ -18,6 +18,8 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models.user import User
 from app.schemas import (
+    CBLSourceResponse,
+    CBLadoptionPlanResponse,
     MigrateToIssuesRequest,
     QueueThreadListResponse,
     ReactivateRequest,
@@ -426,12 +428,12 @@ async def preview_cbl_adoption(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(exc)
-        )
+        ) from exc
 
 
 @router.post("/adoptCBL", status_code=status.HTTP_201_CREATED)
 async def adopt_cbl(
-    request: Dict[str, Any],
+    request: dict[str, Any],
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ):
@@ -455,4 +457,4 @@ async def adopt_cbl(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(exc)
-        )
+        ) from exc
