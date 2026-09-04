@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, Path, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, get_db
@@ -16,7 +16,6 @@ from app.schemas.cbl_adoption import (
     CBLPreviewResponse,
     CBLPlanCalculationRequest,
     CBLPlanCalculationResponse,
-    SourceBackedDecision,
 )
 
 router = APIRouter(prefix="/api/v1/cbl-lists", tags=["cbl-adoption"])
@@ -65,13 +64,13 @@ async def calculate_cbl_adoption_plan_endpoint(
         request = CBLPlanCalculationRequest()
     
     # Convert the request format to the format expected by the service
-    series_decisions = {
-        sd.series_name: sd.decision for sd in request.series_decisions
-    } if request.series_decisions else None
+    series_decisions = dict(
+        (sd.series_name, sd.decision) for sd in request.series_decisions
+    ) if request.series_decisions else None
     
-    entry_decisions = {
-        pos: decision for pos, decision in request.entry_decisions.items()
-    } if request.entry_decisions else None
+    entry_decisions = dict(
+        (pos, decision) for pos, decision in request.entry_decisions.items()
+    ) if request.entry_decisions else None
     
     return await calculate_cbl_adoption_plan(
         db,
@@ -102,13 +101,13 @@ async def commit_cbl_adoption_plan_endpoint(
         request = CBLPlanCalculationRequest()
     
     # Convert the request format to the format expected by the service
-    series_decisions = {
-        sd.series_name: sd.decision for sd in request.series_decisions
-    } if request.series_decisions else None
+    series_decisions = dict(
+        (sd.series_name, sd.decision) for sd in request.series_decisions
+    ) if request.series_decisions else None
     
-    entry_decisions = {
-        pos: decision for pos, decision in request.entry_decisions.items()
-    } if request.entry_decisions else None
+    entry_decisions = dict(
+        (pos, decision) for pos, decision in request.entry_decisions.items()
+    ) if request.entry_decisions else None
     
     return await commit_cbl_adoption_plan(
         db,
