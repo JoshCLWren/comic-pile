@@ -44,9 +44,10 @@ async def commit_cbl_adoption(
 
     Serializes concurrent adoption attempts for the same user/source using a
     PostgreSQL advisory lock so that duplicate groups and memberships cannot be
-    created by race.  All mutations (group, memberships, imports, blocked-state
-    refresh) are committed atomically; if the blocked-state refresh fails the
-    entire adoption rolls back.
+    created by race.  All mutations (group, memberships, imports) are committed
+    atomically; the blocked-state refresh runs after the order persists and a
+    refresh failure is reported via ``blocker_refreshed`` without rolling back
+    the adoption.
 
     Args:
         db: Async database session.
@@ -89,7 +90,7 @@ async def commit_cbl_adoption(
     ):
         raise StalePreviewError("CBL source has changed since preview")
 
-    report, plan = await preview_cbl_adoption(
+    _, plan = await preview_cbl_adoption(
         db,
         user_id=user_id,
         list_id=list_id,
