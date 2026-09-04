@@ -1001,97 +1001,97 @@ async def set_current_issue(
     await invalidate_user_view(user_id)
 
     return SetCurrentIssueResponse(
-        thread_id=thread_id,
-        title=thread_title,
-        format=thread_format,
-        issues_remaining=issues_remaining,
-        queue_position=queue_position,
-        issue_id=target_issue_id,
-        issue_number=target_issue_number,
-        next_issue_id=target_issue_id,
-        next_issue_number=target_issue_number,
-        total_issues=total_issues,
-        reading_progress=reading_progress,
+         thread_id=thread_id,
+         title=thread_title,
+         format=thread_format,
+         issues_remaining=issues_remaining,
+         queue_position=queue_position,
+         issue_id=target_issue_id,
+         issue_number=target_issue_number,
+         next_issue_id=target_issue_id,
+         next_issue_number=target_issue_number,
+         total_issues=total_issues,
+         reading_progress=reading_progress,
     )
 
-    async def list_cbl_sources(
-        self,
-        db: AsyncSession,
-        user_id: int,
-    ) -> list[CBLSourceResponse]:
-        """List available CBL sources for a user.
-        
-        Returns a list of CBL sources with their id and name.
-        """
-        # Query CBL sources that have been synced for the user
-        # For now, we'll return a placeholder implementation
-        # In a real implementation, this would join with user permissions
-        sources = await cbl_repository.list_cbl_sources(db)
-        return [CBLSourceResponse(id=source[0], name=source[1]) for source in sources]
 
-    async def preview_cbl_adoption(
-        self,
-        db: AsyncSession,
-        user_id: int,
-        cbl_id: int,
-    ) -> CBLadoptionPlanResponse:
-        """Preview the adoption of a CBL for a user.
-        
-        Returns a preview of what would be adopted without making changes.
-        """
-        # Placeholder implementation - in reality this would:
-        # 1. Get the CBL source by ID
-        # 2. Verify user has access to it
-        # 3. Get the CBL source list and entries
-        # 4. Generate a preview of how it would integrate with user's threads
-        # 5. Return the preview data
-        
-        # For now, return a mock preview structure
-        return CBLadoptionPlanResponse(
-            entries=[
-                CBLAdoptionEntryResponse(
-                    id=1,
-                    title="Sample Comic Issue #1",
-                    series_id=101
-                ),
-                CBLAdoptionEntryResponse(
-                    id=2,
-                    title="Sample Comic Issue #2",
-                    series_id=101
-                )
-            ],
-            series=[
-                CBLAdoptionSeriesResponse(
-                    id=101,
-                    name="Sample Comic Series"
-                )
-            ],
-            existing_count=0,
-            missing_count=2,
-            excludedCount=0,
-            unresolvedCount=0
-        )
+async def list_cbl_sources(
+    db: AsyncSession,
+    user_id: int,
+) -> list[CBLSourceResponse]:
+    """List available CBL sources for a user.
+    
+    Returns a list of CBL sources with their id and name.
+    """
+    # Query CBL sources that have been synced for the user
+    # For now, we'll return a placeholder implementation
+    # In a real implementation, this would join with user permissions
+    sources = await cbl_repository.list_cbl_sources(db)
+    return [CBLSourceResponse(id=source[0], name=source[1]) for source in sources]
 
-    async def adopt_cbl(
-        self,
-        db: AsyncSession,
-        user_id: int,
-        cbl_id: int,
-        selections: dict[int, dict[str, bool]],
-    ) -> None:
-        """Adopt a CBL for a user.
-        
-        Processes the selected CBL entries and creates/updates threads accordingly.
-        """
-        # Placeholder implementation - in reality this would:
-        # 1. Get the CBL source by ID
-        # 2. Verify user has access to it
-        # 3. Get the CBL source list and entries
-        # 4. Process selections to determine which entries to include/exclude
-        # 5. Create new threads for missing comics
-        # 6. Link existing threads for comics the user already has
-        # 7. Update reading positions and continuity information
-        pass
+
+async def preview_cbl_adoption(
+    db: AsyncSession,
+    user_id: int,
+    cbl_id: int,
+) -> CBLadoptionPlanResponse:
+    """Preview the adoption of a CBL for a user.
+    
+    Returns a preview of what would be adopted without making changes.
+    """
+    # Placeholder implementation - in reality this would:
+    # 1. Get the CBL source by ID
+    # 2. Verify user has access to it
+    # 3. Get the CBL source list and entries
+    # 4. Generate a preview of how it would integrate with user's threads
+    # 5. Return the preview data
+    
+    # For now, return a mock preview structure
+    return CBLadoptionPlanResponse(
+        entries=[
+            CBLAdoptionEntryResponse(
+                id=1,
+                title="Sample Comic Issue #1",
+                series_id=101
+            ),
+            CBLAdoptionEntryResponse(
+                id=2,
+                title="Sample Comic Issue #2",
+                series_id=101
+            )
+        ],
+        series=[
+            CBLAdoptionSeriesResponse(
+                id=101,
+                name="Sample Comic Series"
+            )
+        ],
+        existing_count=0,
+        missing_count=2,
+        excluded_count=0,
+        unresolved_count=0
+    )
+
+
+async def adopt_cbl(
+    db: AsyncSession,
+    user_id: int,
+    cbl_id: int,
+    selections: dict[int, dict[str, bool]],
+) -> None:
+    """Adopt a CBL for a user.
+    
+    Processes the selected CBL entries and creates/updates threads accordingly.
+    """
+    # Placeholder implementation - in reality this would:
+    # 1. Get the CBL source by ID
+    # 2. Verify user has access to it
+    # 3. Get the CBL source list and entries
+    # 4. Process selections to determine which entries to include/exclude
+    # 5. Create new threads for missing comics
+    # 6. Link existing threads for comics the user already has
+    # 7. Update reading positions and continuity information
+    pass
 
 
 
