@@ -899,7 +899,10 @@ def handle_review(
     current_head = str(pr.get("headRefOid") or "")
     if not HEAD_RE.fullmatch(current_head):
         raise RuntimeError(f"PR #{pr_number} has an invalid current head")
-    
+
+    producer = producer_worker_from_pr(branch=branch, body=str(pr.get("body") or ""))
+    excerpt = review_excerpt(review_log, worker=worker)
+
     # Check for stale head - the reviewed head must match the current PR head
     if current_head != reviewed_head:
         return return_to_review(
@@ -917,9 +920,6 @@ def handle_review(
             head=current_head,
             producer=producer,
         )
-
-    producer = producer_worker_from_pr(branch=branch, body=str(pr.get("body") or ""))
-    excerpt = review_excerpt(review_log, worker=worker)
 
     # Check for self-review first (takes precedence)
     if producer is not None and producer == worker and verdict in {"approve", "reject"}:
