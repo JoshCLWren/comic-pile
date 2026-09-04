@@ -161,7 +161,7 @@ export interface SessionCurrent {
 }
 
 export type ReadingBandwidth = 'light' | 'balanced' | 'deep'
-export type ReadingIntent = 'momentum' | 'familiar' | 'explore' | 'random'
+export type ReadingIntent = 'balanced' | 'momentum' | 'familiar' | 'explore' | 'random'
 export type ReadingModeSource = 'quiz' | 'manual'
 
 export type BandwidthSource = 'manual' | 'inferred' | 'snooze' | 'quiz' | null
