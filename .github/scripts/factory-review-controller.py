@@ -902,22 +902,41 @@ def handle_review(
     producer = producer_worker_from_pr(branch=branch, body=str(pr.get("body") or ""))
     excerpt = review_excerpt(review_log, worker=worker)
 
-    if current_head != reviewed_head:
-        return return_to_review(
-            pr_number=pr_number,
-            branch=branch,
-            worker=worker,
-            reviewer=worker,
-            verdict=verdict,
-            excerpt=excerpt,
-            note=(
-                f"Verdict ignored because the reviewed checkout {reviewed_head} no longer "
-                f"matches current head {current_head}. The new head requires fresh review."
-            ),
-            status="stale-head",
-            head=current_head,
-            producer=producer,
-        )
+    # NEW: For approval, require evidence of diff inspection
+    if verdict == "approve":
+        if not DIFF_INSPECTION_RE.search(excerpt):
+            return return_to_review(
+                pr_number=pr_number,
+                branch=branch,
+                worker=worker,
+                reviewer=worker,
+                verdict=verdict,
+                excerpt=excerpt,
+                note=(
+                    "Approval requires evidence of diff inspection (e.g., running `git diff` or `gh pr diff`). "
+                    "The reviewed head must be inspected to ensure the changes are understood."
+                ),
+                status="review",
+                head=reviewed_head,
+                producer=producer,
+            )
+
+        if producer is not None and producer == worker and verdict in {"approve", "reject"}:
+            return return_to_review(
+                pr_number=pr_number,
+                branch=branch,
+                worker=worker,
+                reviewer=worker,
+                verdict=verdict,
+                excerpt=excerpt,
+                note=(
+                    "Verdict ignored because the reviewer is the producing factory. "
+                    "A different factory must independently review this exact head."
+                ),
+                status="self-review-blocked",
+                head=reviewed_head,
+                producer=producer,
+            )
 
     if producer is not None and producer == worker and verdict in {"approve", "reject"}:
         return return_to_review(
