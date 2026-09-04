@@ -8,6 +8,16 @@ from pydantic import BaseModel, Field
 from app.schemas.shared_types import SourceBackedDecision, SourceBackedStatus
 
 
+class CBLSourceFingerprintResponse(BaseModel):
+    """Immutable source evidence needed to review and later accept a plan."""
+
+    source_list_id: int
+    source_repository: str
+    source_path: str
+    content_hash: str
+    revision_sha: str
+
+
 class CBLPreviewEntry(BaseModel):
     """One CBL source position with resolution and read context."""
 

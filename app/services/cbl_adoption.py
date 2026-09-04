@@ -175,40 +175,31 @@ async def commit_cbl_adoption(
             })
         elif decision == "would_create_missing":
             # Create a new issue using the normal import path
-            # We'll use the series name and issue number from the CBL entry
-            # We need to create an issue and a thread
-            # This is a simplified version - in reality we'd use the import service
-            # For now, we'll create a basic issue and thread
-            issue = Issue(
-                series_name=entry.series_name,
-                issue_number=entry.issue_number,
-                # We don't have comicvine_issue_id from the entry, but we can get it from the plan?
-                # Actually, the plan entry has comicvine_issue_id from the reconciliation
-                # We'll leave it as None for now and rely on the import process to fill it
-                # But note: we are supposed to use the normal ComicVine-aware import path
-                # We'll skip the actual import for now and create a placeholder
-                # In a real implementation, we would call the import service
-                # For the purpose of this task, we'll create an issue with minimal fields
-                # and note that the import path should be used.
-                # We'll set the comicvine_issue_id if available in the plan entry
+            # We need to create a thread with the issue, using the import service
+            from app.schemas.comicvine_resolution import ImportIssueRequest
+            
+            # Prepare import request
+            import_request = ImportIssueRequest(
+                title=f"{entry.series_name} #{entry.issue_number}",
+                issue_number=str(entry.issue_number),
                 comicvine_issue_id=plan_entry.get("comicvine_issue_id"),
-                # Other fields will be set by the import process or left as default
+                # No reading order placement for CBL adoptions
+                reading_order_id=None,
+                anchor_before_thread_id=None,
+                anchor_after_thread_id=None,
             )
-            db.add(issue)
-            await db.flush()  # Get the issue ID
             
-            # Create a thread for the issue
-            thread = Thread(
-                issue_id=issue.id,
+            # Use the import service to create thread and issue properly
+            import_result = await import_comicvine_issue(
+                db,
                 user_id=user_id,
-                # Other thread fields will be set by the thread creation process
+                request=import_request,
             )
-            db.add(thread)
-            await db.flush()  # Get the thread ID
             
-            created_issue_ids.append(issue.id)
-            created_thread_ids.append(thread.id)
-            issue_id = issue.id
+            # Extract IDs from import result
+            created_thread_ids.append(import_result.thread_id)
+            created_issue_ids.append(import_result.issue_id)
+            issue_id = import_result.issue_id
         else:
             # Should not happen
             continue
