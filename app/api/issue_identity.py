@@ -10,11 +10,17 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
+from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.models.user import User
 from app.services.cbl_reconciliation import (
+    CBLAdoptionMaterializationError,
     CBLAdoptionPlan,
+    CBLAdoptionStaleError,
     CBLReconciliationReport,
+    CBLReviewedEntry,
+    CBLReviewedSource,
+    commit_cbl_adoption,
     preview_cbl_adoption,
     reconcile_cbl_source_list,
 )
@@ -155,6 +161,48 @@ class CBLAdoptionPreviewResponse(BaseModel):
     total_positions: int
     entries: list[CBLAdoptionEntryResponse]
     summary: CBLAdoptionSummaryResponse
+
+
+class CBLAdoptionCommitRequest(BaseModel):
+    """Reviewed preview evidence and choices required for an atomic adoption."""
+
+    source: CBLSourceFingerprintResponse
+    series_decisions: dict[str, bool] = Field(default_factory=dict)
+    entry_decisions: dict[str, bool] = Field(default_factory=dict)
+    reviewed_entries: list[CBLAdoptionEntryResponse]
+    reviewed_final_source_positions: list[int]
+
+
+class CBLAdoptionMembershipResponse(BaseModel):
+    """One persisted CBL source-position membership."""
+
+    membership_id: int
+    issue_id: int
+    sequence_order: int
+
+
+class CBLBlockerRefreshResponse(BaseModel):
+    """Outcome of the existing denormalized blocker refresh path."""
+
+    refreshed: bool
+    changed_thread_ids: list[int]
+
+
+class CBLAdoptionCommitResponse(BaseModel):
+    """Typed result of an atomic CBL source adoption."""
+
+    source: CBLSourceFingerprintResponse
+    group_id: int
+    group_name: str
+    reused_issue_ids: list[int]
+    created_issue_ids: list[int]
+    created_thread_ids: list[int]
+    excluded_source_positions: list[int]
+    unresolved_source_positions: list[int]
+    memberships: list[CBLAdoptionMembershipResponse]
+    final_adopted_source_positions: list[int]
+    blocker_refresh: CBLBlockerRefreshResponse
+    idempotent_replay: bool
 
 
 @router.get("/report", response_model=IdentityReportResponse)
@@ -506,3 +554,97 @@ async def api_cbl_adoption_plan(
         entry_decisions=request.entry_decisions,
     )
     return _adoption_payload(report, plan)
+
+
+@router.post(
+    "/cbl/{list_id}/adoption-commit",
+    response_model=CBLAdoptionCommitResponse,
+)
+async def api_cbl_adoption_commit(
+    list_id: int,
+    request: CBLAdoptionCommitRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> CBLAdoptionCommitResponse:
+    """Commit one reviewed CBL adoption atomically after stale-plan validation."""
+    source = CBLReviewedSource(**request.source.model_dump())
+    reviewed_entries = tuple(
+        CBLReviewedEntry(
+            cbl_position=entry.cbl_position,
+            cbl_entry_id=entry.cbl_entry_id,
+            series_group_id=entry.series_group_id,
+            series_provider=entry.series_provider,
+            series_external_id=entry.series_external_id,
+            comicvine_series_id=entry.comicvine_series_id,
+            adoption_class=entry.adoption_class,
+            adoption_decision=entry.adoption_decision,
+            adopted=entry.adopted,
+            comicvine_issue_id=entry.comicvine_issue_id,
+            resolved_issue_id=entry.resolved_issue_id,
+            canonical_issue_id=entry.canonical_issue_id,
+            resolution_status=entry.resolution_status,
+        )
+        for entry in request.reviewed_entries
+    )
+    try:
+        result = await commit_cbl_adoption(
+            db,
+            user_id=current_user.id,
+            list_id=list_id,
+            source=source,
+            reviewed_entries=reviewed_entries,
+            reviewed_final_positions=tuple(request.reviewed_final_source_positions),
+            series_decisions=request.series_decisions,
+            entry_decisions=request.entry_decisions,
+        )
+        await db.commit()
+    except CBLAdoptionStaleError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "cbl_adoption_plan_stale",
+                "message": str(exc),
+                "reasons": list(exc.reasons),
+            },
+        ) from exc
+    except CBLAdoptionMaterializationError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "cbl_adoption_not_materializable", "message": str(exc)},
+        ) from exc
+    except Exception:
+        await db.rollback()
+        raise
+    await invalidate_user_view(current_user.id)
+    return CBLAdoptionCommitResponse(
+        source=CBLSourceFingerprintResponse(
+            source_list_id=result.source.source_list_id,
+            source_repository=result.source.source_repository,
+            source_path=result.source.source_path,
+            content_hash=result.source.content_hash,
+            revision_sha=result.source.revision_sha,
+        ),
+        group_id=result.group_id,
+        group_name=result.group_name,
+        reused_issue_ids=list(result.reused_issue_ids),
+        created_issue_ids=list(result.created_issue_ids),
+        created_thread_ids=list(result.created_thread_ids),
+        excluded_source_positions=list(result.excluded_source_positions),
+        unresolved_source_positions=list(result.unresolved_source_positions),
+        memberships=[
+            CBLAdoptionMembershipResponse(
+                membership_id=item.membership_id,
+                issue_id=item.issue_id,
+                sequence_order=item.sequence_order,
+            )
+            for item in result.memberships
+        ],
+        final_adopted_source_positions=list(result.final_adopted_source_positions),
+        blocker_refresh=CBLBlockerRefreshResponse(
+            refreshed=True,
+            changed_thread_ids=list(result.blocker_changed_thread_ids),
+        ),
+        idempotent_replay=result.idempotent_replay,
+    )

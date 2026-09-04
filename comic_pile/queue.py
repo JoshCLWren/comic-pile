@@ -16,7 +16,7 @@ ADVISORY_LOCK_NAMESPACE = 699001
 QueuePositionChanges = dict[int, int]
 
 
-async def _acquire_queue_lock(user_id: int, db: AsyncSession) -> None:
+async def acquire_queue_lock(user_id: int, db: AsyncSession) -> None:
     """Acquire a transaction-scoped advisory lock keyed on user ID.
 
     Args:
@@ -163,7 +163,7 @@ async def move_to_back(
     Returns:
         Mapping of changed thread IDs to their previous positions.
     """
-    await _acquire_queue_lock(user_id, db)
+    await acquire_queue_lock(user_id, db)
 
     result = await db.execute(
         _MOVE_TO_BACK_SQL,
@@ -203,7 +203,7 @@ async def move_to_position(
         new_position,
     )
 
-    await _acquire_queue_lock(user_id, db)
+    await acquire_queue_lock(user_id, db)
 
     result = await db.execute(
         select(Thread.id, Thread.queue_position, Thread.status)
@@ -327,7 +327,7 @@ async def move_to_safe_position(
     Returns:
         Mapping of changed thread IDs to their previous positions.
     """
-    await _acquire_queue_lock(user_id, db)
+    await acquire_queue_lock(user_id, db)
 
     excluded_ids = set(excluded_thread_ids or ())
     result = await db.execute(
@@ -385,7 +385,7 @@ async def shuffle_queue(user_id: int, db: AsyncSession) -> int:
     Returns:
         Number of active threads that were shuffled.
     """
-    await _acquire_queue_lock(user_id, db)
+    await acquire_queue_lock(user_id, db)
 
     result = await db.execute(
         select(Thread.id)

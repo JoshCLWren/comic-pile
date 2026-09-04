@@ -28,6 +28,13 @@ class DependencyGroup(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+    cbl_source_list_id: Mapped[int | None] = mapped_column(
+        ForeignKey("cbl_source_lists.id", ondelete="SET NULL"), nullable=True
+    )
+    cbl_source_repository: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cbl_source_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    cbl_content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cbl_revision_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
@@ -41,6 +48,11 @@ class DependencyGroup(Base):
 
     __table_args__ = (
         UniqueConstraint("user_id", "name", name="uq_dependency_groups_user_name"),
+        UniqueConstraint(
+            "user_id",
+            "cbl_source_list_id",
+            name="uq_dependency_groups_user_cbl_source",
+        ),
         Index("ix_dependency_groups_user_id", "user_id"),
     )
 

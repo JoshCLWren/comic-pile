@@ -26,6 +26,12 @@ from app.schemas import (
 from app.schemas.comicvine import ComicVineIssueIntelligence
 from app.schemas.reader_context import ReaderContextResponse
 from app.services.comicvine_intelligence import get_issue_intelligence
+from app.services.issue_tracking import (
+    recalculate_next_unread_issue_id as _recalculate_next_unread_issue_id,
+)
+from app.services.issue_tracking import (
+    recalculate_thread_issue_tracking_state as _recalculate_thread_issue_tracking_state,
+)
 from app.services.reader_context import get_reader_context
 from app.utils.issue_parser import parse_issue_ranges
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
@@ -172,39 +178,6 @@ def _assign_issue_positions(issues: list[Issue]) -> None:
     """Rewrite positions so the given issue order becomes canonical."""
     for position, issue in enumerate(issues, start=1):
         issue.position = position
-
-
-def _recalculate_next_unread_issue_id(thread: Thread, issues: list[Issue]) -> None:
-    """Update a thread's next unread pointer from the current in-memory issue order."""
-    next_unread_issue = next(
-        (issue for issue in issues if issue.status == "unread"),
-        None,
-    )
-    thread.next_unread_issue_id = next_unread_issue.id if next_unread_issue else None
-
-
-def _recalculate_thread_issue_tracking_state(thread: Thread, issues: list[Issue]) -> None:
-    """Recalculate issue-tracking metadata from the current in-memory issue state."""
-    unread_issues = [issue for issue in issues if issue.status == "unread"]
-    unread_count = len(unread_issues)
-    total_issues = len(issues)
-
-    thread.total_issues = total_issues
-    thread.issues_remaining = unread_count
-    thread.next_unread_issue_id = unread_issues[0].id if unread_issues else None
-
-    if unread_count == 0:
-        thread.reading_progress = "completed"
-        thread.status = "completed"
-        return
-
-    if unread_count == total_issues:
-        thread.reading_progress = "not_started"
-    else:
-        thread.reading_progress = "in_progress"
-
-    if thread.status == "completed":
-        thread.status = "active"
 
 
 @router.get("/threads/{thread_id}/issues", response_model=IssueListResponse)
@@ -781,7 +754,7 @@ async def delete_issue(
                 by_lane.setdefault(str(n.get("lane_id", "")), []).append(n)
             normalized: list[dict[str, object]] = []
             for lane_nodes in by_lane.values():
-                lane_nodes.sort(key=lambda x: int(x.get("position", 0)))  # type: ignore[arg-type]
+                lane_nodes.sort(key=lambda x: int(x.get("position", 0)))
                 for idx, n in enumerate(lane_nodes):
                     n["position"] = idx
                     normalized.append(n)
