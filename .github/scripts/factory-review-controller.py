@@ -902,6 +902,24 @@ def handle_review(
     producer = producer_worker_from_pr(branch=branch, body=str(pr.get("body") or ""))
     excerpt = review_excerpt(review_log, worker=worker)
 
+    # Check for self-review first (takes precedence)
+    if producer is not None and producer == worker and verdict in {"approve", "reject"}:
+        return return_to_review(
+            pr_number=pr_number,
+            branch=branch,
+            worker=worker,
+            reviewer=worker,
+            verdict=verdict,
+            excerpt=excerpt,
+            note=(
+                "Verdict ignored because the reviewer is the producing factory. "
+                "A different factory must independently review this exact head."
+            ),
+            status="self-review-blocked",
+            head=reviewed_head,
+            producer=producer,
+        )
+
     # NEW: For approval, require evidence of diff inspection
     if verdict == "approve":
         if not DIFF_INSPECTION_RE.search(excerpt):
@@ -920,40 +938,6 @@ def handle_review(
                 head=reviewed_head,
                 producer=producer,
             )
-
-        if producer is not None and producer == worker and verdict in {"approve", "reject"}:
-            return return_to_review(
-                pr_number=pr_number,
-                branch=branch,
-                worker=worker,
-                reviewer=worker,
-                verdict=verdict,
-                excerpt=excerpt,
-                note=(
-                    "Verdict ignored because the reviewer is the producing factory. "
-                    "A different factory must independently review this exact head."
-                ),
-                status="self-review-blocked",
-                head=reviewed_head,
-                producer=producer,
-            )
-
-    if producer is not None and producer == worker and verdict in {"approve", "reject"}:
-        return return_to_review(
-            pr_number=pr_number,
-            branch=branch,
-            worker=worker,
-            reviewer=worker,
-            verdict=verdict,
-            excerpt=excerpt,
-            note=(
-                "Verdict ignored because the reviewer is the producing factory. "
-                "A different factory must independently review this exact head."
-            ),
-            status="self-review-blocked",
-            head=reviewed_head,
-            producer=producer,
-        )
 
     marker = review_marker(
         pr=pr_number,
