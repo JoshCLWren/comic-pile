@@ -10,6 +10,11 @@ from typing import Any
 from factory_review_policy import producer_worker_from_pr as producer_worker_from_values
 NON_EXECUTABLE_ISSUES = {679, 1093, 1109}
 
+CLOSING_RE = re.compile(
+    r"\b(?:closes|closed|close|fixes|fixed|fix|resolves|resolved|resolve)\s+#(?P<issue>[0-9]+)",
+    re.IGNORECASE,
+)
+
 OWNER_RE = re.compile('^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$')
 
 FIXED_OWNER_RE = re.compile('^factory:(?P<worker>[6-9]|[1-3][0-9]|[4-7][0-9])$')
@@ -307,20 +312,53 @@ def pr_is_static_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, An
 
 
 def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, Any]]) -> bool:
-    """Return whether this open factory PR is canonical work for its issue.
+    """Return whether this open non-draft PR is canonical work for its issue.
 
-    Once a canonical factory PR exists, the linked issue must not become fresh
+    Once a canonical PR exists, the linked issue must not become fresh
     implementation work again for any reason. If an old PR is no longer worth
     repairing, it must be explicitly closed before the issue can re-enter fresh
     implementation. Urgency changes ranking, never canonical PR identity.
+
+    A PR suppresses its issue if:
+    1. It is an open, non-draft PR; AND
+    2. Either:
+       a. It is a factory PR with canonical branch shape (factory/N-ISSUE-...); OR
+       b. It has an explicit closing reference in its body (Closes/Fixes/Resolves #N)
     """
     del issue_map  # Kept in the signature for compatibility with existing callers.
+
+    state = str(pr.get('state') or 'OPEN').upper()
+    if state != 'OPEN' or pr.get('isDraft'):
+        return False
+
     head = str(pr.get('headRefName') or '')
-    return (
-        str(pr.get('state') or 'OPEN').upper() == 'OPEN'
-        and head.startswith('factory/')
-        and linked_issue_from_branch(head) is not None
-    )
+    body = str(pr.get('body') or '')
+
+    # Factory PR with canonical branch shape
+    if head.startswith('factory/') and linked_issue_from_branch(head) is not None:
+        return True
+
+    # Any open non-draft PR with explicit closing reference
+    closing_match = CLOSING_RE.search(body)
+    if closing_match is not None:
+        return True
+
+    return False
+
+
+def _linked_issue_from_pr(pr: dict[str, Any]) -> int | None:
+    """Extract the issue number a PR is linked to, either from branch or closing keyword."""
+    head = str(pr.get('headRefName') or '')
+    body = str(pr.get('body') or '')
+    # First try canonical factory branch shape
+    linked = linked_issue_from_branch(head)
+    if linked is not None:
+        return linked
+    # Fall back to explicit closing reference in body
+    closing_match = CLOSING_RE.search(body)
+    if closing_match is not None:
+        return int(closing_match.group('issue'))
+    return None
 
 
 def build_candidates(
@@ -335,7 +373,7 @@ def build_candidates(
     suppressing_pr_issues = {
         linked
         for pr in prs
-        if (linked := linked_issue_from_branch(pr.get('headRefName'))) is not None
+        if (linked := _linked_issue_from_pr(pr)) is not None
         and pr_suppresses_issue_candidate(pr, issue_map)
     }
     pr_wip_full = factory_pr_wip_count(prs) >= FACTORY_PR_WIP_LIMIT
