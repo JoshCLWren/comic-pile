@@ -150,6 +150,14 @@ export interface SessionCurrent {
   reading_intent?: ReadingIntent | null;
   reading_mode_source?: ReadingModeSource | null;
   reading_mode_suggested?: boolean;
+  correction?: {
+    bandwidth_changed: boolean;
+    active_bandwidth: ReadingBandwidth | null;
+    active_confidence: number | null;
+    predicted_bandwidth: ReadingBandwidth | null;
+    reason_code: 'heavy_snooze_shift' | 'light_snooze_deflate' | 'confidence_degrade' | 'no_correction' | 'clarification_needed';
+    suggest_clarification: boolean;
+  } | null;
 }
 
 export type ReadingBandwidth = 'light' | 'balanced' | 'deep'
