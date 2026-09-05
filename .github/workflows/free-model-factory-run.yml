@@ -85,8 +85,8 @@ jobs:
           # GitHub agents have one execution gateway. The manifest remains the
           # durable worker roster, while OmniRoute owns provider/model choice.
           source='omniroute-free'
-          model='free-cascade-small'
-          runtime_model='omniroute/free-cascade-small'
+          model='auto/coding:free'
+          runtime_model='omniroute/auto/coding:free'
           branch_suffix='omniroute'
           if [[ -n "${OMNIROUTE_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]]; then
             configured=true
@@ -298,7 +298,7 @@ jobs:
             echo "runtime_model=$runtime_model"
             echo "display=${source} · ${model}"
             echo "branch_suffix=$branch_suffix"
-            echo "reason=selected-${health_state}-from-live-provider-catalog"
+            echo "reason=selected-${health_state}-native-omniroute-auto-route"
           } >> "$GITHUB_OUTPUT"
           printf 'Factory %s selected executor: provider=%s model=%s runtime=%s health=%s\n' \
             "$WORKER" "$source" "$model" "$runtime_model" "$health_state"
@@ -317,6 +317,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           [[ -n "${WORKER:-}" ]] || exit 0
+          if [[ -f "$RUNNER_TEMP/factory-effective-model" ]]; then MODEL="$(cat "$RUNNER_TEMP/factory-effective-model")"; fi
           marker="<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-${WORKER} -->"
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           if [[ "$CONFIGURED" != true ]]; then
@@ -519,6 +520,7 @@ jobs:
           MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
+          if [[ -f "$RUNNER_TEMP/factory-effective-model" ]]; then MODEL="$(cat "$RUNNER_TEMP/factory-effective-model")"; fi
           [[ -n "${OMNIROUTE_MANAGEMENT_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]] || {
             echo 'OmniRoute routing summary unavailable: gateway credentials missing' >&2
             exit 0
@@ -572,6 +574,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           [[ -n "${WORKER:-}" ]] || exit 0
+          if [[ -f "$RUNNER_TEMP/factory-effective-model" ]]; then MODEL="$(cat "$RUNNER_TEMP/factory-effective-model")"; fi
           marker="<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-${WORKER} -->"
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           if [[ "$CONFIGURED" != true ]]; then outcome='unconfigured'; else outcome="$JOB_STATUS"; fi

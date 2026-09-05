@@ -143,8 +143,8 @@ def test_preferred_provider_lane_uses_usable_provider_before_global_rank() -> No
         *CANDIDATES,
         {
             "provider": "omniroute-free",
-            "model": "free-cascade-small",
-            "runtime_model": "omniroute/free-cascade-small",
+            "model": "auto/coding:free",
+            "runtime_model": "omniroute/auto/coding:free",
             "discovered_by": "provider_catalog",
         },
     ]
@@ -152,7 +152,7 @@ def test_preferred_provider_lane_uses_usable_provider_before_global_rank() -> No
         candidates,
         [
             evidence("vendor/a:free", "success"),
-            evidence("free-cascade-small", "success", provider="omniroute-free"),
+            evidence("auto/coding:free", "success", provider="omniroute-free"),
         ],
         worker=45,
         now_epoch=NOW,
@@ -168,22 +168,22 @@ def test_omniroute_throttle_is_scoped_to_one_model_route() -> None:
     candidates = [
         {
             "provider": "omniroute-free",
-            "model": "free-cascade-small",
-            "runtime_model": "omniroute/free-cascade-small",
+            "model": "auto/coding:free",
+            "runtime_model": "omniroute/auto/coding:free",
             "discovered_by": "provider_catalog",
         },
         {
             "provider": "omniroute-free",
-            "model": "free-cascade-big",
-            "runtime_model": "omniroute/free-cascade-big",
+            "model": "auto/reasoning:free",
+            "runtime_model": "omniroute/auto/reasoning:free",
             "discovered_by": "provider_catalog",
         },
     ]
     result = HEALTH.select_candidate(
         candidates,
         [
-            evidence("free-cascade-small", "provider_throttle", provider="omniroute-free"),
-            evidence("free-cascade-big", "success", provider="omniroute-free"),
+            evidence("auto/coding:free", "provider_throttle", provider="omniroute-free"),
+            evidence("auto/reasoning:free", "success", provider="omniroute-free"),
         ],
         worker=45,
         now_epoch=NOW,
@@ -191,7 +191,7 @@ def test_omniroute_throttle_is_scoped_to_one_model_route() -> None:
     )
 
     assert result.selected is not None
-    assert result.selected.model == "free-cascade-big"
+    assert result.selected.model == "auto/reasoning:free"
 
 
 def test_omniroute_410_still_retires_only_that_model() -> None:
@@ -199,22 +199,22 @@ def test_omniroute_410_still_retires_only_that_model() -> None:
     candidates = [
         {
             "provider": "omniroute-free",
-            "model": "free-cascade-small",
-            "runtime_model": "omniroute/free-cascade-small",
+            "model": "auto/coding:free",
+            "runtime_model": "omniroute/auto/coding:free",
             "discovered_by": "provider_catalog",
         },
         {
             "provider": "omniroute-free",
-            "model": "free-cascade-big",
-            "runtime_model": "omniroute/free-cascade-big",
+            "model": "auto/reasoning:free",
+            "runtime_model": "omniroute/auto/reasoning:free",
             "discovered_by": "provider_catalog",
         },
     ]
     result = HEALTH.select_candidate(
         candidates,
         [
-            evidence("free-cascade-small", "model_retired_410", provider="omniroute-free"),
-            evidence("free-cascade-big", "success", provider="omniroute-free"),
+            evidence("auto/coding:free", "model_retired_410", provider="omniroute-free"),
+            evidence("auto/reasoning:free", "success", provider="omniroute-free"),
         ],
         worker=45,
         now_epoch=NOW,
@@ -222,7 +222,7 @@ def test_omniroute_410_still_retires_only_that_model() -> None:
     )
 
     assert result.selected is not None
-    assert result.selected.model == "free-cascade-big"
+    assert result.selected.model == "auto/reasoning:free"
 
 
 def test_no_work_keeps_candidate_healthy() -> None:

@@ -305,6 +305,29 @@ if (( assignment_status != 0 )); then
   exit "$assignment_status"
 fi
 
+effective_route="$(python3 .github/scripts/factory_omniroute_route.py --mode "$MODE" --pr-stage "$ASSIGNED_PR_STAGE")" || {
+  record_terminal_outcome control_plane_failure 'failed to resolve native OmniRoute route for assignment'
+  exit 2
+}
+MODEL="$effective_route"
+RUNTIME_MODEL="omniroute/${effective_route}"
+DISPLAY="omniroute-free · ${effective_route}"
+printf '%s\n' "$MODEL" > "${RUNNER_TEMP:-/tmp}/factory-effective-model"
+
+opencode_config="$HOME/.config/opencode/opencode.json"
+if [[ ! -f "$opencode_config" ]]; then
+  record_terminal_outcome control_plane_failure 'OpenCode OmniRoute configuration missing before assignment route selection'
+  exit 2
+fi
+route_config="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-opencode-route.XXXXXX.json")"
+if ! jq --arg model "$MODEL" '.provider.omniroute.models[$model] = {name: $model}' "$opencode_config" > "$route_config"; then
+  record_terminal_outcome control_plane_failure 'failed to add assignment route to OpenCode OmniRoute configuration'
+  exit 2
+fi
+mv "$route_config" "$opencode_config"
+chmod 600 "$opencode_config"
+log "selected native OmniRoute intent route ${MODEL} for ${MODE} #${NUMBER}${ASSIGNED_PR_STAGE:+ (${ASSIGNED_PR_STAGE})}"
+
 log "executing control-plane assignment: ${MODE} #${NUMBER}; runtime ${RUNTIME_MODEL}; budget ${BUDGET_SECONDS}s"
 checkout_target "$MODE" "$NUMBER" "$BRANCH"
 

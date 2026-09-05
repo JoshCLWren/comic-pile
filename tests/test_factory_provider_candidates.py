@@ -91,48 +91,48 @@ def test_opencode_uses_project_available_cli_catalog() -> None:
     assert result.candidates[0].discovered_by == "opencode_models"
 
 
-def test_omniroute_exposes_only_gateway_owned_free_pools() -> None:
-    """Individual free routes cannot bypass the reconciled gateway pools."""
+
+def test_omniroute_exposes_native_free_coding_route() -> None:
+    """Factories choose work intent while OmniRoute chooses the backing model."""
     result = CANDIDATES.discover(
         "omniroute-free",
         json.dumps(
             {
                 "data": [
                     {"id": "free-cascade-small"},
-                    {"id": "free-cascade-big"},
-                    {"id": "auto/coding:free", "capabilities": {"tool_calling": True}},
-                    {"id": "provider/no-tools:free"},
-                    {
-                        "id": "openrouter/nvidia/nemotron-3.5-content-safety:free",
-                        "capabilities": {"tool_calling": True},
-                    },
-                    {"id": "auto/best-coding"},
-                    {"id": "provider/backing-model"},
+                    {"id": "auto/coding:free"},
+                    {"id": "provider/backing-model:free"},
                 ]
             }
         ),
     )
 
     assert result.status == "available"
-    assert [candidate.model for candidate in result.candidates] == [
-        "free-cascade-big",
-        "free-cascade-small",
-    ]
+    assert [candidate.model for candidate in result.candidates] == ["auto/coding:free"]
+    assert result.candidates[0].runtime_model == "omniroute/auto/coding:free"
+    assert result.candidates[0].discovered_by == "provider_catalog"
 
 
-def test_omniroute_keeps_configured_cascade_when_catalog_temporarily_omits_it() -> None:
-    """A transient catalog omission cannot replace the known healthy cascade."""
+def test_omniroute_native_route_survives_catalog_omission() -> None:
+    """Virtual native routes remain addressable when /models omits them transiently."""
+    result = CANDIDATES.discover(
+        "omniroute-free",
+        json.dumps({"data": [{"id": "provider/backing-model:free"}]}),
+    )
+
+    assert [candidate.model for candidate in result.candidates] == ["auto/coding:free"]
+    assert result.candidates[0].discovered_by == "native_auto_route_fallback"
+
+
+def test_omniroute_configured_filter_can_exclude_native_route() -> None:
     result = CANDIDATES.discover(
         "omniroute-free",
         json.dumps({"data": [{"id": "auto/coding:free"}]}),
+        ["some-other-route"],
     )
 
-    fallback = next(
-        candidate for candidate in result.candidates if candidate.model == "free-cascade-small"
-    )
-    assert fallback.runtime_model == "omniroute/free-cascade-small"
-    assert fallback.discovered_by == "configured_cascade_fallback"
-
+    assert result.status == "empty"
+    assert result.candidates == ()
 
 
 def test_invalid_catalog_fails_closed() -> None:
