@@ -69,10 +69,8 @@ async def calculate_cbl_adoption_plan_endpoint(
         sd.series_name: sd.decision for sd in request.series_decisions
     } if request.series_decisions else None
     
-    entry_decisions = {
-        pos: decision for pos, decision in request.entry_decisions.items()
-    } if request.entry_decisions else None
-    
+entry_decisions = dict(request.entry_decisions) if request.entry_decisions else None
+
     return await calculate_cbl_adoption_plan(
         db,
         user_id=current_user.id,
@@ -106,10 +104,8 @@ async def commit_cbl_adoption_plan_endpoint(
         sd.series_name: sd.decision for sd in request.series_decisions
     } if request.series_decisions else None
     
-    entry_decisions = {
-        pos: decision for pos, decision in request.entry_decisions.items()
-    } if request.entry_decisions else None
-    
+entry_decisions = dict(request.entry_decisions) if request.entry_decisions else None
+
     return await commit_cbl_adoption_plan(
         db,
         user_id=current_user.id,
