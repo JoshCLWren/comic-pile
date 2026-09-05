@@ -46,6 +46,7 @@ _CANONICAL_HEALTH_ROUTES: frozenset[str] = frozenset(
         "GET /api/v1/health/dependencies",
         "GET /api/v1/health/warmup",
         "GET /api/v1/health/cache-quota",
+        "GET /api/v1/health/cache-latency",
     }
 )
 

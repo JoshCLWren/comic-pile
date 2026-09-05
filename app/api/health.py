@@ -22,6 +22,12 @@ from app.cache import cache
 from app.cache_quota import observe_cache_quota
 from app.database import get_db
 from app.models import Event
+from app.services.cache_latency_probe import (
+    CacheLatencyProbeResult,
+    authorize_probe_header,
+    measure_upstash_rest_get,
+)
+from app.services.errors import InvalidRequestError, NotFoundError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
@@ -70,6 +76,26 @@ class DependencyHealthResponse(BaseModel):
     database: DependencyProbe
     cache: DependencyProbe
     total_duration_ms: float
+
+
+class CacheLatencyProbeResponse(BaseModel):
+    """Redacted Upstash REST GET latency from this Vercel function.
+
+    Temporary for issue #2216. Remove after the provider decision. Never
+    includes credentials, hosts, or request URLs.
+    """
+
+    measured_from: str
+    vercel_env: str
+    samples: int
+    p50_ms: float | None
+    p95_ms: float | None
+    min_ms: float | None
+    max_ms: float | None
+    mean_ms: float | None
+    quota_blocked: bool
+    status: str
+    note: str = "temporary-issue-2216-remove-after-measurement"
 
 
 class CacheQuotaHealthResponse(BaseModel):
@@ -254,6 +280,56 @@ async def dependency_health(
             content=payload.model_dump(),
         )
     return payload
+
+
+@router.get(
+    "/health/cache-latency",
+    response_model=CacheLatencyProbeResponse,
+    include_in_schema=False,
+)
+async def cache_latency_probe(
+    _: Annotated[None, Depends(_authorize_operational_probe)],
+    x_cache_latency_probe: Annotated[str | None, Header()] = None,
+) -> CacheLatencyProbeResponse:
+    """Time Upstash REST GET using in-process KV REST env (issue #2216).
+
+    REMOVE AFTER MEASUREMENT. Gated by the temporary probe header and, when
+    configured, ``HEALTH_CHECK_TOKEN``. Enabled on Vercel production/preview
+    or when ``CACHE_LATENCY_PROBE_ENABLED=true``. Never returns credentials.
+
+    Args:
+        _: Operational-probe authorization result.
+        x_cache_latency_probe: Shared temporary probe token.
+
+    Returns:
+        Redacted p50/p95 latency stats only.
+
+    Raises:
+        HTTPException: 404 when disabled or unauthorized; 503 when KV REST
+            credentials are not present in this process.
+    """
+    try:
+        authorize_probe_header(x_cache_latency_probe)
+        result: CacheLatencyProbeResult = measure_upstash_rest_get()
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found") from exc
+    except InvalidRequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=exc.detail,
+        ) from exc
+    return CacheLatencyProbeResponse(
+        measured_from=result.measured_from,
+        vercel_env=result.vercel_env,
+        samples=result.samples,
+        p50_ms=result.p50_ms,
+        p95_ms=result.p95_ms,
+        min_ms=result.min_ms,
+        max_ms=result.max_ms,
+        mean_ms=result.mean_ms,
+        quota_blocked=result.quota_blocked,
+        status=result.status,
+    )
 
 
 @router.get(
