@@ -42,8 +42,18 @@ class TestMemoConclusionAndProductionConfig:
     """The memo's conclusion must match the runtime default configuration."""
 
     def test_memo_conclusion_chooses_postgres(self) -> None:
-        """The provider-decision memo concludes with the Postgres provider."""
+        """Deployed production stays Postgres until Josh applies the GO flips."""
         assert PRODUCTION_CACHE_PROVIDER == "postgres"
+
+    def test_measured_distributions_recommend_upstash(self) -> None:
+        """The 2026-09-05 committed samples make provider_recommendation GO redis."""
+        assert (
+            provider_recommendation(
+                LatencySample(p50_ms=7.088, p95_ms=7.807),
+                LatencySample(p50_ms=143.303, p95_ms=151.812),
+            )
+            == "upstash"
+        )
 
     def test_runtime_default_resolution_matches_memo_conclusion(self) -> None:
         """Production defaults resolve to the memo's chosen provider."""

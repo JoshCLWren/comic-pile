@@ -71,16 +71,23 @@ def test_monthly_counts_are_scaled_from_seven_day_window() -> None:
     assert monthly["queue_load"] == expected_queue
 
 
-def test_committed_latency_json_has_neon_samples_and_skipped_upstash() -> None:
-    """The filled JSON is redacted, has 30 Neon samples, and cannot yet recommend Redis."""
+def test_committed_latency_json_has_production_upstash_and_gha_neon() -> None:
+    """The filled JSON is redacted and records the production-runtime Upstash row."""
     report = json.loads(LATENCY_PATH.read_text(encoding="utf-8"))
     neon = report["neon_point_select"]["summary"]["elapsed_ms"]
     upstash = report["upstash_rest_get"]
+    assert isinstance(upstash, dict)
+    summary = upstash["summary"]
+    assert isinstance(summary, dict)
+    elapsed = summary["elapsed_ms"]
+    assert isinstance(elapsed, dict)
 
-    assert report["measured_from"] == "github-actions:ubuntu-latest"
     assert report["iterations"] == 30
+    assert report["provider_recommendation"] == "upstash"
     assert neon["p50"] == 143.303
     assert neon["p95"] == 151.812
-    assert upstash["summary"] is None
+    assert summary["samples"] == 30
+    assert elapsed["p50"] == 7.088
+    assert elapsed["p95"] == 7.807
     assert upstash["quota_blocked"] is False
     assert "upstash.io" not in json.dumps(report)

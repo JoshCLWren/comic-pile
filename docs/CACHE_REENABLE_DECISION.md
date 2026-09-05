@@ -4,23 +4,24 @@ Updated: 2026-09-05
 
 ## Decision
 
-**NEED MORE DATA — remain NO-GO for enabling remote Redis/Upstash caching.**
+**GO redis — pending Josh's production env flips.**
 
-The production-demand half of the gate is now closed: Vercel production
+`provider_recommendation()` returned `"upstash"` on the 2026-09-05 samples.
+The production-demand half of the gate is also closed: Vercel production
 runtime logs project **1,990** conservative monthly cache commands (pathological
 upper bound 18,321), well under 350,000 with 150,000 headroom. See
 `docs/CACHE_TRAFFIC_CENSUS_2026-09.json` and `project_monthly_cache_commands()`.
 
-The remaining blocker is the latency comparison. Neon point SELECT is measured
-(p50=143.303 ms from `github-actions:ubuntu-latest`). Upstash REST GET has 0
-samples: `vercel env run -e production` injects `KV_REST_API_URL` /
-`KV_REST_API_TOKEN` as empty (Actions run 33986154224). Do not flip
-`CACHE_PROVIDER` or `CACHE_ENABLED` until `provider_recommendation()` can run.
-Do not add GitHub secrets.
+Latency: Upstash REST GET p50=7.088 ms / p95=7.807 ms (n=30) from Hobby
+production `vercel:cle1`
+(https://github.com/JoshCLWren/comic-pile/actions/runs/33986556893). Neon
+point SELECT remains p50=143.303 ms / p95=151.812 ms from
+`github-actions:ubuntu-latest` (cle1 Neon was not re-measured).
 
-This is a remain-disabled decision, not a rejection of Redis. Re-enable only
-after both the census (already GO) and a measured Upstash-vs-Neon ratio support
-it.
+**Do not flip production in this PR.** `CACHE_PROVIDER` was never changed.
+The production alias was promoted back to `dpl_9E9NbZS8LTGZe5evKcwBtdD1dLhC`.
+Josh confirms the flips below. Rollback remains `CACHE_ENABLED=false`.
+Do not add GitHub secrets.
 
 ## TTL tier tuning (issue #1754)
 
@@ -117,9 +118,13 @@ The re-enable evaluation added the operational guardrails the decision was missi
 
 ### Go / no-go memo
 
-**Decision: NEED MORE DATA / remain NO-GO / stay Postgres.** Command-budget
-evidence landed on 2026-09-05 and is a GO (1,990 projected commands/month).
-Latency evidence is incomplete: `vercel env run` does not inject Sensitive
-KV REST values. Do not set `CACHE_PROVIDER=redis` or `CACHE_ENABLED=true`.
-A future staged rollout must keep `CACHE_ENABLED` reversible and set
-`CACHE_QUOTA_THROTTLE_ENABLED=true` from day one.
+**Decision: GO redis.** `provider_recommendation()` returned `"upstash"`.
+Command budget is a GO (1,990 projected commands/month). Production still
+runs Postgres until Josh sets:
+
+1. `CACHE_PROVIDER=redis`
+2. `CACHE_ENABLED=true`
+3. `CACHE_QUOTA_THROTTLE_ENABLED=true`
+
+Rollback remains `CACHE_ENABLED=false`. Remove temporary
+`GET /api/v1/health/cache-latency` before merging to `main`.

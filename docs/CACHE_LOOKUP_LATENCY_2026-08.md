@@ -1,9 +1,11 @@
 # Cache lookup latency: Upstash REST vs Neon point SELECT
 
 Updated: 2026-09-05  
-Script: `scripts/benchmark_cache_latency.py`  
+Script: `scripts/benchmark_cache_latency.py` plus temporary `GET /api/v1/health/cache-latency`  
 Preferred vantage: Vercel region `cle1` (`vercel.json` `regions`).  
-Measurement workflow: `.github/workflows/cache-latency-benchmark.yml` (`workflow_dispatch` or push of the script/workflow). That job runs on `ubuntu-latest` and records `measured_from: github-actions:ubuntu-latest` when a same-region `cle1` runner is not available. The decision rule compares Upstash and Neon from the same vantage, so a same-host ratio is still valid.
+Upstash was measured from Hobby production (`vercel:cle1`). Neon stays the
+existing `github-actions:ubuntu-latest` distribution (cle1 Neon was not
+re-measured). Mixed vantages are called out in the table and JSON.
 
 Run command:
 
@@ -25,50 +27,31 @@ Issues: #1782, #2216
 
 Upstash Redis free-tier REST quota was exhausted through approximately
 2026-08-28. HTTP 429 responses are recorded as `"status": "quota_blocked"`.
-The 2026-09-05 measurement runs did not receive HTTP 429. Upstash was not
-measured because production `KV_REST_API_*` values are Sensitive and stay
-empty after `vercel env run -e production`. See the stop report below.
+The 2026-09-05 production-runtime probe did not receive HTTP 429
+(`quota_blocked=false`).
 
 ## Measurements
 
 Committed JSON: `docs/CACHE_LOOKUP_LATENCY_2026-08.json`  
-Workflow run: GitHub Actions `Cache Latency Benchmark` on 2026-09-05  
-Vantage: `github-actions:ubuntu-latest` (preferred `vercel:cle1` not available
-in this runner). Iterations 30, warmups 3.
+Workflow run: https://github.com/JoshCLWren/comic-pile/actions/runs/33986556893  
+One-shot deploy: https://comic-pile-4kvkaxz5x-joshclwrens-projects.vercel.app  
+Production alias restored to: `dpl_9E9NbZS8LTGZe5evKcwBtdD1dLhC` (`main` `a95cba45`)  
+Iterations 30, warmups 3. `CACHE_PROVIDER` was never flipped.
 
-| Path | Samples | Min (ms) | Median (ms) | P95 (ms) | Max (ms) | Mean (ms) | Status |
-|---|---|---|---|---|---|---|---|
-| Upstash REST GET | 0 | — | — | — | — | — | stopped: `vercel env run -e production` injects `KV_REST_API_URL` / `KV_REST_API_TOKEN` / `KV_REST_API_READ_ONLY_TOKEN` as **empty** |
-| Neon point SELECT (KV table) | 30 | 115.849 | 143.303 | 151.812 | 152.833 | 141.518 | ok |
-| Uncached queue read (`/api/v1/sessions/current/`) | 0 | — | — | — | — | — | skipped: no `VERCEL_BEARER_TOKEN` |
+| Path | Samples | Min (ms) | Median (ms) | P95 (ms) | Max (ms) | Mean (ms) | Vantage | Status |
+|---|---|---|---|---|---|---|---|---|
+| Upstash REST GET | 30 | 6.579 | 7.088 | 7.807 | 7.872 | 7.150 | `vercel:cle1` production | ok |
+| Neon point SELECT (KV table) | 30 | 115.849 | 143.303 | 151.812 | 152.833 | 141.518 | `github-actions:ubuntu-latest` | ok |
+| Uncached queue read (`/api/v1/sessions/current/`) | 0 | — | — | — | — | — | — | skipped: no `VERCEL_BEARER_TOKEN` |
 
-An earlier same-vantage Neon run landed at p50=569.314 ms (also 30 ok samples).
-That colder connect-included hop is recorded here as context; the committed
-JSON is the later 143.303 ms distribution. Both are far above the 3 ms
-"Neon already fast" threshold. Neon p95/p50 on the committed run is 1.06×
-(stable; not an investigate signal).
+Neon comparison remains the existing GHA number; cle1 Neon was not
+re-measured. An earlier same-vantage Neon run landed at p50=569.314 ms
+(also 30 ok samples) and is context only.
 
-`provider_recommendation()` cannot run until Upstash p50/p95 exist. Neon
-alone does not flip the production provider. Stay on Postgres.
-
-### Stop report: sensitive KV values are not injectable on the runner
-
-Actions run (required path, no `--yes`):
-https://github.com/JoshCLWren/comic-pile/actions/runs/33986154224
-
-Exact child-process preflight (booleans only):
-
-```
-KV_REST_API_URL=empty
-KV_REST_API_TOKEN=empty
-KV_REST_API_READ_ONLY_TOKEN=empty
-url_ready=no
-token_ready=no
-```
-
-CLI 58.1.0 logged `Retrieving project…` then `Downloading production environment variables` and started the Python child. The KV REST **names** exist in that process; the **values** are empty. The Vercel REST decrypt path earlier listed the same key names and also returned no usable values. `REDIS_URL` / `KV_URL` were not used.
-
-This is the Sensitive Environment Variable boundary on the Deploy Production token. Do **not** add GitHub secrets. Do not invent another decrypt loop. `provider_recommendation()` still cannot run until a production-runtime GET (or a token that can decrypt Sensitive values) fills the Upstash row.
+`provider_recommendation(LatencySample(7.088, 7.807), LatencySample(143.303, 151.812))`
+returned **`"upstash"`** (GO redis). Production stays on Postgres until Josh
+confirms the documented env flips. Remove `GET /api/v1/health/cache-latency`
+after this measurement / before merge to `main`.
 
 ## What each measurement captures
 
@@ -117,45 +100,24 @@ application stack add to a raw Postgres point read?"
 
 ## Provider decision memo
 
-The go/no-go ruling for the production provider lives in
-`CACHE_PROVIDER_DECISION_2026-08.md` (issue #2216): **Postgres**, with remote
-Redis re-enable marked **NEED MORE DATA**. The command census is a GO (1,990
-projected commands/month). Upstash REST p50 is still missing, so
-`provider_recommendation()` cannot run. The rule itself is unchanged:
+The go/no-go ruling lives in `CACHE_PROVIDER_DECISION_2026-08.md` (issue
+#2216): **GO redis** from `provider_recommendation() == "upstash"`. Production
+is still Postgres; this PR does not apply env flips.
 
-**Hypothesis (still unverified — Upstash row empty):**
+The rule itself is unchanged:
 
-The raw Upstash REST hop should outperform a Neon point SELECT when measured
-from the same Vercel region, because Upstash is an in-memory edge cache at a
-colocation that is likely nearer to Vercel's `cle1` region than Neon's GCP
-`us-east1`.  The p50 delta determines whether caching is worth the 350 000
-command/month budget documented in `docs/CACHE_COMMAND_BUDGET.md`.
+- **Upstash REST p50 < 2× Neon p50** and Neon p50 > 3 ms → `"upstash"`
+- **Upstash REST p50 ≥ 2× Neon p50, or Neon p50 ≤ 3 ms** → `"postgres"`
+- **Either path p95 / p50 > 5×** → `"investigate"`
 
-Once both samples are available the decision rule is:
-
-- **Upstash REST p50 < 2× Neon p50** → Upstash is meaningfully faster; re-enable
-  gate in `docs/CACHE_REENABLE_DECISION.md` can proceed when command-rate
-  evidence is also in range.
-- **Upstash REST p50 ≥ 2× Neon p50, or Neon p50 ≤ 3 ms** → Neon point reads
-  are not meaningfully slower; staying on the Postgres provider is justified.
-- **Either path shows high variance (p95 / p50 > 5×)** → investigate network
-  instability before declaring a stable default.
-
-The uncached queue read baseline (path 3) is required context: if path 1 and
-path 2 are both sub-millisecond but path 3 is 100 ms, caching only helps when
-the cached object is large or the uncached cache-miss cost is proportionally
-significant at the application layer.
+Measured: 7.088 < 2 × 143.303 (286.606) and 143.303 > 3; Upstash p95/p50 =
+1.10×; Neon p95/p50 = 1.06×. Result: `"upstash"`.
 
 ## Re-run procedure
 
-Do not add GitHub secrets. Re-run only after Sensitive `KV_REST_API_*`
-values are available inside a production-runtime context (or a token that
-can decrypt them). Then:
-
-1. Re-run **Cache Latency Benchmark** (`workflow_dispatch`).
-2. Replace the Upstash row from the redacted JSON.
-3. Feed both medians into `provider_recommendation()` and update
-   `CACHE_PROVIDER_DECISION_2026-08.md` plus `CACHE_REENABLE_DECISION.md`.
+Do not add GitHub secrets. Do not start another production one-shot unless
+Upstash samples return to 0. The 2026-09-05 production-runtime probe already
+filled the Upstash row.
 
 ## Related documents and code
 
