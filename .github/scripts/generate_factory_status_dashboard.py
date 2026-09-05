@@ -368,6 +368,28 @@ def age_text(value: str, *, now: datetime) -> str:
     return f"{minutes // 1440}d ago"
 
 
+def collect_opencode_free_roster() -> dict[str, Any]:
+    """Load the live OpenCode free-roster probe, never aborting the dashboard."""
+    try:
+        probe = load_module(
+            "probe_opencode_free_roster_dashboard",
+            SCRIPTS / "probe_opencode_free_roster.py",
+        )
+        return probe.collect_roster().as_dict()
+    except Exception as exc:
+        return {
+            "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "freshness": "stale",
+            "detail": (
+                "OpenCode free-roster probe failed; table is unknown/stale. "
+                f"{exc}"
+            ),
+            "connections": [],
+            "models": [],
+            "counts": {},
+        }
+
+
 def collect_snapshot() -> dict[str, Any]:
     completion = load_module(
         "factory_completion_controller_dashboard",
@@ -453,6 +475,7 @@ def collect_snapshot() -> dict[str, Any]:
         "workers": worker_rows,
         "productive_workers_week": sum(int(row["merged_week"]) > 0 for row in worker_rows),
         "merged_week": sum(int(row["merged_week"]) for row in worker_rows),
+        "opencode_free_roster": collect_opencode_free_roster(),
     }
 
 
@@ -525,6 +548,106 @@ def render_worker_rows(snapshot: Mapping[str, Any]) -> str:
     return "".join(rendered)
 
 
+def render_roster_rows(snapshot: Mapping[str, Any]) -> str:
+    """Render OpenCode free-roster table rows.
+
+    Args:
+        snapshot: Dashboard snapshot that may include ``opencode_free_roster``.
+
+    Returns:
+        HTML table rows, or a single unknown/stale placeholder row.
+    """
+    roster = snapshot.get("opencode_free_roster") or {}
+    models = roster.get("models") if isinstance(roster, Mapping) else None
+    if not isinstance(models, list) or not models:
+        return (
+            '<tr><td colspan="4"><span class="muted">'
+            "OpenCode free-roster status is unknown/stale."
+            "</span></td></tr>"
+        )
+    rendered: list[str] = []
+    for row in models:
+        if not isinstance(row, Mapping):
+            continue
+        status = str(row.get("status") or "unknown")
+        detail = str(row.get("detail") or "")
+        rendered.append(
+            f'<tr data-status="{esc(status)}">'
+            f"<td><strong>{esc(row.get('model_id') or '')}</strong>"
+            f"<small>{esc(row.get('connection') or '')}</small></td>"
+            f'<td><span class="tag {esc(status)}">{esc(status.replace("_", " "))}</span></td>'
+            f"<td>{esc(detail)}</td>"
+            f"<td>{esc(row.get('http_status') or '—')}</td></tr>"
+        )
+    return "".join(rendered) or (
+        '<tr><td colspan="4"><span class="muted">'
+        "OpenCode free-roster status is unknown/stale."
+        "</span></td></tr>"
+    )
+
+
+def render_roster_section(snapshot: Mapping[str, Any]) -> str:
+    """Render the OpenCode free-roster panel.
+
+    Args:
+        snapshot: Dashboard snapshot that may include ``opencode_free_roster``.
+
+    Returns:
+        HTML for the roster section, including last-checked time.
+    """
+    roster = snapshot.get("opencode_free_roster")
+    if not isinstance(roster, Mapping):
+        roster = {}
+    checked = str(roster.get("checked_at") or snapshot.get("generated_at") or "unknown")
+    freshness = str(roster.get("freshness") or "stale")
+    detail = str(
+        roster.get("detail")
+        or (
+            "Live OmniRoute probe of free OpenCode / Zen models. "
+            "opencode and opencode-zen connections can both be active. "
+            "Free roster models stay eligible via catalog, pricing, and freeProviders; "
+            "the opencode-zen providerOverride (blanket whole-provider=free) is avoided "
+            "to prevent paid bleed."
+        )
+    )
+    counts = roster.get("counts") if isinstance(roster.get("counts"), Mapping) else {}
+    count_text = " · ".join(
+        f"{int(counts.get(key, 0))} {key.replace('_', ' ')}"
+        for key in (
+            "ok",
+            "rate_limited",
+            "unsupported",
+            "catalog_miss",
+            "auth_paid",
+            "timeout",
+            "error",
+            "unknown",
+        )
+        if int(counts.get(key, 0))
+    ) or "no live rows"
+    connections = roster.get("connections") if isinstance(roster.get("connections"), list) else []
+    connection_html = "".join(
+        f'<span class="tag {("healthy" if item.get("active") else "unknown")}">'
+        f"{esc(item.get('provider') or '')} · {esc(item.get('detail') or 'unknown')}</span>"
+        for item in connections
+        if isinstance(item, Mapping)
+    )
+    if not connection_html:
+        connection_html = (
+            '<span class="tag unknown">opencode · unknown</span>'
+            '<span class="tag unknown">opencode-zen · unknown</span>'
+        )
+    return f"""<section class="panel scoreboard" id="opencode-free-roster">
+<div class="score-head"><div><h2>OpenCode free roster</h2>
+<div class="sub">{esc(detail)}</div></div>
+<div class="sub">Last checked {esc(checked)} · {esc(freshness)} · {esc(count_text)}</div></div>
+<div class="notes">{connection_html}</div>
+<div class="table-wrap"><table><thead><tr><th>Model</th><th>Status</th><th>Detail</th><th>HTTP</th></tr></thead>
+<tbody id="opencode-free-roster-rows">{render_roster_rows(snapshot)}</tbody></table></div>
+<div class="notes">Free OpenCode models remain first-class factory capacity. This table does not disable Zen; both connections can stay active. Statuses are live-ish OmniRoute probes, not a historical success rate.</div>
+</section>"""
+
+
 def render_dashboard(snapshot: Mapping[str, Any]) -> str:
     pipeline = snapshot["pipeline"]
     throughput = snapshot["throughput"]
@@ -572,7 +695,7 @@ def render_dashboard(snapshot: Mapping[str, Any]) -> str:
 <meta http-equiv="refresh" content="300"><title>ComicPile Factory Status</title>
 <style>
 :root{{color-scheme:dark;--bg:#0d1117;--panel:#161b22;--line:#30363d;--text:#f0f6fc;--muted:#8b949e;--good:#3fb950;--warn:#d29922;--bad:#f85149;--link:#58a6ff}}
-*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,sans-serif}}main{{max-width:1380px;margin:auto;padding:28px 20px 60px}}a{{color:inherit;text-decoration:none}}a:hover,.work{{color:var(--link)}}header,.score-head,.filters{{display:flex;gap:12px;justify-content:space-between;align-items:flex-end;flex-wrap:wrap}}header{{margin-bottom:18px}}h1{{margin:0;font-size:28px}}h2{{font-size:15px;margin:0 0 12px;color:var(--muted)}}.sub,small{{display:block;color:var(--muted);font-size:12px}}.verdict,.metric,.panel{{background:var(--panel);border:1px solid var(--line);border-radius:10px}}.verdict{{display:flex;gap:12px;align-items:center;padding:15px 17px;margin-bottom:12px}}.dot{{width:14px;height:14px;border-radius:50%;background:var(--muted)}}.verdict.good .dot{{background:var(--good)}}.verdict.warn .dot{{background:var(--warn)}}.verdict.bad .dot{{background:var(--bad)}}.verdict strong{{font-size:20px;margin-right:8px}}.metrics{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}}.metric{{padding:15px;min-height:90px;display:flex;flex-direction:column;justify-content:space-between}}.metric span,.muted{{color:var(--muted)}}.metric strong,.big{{font-size:28px}}.grid{{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:12px;margin-top:12px}}.panel{{padding:15px;min-width:0}}.row{{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--line)}}.row:first-of-type{{border-top:0}}.good{{color:var(--good)}}.bad{{color:var(--bad)}}.ratio{{height:16px;display:flex;overflow:hidden;border-radius:99px;background:#21262d;margin:11px 0}}.completion{{width:{completion_pct}%;background:var(--link)}}.production{{width:{production_pct}%;background:var(--good)}}.scoreboard{{margin-top:12px}}.score-head h2{{font-size:18px;color:var(--text);margin-bottom:2px}}.filters input,.filters select{{min-height:38px;padding:8px 10px;background:#0f141b;color:var(--text);border:1px solid var(--line);border-radius:8px}}.filters input{{width:min(280px,70vw)}}.table-wrap{{overflow-x:auto;border:1px solid var(--line);border-radius:9px}}table{{width:100%;min-width:1040px;border-collapse:collapse}}th,td{{padding:10px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}}th{{font-size:11px;text-transform:uppercase;color:var(--muted);background:#1b222c}}.num{{text-align:center;font-weight:700}}.tag{{display:inline-block;padding:2px 7px;border:1px solid var(--line);border-radius:99px;font-size:10px;text-transform:uppercase;font-weight:700}}.proven,.productive,.healthy{{color:var(--good);border-color:#238636}}.working{{color:var(--link);border-color:#1f6feb}}.watch,.degraded,.cooling{{color:var(--warn);border-color:#9e6a03}}.blocked,.unavailable{{color:var(--bad);border-color:#da3633}}.notes,footer{{color:var(--muted);font-size:12px;margin-top:10px}}@media(max-width:900px){{.metrics{{grid-template-columns:repeat(2,1fr)}}.grid{{grid-template-columns:1fr}}main{{padding:18px 12px 40px}}}}
+*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,sans-serif}}main{{max-width:1380px;margin:auto;padding:28px 20px 60px}}a{{color:inherit;text-decoration:none}}a:hover,.work{{color:var(--link)}}header,.score-head,.filters{{display:flex;gap:12px;justify-content:space-between;align-items:flex-end;flex-wrap:wrap}}header{{margin-bottom:18px}}h1{{margin:0;font-size:28px}}h2{{font-size:15px;margin:0 0 12px;color:var(--muted)}}.sub,small{{display:block;color:var(--muted);font-size:12px}}.verdict,.metric,.panel{{background:var(--panel);border:1px solid var(--line);border-radius:10px}}.verdict{{display:flex;gap:12px;align-items:center;padding:15px 17px;margin-bottom:12px}}.dot{{width:14px;height:14px;border-radius:50%;background:var(--muted)}}.verdict.good .dot{{background:var(--good)}}.verdict.warn .dot{{background:var(--warn)}}.verdict.bad .dot{{background:var(--bad)}}.verdict strong{{font-size:20px;margin-right:8px}}.metrics{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}}.metric{{padding:15px;min-height:90px;display:flex;flex-direction:column;justify-content:space-between}}.metric span,.muted{{color:var(--muted)}}.metric strong,.big{{font-size:28px}}.grid{{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:12px;margin-top:12px}}.panel{{padding:15px;min-width:0}}.row{{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--line)}}.row:first-of-type{{border-top:0}}.good{{color:var(--good)}}.bad{{color:var(--bad)}}.ratio{{height:16px;display:flex;overflow:hidden;border-radius:99px;background:#21262d;margin:11px 0}}.completion{{width:{completion_pct}%;background:var(--link)}}.production{{width:{production_pct}%;background:var(--good)}}.scoreboard{{margin-top:12px}}.score-head h2{{font-size:18px;color:var(--text);margin-bottom:2px}}.filters input,.filters select{{min-height:38px;padding:8px 10px;background:#0f141b;color:var(--text);border:1px solid var(--line);border-radius:8px}}.filters input{{width:min(280px,70vw)}}.table-wrap{{overflow-x:auto;border:1px solid var(--line);border-radius:9px}}table{{width:100%;min-width:1040px;border-collapse:collapse}}th,td{{padding:10px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}}th{{font-size:11px;text-transform:uppercase;color:var(--muted);background:#1b222c}}.num{{text-align:center;font-weight:700}}.tag{{display:inline-block;padding:2px 7px;border:1px solid var(--line);border-radius:99px;font-size:10px;text-transform:uppercase;font-weight:700}}.proven,.productive,.healthy,.ok{{color:var(--good);border-color:#238636}}.working{{color:var(--link);border-color:#1f6feb}}.watch,.degraded,.cooling,.rate_limited,.timeout,.catalog_miss,.unsupported{{color:var(--warn);border-color:#9e6a03}}.blocked,.unavailable,.auth_paid,.error{{color:var(--bad);border-color:#da3633}}.unknown,.stale{{color:var(--muted)}}.notes,footer{{color:var(--muted);font-size:12px;margin-top:10px}}#opencode-free-roster .notes .tag{{margin:0 8px 8px 0}}.scoreboard+.scoreboard{{margin-top:16px}}@media(max-width:900px){{.metrics{{grid-template-columns:repeat(2,1fr)}}.grid{{grid-template-columns:1fr}}main{{padding:18px 12px 40px}}}}
 </style></head><body><main>
 <header><div><h1>🏭 ComicPile Factory</h1><div class="sub">Can the fleet move work, and which factories are actually useful?</div></div><div class="sub">Generated {esc(snapshot['generated_at'])} · refreshes every 5 min · <a href="{REPO_URL}/actions">Actions ↗</a></div></header>
 <section class="verdict {esc(verdict_class)}"><span class="dot"></span><div><strong>{esc(verdict_title)}</strong>{esc(verdict_detail)}</div></section>
@@ -585,6 +708,7 @@ def render_dashboard(snapshot: Mapping[str, Any]) -> str:
 <div class="panel"><h2>Throughput · last 24h</h2><div class="row"><span>Opened</span><strong>{esc(throughput['opened_day'])}</strong></div><div class="row"><span>Merged</span><strong>{esc(throughput['merged_day'])}</strong></div><div class="row"><span>Net PR change</span><strong class="{'good' if throughput['net_day'] < 0 else 'bad' if throughput['net_day'] > 0 else ''}">{signed(int(throughput['net_day']))}</strong></div><div class="row"><span>Factories with 7d merge credit</span><strong>{esc(snapshot.get('productive_workers_week', 0))}</strong></div></div>
 <div class="panel"><h2>Control plane</h2><a class="row" href="{REPO_URL}/issues/1093"><span>Heartbeat + allocator registry</span><strong>#1093 ↗</strong></a><a class="row" href="{REPO_URL}/actions/workflows/factory-completion-drain.yml"><span>Completion drain</span><strong>workflow ↗</strong></a><a class="row" href="{REPO_URL}/actions/workflows/fixed-model-factory-dispatch.yml"><span>Main dispatcher</span><strong>workflow ↗</strong></a></div>
 </section>
+{render_roster_section(snapshot)}
 <section class="panel scoreboard"><div class="score-head"><div><h2>Fleet scoreboard</h2><div class="sub">Current health, current work, latest classified attempt, and retained merge credit.</div></div><div class="filters"><input id="factory-search" type="search" placeholder="Factory, model, provider…" aria-label="Search factories"><select id="factory-filter" aria-label="Filter factories"><option value="">All factories</option><option value="working">Working now</option><option value="healthy">Healthy</option><option value="watch">Needs attention</option><option value="blocked">Blocked</option></select></div></div>
 <div class="table-wrap"><table><thead><tr><th>Verdict</th><th>Factory</th><th>Health</th><th>Latest runtime</th><th>Latest attempt</th><th>24h merges</th><th>7d merges</th><th>Current work</th><th>Seen</th></tr></thead><tbody id="factory-rows">{render_worker_rows(snapshot)}</tbody></table></div>
 <div class="notes">7d merge credit uses the factory owner label retained on merged PRs. The registry currently overwrites each factory’s latest attempt, so this dashboard does not pretend that one latest outcome is a historical success rate.</div></section>
