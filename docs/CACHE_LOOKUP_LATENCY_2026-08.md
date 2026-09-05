@@ -148,6 +148,7 @@ After the Upstash quota resets (target: 2026-08-28 or earlier):
 - `CACHE_PROVIDER_DECISION_2026-08.md` – the go/no-go memo this benchmark feeds
 - `docs/CACHE_REENABLE_DECISION.md` – the live re-enable gate this benchmark feeds
 - `docs/CACHE_COMMAND_BUDGET.md` – 350 000 command/month budget constraint
+- `docs/CACHE_TRAFFIC_CENSUS_2026-09.json` – Vercel runtime-log census feeding `project_monthly_cache_commands()`
 - `app/cache.py` – `UpstashCache`, circuit breaker, `@cached` decorator
 - `app/cache_generation.py` – generation-namespace invalidation (the atomic
   `INCR` that makes all prior generation keys unreachable without a SCAN)
