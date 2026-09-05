@@ -69,6 +69,7 @@ def wire_controller(
     *,
     comments: Sequence[str] = (),
     mechanical: bool | str = True,
+    include_diff_inspection: bool = True,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]], list[list[str]]]:
     """Replace GitHub I/O with deterministic state capture."""
     payload_iter = iter(payloads)
@@ -78,10 +79,11 @@ def wire_controller(
 
     monkeypatch.setattr(module, "pr_json", lambda _pr: next(payload_iter))
     monkeypatch.setattr(module, "target_owned_by_worker", lambda _number, _worker: True)
+    excerpt_text = "git diff HEAD~1\nsemantic findings" if include_diff_inspection else "semantic findings"
     monkeypatch.setattr(
         module,
         "review_excerpt",
-        lambda _path, **_kwargs: "semantic findings",
+        lambda _path, **_kwargs: excerpt_text,
     )
     monkeypatch.setattr(module, "review_comment_bodies", lambda _pr: list(comments))
     if mechanical == "retry":
@@ -300,7 +302,7 @@ def test_controller_blocks_self_review_even_with_approve_verdict(
     """The producing worker cannot turn its own strongest verdict into ready state."""
     module = load_review_controller()
     payload = pr_payload(worker="43", branch_worker="43")
-    transitions, _posted, _commands = wire_controller(monkeypatch, module, [payload])
+    transitions, _posted, _commands = wire_controller(monkeypatch, module, [payload], include_diff_inspection=True)
     result = module.handle_review(
         worker="43",
         pr_number=1390,
@@ -319,7 +321,7 @@ def test_controller_blocks_producer_from_rejecting_own_pr(
     """A producer cannot use semantic rejection to close its own work either."""
     module = load_review_controller()
     payload = pr_payload(worker="43", branch_worker="43")
-    transitions, _posted, commands = wire_controller(monkeypatch, module, [payload])
+    transitions, _posted, commands = wire_controller(monkeypatch, module, [payload], include_diff_inspection=True)
     result = module.handle_review(
         worker="43",
         pr_number=1390,
@@ -341,6 +343,7 @@ def test_controller_promotes_independent_green_review(monkeypatch: MonkeyPatch) 
         module,
         [payload, payload],
         mechanical=True,
+        include_diff_inspection=True,
     )
     result = module.handle_review(
         worker="17",
@@ -364,6 +367,7 @@ def test_controller_mechanical_failure_routes_to_repair(
         module,
         [payload, payload],
         mechanical=False,
+        include_diff_inspection=True,
     )
     result = module.handle_review(
         worker="17",
@@ -389,6 +393,7 @@ def test_controller_defers_pending_ci_to_cheap_reconciliation(
         module,
         [payload, payload],
         mechanical="retry",
+        include_diff_inspection=True,
     )
     result = module.handle_review(
         worker="17",
@@ -411,7 +416,8 @@ def test_controller_refuses_verdict_when_head_moved_during_review(
     """A concurrent push cannot make an unseen head inherit the model verdict."""
     module = load_review_controller()
     moved = pr_payload(worker="17", head=MOVED_HEAD, branch_worker="43")
-    transitions, _posted, commands = wire_controller(monkeypatch, module, [moved])
+    # Need two payloads: one for initial pr_json, one for the re-read after posting
+    transitions, _posted, commands = wire_controller(monkeypatch, module, [moved, moved], include_diff_inspection=True)
     result = module.handle_review(
         worker="17",
         pr_number=1390,
@@ -429,7 +435,7 @@ def test_stale_reject_cannot_close_new_head(monkeypatch: MonkeyPatch) -> None:
     """A REJECT verdict is also scoped to the exact checkout the model inspected."""
     module = load_review_controller()
     moved = pr_payload(worker="17", head=MOVED_HEAD, branch_worker="43")
-    transitions, _posted, commands = wire_controller(monkeypatch, module, [moved])
+    transitions, _posted, commands = wire_controller(monkeypatch, module, [moved], include_diff_inspection=True)
     result = module.handle_review(
         worker="17",
         pr_number=1390,
@@ -448,7 +454,7 @@ def test_controller_routes_repair_to_changes_requested(
     """Actionable semantic findings become repair work, not ready work."""
     module = load_review_controller()
     payload = pr_payload(worker="17", branch_worker="43")
-    transitions, posted, _commands = wire_controller(monkeypatch, module, [payload])
+    transitions, posted, _commands = wire_controller(monkeypatch, module, [payload], include_diff_inspection=True)
     events: list[str] = []
     monkeypatch.setattr(
         module,
@@ -470,7 +476,7 @@ def test_controller_routes_repair_to_changes_requested(
     assert result["status"] == "repair"
     assert transitions[-1]["pr_stage"] == "factory:changes-requested"
     assert events == ["comment", "transition"]
-    assert posted[-1]["excerpt"] == "semantic findings"
+    assert posted[-1]["excerpt"] == "git diff HEAD~1\nsemantic findings"
     assert posted[-1]["marker"] == review_marker(
         pr=1390, head=REVIEWED_HEAD, reviewer="17", producer="43", verdict="repair"
     )
@@ -535,11 +541,12 @@ def test_controller_refuses_repair_when_findings_cannot_be_persisted(
 
 
 def test_controller_allows_approval_without_findings(monkeypatch: MonkeyPatch) -> None:
-    """A clean semantic approval does not need a detailed findings payload."""
+    """A clean semantic approval does not need a detailed findings payload, but requires diff inspection."""
     module = load_review_controller()
     payload = pr_payload(worker="17", branch_worker="43")
-    transitions, _posted, _commands = wire_controller(monkeypatch, module, [payload, payload])
-    monkeypatch.setattr(module, "review_excerpt", lambda _path, **_kwargs: "")
+    transitions, _posted, _commands = wire_controller(monkeypatch, module, [payload, payload], include_diff_inspection=True)
+    # Diff inspection evidence is required even without detailed findings
+    monkeypatch.setattr(module, "review_excerpt", lambda _path, **_kwargs: "gh pr diff\n")
 
     result = module.handle_review(
         worker="17",

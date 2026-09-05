@@ -33,6 +33,9 @@ SENSITIVE_ASSIGNMENT_RE = re.compile(
 BEARER_RE = re.compile(r"(?i)(authorization\s*:\s*bearer\s+)\S+")
 GITHUB_TOKEN_RE = re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b")
 API_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")
+DIFF_INSPECTION_RE = re.compile(
+    r"(?i)gh (?:pr|api)[^\n]{0,60}\bdiff\b|git (?:diff|show|log -p)"
+)
 STAGE_LABELS = {
     "factory:building",
     "factory:review",
@@ -896,9 +899,11 @@ def handle_review(
     current_head = str(pr.get("headRefOid") or "")
     if not HEAD_RE.fullmatch(current_head):
         raise RuntimeError(f"PR #{pr_number} has an invalid current head")
+
     producer = producer_worker_from_pr(branch=branch, body=str(pr.get("body") or ""))
     excerpt = review_excerpt(review_log, worker=worker)
 
+    # Check for stale head - the reviewed head must match the current PR head
     if current_head != reviewed_head:
         return return_to_review(
             pr_number=pr_number,
@@ -916,6 +921,7 @@ def handle_review(
             producer=producer,
         )
 
+    # Check for self-review first (takes precedence)
     if producer is not None and producer == worker and verdict in {"approve", "reject"}:
         return return_to_review(
             pr_number=pr_number,
@@ -932,6 +938,25 @@ def handle_review(
             head=reviewed_head,
             producer=producer,
         )
+
+    # NEW: For approval, require evidence of diff inspection
+    if verdict == "approve":
+        if not DIFF_INSPECTION_RE.search(excerpt):
+            return return_to_review(
+                pr_number=pr_number,
+                branch=branch,
+                worker=worker,
+                reviewer=worker,
+                verdict=verdict,
+                excerpt=excerpt,
+                note=(
+                    "Approval requires evidence of diff inspection (e.g., running `git diff` or `gh pr diff`). "
+                    "The reviewed head must be inspected to ensure the changes are understood."
+                ),
+                status="review",
+                head=reviewed_head,
+                producer=producer,
+            )
 
     marker = review_marker(
         pr=pr_number,
