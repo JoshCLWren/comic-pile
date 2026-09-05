@@ -168,7 +168,7 @@ def test_decrypt_production_kv_rest_uses_per_id_when_list_is_redacted() -> None:
         patch("scripts.decrypt_vercel_kv_rest.list_project_envs", side_effect=fake_list),
         patch("scripts.decrypt_vercel_kv_rest.decrypt_env_by_id", side_effect=fake_by_id),
     ):
-        url, token, source, method, keys = decrypt_production_kv_rest(
+        url, token, source, method, keys, _types = decrypt_production_kv_rest(
             "vercel-token",
             "prj_test",
             "team_test",
@@ -206,7 +206,7 @@ def test_decrypt_production_kv_rest_uses_list_decrypt_when_values_are_real() -> 
         ) as list_mock,
         patch("scripts.decrypt_vercel_kv_rest.decrypt_env_by_id") as by_id_mock,
     ):
-        url, token, source, method, _keys = decrypt_production_kv_rest(
+        url, token, source, method, _keys, _types = decrypt_production_kv_rest(
             "vercel-token",
             "prj_test",
             "team_test",

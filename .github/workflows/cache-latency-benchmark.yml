@@ -87,8 +87,11 @@ jobs:
             --github-mask; then
             echo "kv_available=true" >> "$GITHUB_OUTPUT"
           else
-            echo "API decrypt did not yield usable KV REST values; will try production-context env run."
+            echo "API decrypt cannot read sensitive KV REST values; production-context env run will inject them."
           fi
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@58.1.0
 
       - name: Run redacted Upstash REST vs Neon benchmark
         id: measure
@@ -115,21 +118,22 @@ jobs:
             echo "Mapped --upstash-url <- KV_REST_API_URL and --upstash-token <- KV_REST_API_TOKEN"
             dotenv_args+=(--from-dotenv "$kv_env")
           elif [[ -n "${VERCEL_TOKEN:-}" ]]; then
-            echo "Installing Vercel CLI for production-context env injection."
-            npm install --global vercel@58.1.0
             mkdir -p .vercel
             printf '%s\n' "{\"orgId\":\"${VERCEL_ORG_ID}\",\"projectId\":\"${VERCEL_PROJECT_ID}\"}" > .vercel/project.json
+            # Sensitive KV values cannot be decrypted into a pull file. Inject
+            # them into the child process only — never echo or artifact them.
             runner=(
               vercel env run
-              --environment=production
+              -e production
               --scope "$VERCEL_TEAM_SLUG"
               --token "$VERCEL_TOKEN"
-              --yes
               --
               uv run python
             )
-            keys="production-context:vercel-env-run"
+            keys="KV_REST_API_URL KV_REST_API_TOKEN"
             echo "env_keys=$keys" >> "$GITHUB_OUTPUT"
+            echo "Using vercel env run -e production to inject KV REST aliases (values not printed)"
+            echo "Mapped --upstash-url <- KV_REST_API_URL and --upstash-token <- KV_REST_API_TOKEN"
           else
             echo "No decryptable KV REST credentials; Upstash path will be skipped."
           fi

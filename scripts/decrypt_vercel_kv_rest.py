@@ -197,12 +197,46 @@ def write_kv_dotenv(path: Path, url: str, token: str) -> None:
     path.chmod(0o600)
 
 
+def env_type(entry: Mapping[str, object]) -> str | None:
+    """Return the Vercel env type (``sensitive``, ``encrypted``, ``plain``).
+
+    Args:
+        entry: One object from the project env list payload.
+
+    Returns:
+        The type string, or ``None`` when absent.
+    """
+    return string_field(entry, "type")
+
+
+def production_env_types(envs: Sequence[Mapping[str, object]]) -> dict[str, str]:
+    """Map production key names to their Vercel env types.
+
+    Args:
+        envs: Project environment-variable records.
+
+    Returns:
+        ``{key_name: type}`` for production-targeted keys only.
+    """
+    types: dict[str, str] = {}
+    for entry in envs:
+        key = string_field(entry, "key")
+        kind = env_type(entry)
+        if key is None or kind is None:
+            continue
+        if not env_targets_production(entry):
+            continue
+        types[key] = kind
+    return types
+
+
 def coverage_payload(
     listed_keys: Sequence[str],
     url: str | None,
     token: str | None,
     token_source: str,
     decrypt_method: str,
+    env_types: Mapping[str, str] | None = None,
 ) -> dict[str, object]:
     """Build a secret-free coverage document for logs and artifacts.
 
@@ -212,16 +246,23 @@ def coverage_payload(
         token: Decrypted REST token, or ``None``.
         token_source: Vercel key that supplied the token.
         decrypt_method: Which API path produced usable values.
+        env_types: Optional ``{key: type}`` map (no values).
 
     Returns:
         JSON-ready coverage mapping with booleans and key names only.
     """
+    wanted_types = {
+        key: (env_types or {}).get(key)
+        for key in WANTED_KEYS
+        if key in (env_types or {})
+    }
     return {
         "listed_production_keys": sorted(listed_keys),
         "kv_rest_api_url_present": is_usable_secret(url),
         "kv_rest_api_token_present": is_usable_secret(token),
         "kv_token_source": token_source or None,
         "decrypt_method": decrypt_method,
+        "kv_env_types": wanted_types,
         "redis_url_ignored": True,
     }
 
@@ -301,6 +342,10 @@ def decrypt_env_by_id(
 ) -> str | None:
     """Fetch the decrypted value of one project environment variable.
 
+    Tries the project-scoped decrypt endpoints and the shared-env decrypt
+    path. Sensitive values still return ``None`` when the token cannot
+    decrypt them; the caller then uses ``vercel env run``.
+
     Args:
         token: Vercel bearer token.
         project_id: Project id (``prj_...``).
@@ -311,21 +356,29 @@ def decrypt_env_by_id(
         The decrypted value when usable, otherwise ``None``.
     """
     query = urllib.parse.urlencode({"teamId": team_id})
-    payload = _api_get(
+    paths = (
         f"{API_BASE}/v1/projects/{project_id}/env/{env_id}?{query}",
-        token,
+        f"{API_BASE}/v9/projects/{project_id}/env/{env_id}?{query}",
+        f"{API_BASE}/v1/env/{env_id}?{query}",
     )
-    if not isinstance(payload, dict):
-        return None
-    value = string_field(payload, "value")
-    return value if is_usable_secret(value) else None
+    for url in paths:
+        try:
+            payload = _api_get(url, token)
+        except RuntimeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        value = string_field(payload, "value")
+        if is_usable_secret(value):
+            return value
+    return None
 
 
 def decrypt_production_kv_rest(
     token: str,
     project_id: str,
     team_id: str,
-) -> tuple[str | None, str | None, str, str, list[str]]:
+) -> tuple[str | None, str | None, str, str, list[str], dict[str, str]]:
     """Decrypt production KV REST credentials via list-decrypt then per-id GET.
 
     Args:
@@ -334,7 +387,7 @@ def decrypt_production_kv_rest(
         team_id: Team id (``team_...``).
 
     Returns:
-        ``(url, token, token_source, decrypt_method, listed_keys)``.
+        ``(url, token, token_source, decrypt_method, listed_keys, env_types)``.
     """
     listed = list_project_envs(token, project_id, team_id, decrypt=False)
     listed_keys = sorted(
@@ -344,11 +397,12 @@ def decrypt_production_kv_rest(
             if (key := string_field(entry, "key")) is not None and env_targets_production(entry)
         }
     )
+    types = production_env_types(listed)
     decrypted_list = list_project_envs(token, project_id, team_id, decrypt=True)
     values = collect_usable_values(decrypted_list)
     url, rest_token, token_source = choose_kv_credentials(values)
     if is_usable_secret(url) and is_usable_secret(rest_token):
-        return url, rest_token, token_source, "list_decrypt", listed_keys
+        return url, rest_token, token_source, "list_decrypt", listed_keys, types
 
     ids = select_production_env_ids(listed)
     by_id: dict[str, str] = dict(values)
@@ -359,7 +413,7 @@ def decrypt_production_kv_rest(
         if fetched is not None:
             by_id[key] = fetched
     url, rest_token, token_source = choose_kv_credentials(by_id)
-    return url, rest_token, token_source, "project_env_by_id", listed_keys
+    return url, rest_token, token_source, "project_env_by_id", listed_keys, types
 
 
 def emit_github_masks(values: Sequence[str]) -> None:
@@ -432,16 +486,25 @@ def main() -> int:
         )
         return 1
     try:
-        url, rest_token, token_source, method, listed_keys = decrypt_production_kv_rest(
-            args.token,
-            args.project_id,
-            args.team_id,
+        url, rest_token, token_source, method, listed_keys, env_types = (
+            decrypt_production_kv_rest(
+                args.token,
+                args.project_id,
+                args.team_id,
+            )
         )
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
-    coverage = coverage_payload(listed_keys, url, rest_token, token_source, method)
+    coverage = coverage_payload(
+        listed_keys,
+        url,
+        rest_token,
+        token_source,
+        method,
+        env_types,
+    )
     if args.coverage:
         coverage_path = Path(args.coverage)
         coverage_path.parent.mkdir(parents=True, exist_ok=True)
