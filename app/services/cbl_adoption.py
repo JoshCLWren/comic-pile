@@ -18,9 +18,8 @@ from app.schemas.cbl_adoption import (
     CBLPlanCalculationResponse,
     CBLProposedEntry,
     CBLPlannedAction,
-    SourceBackedDecision,
-    SourceBackedStatus,
 )
+from app.schemas.shared_types import SourceBackedDecision, SourceBackedStatus
 
 
 async def preview_cbl_source_list(
@@ -143,12 +142,12 @@ async def calculate_cbl_adoption_plan(
 
     # Convert series_decisions and entry_decisions to the format expected by the pure function
     series_choices = {
-        str(series_decision.series_name): series_decision.decision.value
-        for series_decision in (series_decisions or [])
+        k: v == SourceBackedDecision.INCLUDE
+        for k, v in (series_decisions or {}).items()
     }
     entry_choices = {
-        str(entry_decision.cbl_position): entry_decision.decision.value
-        for entry_decision in (entry_decisions or [])
+        k: v == SourceBackedDecision.INCLUDE
+        for k, v in (entry_decisions or {}).items()
     }
 
     # Calculate the plan using the pure function
@@ -270,12 +269,12 @@ async def commit_cbl_adoption_plan(
     
     # Convert series_decisions and entry_decisions to the format expected by the loop
     series_choices = {
-        str(series_decision.series_name): series_decision.decision.value
-        for series_decision in (series_decisions or [])
+        k: v == SourceBackedDecision.INCLUDE
+        for k, v in (series_decisions or {}).items()
     }
     entry_choices = {
-        str(entry_decision.cbl_position): entry_decision.decision.value
-        for entry_decision in (entry_decisions or [])
+        k: v == SourceBackedDecision.INCLUDE
+        for k, v in (entry_decisions or {}).items()
     }
 
     # Get all CBL source entries for this list, ordered by position
@@ -316,13 +315,13 @@ async def commit_cbl_adoption_plan(
         # Determine if we should adopt this entry
         adopted = False
         if preview_entry.resolution_status in (
-            SourceBackedStatus.resolved_via_comicvine_id,
-            SourceBackedStatus.resolved_via_comicvine_canonical,
-            SourceBackedStatus.resolved_via_title_number,
+            SourceBackedStatus.RESOLVED_VIA_COMICVINE_ID,
+            SourceBackedStatus.RESOLVED_VIA_COMICVINE_CANONICAL,
+            SourceBackedStatus.RESOLVED_VIA_TITLE_NUMBER,
         ):
             # Resolved via some method
             default_selected = True
-        elif preview_entry.resolution_status == SourceBackedStatus.no_owned_issue_for_comicvine_id:
+        elif preview_entry.resolution_status == SourceBackedStatus.NO_OWNED_ISSUE_FOR_COMICVINE_ID:
             # Importable
             default_selected = True
         else:
@@ -332,9 +331,9 @@ async def commit_cbl_adoption_plan(
         # Apply decisions: entry decision overrides series decision
         selected = entry_decision or series_decision or default_selected
         if selected and preview_entry.resolution_status not in (
-            SourceBackedStatus.ambiguous_no_comicvine_id,
-            SourceBackedStatus.comicvine_identity_not_known,
-            SourceBackedStatus.resolved_via_comicvine_canonical_ambiguous,
+            SourceBackedStatus.AMBIGUOUS_NO_COMICVINE_ID,
+            SourceBackedStatus.COMICVINE_IDENTITY_NOT_KNOWN,
+            SourceBackedStatus.RESOLVED_VIA_COMICVINE_CANONICAL_AMBIGUOUS,
         ):
             adopted = True
 
