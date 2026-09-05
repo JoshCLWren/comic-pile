@@ -68,101 +68,52 @@ jobs:
       - name: Install pinned Vercel CLI
         run: npm install --global vercel@58.1.0
 
-      - name: Pull production env key names and Upstash REST credentials
-        id: vercel_env
+      - name: Pull production env and run redacted benchmark
+        id: measure
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          set -euo pipefail
-          echo "upstash_rest=false" >> "$GITHUB_OUTPUT"
-          echo "upstash_management=false" >> "$GITHUB_OUTPUT"
-          if [[ -z "${VERCEL_TOKEN:-}" ]]; then
-            echo "VERCEL_TOKEN missing; Upstash REST credentials will not be pulled."
-            echo "env_keys=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          vercel pull \
-            --yes \
-            --environment=production \
-            --scope "$VERCEL_TEAM_SLUG" \
-            --token "$VERCEL_TOKEN"
-          vercel env pull .env.production.local \
-            --yes \
-            --environment=production \
-            --scope "$VERCEL_TEAM_SLUG" \
-            --token "$VERCEL_TOKEN"
-          if [[ ! -f .env.production.local ]]; then
-            echo "Vercel env pull did not create .env.production.local"
-            echo "env_keys=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          keys="$(awk -F= 'BEGIN { OFS="" } /^[A-Za-z_][A-Za-z0-9_]*=/ { print $1 }' .env.production.local | sort | tr '\n' ' ')"
-          echo "env_keys=$keys" >> "$GITHUB_OUTPUT"
-          echo "Production env keys present (values not printed): $keys"
-
-          mask_value() {
-            local raw="$1"
-            raw="${raw#\"}"
-            raw="${raw%\"}"
-            raw="${raw#\'}"
-            raw="${raw%\'}"
-            if [[ -n "$raw" ]]; then
-              echo "::add-mask::$raw"
-            fi
-            printf '%s' "$raw"
-          }
-
-          native_url=""
-          kv_url=""
-          native_token=""
-          readonly_token=""
-          write_token=""
-          while IFS= read -r line || [[ -n "$line" ]]; do
-            case "$line" in
-              UPSTASH_REDIS_REST_URL=*)
-                native_url="$(mask_value "${line#UPSTASH_REDIS_REST_URL=}")"
-                ;;
-              KV_REST_API_URL=*)
-                kv_url="$(mask_value "${line#KV_REST_API_URL=}")"
-                ;;
-              UPSTASH_REDIS_REST_TOKEN=*)
-                native_token="$(mask_value "${line#UPSTASH_REDIS_REST_TOKEN=}")"
-                ;;
-              KV_REST_API_READ_ONLY_TOKEN=*)
-                readonly_token="$(mask_value "${line#KV_REST_API_READ_ONLY_TOKEN=}")"
-                ;;
-              KV_REST_API_TOKEN=*)
-                write_token="$(mask_value "${line#KV_REST_API_TOKEN=}")"
-                ;;
-              UPSTASH_EMAIL=*)
-                echo "UPSTASH_EMAIL=$(mask_value "${line#UPSTASH_EMAIL=}")" >> "$GITHUB_ENV"
-                echo "upstash_management=true" >> "$GITHUB_OUTPUT"
-                ;;
-              UPSTASH_API_KEY=*)
-                echo "UPSTASH_API_KEY=$(mask_value "${line#UPSTASH_API_KEY=}")" >> "$GITHUB_ENV"
-                echo "upstash_management=true" >> "$GITHUB_OUTPUT"
-                ;;
-              UPSTASH_DATABASE_ID=*)
-                echo "UPSTASH_DATABASE_ID=$(mask_value "${line#UPSTASH_DATABASE_ID=}")" >> "$GITHUB_ENV"
-                ;;
-            esac
-          done < .env.production.local
-          rm -f .env.production.local
-
-          rest_url="${native_url:-$kv_url}"
-          rest_token="${native_token:-${readonly_token:-$write_token}}"
-          if [[ -n "$rest_url" && -n "$rest_token" ]]; then
-            echo "UPSTASH_REDIS_REST_URL=$rest_url" >> "$GITHUB_ENV"
-            echo "UPSTASH_REDIS_REST_TOKEN=$rest_token" >> "$GITHUB_ENV"
-            echo "upstash_rest=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Run cache latency benchmark
-        env:
           DATABASE_URL: ${{ steps.neon.outputs.db_url }}
         run: |
           set -euo pipefail
           mkdir -p docs
+          echo "upstash_rest=false" >> "$GITHUB_OUTPUT"
+          echo "upstash_management=false" >> "$GITHUB_OUTPUT"
+          echo "env_keys=" >> "$GITHUB_OUTPUT"
+
+          dotenv_args=()
+          keys=""
+          if [[ -n "${VERCEL_TOKEN:-}" ]]; then
+            vercel pull \
+              --yes \
+              --environment=production \
+              --scope "$VERCEL_TEAM_SLUG" \
+              --token "$VERCEL_TOKEN"
+            vercel env pull .env.production.local \
+              --yes \
+              --environment=production \
+              --scope "$VERCEL_TEAM_SLUG" \
+              --token "$VERCEL_TOKEN"
+          else
+            echo "VERCEL_TOKEN missing; Upstash REST credentials will not be pulled."
+          fi
+
+          if [[ -f .env.production.local ]]; then
+            keys="$(awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/ { print $1 }' .env.production.local | sort | tr '\n' ' ')"
+            echo "env_keys=$keys" >> "$GITHUB_OUTPUT"
+            echo "Production env keys present (values not printed): $keys"
+            if grep -Eq '^(UPSTASH_REDIS_REST_URL|KV_REST_API_URL)=' .env.production.local \
+              && grep -Eq '^(UPSTASH_REDIS_REST_TOKEN|KV_REST_API_READ_ONLY_TOKEN|KV_REST_API_TOKEN)=' .env.production.local
+            then
+              echo "upstash_rest=true" >> "$GITHUB_OUTPUT"
+            fi
+            if grep -Eq '^UPSTASH_EMAIL=' .env.production.local \
+              && grep -Eq '^UPSTASH_API_KEY=' .env.production.local
+            then
+              echo "upstash_management=true" >> "$GITHUB_OUTPUT"
+            fi
+            dotenv_args+=(--from-dotenv .env.production.local)
+          fi
+
           extra_args=()
           if [[ "${{ steps.neon.outputs.neon_available }}" == "true" && -n "${DATABASE_URL:-}" ]]; then
             extra_args+=(--database-url "$DATABASE_URL")
@@ -174,7 +125,9 @@ jobs:
             --kv-table bench_cache_kv \
             --redact \
             --output docs/CACHE_LOOKUP_LATENCY_2026-08.json \
+            "${dotenv_args[@]}" \
             "${extra_args[@]}"
+          rm -f .env.production.local
           jq '{
             measured_from,
             iterations,
@@ -187,37 +140,26 @@ jobs:
             provider_decision
           }' docs/CACHE_LOOKUP_LATENCY_2026-08.json
 
-      - name: Report cache usage when management credentials exist
-        if: ${{ env.UPSTASH_EMAIL != '' && env.UPSTASH_API_KEY != '' }}
-        run: |
-          set -euo pipefail
-          uv run python -m scripts.cache_usage_report --json > "$RUNNER_TEMP/cache-usage.json"
-          jq '{
-            status,
-            observed_commands,
-            provider_commands,
-            application_budget,
-            provider_ratio,
-            recommendation
-          }' "$RUNNER_TEMP/cache-usage.json"
-
-      - name: Write credential coverage summary
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
+          python3 - "$RUNNER_TEMP/cache-benchmark-coverage.json" \
+            "${{ steps.neon.outputs.neon_available }}" \
+            "${keys:-}" <<'PY'
           import json
+          import sys
           from pathlib import Path
+
+          path, neon_available, keys = sys.argv[1], sys.argv[2], sys.argv[3]
+          report = json.loads(Path("docs/CACHE_LOOKUP_LATENCY_2026-08.json").read_text(encoding="utf-8"))
+          upstash = report.get("upstash_rest_get") or {}
           payload = {
-              "neon_available": "${{ steps.neon.outputs.neon_available }}" == "true",
-              "upstash_rest_env_present": "${{ steps.vercel_env.outputs.upstash_rest }}" == "true",
-              "upstash_management_env_present": "${{ steps.vercel_env.outputs.upstash_management }}" == "true",
+              "neon_available": neon_available == "true",
+              "upstash_rest_measured": upstash.get("summary") is not None,
+              "upstash_quota_blocked": bool(upstash.get("quota_blocked")),
               "queue_bearer_skipped": True,
-              "production_env_keys": "${{ steps.vercel_env.outputs.env_keys }}".split(),
+              "production_env_keys": keys.split(),
               "measured_from": "github-actions:ubuntu-latest",
               "preferred_vantage": "vercel:cle1",
           }
-          path = Path("${{ runner.temp }}/cache-benchmark-coverage.json")
-          path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          Path(path).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
           print(json.dumps(payload, indent=2))
           PY
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from scripts.benchmark_cache_latency import (
@@ -9,6 +11,7 @@ from scripts.benchmark_cache_latency import (
     DEFAULT_KV_TABLE,
     Run,
     _summarize,
+    load_dotenv_values,
     normalize_asyncpg_url,
     redact_report,
     resolve_upstash_rest_token,
@@ -86,6 +89,23 @@ def test_benchmark_uses_one_shared_kv_key_and_table() -> None:
     """Neon insert/select and Upstash GET must share one key and the documented table."""
     assert BENCH_KV_KEY == "comic_pile_cache_latency_bench_key_v1"
     assert DEFAULT_KV_TABLE == "bench_cache_kv"
+
+
+def test_load_dotenv_values_strips_quotes(tmp_path: Path) -> None:
+    """Vercel env-pull files may quote values; the loader must not keep the quotes."""
+
+    env_file = tmp_path / ".env.production.local"
+    env_file.write_text(
+        'KV_REST_API_URL="https://example.upstash.io"\n'
+        "KV_REST_API_TOKEN=plain-token\n"
+        "# comment\n",
+        encoding="utf-8",
+    )
+
+    values = load_dotenv_values(str(env_file))
+
+    assert values["KV_REST_API_URL"] == "https://example.upstash.io"
+    assert values["KV_REST_API_TOKEN"] == "plain-token"
 
 
 def test_upstash_rest_aliases_prefer_native_then_vercel_kv(

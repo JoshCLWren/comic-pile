@@ -83,6 +83,31 @@ class Run:
     error_detail: str | None
 
 
+def load_dotenv_values(path: str) -> dict[str, str]:
+    """Load ``KEY=VALUE`` pairs from a Vercel env-pull file without printing values.
+
+    Args:
+        path: Path to a ``.env``-style file.
+
+    Returns:
+        A mapping of variable names to unquoted values.
+    """
+    values: dict[str, str] = {}
+    with open(path, encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            if not key or not key.replace("_", "").isalnum():
+                continue
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+                value = value[1:-1]
+            values[key] = value
+    return values
+
+
 def resolve_upstash_rest_url() -> str | None:
     """Return the Upstash REST base URL from native or Vercel KV aliases.
 
@@ -643,6 +668,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Rewrite provider hostnames and credential-like error text before writing JSON",
     )
+    parser.add_argument(
+        "--from-dotenv",
+        default=None,
+        help="Load KEY=VALUE pairs into the process env before resolving credentials",
+    )
     return parser
 
 
@@ -653,6 +683,15 @@ def main() -> int:
         The process exit code (``0`` on success).
     """
     args = build_parser().parse_args()
+    if args.from_dotenv:
+        for key, value in load_dotenv_values(args.from_dotenv).items():
+            os.environ.setdefault(key, value)
+        if args.upstash_url is None:
+            args.upstash_url = resolve_upstash_rest_url()
+        if args.upstash_token is None:
+            args.upstash_token = resolve_upstash_rest_token()
+        if args.database_url is None:
+            args.database_url = os.environ.get("DATABASE_URL")
     if args.iterations < 1:
         raise SystemExit("--iterations must be >= 1")
     if args.warmups < 0:
