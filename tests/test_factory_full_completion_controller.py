@@ -106,6 +106,9 @@ def test_current_demand_caps_idle_workers_to_remaining_omniroute_slots():
             return 2
 
     class FakePolicy:
+        def comment_is_trusted(self, comment):
+            return True
+
         def pr_is_static_candidate(self, pr, issue_map):
             return False
 

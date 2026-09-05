@@ -108,9 +108,9 @@ def main() -> None:
     assert "source='omniroute-free'" in runner
     assert "runtime_model='omniroute/auto/coding:free'" in runner
     assert 'GitHub execution is OmniRoute-only' in runner
-    assert 'catalog_candidates="$(jq' in runner
-    assert 'select(.provider == "omniroute-free")' in runner
-    assert 'omniroute-free)' in runner
+    assert 'Select native OmniRoute execution intent' in runner
+    assert 'reason=native-omniroute-intent-direct' in runner
+    assert "${OMNIROUTE_BASE_URL%/}/models" not in runner
     assert 'OPENCODE_API_KEY' not in runner
     assert "KILO_VERSION: '7.4.22'" in runner
     assert 'Smoke Kilo Auto Free through Kilo CLI' in runner
