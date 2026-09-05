@@ -49,3 +49,49 @@ def test_targets_are_bounded_by_real_queue_depth_and_capacity():
     assert policy.completion_worker_target(demand(3, 0, 50)) == 3
     assert policy.completion_worker_target(demand(50, 0, 3)) == 3
     assert policy.completion_worker_target(demand(0, 50, 10)) == 0
+
+
+def test_omniroute_free_entry_cap_default_is_three_concurrent_units():
+    assert policy.DEFAULT_OMNIROUTE_FREE_ENTRY_CAP == 3
+    assert policy.remaining_omniroute_free_entry_slots(0) == 3
+    assert policy.remaining_omniroute_free_entry_slots(2) == 1
+    assert policy.remaining_omniroute_free_entry_slots(3) == 0
+    assert policy.remaining_omniroute_free_entry_slots(12) == 0
+
+
+def test_omniroute_free_entry_cap_bounds_idle_workers_without_erasing_demand():
+    current = demand(completion=35, production=10, idle=30)
+    capped = policy.apply_omniroute_free_entry_cap(current, in_flight=1)
+
+    assert capped.completion == 35
+    assert capped.production == 10
+    assert capped.idle_workers == 2
+    assert policy.completion_worker_target(capped) == 2
+    assert policy.production_worker_target(capped) == 0
+
+
+def test_omniroute_free_entry_cap_leaves_idle_unchanged_when_already_inside_budget():
+    current = demand(completion=2, production=1, idle=2)
+    assert policy.apply_omniroute_free_entry_cap(current, in_flight=0) is current
+
+
+def test_exhausted_omniroute_free_entry_cap_allocates_no_workers():
+    current = policy.apply_omniroute_free_entry_cap(demand(20, 20, 20), in_flight=3)
+    assert current.idle_workers == 0
+    assert policy.completion_worker_target(current) == 0
+    assert policy.production_worker_target(current) == 0
+
+
+def test_omniroute_free_entry_slot_counts_reject_negative_inputs():
+    try:
+        policy.remaining_omniroute_free_entry_slots(-1)
+    except ValueError as exc:
+        assert "in-flight" in str(exc)
+    else:
+        raise AssertionError("negative in-flight must fail closed")
+    try:
+        policy.remaining_omniroute_free_entry_slots(0, cap=-1)
+    except ValueError as exc:
+        assert "cap" in str(exc)
+    else:
+        raise AssertionError("negative cap must fail closed")

@@ -88,3 +88,15 @@ def test_dispatch_failure_releases_assignment_and_continues_batch() -> None:
     assert 'python3 "$controller" release --worker "$worker" || true' in text
     assert 'failures=$((failures + 1))' in text
     assert 'all other slots were still attempted' in text
+
+
+def test_refill_refuses_new_entries_when_omniroute_free_cap_is_exhausted() -> None:
+    """Bootstrap and 1:1 refill must share the OmniRoute free-entry cap."""
+    text = _workflow_text()
+
+    assert 'python3 "$controller" capacity' in text
+    assert 'jq -c --argjson n "$remaining" \'.[0:$n]\'' in text
+    assert 'OmniRoute free-entry cap is exhausted' in text
+    assert text.index('python3 "$controller" reconcile || true') < text.index(
+        'python3 "$controller" capacity'
+    )

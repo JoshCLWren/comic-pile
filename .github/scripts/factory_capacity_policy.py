@@ -4,6 +4,11 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+# OmniRoute's shared free coding pool 429s when many Entry smokes overlap.
+# Three concurrent Entry/lease units is the working ceiling that still lets
+# light-load Sessions start; dispatcher, assignment, and drain must share it.
+DEFAULT_OMNIROUTE_FREE_ENTRY_CAP = 3
+
 
 @dataclass(frozen=True)
 class FleetDemand:
@@ -27,6 +32,57 @@ class FleetDemand:
         if self.total == 0:
             return 0.0
         return self.completion / self.total
+
+
+def remaining_omniroute_free_entry_slots(
+    in_flight: int,
+    *,
+    cap: int = DEFAULT_OMNIROUTE_FREE_ENTRY_CAP,
+) -> int:
+    """Return how many new OmniRoute free Entry sessions may start.
+
+    Args:
+        in_flight: Occupied Entry runs plus equivalent fixed-model leases.
+        cap: Maximum concurrent OmniRoute free-entry units.
+
+    Returns:
+        Non-negative remaining slots. Zero means refuse new Entry starts.
+
+    Raises:
+        ValueError: If ``in_flight`` or ``cap`` is negative.
+    """
+    if in_flight < 0:
+        raise ValueError("in-flight factory entry count cannot be negative")
+    if cap < 0:
+        raise ValueError("omniroute free entry cap cannot be negative")
+    return max(0, cap - in_flight)
+
+
+def apply_omniroute_free_entry_cap(
+    demand: FleetDemand,
+    in_flight: int,
+    *,
+    cap: int = DEFAULT_OMNIROUTE_FREE_ENTRY_CAP,
+) -> FleetDemand:
+    """Bound idle workers to remaining OmniRoute free-entry slots.
+
+    Args:
+        demand: Uncapped completion/production demand and idle fleet size.
+        in_flight: Occupied Entry runs plus equivalent fixed-model leases.
+        cap: Maximum concurrent OmniRoute free-entry units.
+
+    Returns:
+        The original demand when idle workers already fit the remaining
+        slots; otherwise a copy whose idle count equals remaining slots.
+    """
+    remaining = remaining_omniroute_free_entry_slots(in_flight, cap=cap)
+    if remaining >= demand.idle_workers:
+        return demand
+    return FleetDemand(
+        completion=demand.completion,
+        production=demand.production,
+        idle_workers=remaining,
+    )
 
 
 def completion_worker_target(demand: FleetDemand) -> int:

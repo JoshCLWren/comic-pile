@@ -13,6 +13,15 @@ sys.modules[SPEC.name] = controller
 SPEC.loader.exec_module(controller)
 
 
+def test_completion_claims_stop_at_omniroute_free_entry_cap():
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "omniroute_free_entry_has_capacity" in text
+    assert "OmniRoute free-entry cap reached" in text
+    assert text.index("omniroute_free_entry_has_capacity") < text.index(
+        "order_candidates_for_worker(remaining, worker)"
+    )
+
+
 def test_completion_batch_size_scales_with_backlog():
     assert controller.completion_batch_size(14) == 0
     assert controller.completion_batch_size(15) == 8
