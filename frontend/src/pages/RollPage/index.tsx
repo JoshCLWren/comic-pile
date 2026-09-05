@@ -58,6 +58,40 @@ export default function RollPage() {
     error: bootstrapError,
   } = useRollBootstrap()
 
+  // Process rollResponse state from queue page "Read Now" button
+  useEffect(() => {
+    if (location.state?.rollResponse && bootstrap) {
+      const rollResponse = location.state.rollResponse as RollResponse;
+      const threadId = rollResponse.thread_id;
+      
+      // Find the thread in roll pool or active thread
+      const threadInPool = bootstrap.roll_pool?.find(t => t.id === threadId);
+      const isActiveThread = bootstrap.active_thread?.id === threadId;
+      
+      // Prepare thread metadata
+      const threadMetadata: ThreadMetadata = {
+        id: rollResponse.thread_id,
+        title: rollResponse.title,
+        format: rollResponse.format,
+        issues_remaining: rollResponse.issues_remaining,
+        queue_position: rollResponse.queue_position,
+        total_issues: rollResponse.total_issues,
+        reading_progress: rollResponse.reading_progress ?? null,
+        issue_id: rollResponse.issue_id,
+        issue_number: rollResponse.issue_number,
+        next_issue_id: rollResponse.next_issue_id,
+        next_issue_number: rollResponse.next_issue_number,
+        last_rolled_result: rollResponse.result ?? rollResponse.last_rolled_result,
+      };
+
+      // Suppress auto-open to prevent conflicts
+      state.suppressPendingAutoOpenRef.current = true;
+      
+      // Enter rating view with the thread data
+      rating.enterRatingView(threadId, rollResponse.result ?? null, threadMetadata);
+    }
+  }, [location.state, bootstrap, rating, state]);
+
   const scrollToDice = useCallback(() => {
     mainDieRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
