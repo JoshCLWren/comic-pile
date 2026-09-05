@@ -95,6 +95,29 @@ def reconcile_combos(
             if isinstance(item, dict)
         ]
 
+    def models_match(actual: object) -> bool:
+        """Verify owned model fields, allowing only OmniRoute's sentinel rewrite."""
+        actual_models = owned_models(actual)
+        if len(actual_models) != len(members):
+            return False
+        for expected_model, actual_model in zip(members, actual_models, strict=True):
+            if expected_model.get("kind") != actual_model.get("kind"):
+                return False
+            if expected_model.get("providerId") != actual_model.get("providerId"):
+                return False
+            if expected_model.get("weight") != actual_model.get("weight"):
+                return False
+            expected_name = expected_model.get("model")
+            actual_name = actual_model.get("model")
+            sentinel_readback = (
+                expected_name == NO_CAPACITY_MODEL
+                and expected_model.get("providerId") == "openrouter"
+                and actual_name == f"openrouter/{NO_CAPACITY_MODEL}"
+            )
+            if expected_name != actual_name and not sentinel_readback:
+                return False
+        return True
+
     for name in CASCADE_NAMES:
         combo = by_name[name]
         payload = {"strategy": "priority", "models": members, "config": combo.get("config") or {}}
@@ -114,7 +137,7 @@ def reconcile_combos(
         if (
             not isinstance(combo, dict)
             or combo.get("strategy") != "priority"
-            or owned_models(combo.get("models")) != owned_models(members)
+            or not models_match(combo.get("models"))
             or (combo.get("config") or {}) != (expected.get("config") or {})
         ):
             failures.append(f"{name} readback mismatch")

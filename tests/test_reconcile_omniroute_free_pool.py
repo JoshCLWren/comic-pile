@@ -156,3 +156,63 @@ def test_successful_readback_ignores_generated_ids_on_both_cascades() -> None:
     ok, failures = POOL.reconcile_combos(expected, ["vendor/model:free"], put, lambda: state)
     assert ok
     assert failures == []
+
+
+def test_sentinel_readback_accepts_openrouter_qualified_name_on_both_cascades() -> None:
+    """OmniRoute's provider-qualified no-capacity sentinel is equivalent."""
+    expected = _combos()
+    actual = [
+        {
+            **combo,
+            "strategy": "priority",
+            "models": [{"kind": "model", "model": "openrouter/" + POOL.NO_CAPACITY_MODEL,
+                        "providerId": "openrouter", "weight": 0}],
+        }
+        for combo in expected
+    ]
+
+    ok, failures = POOL.reconcile_combos(
+        expected, [POOL.NO_CAPACITY_MODEL], lambda identifier, payload: None, lambda: actual,
+    )
+    assert ok
+    assert failures == []
+
+
+def test_sentinel_equivalence_does_not_normalize_executable_model_names() -> None:
+    """Provider/name prefixes remain significant for executable models."""
+    combos = _combos()
+    actual = [
+        {
+            **combo,
+            "strategy": "priority",
+            "models": [{"kind": "model", "model": "openrouter/vendor/model:free",
+                        "providerId": "openrouter", "weight": 0}],
+        }
+        for combo in combos
+    ]
+
+    ok, failures = POOL.reconcile_combos(
+        combos, ["vendor/model:free"], lambda identifier, payload: None, lambda: actual,
+    )
+    assert not ok
+    assert "free-cascade-small readback mismatch" in failures
+
+
+def test_sentinel_equivalence_requires_openrouter_provider() -> None:
+    """The sentinel exception cannot hide a provider identity mismatch."""
+    combos = _combos()
+    actual = [
+        {
+            **combo,
+            "strategy": "priority",
+            "models": [{"kind": "model", "model": "openrouter/" + POOL.NO_CAPACITY_MODEL,
+                        "providerId": "other", "weight": 0}],
+        }
+        for combo in combos
+    ]
+
+    ok, failures = POOL.reconcile_combos(
+        combos, [POOL.NO_CAPACITY_MODEL], lambda identifier, payload: None, lambda: actual,
+    )
+    assert not ok
+    assert "free-cascade-small readback mismatch" in failures
