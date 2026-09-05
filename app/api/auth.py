@@ -14,6 +14,7 @@ from app.auth import (
     create_refresh_token,
     get_current_user,
     hash_password,
+    refresh_cookie_max_age_seconds,
     revoke_token,
     verify_password,
     verify_token,
@@ -76,7 +77,7 @@ def _set_refresh_cookie(response: Response, request: Request, refresh_token: str
         secure=is_secure_request(request),
         samesite="lax",
         path=REFRESH_COOKIE_PATH,
-        max_age=60 * 60 * 24 * 30,
+        max_age=refresh_cookie_max_age_seconds(),
     )
 
 
@@ -210,6 +211,7 @@ async def login_user(
 
 
 @router.post("/refresh", response_model=TokenResponse)
+@limiter.limit("20/minute")
 async def refresh_access_token(
     request: Request,
     response: Response,

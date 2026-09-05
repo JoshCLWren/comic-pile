@@ -32,6 +32,11 @@ vi.mock('../services/api', () => {
     setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) => mockSetAccessToken(...args),
     clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) => mockClearAccessToken(...args),
     getAccessToken: () => mockGetAccessToken(),
+    refreshSession: vi.fn().mockRejectedValue(Object.assign(new Error('unauthenticated'), {
+      isAxiosError: true,
+      response: { status: 401 },
+    })),
+    isSessionRefreshRejected: () => false,
   }
 })
 

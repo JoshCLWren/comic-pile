@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { queryClient } from '../query/queryClient'
+import { isDefinitiveAuthenticationFailure } from '../services/authFailure'
 
 const RESUME_REQUEST_TIMEOUT_MS = 15000
 const RESUME_RETRY_DELAY_MS = 750
@@ -62,7 +63,10 @@ export default function ResumeRecovery({
           }
           setRecoveryState('idle')
           return
-        } catch (_error) {
+        } catch (error) {
+          if (isDefinitiveAuthenticationFailure(error)) {
+            break
+          }
           if (attempt < MAX_RESUME_ATTEMPTS) {
             await delay(RESUME_RETRY_DELAY_MS)
           }

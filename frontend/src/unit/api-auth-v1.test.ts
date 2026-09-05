@@ -16,7 +16,7 @@ vi.mock('axios', () => ({
   },
 }))
 
-import { clearAccessToken } from '../services/api'
+import { setAccessToken } from '../services/api'
 
 const requestInterceptor = apiMock.interceptors.request.use.mock.calls[0][0] as (
   config: { method?: string; url?: string; headers?: Record<string, string> },
@@ -33,7 +33,7 @@ beforeEach(() => {
   apiMock.get.mockReset()
   apiMock.post.mockReset()
   apiMock.request.mockReset()
-  clearAccessToken()
+  setAccessToken(null)
   document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
 })
 

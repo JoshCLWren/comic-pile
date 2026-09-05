@@ -32,6 +32,8 @@ vi.mock('../services/api', () => ({
   setAccessToken: mocks.setAccessToken,
   getAccessToken: mocks.getAccessToken,
   readStoredAccessToken: mocks.readStoredAccessToken,
+  refreshSession: vi.fn(),
+  isSessionRefreshRejected: () => false,
 }))
 
 function axiosError(status: number): Error & { isAxiosError: true; response: { status: number } } {

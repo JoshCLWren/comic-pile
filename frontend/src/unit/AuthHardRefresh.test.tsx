@@ -19,6 +19,11 @@ vi.mock('../services/api', () => ({
   readStoredAccessToken: () => mockReadStoredAccessToken(),
   setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) => mockSetAccessToken(...args),
   clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) => mockClearAccessToken(...args),
+  refreshSession: vi.fn().mockRejectedValue(Object.assign(new Error('unauthenticated'), {
+    isAxiosError: true,
+    response: { status: 401 },
+  })),
+  isSessionRefreshRejected: () => false,
 }))
 
 import { AuthProvider, useAuth } from '../App'

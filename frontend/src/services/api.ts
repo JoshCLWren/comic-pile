@@ -73,6 +73,8 @@ let failedQueue: Array<{
   config: ApiRequestConfig
 }> = []
 let isRefreshing = false
+let sessionRefreshRejected = false
+let refreshPromise: Promise<string> | null = null
 
 export function readStoredAccessToken(): string | null {
   if (typeof localStorage === 'undefined') {
@@ -97,6 +99,8 @@ function writeStoredAccessToken(token: string | null): void {
 export function setAccessToken(token: string | null): void {
   accessToken = token
   writeStoredAccessToken(token)
+  // A new explicit token write (login or test setup) allows another cookie probe.
+  sessionRefreshRejected = false
 }
 
 export function getAccessToken(): string | null {
@@ -114,6 +118,57 @@ export function getAccessToken(): string | null {
 export function clearAccessToken(): void {
   accessToken = null
   writeStoredAccessToken(null)
+}
+
+function discardAccessToken(): void {
+  accessToken = null
+  writeStoredAccessToken(null)
+}
+
+function markSessionRefreshRejected(): void {
+  sessionRefreshRejected = true
+  discardAccessToken()
+}
+
+export function isSessionRefreshRejected(): boolean {
+  return sessionRefreshRejected
+}
+
+function buildRejectedRefreshError(): Error & { isAxiosError: true; response: { status: number } } {
+  return Object.assign(new Error('Session refresh unavailable'), {
+    isAxiosError: true as const,
+    response: { status: 401 },
+  })
+}
+
+export async function refreshSession(options?: { skipAuthRedirect?: boolean }): Promise<string> {
+  if (sessionRefreshRejected) {
+    throw buildRejectedRefreshError()
+  }
+  if (refreshPromise) {
+    return refreshPromise
+  }
+
+  refreshPromise = (async () => {
+    try {
+      const response = await api.post<AuthTokens>(
+        '/v1/auth/refresh',
+        undefined,
+        options?.skipAuthRedirect ? { skipAuthRedirect: true } : undefined,
+      )
+      setAccessToken(response.access_token)
+      return response.access_token
+    } catch (error) {
+      if (isAuthenticationFailure(error as AxiosError)) {
+        markSessionRefreshRejected()
+      }
+      throw error
+    } finally {
+      refreshPromise = null
+    }
+  })()
+
+  return refreshPromise
 }
 
 function getCookieValue(name: string): string | null {
@@ -250,7 +305,17 @@ rawApi.interceptors.response.use(
     if (isAuthenticationFailure(error) && !originalRequest._retry) {
       const requestPathname = getRequestPathname(originalRequest.url ?? '')
       if (AUTH_ENDPOINT_PATHS.has(requestPathname)) {
-        if (requestPathname === '/v1/auth/refresh' && !originalRequest.skipAuthRedirect) {
+        if (requestPathname === '/v1/auth/refresh' && isAuthenticationFailure(error)) {
+          markSessionRefreshRejected()
+          if (!originalRequest.skipAuthRedirect) {
+            redirectToLogin()
+          }
+        }
+        return Promise.reject(error)
+      }
+
+      if (sessionRefreshRejected) {
+        if (!originalRequest.skipAuthRedirect) {
           redirectToLogin()
         }
         return Promise.reject(error)
@@ -271,12 +336,9 @@ rawApi.interceptors.response.use(
       isRefreshing = true
 
       try {
-        const response = originalRequest.skipAuthRedirect
-          ? await api.post<AuthTokens>('/v1/auth/refresh', undefined, { skipAuthRedirect: true })
-          : await api.post<AuthTokens>('/v1/auth/refresh')
-
-        const { access_token } = response
-        setAccessToken(access_token)
+        const access_token = await refreshSession({
+          skipAuthRedirect: originalRequest.skipAuthRedirect,
+        })
 
         processQueue(null, access_token)
         isRefreshing = false

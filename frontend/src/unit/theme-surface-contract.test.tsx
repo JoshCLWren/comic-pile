@@ -31,6 +31,8 @@ vi.mock('../services/api', () => ({
   setAccessToken: mocks.setAccessToken,
   getAccessToken: mocks.getAccessToken,
   readStoredAccessToken: mocks.readStoredAccessToken,
+  refreshSession: vi.fn(),
+  isSessionRefreshRejected: () => false,
 }))
 
 const THEMES = ['classic', 'ink-gold', 'command-center'] as const
