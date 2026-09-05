@@ -103,7 +103,7 @@ def main() -> None:
     assert 'group: fixed-model-factory-${{ inputs.worker }}' in runner
     assert 'cancel-in-progress: false' in runner
     assert "source='omniroute-free'" in runner
-    assert "runtime_model='omniroute/free-cascade-small'" in runner
+    assert "runtime_model='omniroute/auto/coding:free'" in runner
     assert 'GitHub execution is OmniRoute-only' in runner
     assert 'catalog_candidates="$(jq' in runner
     assert 'select(.provider == "omniroute-free")' in runner

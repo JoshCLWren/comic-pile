@@ -185,18 +185,9 @@ class OpenCodeFreeAdapter:
 
 
 class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
-    """Expose free OmniRoute coding routes for independent factory lanes."""
+    """Expose OmniRoute's native free coding route for factory execution."""
 
-    FALLBACK_CASCADE_MODEL = "free-cascade-small"
-
-    @staticmethod
-    def _supports_agent_tools(item: dict[str, Any]) -> bool:
-        """Return whether catalog metadata supports OpenCode tool execution."""
-        model = str(item.get("id") or "").lower()
-        if "content-safety" in model or "moderation" in model:
-            return False
-        capabilities = item.get("capabilities")
-        return isinstance(capabilities, dict) and capabilities.get("tool_calling") is True
+    FACTORY_ROUTE = "auto/coding:free"
 
     def __init__(self) -> None:
         """Configure the external OmniRoute OpenAI-compatible adapter."""
@@ -207,7 +198,7 @@ class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
         raw_catalog: str,
         configured_models: Sequence[str] = (),
     ) -> Discovery:
-        """Expose routes explicitly marked free without fixing one model."""
+        """Expose the native virtual route while OmniRoute owns model selection."""
         items = _json_catalog(raw_catalog)
         if items is None:
             return Discovery(
@@ -218,59 +209,47 @@ class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
             )
 
         configured = _configured_filter(configured_models)
-        models = {
-            model
+        if configured is not None and self.FACTORY_ROUTE not in configured:
+            return Discovery(
+                provider=self.provider,
+                mode=self.mode,
+                status="empty",
+                detail="configured policy excluded the native OmniRoute factory route",
+            )
+
+        catalog_models = {
+            str(item.get("id"))
             for item in items
-            if isinstance(model := item.get("id"), str)
-            and model
-            # GitHub workers consume only gateway-owned pools. Individual
-            # free routes are intentionally excluded so they cannot bypass
-            # OmniRoute's quality admission and reconciliation policy.
-            and model.startswith("free-cascade-")
-            and (configured is None or model in configured)
-            and (
-                model.endswith(":free")
-                or model.endswith("-free")
-                or model.startswith("free-cascade-")
-            )
+            if isinstance(item.get("id"), str)
         }
-        # OmniRoute's model catalog is dynamic and can briefly omit the
-        # configured cascade while upstream capacity is being refreshed. Keep
-        # the known gateway-owned cascade executable as a durable fallback;
-        # candidate health still retires it permanently after a recorded 410
-        # or excludes it during its evidence-based cooldown.
-        if self.FALLBACK_CASCADE_MODEL not in models:
-            models.add(self.FALLBACK_CASCADE_MODEL)
-        candidates = tuple(
-            _candidate(
-                self.provider,
-                model,
-                "omniroute",
-                "provider_catalog"
-                if model in {
-                    str(item.get("id"))
-                    for item in items
-                    if isinstance(item.get("id"), str)
-                }
-                else "configured_cascade_fallback",
-            )
-            for model in sorted(models)
+        discovered_by = (
+            "provider_catalog"
+            if self.FACTORY_ROUTE in catalog_models
+            else "native_auto_route_fallback"
+        )
+        candidate = _candidate(
+            self.provider,
+            self.FACTORY_ROUTE,
+            self.runtime_prefix,
+            discovered_by,
         )
         return Discovery(
             provider=self.provider,
             mode=self.mode,
-            status="available" if candidates else "empty",
-            candidates=candidates,
-            detail=f"OmniRoute exposed {len(candidates)} eligible free coding route(s)",
+            status="available",
+            candidates=(candidate,),
+            detail=(
+                "OmniRoute native auto/coding:free route delegates free-tier, "
+                "tool-compatibility, quality, quota, and fallback decisions to OmniRoute"
+            ),
         )
-
 
 
 class RuntimeOnlyAdapter:
     """Adapter for a provider route that cannot be enumerated reliably."""
 
     def __init__(self, provider: str) -> None:
-        """Configure a runtime-evidence-only provider."""
+        """Configure provider metadata and eligibility policy."""
         self.provider = provider
         self.mode = "runtime_only"
 
@@ -324,9 +303,8 @@ ADAPTERS: dict[str, ProviderAdapter] = {
         "openrouter",
         free_only=True,
     ),
-    # OmniRoute owns discovery and routing across its underlying providers.
-    # The factory consumes the locally maintained, health-validated free cascade
-    # rather than the broader synthetic route whose candidates may go stale.
+    # OmniRoute owns discovery, free-tier filtering, quality scoring, tool
+    # compatibility, quota handling, and fallback across underlying providers.
     "omniroute-free": OmniRouteFreeAdapter(),
     # Kilo documents a changing free model set exposed through interactive model
     # selection, but no reliable non-interactive enumeration contract. Keep that

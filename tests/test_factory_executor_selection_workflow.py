@@ -75,7 +75,7 @@ def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
     assert f"FACTORY_MODEL: {selected_model}" in workflow
     assert f"FACTORY_RUNTIME_MODEL: {selected_runtime}" in workflow
     assert f"FACTORY_BRANCH_SUFFIX: {selected_branch}" in workflow
-    assert "from-live-provider-catalog" in workflow
+    assert "native-omniroute-auto-route" in workflow
     assert "health_state=" in workflow
 
 
