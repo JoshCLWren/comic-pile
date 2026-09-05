@@ -58,6 +58,8 @@ def pr_fixture(
     labels: list[str],
     state: str = "OPEN",
     draft: bool = False,
+    branch: str | None = None,
+    body: str | None = None,
 ) -> dict[str, object]:
     """Build a canonical fixed-model PR linked to one issue."""
     return {
@@ -65,8 +67,8 @@ def pr_fixture(
         "state": state,
         "isDraft": draft,
         "labels": [{"name": label} for label in labels],
-        "headRefName": f"factory/18-{issue}-nvidia",
-        "body": "Worker: opencode-free-model-factory-18",
+        "headRefName": branch or f"factory/18-{issue}-nvidia",
+        "body": body or "Worker: opencode-free-model-factory-18",
         "createdAt": "2026-08-16T01:00:00Z",
         "mergeable": "MERGEABLE",
         "mergeStateStatus": "CLEAN",
@@ -226,6 +228,142 @@ def test_closed_pr_releases_issue_back_to_implementation_queue():
     assert [(candidate.kind, candidate.number) for candidate in candidates] == [
         ("issue", 1487)
     ]
+
+
+def test_human_pr_with_closing_reference_suppresses_fresh_implementation():
+    """A human-authored open PR that closes an issue owns it for intake."""
+    issue = issue_fixture(2127)
+    human = pr_fixture(
+        number=2161,
+        issue=2127,
+        labels=["factory", "factory:unowned"],
+        branch="local/2127-cbl-commit",
+        body="Closes #2127",
+    )
+
+    candidates = policy.build_candidates([issue], [human])
+
+    assert all(candidate.number != 2127 or candidate.kind != "issue" for candidate in candidates)
+    assert candidates == []
+
+
+def test_non_factory_branch_with_closing_reference_is_recognized():
+    """non-`factory/*` branches suppress when they explicitly close the issue."""
+    issue = issue_fixture(2127)
+    human = pr_fixture(
+        number=2161,
+        issue=2127,
+        labels=["factory", "factory:unowned"],
+        branch="local/2127-cbl-commit",
+        body="Resolves #2127",
+    )
+
+    assert policy._linked_issue_from_pr(human) == 2127
+    assert policy.pr_suppresses_issue_candidate(human, {})
+
+    candidates = policy.build_candidates([issue], [human])
+
+    assert all(candidate.number != 2127 or candidate.kind != "issue" for candidate in candidates)
+
+
+def test_factory_canonical_pr_is_still_recognized_as_suppressing():
+    """Factory-authored canonical PRs keep suppressing without a closing body."""
+    issue = issue_fixture(2127)
+    factory_pr = pr_fixture(
+        number=2162,
+        issue=2127,
+        labels=["factory", "factory:unowned", "factory:review"],
+    )
+
+    assert policy._linked_issue_from_pr(factory_pr) == 2127
+    assert policy.pr_suppresses_issue_candidate(factory_pr, {})
+
+    candidates = policy.build_candidates([issue], [factory_pr])
+
+    assert all(candidate.number != 2127 or candidate.kind != "issue" for candidate in candidates)
+
+
+def test_mention_without_closing_reference_does_not_suppress():
+    """A stacked/child PR that only mentions #N stays non-canonical."""
+    issue = issue_fixture(2127)
+    stacked = pr_fixture(
+        number=2171,
+        issue=2127,
+        labels=["factory", "factory:unowned"],
+        branch="local/2127-stacked-child",
+        body="Depends on #2127",
+    )
+
+    assert policy._linked_issue_from_pr(stacked) is None
+    assert not policy.pr_suppresses_issue_candidate(stacked, {})
+
+    candidates = policy.build_candidates([issue], [stacked])
+
+    assert [(candidate.kind, candidate.number) for candidate in candidates] == [
+        ("issue", 2127)
+    ]
+
+
+def test_closed_human_pr_no_longer_suppresses_fresh_implementation():
+    """A closed/superseded human PR releases its issue for new implementation."""
+    issue = issue_fixture(2127)
+    closed = pr_fixture(
+        number=2161,
+        issue=2127,
+        labels=["factory", "factory:unowned"],
+        state="CLOSED",
+        branch="local/2127-cbl-commit",
+        body="Closes #2127",
+    )
+
+    candidates = policy.build_candidates([issue], [closed])
+
+    assert [(candidate.kind, candidate.number) for candidate in candidates] == [
+        ("issue", 2127)
+    ]
+
+
+def test_draft_pr_with_closing_reference_does_not_suppress():
+    """Only open non-draft PRs claim ownership via a closing reference."""
+    issue = issue_fixture(2127)
+    draft = pr_fixture(
+        number=2161,
+        issue=2127,
+        labels=["factory", "factory:unowned"],
+        draft=True,
+        branch="local/2127-cbl-commit",
+        body="Closes #2127",
+    )
+
+    assert policy._linked_issue_from_pr(draft) == 2127
+    assert not policy.pr_suppresses_issue_candidate(draft, {})
+
+    candidates = policy.build_candidates([issue], [draft])
+
+    assert [(candidate.kind, candidate.number) for candidate in candidates] == [
+        ("issue", 2127)
+    ]
+
+
+def test_two_open_implementation_prs_cannot_open_a_third():
+    """Concurrent open implementation PRs block further fresh intake."""
+    issue = issue_fixture(2127)
+    human = pr_fixture(
+        number=2161,
+        issue=2127,
+        labels=["factory", "factory:unowned"],
+        branch="local/2127-cbl-commit",
+        body="Resolves #2127",
+    )
+    duplicate = pr_fixture(
+        number=2162,
+        issue=2127,
+        labels=["factory", "factory:17", "factory:review"],
+    )
+
+    candidates = policy.build_candidates([issue], [human, duplicate])
+
+    assert all(candidate.number != 2127 or candidate.kind != "issue" for candidate in candidates)
 
 
 def test_plan_distinct_assignments_reserves_review_without_stopping_product():

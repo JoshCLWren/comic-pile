@@ -42,7 +42,7 @@ def raw_work_demand(policy, issues, prs) -> tuple[int, int]:
     suppressing_pr_issues = {
         linked
         for pr in prs
-        if (linked := policy.linked_issue_from_branch(pr.get("headRefName"))) is not None
+        if (linked := policy._linked_issue_from_pr(pr)) is not None
         and policy.pr_suppresses_issue_candidate(pr, issue_map)
     }
     production = sum(

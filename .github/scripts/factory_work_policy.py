@@ -312,7 +312,7 @@ def pr_is_static_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, An
 
 
 def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, Any]]) -> bool:
-    """Return whether this open non-draft PR is canonical work for its issue.
+    """Return whether this open PR is canonical work for its issue.
 
     Once a canonical PR exists, the linked issue must not become fresh
     implementation work again for any reason. If an old PR is no longer worth
@@ -320,15 +320,22 @@ def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[
     implementation. Urgency changes ranking, never canonical PR identity.
 
     A PR suppresses its issue if:
-    1. It is an open, non-draft PR; AND
+    1. It is an open PR; AND
     2. Either:
-       a. It is a factory PR with canonical branch shape (factory/N-ISSUE-...); OR
-       b. It has an explicit closing reference in its body (Closes/Fixes/Resolves #N)
+       a. It is a factory PR with canonical branch shape (factory/N-ISSUE-...).
+          The factory branch is the ownership signal: that PR IS the
+          implementation for its linked issue, so it suppresses fresh intake
+          even while temporary states (draft/blocked) keep it ineligible for
+          review; or
+       b. It is an open, non-draft PR with an explicit closing reference in
+          its body (Closes/Fixes/Resolves #N), regardless of author or branch
+          naming. Mere issue mentions without a closing claim (stacked/child
+          PRs) do not suppress.
     """
     del issue_map  # Kept in the signature for compatibility with existing callers.
 
     state = str(pr.get('state') or 'OPEN').upper()
-    if state != 'OPEN' or pr.get('isDraft'):
+    if state != 'OPEN':
         return False
 
     head = str(pr.get('headRefName') or '')
@@ -339,6 +346,8 @@ def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[
         return True
 
     # Any open non-draft PR with explicit closing reference
+    if pr.get('isDraft'):
+        return False
     closing_match = CLOSING_RE.search(body)
     if closing_match is not None:
         return True

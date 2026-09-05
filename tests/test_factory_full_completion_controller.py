@@ -64,6 +64,31 @@ def test_raw_demand_is_not_erased_by_legacy_review_backpressure_threshold():
     )
 
 
+def test_raw_demand_counts_human_closing_pr_as_suppressing_issue():
+    """Production demand respects a human `local/*` PR that closes an issue."""
+    controller = full.load_controller()
+    policy = controller.load_policy()
+    issue = {
+        "number": 2127,
+        "state": "OPEN",
+        "labels": ["factory:unowned"],
+        "createdAt": "2026-08-24T00:00:00Z",
+    }
+    human = {
+        "number": 2161,
+        "state": "OPEN",
+        "isDraft": False,
+        "headRefName": "local/2127-cbl-commit",
+        "body": "Closes #2127",
+        "labels": ["factory", "factory:unowned"],
+        "createdAt": "2026-08-24T00:00:00Z",
+    }
+
+    assert policy._linked_issue_from_pr(human) == 2127
+    assert policy.pr_suppresses_issue_candidate(human, {})
+    assert full.raw_work_demand(policy, [issue], [human]) == (0, 0)
+
+
 def test_only_healthy_or_degraded_workers_count_as_executable_capacity():
     controller = full.load_controller()
     full.configure_demand_selection(controller, target=4)
