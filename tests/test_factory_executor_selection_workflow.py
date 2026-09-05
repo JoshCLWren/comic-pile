@@ -7,45 +7,46 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "free-model-factory-run.yml"
 
 
-def test_omniroute_is_the_only_execution_gateway() -> None:
-    """GitHub agents discover and execute through OmniRoute only."""
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    selector = workflow.split(
-        "- name: Select execution candidate at dispatch time", maxsplit=1
+def _native_intent_selector(workflow: str) -> str:
+    """Return the native OmniRoute intent selection step body."""
+    return workflow.split(
+        "- name: Select native OmniRoute execution intent", maxsplit=1
     )[1].split("- name: Report selected executor heartbeat", maxsplit=1)[0]
 
-    assert "${OMNIROUTE_BASE_URL%/}/models" in selector
-    assert "provider == \"omniroute-free\"" in selector
-    assert ".github/scripts/factory_provider_candidates.py" in selector
-    assert "--configured-model" not in selector
-    assert "free-model-factories.tsv" not in selector
-    assert ".github/scripts/factory_candidate_health.py" in selector
-    assert "factory-attempt-comments.json" in selector
-    assert "--worker \"$WORKER\"" in selector
-    assert "--preferred-provider \"$preferred_provider\"" in selector
-    assert "preferred_provider='omniroute-free'" in selector
+
+def test_omniroute_is_the_only_execution_gateway() -> None:
+    """GitHub agents select a native OmniRoute intent without catalog discovery."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    selector = _native_intent_selector(workflow)
+
+    assert "GitHub execution is OmniRoute-only" in selector
+    assert "auto/coding:free" in selector
+    assert 'omniroute/${LANE_MODEL}' in selector
+    assert "${OMNIROUTE_BASE_URL%/}/models" not in selector
+    assert "/models" not in selector
+    assert ".github/scripts/factory_provider_candidates.py" not in selector
+    assert "factory-attempt-comments.json" not in selector
+    assert ".github/scripts/factory_candidate_health.py" not in selector
+    assert "reason=native-omniroute-intent-direct" in selector
 
 
 def test_other_catalogs_cannot_be_execution_capacity() -> None:
-    """Diagnostic provider catalogs cannot bypass the OmniRoute gateway."""
+    """Non-OmniRoute sources and wrong intents fail closed at selection."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    selector = workflow.split(
-        "- name: Select execution candidate at dispatch time", maxsplit=1
-    )[1].split("- name: Report selected executor heartbeat", maxsplit=1)[0]
+    selector = _native_intent_selector(workflow)
 
-    assert "OmniRoute exposed no policy-eligible candidate" in selector
-    assert "catalog_candidates='[]'" in selector
-    assert "$left + $right | unique_by([.provider, .model])" in selector
-    assert ".selected.provider // empty" in selector
-    assert "Selected unsupported catalog provider" in selector
+    assert "GitHub execution is OmniRoute-only" in selector
+    assert "Unexpected native OmniRoute coding intent" in selector
+    assert "Native OmniRoute runtime selector mismatch" in selector
+    assert "catalog_candidates" not in selector
+    assert "$left + $right | unique_by([.provider, .model])" not in selector
+    assert "Selected unsupported catalog provider" not in selector
 
 
 def test_runtime_only_providers_keep_real_probe_authority() -> None:
     """Runtime-only provider credentials cannot bypass the OmniRoute gateway."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    selector = workflow.split(
-        "- name: Select execution candidate at dispatch time", maxsplit=1
-    )[1].split("- name: Report selected executor heartbeat", maxsplit=1)[0]
+    selector = _native_intent_selector(workflow)
 
     assert "GitHub execution is OmniRoute-only" in selector
     assert "selected-by-runtime-evidence" not in selector
@@ -75,24 +76,31 @@ def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
     assert f"FACTORY_MODEL: {selected_model}" in workflow
     assert f"FACTORY_RUNTIME_MODEL: {selected_runtime}" in workflow
     assert f"FACTORY_BRANCH_SUFFIX: {selected_branch}" in workflow
-    assert "native-omniroute-auto-route" in workflow
-    assert "health_state=" in workflow
+    assert "native-omniroute-intent-direct" in workflow
+    assert "health_state=" not in workflow
 
 
 def test_discovery_failures_publish_normalized_outcomes() -> None:
-    """OmniRoute catalog failures are not generic failures."""
+    """Native intent selection fails closed without catalog probing."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
-    assert "catalog_failures+=('OmniRoute model catalog request failed')" in workflow
-    assert "catalog_failures+=('OmniRoute candidate adapter failed')" in workflow
-    assert "OpenRouter_API_KEY" not in workflow
-    assert "integrate.api.nvidia.com" not in workflow
-    assert "provider_unavailable\\t%s" in workflow
-    assert "No catalog provider was executable" in workflow
     assert (
-        "model_unavailable\\tLive catalogs exposed no policy-eligible candidate"
+        "control_plane_failure\\tGitHub execution is OmniRoute-only; got %s\\n"
         in workflow
     )
+    assert (
+        "control_plane_failure\\tUnexpected native OmniRoute coding intent: %s\\n"
+        in workflow
+    )
+    assert (
+        "control_plane_failure\\tNative OmniRoute runtime selector mismatch: %s\\n"
+        in workflow
+    )
+    assert "catalog_failures+=('OmniRoute model catalog request failed')" not in workflow
+    assert "catalog_failures+=('OmniRoute candidate adapter failed')" not in workflow
+    assert "${OMNIROUTE_BASE_URL%/}/models" not in workflow
+    assert "OpenRouter_API_KEY" not in workflow
+    assert "integrate.api.nvidia.com" not in workflow
     assert 'discovery_record="$(cat "$DISCOVERY_OUTCOME_FILE"' in workflow
     assert "attempt_outcome attempt_detail" in workflow
     assert "outcome='selection-failed'" in workflow
