@@ -13,6 +13,7 @@ from typing import Any
 ARENA_URL = "https://api.wulong.dev/arena-ai-leaderboards/v1/leaderboard?name=code"
 MAX_AGE_SECONDS = 7 * 24 * 60 * 60
 CASCADE_NAMES = ("free-cascade-small", "free-cascade-big")
+NO_CAPACITY_MODEL = "__no_qualified_free_capacity__"
 
 
 def _get(url: str, key: str) -> Any:
@@ -76,10 +77,8 @@ def main() -> int:
         catalog = _get(f"{base}/models", inference_key)
         ranking = _get(ARENA_URL, "")
         models = qualified_models(catalog, ranking)
-        if not models:
-            print("temporary_no_capacity: no exact ranked free tool-capable model")
-            return 3
         combos = _get(f"{base}/api/combos", management_key).get("combos", [])
+        selected_models = models or [NO_CAPACITY_MODEL]
         for combo in combos:
             if combo.get("name") not in CASCADE_NAMES:
                 continue
@@ -87,7 +86,7 @@ def main() -> int:
                 "strategy": "priority",
                 "models": [
                     {"kind": "model", "model": model, "providerId": "openrouter", "weight": 0}
-                    for model in models
+                    for model in selected_models
                 ],
                 "config": combo.get("config") or {},
             }
@@ -102,6 +101,9 @@ def main() -> int:
             )
             with urllib.request.urlopen(request, timeout=30):
                 pass
+        if not models:
+            print("temporary_no_capacity: authoritative sources exposed no qualified model")
+            return 3
         print(f"reconciled_qualified_models={len(models)}")
         return 0
     except (urllib.error.URLError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:

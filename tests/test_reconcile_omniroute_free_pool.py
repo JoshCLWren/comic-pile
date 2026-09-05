@@ -40,3 +40,8 @@ def test_paid_or_non_tool_model_is_excluded() -> None:
     }
     ranking = {"models": [{"model": "vendor/paid", "score": 0.9}, {"model": "vendor/no-tools", "score": 0.8}]}
     assert POOL.qualified_models(catalog, ranking) == []
+
+
+def test_empty_qualified_pool_uses_non_expanding_sentinel() -> None:
+    """An empty authoritative result must not leave stale executable members."""
+    assert POOL.NO_CAPACITY_MODEL == "__no_qualified_free_capacity__"
