@@ -266,6 +266,24 @@ def test_parse_depends_on_casual_mentions_not_matched():
     assert policy.parse_depends_on_numbers(body) == set()
 
 
+def test_parse_depends_on_later_lines_do_not_block():
+    """'#N' mentions on lines after a declaration are not prerequisites."""
+    body = "Depends on #2126.\n\nRelated cleanup tracked in #2104 for context."
+    assert policy.parse_depends_on_numbers(body) == {2126}
+
+
+def test_parse_depends_on_plus_separated_references():
+    """'Depends on #N + #M + #K' reference clusters are honored."""
+    body = "Depends on #2126 + #2127 + #2128 being deployed."
+    assert policy.parse_depends_on_numbers(body) == {2126, 2127, 2128}
+
+
+def test_parse_depends_on_prose_ends_reference_cluster():
+    """Casual mentions after prose on the same line are not prerequisites."""
+    body = "Depends on #10 and #11 being merged; see also #12 for audited reads."
+    assert policy.parse_depends_on_numbers(body) == {10, 11}
+
+
 def test_parse_depends_on_empty_body():
     """Empty body yields no prerequisites."""
     assert policy.parse_depends_on_numbers("") == set()
@@ -389,6 +407,35 @@ def test_casual_hash_mentions_do_not_block_intake():
         "createdAt": "2026-08-16T00:00:00Z",
     }
     candidates = policy.build_candidates([prerequisite_like, issue], [])
+    assert any(c.kind == "issue" and c.number == 200 for c in candidates)
+
+
+def test_later_casual_mention_does_not_block_resolved_declaration():
+    """A body that resolves its declared prereq stays eligible despite a
+    later casual '#N' mention of an open issue (mirrors #2127/#2104)."""
+    closed_prereq = {
+        "number": 100,
+        "state": "CLOSED",
+        "title": "Closed prereq",
+        "labels": [{"name": "ralph-status:done"}],
+        "createdAt": "2026-08-16T00:00:00Z",
+    }
+    casual_open = {
+        "number": 300,
+        "state": "OPEN",
+        "title": "Casually mentioned open issue",
+        "labels": [{"name": "factory:unowned"}],
+        "createdAt": "2026-08-16T00:00:00Z",
+    }
+    child = {
+        "number": 200,
+        "state": "OPEN",
+        "title": "Child with resolved declaration",
+        "labels": [{"name": "factory:unowned"}],
+        "body": "Depends on #100.\n\nRelated cleanup tracked in #300 for context.",
+        "createdAt": "2026-08-16T01:00:00Z",
+    }
+    candidates = policy.build_candidates([closed_prereq, casual_open, child], [])
     assert any(c.kind == "issue" and c.number == 200 for c in candidates)
 
 

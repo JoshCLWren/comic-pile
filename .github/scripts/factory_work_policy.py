@@ -26,7 +26,9 @@ TRUSTED_ASSOCIATIONS = {'OWNER', 'MEMBER', 'COLLABORATOR'}
 TRUSTED_FACTORY_APP_SLUGS = {'github-actions'}
 REQUIRED_CHECK_FAILURE_STATES = frozenset({'CANCELLED', 'ERROR', 'FAILURE', 'STALE', 'STARTUP_FAILURE', 'TIMED_OUT'})
 NO_DIFF_ATTEMPT_RE = re.compile(r'<!--\s*comic-pile-factory-claim-released-v3:(?P<kind>issue|pr)-(?P<number>\d+):(?P<worker>[^:>\s]+):(?P<epoch>\d{10}):(?:repair-)?no-persisted-change-handoff\s*-->')
-DEP_ON_RE = re.compile(r"(?:[Dd]epends?\s+on)\s+(.+)", re.DOTALL)
+DEP_ON_RE = re.compile(r"(?:[Dd]epends?\s+on)\s+([^\n]+)")
+NUMBER_REF_RE = re.compile(r"#(\d+)")
+DEPENDENCY_SEPARATORS = frozenset({'and', '&', '+', ','})
 
 
 def comment_is_trusted(comment: Mapping[str, Any]) -> bool:
@@ -324,6 +326,25 @@ def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[
     )
 
 
+def _leading_reference_numbers(text: str) -> set[int]:
+    """Return the '#N' references at the head of a dependency declaration.
+
+    Only the leading reference cluster counts: consecutive ``#N`` tokens
+    joined by separators such as ``and``, ``,``, or ``+``.  Prose or casual
+    ``#N`` mentions later on the line end the cluster so they never become
+    blocking prerequisites.
+    """
+    result: set[int] = set()
+    for token in text.split():
+        clean = token.rstrip(',.;:')
+        ref = NUMBER_REF_RE.fullmatch(clean)
+        if ref:
+            result.add(int(ref.group(1)))
+        elif clean.lower() not in DEPENDENCY_SEPARATORS:
+            break
+    return result
+
+
 def parse_depends_on_numbers(body: str) -> set[int]:
     """Return issue numbers declared as explicit prerequisites in the body.
 
@@ -333,7 +354,7 @@ def parse_depends_on_numbers(body: str) -> set[int]:
     """
     numbers: set[int] = set()
     for match in DEP_ON_RE.finditer(body):
-        numbers.update(int(num) for num in re.findall(r"#(\d+)", match.group(1)))
+        numbers.update(_leading_reference_numbers(match.group(1)))
     return numbers
 
 
