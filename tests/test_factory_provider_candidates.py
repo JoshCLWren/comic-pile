@@ -92,7 +92,7 @@ def test_opencode_uses_project_available_cli_catalog() -> None:
 
 
 
-def test_omniroute_exposes_native_free_coding_route() -> None:
+def test_omniroute_exposes_native_free_intent_routes() -> None:
     """Factories choose work intent while OmniRoute chooses the backing model."""
     result = CANDIDATES.discover(
         "omniroute-free",
@@ -101,6 +101,7 @@ def test_omniroute_exposes_native_free_coding_route() -> None:
                 "data": [
                     {"id": "free-cascade-small"},
                     {"id": "auto/coding:free"},
+                    {"id": "auto/reasoning:free"},
                     {"id": "provider/backing-model:free"},
                 ]
             }
@@ -108,9 +109,17 @@ def test_omniroute_exposes_native_free_coding_route() -> None:
     )
 
     assert result.status == "available"
-    assert [candidate.model for candidate in result.candidates] == ["auto/coding:free"]
-    assert result.candidates[0].runtime_model == "omniroute/auto/coding:free"
-    assert result.candidates[0].discovered_by == "provider_catalog"
+    assert [candidate.model for candidate in result.candidates] == [
+        "auto/coding:free",
+        "auto/reasoning:free",
+    ]
+    assert [candidate.runtime_model for candidate in result.candidates] == [
+        "omniroute/auto/coding:free",
+        "omniroute/auto/reasoning:free",
+    ]
+    assert {candidate.discovered_by for candidate in result.candidates} == {
+        "provider_catalog"
+    }
 
 
 def test_omniroute_native_route_survives_catalog_omission() -> None:
@@ -120,8 +129,37 @@ def test_omniroute_native_route_survives_catalog_omission() -> None:
         json.dumps({"data": [{"id": "provider/backing-model:free"}]}),
     )
 
-    assert [candidate.model for candidate in result.candidates] == ["auto/coding:free"]
-    assert result.candidates[0].discovered_by == "native_auto_route_fallback"
+    assert [candidate.model for candidate in result.candidates] == [
+        "auto/coding:free",
+        "auto/reasoning:free",
+    ]
+    assert {candidate.discovered_by for candidate in result.candidates} == {
+        "native_auto_route_fallback"
+    }
+
+
+def test_omniroute_does_not_enumerate_backing_models() -> None:
+    """Catalog backing models never become ComicPile-selected factory capacity."""
+    result = CANDIDATES.discover(
+        "omniroute-free",
+        json.dumps(
+            {
+                "data": [
+                    {"id": "provider/backing-model:free"},
+                    {"id": "another/paid-model"},
+                    {"id": "free-cascade-big"},
+                ]
+            }
+        ),
+    )
+
+    assert all(
+        candidate.model in {"auto/coding:free", "auto/reasoning:free"}
+        for candidate in result.candidates
+    )
+    assert "provider/backing-model:free" not in {
+        candidate.model for candidate in result.candidates
+    }
 
 
 def test_omniroute_configured_filter_can_exclude_native_route() -> None:

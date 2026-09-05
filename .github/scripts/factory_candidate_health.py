@@ -289,6 +289,10 @@ def rank_candidates(
         discovered_by = str(candidate.get("discovered_by") or "")
         if not all((provider, model, runtime_model, discovered_by)):
             continue
+        native = _native_omniroute_candidate(candidate)
+        if native is not None:
+            ranked.append(native)
+            continue
 
         provider_state = (
             "unknown"
@@ -370,12 +374,22 @@ def select_candidate(
         if (value := _native_omniroute_candidate(candidate)) is not None
     )
     if native and preferred_provider in {None, "omniroute-free"}:
-        selected = native[(worker - 1) % len(native)]
+        # Carry the already-resolved native intent. ComicPile must not pick
+        # among intent lanes or backing models by worker identity.
+        selected = native[0]
+        ranking_note = (
+            "; Arena ranking is preference-only and is not a capacity gate"
+            if require_rankings
+            else ""
+        )
         return Selection(
             selected=selected,
             candidates=native,
             failure_outcome="",
-            detail="selected native OmniRoute intent route; smoke owns executable health",
+            detail=(
+                "selected native OmniRoute intent route; smoke owns executable health"
+                + ranking_note
+            ),
         )
 
     comment_list = tuple(comments)
@@ -391,15 +405,6 @@ def select_candidate(
     ]
     if preferred:
         usable = preferred
-    ranked_usable = [
-        candidate
-        for candidate in usable
-        if _ranking_key(candidate.model) in (rankings or {})
-    ]
-    if ranked_usable:
-        usable = ranked_usable
-    elif require_rankings:
-        usable = []
     if usable:
         best_priority = min(priority[candidate.health_state] for candidate in usable)
         best = sorted(
@@ -424,6 +429,11 @@ def select_candidate(
                 f"{f' from preferred provider {preferred_provider}' if preferred else ''}"
                 " from "
                 f"{len(best)} best-tier option(s)"
+                + (
+                    "; Arena ranking is preference-only and is not a capacity gate"
+                    if require_rankings
+                    else ""
+                )
             ),
         )
 

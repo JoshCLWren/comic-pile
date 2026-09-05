@@ -85,6 +85,83 @@ def test_malformed_native_runtime_selector_still_fails_closed() -> None:
     assert selection.failure_outcome == "unknown_failure"
 
 
+def test_review_intent_is_not_replaced_by_a_concrete_backing_model() -> None:
+    """A resolved reasoning intent stays virtual even when concrete models exist."""
+    selection = HEALTH.select_candidate(
+        [
+            candidate("auto/reasoning:free"),
+            {
+                "provider": "omniroute-free",
+                "model": "vendor/concrete:free",
+                "runtime_model": "omniroute/vendor/concrete:free",
+                "discovered_by": "provider_catalog",
+            },
+        ],
+        [],
+        worker=99,
+        now_epoch=1_788_619_500,
+        preferred_provider="omniroute-free",
+    )
+
+    assert selection.selected is not None
+    assert selection.selected.model == "auto/reasoning:free"
+    assert selection.selected.runtime_model == "omniroute/auto/reasoning:free"
+    assert selection.selected.health_state == "native_route"
+
+
+def test_coding_lane_does_not_consult_backing_model_health() -> None:
+    """A coding intent reaches selection with no catalog health evidence."""
+    selection = HEALTH.select_candidate(
+        [
+            candidate("auto/coding:free"),
+            {
+                "provider": "omniroute-free",
+                "model": "vendor/concrete:free",
+                "runtime_model": "omniroute/vendor/concrete:free",
+                "discovered_by": "provider_catalog",
+            },
+        ],
+        [],
+        worker=41,
+        now_epoch=1_788_619_500,
+        preferred_provider="omniroute-free",
+        require_rankings=True,
+        rankings={"vendor/concrete": 0.99},
+    )
+
+    assert selection.selected is not None
+    assert selection.selected.model == "auto/coding:free"
+    assert "smoke owns executable health" in selection.detail
+
+
+def test_resolved_native_intent_is_not_rotated_by_worker_identity() -> None:
+    """Dispatch carries the already-resolved intent instead of picking by slot."""
+    selection = HEALTH.select_candidate(
+        [candidate("auto/reasoning:free"), candidate("auto/coding:free")],
+        [],
+        worker=2,
+        now_epoch=1_788_619_500,
+        preferred_provider="omniroute-free",
+    )
+
+    assert selection.selected is not None
+    assert selection.selected.model == "auto/reasoning:free"
+
+
+def test_rank_candidates_does_not_health_filter_native_intents() -> None:
+    """Native OmniRoute intents stay executable without backing-model history."""
+    ranked = HEALTH.rank_candidates(
+        [candidate("auto/coding:free"), candidate("auto/reasoning:free")],
+        [],
+        now_epoch=1_788_619_500,
+    )
+
+    assert {item.model: item.health_state for item in ranked} == {
+        "auto/coding:free": "native_route",
+        "auto/reasoning:free": "native_route",
+    }
+
+
 def test_unknown_concrete_omniroute_model_still_needs_health_evidence() -> None:
     selection = HEALTH.select_candidate(
         [

@@ -21,6 +21,7 @@ def test_omniroute_is_the_only_execution_gateway() -> None:
 
     assert "GitHub execution is OmniRoute-only" in selector
     assert "auto/coding:free" in selector
+    assert "auto/reasoning:free" in selector
     assert 'omniroute/${LANE_MODEL}' in selector
     assert "${OMNIROUTE_BASE_URL%/}/models" not in selector
     assert "/models" not in selector
@@ -36,7 +37,7 @@ def test_other_catalogs_cannot_be_execution_capacity() -> None:
     selector = _native_intent_selector(workflow)
 
     assert "GitHub execution is OmniRoute-only" in selector
-    assert "Unexpected native OmniRoute coding intent" in selector
+    assert "Unexpected native OmniRoute intent" in selector
     assert "Native OmniRoute runtime selector mismatch" in selector
     assert "catalog_candidates" not in selector
     assert "$left + $right | unique_by([.provider, .model])" not in selector
@@ -89,7 +90,7 @@ def test_discovery_failures_publish_normalized_outcomes() -> None:
         in workflow
     )
     assert (
-        "control_plane_failure\\tUnexpected native OmniRoute coding intent: %s\\n"
+        "control_plane_failure\\tUnexpected native OmniRoute intent: %s\\n"
         in workflow
     )
     assert (
@@ -130,3 +131,42 @@ def test_smoke_timeout_reaches_gateway_retry_path() -> None:
 
     assert "status == 124 || status == 137 || status == 143" in workflow
     assert "allowing worker to proceed with built-in retry handling" in workflow
+
+
+def test_review_intent_is_carried_through_without_backing_model_selection() -> None:
+    """Exact-head review keeps auto/reasoning:free instead of a concrete model."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    selector = _native_intent_selector(workflow)
+    smoke = workflow.split(
+        "- name: Smoke selected OmniRoute route through OpenCode", maxsplit=1
+    )[1].split("- name: Smoke Kilo Auto Free through Kilo CLI", maxsplit=1)[0]
+    session = workflow.split(
+        "- name: Run continuous fixed-model factory session", maxsplit=1
+    )[1].split("- name: Report OmniRoute routing summary", maxsplit=1)[0]
+
+    assert "auto/coding:free|auto/reasoning:free" in selector
+    assert "factory_provider_candidates.py" not in selector
+    assert "factory_candidate_health.py" not in selector
+    assert "factory_provider_candidates.py" not in smoke
+    assert "factory_candidate_health.py" not in smoke
+    assert "free-model-factory-worker.sh" in session
+
+
+def test_missing_native_capacity_fails_at_smoke_not_catalog_selection() -> None:
+    """Unusable native intent capacity is recorded by OpenCode smoke, not /models."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    selector = _native_intent_selector(workflow)
+    smoke = workflow.split(
+        "- name: Smoke selected OmniRoute route through OpenCode", maxsplit=1
+    )[1].split("- name: Smoke Kilo Auto Free through Kilo CLI", maxsplit=1)[0]
+
+    assert "Select execution candidate at dispatch time" not in workflow
+    assert "${OMNIROUTE_BASE_URL%/}/models" not in selector
+    assert "factory_candidate_health.py" not in selector
+    assert "record_smoke_model_outcome()" in smoke
+    assert workflow.index("Select native OmniRoute execution intent") < workflow.index(
+        "Smoke selected OmniRoute route through OpenCode"
+    )
+    assert workflow.index("Smoke selected OmniRoute route through OpenCode") < (
+        workflow.index("Run continuous fixed-model factory session")
+    )

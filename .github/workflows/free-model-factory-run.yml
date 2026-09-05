@@ -199,16 +199,20 @@ jobs:
             printf 'control_plane_failure\tGitHub execution is OmniRoute-only; got %s\n' "$SOURCE" > "$discovery_outcome"
             exit 1
           }
-          [[ "$LANE_MODEL" == 'auto/coding:free' ]] || {
-            printf 'control_plane_failure\tUnexpected native OmniRoute coding intent: %s\n' "$LANE_MODEL" > "$discovery_outcome"
-            exit 1
-          }
+          case "$LANE_MODEL" in
+            auto/coding:free|auto/reasoning:free) ;;
+            *)
+              printf 'control_plane_failure\tUnexpected native OmniRoute intent: %s\n' "$LANE_MODEL" > "$discovery_outcome"
+              exit 1
+              ;;
+          esac
           [[ "$LANE_RUNTIME_MODEL" == "omniroute/${LANE_MODEL}" ]] || {
             printf 'control_plane_failure\tNative OmniRoute runtime selector mismatch: %s\n' "$LANE_RUNTIME_MODEL" > "$discovery_outcome"
             exit 1
           }
 
-          # Do not enumerate or health-rank OmniRoute backing models here.
+          # Carry the already-resolved native intent unchanged. Do not
+          # enumerate, rank, filter, or select OmniRoute backing models here.
           # OmniRoute owns free-tier/provider/model selection. The bounded
           # OpenCode smoke below is the executable-capacity gate.
           {

@@ -384,3 +384,22 @@ def test_legacy_catalog_provider_outage_still_suppresses_peer_slots():
 
     assert controller.worker_health_state("39", health, now_epoch=now) == "cooling"
     assert controller.worker_health_state("40", health, now_epoch=now) == "cooling"
+
+
+def test_native_omniroute_intents_are_executable_without_backing_model_health():
+    """Native OmniRoute routes do not wait on concrete-model attempt history."""
+    candidates = [
+        {"worker": "41", "provider": "omniroute-free", "model": "auto/coding:free"},
+        {"worker": "42", "provider": "omniroute-free", "model": "auto/reasoning:free"},
+    ]
+    now = controller.parse_time("2026-08-24T12:01:00Z")
+    assert now is not None
+
+    health = controller.latest_worker_health(
+        [],
+        candidates=candidates,
+        now_epoch=now,
+    )
+
+    assert controller.worker_is_executable("41", health, now_epoch=now)
+    assert controller.worker_is_executable("42", health, now_epoch=now)
