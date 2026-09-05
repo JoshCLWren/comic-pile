@@ -54,9 +54,11 @@ def qualified_models(catalog: dict[str, Any], ranking: dict[str, Any]) -> list[s
             continue
         model = item["id"]
         capabilities = item.get("capabilities")
-        if not model.endswith(":free") or not isinstance(capabilities, dict):
+        if not model.endswith(":free") or (
+            isinstance(capabilities, dict) and capabilities.get("tool_calling") is False
+        ):
             continue
-        if capabilities.get("tool_calling") is not True or _key(model) not in scores:
+        if _key(model) not in scores:
             continue
         qualified.append(model)
     return sorted(set(qualified), key=lambda model: (-scores[_key(model)], model))
@@ -78,6 +80,21 @@ def reconcile_combos(
         for model in selected_models
     ]
     failures: list[str] = []
+
+    def owned_models(value: object) -> list[dict[str, object]]:
+        """Return only model-entry fields controlled by this reconciler."""
+        if not isinstance(value, list):
+            return []
+        return [
+            {
+                field: item[field]
+                for field in ("kind", "model", "providerId", "weight")
+                if field in item
+            }
+            for item in value
+            if isinstance(item, dict)
+        ]
+
     for name in CASCADE_NAMES:
         combo = by_name[name]
         payload = {"strategy": "priority", "models": members, "config": combo.get("config") or {}}
@@ -97,7 +114,7 @@ def reconcile_combos(
         if (
             not isinstance(combo, dict)
             or combo.get("strategy") != "priority"
-            or combo.get("models") != members
+            or owned_models(combo.get("models")) != owned_models(members)
             or (combo.get("config") or {}) != (expected.get("config") or {})
         ):
             failures.append(f"{name} readback mismatch")
