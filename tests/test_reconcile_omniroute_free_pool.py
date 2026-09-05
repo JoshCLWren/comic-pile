@@ -132,3 +132,27 @@ def test_successful_reconciliation_is_idempotent() -> None:
 
     assert POOL.reconcile_combos(combos, ["vendor/model:free"], put, lambda: state)[0]
     assert POOL.reconcile_combos(state, ["vendor/model:free"], put, lambda: state)[0]
+
+
+def test_successful_readback_ignores_generated_ids_on_both_cascades() -> None:
+    """Both server-generated entry IDs are ignored after successful updates."""
+    expected = _combos()
+    state = _combos()
+
+    def put(identifier: str, payload: dict[str, object]) -> None:
+        for index, combo in enumerate(state):
+            if combo["id"] == identifier:
+                models = payload["models"]
+                assert isinstance(models, list)
+                state[index] = {
+                    **combo,
+                    **payload,
+                    "models": [
+                        {**model, "id": f"server-generated-{identifier}"}
+                        for model in models
+                    ],
+                }
+
+    ok, failures = POOL.reconcile_combos(expected, ["vendor/model:free"], put, lambda: state)
+    assert ok
+    assert failures == []
