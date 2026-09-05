@@ -93,7 +93,6 @@ def test_benchmark_uses_one_shared_kv_key_and_table() -> None:
 
 def test_load_dotenv_values_strips_quotes(tmp_path: Path) -> None:
     """Vercel env-pull files may quote values; the loader must not keep the quotes."""
-
     env_file = tmp_path / ".env.production.local"
     env_file.write_text(
         'KV_REST_API_URL="https://example.upstash.io"\n'
