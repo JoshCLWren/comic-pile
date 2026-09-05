@@ -43,7 +43,7 @@ def gh_json(args: list[str], *, input_json: object | None = None) -> object | No
 
 def list_issues() -> list[dict[str, Any]]:
     """List open issues visible to the assignment controller."""
-    return cast(list[dict[str, Any]], gh_json(['issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000', '--json', 'number,title,labels,createdAt,updatedAt']))
+    return cast(list[dict[str, Any]], gh_json(['issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000', '--json', 'number,title,body,labels,createdAt,updatedAt']))
 
 
 def list_prs() -> list[dict[str, Any]]:
