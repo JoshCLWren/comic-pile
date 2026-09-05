@@ -33,12 +33,23 @@ LOCK_RE = re.compile(
     re.IGNORECASE,
 )
 TARGET_RE = re.compile(r"checked out (?P<kind>issue|pr) #(?P<number>\d+) on ")
-RATE_LIMIT_RE = re.compile(r"429|too many requests|rate.?limit|quota|throttl|capacity", re.I)
+RATE_LIMIT_RE = re.compile(
+    r"429|too many requests|rate.?limit|quota|throttl|capacity|"
+    r"(?:http(?: status)?|status(?: code)?)[ :]+413\b|\b413\b|"
+    r"request too large|tokens per minute|\btpm\b",
+    re.I,
+)
 MODEL_MISSING_RE = re.compile(
     r"pinned .*model is not currently (?:exposed|invokable)|unknown model|model .*not found|"
     r"model .*not available|"
     r"model .*does not exist|(?:http(?: status)?|status(?: code)?)[ :]+(?:404|410)\b|"
     r"\b(?:404 not found|410 gone)\b",
+    re.I,
+)
+NATIVE_INTENT_RE = re.compile(r"^auto/", re.I)
+BACKING_UNAVAILABLE_RE = re.compile(
+    r"model\s+'([^']+)'\s+is not available|"
+    r"([\w./:-]+):\s*model\s+[—\-]\s*.*not available",
     re.I,
 )
 TIMEOUT_RE = re.compile(r"timed? out|timeout|exit status 124|process completed with exit code 124", re.I)
@@ -118,6 +129,33 @@ class Result:
     detail: str = "factory job did not expose enough runtime evidence"
 
 
+def _is_native_intent(model: str) -> bool:
+    """Return True when the selected model is an OmniRoute intent selector."""
+    return bool(NATIVE_INTENT_RE.match(model or ""))
+
+
+def _backing_unavailable_for_intent(log: str, selected_model: str) -> bool:
+    """True when a backing model (not the intent) is reported unavailable."""
+    if not _is_native_intent(selected_model):
+        return False
+    for match in BACKING_UNAVAILABLE_RE.finditer(log):
+        named = next((g for g in match.groups() if g), "")
+        if not named:
+            continue
+        # Ignore when the unavailable name is the selected intent itself.
+        if named == selected_model or named.endswith("/" + selected_model):
+            continue
+        if selected_model not in named:
+            return True
+    # Fallback: generic "not available" alongside a native intent lock, but
+    # without naming the intent — treat as backing-route exhaustion.
+    if MODEL_MISSING_RE.search(log) and selected_model not in log.split("not available", 1)[0][-80:]:
+        # Prefer explicit backing-name matches above; this is a soft signal only
+        # when the unavailable phrase does not quote the intent id nearby.
+        return "not available in the active live catalog" in log.lower()
+    return False
+
+
 def classify(log: str) -> Result:
     """Classify a fixed-model factory Actions log into a structured outcome.
 
@@ -159,7 +197,24 @@ def classify(log: str) -> Result:
             detail="lane was not configured, so the pinned model was never invoked",
         )
 
+    # TPM / request-too-large must win over backing-model "not available" noise
+    # that OmniRoute emits after a 413 cascade for native intents.
+    if RATE_LIMIT_RE.search(log):
+        return Result(
+            **common,
+            outcome="PROVIDER THROTTLE",
+            outcome_class="provider_throttle",
+            detail="runtime evidence contains a provider rate-limit, quota, TPM, or capacity response",
+        )
+
     if MODEL_MISSING_RE.search(log):
+        if _backing_unavailable_for_intent(log, values["model"]):
+            return Result(
+                **common,
+                outcome="PROVIDER FAILURE",
+                outcome_class="provider_failure",
+                detail="native intent remaining backing routes were unavailable; the intent itself is not missing",
+            )
         return Result(
             **common,
             outcome="MODEL MISSING",
@@ -215,14 +270,6 @@ def classify(log: str) -> Result:
             outcome="NOT YET PROVEN" if not exact_proven else "ENVIRONMENT FAILURE",
             outcome_class="environment_failure",
             detail="worker checkout, tooling, runner, or execution environment failed",
-        )
-
-    if RATE_LIMIT_RE.search(log):
-        return Result(
-            **common,
-            outcome="PROVIDER THROTTLE",
-            outcome_class="provider_throttle",
-            detail="runtime evidence contains a provider rate-limit, quota, or capacity response",
         )
 
     if CANCEL_RE.search(log):
@@ -332,6 +379,49 @@ class ClassifierTests(unittest.TestCase):
         result = classify(self.BASE + "ComicPile fixed-model smoke\nError: Too Many Requests 429\n")
         self.assertEqual(result.outcome, "PROVIDER THROTTLE")
         self.assertEqual(result.outcome_class, "provider_throttle")
+
+    def test_tpm_413_is_provider_throttle(self) -> None:
+        """HTTP 413 TPM / request-too-large maps to provider_throttle."""
+        result = classify(
+            self.BASE
+            + "ComicPile fixed-model smoke\n"
+            + "Error: groq/openai/gpt-oss-20b: model — [413]: Request too large for model "
+            + "`openai/gpt-oss-20b` on tokens per minute (TPM): Limit 8000, Requested 12027 "
+            + "(HTTP 413)\n"
+        )
+        self.assertEqual(result.outcome, "PROVIDER THROTTLE")
+        self.assertEqual(result.outcome_class, "provider_throttle")
+
+    def test_native_intent_backing_unavailable_is_not_model_missing(self) -> None:
+        """Backing catalog misses must not mark auto/coding:free as MODEL MISSING."""
+        lock = (
+            "Factory 68 locked: source=omniroute-free model=auto/coding:free "
+            "runtime=omniroute/auto/coding:free minute=:30 scheduler=dispatcher configured=true\n"
+        )
+        result = classify(
+            lock
+            + "ComicPile fixed-model smoke\n"
+            + "Error: groq/openai/gpt-oss-20b: model — [413]: Request too large (HTTP 413); "
+            + "oc/north-mini-code-free: model — Model 'north-mini-code-free' is not available "
+            + "in the active live catalog for provider 'opencode'. (HTTP 400)\n"
+        )
+        self.assertEqual(result.outcome_class, "provider_throttle")
+        self.assertNotEqual(result.outcome, "MODEL MISSING")
+
+    def test_native_intent_backing_only_unavailable_is_provider_failure(self) -> None:
+        """Intent stays selectable when only a backing model is catalog-missing."""
+        lock = (
+            "Factory 68 locked: source=omniroute-free model=auto/coding:free "
+            "runtime=omniroute/auto/coding:free minute=:30 scheduler=dispatcher configured=true\n"
+        )
+        result = classify(
+            lock
+            + "ComicPile fixed-model smoke\n"
+            + "Model 'north-mini-code-free' is not available in the active live catalog "
+            + "for provider 'opencode'. (HTTP 400)\n"
+        )
+        self.assertEqual(result.outcome_class, "provider_failure")
+        self.assertNotEqual(result.outcome, "MODEL MISSING")
 
     def test_model_missing(self) -> None:
         """Missing pinned model exposure maps to MODEL MISSING."""
@@ -464,6 +554,7 @@ class ClassifierTests(unittest.TestCase):
             self.BASE + "FIXED_MODEL_OPENCODE_OK\ntests failed\n",
             self.BASE + "FIXED_MODEL_OPENCODE_OK\nprovider error 503\n",
             self.BASE + "Error 429 Too Many Requests\n",
+            self.BASE + "Request too large tokens per minute (TPM) HTTP 413\n",
             self.BASE + "model invocation failed: HTTP 404\n",
             self.BASE + "content policy violation\n",
             self.BASE + "checkout failed\n",

@@ -299,43 +299,72 @@ jobs:
         shell: bash
         env:
           RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
+          LANE_MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
-          before="$(git status --porcelain)"
-          [[ -z "$before" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
+          # Lean smoke workspace: avoid loading repo AGENTS.md / build-agent
+          # context that blows past free-tier TPM (seen as HTTP 413 ~12k vs 8k).
+          smoke_dir="$RUNNER_TEMP/smoke-workspace"
+          rm -rf "$smoke_dir"
+          mkdir -p "$smoke_dir"
+          git -C "$smoke_dir" init --quiet
           set +e
           timeout --signal=TERM --kill-after=10s 180s \
-            opencode run -m "$RUNTIME_MODEL" --agent build --dir "$GITHUB_WORKSPACE" \
+            opencode run -m "$RUNTIME_MODEL" --dir "$smoke_dir" \
             --title 'ComicPile fixed-model smoke' \
             'Use a read-only shell tool to run `git status --short`. Do not edit files. After the tool call succeeds, reply with exactly FIXED_MODEL_OPENCODE_OK.' \
             2>&1 | tee "$RUNNER_TEMP/fixed-model-smoke.log"
           status=${PIPESTATUS[0]}
           set -e
+          is_native_intent=false
+          case "${LANE_MODEL:-}" in
+            auto/*) is_native_intent=true ;;
+          esac
           record_smoke_model_outcome() {
             local smoke_log="$RUNNER_TEMP/fixed-model-smoke.log"
             if grep -Eiq 'HTTP[^0-9]*410|410 Gone' "$smoke_log"; then
               printf 'model_retired_410\t%s\n' \
                 "${RUNTIME_MODEL} returned HTTP 410 and is permanently retired" \
                 > "$RUNNER_TEMP/factory-discovery-outcome"
-            elif grep -Eiq 'model[^[:alnum:]]+(not found|not available|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found|Model is unavailable' "$smoke_log"; then
-              printf 'model_unavailable\t%s\n' \
-                "${RUNTIME_MODEL} was rejected as unavailable by OmniRoute" \
+            elif grep -Eiq 'HTTP[^0-9]*413|Request too large|tokens per minute|\bTPM\b' "$smoke_log"; then
+              printf 'provider_throttle\t%s\n' \
+                "${RUNTIME_MODEL} hit a provider token/TPM or request-size limit (HTTP 413)" \
                 > "$RUNNER_TEMP/factory-discovery-outcome"
             elif grep -Eiq '429|Too Many Requests|rate.?limit|cooling down' "$smoke_log"; then
               printf 'provider_throttle\t%s\n' \
                 "${RUNTIME_MODEL} was throttled or all upstream credentials were cooling down" \
                 > "$RUNNER_TEMP/factory-discovery-outcome"
+            elif grep -Eiq 'model[^[:alnum:]]+(not found|not available|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found|Model is unavailable' "$smoke_log"; then
+              # Native intents (auto/coding:free) must not be marked unavailable
+              # when a backing fallback model is missing from the live catalog.
+              if [[ "$is_native_intent" == true ]]; then
+                printf 'provider_failure\t%s\n' \
+                  "${RUNTIME_MODEL} native intent exhausted backing routes (backing model unavailable)" \
+                  > "$RUNNER_TEMP/factory-discovery-outcome"
+              else
+                printf 'model_unavailable\t%s\n' \
+                  "${RUNTIME_MODEL} was rejected as unavailable by OmniRoute" \
+                  > "$RUNNER_TEMP/factory-discovery-outcome"
+              fi
             elif grep -Eiq 'bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$smoke_log"; then
               printf 'provider_failure\t%s\n' \
                 "${RUNTIME_MODEL} failed with a transient gateway or upstream error" \
                 > "$RUNNER_TEMP/factory-discovery-outcome"
             fi
           }
+          smoke_transient_re='429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|HTTP[^0-9]*413|Request too large|tokens per minute|\bTPM\b|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset'
+          emit_transient_smoke_message() {
+            if [[ "$is_native_intent" == true ]]; then
+              echo "Transient smoke failure for native intent ${RUNTIME_MODEL} (TPM/throttle/upstream); not quarantining the intent selector" >&2
+            else
+              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; quarantining this route for the next selection" >&2
+            fi
+          }
           if (( status != 0 )); then
             if (( status == 124 || status == 137 || status == 143 )) || \
-              grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+              grep -Eiq "$smoke_transient_re" "$RUNNER_TEMP/fixed-model-smoke.log"; then
               record_smoke_model_outcome
-              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; quarantining this route for the next selection" >&2
+              emit_transient_smoke_message
               cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
               exit 1
             fi
@@ -343,9 +372,9 @@ jobs:
             exit "$status"
           fi
           if ! grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"; then
-            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+            if grep -Eiq "$smoke_transient_re" "$RUNNER_TEMP/fixed-model-smoke.log"; then
               record_smoke_model_outcome
-              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; quarantining this route for the next selection" >&2
+              emit_transient_smoke_message
               cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
               exit 1
             fi
@@ -354,7 +383,6 @@ jobs:
             record_smoke_model_outcome
             exit 1
           fi
-          [[ -z "$(git status --porcelain)" ]] || { echo 'Model smoke modified the worktree' >&2; exit 1; }
 
       - name: Smoke Kilo Auto Free through Kilo CLI
         if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'kilo-auto'
