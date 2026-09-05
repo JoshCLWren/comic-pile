@@ -142,6 +142,19 @@ jobs:
           sleep 2
           python3 "$controller" reconcile || true
 
+          capacity="$(python3 "$controller" capacity)"
+          echo "OmniRoute free-entry capacity: ${capacity}"
+          remaining="$(jq -r '.remaining // empty' <<< "$capacity")"
+          [[ "$remaining" =~ ^[0-9]+$ ]] || {
+            echo "OmniRoute free-entry capacity snapshot is unusable; refusing refill" >&2
+            exit 1
+          }
+          workers="$(jq -c --argjson n "$remaining" '.[0:$n]' <<< "$workers")"
+          if [[ "$workers" == '[]' ]]; then
+            echo 'OmniRoute free-entry cap is exhausted; not starting additional Entry sessions'
+            exit 0
+          fi
+
           failures=0
           while IFS= read -r worker; do
             [[ -n "$worker" ]] || continue

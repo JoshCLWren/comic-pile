@@ -590,6 +590,13 @@ def assign_completion_batch(*, now_epoch: int | None = None) -> dict[str, object
         # concurrency groups, so a worker can become busy after our snapshot.
         if controller.worker_has_active_lease(worker):
             continue
+        if not controller.omniroute_free_entry_has_capacity():
+            print(
+                "[factory-completion] OmniRoute free-entry cap reached; "
+                "stopping completion claims",
+                file=sys.stderr,
+            )
+            break
         ordered = policy.order_candidates_for_worker(remaining, worker)
         for candidate in ordered:
             if not candidate_is_batch_executable(

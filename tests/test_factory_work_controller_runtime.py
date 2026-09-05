@@ -305,6 +305,11 @@ def test_assign_returns_actionable_pr_despite_historical_no_diff_markers(
         "mergeStateStatus": "CLEAN",
     }
     monkeypatch.setattr(controller, "worker_has_active_lease", lambda worker: False)
+    monkeypatch.setattr(
+        controller,
+        "omniroute_free_entry_capacity",
+        lambda: {"in_flight": 0, "cap": 3, "remaining": 3},
+    )
     monkeypatch.setattr(controller, "reconcile_stale_leases", lambda: [])
     monkeypatch.setattr(controller, "list_issues", lambda: [])
     monkeypatch.setattr(controller, "list_prs", lambda: [pr])
@@ -409,6 +414,66 @@ def test_busy_fixed_worker_is_not_given_a_second_assignment(
     )
 
     assert controller.assign("13") is None
+
+
+def test_assign_skips_when_omniroute_free_entry_cap_is_exhausted(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A full OmniRoute free pool must not lease more Entry sessions."""
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda worker: False)
+    monkeypatch.setattr(
+        controller,
+        "omniroute_free_entry_capacity",
+        lambda: {"in_flight": 3, "cap": 3, "remaining": 0},
+    )
+    monkeypatch.setattr(
+        controller,
+        "list_issues",
+        lambda: (_ for _ in ()).throw(AssertionError("must not rank new work")),
+    )
+
+    assert controller.assign("13") is None
+
+
+def test_in_flight_units_union_active_runs_and_leases(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Leases and Entry runs occupy the same OmniRoute free-entry budget."""
+    monkeypatch.setattr(
+        controller,
+        "active_fixed_workers",
+        lambda: controller.ActiveWorkerResult({41, 58}, set()),
+    )
+    monkeypatch.setattr(
+        controller,
+        "owned_targets",
+        lambda: [(2201, "factory:58"), (2202, "factory:60")],
+    )
+
+    assert controller.in_flight_omniroute_free_entries() == 3
+    assert controller.omniroute_free_entry_capacity() == {
+        "in_flight": 3,
+        "cap": 3,
+        "remaining": 0,
+    }
+
+
+def test_unresolved_run_listing_fails_closed_at_the_free_entry_cap(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Unknown Entry occupancy must not start additional OmniRoute smokes."""
+    monkeypatch.setattr(
+        controller,
+        "active_fixed_workers",
+        lambda: controller.ActiveWorkerResult(
+            set(),
+            {"queued-run-query-unavailable"},
+        ),
+    )
+    monkeypatch.setattr(controller, "owned_targets", lambda: [])
+
+    assert controller.in_flight_omniroute_free_entries() == 3
+    assert controller.omniroute_free_entry_has_capacity() is False
 
 
 def test_one_dispatch_batch_plans_distinct_targets(controller: types.ModuleType) -> None:

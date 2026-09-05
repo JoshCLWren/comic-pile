@@ -61,6 +61,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "The highest-priority unclaimed open issue labeled both `user-reported` and `bug`",
         "The highest-priority unclaimed reproducible E2E-discovered product `bug` issue",
         "When fewer than four substantive implementation PRs are open",
+        "limited to at most three concurrent in-flight units",
         "At most one implementation worker may own an issue",
         "Existing open PRs are not automatically higher priority than unclaimed issues.",
         "Release notes are asynchronous post-merge infrastructure",

@@ -65,3 +65,16 @@ def test_roster_chain_is_serialized_and_keeps_hourly_watchdog():
     assert "Self-perpetuate roster cadence" in workflow
     assert "inputs.mode == 'roster'" in workflow
     assert "sleep 240" in workflow
+
+
+def test_roster_tick_defaults_to_three_workers_and_respects_free_entry_cap():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert 'max_per_tick="${MAX_WORKERS_PER_TICK:-3}"' in workflow
+    assert 'max_per_tick="${MAX_WORKERS_PER_TICK:-12}"' not in workflow
+    assert 'python3 "$controller" capacity' in workflow
+    assert 'jq -c --argjson n "$remaining" \'.[0:$n]\'' in workflow
+    assert "OmniRoute free-entry cap is exhausted" in workflow
+    assert workflow.index('python3 "$controller" reconcile') < workflow.index(
+        'python3 "$controller" capacity'
+    )

@@ -107,6 +107,10 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             "At most one implementation worker may own an issue",
             "Any number of workers may own an issue",
         )
+        self.assert_policy_change_fails(
+            "limited to at most three concurrent in-flight units",
+            "unlimited concurrent OmniRoute free-entry sessions",
+        )
 
     def test_database_release_note_ownership_is_required(self) -> None:
         """Require post-merge database release notes instead of fragments."""

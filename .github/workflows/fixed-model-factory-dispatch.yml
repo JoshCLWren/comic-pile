@@ -447,7 +447,7 @@ jobs:
             # Scheduled delivery is roughly hourly regardless of the requested
             # cron cadence. Offer the roster and let centralized assignment
             # lease only work that has real capacity.
-            max_per_tick="${MAX_WORKERS_PER_TICK:-12}"
+            max_per_tick="${MAX_WORKERS_PER_TICK:-3}"
             [[ "$max_per_tick" =~ ^[1-9][0-9]*$ ]] || {
               echo "MAX_WORKERS_PER_TICK must be a positive integer" >&2
               exit 1
@@ -480,6 +480,20 @@ jobs:
 
           echo 'Reconciling abandoned factory leases before assignment'
           python3 "$controller" reconcile
+
+          capacity="$(python3 "$controller" capacity)"
+          echo "OmniRoute free-entry capacity: ${capacity}"
+          remaining="$(jq -r '.remaining // empty' <<< "$capacity")"
+          [[ "$remaining" =~ ^[0-9]+$ ]] || {
+            echo "OmniRoute free-entry capacity snapshot is unusable; refusing dispatch" >&2
+            exit 1
+          }
+          workers="$(jq -c --argjson n "$remaining" '.[0:$n]' <<< "$workers")"
+
+          if [[ "$workers" == '[]' ]]; then
+            echo 'OmniRoute free-entry cap is exhausted; not starting additional Entry sessions'
+            exit 0
+          fi
 
           echo "Dispatching workers through centralized assignment: $workers"
           dispatch_failures=0

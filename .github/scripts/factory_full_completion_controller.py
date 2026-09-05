@@ -10,7 +10,11 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from factory_capacity_policy import FleetDemand, completion_worker_target
+from factory_capacity_policy import (
+    FleetDemand,
+    apply_omniroute_free_entry_cap,
+    completion_worker_target,
+)
 
 TELEMETRY_MARKER = "<!-- factory-completion-funnel:v1 -->"
 TELEMETRY_ISSUE = "1093"
@@ -90,7 +94,10 @@ def current_demand(controller, *, now_epoch: int | None = None) -> tuple[FleetDe
         )
         for candidate in candidates
     )
-    demand = FleetDemand(completion=completion, production=production, idle_workers=idle)
+    demand = apply_omniroute_free_entry_cap(
+        FleetDemand(completion=completion, production=production, idle_workers=idle),
+        work_controller.in_flight_omniroute_free_entries(),
+    )
     return demand, capacity
 
 

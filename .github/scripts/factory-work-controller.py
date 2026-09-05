@@ -11,6 +11,10 @@ import time
 from datetime import datetime, timezone
 from typing import Any, cast
 sys.path.insert(0, os.path.dirname(__file__))
+from factory_capacity_policy import (
+    DEFAULT_OMNIROUTE_FREE_ENTRY_CAP,
+    remaining_omniroute_free_entry_slots,
+)
 from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, no_diff_attempts_from_comments, order_candidates_for_worker, owner_of, plan_distinct_assignments)
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
@@ -398,12 +402,63 @@ def worker_has_active_lease(worker: str) -> bool:
     return any(current_owner == owner for _, current_owner in owned_targets())
 
 
+def omniroute_free_entry_cap() -> int:
+    """Return the configured OmniRoute free-entry concurrency cap."""
+    return env_positive_int('FACTORY_OMNIROUTE_FREE_ENTRY_CAP', DEFAULT_OMNIROUTE_FREE_ENTRY_CAP)
+
+
+def in_flight_omniroute_free_entries() -> int:
+    """Count Entry runs and equivalent leases occupying OmniRoute free capacity.
+
+    Occupied units are the unique set of workers with a queued/in-progress
+    Fixed Model Factory Entry or an active fixed-model lease. Unresolved
+    numeric run identities each consume one extra unit. A failed run listing
+    or non-numeric unresolved identity fails closed at the configured cap so
+    assignment cannot start additional smokes while occupancy is unknown.
+    """
+    cap = omniroute_free_entry_cap()
+    active_result = active_fixed_workers()
+    workers, unresolved = active_result[0], active_result[1]
+    if any(not item.isdigit() for item in unresolved):
+        return cap
+    leased: set[int] = set()
+    for _, owner in owned_targets():
+        match = FIXED_OWNER_RE.fullmatch(owner)
+        if match:
+            leased.add(int(match.group('worker')))
+    return len(set(workers) | leased) + len(unresolved)
+
+
+def omniroute_free_entry_capacity() -> dict[str, int]:
+    """Return the current OmniRoute free-entry occupancy snapshot."""
+    cap = omniroute_free_entry_cap()
+    in_flight = in_flight_omniroute_free_entries()
+    return {
+        'in_flight': in_flight,
+        'cap': cap,
+        'remaining': remaining_omniroute_free_entry_slots(in_flight, cap=cap),
+    }
+
+
+def omniroute_free_entry_has_capacity() -> bool:
+    """Return whether a new OmniRoute free Entry may start."""
+    return omniroute_free_entry_capacity()['remaining'] > 0
+
+
 def assign(worker: str) -> Candidate | None:
     """Assign the highest-ranked executable work to one fixed-model worker."""
     if not re.fullmatch('(?:[6-9]|[1-3][0-9]|[4-7][0-9])', worker):
         raise SystemExit(f'unsupported fixed-model worker: {worker}')
     if worker_has_active_lease(worker):
         print(f'[factory-controller] Factory {worker} already has an active lease; skipping dispatch', file=sys.stderr)
+        return None
+    snapshot = omniroute_free_entry_capacity()
+    if snapshot['remaining'] <= 0:
+        print(
+            '[factory-controller] OmniRoute free-entry cap reached '
+            f'(in_flight={snapshot["in_flight"]} cap={snapshot["cap"]}); skipping dispatch',
+            file=sys.stderr,
+        )
         return None
     reconcile_stale_leases()
     issues = list_issues()
@@ -444,6 +499,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest='command', required=True)
     subparsers.add_parser('reconcile')
+    subparsers.add_parser('capacity')
     assign_parser = subparsers.add_parser('assign')
     assign_parser.add_argument('--worker', required=True)
     release_parser = subparsers.add_parser('release')
@@ -451,6 +507,9 @@ def main() -> int:
     args = parser.parse_args()
     if args.command == 'reconcile':
         print(json.dumps({'released': reconcile_stale_leases()}))
+        return 0
+    if args.command == 'capacity':
+        print(json.dumps(omniroute_free_entry_capacity()))
         return 0
     if args.command == 'assign':
         candidate = assign(args.worker)
