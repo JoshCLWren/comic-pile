@@ -19,7 +19,7 @@ vi.mock('axios', () => ({
   },
 }))
 
-import { clearAccessToken, getAccessToken, setAccessToken } from '../services/api'
+import { getAccessToken, setAccessToken } from '../services/api'
 
 const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] as (
   error: {
