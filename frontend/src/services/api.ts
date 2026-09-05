@@ -151,11 +151,9 @@ export async function refreshSession(options?: { skipAuthRedirect?: boolean }): 
 
   refreshPromise = (async () => {
     try {
-      const response = await api.post<AuthTokens>(
-        '/v1/auth/refresh',
-        undefined,
-        options?.skipAuthRedirect ? { skipAuthRedirect: true } : undefined,
-      )
+      const response = options?.skipAuthRedirect
+        ? await api.post<AuthTokens>('/v1/auth/refresh', undefined, { skipAuthRedirect: true })
+        : await api.post<AuthTokens>('/v1/auth/refresh')
       setAccessToken(response.access_token)
       return response.access_token
     } catch (error) {

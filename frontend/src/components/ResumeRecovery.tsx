@@ -65,7 +65,7 @@ export default function ResumeRecovery({
           return
         } catch (error) {
           if (isDefinitiveAuthenticationFailure(error)) {
-            break
+            return
           }
           if (attempt < MAX_RESUME_ATTEMPTS) {
             await delay(RESUME_RETRY_DELAY_MS)
