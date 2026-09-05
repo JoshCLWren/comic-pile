@@ -91,8 +91,8 @@ def test_opencode_uses_project_available_cli_catalog() -> None:
     assert result.candidates[0].discovered_by == "opencode_models"
 
 
-def test_omniroute_exposes_multiple_free_routes_for_independent_lanes() -> None:
-    """OmniRoute exposes multiple free routes without fixing one model."""
+def test_omniroute_exposes_only_gateway_owned_free_pools() -> None:
+    """Individual free routes cannot bypass the reconciled gateway pools."""
     result = CANDIDATES.discover(
         "omniroute-free",
         json.dumps(
@@ -115,11 +115,9 @@ def test_omniroute_exposes_multiple_free_routes_for_independent_lanes() -> None:
 
     assert result.status == "available"
     assert [candidate.model for candidate in result.candidates] == [
-        "auto/coding:free",
         "free-cascade-big",
         "free-cascade-small",
     ]
-    assert result.candidates[0].runtime_model == "omniroute/auto/coding:free"
 
 
 def test_omniroute_keeps_configured_cascade_when_catalog_temporarily_omits_it() -> None:
