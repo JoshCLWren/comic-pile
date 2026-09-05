@@ -68,6 +68,17 @@ DEFAULT_ITERATIONS = 30
 DEFAULT_WARMUPS = 3
 DEFAULT_KV_TABLE = "bench_cache_kv"
 BENCH_KV_KEY = "comic_pile_cache_latency_bench_key_v1"
+PLACEHOLDER_ENV_VALUES = frozenset(
+    {
+        "",
+        "[SENSITIVE]",
+        "<redacted>",
+        "redacted",
+        "undefined",
+        "null",
+    }
+)
+IGNORED_UPSTASH_ENV = frozenset({"REDIS_URL", "KV_URL"})
 
 
 @dataclasses.dataclass(frozen=True)
@@ -110,27 +121,116 @@ def load_dotenv_values(path: str) -> dict[str, str]:
     return values
 
 
-def resolve_upstash_rest_url() -> str | None:
-    """Return the Upstash REST base URL from native or Vercel KV aliases.
+def is_placeholder(value: str | None) -> bool:
+    """Return whether ``value`` is missing or a Vercel pull placeholder.
+
+    Args:
+        value: Candidate credential or URL.
 
     Returns:
-        ``UPSTASH_REDIS_REST_URL``, else ``KV_REST_API_URL``, else ``None``.
+        ``True`` when the value cannot be used as an Upstash REST credential.
     """
-    return os.environ.get("UPSTASH_REDIS_REST_URL") or os.environ.get("KV_REST_API_URL")
+    if value is None:
+        return True
+    stripped = value.strip()
+    if not stripped:
+        return True
+    return stripped.lower() in PLACEHOLDER_ENV_VALUES or stripped == "[SENSITIVE]"
+
+
+def env_presence(name: str) -> str:
+    """Return a boolean-style presence label for one process env var.
+
+    Args:
+        name: Environment variable name.
+
+    Returns:
+        ``missing``, ``empty``, ``redacted``, or ``present``. Never returns
+        the value itself.
+    """
+    if name not in os.environ:
+        return "missing"
+    raw = os.environ.get(name, "")
+    if not raw.strip():
+        return "empty"
+    if is_placeholder(raw):
+        return "redacted"
+    return "present"
+
+
+def usable_env(*names: str) -> str | None:
+    """Return the first usable process env value from ``names``.
+
+    ``REDIS_URL`` and ``KV_URL`` are ignored even if listed: those are the
+    RESP/local path, not the Upstash REST probe.
+
+    Args:
+        names: Candidate environment variable names, in preference order.
+
+    Returns:
+        The first non-placeholder value, or ``None``.
+    """
+    for name in names:
+        if name in IGNORED_UPSTASH_ENV:
+            continue
+        if env_presence(name) != "present":
+            continue
+        value = os.environ.get(name)
+        if value is None:
+            continue
+        stripped = value.strip()
+        if stripped:
+            return stripped
+    return None
+
+
+def resolve_upstash_rest_url() -> str | None:
+    """Return the Upstash REST base URL from process env when flags are omitted.
+
+    Returns:
+        ``KV_REST_API_URL``, else ``UPSTASH_REDIS_REST_URL``, else ``None``.
+        Never reads ``REDIS_URL`` or ``KV_URL``.
+    """
+    return usable_env("KV_REST_API_URL", "UPSTASH_REDIS_REST_URL")
 
 
 def resolve_upstash_rest_token() -> str | None:
-    """Return the Upstash REST token, preferring the read-write Vercel KV token.
+    """Return the Upstash REST token from process env when flags are omitted.
 
     Returns:
-        ``UPSTASH_REDIS_REST_TOKEN``, else ``KV_REST_API_TOKEN``, else
-        ``KV_REST_API_READ_ONLY_TOKEN`` (GET-only latency fallback), else
-        ``None``.
+        ``KV_REST_API_TOKEN``, else ``KV_REST_API_READ_ONLY_TOKEN`` (GET-only
+        fallback), else ``UPSTASH_REDIS_REST_TOKEN``, else ``None``.
     """
-    return (
-        os.environ.get("UPSTASH_REDIS_REST_TOKEN")
-        or os.environ.get("KV_REST_API_TOKEN")
-        or os.environ.get("KV_REST_API_READ_ONLY_TOKEN")
+    return usable_env(
+        "KV_REST_API_TOKEN",
+        "KV_REST_API_READ_ONLY_TOKEN",
+        "UPSTASH_REDIS_REST_TOKEN",
+    )
+
+
+def kv_rest_preflight() -> dict[str, str]:
+    """Assert production KV REST URL and token are present in process env.
+
+    Returns:
+        Secret-free presence labels for the KV REST aliases.
+
+    Raises:
+        SystemExit: When the URL or token is missing, empty, or redacted.
+    """
+    coverage = {
+        "KV_REST_API_URL": env_presence("KV_REST_API_URL"),
+        "KV_REST_API_TOKEN": env_presence("KV_REST_API_TOKEN"),
+        "KV_REST_API_READ_ONLY_TOKEN": env_presence("KV_REST_API_READ_ONLY_TOKEN"),
+        "url_ready": "yes" if resolve_upstash_rest_url() else "no",
+        "token_ready": "yes" if resolve_upstash_rest_token() else "no",
+    }
+    if coverage["url_ready"] == "yes" and coverage["token_ready"] == "yes":
+        return coverage
+    rendered = " ".join(f"{key}={value}" for key, value in coverage.items())
+    raise SystemExit(
+        "KV REST preflight failed (booleans only; values not printed): "
+        f"{rendered}. vercel env run -e production did not inject usable "
+        "KV_REST_API_URL / KV_REST_API_TOKEN. Not requesting new GitHub secrets."
     )
 
 
@@ -402,7 +502,7 @@ async def run_benchmark(args: argparse.Namespace) -> dict[str, str | int | float
                 status="skipped",
                 http_status=None,
                 upstash_error=None,
-                error_detail="UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN required",
+                error_detail="KV_REST_API_URL and KV_REST_API_TOKEN required",
             )
             upstash_runs.append(run)
             all_runs.append(dataclasses.asdict(run))
@@ -602,12 +702,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--upstash-url",
         default=resolve_upstash_rest_url(),
-        help="Upstash Redis REST base URL (default: UPSTASH_REDIS_REST_URL or KV_REST_API_URL)",
+        help="Upstash Redis REST base URL (default: KV_REST_API_URL)",
     )
     parser.add_argument(
         "--upstash-token",
         default=resolve_upstash_rest_token(),
-        help="Upstash Redis REST token (default: UPSTASH_REDIS_REST_TOKEN or KV_REST_API_*_TOKEN)",
+        help="Upstash Redis REST token (default: KV_REST_API_TOKEN, else READ_ONLY)",
     )
     parser.add_argument(
         "--database-url",
@@ -679,6 +779,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Load KEY=VALUE pairs into the process env before resolving credentials",
     )
+    parser.add_argument(
+        "--require-kv-rest",
+        action="store_true",
+        help="Fail if KV_REST_API_URL and a KV REST token are not present in process env",
+    )
     return parser
 
 
@@ -692,12 +797,15 @@ def main() -> int:
     if args.from_dotenv:
         for key, value in load_dotenv_values(args.from_dotenv).items():
             os.environ.setdefault(key, value)
-        if args.upstash_url is None:
-            args.upstash_url = resolve_upstash_rest_url()
-        if args.upstash_token is None:
-            args.upstash_token = resolve_upstash_rest_token()
-        if args.database_url is None:
-            args.database_url = os.environ.get("DATABASE_URL")
+    if is_placeholder(args.upstash_url):
+        args.upstash_url = resolve_upstash_rest_url()
+    if is_placeholder(args.upstash_token):
+        args.upstash_token = resolve_upstash_rest_token()
+    if args.database_url is None:
+        args.database_url = os.environ.get("DATABASE_URL")
+    if args.require_kv_rest:
+        coverage = kv_rest_preflight()
+        print(json.dumps({"kv_rest_preflight": coverage}, sort_keys=True))
     if args.iterations < 1:
         raise SystemExit("--iterations must be >= 1")
     if args.warmups < 0:

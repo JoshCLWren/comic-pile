@@ -6,7 +6,6 @@ on:
     paths:
       - ".github/workflows/cache-latency-benchmark.yml"
       - "scripts/benchmark_cache_latency.py"
-      - "scripts/decrypt_vercel_kv_rest.py"
 
 permissions:
   contents: read
@@ -66,30 +65,6 @@ jobs:
           echo "neon_available=true" >> "$GITHUB_OUTPUT"
           echo "db_url=$uri" >> "$GITHUB_OUTPUT"
 
-      - name: Decrypt production KV REST credentials
-        id: kv
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          set -euo pipefail
-          kv_env="$RUNNER_TEMP/vercel-kv-rest.env"
-          coverage="$RUNNER_TEMP/kv-decrypt-coverage.json"
-          echo "kv_env=$kv_env" >> "$GITHUB_OUTPUT"
-          echo "kv_available=false" >> "$GITHUB_OUTPUT"
-          if [[ -z "${VERCEL_TOKEN:-}" ]]; then
-            echo "VERCEL_TOKEN missing; KV REST decrypt will be skipped."
-            printf '%s\n' '{"decrypt_method":"skipped","reason":"missing_vercel_token"}' > "$coverage"
-            exit 0
-          fi
-          if uv run python scripts/decrypt_vercel_kv_rest.py \
-            --output "$kv_env" \
-            --coverage "$coverage" \
-            --github-mask; then
-            echo "kv_available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "API decrypt cannot read sensitive KV REST values; production-context env run will inject them."
-          fi
-
       - name: Install pinned Vercel CLI
         run: npm install --global vercel@58.1.0
 
@@ -98,60 +73,29 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           DATABASE_URL: ${{ steps.neon.outputs.db_url }}
-          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
-          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
         run: |
           set -euo pipefail
-          mkdir -p docs
-          echo "upstash_rest=false" >> "$GITHUB_OUTPUT"
-          echo "upstash_management=false" >> "$GITHUB_OUTPUT"
-          echo "env_keys=" >> "$GITHUB_OUTPUT"
-
-          kv_env="$RUNNER_TEMP/vercel-kv-rest.env"
-          dotenv_args=()
-          keys=""
-          runner=(uv run python)
-          if [[ "${{ steps.kv.outputs.kv_available }}" == "true" && -f "$kv_env" ]]; then
-            keys="KV_REST_API_URL KV_REST_API_TOKEN"
-            echo "env_keys=$keys" >> "$GITHUB_OUTPUT"
-            echo "Using API-decrypted production KV REST aliases (values not printed): $keys"
-            echo "Mapped --upstash-url <- KV_REST_API_URL and --upstash-token <- KV_REST_API_TOKEN"
-            dotenv_args+=(--from-dotenv "$kv_env")
-          elif [[ -n "${VERCEL_TOKEN:-}" ]]; then
-            mkdir -p .vercel
-            printf '%s\n' "{\"orgId\":\"${VERCEL_ORG_ID}\",\"projectId\":\"${VERCEL_PROJECT_ID}\"}" > .vercel/project.json
-            # Sensitive KV values cannot be decrypted into a pull file. Inject
-            # them into the child process only — never echo or artifact them.
-            runner=(
-              vercel env run
-              -e production
-              --scope "$VERCEL_TEAM_SLUG"
-              --token "$VERCEL_TOKEN"
-              --
-              uv run python
-            )
-            keys="KV_REST_API_URL KV_REST_API_TOKEN"
-            echo "env_keys=$keys" >> "$GITHUB_OUTPUT"
-            echo "Using vercel env run -e production to inject KV REST aliases (values not printed)"
-            echo "Mapped --upstash-url <- KV_REST_API_URL and --upstash-token <- KV_REST_API_TOKEN"
-          else
-            echo "No decryptable KV REST credentials; Upstash path will be skipped."
-          fi
+          mkdir -p docs .vercel
+          printf '%s\n' "{\"orgId\":\"${VERCEL_ORG_ID}\",\"projectId\":\"${VERCEL_PROJECT_ID}\"}" > .vercel/project.json
 
           extra_args=()
           if [[ "${{ steps.neon.outputs.neon_available }}" == "true" && -n "${DATABASE_URL:-}" ]]; then
             extra_args+=(--database-url "$DATABASE_URL")
           fi
-          "${runner[@]}" scripts/benchmark_cache_latency.py \
-            --iterations 30 \
-            --warmups 3 \
-            --location "github-actions:ubuntu-latest" \
-            --kv-table bench_cache_kv \
-            --redact \
-            --output docs/CACHE_LOOKUP_LATENCY_2026-08.json \
-            "${dotenv_args[@]}" \
-            "${extra_args[@]}"
-          rm -f "$kv_env" .env.production.local .vercel/.env.production.local
+
+          echo "Injecting production env via vercel env run (values not printed)."
+          echo "Mapped process env: KV_REST_API_URL -> upstash url; KV_REST_API_TOKEN -> upstash token."
+          vercel env run -e production --scope "$VERCEL_TEAM_SLUG" --token "$VERCEL_TOKEN" -- \
+            uv run python scripts/benchmark_cache_latency.py \
+              --require-kv-rest \
+              --iterations 30 \
+              --warmups 3 \
+              --location "github-actions:ubuntu-latest" \
+              --kv-table bench_cache_kv \
+              --redact \
+              --output docs/CACHE_LOOKUP_LATENCY_2026-08.json \
+              "${extra_args[@]}"
+
           jq '{
             measured_from,
             iterations,
@@ -165,29 +109,20 @@ jobs:
           }' docs/CACHE_LOOKUP_LATENCY_2026-08.json
 
           python3 - "$RUNNER_TEMP/cache-benchmark-coverage.json" \
-            "${{ steps.neon.outputs.neon_available }}" \
-            "${{ steps.kv.outputs.kv_available }}" \
-            "${keys:-}" \
-            "$RUNNER_TEMP/kv-decrypt-coverage.json" <<'PY'
+            "${{ steps.neon.outputs.neon_available }}" <<'PY'
           import json
           import sys
           from pathlib import Path
 
-          path, neon_available, kv_available, keys, decrypt_coverage = sys.argv[1:6]
+          path, neon_available = sys.argv[1], sys.argv[2]
           report = json.loads(Path("docs/CACHE_LOOKUP_LATENCY_2026-08.json").read_text(encoding="utf-8"))
           upstash = report.get("upstash_rest_get") or {}
-          decrypt = {}
-          coverage_path = Path(decrypt_coverage)
-          if coverage_path.is_file():
-              decrypt = json.loads(coverage_path.read_text(encoding="utf-8"))
           payload = {
               "neon_available": neon_available == "true",
-              "kv_rest_decrypted": kv_available == "true",
               "upstash_rest_measured": upstash.get("summary") is not None,
               "upstash_quota_blocked": bool(upstash.get("quota_blocked")),
               "queue_bearer_skipped": True,
-              "production_env_keys": keys.split(),
-              "decrypt_coverage": decrypt,
+              "credential_path": "vercel env run -e production",
               "measured_from": "github-actions:ubuntu-latest",
               "preferred_vantage": "vercel:cle1",
           }
@@ -203,5 +138,3 @@ jobs:
           path: |
             docs/CACHE_LOOKUP_LATENCY_2026-08.json
             ${{ runner.temp }}/cache-benchmark-coverage.json
-            ${{ runner.temp }}/kv-decrypt-coverage.json
-            ${{ runner.temp }}/cache-usage.json

@@ -12,6 +12,8 @@ from scripts.benchmark_cache_latency import (
     Run,
     _summarize,
     _upstash_request,
+    env_presence,
+    kv_rest_preflight,
     load_dotenv_values,
     normalize_asyncpg_url,
     redact_report,
@@ -124,12 +126,14 @@ def test_load_dotenv_values_strips_quotes(tmp_path: Path) -> None:
     assert "UPSTASH_REDIS_REST_TOKEN" not in values
 
 
-def test_upstash_rest_aliases_prefer_native_then_vercel_kv(
+def test_upstash_rest_aliases_prefer_kv_rest_over_empty_native(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Vercel KV REST names are accepted when native Upstash names are absent."""
-    monkeypatch.delenv("UPSTASH_REDIS_REST_URL", raising=False)
-    monkeypatch.delenv("UPSTASH_REDIS_REST_TOKEN", raising=False)
+    """Empty native Upstash names and RESP aliases must not hide Vercel KV REST."""
+    monkeypatch.setenv("UPSTASH_REDIS_REST_URL", "")
+    monkeypatch.setenv("UPSTASH_REDIS_REST_TOKEN", "")
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
+    monkeypatch.setenv("KV_URL", "redis://localhost:6379")
     monkeypatch.setenv("KV_REST_API_URL", "https://example.upstash.io")
     monkeypatch.setenv("KV_REST_API_READ_ONLY_TOKEN", "readonly-token")
     monkeypatch.setenv("KV_REST_API_TOKEN", "write-token")
@@ -140,7 +144,49 @@ def test_upstash_rest_aliases_prefer_native_then_vercel_kv(
     monkeypatch.delenv("KV_REST_API_TOKEN")
     assert resolve_upstash_rest_token() == "readonly-token"
 
-    monkeypatch.setenv("UPSTASH_REDIS_REST_URL", "https://native.upstash.io")
-    monkeypatch.setenv("UPSTASH_REDIS_REST_TOKEN", "native-token")
-    assert resolve_upstash_rest_url() == "https://native.upstash.io"
-    assert resolve_upstash_rest_token() == "native-token"
+
+def test_upstash_rest_aliases_treat_sensitive_placeholders_as_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Vercel [SENSITIVE] pull placeholder is not a credential."""
+    monkeypatch.setenv("KV_REST_API_URL", "[SENSITIVE]")
+    monkeypatch.setenv("KV_REST_API_TOKEN", "[SENSITIVE]")
+    monkeypatch.delenv("KV_REST_API_READ_ONLY_TOKEN", raising=False)
+    monkeypatch.delenv("UPSTASH_REDIS_REST_URL", raising=False)
+    monkeypatch.delenv("UPSTASH_REDIS_REST_TOKEN", raising=False)
+
+    assert resolve_upstash_rest_url() is None
+    assert resolve_upstash_rest_token() is None
+    assert env_presence("KV_REST_API_URL") == "redacted"
+    assert env_presence("KV_REST_API_TOKEN") == "redacted"
+
+
+def test_kv_rest_preflight_fails_with_boolean_labels_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Preflight must fail closed without printing secret values."""
+    monkeypatch.setenv("KV_REST_API_URL", "[SENSITIVE]")
+    monkeypatch.delenv("KV_REST_API_TOKEN", raising=False)
+    monkeypatch.delenv("KV_REST_API_READ_ONLY_TOKEN", raising=False)
+
+    with pytest.raises(SystemExit, match="url_ready=no") as caught:
+        kv_rest_preflight()
+
+    message = str(caught.value)
+    assert "KV_REST_API_URL=redacted" in message
+    assert "KV_REST_API_TOKEN=missing" in message
+    assert "[SENSITIVE]" not in message
+
+
+def test_kv_rest_preflight_passes_when_kv_aliases_are_present(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A production-context child with KV REST aliases is ready to measure."""
+    monkeypatch.setenv("KV_REST_API_URL", "https://example.upstash.io")
+    monkeypatch.setenv("KV_REST_API_TOKEN", "write-token")
+
+    coverage = kv_rest_preflight()
+
+    assert coverage["url_ready"] == "yes"
+    assert coverage["token_ready"] == "yes"
+    assert "write-token" not in str(coverage)
