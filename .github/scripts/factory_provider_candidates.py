@@ -223,7 +223,10 @@ class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
             for item in items
             if isinstance(model := item.get("id"), str)
             and model
-            and (model.startswith("free-cascade-") or self._supports_agent_tools(item))
+            # GitHub workers consume only gateway-owned pools. Individual
+            # free routes are intentionally excluded so they cannot bypass
+            # OmniRoute's quality admission and reconciliation policy.
+            and model.startswith("free-cascade-")
             and (configured is None or model in configured)
             and (
                 model.endswith(":free")

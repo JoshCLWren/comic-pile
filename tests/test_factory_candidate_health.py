@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -81,6 +82,59 @@ def test_successful_execution_is_preferred_to_unknown_candidate() -> None:
     assert result.selected is not None
     assert result.selected.model == "vendor/b:free"
     assert result.selected.health_state == "healthy"
+
+
+def test_arena_code_ranking_prefers_strongest_qualified_route() -> None:
+    """A live Arena code score orders healthy free routes deterministically."""
+    result = HEALTH.select_candidate(
+        CANDIDATES,
+        [evidence("vendor/a:free", "success"), evidence("vendor/b:free", "success")],
+        worker=1,
+        now_epoch=NOW,
+        rankings={"vendor/a": 0.41, "vendor/b": 0.73},
+    )
+
+    assert result.selected is not None
+    assert result.selected.model == "vendor/b:free"
+
+
+def test_unranked_route_is_fallback_when_no_ranked_route_is_usable() -> None:
+    """A roster change does not make the factory unusable when rankings lag."""
+    result = HEALTH.select_candidate(
+        CANDIDATES,
+        [
+            evidence("vendor/a:free", "model_unavailable"),
+            evidence("vendor/b:free", "success"),
+        ],
+        worker=1,
+        now_epoch=NOW,
+        rankings={"vendor/a": 0.73},
+    )
+
+    assert result.selected is not None
+    assert result.selected.model == "vendor/b:free"
+
+
+def test_required_ranking_excludes_successful_unranked_routes() -> None:
+    """Transport success cannot admit a route without quality evidence."""
+    result = HEALTH.select_candidate(
+        CANDIDATES,
+        [evidence("vendor/a:free", "success"), evidence("vendor/b:free", "success")],
+        worker=1,
+        now_epoch=NOW,
+        require_rankings=True,
+    )
+
+    assert result.selected is None
+    assert result.failure_outcome == "unknown_failure"
+
+
+def test_expired_ranking_file_is_not_usable(tmp_path) -> None:
+    """A stale last-known-good feed cannot admit new factory capacity."""
+    path = tmp_path / "rankings.json"
+    path.write_text(json.dumps({"fetched_at": 1, "models": []}), encoding="utf-8")
+
+    assert HEALTH.load_code_rankings(path) == {}
 
 
 def test_preferred_provider_lane_uses_usable_provider_before_global_rank() -> None:

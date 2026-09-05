@@ -96,6 +96,43 @@ class Selection:
     detail: str
 
 
+def _ranking_key(model: str) -> str:
+    """Normalize a catalog model for the documented Arena provider suffixes."""
+    value = model.strip().lower()
+    if value.endswith(":free"):
+        value = value[:-5]
+    if value.startswith("openrouter/"):
+        value = value[len("openrouter/"):]
+    return value
+
+
+def load_code_rankings(path: Path | None) -> dict[str, float]:
+    """Load exact code leaderboard scores, failing closed on malformed data."""
+    if path is None:
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, Mapping):
+        return {}
+    fetched_at = payload.get("fetched_at")
+    if not isinstance(fetched_at, int) or int(time.time()) - fetched_at > 7 * 24 * 60 * 60:
+        return {}
+    models = payload.get("models")
+    if not isinstance(models, list):
+        return {}
+    rankings: dict[str, float] = {}
+    for item in models:
+        if not isinstance(item, Mapping):
+            continue
+        model = item.get("model")
+        score = item.get("score")
+        if isinstance(model, str) and isinstance(score, (int, float)):
+            rankings[_ranking_key(model)] = float(score)
+    return rankings
+
+
 def flatten_comments(payload: object) -> list[Mapping[str, Any]]:
     """Flatten one page or a slurped list of GitHub comment pages."""
     if not isinstance(payload, list):
@@ -292,6 +329,8 @@ def select_candidate(
     worker: int,
     now_epoch: int,
     preferred_provider: str | None = None,
+    rankings: Mapping[str, float] | None = None,
+    require_rankings: bool = False,
 ) -> Selection:
     """Prefer candidates with trusted evidence, failing closed on unknown routes."""
     comment_list = tuple(comments)
@@ -308,6 +347,14 @@ def select_candidate(
     ]
     if preferred:
         usable = preferred
+    ranked_usable = [
+        candidate for candidate in usable
+        if _ranking_key(candidate.model) in (rankings or {})
+    ]
+    if ranked_usable:
+        usable = ranked_usable
+    elif require_rankings:
+        usable = []
     if usable:
         best_priority = min(priority[candidate.health_state] for candidate in usable)
         best = sorted(
@@ -316,7 +363,11 @@ def select_candidate(
                 for candidate in usable
                 if priority[candidate.health_state] == best_priority
             ),
-            key=lambda candidate: (candidate.model, candidate.runtime_model),
+            key=lambda candidate: (
+                -(rankings or {}).get(_ranking_key(candidate.model), float("-inf")),
+                candidate.model,
+                candidate.runtime_model,
+            ),
         )
         selected = best[(worker - 1) % len(best)]
         return Selection(
@@ -388,6 +439,8 @@ def main() -> int:
     parser.add_argument("--comments", type=Path, required=True)
     parser.add_argument("--worker", type=int, required=True)
     parser.add_argument("--preferred-provider", default=None)
+    parser.add_argument("--rankings", type=Path, default=None)
+    parser.add_argument("--require-rankings", action="store_true")
     parser.add_argument("--now", type=int, default=None)
     args = parser.parse_args()
 
@@ -402,6 +455,8 @@ def main() -> int:
         worker=args.worker,
         now_epoch=args.now if args.now is not None else int(time.time()),
         preferred_provider=args.preferred_provider,
+        rankings=load_code_rankings(args.rankings),
+        require_rankings=args.require_rankings,
     )
     print(json.dumps(asdict(selection), sort_keys=True))
     return 0
