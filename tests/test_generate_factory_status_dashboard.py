@@ -70,6 +70,92 @@ def sample_snapshot() -> dict[str, object]:
         },
         "productive_workers_week": 1,
         "merged_week": 3,
+        "opencode_free_roster": {
+            "checked_at": "2026-09-05T20:00:00Z",
+            "freshness": "live",
+            "detail": (
+                "Live OmniRoute probe of free OpenCode / Zen models. "
+                "opencode and opencode-zen connections can both be active. "
+                "Free roster models stay eligible via catalog, pricing, and freeProviders; "
+                "the opencode-zen providerOverride (blanket whole-provider=free) is avoided "
+                "to prevent paid bleed."
+            ),
+            "connections": [
+                {
+                    "provider": "opencode",
+                    "active": True,
+                    "test_status": "active",
+                    "detail": "active · test active",
+                },
+                {
+                    "provider": "opencode-zen",
+                    "active": True,
+                    "test_status": "active",
+                    "detail": "active · test active",
+                },
+            ],
+            "counts": {
+                "ok": 2,
+                "rate_limited": 1,
+                "unsupported": 1,
+                "catalog_miss": 1,
+                "auth_paid": 1,
+                "timeout": 1,
+                "error": 0,
+                "unknown": 0,
+            },
+            "models": [
+                {
+                    "model_id": "oc/nemotron-3.5-lightning-free",
+                    "connection": "oc",
+                    "status": "ok",
+                    "detail": "200, $0",
+                    "http_status": 200,
+                },
+                {
+                    "model_id": "opencode-zen/nemotron-3.5-lightning-free",
+                    "connection": "opencode-zen",
+                    "status": "ok",
+                    "detail": "200, $0",
+                    "http_status": 200,
+                },
+                {
+                    "model_id": "oc/big-pickle",
+                    "connection": "oc",
+                    "status": "rate_limited",
+                    "detail": "429 / cooling",
+                    "http_status": 429,
+                },
+                {
+                    "model_id": "oc/laguna-s-2.1-free",
+                    "connection": "oc",
+                    "status": "unsupported",
+                    "detail": "401 not supported",
+                    "http_status": 401,
+                },
+                {
+                    "model_id": "oc/north-mini-code-free",
+                    "connection": "oc",
+                    "status": "catalog_miss",
+                    "detail": "400 not available in the active live catalog",
+                    "http_status": 400,
+                },
+                {
+                    "model_id": "opencode-zen/muse-spark-1.2",
+                    "connection": "opencode-zen",
+                    "status": "auth_paid",
+                    "detail": "402 wants API key",
+                    "http_status": 402,
+                },
+                {
+                    "model_id": "oc/nemotron-3-ultra-free",
+                    "connection": "oc",
+                    "status": "timeout",
+                    "detail": "probe timed out",
+                    "http_status": None,
+                },
+            ],
+        },
         "workers": [
             {
                 "worker": "43",
@@ -120,6 +206,50 @@ def test_dashboard_surfaces_operational_state_and_worker_scoreboard():
     assert "PR #1950" in rendered
     assert "refreshes every 5 min" in rendered
     assert "fixed-model-factory-dispatch.yml" in rendered
+    assert "OpenCode free roster" in rendered
+    assert "oc/nemotron-3.5-lightning-free" in rendered
+    assert "opencode-zen/muse-spark-1.2" in rendered
+    assert "Last checked 2026-09-05T20:00:00Z" in rendered
+    assert "rate limited" in rendered
+    assert "catalog miss" in rendered
+    assert "providerOverride" in rendered
+    assert "zen is off" not in rendered.lower()
+
+
+def test_dashboard_keeps_existing_fleet_content_when_roster_is_stale():
+    """A failed or missing roster probe still leaves the factory scoreboard visible."""
+    snapshot = sample_snapshot()
+    snapshot["opencode_free_roster"] = {
+        "checked_at": "2026-09-05T20:30:00Z",
+        "freshness": "stale",
+        "detail": "OpenCode free-roster probe failed; table is unknown/stale.",
+        "connections": [],
+        "counts": {},
+        "models": [],
+    }
+
+    rendered = dashboard.render_dashboard(snapshot)
+
+    assert "OpenCode free roster" in rendered
+    assert "unknown/stale" in rendered
+    assert "Last checked 2026-09-05T20:30:00Z" in rendered
+    assert "Fleet scoreboard" in rendered
+    assert "Laguna S 2.1 Free" in rendered
+    assert "zen is off" not in rendered.lower()
+
+
+def test_collect_opencode_free_roster_is_fail_soft(monkeypatch: pytest.MonkeyPatch):
+    """Dashboard generation survives a broken probe import or runtime crash."""
+
+    def boom(_name: str, _path: Path):
+        raise RuntimeError("probe module exploded")
+
+    monkeypatch.setattr(dashboard, "load_module", boom)
+    roster = dashboard.collect_opencode_free_roster()
+
+    assert roster["freshness"] == "stale"
+    assert "unknown/stale" in str(roster["detail"])
+    assert roster["models"] == []
 
 
 def test_worker_rows_join_runtime_health_merge_credit_and_current_work():
@@ -277,6 +407,18 @@ def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
     monkeypatch.setattr(dashboard, "recently_merged_prs", lambda _controller: [])
     monkeypatch.setattr(
         dashboard,
+        "collect_opencode_free_roster",
+        lambda: {
+            "checked_at": "2026-09-05T20:00:00Z",
+            "freshness": "stale",
+            "detail": "probe skipped in unit test",
+            "connections": [],
+            "models": [],
+            "counts": {},
+        },
+    )
+    monkeypatch.setattr(
+        dashboard,
         "load_manifest_rows",
         lambda _path: [
             {
@@ -312,3 +454,4 @@ def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
     assert snapshot["configured_workers"] == 2
     assert snapshot["busy_workers"] == 1
     assert len(snapshot["workers"]) == 2
+    assert snapshot["opencode_free_roster"]["freshness"] == "stale"

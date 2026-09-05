@@ -43,3 +43,17 @@ def test_pages_workflow_proves_the_shell_and_live_snapshot_are_available() -> No
     assert "factory-pages-check=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" in workflow
     assert "factory-live-check=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" in workflow
     assert "live snapshot is stale" in workflow
+
+
+def test_pages_workflow_probes_opencode_free_roster_fail_soft() -> None:
+    """Refresh the roster with OmniRoute credentials without failing the page."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert ".github/scripts/probe_opencode_free_roster.py" in workflow
+    assert "OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}" in workflow
+    assert (
+        "OMNIROUTE_MANAGEMENT_API_KEY: ${{ secrets.OMNIROUTE_MANAGEMENT_API_KEY }}"
+        in workflow
+    )
+    assert "OMNIROUTE_BASE_URL: ${{ vars.OMNIROUTE_BASE_URL }}" in workflow
+    assert "generate_factory_status_dashboard.py" in workflow
