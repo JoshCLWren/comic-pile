@@ -34,7 +34,7 @@ BEARER_RE = re.compile(r"(?i)(authorization\s*:\s*bearer\s+)\S+")
 GITHUB_TOKEN_RE = re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b")
 API_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")
 DIFF_INSPECTION_RE = re.compile(
-    r"(?i)(gh (?:pr|api).*diff|git (?:diff|show)|fetch.*diff|inspect.*diff|review.*diff|pr (?:diff|files))"
+    r"(?i)gh (?:pr|api)[^\n]{0,60}\bdiff\b|git (?:diff|show|log -p)"
 )
 STAGE_LABELS = {
     "factory:building",
