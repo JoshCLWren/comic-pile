@@ -45,3 +45,64 @@ def test_paid_or_non_tool_model_is_excluded() -> None:
 def test_empty_qualified_pool_uses_non_expanding_sentinel() -> None:
     """An empty authoritative result must not leave stale executable members."""
     assert POOL.NO_CAPACITY_MODEL == "__no_qualified_free_capacity__"
+
+
+def _combos() -> list[dict[str, object]]:
+    """Build both expected cascades with distinct preserved configs."""
+    return [
+        {"id": "small", "name": "free-cascade-small", "config": {"validate": True}},
+        {"id": "big", "name": "free-cascade-big", "config": {}},
+    ]
+
+
+def test_first_update_failure_still_attempts_second_and_fails_closed() -> None:
+    """Partial management failure cannot skip the second sentinel update."""
+    calls: list[str] = []
+    readback = _combos()
+
+    def put(identifier: str, payload: dict[str, object]) -> None:
+        calls.append(identifier)
+        if identifier == "small":
+            raise OSError("first target unavailable")
+        readback[1] = {**readback[1], "strategy": payload["strategy"], "models": payload["models"]}
+
+    ok, failures = POOL.reconcile_combos(_combos(), [POOL.NO_CAPACITY_MODEL], put, lambda: readback)
+    assert calls == ["small", "big"]
+    assert not ok
+    assert any("small update failed" in failure for failure in failures)
+
+
+def test_missing_expected_cascade_is_rejected_before_mutation() -> None:
+    """A partial combo listing cannot be reported as successful reconciliation."""
+    calls: list[str] = []
+    ok, failures = POOL.reconcile_combos(
+        _combos()[:1], ["vendor/model:free"], lambda identifier, payload: calls.append(identifier), lambda: [],
+    )
+    assert not ok
+    assert calls == []
+    assert failures == ["missing cascade: free-cascade-big"]
+
+
+def test_readback_mismatch_is_failure() -> None:
+    """Successful PUT responses are insufficient without exact readback."""
+    combos = _combos()
+    ok, failures = POOL.reconcile_combos(
+        combos, ["vendor/model:free"], lambda identifier, payload: None,
+        lambda: [{**combo, "strategy": "priority", "models": []} for combo in combos],
+    )
+    assert not ok
+    assert "free-cascade-small readback mismatch" in failures
+
+
+def test_successful_reconciliation_is_idempotent() -> None:
+    """The same desired payload can be applied and verified repeatedly."""
+    combos = _combos()
+    state = _combos()
+
+    def put(identifier: str, payload: dict[str, object]) -> None:
+        for index, combo in enumerate(state):
+            if combo["id"] == identifier:
+                state[index] = {**combo, **payload}
+
+    assert POOL.reconcile_combos(combos, ["vendor/model:free"], put, lambda: state)[0]
+    assert POOL.reconcile_combos(state, ["vendor/model:free"], put, lambda: state)[0]
