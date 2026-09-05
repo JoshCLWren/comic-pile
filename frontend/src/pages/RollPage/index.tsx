@@ -111,35 +111,65 @@ export default function RollPage() {
     refetchBootstrap,
   })
 
-  // Process rollResponse state from queue page "Read Now" button
-  useEffect(() => {
-    if (location.state?.rollResponse && bootstrap) {
-      const rollResponse = location.state.rollResponse as RollResponse
-      const threadId = rollResponse.thread_id
+// Process rollResponse state from queue page "Read Now" button
+   useEffect(() => {
+     if (!location.state?.rollResponse || !bootstrap) {
+       return
+     }
 
-      // Prepare thread metadata
-      const threadMetadata: ThreadMetadata = {
-        id: rollResponse.thread_id,
-        title: rollResponse.title,
-        format: rollResponse.format,
-        issues_remaining: rollResponse.issues_remaining,
-        queue_position: rollResponse.queue_position,
-        total_issues: rollResponse.total_issues,
-        reading_progress: rollResponse.reading_progress ?? null,
-        issue_id: rollResponse.issue_id,
-        issue_number: rollResponse.issue_number,
-        next_issue_id: rollResponse.next_issue_id,
-        next_issue_number: rollResponse.next_issue_number,
-        last_rolled_result: rollResponse.result ?? rollResponse.last_rolled_result,
-      }
+     const rollResponse = location.state.rollResponse
+     
+     // Validate required fields
+     const threadId = rollResponse.thread_id
+     const rollResult = rollResponse.result
+     
+     if (typeof threadId !== 'number' || isNaN(threadId) ||
+         typeof rollResult !== 'number' || isNaN(rollResult)) {
+       // Invalid or missing required fields - cannot proceed
+       return
+     }
 
-      // Suppress auto-open to prevent conflicts
-      state.suppressPendingAutoOpenRef.current = true
+     // Build thread metadata with defensive defaults
+     const threadMetadata: ThreadMetadata = {
+       // Required fields
+       id: threadId,
+       
+       // String fields - default to empty string if invalid
+       title: typeof rollResponse.title === 'string' ? rollResponse.title : '',
+       format: typeof rollResponse.format === 'string' ? rollResponse.format : '',
+       
+       // Number fields - default to 0 if invalid
+       issues_remaining: typeof rollResponse.issues_remaining === 'number' && !isNaN(rollResponse.issues_remaining)
+         ? rollResponse.issues_remaining : 0,
+       queue_position: typeof rollResponse.queue_position === 'number' && !isNaN(rollResponse.queue_position)
+         ? rollResponse.queue_position : 0,
+       
+       // Nullable number fields - preserve null, default to null if invalid
+       total_issues: (typeof rollResponse.total_issues === 'number' || rollResponse.total_issues === null)
+         ? rollResponse.total_issues : null,
+       reading_progress: (typeof rollResponse.reading_progress === 'string')
+         ? rollResponse.reading_progress : null,
+       
+       // Nullable ID fields - preserve null, default to null if invalid
+       issue_id: (typeof rollResponse.issue_id === 'number' || rollResponse.issue_id === null)
+         ? rollResponse.issue_id : null,
+       issue_number: (typeof rollResponse.issue_number === 'string' || rollResponse.issue_number === null)
+         ? rollResponse.issue_number : null,
+       next_issue_id: (typeof rollResponse.next_issue_id === 'number' || rollResponse.next_issue_id === null)
+         ? rollResponse.next_issue_id : null,
+       next_issue_number: (typeof rollResponse.next_issue_number === 'string' || rollResponse.next_issue_number === null)
+         ? rollResponse.next_issue_number : null,
+       
+       // Last rolled result - use the current roll result as the last rolled result for this context
+       last_rolled_result: rollResult,
+     }
 
-      // Enter rating view with the thread data
-      rating.enterRatingView(threadId, rollResponse.result ?? null, threadMetadata)
-    }
-  }, [location.state, bootstrap, rating, state])
+     // Suppress auto-open to prevent conflicts
+     state.suppressPendingAutoOpenRef.current = true
+
+     // Enter rating view with the thread data
+     rating.enterRatingView(threadId, rollResult, threadMetadata)
+   }, [location.state, bootstrap, rating, state])
 
   const snooze = useRollSnooze({
     state,
