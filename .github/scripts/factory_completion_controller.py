@@ -159,11 +159,19 @@ def _catalog_worker_health(
         if provider not in catalog_providers or not model or key in seen:
             continue
         seen.add(key)
+        runtime_model = (
+            f"omniroute/{model}"
+            if (
+                provider == "omniroute-free"
+                and model in candidate_health.NATIVE_OMNIROUTE_ROUTES
+            )
+            else model
+        )
         discovered.append(
             {
                 "provider": provider,
                 "model": model,
-                "runtime_model": model,
+                "runtime_model": runtime_model,
                 "discovered_by": "configured_policy",
             }
         )
@@ -174,6 +182,7 @@ def _catalog_worker_health(
         now_epoch=now_epoch,
     )
     priority = {
+        "native_route": 0,
         "healthy": 0,
         "degraded": 1,
         "unknown": 2,
@@ -187,6 +196,7 @@ def _catalog_worker_health(
             provider_states[item.provider] = item.health_state
 
     state_evidence = {
+        "native_route": ("success", now_epoch),
         "healthy": ("success", now_epoch),
         "degraded": (
             "unknown_failure",

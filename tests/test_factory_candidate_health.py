@@ -115,8 +115,8 @@ def test_unranked_route_is_fallback_when_no_ranked_route_is_usable() -> None:
     assert result.selected.model == "vendor/b:free"
 
 
-def test_required_ranking_excludes_successful_unranked_routes() -> None:
-    """Transport success cannot admit a route without quality evidence."""
+def test_required_ranking_keeps_successful_unranked_routes() -> None:
+    """Arena membership must not erase eligible free fallback capacity."""
     result = HEALTH.select_candidate(
         CANDIDATES,
         [evidence("vendor/a:free", "success"), evidence("vendor/b:free", "success")],
@@ -125,8 +125,48 @@ def test_required_ranking_excludes_successful_unranked_routes() -> None:
         require_rankings=True,
     )
 
-    assert result.selected is None
-    assert result.failure_outcome == "unknown_failure"
+    assert result.selected is not None
+    assert result.selected.model in {"vendor/a:free", "vendor/b:free"}
+    assert result.failure_outcome == ""
+    assert {candidate.model for candidate in result.candidates} == {
+        "vendor/a:free",
+        "vendor/b:free",
+    }
+
+
+def test_zero_arena_overlap_does_not_create_no_capacity_sentinel() -> None:
+    """Eligible free models remain routable when Arena has no identity matches."""
+    result = HEALTH.select_candidate(
+        CANDIDATES,
+        [evidence("vendor/a:free", "success"), evidence("vendor/b:free", "success")],
+        worker=1,
+        now_epoch=NOW,
+        rankings={"some-other-arena-model": 0.99},
+        require_rankings=True,
+    )
+
+    assert result.selected is not None
+    assert result.selected.model in {"vendor/a:free", "vendor/b:free"}
+    assert result.failure_outcome == ""
+
+
+def test_arena_orders_matched_models_without_dropping_unranked_fallbacks() -> None:
+    """Arena may prefer a scored route while unranked free models stay eligible."""
+    result = HEALTH.select_candidate(
+        CANDIDATES,
+        [evidence("vendor/a:free", "success"), evidence("vendor/b:free", "success")],
+        worker=1,
+        now_epoch=NOW,
+        rankings={"vendor/b": 0.73},
+        require_rankings=True,
+    )
+
+    assert result.selected is not None
+    assert result.selected.model == "vendor/b:free"
+    assert {candidate.model for candidate in result.candidates} == {
+        "vendor/a:free",
+        "vendor/b:free",
+    }
 
 
 def test_expired_ranking_file_is_not_usable(tmp_path) -> None:

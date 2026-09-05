@@ -46,3 +46,20 @@ def test_exact_head_review_uses_free_reasoning_route() -> None:
         ROUTES.route_for_assignment("pr", "factory:review")
         == "auto/reasoning:free"
     )
+
+
+def test_worker_applies_assignment_route_without_candidate_health() -> None:
+    """The session wrapper resolves the native intent after assignment."""
+    worker = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "scripts"
+        / "free-model-factory-worker.sh"
+    ).read_text(encoding="utf-8")
+
+    assert "factory_omniroute_route.py" in worker
+    assert 'MODEL="$effective_route"' in worker
+    assert 'RUNTIME_MODEL="omniroute/${effective_route}"' in worker
+    assert "factory_provider_candidates.py" not in worker
+    assert "factory_candidate_health.py" not in worker
+    assert "selected native OmniRoute intent route" in worker

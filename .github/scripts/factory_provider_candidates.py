@@ -185,9 +185,9 @@ class OpenCodeFreeAdapter:
 
 
 class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
-    """Expose OmniRoute's native free coding route for factory execution."""
+    """Expose OmniRoute's native free intent routes for factory execution."""
 
-    FACTORY_ROUTE = "auto/coding:free"
+    FACTORY_ROUTES = ("auto/coding:free", "auto/reasoning:free")
 
     def __init__(self) -> None:
         """Configure the external OmniRoute OpenAI-compatible adapter."""
@@ -198,7 +198,7 @@ class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
         raw_catalog: str,
         configured_models: Sequence[str] = (),
     ) -> Discovery:
-        """Expose the native virtual route while OmniRoute owns model selection."""
+        """Expose native virtual intents while OmniRoute owns model selection."""
         items = _json_catalog(raw_catalog)
         if items is None:
             return Discovery(
@@ -209,12 +209,17 @@ class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
             )
 
         configured = _configured_filter(configured_models)
-        if configured is not None and self.FACTORY_ROUTE not in configured:
+        routes = tuple(
+            route
+            for route in self.FACTORY_ROUTES
+            if configured is None or route in configured
+        )
+        if not routes:
             return Discovery(
                 provider=self.provider,
                 mode=self.mode,
                 status="empty",
-                detail="configured policy excluded the native OmniRoute factory route",
+                detail="configured policy excluded the native OmniRoute factory routes",
             )
 
         catalog_models = {
@@ -222,25 +227,28 @@ class OmniRouteFreeAdapter(OpenAICompatibleAdapter):
             for item in items
             if isinstance(item.get("id"), str)
         }
-        discovered_by = (
-            "provider_catalog"
-            if self.FACTORY_ROUTE in catalog_models
-            else "native_auto_route_fallback"
-        )
-        candidate = _candidate(
-            self.provider,
-            self.FACTORY_ROUTE,
-            self.runtime_prefix,
-            discovered_by,
+        candidates = tuple(
+            _candidate(
+                self.provider,
+                route,
+                self.runtime_prefix,
+                (
+                    "provider_catalog"
+                    if route in catalog_models
+                    else "native_auto_route_fallback"
+                ),
+            )
+            for route in routes
         )
         return Discovery(
             provider=self.provider,
             mode=self.mode,
             status="available",
-            candidates=(candidate,),
+            candidates=candidates,
             detail=(
-                "OmniRoute native auto/coding:free route delegates free-tier, "
-                "tool-compatibility, quality, quota, and fallback decisions to OmniRoute"
+                "OmniRoute native auto/coding:free and auto/reasoning:free "
+                "intents delegate free-tier, tool-compatibility, quality, "
+                "quota, and fallback decisions to OmniRoute"
             ),
         )
 
