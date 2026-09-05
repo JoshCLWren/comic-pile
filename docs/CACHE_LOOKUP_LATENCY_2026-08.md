@@ -23,31 +23,58 @@ Issues: #1782, #2216
 
 ## Quota context
 
-Upstash Redis free-tier REST quota was exhausted, and the automated quota pause
-lifted on or before approximately 2026-08-28.  The benchmark script handles a
-still-blocked path gracefully: any HTTP 429 response is recorded as `"status":
-"quota_blocked"` rather than aborting, so the Neon and uncached-queue paths can
-always be measured independently.
-
-A post-reset full run was still outstanding when the provider-decision memo
-(`CACHE_PROVIDER_DECISION_2026-08.md`) was written, so the **Upstash REST GET**,
-**Neon point SELECT**, and **uncached queue read** rows below remain unfilled
-with the exact "awaiting run" marker a pre-reset observation window leaves
-behind.  The decision rule that consumes these cells is codified in
-`app/cache_provider_decision.py` (issue #1785).
+Upstash Redis free-tier REST quota was exhausted through approximately
+2026-08-28. HTTP 429 responses are recorded as `"status": "quota_blocked"`.
+The 2026-09-05 measurement run did not receive HTTP 429; Upstash was skipped
+because production credentials were not decryptable (see below), not because
+quota was still blocked.
 
 ## Measurements
 
+Committed JSON: `docs/CACHE_LOOKUP_LATENCY_2026-08.json`  
+Workflow run: GitHub Actions `Cache Latency Benchmark` on 2026-09-05  
+Vantage: `github-actions:ubuntu-latest` (preferred `vercel:cle1` not available
+in this runner). Iterations 30, warmups 3.
+
 | Path | Samples | Min (ms) | Median (ms) | P95 (ms) | Max (ms) | Mean (ms) | Status |
 |---|---|---|---|---|---|---|---|
-| Upstash REST GET | 0 | — | — | — | — | — | *Awaiting post-reset run* |
-| Neon point SELECT (KV table) | 0 | — | — | — | — | — | *Awaiting run* |
-| Uncached queue read (`/api/v1/sessions/current/`) | 0 | — | — | — | — | — | *Awaiting run* |
+| Upstash REST GET | 0 | — | — | — | — | — | skipped: Vercel `KV_REST_API_*` values pulled as `[SENSITIVE]`; no GitHub `UPSTASH_REDIS_REST_*` secrets |
+| Neon point SELECT (KV table) | 30 | 115.849 | 143.303 | 151.812 | 152.833 | 141.518 | ok |
+| Uncached queue read (`/api/v1/sessions/current/`) | 0 | — | — | — | — | — | skipped: no `VERCEL_BEARER_TOKEN` |
 
-"0 samples" means: no successful samples were collected in the pre-reset
-window.  A post-reset run will populate these cells with the actual measured
-distribution.  Re-run the script with the same `--iterations 30 --warmups 3`
-flags to fill the table.
+An earlier same-vantage Neon run landed at p50=569.314 ms (also 30 ok samples).
+That colder connect-included hop is recorded here as context; the committed
+JSON is the later 143.303 ms distribution. Both are far above the 3 ms
+"Neon already fast" threshold. Neon p95/p50 on the committed run is 1.06×
+(stable; not an investigate signal).
+
+`provider_recommendation()` cannot run until Upstash p50/p95 exist. Neon
+alone does not flip the production provider.
+
+### Operator steps to finish the Upstash row
+
+The Deploy Production `VERCEL_TOKEN` can list production env **key names**
+(`KV_REST_API_URL`, `KV_REST_API_TOKEN`, `KV_REST_API_READ_ONLY_TOKEN`,
+`REDIS_URL`) but `vercel pull` writes `[SENSITIVE]` for those values. Native
+`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` are **absent** from
+Vercel production env. Do not invent or commit the values.
+
+Josh should do one of the following, then re-run **Cache Latency Benchmark**:
+
+1. Add GitHub Actions secrets `UPSTASH_REDIS_REST_URL` and
+   `UPSTASH_REDIS_REST_TOKEN` (REST URL + token from the Upstash / Vercel KV
+   console). The workflow already reads those secret names.
+2. Or grant the deploy token permission to decrypt production env and confirm
+   `vercel pull --environment=production` writes real `KV_REST_API_URL` values
+   rather than `[SENSITIVE]`.
+3. Optional: `UPSTASH_EMAIL` + `UPSTASH_API_KEY` GitHub secrets so
+   `make cache-usage` can include provider month-to-date commands.
+4. Optional: a session bearer as `VERCEL_BEARER_TOKEN` if the uncached queue
+   path should be measured.
+
+`REDIS_URL` is present in production env but is the RESP/local path. Do not
+use it for this REST comparison; production must not enable
+`CACHE_LOCAL_REDIS_DEV`.
 
 ## What each measurement captures
 
@@ -97,14 +124,12 @@ application stack add to a raw Postgres point read?"
 ## Provider decision memo
 
 The go/no-go ruling for the production provider lives in
-`CACHE_PROVIDER_DECISION_2026-08.md` (issue #1785): **Postgres**, with remote
-Redis re-enable marked NO-GO until both the measured latency ratio here and a
-clean route-traffic census land.  The `app/cache_provider_decision.py` rule makes
-that ruling reproducible: `provider_recommendation()` applies the thresholds
-below, and `project_monthly_cache_commands()` checks the census against the
-budget in `docs/CACHE_COMMAND_BUDGET.md`.
+`CACHE_PROVIDER_DECISION_2026-08.md` (issue #2216): **Postgres**, with remote
+Redis re-enable marked **NEED MORE DATA**. The command census is a GO (1,990
+projected commands/month). Upstash REST p50 is still missing, so
+`provider_recommendation()` cannot run. The rule itself is unchanged:
 
-**Hypothesis (to be verified after quota reset):**
+**Hypothesis (still unverified — Upstash row empty):**
 
 The raw Upstash REST hop should outperform a Neon point SELECT when measured
 from the same Vercel region, because Upstash is an in-memory edge cache at a
@@ -129,19 +154,15 @@ significant at the application layer.
 
 ## Re-run procedure
 
-After the Upstash quota resets (target: 2026-08-28 or earlier):
-
-1. Confirm quota restored by running `python scripts/benchmark_cache_latency.py
-   --iterations 1 --warmups 0` and verifying `"status": "ok"` in the
-   `upstash_rest_get` section.
-2. Run the full benchmark:
+1. Supply decryptable Upstash REST credentials (GitHub Actions secrets
+   `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`, or a Vercel token
+   that can decrypt `KV_REST_API_*`).
+2. Re-run **Cache Latency Benchmark** (`workflow_dispatch`) or:
    `python scripts/benchmark_cache_latency.py --iterations 30 --warmups 3
    --location "vercel:cle1" --redact --output docs/CACHE_LOOKUP_LATENCY_2026-08.json`
-3. Replace the placeholder numbers in the summary table above with the values
-   from the JSON file.
-4. Feed the medians into `app/cache_provider_decision.py::provider_recommendation`
-   and update the conclusion in `CACHE_PROVIDER_DECISION_2026-08.md`, plus the
-   concrete action on `docs/CACHE_REENABLE_DECISION.md`.
+3. Replace the Upstash row in the summary table from the redacted JSON.
+4. Feed both medians into `provider_recommendation()` and update
+   `CACHE_PROVIDER_DECISION_2026-08.md` plus `CACHE_REENABLE_DECISION.md`.
 
 ## Related documents and code
 

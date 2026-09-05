@@ -1,127 +1,103 @@
 # Production cache provider decision
 
-Updated: 2026-08-29
-Owner: Factory 71 (issue #1785)
+Updated: 2026-09-05
+Owner: issue #2216 (follow-up to #1785)
 
 ## Decision
 
-**Production cache provider: Postgres.** Remote Redis (Upstash) re-enable: **NO-GO for now.**
+**Production cache provider remains Postgres.** Remote Redis (Upstash) re-enable:
+**NEED MORE DATA** — not a GO.
 
-This memo records the go/no-go ruling the issue asked for. It is a decision
-backed by the numbers below and by a reproducible executable rule, not a
-measurement report: the clean post-reset latency comparison and a trustworthy
-production traffic census were still outstanding when this memo was committed,
-and the decision rule in code will compute the verdict the moment they land.
-
-The production configuration is unchanged and this memo's conclusion requires no
-environment flip: with no cache overrides, the runtime resolves to
-`CACHE_PROVIDER=postgres`, which is exactly the Postgres provider this memo
-chooses. `CACHE_ENABLED` cannot activate Redis unless `CACHE_PROVIDER=redis` and
-credentials are also present, so the deployed default and the memo conclusion
-agree by construction and by test.
+The command-budget half of the rule is a GO. The latency half cannot be
+evaluated: Upstash REST was not measured because production credentials are
+not decryptable with the Deploy Production token. Until
+`provider_recommendation(upstash, neon)` can run, production stays on
+`CACHE_PROVIDER=postgres`. No environment flip is authorized.
 
 ## Why Postgres stays
 
-1. **The re-enable gate needs evidence the census does not yet provide.**
-   `CACHE_REENABLE_DECISION.md` re-enables remote caching only after a recent
-   production observation window projects application commands below the
-   350,000-command monthly budget while preserving the 150,000-command (30%)
-   provider headroom. No clean route-traffic census has landed, so the gate is
-   not satisfied. Absence of that evidence is itself the conservative outcome.
-2. **The latency comparison is not yet measured.** The Upstash free-tier quota
-   paused the remote measurements until ~2026-08-28; the post-reset benchmark
-   run had not produced committed numbers when this memo was written. Upstash
-   REST (path 1) and Neon point SELECT (path 2) remain unmeasured from the Vercel
-   region, so no measured ratio supports spending free-tier budget.
-3. **Postgres is the safe, already-configured default.** The Postgres cache
-   provider shares the application's primary database, keeps the same
-   `CacheClient` interface and generation-based invalidation, and requires no
-   new dependency or quota. It is the fail-safe choice while remote evidence is
-   outstanding.
+1. **Latency evidence is incomplete.** Neon point SELECT from
+   `github-actions:ubuntu-latest` is measured (p50=143.303 ms, p95=151.812 ms,
+   30 samples). Upstash REST GET has 0 samples. The executable rule in
+   `app/cache_provider_decision.py` requires both distributions.
+2. **Command budget is satisfied.** Vercel production runtime logs (7-day
+   Hobby window, 2026-09-05) map to 1,990 conservative monthly commands via
+   `project_monthly_cache_commands()`. Pathological upper bound treating every
+   request as a 5-command roll is 18,321. Both preserve the 150,000-command
+   headroom. See `docs/CACHE_TRAFFIC_CENSUS_2026-09.json`.
+3. **Postgres is the safe, already-configured default.** The runtime still
+   resolves to `CACHE_PROVIDER=postgres`. `CACHE_ENABLED` cannot activate Redis
+   unless `CACHE_PROVIDER=redis` and credentials are also present.
 
 ## The numbers
 
-### Monthly command budget (already documented in `CACHE_COMMAND_BUDGET.md`)
+### Monthly command budget
 
 | Item | Commands/month |
 | --- | ---: |
 | Upstash Free allowance | 500,000 |
 | ComicPile application budget | **350,000** |
 | Reserved headroom | **150,000 (30%)** |
+| Conservative census projection (2026-09-05) | **1,990** |
+| Pathological all-roll bound | **18,321** |
 
-### Per-flow command ceilings (source: `app/cache_metrics.py`)
+### Latency (2026-09-05, `github-actions:ubuntu-latest`, 30/3)
 
-| Flow | Ceiling |
-| --- | ---: |
-| Bootstrap | 4 |
-| Queue load | 2 |
-| Roll | 5 |
-| Snooze | 1 |
-| Rating | 1 |
-| Thread mutation | 1 |
-| Issue mutation | 1 |
-| Continuity mutation | 1 |
+| Path | p50 (ms) | p95 (ms) | Status |
+| --- | ---: | ---: | --- |
+| Upstash REST GET | — | — | skipped; credentials not decryptable |
+| Neon point SELECT | 143.303 | 151.812 | ok |
+| Uncached queue read | — | — | skipped; no bearer token |
 
-### Latency decision rule (source: `docs/CACHE_LOOKUP_LATENCY_2026-08.md`)
-
-| Threshold | Meaning |
-| --- | --- |
-| Upstash REST p50 < 2× Neon point SELECT p50 | Upstash is meaningfully faster; the re-enable gate can proceed when command-rate evidence is also in range |
-| Upstash REST p50 ≥ 2× Neon p50, or Neon p50 ≤ 3 ms | Neon point reads are not meaningfully slower; staying on Postgres is justified |
-| Either path p95 / p50 > 5× | Unstable measurements; investigate before declaring any default |
+Neon p95/p50 = 1.06× (stable). Neon p50 is far above the 3 ms absolute-fast
+threshold, so a future Upstash p50 below 286.6 ms would be a latency GO. That
+comparison is not available yet.
 
 ### Contract that keeps production config aligned with this memo
 
-`app/cache_provider_decision.py` pins:
+`app/cache_provider_decision.py` still pins:
 
-- `PRODUCTION_CACHE_PROVIDER = "postgres"` — the memo conclusion.
-- `provider_recommendation(upstash, neon)` — applies the latency thresholds above.
-- `project_monthly_cache_commands(flow_counts)` — multiplies a monthly per-flow
-  census by the ceilings above and reports whether the projection stays below
-  the 350,000-command budget.
+- `PRODUCTION_CACHE_PROVIDER = "postgres"` — current production, unchanged.
+- `provider_recommendation(upstash, neon)` — applies once both samples exist.
+- `project_monthly_cache_commands(flow_counts)` — census is under budget.
 
-`tests/test_cache_provider_decision.py` asserts that the runtime default
-(`RedisSettings().effective_provider`) resolves to `PRODUCTION_CACHE_PROVIDER`
-and pins the decision rule and projection behavior. That test is what makes
-"production config matches its conclusion" a machine-checked invariant instead of
-a prose claim.
+`tests/test_cache_provider_decision.py` continues to assert that the runtime
+default resolves to `PRODUCTION_CACHE_PROVIDER`.
 
-## Outstanding measurement inputs (next worker's fill step)
+## Next env flips — only after a Redis GO
 
-Neither clean input was available to this run, so they are tabled here with the
-exact procedure to close them:
+Do **not** flip production now. If a later Upstash measurement makes
+`provider_recommendation()` return `"upstash"` while the census stays under
+350,000, Josh should confirm these flips:
 
-1. **Latency comparison.** Run from the Vercel region after the 2026-08-28 quota
-   reset:
-   ```text
-   python scripts/benchmark_cache_latency.py --iterations 30 --warmups 3 \
-     --location "vercel:iad1" --output docs/CACHE_LOOKUP_LATENCY_2026-08.json
-   ```
-   Then copy the path p50/p95 cells into `CACHE_LOOKUP_LATENCY_2026-08.md` and
-   feed the medians into `provider_recommendation()`.
-2. **Route-traffic census.** Poll `GET /api/v1/traffic-metrics` periodically
-   across instances and reconstruct fleet totals by keeping the maximum count
-   per key per `instance_id` (aggregates only; see `app/traffic_metrics.py`).
-   Map the route tallies onto the eight documented cache flows and feed the
-   monthly counts into `project_monthly_cache_commands()`.
+1. `CACHE_PROVIDER=redis`
+2. `CACHE_ENABLED=true`
+3. `CACHE_QUOTA_THROTTLE_ENABLED=true` (recommended from day one)
 
-If both land and the rule flips the verdict to "upstash" **and** the projection
-stays below 350,000 commands, then — and only then — a future revision may flip
-`CACHE_PROVIDER=redis` + `CACHE_ENABLED=true` in production and update this memo.
-That flipped state is reversible with the single `CACHE_ENABLED` flag per the
-rollback boundary in `CACHE_REENABLE_DECISION.md`.
+Rollback remains `CACHE_ENABLED=false`.
+
+## Operator steps to close NEED MORE DATA
+
+1. Add GitHub Actions secrets `UPSTASH_REDIS_REST_URL` and
+   `UPSTASH_REDIS_REST_TOKEN`, **or** make `vercel pull --environment=production`
+   decrypt `KV_REST_API_URL` / `KV_REST_API_*_TOKEN` (today they pull as
+   `[SENSITIVE]`).
+2. Re-run **Cache Latency Benchmark** (`workflow_dispatch`).
+3. Commit the redacted JSON and feed p50/p95 into `provider_recommendation()`.
+4. Optional: `UPSTASH_EMAIL` + `UPSTASH_API_KEY` for provider month-to-date
+   commands in `make cache-usage`.
+5. Optional: session bearer for `/api/v1/sessions/current/`.
 
 ## Verification for this memo
 
-- `python3 -m py_compile app/cache_provider_decision.py tests/test_cache_provider_decision.py`
-- `python3 scripts/check_markdown_docs.py` (local; passes)
-- Full runtime test coverage for `tests/test_cache_provider_decision.py` is
-  delegated to CI because this runner does not provide the project Python
-  environment (`redis`/`pydantic`/Postgres are not installed).
+- `ruff check` on the touched Python files
+- `pytest --no-cov tests/test_benchmark_cache_latency.py tests/test_cache_traffic_census.py tests/test_cache_usage.py tests/test_cache_provider_decision.py`
+- `python scripts/check_markdown_docs.py`
 
 ## References
 
-- `CACHE_REENABLE_DECISION.md` — the live re-enable gate this memo does not satisfy yet
-- `CACHE_COMMAND_BUDGET.md` — the budget and per-flow ceiling ledger
-- `CACHE_LOOKUP_LATENCY_2026-08.md` — the latency comparison and decision rule
-- `app/cache_provider_decision.py` + `tests/test_cache_provider_decision.py` — executable rule and config invariant
+- `CACHE_REENABLE_DECISION.md` — live re-enable gate; still not satisfied
+- `CACHE_COMMAND_BUDGET.md` — budget and 2026-09 census
+- `CACHE_LOOKUP_LATENCY_2026-08.md` / `.json` — latency table and raw samples
+- `CACHE_TRAFFIC_CENSUS_2026-09.json` — Vercel runtime-log census
+- `app/cache_provider_decision.py` + `tests/test_cache_provider_decision.py`

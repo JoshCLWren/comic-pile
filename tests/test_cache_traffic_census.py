@@ -9,6 +9,7 @@ from app.cache_metrics import CACHE_FLOW_COMMAND_CEILINGS, CONSERVATIVE_MONTHLY_
 from app.cache_provider_decision import project_monthly_cache_commands
 
 CENSUS_PATH = Path("docs/CACHE_TRAFFIC_CENSUS_2026-09.json")
+LATENCY_PATH = Path("docs/CACHE_LOOKUP_LATENCY_2026-08.json")
 
 
 def _load_census() -> dict[str, object]:
@@ -64,3 +65,18 @@ def test_monthly_counts_are_scaled_from_seven_day_window() -> None:
     expected_queue = round(observed["queue_load"] * scale * multiplier)
     assert monthly["bootstrap"] == expected_bootstrap
     assert monthly["queue_load"] == expected_queue
+
+
+def test_committed_latency_json_has_neon_samples_and_skipped_upstash() -> None:
+    """The filled JSON is redacted, has 30 Neon samples, and cannot yet recommend Redis."""
+    report = json.loads(LATENCY_PATH.read_text(encoding="utf-8"))
+    neon = report["neon_point_select"]["summary"]["elapsed_ms"]
+    upstash = report["upstash_rest_get"]
+
+    assert report["measured_from"] == "github-actions:ubuntu-latest"
+    assert report["iterations"] == 30
+    assert neon["p50"] == 143.303
+    assert neon["p95"] == 151.812
+    assert upstash["summary"] is None
+    assert upstash["quota_blocked"] is False
+    assert "upstash.io" not in json.dumps(report)

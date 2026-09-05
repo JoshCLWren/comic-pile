@@ -1,14 +1,25 @@
 # Remote cache re-enable decision
 
-Updated: 2026-08-29
+Updated: 2026-09-05
 
 ## Decision
 
-**NO-GO for enabling remote Redis/Upstash caching at this time.**
+**NEED MORE DATA — remain NO-GO for enabling remote Redis/Upstash caching.**
 
-ComicPile now has bounded generation-based invalidation, privacy-safe command counting, conservative flow ceilings, a quota guardrail (alert + smoke-test throttling), a dev-gated local Redis path, and the tuned TTL tiers described below. The remaining blocker is not correctness of the caching primitives — it is production demand evidence. The repository does not yet contain a trustworthy recent production request mix that can be translated into an observed monthly cache-command projection, so enabling the provider would spend free-tier budget without evidence that the benefit justifies the risk.
+The production-demand half of the gate is now closed: Vercel production
+runtime logs project **1,990** conservative monthly cache commands (pathological
+upper bound 18,321), well under 350,000 with 150,000 headroom. See
+`docs/CACHE_TRAFFIC_CENSUS_2026-09.json` and `project_monthly_cache_commands()`.
 
-This is a remain-disabled decision, not a rejection of Redis. Re-enable only after production evidence demonstrates that projected application commands stay below the 350,000 monthly operating budget with the existing 150,000-command provider headroom.
+The remaining blocker is the latency comparison. Neon point SELECT is measured
+(p50=143.303 ms from `github-actions:ubuntu-latest`). Upstash REST GET has 0
+samples because Vercel production `KV_REST_API_*` values pull as `[SENSITIVE]`
+and no GitHub `UPSTASH_REDIS_REST_*` secrets exist. Do not flip
+`CACHE_PROVIDER` or `CACHE_ENABLED` until `provider_recommendation()` can run.
+
+This is a remain-disabled decision, not a rejection of Redis. Re-enable only
+after both the census (already GO) and a measured Upstash-vs-Neon ratio support
+it.
 
 ## TTL tier tuning (issue #1754)
 
@@ -105,4 +116,10 @@ The re-enable evaluation added the operational guardrails the decision was missi
 
 ### Go / no-go memo
 
-**Decision: NO-GO for enabling remote Redis at this time.** The remain-disabled verdict from the prior decision stands. The evaluation is complete: observability, an alert-plus-throttle guardrail, a dev-gated local path, and tuned TTLs are now in place. Enabling `CACHE_ENABLED=true` is still gated behind the production-traffic evidence in the re-enable gate (observed mix projecting below 350,000 commands/month with 30% headroom). A future staged rollout must keep `CACHE_ENABLED` reversible and the quota guardrail active from day one.
+**Decision: NEED MORE DATA / remain NO-GO.** Command-budget evidence landed on
+2026-09-05 and is a GO (1,990 projected commands/month). Latency evidence is
+incomplete (Upstash REST not measured). Do not set `CACHE_PROVIDER=redis` or
+`CACHE_ENABLED=true` until Josh supplies decryptable Upstash REST credentials
+and `provider_recommendation()` returns `"upstash"`. A future staged rollout
+must keep `CACHE_ENABLED` reversible and set `CACHE_QUOTA_THROTTLE_ENABLED=true`
+from day one.
