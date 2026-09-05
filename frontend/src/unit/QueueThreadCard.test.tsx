@@ -214,6 +214,51 @@ describe('QueueThreadCard', () => {
     expect(screen.queryByRole('button', { name: /View dependencies for/ })).not.toBeInTheDocument()
   })
 
+  it('distinguishes blocked Queue cards with continuity styling instead of danger-red', () => {
+    const { unmount } = renderCard(createMockThread())
+    const unblocked = screen.getByTestId('queue-thread-item')
+    expect(unblocked.className).not.toMatch(/bg-red-500/)
+    expect(unblocked.className).not.toMatch(/theme-danger/)
+    expect(unblocked.className).not.toMatch(/theme-continuity-accent/)
+    expect(screen.queryByLabelText('Blocked thread')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('queue-thread-blocked-detail')).not.toBeInTheDocument()
+    unmount()
+
+    renderCard(createMockThread(), {
+      isBlocked: true,
+      blockingDependencies: [],
+    })
+    const blocked = screen.getByTestId('queue-thread-item')
+    expect(blocked.className).not.toMatch(/bg-red-500/)
+    expect(blocked.className).not.toMatch(/theme-danger/)
+    expect(screen.getByLabelText('Blocked thread')).toHaveClass('text-[var(--theme-continuity-accent)]')
+
+    const detail = screen.getByTestId('queue-thread-blocked-detail')
+    expect(detail.className).toMatch(/theme-continuity-accent/)
+    expect(detail.className).not.toMatch(/bg-red-500/)
+    expect(detail.className).not.toMatch(/text-red-/)
+    expect(detail.className).not.toMatch(/theme-danger/)
+  })
+
+  it('keeps crossover load errors out of dependency continuity styling', () => {
+    renderCard(createMockThread(), {
+      crossoverGroups: [],
+      crossoverGroupsError: true,
+    })
+
+    expect(screen.getByText('Crossovers unavailable')).toHaveClass('text-red-300/80')
+  })
+
+  it('still disables Read when the thread is blocked', () => {
+    renderCard(createMockThread(), {
+      isBlocked: true,
+      readDisabled: true,
+      readDisabledReason: 'Blocked by dependency',
+    })
+
+    expect(screen.getByRole('button', { name: 'Read' })).toBeDisabled()
+  })
+
   it('renders thread title', () => {
     const thread = createMockThread({ title: 'Amazing Spider-Man' })
     renderCard(thread)
