@@ -13,9 +13,10 @@ upper bound 18,321), well under 350,000 with 150,000 headroom. See
 
 The remaining blocker is the latency comparison. Neon point SELECT is measured
 (p50=143.303 ms from `github-actions:ubuntu-latest`). Upstash REST GET has 0
-samples because Vercel production `KV_REST_API_*` values pull as `[SENSITIVE]`
-and no GitHub `UPSTASH_REDIS_REST_*` secrets exist. Do not flip
+samples: `vercel env run -e production` injects `KV_REST_API_URL` /
+`KV_REST_API_TOKEN` as empty (Actions run 33986154224). Do not flip
 `CACHE_PROVIDER` or `CACHE_ENABLED` until `provider_recommendation()` can run.
+Do not add GitHub secrets.
 
 This is a remain-disabled decision, not a rejection of Redis. Re-enable only
 after both the census (already GO) and a measured Upstash-vs-Neon ratio support
@@ -116,10 +117,9 @@ The re-enable evaluation added the operational guardrails the decision was missi
 
 ### Go / no-go memo
 
-**Decision: NEED MORE DATA / remain NO-GO.** Command-budget evidence landed on
-2026-09-05 and is a GO (1,990 projected commands/month). Latency evidence is
-incomplete (Upstash REST not measured). Do not set `CACHE_PROVIDER=redis` or
-`CACHE_ENABLED=true` until Josh supplies decryptable Upstash REST credentials
-and `provider_recommendation()` returns `"upstash"`. A future staged rollout
-must keep `CACHE_ENABLED` reversible and set `CACHE_QUOTA_THROTTLE_ENABLED=true`
-from day one.
+**Decision: NEED MORE DATA / remain NO-GO / stay Postgres.** Command-budget
+evidence landed on 2026-09-05 and is a GO (1,990 projected commands/month).
+Latency evidence is incomplete: `vercel env run` does not inject Sensitive
+KV REST values. Do not set `CACHE_PROVIDER=redis` or `CACHE_ENABLED=true`.
+A future staged rollout must keep `CACHE_ENABLED` reversible and set
+`CACHE_QUOTA_THROTTLE_ENABLED=true` from day one.

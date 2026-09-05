@@ -25,9 +25,9 @@ Issues: #1782, #2216
 
 Upstash Redis free-tier REST quota was exhausted through approximately
 2026-08-28. HTTP 429 responses are recorded as `"status": "quota_blocked"`.
-The 2026-09-05 measurement run did not receive HTTP 429; Upstash was skipped
-because production credentials were not decryptable (see below), not because
-quota was still blocked.
+The 2026-09-05 measurement runs did not receive HTTP 429. Upstash was not
+measured because production `KV_REST_API_*` values are Sensitive and stay
+empty after `vercel env run -e production`. See the stop report below.
 
 ## Measurements
 
@@ -38,7 +38,7 @@ in this runner). Iterations 30, warmups 3.
 
 | Path | Samples | Min (ms) | Median (ms) | P95 (ms) | Max (ms) | Mean (ms) | Status |
 |---|---|---|---|---|---|---|---|
-| Upstash REST GET | 0 | — | — | — | — | — | skipped: Vercel `KV_REST_API_*` values pulled as `[SENSITIVE]`; no GitHub `UPSTASH_REDIS_REST_*` secrets |
+| Upstash REST GET | 0 | — | — | — | — | — | stopped: `vercel env run -e production` injects `KV_REST_API_URL` / `KV_REST_API_TOKEN` / `KV_REST_API_READ_ONLY_TOKEN` as **empty** |
 | Neon point SELECT (KV table) | 30 | 115.849 | 143.303 | 151.812 | 152.833 | 141.518 | ok |
 | Uncached queue read (`/api/v1/sessions/current/`) | 0 | — | — | — | — | — | skipped: no `VERCEL_BEARER_TOKEN` |
 
@@ -49,32 +49,26 @@ JSON is the later 143.303 ms distribution. Both are far above the 3 ms
 (stable; not an investigate signal).
 
 `provider_recommendation()` cannot run until Upstash p50/p95 exist. Neon
-alone does not flip the production provider.
+alone does not flip the production provider. Stay on Postgres.
 
-### Operator steps to finish the Upstash row
+### Stop report: sensitive KV values are not injectable on the runner
 
-The Deploy Production `VERCEL_TOKEN` can list production env **key names**
-(`KV_REST_API_URL`, `KV_REST_API_TOKEN`, `KV_REST_API_READ_ONLY_TOKEN`,
-`REDIS_URL`) but `vercel pull` writes `[SENSITIVE]` for those values. Native
-`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` are **absent** from
-Vercel production env. Do not invent or commit the values.
+Actions run (required path, no `--yes`):
+https://github.com/JoshCLWren/comic-pile/actions/runs/33986154224
 
-Josh should do one of the following, then re-run **Cache Latency Benchmark**:
+Exact child-process preflight (booleans only):
 
-1. Add GitHub Actions secrets `UPSTASH_REDIS_REST_URL` and
-   `UPSTASH_REDIS_REST_TOKEN` (REST URL + token from the Upstash / Vercel KV
-   console). The workflow already reads those secret names.
-2. Or grant the deploy token permission to decrypt production env and confirm
-   `vercel pull --environment=production` writes real `KV_REST_API_URL` values
-   rather than `[SENSITIVE]`.
-3. Optional: `UPSTASH_EMAIL` + `UPSTASH_API_KEY` GitHub secrets so
-   `make cache-usage` can include provider month-to-date commands.
-4. Optional: a session bearer as `VERCEL_BEARER_TOKEN` if the uncached queue
-   path should be measured.
+```
+KV_REST_API_URL=empty
+KV_REST_API_TOKEN=empty
+KV_REST_API_READ_ONLY_TOKEN=empty
+url_ready=no
+token_ready=no
+```
 
-`REDIS_URL` is present in production env but is the RESP/local path. Do not
-use it for this REST comparison; production must not enable
-`CACHE_LOCAL_REDIS_DEV`.
+CLI 58.1.0 logged `Retrieving project…` then `Downloading production environment variables` and started the Python child. The KV REST **names** exist in that process; the **values** are empty. The Vercel REST decrypt path earlier listed the same key names and also returned no usable values. `REDIS_URL` / `KV_URL` were not used.
+
+This is the Sensitive Environment Variable boundary on the Deploy Production token. Do **not** add GitHub secrets. Do not invent another decrypt loop. `provider_recommendation()` still cannot run until a production-runtime GET (or a token that can decrypt Sensitive values) fills the Upstash row.
 
 ## What each measurement captures
 
@@ -154,14 +148,13 @@ significant at the application layer.
 
 ## Re-run procedure
 
-1. Supply decryptable Upstash REST credentials (GitHub Actions secrets
-   `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`, or a Vercel token
-   that can decrypt `KV_REST_API_*`).
-2. Re-run **Cache Latency Benchmark** (`workflow_dispatch`) or:
-   `python scripts/benchmark_cache_latency.py --iterations 30 --warmups 3
-   --location "vercel:cle1" --redact --output docs/CACHE_LOOKUP_LATENCY_2026-08.json`
-3. Replace the Upstash row in the summary table from the redacted JSON.
-4. Feed both medians into `provider_recommendation()` and update
+Do not add GitHub secrets. Re-run only after Sensitive `KV_REST_API_*`
+values are available inside a production-runtime context (or a token that
+can decrypt them). Then:
+
+1. Re-run **Cache Latency Benchmark** (`workflow_dispatch`).
+2. Replace the Upstash row from the redacted JSON.
+3. Feed both medians into `provider_recommendation()` and update
    `CACHE_PROVIDER_DECISION_2026-08.md` plus `CACHE_REENABLE_DECISION.md`.
 
 ## Related documents and code

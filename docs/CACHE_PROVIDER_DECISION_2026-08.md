@@ -6,13 +6,15 @@ Owner: issue #2216 (follow-up to #1785)
 ## Decision
 
 **Production cache provider remains Postgres.** Remote Redis (Upstash) re-enable:
-**NEED MORE DATA** — not a GO.
+**NEED MORE DATA / stay Postgres** — not a GO.
 
 The command-budget half of the rule is a GO. The latency half cannot be
-evaluated: Upstash REST was not measured because production credentials are
-not decryptable with the Deploy Production token. Until
+evaluated. `vercel env run -e production` (Actions
+https://github.com/JoshCLWren/comic-pile/actions/runs/33986154224) injects
+`KV_REST_API_URL` / `KV_REST_API_TOKEN` as **empty**. Until
 `provider_recommendation(upstash, neon)` can run, production stays on
-`CACHE_PROVIDER=postgres`. No environment flip is authorized.
+`CACHE_PROVIDER=postgres`. No environment flip is authorized. Do not add
+GitHub secrets.
 
 ## Why Postgres stays
 
@@ -45,7 +47,7 @@ not decryptable with the Deploy Production token. Until
 
 | Path | p50 (ms) | p95 (ms) | Status |
 | --- | ---: | ---: | --- |
-| Upstash REST GET | — | — | skipped; credentials not decryptable |
+| Upstash REST GET | — | — | stopped; `vercel env run` injects empty Sensitive values |
 | Neon point SELECT | 143.303 | 151.812 | ok |
 | Uncached queue read | — | — | skipped; no bearer token |
 
@@ -78,15 +80,11 @@ Rollback remains `CACHE_ENABLED=false`.
 
 ## Operator steps to close NEED MORE DATA
 
-1. Add GitHub Actions secrets `UPSTASH_REDIS_REST_URL` and
-   `UPSTASH_REDIS_REST_TOKEN`, **or** make `vercel pull --environment=production`
-   decrypt `KV_REST_API_URL` / `KV_REST_API_*_TOKEN` (today they pull as
-   `[SENSITIVE]`).
-2. Re-run **Cache Latency Benchmark** (`workflow_dispatch`).
-3. Commit the redacted JSON and feed p50/p95 into `provider_recommendation()`.
-4. Optional: `UPSTASH_EMAIL` + `UPSTASH_API_KEY` for provider month-to-date
-   commands in `make cache-usage`.
-5. Optional: session bearer for `/api/v1/sessions/current/`.
+Stopped after the required `vercel env run` path. The Deploy Production
+token downloads the production env envelope but leaves Sensitive KV REST
+values empty. Closing the latency gate needs a **production-runtime** GET
+(the values exist in deployed functions) or a token that can decrypt
+Sensitive env vars. Do not add GitHub secrets. Do not use `REDIS_URL`.
 
 ## Verification for this memo
 
