@@ -9,7 +9,14 @@ import Navigation from './components/Navigation'
 import BugReportButton from './components/BugReportButton'
 import type { ReportType } from './components/BugReportModal'
 import ResumeRecovery from './components/ResumeRecovery'
-import api, { clearAccessToken, setAccessToken, getAccessToken, readStoredAccessToken } from './services/api'
+import api, {
+  clearAccessToken,
+  getAccessToken,
+  isSessionRefreshRejected,
+  readStoredAccessToken,
+  refreshSession,
+  setAccessToken,
+} from './services/api'
 import {
   applyTheme,
   ensureThemeApplied,
@@ -19,7 +26,7 @@ import {
 } from './services/theme'
 import { isDefinitiveAuthenticationFailure } from './services/authFailure'
 import { reconcileStoredThemeWithServer } from './services/themePreferenceSync'
-import type { AuthTokens, AuthUser } from './types'
+import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import { usePingHeartbeat } from './hooks/usePingHeartbeat'
 import { useScrollRestoration } from './hooks/useScrollRestoration'
@@ -133,10 +140,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!recoveryPromise.current) {
       recoveryPromise.current = (async () => {
         try {
-          const tokens = await api.post<AuthTokens>('/v1/auth/refresh', undefined, {
-            skipAuthRedirect: true,
-          })
-          setAccessToken(tokens.access_token)
+          if (isSessionRefreshRejected()) {
+            markDefinitivelyUnauthenticated()
+            throw Object.assign(new Error('Session refresh unavailable'), {
+              isAxiosError: true,
+              response: { status: 401 },
+            })
+          }
+          await refreshSession({ skipAuthRedirect: true })
           const response = await api.get<AuthUser>('/v1/auth/me', {
             timeout,
             skipAuthRedirect: true,

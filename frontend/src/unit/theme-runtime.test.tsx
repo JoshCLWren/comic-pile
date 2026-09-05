@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => ({
   setAccessToken: vi.fn(),
   getAccessToken: vi.fn<() => string | null>(),
   readStoredAccessToken: vi.fn<() => string | null>(),
+  refreshSession: vi.fn(),
+  isSessionRefreshRejected: vi.fn(() => false),
 }))
 
 vi.mock('../services/api', () => ({
@@ -40,6 +42,8 @@ vi.mock('../services/api', () => ({
   setAccessToken: mocks.setAccessToken,
   getAccessToken: mocks.getAccessToken,
   readStoredAccessToken: mocks.readStoredAccessToken,
+  refreshSession: mocks.refreshSession,
+  isSessionRefreshRejected: mocks.isSessionRefreshRejected,
 }))
 
 let auth: AuthContextValue | null = null
@@ -95,7 +99,10 @@ function resetApiMocks() {
   mocks.setAccessToken.mockReset()
   mocks.getAccessToken.mockReset()
   mocks.readStoredAccessToken.mockReset()
+  mocks.refreshSession.mockReset()
+  mocks.isSessionRefreshRejected.mockReset()
   mocks.readStoredAccessToken.mockReturnValue(null)
+  mocks.isSessionRefreshRejected.mockReturnValue(false)
 }
 
 describe('semantic theme runtime bootstrap', () => {
@@ -217,7 +224,7 @@ describe('semantic theme runtime bootstrap', () => {
       .mockRejectedValueOnce(axiosError(401))
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
       .mockResolvedValueOnce({ theme: 'command-center', user_id: 1 })
-    mocks.post.mockResolvedValueOnce({ access_token: 'new-token', refresh_token: 'new-refresh' })
+    mocks.refreshSession.mockResolvedValueOnce('new-token')
     renderProvider()
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
@@ -228,7 +235,7 @@ describe('semantic theme runtime bootstrap', () => {
   it('resolves the persisted theme after a fresh login on a new client', async () => {
     mocks.getAccessToken.mockReturnValue(null)
     mocks.get.mockRejectedValueOnce(axiosError(401))
-    mocks.post.mockRejectedValueOnce(axiosError(401))
+    mocks.refreshSession.mockRejectedValueOnce(axiosError(401))
     renderProvider()
     await waitFor(() => expect(auth?.isAuthenticated).toBe(false))
 

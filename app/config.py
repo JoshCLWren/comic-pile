@@ -78,8 +78,12 @@ class AuthSettings(BaseSettings):
     )
     algorithm: str = Field(default="HS256", description="JWT signing algorithm")
     access_token_expire_minutes: int = Field(
-        default=30,
-        description="Access token expiration time in minutes",
+        default=720,
+        description=(
+            "Access token expiration time in minutes. Default is 12 hours so tab "
+            "focus and concurrent React Query traffic do not constantly trip "
+            "refresh; the httpOnly refresh cookie remains the durable session."
+        ),
         json_schema_extra={"env": "ACCESS_TOKEN_EXPIRE_MINUTES"},
     )
     refresh_token_expire_days: int = Field(

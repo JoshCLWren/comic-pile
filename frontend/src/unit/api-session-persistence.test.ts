@@ -19,7 +19,7 @@ vi.mock('axios', () => ({
   },
 }))
 
-import { clearAccessToken, getAccessToken, setAccessToken } from '../services/api'
+import { getAccessToken, setAccessToken } from '../services/api'
 
 const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] as (
   error: {
@@ -31,7 +31,7 @@ const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] a
 beforeEach(() => {
   apiMock.post.mockReset()
   apiMock.request.mockReset()
-  clearAccessToken()
+  setAccessToken(null)
 })
 
 it.each([

@@ -24,6 +24,8 @@ vi.mock('../services/api', () => {
     clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) =>
       mockClearAccessToken(...args),
     getAccessToken: () => mockGetAccessToken(),
+    refreshSession: vi.fn(),
+    isSessionRefreshRejected: () => false,
   }
 })
 

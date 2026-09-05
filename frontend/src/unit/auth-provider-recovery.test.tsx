@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   clearAccessToken: vi.fn(),
   setAccessToken: vi.fn(),
   getAccessToken: vi.fn<() => string | null>(),
+  refreshSession: vi.fn(),
+  isSessionRefreshRejected: vi.fn(() => false),
 }))
 
 vi.mock('../services/api', () => ({
@@ -18,6 +20,8 @@ vi.mock('../services/api', () => ({
   clearAccessToken: mocks.clearAccessToken,
   setAccessToken: mocks.setAccessToken,
   getAccessToken: mocks.getAccessToken,
+  refreshSession: mocks.refreshSession,
+  isSessionRefreshRejected: mocks.isSessionRefreshRejected,
 }))
 
 import { AuthProvider, useAuth } from '../App'
@@ -52,7 +56,10 @@ describe('AuthProvider transient recovery', () => {
     mocks.clearAccessToken.mockReset()
     mocks.setAccessToken.mockReset()
     mocks.getAccessToken.mockReset()
+    mocks.refreshSession.mockReset()
+    mocks.isSessionRefreshRejected.mockReset()
     mocks.getAccessToken.mockReturnValue('test-token')
+    mocks.isSessionRefreshRejected.mockReturnValue(false)
     delete window.__COMIC_PILE_ACCESS_TOKEN
   })
 
@@ -98,7 +105,7 @@ describe('AuthProvider transient recovery', () => {
     renderProvider()
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
 
-    mocks.post.mockRejectedValueOnce(axiosError(401))
+    mocks.refreshSession.mockRejectedValueOnce(axiosError(401))
     await act(async () => {
       await expect(auth!.recoverSession(15000)).rejects.toMatchObject({ response: { status: 401 } })
     })
@@ -112,7 +119,7 @@ describe('AuthProvider transient recovery', () => {
     renderProvider()
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
 
-    mocks.post.mockRejectedValueOnce(axiosError(503))
+    mocks.refreshSession.mockRejectedValueOnce(axiosError(503))
     await act(async () => {
       await expect(auth!.recoverSession(15000)).rejects.toMatchObject({ response: { status: 503 } })
     })
@@ -126,25 +133,37 @@ describe('AuthProvider transient recovery', () => {
     mocks.get
       .mockRejectedValueOnce(axiosError(401))
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
-    mocks.post.mockResolvedValueOnce({ access_token: 'new-token', refresh_token: 'new-refresh' })
+    mocks.refreshSession.mockResolvedValueOnce('new-token')
 
     renderProvider()
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
 
     expect(auth?.isLoading).toBe(false)
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
-    expect(mocks.post).toHaveBeenCalledWith('/v1/auth/refresh', undefined, { skipAuthRedirect: true })
+    expect(mocks.refreshSession).toHaveBeenCalledWith({ skipAuthRedirect: true })
   })
 
   it('only shows the login screen when silent recovery also fails', async () => {
     mocks.getAccessToken.mockReturnValue('stale-token')
     mocks.get.mockRejectedValueOnce(axiosError(401))
-    mocks.post.mockRejectedValueOnce(axiosError(401))
+    mocks.refreshSession.mockRejectedValueOnce(axiosError(401))
 
     renderProvider()
     await waitFor(() => expect(auth?.isAuthenticated).toBe(false))
 
     expect(auth?.isLoading).toBe(false)
+    expect(mocks.clearAccessToken).toHaveBeenCalled()
+  })
+
+  it('clears a stale access token without probing refresh when the cookie session is already rejected', async () => {
+    mocks.getAccessToken.mockReturnValue('stale-token')
+    mocks.isSessionRefreshRejected.mockReturnValue(true)
+    mocks.get.mockRejectedValueOnce(axiosError(401))
+
+    renderProvider()
+    await waitFor(() => expect(auth?.isAuthenticated).toBe(false))
+
+    expect(mocks.refreshSession).not.toHaveBeenCalled()
     expect(mocks.clearAccessToken).toHaveBeenCalled()
   })
 
@@ -154,7 +173,7 @@ describe('AuthProvider transient recovery', () => {
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
 
     mocks.get.mockRejectedValueOnce(axiosError(401))
-    mocks.post.mockResolvedValueOnce({ access_token: 'new-token', refresh_token: 'new-refresh' })
+    mocks.refreshSession.mockResolvedValueOnce('new-token')
     mocks.get.mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
 
     await act(async () => {

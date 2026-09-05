@@ -60,6 +60,22 @@ describe('ResumeRecovery', () => {
     expect(recoverSession).not.toHaveBeenCalled()
   })
 
+  it('does not retry automatic resume after a definitive authentication failure', async () => {
+    const unauthorized = Object.assign(new Error('unauthorized'), {
+      isAxiosError: true,
+      response: { status: 401 },
+    })
+    revalidateSession.mockRejectedValue(unauthorized)
+
+    renderRecovery()
+    dispatchPageShow(true)
+
+    await waitFor(() => expect(revalidateSession).toHaveBeenCalledOnce())
+    expect(revalidateSession).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByText('Last usable screen')).toBeInTheDocument()
+  })
+
   it('keeps the application visible during automatic retries, then shows failure alert when retries are exhausted', async () => {
     vi.useFakeTimers()
     revalidateSession.mockRejectedValue(new Error('network suspended'))

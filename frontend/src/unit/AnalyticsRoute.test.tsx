@@ -11,6 +11,8 @@ vi.mock('../services/api', () => ({
   clearAccessToken: vi.fn(),
   setAccessToken: vi.fn(),
   getAccessToken: () => 'test-token',
+  refreshSession: vi.fn(),
+  isSessionRefreshRejected: () => false,
 }))
 
 vi.mock('../hooks/useBugReport', () => ({

@@ -293,6 +293,16 @@ class TestAuthSettingsValidation:
 
         assert "secret_key" in str(exc_info.value).lower()
 
+    def test_access_token_default_is_twelve_hours(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Access tokens default to 12 hours so tab-focus traffic does not refresh constantly."""
+        monkeypatch.delenv("ACCESS_TOKEN_EXPIRE_MINUTES", raising=False)
+        monkeypatch.setenv("ENVIRONMENT", "test")
+        monkeypatch.setenv("SECRET_KEY", "configured-key")
+        clear_settings_cache()
+        settings = AuthSettings()
+
+        assert settings.access_token_expire_minutes == 720
+
     def test_uses_explicit_secret_key_in_production(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test production environment uses configured secret key."""
         monkeypatch.setenv("ENVIRONMENT", "production")

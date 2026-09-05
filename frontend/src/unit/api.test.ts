@@ -23,7 +23,7 @@ vi.mock('axios', () => ({
   },
 }))
 
-import { bugReportsApi, clearAccessToken, dependenciesApi, migrationApi, queueApi, rateApi, rollApi, sessionApi, setAccessToken, snoozeApi, tasksApi, threadsApi, undoApi } from '../services/api'
+import { bugReportsApi, dependenciesApi, migrationApi, queueApi, rateApi, rollApi, sessionApi, setAccessToken, snoozeApi, tasksApi, threadsApi, undoApi } from '../services/api'
 
 const requestInterceptor = apiMock.interceptors.request.use.mock.calls[0][0] as (
   config: { method?: string; url?: string; headers?: Record<string, string> }
@@ -44,7 +44,7 @@ beforeEach(() => {
   del.mockResolvedValue({})
   patch.mockResolvedValue({})
   apiMock.request.mockReset()
-  clearAccessToken()
+  setAccessToken(null)
   document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
 })
 
@@ -320,6 +320,7 @@ it('covers csrf fallback, redirect guards, and queued refresh rejection', async 
 
   window.history.pushState({}, '', '/login')
   await expect(responseInterceptor({ config: { url: '/v1/auth/refresh' }, response: { status: 401 } })).rejects.toBeDefined()
+  setAccessToken('token')
   window.history.pushState({}, '', '/queue')
 
   let rejectRefresh: (reason: Error) => void = () => {}

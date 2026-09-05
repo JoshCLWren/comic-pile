@@ -23,6 +23,20 @@ ALGORITHM = _auth_settings.algorithm
 ACCESS_TOKEN_EXPIRE_MINUTES = _auth_settings.access_token_expire_minutes
 REFRESH_TOKEN_EXPIRE_DAYS = _auth_settings.refresh_token_expire_days
 
+
+def refresh_cookie_max_age_seconds() -> int:
+    """Return the HttpOnly refresh cookie lifetime in seconds.
+
+    The cookie must expire with the refresh JWT. A longer cookie would keep a
+    dead credential that looks logged-in; a shorter cookie would drop a still-
+    valid refresh token.
+
+    Returns:
+        Cookie ``max_age`` derived from ``REFRESH_TOKEN_EXPIRE_DAYS``.
+    """
+    return REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+
+
 security = HTTPBearer()
 
 
