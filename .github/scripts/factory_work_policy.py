@@ -26,6 +26,9 @@ TRUSTED_ASSOCIATIONS = {'OWNER', 'MEMBER', 'COLLABORATOR'}
 TRUSTED_FACTORY_APP_SLUGS = {'github-actions'}
 REQUIRED_CHECK_FAILURE_STATES = frozenset({'CANCELLED', 'ERROR', 'FAILURE', 'STALE', 'STARTUP_FAILURE', 'TIMED_OUT'})
 NO_DIFF_ATTEMPT_RE = re.compile(r'<!--\s*comic-pile-factory-claim-released-v3:(?P<kind>issue|pr)-(?P<number>\d+):(?P<worker>[^:>\s]+):(?P<epoch>\d{10}):(?:repair-)?no-persisted-change-handoff\s*-->')
+DEP_ON_RE = re.compile(r"(?:[Dd]epends?\s+on)\s+([^\n]+)")
+NUMBER_REF_RE = re.compile(r"#(\d+)")
+DEPENDENCY_SEPARATORS = frozenset({'and', '&', '+', ','})
 
 
 def comment_is_trusted(comment: Mapping[str, Any]) -> bool:
@@ -323,6 +326,43 @@ def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[
     )
 
 
+def _leading_reference_numbers(text: str) -> set[int]:
+    """Return the '#N' references at the head of a dependency declaration.
+
+    Only the leading reference cluster counts: consecutive ``#N`` tokens
+    joined by separators such as ``and``, ``,``, or ``+``.  Prose or casual
+    ``#N`` mentions later on the line end the cluster so they never become
+    blocking prerequisites.
+    """
+    result: set[int] = set()
+    for token in text.split():
+        clean = token.rstrip(',.;:')
+        ref = NUMBER_REF_RE.fullmatch(clean)
+        if ref:
+            result.add(int(ref.group(1)))
+        elif clean.lower() not in DEPENDENCY_SEPARATORS:
+            break
+    return result
+
+
+def parse_depends_on_numbers(body: str) -> set[int]:
+    """Return issue numbers declared as explicit prerequisites in the body.
+
+    Only matches the canonical ``Depends on #NNN`` / ``Depends on #N, #M``
+    format used by structured issue declarations.  Casual ``#N`` mentions
+    elsewhere in the body are not treated as blocking prerequisites.
+    """
+    numbers: set[int] = set()
+    for match in DEP_ON_RE.finditer(body):
+        numbers.update(_leading_reference_numbers(match.group(1)))
+    return numbers
+
+
+def body_depends_on_unresolved(body: str, open_numbers: set[int]) -> bool:
+    """Return whether the body declares a prerequisite that is still open."""
+    return bool(parse_depends_on_numbers(body) & open_numbers)
+
+
 def build_candidates(
     issues: list[dict[str, Any]],
     prs: list[dict[str, Any]],
@@ -340,6 +380,11 @@ def build_candidates(
     }
     pr_wip_full = factory_pr_wip_count(prs) >= FACTORY_PR_WIP_LIMIT
     review_backlog_full = factory_review_backlog_count(prs) >= FACTORY_REVIEW_BACKLOG_LIMIT
+    open_numbers = {
+        int(issue['number'])
+        for issue in issues
+        if str(issue.get('state') or 'OPEN').upper() == 'OPEN'
+    }
     candidates: list[Candidate] = []
     for issue in issues:
         number = int(issue['number'])
@@ -348,6 +393,9 @@ def build_candidates(
             suppressing_pr_issues,
             no_diff_attempts=max(0, int(retry_counts.get(number, 0))),
         ):
+            continue
+        body = str(issue.get('body') or '')
+        if body_depends_on_unresolved(body, open_numbers - {number}):
             continue
         if pr_wip_full and not issue_bypasses_wip_limit(issue):
             continue
