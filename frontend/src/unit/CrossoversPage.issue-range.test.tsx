@@ -105,6 +105,10 @@ async function loadIssues() {
   const listbox = screen.getByRole('listbox', { name: 'Comic series for issue range results' })
   fireEvent.click(within(listbox).getByRole('option', { name: /Nova/ }))
   await screen.findByText(/Issues from Nova/)
+  await waitFor(() => {
+    expect(screen.getByLabelText('First issue')).not.toBeDisabled()
+    expect(screen.getByLabelText('First issue')).not.toHaveTextContent('Loading issues')
+  })
 }
 
 function selectRange(firstIssueId: string, lastIssueId: string) {
@@ -357,9 +361,10 @@ describe('CrossoversPage issue ranges', () => {
     openRangeForm()
     await loadIssues()
     selectRange('31', '33')
-    fireEvent.click(screen.getByRole('button', { name: 'Add range' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add range' })).toBeEnabled())
+    fireEvent.submit(screen.getByRole('form', { name: 'Add issue range to Annihilation' }))
 
-    expect(screen.getByRole('button', { name: 'Adding…' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Adding…' })).toBeDisabled()
     expect(screen.getByLabelText('Comic series for issue range')).toBeDisabled()
     expect(screen.getByLabelText('First issue')).toBeDisabled()
   })

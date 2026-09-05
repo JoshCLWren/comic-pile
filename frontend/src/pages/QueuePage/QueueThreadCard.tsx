@@ -105,7 +105,7 @@ export default function QueueThreadCard({
   return (
     <div
       data-testid="queue-thread-item"
-      className={`queue-thread-card group flex flex-col gap-3 px-3 py-3 md:flex-row md:items-center md:gap-4 md:px-4 md:py-3.5 cursor-pointer transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] focus-visible:ring-inset ${isDragOver ? 'bg-amber-500/10' : ''} ${isBlocked ? 'bg-red-500/[0.06]' : ''}`}
+      className={`queue-thread-card group flex flex-col gap-3 px-3 py-3 md:flex-row md:items-center md:gap-4 md:px-4 md:py-3.5 cursor-pointer transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] focus-visible:ring-inset ${isDragOver ? 'bg-amber-500/10' : ''}`}
       role="link"
       tabIndex={0}
       aria-label={`Open ${thread.title} details`}
@@ -145,7 +145,7 @@ export default function QueueThreadCard({
             </button>
             {isBlocked && (
               <Tooltip content={blockerLabels.length > 0 ? blockerLabels.join('\n') : 'Blocked by dependency'}>
-                <span className="text-[var(--theme-danger)] text-sm" aria-label="Blocked thread">🔒</span>
+                <span className="text-[var(--theme-continuity-accent)] text-sm" aria-label="Blocked thread">🔒</span>
               </Tooltip>
             )}
           </div>
@@ -172,11 +172,14 @@ export default function QueueThreadCard({
             )}
           </div>
           {isBlocked && (
-            <div className="mt-2 w-full text-left text-xs text-red-300/80 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+            <div
+              data-testid="queue-thread-blocked-detail"
+              className="mt-2 w-full rounded-lg border border-[var(--theme-continuity-accent)]/20 bg-[var(--theme-continuity-accent)]/10 px-3 py-2 text-left text-xs text-[var(--theme-text-muted)]"
+            >
               {firstBlocker ? (
                 <Link
                   to={`/thread/${firstBlocker.thread_id}`}
-                  className="font-bold hover:text-red-200 underline decoration-red-400/40"
+                  className="font-bold text-[var(--theme-continuity-accent)] underline decoration-[var(--theme-continuity-accent)]/40 hover:text-[var(--theme-text-primary)]"
                   aria-label={`Open ${firstBlocker.thread_title}`}
                   onClick={(event) => event.stopPropagation()}
                 >
@@ -185,7 +188,7 @@ export default function QueueThreadCard({
               ) : (
                 <button
                   type="button"
-                  className="font-bold hover:text-red-200 transition-colors"
+                  className="font-bold text-[var(--theme-continuity-accent)] transition-colors hover:text-[var(--theme-text-primary)]"
                   onClick={onDependencies}
                   aria-label={`View dependencies for ${thread.title}`}
                 >
@@ -195,7 +198,7 @@ export default function QueueThreadCard({
               {extraBlockerCount > 0 && (
                 <button
                   type="button"
-                  className="text-red-400/60 ml-1 hover:text-red-300 transition-colors"
+                  className="ml-1 text-[var(--theme-text-dim)] transition-colors hover:text-[var(--theme-continuity-accent)]"
                   onClick={onDependencies}
                   aria-label={`View all dependencies for ${thread.title}`}
                 >
