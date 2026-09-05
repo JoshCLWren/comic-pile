@@ -21,7 +21,11 @@ const navigateSpy = vi.fn()
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
-  return { ...actual, useNavigate: () => navigateSpy }
+  return {
+    ...actual,
+    useNavigate: () => navigateSpy,
+    useLocation: () => ({ state: null, pathname: '/' }),
+  }
 })
 
 vi.mock('../components/LazyDice3D', () => ({

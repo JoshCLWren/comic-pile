@@ -8,7 +8,10 @@ const spies = vi.hoisted(() => ({
   list: vi.fn(), override: vi.fn(), refetch: vi.fn(), navigate: vi.fn(), setDie: vi.fn(), clearDie: vi.fn(),
 }))
 
-vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => spies.navigate,
+  useLocation: () => ({ state: null, pathname: '/' }),
+}))
 vi.mock('../contexts/useBugReportRestore', () => ({
   useBugReportRestore: () => ({ setRestoreAction: vi.fn(), clearRestoreAction: vi.fn() }),
 }))

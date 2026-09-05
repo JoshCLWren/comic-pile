@@ -23,7 +23,10 @@ const threadData: Array<{ id: number; title: string; format: string; status: str
 let staleData: never[] = []
 let threadsValue: unknown = threadData
 
-vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => spies.navigate,
+  useLocation: () => ({ state: null, pathname: '/' }),
+}))
 vi.mock('../contexts/useBugReportRestore', () => ({
   useBugReportRestore: () => ({
     setRestoreAction: vi.fn((restore: () => void) => restore()),
