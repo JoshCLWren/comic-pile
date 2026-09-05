@@ -1,0 +1,217 @@
+name: Cache Latency Benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/cache-latency-benchmark.yml"
+      - "scripts/benchmark_cache_latency.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cache-latency-benchmark
+  cancel-in-progress: true
+
+env:
+  VERCEL_ORG_ID: team_1na05XWOpOb6wB1CA4m3GPRT
+  VERCEL_PROJECT_ID: prj_TLT92644pRPZbZSMoXddCfQLZgK8
+  VERCEL_TEAM_SLUG: joshclwrens-projects
+
+jobs:
+  measure:
+    name: Measure Upstash REST vs Neon point SELECT
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install locked runtime dependencies
+        run: uv sync --locked --no-dev
+
+      - name: Get production database connection string
+        id: neon
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${NEON_API_KEY:-}" || -z "${NEON_PROJECT_ID:-}" ]]; then
+            echo "neon_available=false" >> "$GITHUB_OUTPUT"
+            echo "NEON_API_KEY or NEON_PROJECT_ID missing; Neon path will be skipped."
+            exit 0
+          fi
+          uri="$(curl --fail --silent --show-error \
+            --url "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri?database_name=neondb&role_name=neondb_owner" \
+            --header 'Accept: application/json' \
+            --header "Authorization: Bearer ${NEON_API_KEY}" \
+            | jq -r '.uri')"
+          if [[ -z "$uri" || "$uri" == "null" ]]; then
+            echo "neon_available=false" >> "$GITHUB_OUTPUT"
+            echo "Neon connection URI lookup returned empty."
+            exit 0
+          fi
+          echo "::add-mask::$uri"
+          echo "neon_available=true" >> "$GITHUB_OUTPUT"
+          echo "db_url=$uri" >> "$GITHUB_OUTPUT"
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@58.1.0
+
+      - name: Pull production env key names and Upstash REST credentials
+        id: vercel_env
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "upstash_rest=false" >> "$GITHUB_OUTPUT"
+          echo "upstash_management=false" >> "$GITHUB_OUTPUT"
+          if [[ -z "${VERCEL_TOKEN:-}" ]]; then
+            echo "VERCEL_TOKEN missing; Upstash REST credentials will not be pulled."
+            echo "env_keys=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          vercel pull \
+            --yes \
+            --environment=production \
+            --scope "$VERCEL_TEAM_SLUG" \
+            --token "$VERCEL_TOKEN"
+          vercel env pull .env.production.local \
+            --yes \
+            --environment=production \
+            --scope "$VERCEL_TEAM_SLUG" \
+            --token "$VERCEL_TOKEN"
+          if [[ ! -f .env.production.local ]]; then
+            echo "Vercel env pull did not create .env.production.local"
+            echo "env_keys=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          keys="$(awk -F= 'BEGIN { OFS="" } /^[A-Za-z_][A-Za-z0-9_]*=/ { print $1 }' .env.production.local | sort | tr '\n' ' ')"
+          echo "env_keys=$keys" >> "$GITHUB_OUTPUT"
+          echo "Production env keys present (values not printed): $keys"
+
+          mask_value() {
+            local raw="$1"
+            raw="${raw#\"}"
+            raw="${raw%\"}"
+            raw="${raw#\'}"
+            raw="${raw%\'}"
+            if [[ -n "$raw" ]]; then
+              echo "::add-mask::$raw"
+            fi
+            printf '%s' "$raw"
+          }
+
+          while IFS= read -r line || [[ -n "$line" ]]; do
+            case "$line" in
+              UPSTASH_REDIS_REST_URL=*)
+                value="$(mask_value "${line#UPSTASH_REDIS_REST_URL=}")"
+                echo "UPSTASH_REDIS_REST_URL=$value" >> "$GITHUB_ENV"
+                echo "upstash_rest=true" >> "$GITHUB_OUTPUT"
+                ;;
+              UPSTASH_REDIS_REST_TOKEN=*)
+                value="$(mask_value "${line#UPSTASH_REDIS_REST_TOKEN=}")"
+                echo "UPSTASH_REDIS_REST_TOKEN=$value" >> "$GITHUB_ENV"
+                echo "upstash_rest=true" >> "$GITHUB_OUTPUT"
+                ;;
+              UPSTASH_EMAIL=*)
+                value="$(mask_value "${line#UPSTASH_EMAIL=}")"
+                echo "UPSTASH_EMAIL=$value" >> "$GITHUB_ENV"
+                echo "upstash_management=true" >> "$GITHUB_OUTPUT"
+                ;;
+              UPSTASH_API_KEY=*)
+                value="$(mask_value "${line#UPSTASH_API_KEY=}")"
+                echo "UPSTASH_API_KEY=$value" >> "$GITHUB_ENV"
+                echo "upstash_management=true" >> "$GITHUB_OUTPUT"
+                ;;
+              UPSTASH_DATABASE_ID=*)
+                value="$(mask_value "${line#UPSTASH_DATABASE_ID=}")"
+                echo "UPSTASH_DATABASE_ID=$value" >> "$GITHUB_ENV"
+                ;;
+            esac
+          done < .env.production.local
+          rm -f .env.production.local
+
+      - name: Run cache latency benchmark
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          mkdir -p docs
+          extra_args=()
+          if [[ "${{ steps.neon.outputs.neon_available }}" == "true" && -n "${DATABASE_URL:-}" ]]; then
+            extra_args+=(--database-url "$DATABASE_URL")
+          fi
+          uv run python scripts/benchmark_cache_latency.py \
+            --iterations 30 \
+            --warmups 3 \
+            --location "github-actions:ubuntu-latest" \
+            --kv-table bench_cache_kv \
+            --redact \
+            --output docs/CACHE_LOOKUP_LATENCY_2026-08.json \
+            "${extra_args[@]}"
+          jq '{
+            measured_from,
+            iterations,
+            warmups_per_path,
+            kv_table,
+            upstash_quota_blocked: .upstash_rest_get.quota_blocked,
+            upstash: .upstash_rest_get.summary,
+            neon: .neon_point_select.summary,
+            queue: .uncached_queue_read.summary,
+            provider_decision
+          }' docs/CACHE_LOOKUP_LATENCY_2026-08.json
+
+      - name: Report cache usage when management credentials exist
+        if: ${{ env.UPSTASH_EMAIL != '' && env.UPSTASH_API_KEY != '' }}
+        run: |
+          set -euo pipefail
+          uv run python -m scripts.cache_usage_report --json > "$RUNNER_TEMP/cache-usage.json"
+          jq '{
+            status,
+            observed_commands,
+            provider_commands,
+            application_budget,
+            provider_ratio,
+            recommendation
+          }' "$RUNNER_TEMP/cache-usage.json"
+
+      - name: Write credential coverage summary
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          payload = {
+              "neon_available": "${{ steps.neon.outputs.neon_available }}" == "true",
+              "upstash_rest_env_present": "${{ steps.vercel_env.outputs.upstash_rest }}" == "true",
+              "upstash_management_env_present": "${{ steps.vercel_env.outputs.upstash_management }}" == "true",
+              "queue_bearer_skipped": True,
+              "production_env_keys": "${{ steps.vercel_env.outputs.env_keys }}".split(),
+              "measured_from": "github-actions:ubuntu-latest",
+              "preferred_vantage": "vercel:cle1",
+          }
+          path = Path("${{ runner.temp }}/cache-benchmark-coverage.json")
+          path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          print(json.dumps(payload, indent=2))
+          PY
+
+      - name: Upload redacted benchmark artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: cache-provider-evidence
+          if-no-files-found: error
+          path: |
+            docs/CACHE_LOOKUP_LATENCY_2026-08.json
+            ${{ runner.temp }}/cache-benchmark-coverage.json
+            ${{ runner.temp }}/cache-usage.json

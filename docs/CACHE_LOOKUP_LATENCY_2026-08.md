@@ -1,8 +1,11 @@
 # Cache lookup latency: Upstash REST vs Neon point SELECT
 
-Updated: 2026-08-22  
+Updated: 2026-09-05  
 Script: `scripts/benchmark_cache_latency.py`  
-Run command (from Vercel region, e.g. a one-shot serverless function or `vercel run`):
+Preferred vantage: Vercel region `cle1` (`vercel.json` `regions`).  
+Measurement workflow: `.github/workflows/cache-latency-benchmark.yml` (`workflow_dispatch` or push of the script/workflow). That job runs on `ubuntu-latest` and records `measured_from: github-actions:ubuntu-latest` when a same-region `cle1` runner is not available. The decision rule compares Upstash and Neon from the same vantage, so a same-host ratio is still valid.
+
+Run command:
 
     DATABASE_URL=postgresql://... \
     UPSTASH_REDIS_REST_URL=https://... \
@@ -12,10 +15,11 @@ Run command (from Vercel region, e.g. a one-shot serverless function or `vercel 
         python scripts/benchmark_cache_latency.py \
             --iterations 30 \
             --warmups 3 \
-            --location "vercel:iad1" \
+            --location "vercel:cle1" \
+            --redact \
             --output docs/CACHE_LOOKUP_LATENCY_2026-08.json
 
-Issue: #1782
+Issues: #1782, #2216
 
 ## Quota context
 
@@ -104,7 +108,7 @@ budget in `docs/CACHE_COMMAND_BUDGET.md`.
 
 The raw Upstash REST hop should outperform a Neon point SELECT when measured
 from the same Vercel region, because Upstash is an in-memory edge cache at a
-colocation that is likely nearer to Vercel's `iad1` region than Neon's GCP
+colocation that is likely nearer to Vercel's `cle1` region than Neon's GCP
 `us-east1`.  The p50 delta determines whether caching is worth the 350 000
 command/month budget documented in `docs/CACHE_COMMAND_BUDGET.md`.
 
@@ -132,7 +136,7 @@ After the Upstash quota resets (target: 2026-08-28 or earlier):
    `upstash_rest_get` section.
 2. Run the full benchmark:
    `python scripts/benchmark_cache_latency.py --iterations 30 --warmups 3
-   --location "vercel:iad1" --output docs/CACHE_LOOKUP_LATENCY_2026-08.json
+   --location "vercel:cle1" --redact --output docs/CACHE_LOOKUP_LATENCY_2026-08.json`
 3. Replace the placeholder numbers in the summary table above with the values
    from the JSON file.
 4. Feed the medians into `app/cache_provider_decision.py::provider_recommendation`
@@ -155,7 +159,7 @@ After the Upstash quota resets (target: 2026-08-28 or earlier):
 ```jsonc
 {
   "schema_version": "1",          // bump on any structural change
-  "measured_from": "vercel:iad1", // deployment vantage identifier
+  "measured_from": "vercel:cle1", // deployment vantage identifier
   "iterations": 30,
   "warmups_per_path": 3,
   "kv_table": "bench_cache_kv",

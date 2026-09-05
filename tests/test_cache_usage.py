@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.cache_usage import build_cache_usage_report, format_cache_usage_report
 
 
@@ -51,6 +53,50 @@ def test_report_rejects_negative_usage() -> None:
         build_cache_usage_report(observed_commands=-1)
     with pytest.raises(ValueError):
         build_cache_usage_report(provider_commands=-1)
+
+
+def test_resolve_provider_commands_prefers_explicit_count() -> None:
+    """An operator-supplied figure wins over live Upstash credentials."""
+    from scripts.cache_usage_report import resolve_provider_commands
+
+    assert resolve_provider_commands(14500) == 14500
+
+
+def test_resolve_provider_commands_fetches_upstash_when_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Make cache-usage includes provider month-to-date when management creds exist."""
+    from scripts import cache_usage_report as usage_cli
+
+    monkeypatch.setenv("UPSTASH_EMAIL", "ops@example.com")
+    monkeypatch.setenv("UPSTASH_API_KEY", "test-key")
+
+    class _Live:
+        used_commands = 1234
+
+    def _fake_build(**kwargs: object) -> _Live:
+        assert kwargs["email"] == "ops@example.com"
+        assert kwargs["api_key"] == "test-key"
+        return _Live()
+
+    monkeypatch.setattr(
+        "app.cache_usage_report.build_cache_usage_report",
+        _fake_build,
+    )
+
+    assert usage_cli.resolve_provider_commands(None) == 1234
+
+
+def test_resolve_provider_commands_skips_without_management_creds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Missing Upstash management credentials leave provider commands unset."""
+    from scripts.cache_usage_report import resolve_provider_commands
+
+    monkeypatch.delenv("UPSTASH_EMAIL", raising=False)
+    monkeypatch.delenv("UPSTASH_API_KEY", raising=False)
+
+    assert resolve_provider_commands(None) is None
 
 
 def test_report_serializes_to_dict_and_text() -> None:

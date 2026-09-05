@@ -1,6 +1,6 @@
 # Cache command budget
 
-Updated: 2026-08-11
+Updated: 2026-09-05
 
 ComicPile treats Redis as an optional performance layer, not a correctness dependency. The command budget below exists to keep cache usage measurable and comfortably inside the configured Upstash free-tier allowance while preserving enough headroom for retries, diagnostics, console traffic, and future growth.
 
@@ -41,6 +41,42 @@ These are cold-cache upper bounds for the production generation-cache command co
 | Continuity mutation | 1 | one user-generation `INCR` invalidation |
 
 The source-of-truth ceilings live in `app/cache_metrics.py` and are exercised by `tests/test_cache_command_budget.py`. If a flow legitimately needs more cache commands, update the implementation, ceiling test, and this document together so budget growth is explicit rather than accidental.
+
+## Production census (2026-09-05)
+
+Best available fleet traffic is Vercel production runtime logs grouped by
+`requestPath`, not a single-process `/api/v1/traffic-metrics` snapshot.
+
+| Source | Window | Result |
+| --- | --- | --- |
+| Vercel runtime logs (`group_by=requestPath`) | 7 days retained (Hobby) | 855 requests (851×200, 4×401) |
+| Vercel Web Analytics visits/pageviews | latest 31 days | 0 / 0 — not used as API census truth |
+| `GET /api/v1/traffic-metrics` | one serverless instance | process-local; not used as fleet truth |
+
+Mapped 7-day cache-flow counts and the conservative monthly projection live in
+`docs/CACHE_TRAFFIC_CENSUS_2026-09.json`. The official projection uses
+`project_monthly_cache_commands()`:
+
+| Flow | 7-day observed | Conservative monthly count | Ceiling | Monthly commands |
+| --- | ---: | ---: | ---: | ---: |
+| Bootstrap | 5 | 86 | 4 | 344 |
+| Queue load | 41 | 703 | 2 | 1,406 |
+| Roll | 0 | 20 | 5 | 100 |
+| Snooze | 0 | 20 | 1 | 20 |
+| Rating | 0 | 20 | 1 | 20 |
+| Thread mutation | 0 | 40 | 1 | 40 |
+| Issue mutation | 0 | 40 | 1 | 40 |
+| Continuity mutation | 0 | 20 | 1 | 20 |
+| **Total** | | | | **1,990** |
+
+Method: scale 7 days to 30 days, multiply by a 4× uncertainty factor, then apply
+a small floor for unobserved roll/mutation flows. 1,990 commands/month is 0.6%
+of the 350,000 application budget and leaves the 150,000-command headroom
+intact. A pathological bound that treats every observed request as a 5-command
+roll is still only 18,321 commands/month.
+
+This census satisfies the command-budget half of the Redis re-enable gate.
+The latency half still requires measured Upstash vs Neon p50/p95 cells.
 
 ## Guardrail: visible alert + smoke-test throttle (issue #1751)
 
