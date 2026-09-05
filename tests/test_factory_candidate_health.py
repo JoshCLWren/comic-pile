@@ -168,22 +168,22 @@ def test_omniroute_throttle_is_scoped_to_one_model_route() -> None:
     candidates = [
         {
             "provider": "omniroute-free",
-            "model": "auto/coding:free",
-            "runtime_model": "omniroute/auto/coding:free",
+            "model": "vendor/a:free",
+            "runtime_model": "omniroute/vendor/a:free",
             "discovered_by": "provider_catalog",
         },
         {
             "provider": "omniroute-free",
-            "model": "auto/reasoning:free",
-            "runtime_model": "omniroute/auto/reasoning:free",
+            "model": "vendor/b:free",
+            "runtime_model": "omniroute/vendor/b:free",
             "discovered_by": "provider_catalog",
         },
     ]
     result = HEALTH.select_candidate(
         candidates,
         [
-            evidence("auto/coding:free", "provider_throttle", provider="omniroute-free"),
-            evidence("auto/reasoning:free", "success", provider="omniroute-free"),
+            evidence("vendor/a:free", "provider_throttle", provider="omniroute-free"),
+            evidence("vendor/b:free", "success", provider="omniroute-free"),
         ],
         worker=45,
         now_epoch=NOW,
@@ -191,7 +191,7 @@ def test_omniroute_throttle_is_scoped_to_one_model_route() -> None:
     )
 
     assert result.selected is not None
-    assert result.selected.model == "auto/reasoning:free"
+    assert result.selected.model == "vendor/b:free"
 
 
 def test_omniroute_410_still_retires_only_that_model() -> None:
@@ -199,22 +199,22 @@ def test_omniroute_410_still_retires_only_that_model() -> None:
     candidates = [
         {
             "provider": "omniroute-free",
-            "model": "auto/coding:free",
-            "runtime_model": "omniroute/auto/coding:free",
+            "model": "vendor/a:free",
+            "runtime_model": "omniroute/vendor/a:free",
             "discovered_by": "provider_catalog",
         },
         {
             "provider": "omniroute-free",
-            "model": "auto/reasoning:free",
-            "runtime_model": "omniroute/auto/reasoning:free",
+            "model": "vendor/b:free",
+            "runtime_model": "omniroute/vendor/b:free",
             "discovered_by": "provider_catalog",
         },
     ]
     result = HEALTH.select_candidate(
         candidates,
         [
-            evidence("auto/coding:free", "model_retired_410", provider="omniroute-free"),
-            evidence("auto/reasoning:free", "success", provider="omniroute-free"),
+            evidence("vendor/a:free", "model_retired_410", provider="omniroute-free"),
+            evidence("vendor/b:free", "success", provider="omniroute-free"),
         ],
         worker=45,
         now_epoch=NOW,
@@ -222,7 +222,7 @@ def test_omniroute_410_still_retires_only_that_model() -> None:
     )
 
     assert result.selected is not None
-    assert result.selected.model == "auto/reasoning:free"
+    assert result.selected.model == "vendor/b:free"
 
 
 def test_no_work_keeps_candidate_healthy() -> None:

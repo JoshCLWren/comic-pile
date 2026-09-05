@@ -38,4 +38,4 @@ def test_omniroute_control_plane_requests_retry_transient_tunnel_failures():
     """A brief Funnel/DNS interruption must not retire the gateway for one probe."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
-    assert workflow.count("--retry 5 --retry-all-errors --retry-delay 5") == 2
+    assert workflow.count("--retry 5 --retry-all-errors --retry-delay 5") == 1

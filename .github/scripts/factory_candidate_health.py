@@ -63,6 +63,11 @@ TRANSIENT_MODEL_OUTCOMES = {
 # routes. Keep throttle/failure evidence scoped to the affected route so one
 # busy upstream model does not suppress the rest of the fleet.
 MODEL_SCOPED_PROVIDERS = {"omniroute-free"}
+# These are virtual intent routes, not backing models. Their executable health
+# is established by the bounded OpenCode smoke at the execution boundary. They
+# must never be suppressed because a concrete backing model lacks historical
+# health evidence in ComicPile.
+NATIVE_OMNIROUTE_ROUTES = {"auto/coding:free", "auto/reasoning:free"}
 
 
 @dataclass(frozen=True)
@@ -322,6 +327,27 @@ def rank_candidates(
     return tuple(ranked)
 
 
+def _native_omniroute_candidate(
+    candidate: Mapping[str, Any],
+) -> RankedCandidate | None:
+    """Return a trusted native intent route without inspecting backing models."""
+    provider = str(candidate.get("provider") or "")
+    model = str(candidate.get("model") or "")
+    runtime_model = str(candidate.get("runtime_model") or "")
+    discovered_by = str(candidate.get("discovered_by") or "")
+    if provider != "omniroute-free" or model not in NATIVE_OMNIROUTE_ROUTES:
+        return None
+    if runtime_model != f"omniroute/{model}" or not discovered_by:
+        return None
+    return RankedCandidate(
+        provider=provider,
+        model=model,
+        runtime_model=runtime_model,
+        discovered_by=discovered_by,
+        health_state="native_route",
+    )
+
+
 def select_candidate(
     candidates: Sequence[Mapping[str, Any]],
     comments: Iterable[Mapping[str, Any]],
@@ -332,12 +358,30 @@ def select_candidate(
     rankings: Mapping[str, float] | None = None,
     require_rankings: bool = False,
 ) -> Selection:
-    """Prefer candidates with trusted evidence, failing closed on unknown routes."""
+    """Prefer executable candidates while preserving native OmniRoute intents."""
+    # Native OmniRoute intents are the execution boundary. ComicPile must not
+    # inspect or veto the concrete free model/provider selected behind them.
+    # Their executable capacity is proven immediately afterward by the bounded
+    # OpenCode smoke, which provides better evidence than stale backing-model
+    # attempt history.
+    native = tuple(
+        value
+        for candidate in candidates
+        if (value := _native_omniroute_candidate(candidate)) is not None
+    )
+    if native and preferred_provider in {None, "omniroute-free"}:
+        selected = native[(worker - 1) % len(native)]
+        return Selection(
+            selected=selected,
+            candidates=native,
+            failure_outcome="",
+            detail="selected native OmniRoute intent route; smoke owns executable health",
+        )
+
     comment_list = tuple(comments)
     ranked = rank_candidates(candidates, comment_list, now_epoch=now_epoch)
-    # Catalog presence is not execution evidence. Unknown routes must be
-    # rejected before spending a factory slot on a smoke test that is likely
-    # to reveal an unavailable model.
+    # Catalog presence is not execution evidence for concrete model selectors.
+    # Unknown backing-model routes still fail closed.
     priority = {"healthy": 0, "degraded": 1}
     usable = [candidate for candidate in ranked if candidate.health_state in priority]
     preferred = [
@@ -348,7 +392,8 @@ def select_candidate(
     if preferred:
         usable = preferred
     ranked_usable = [
-        candidate for candidate in usable
+        candidate
+        for candidate in usable
         if _ranking_key(candidate.model) in (rankings or {})
     ]
     if ranked_usable:
