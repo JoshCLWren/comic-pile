@@ -1,11 +1,17 @@
 name: Apply Cache Redis Enable
 
-# Josh-confirmed #2216 flip. workflow_dispatch only — never runs on push.
-# Sets production CACHE_PROVIDER=redis, CACHE_ENABLED=true,
-# CACHE_QUOTA_THROTTLE_ENABLED=true, then redeploys the current main SHA.
-# Rollback remains CACHE_ENABLED=false (not performed here).
+# Josh-confirmed #2216 flip. Sets production CACHE_PROVIDER=redis,
+# CACHE_ENABLED=true, CACHE_QUOTA_THROTTLE_ENABLED=true, then redeploys
+# the current main SHA. Rollback remains CACHE_ENABLED=false.
+# Push-to-main on this file is the automation path (workflow_dispatch is
+# 403 for the cloud-agent token). Idempotent if re-run.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/apply-cache-redis-enable.yml"
 
 permissions:
   contents: read
