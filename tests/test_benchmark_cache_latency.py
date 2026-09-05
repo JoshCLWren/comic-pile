@@ -11,6 +11,7 @@ from scripts.benchmark_cache_latency import (
     DEFAULT_KV_TABLE,
     Run,
     _summarize,
+    _upstash_request,
     load_dotenv_values,
     normalize_asyncpg_url,
     redact_report,
@@ -85,6 +86,20 @@ def test_redact_report_rewrites_upstash_host_and_credential_errors() -> None:
     )
 
 
+def test_upstash_request_rejects_placeholder_urls() -> None:
+    """A Vercel [SENSITIVE] placeholder must not crash the harness."""
+    elapsed_ms, http_status, _body, error = _upstash_request(
+        "[SENSITIVE]/get/comic_pile_cache_latency_bench_key_v1",
+        "token",
+        1.0,
+    )
+
+    assert elapsed_ms == 0.0
+    assert http_status == 0
+    assert error is not None
+    assert "invalid_upstash_url_scheme" in error
+
+
 def test_benchmark_uses_one_shared_kv_key_and_table() -> None:
     """Neon insert/select and Upstash GET must share one key and the documented table."""
     assert BENCH_KV_KEY == "comic_pile_cache_latency_bench_key_v1"
@@ -97,6 +112,7 @@ def test_load_dotenv_values_strips_quotes(tmp_path: Path) -> None:
     env_file.write_text(
         'KV_REST_API_URL="https://example.upstash.io"\n'
         "KV_REST_API_TOKEN=plain-token\n"
+        "UPSTASH_REDIS_REST_TOKEN=[SENSITIVE]\n"
         "# comment\n",
         encoding="utf-8",
     )
@@ -105,6 +121,7 @@ def test_load_dotenv_values_strips_quotes(tmp_path: Path) -> None:
 
     assert values["KV_REST_API_URL"] == "https://example.upstash.io"
     assert values["KV_REST_API_TOKEN"] == "plain-token"
+    assert "UPSTASH_REDIS_REST_TOKEN" not in values
 
 
 def test_upstash_rest_aliases_prefer_native_then_vercel_kv(

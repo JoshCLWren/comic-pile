@@ -73,6 +73,10 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          UPSTASH_EMAIL: ${{ secrets.UPSTASH_EMAIL }}
+          UPSTASH_API_KEY: ${{ secrets.UPSTASH_API_KEY }}
         run: |
           set -euo pipefail
           mkdir -p docs
@@ -88,30 +92,21 @@ jobs:
               --environment=production \
               --scope "$VERCEL_TEAM_SLUG" \
               --token "$VERCEL_TOKEN"
-            vercel env pull .env.production.local \
-              --yes \
-              --environment=production \
-              --scope "$VERCEL_TEAM_SLUG" \
-              --token "$VERCEL_TOKEN"
           else
-            echo "VERCEL_TOKEN missing; Upstash REST credentials will not be pulled."
+            echo "VERCEL_TOKEN missing; Vercel production env will not be pulled."
           fi
 
-          if [[ -f .env.production.local ]]; then
-            keys="$(awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/ { print $1 }' .env.production.local | sort | tr '\n' ' ')"
+          dotenv_file=""
+          if [[ -f .vercel/.env.production.local ]]; then
+            dotenv_file=".vercel/.env.production.local"
+          elif [[ -f .env.production.local ]]; then
+            dotenv_file=".env.production.local"
+          fi
+          if [[ -n "$dotenv_file" ]]; then
+            keys="$(awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/ { print $1 }' "$dotenv_file" | sort | tr '\n' ' ')"
             echo "env_keys=$keys" >> "$GITHUB_OUTPUT"
-            echo "Production env keys present (values not printed): $keys"
-            if grep -Eq '^(UPSTASH_REDIS_REST_URL|KV_REST_API_URL)=' .env.production.local \
-              && grep -Eq '^(UPSTASH_REDIS_REST_TOKEN|KV_REST_API_READ_ONLY_TOKEN|KV_REST_API_TOKEN)=' .env.production.local
-            then
-              echo "upstash_rest=true" >> "$GITHUB_OUTPUT"
-            fi
-            if grep -Eq '^UPSTASH_EMAIL=' .env.production.local \
-              && grep -Eq '^UPSTASH_API_KEY=' .env.production.local
-            then
-              echo "upstash_management=true" >> "$GITHUB_OUTPUT"
-            fi
-            dotenv_args+=(--from-dotenv .env.production.local)
+            echo "Production env keys present in $dotenv_file (values not printed): $keys"
+            dotenv_args+=(--from-dotenv "$dotenv_file")
           fi
 
           extra_args=()
@@ -127,7 +122,7 @@ jobs:
             --output docs/CACHE_LOOKUP_LATENCY_2026-08.json \
             "${dotenv_args[@]}" \
             "${extra_args[@]}"
-          rm -f .env.production.local
+          rm -f .env.production.local .vercel/.env.production.local
           jq '{
             measured_from,
             iterations,

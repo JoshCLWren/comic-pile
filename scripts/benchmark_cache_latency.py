@@ -104,6 +104,8 @@ def load_dotenv_values(path: str) -> dict[str, str]:
             value = value.strip()
             if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
                 value = value[1:-1]
+            if not value or value == "[SENSITIVE]":
+                continue
             values[key] = value
     return values
 
@@ -203,6 +205,9 @@ def _upstash_request(url: str, token: str, timeout: float) -> tuple[float, int, 
     Mirrors the network path taken by ``upstash_redis.asyncio.Redis.get`` without
     requiring that package.
     """
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return 0.0, 0, b"", f"invalid_upstash_url_scheme:{parsed.scheme or 'missing'}"
     started = time.perf_counter()
     req = urllib.request.Request(url, method="GET")
     req.add_header("Authorization", f"Bearer {token}")
