@@ -61,8 +61,12 @@ def test_monthly_counts_are_scaled_from_seven_day_window() -> None:
     assert isinstance(scale, float)
     assert isinstance(multiplier, int)
 
-    expected_bootstrap = round(observed["bootstrap"] * scale * multiplier)
-    expected_queue = round(observed["queue_load"] * scale * multiplier)
+    bootstrap = observed["bootstrap"]
+    queue_load = observed["queue_load"]
+    assert isinstance(bootstrap, int)
+    assert isinstance(queue_load, int)
+    expected_bootstrap = round(bootstrap * scale * multiplier)
+    expected_queue = round(queue_load * scale * multiplier)
     assert monthly["bootstrap"] == expected_bootstrap
     assert monthly["queue_load"] == expected_queue
 

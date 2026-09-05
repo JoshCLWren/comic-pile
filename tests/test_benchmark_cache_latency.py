@@ -50,7 +50,9 @@ def test_summarize_ignores_skipped_and_error_runs() -> None:
 
     assert summary is not None
     assert summary["samples"] == 2
-    assert summary["elapsed_ms"]["p50"] == 13.25
+    elapsed = summary["elapsed_ms"]
+    assert isinstance(elapsed, dict)
+    assert elapsed["p50"] == 13.25
 
 
 def test_summarize_returns_none_when_no_ok_samples() -> None:
@@ -77,13 +79,21 @@ def test_redact_report_rewrites_upstash_host_and_credential_errors() -> None:
 
     redacted = redact_report(report)
 
-    endpoint = redacted["upstash_rest_get"]["endpoint"]
+    upstash = redacted["upstash_rest_get"]
+    assert isinstance(upstash, dict)
+    endpoint = upstash["endpoint"]
     assert isinstance(endpoint, str)
     assert "upstash.io" not in endpoint
     assert "<redacted>" in endpoint
-    assert redacted["upstash_rest_get"]["runs"][0]["error_detail"] == "<redacted>"
+    runs = upstash["runs"]
+    assert isinstance(runs, list)
+    first_run = runs[0]
+    assert isinstance(first_run, dict)
+    assert first_run["error_detail"] == "<redacted>"
+    original = report["upstash_rest_get"]
+    assert isinstance(original, dict)
     assert (
-        report["upstash_rest_get"]["endpoint"]
+        original["endpoint"]
         == "https://us1-secret.upstash.io/get/comic_pile_cache_latency_bench_key_v1"
     )
 
