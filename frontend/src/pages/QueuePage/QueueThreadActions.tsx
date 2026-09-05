@@ -7,6 +7,7 @@ interface QueueThreadActionsProps {
   snoozeDisabled: boolean
   readDisabled?: boolean
   readDisabledReason?: string
+  isBlocked?: boolean
   onRead: () => void
   onEdit: () => void
   onSnooze: () => void
@@ -20,6 +21,7 @@ export default function QueueThreadActions({
   snoozeDisabled,
   readDisabled = false,
   readDisabledReason,
+  isBlocked = false,
   onRead,
   onEdit,
   onSnooze,
@@ -36,8 +38,8 @@ export default function QueueThreadActions({
   const snoozeTooltip = snoozeDisabled
     ? 'Only the comic currently waiting to be read can be snoozed.'
     : snoozeLabel === 'Unsnooze'
-      ? 'Unsnooze to return this comic to the rolling pool.'
-      : 'Snooze to temporarily exclude this comic from rolling.'
+    ? 'Unsnooze to return this comic to the rolling pool.'
+    : 'Snooze to temporarily exclude this comic from rolling.'
 
   const snoozeDescriptionId = `snooze-description-${title.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'thread'}`
 
@@ -70,46 +72,96 @@ export default function QueueThreadActions({
           Read
         </button>
       )}
-      <button
-        type="button"
-        aria-label="Edit"
-        onClick={stopCardClick(onEdit)}
-        className="inline-flex h-11 md:h-9 items-center justify-center rounded-lg bg-white/5 px-3 text-sm font-semibold text-[var(--theme-text-muted)] hover:bg-white/10 hover:text-[var(--theme-text-primary)] transition-colors"
-      >
-        Edit
-      </button>
-      <Tooltip content={snoozeTooltip}>
-        <button
-          type="button"
-          aria-label={snoozeLabel}
-          aria-disabled={snoozeDisabled || undefined}
-          aria-describedby={snoozeDisabled ? snoozeDescriptionId : undefined}
-          title={snoozeTooltip}
-          tabIndex={snoozeDisabled ? 0 : undefined}
-          onClick={
-            snoozeDisabled
-              ? (event: React.MouseEvent<HTMLButtonElement>) => event.stopPropagation()
-              : stopCardClick(onSnooze)
-          }
-          className={`inline-flex h-11 md:h-9 items-center justify-center gap-1.5 rounded-lg bg-white/5 px-3 text-sm font-semibold text-[var(--theme-text-muted)] hover:bg-white/10 hover:text-[var(--theme-text-primary)] transition-colors ${snoozeDisabled ? 'cursor-not-allowed opacity-40 hover:bg-white/5 hover:text-[var(--theme-text-muted)]' : ''}`}
-        >
-          <span aria-hidden="true" className="text-xs">{snoozeIcon}</span>
-          {snoozeLabel}
-        </button>
-      </Tooltip>
-      {snoozeDisabled && (
-        <span id={snoozeDescriptionId} className="sr-only">
-          Only the comic currently waiting to be read can be snoozed.
-        </span>
+      {isBlocked ? (
+        <>
+          <button
+            type="button"
+            aria-label="Edit"
+            onClick={stopCardClick(onEdit)}
+            className="inline-flex h-11 md:h-9 items-center justify-center rounded-lg bg-white/5 px-3 text-sm font-semibold text-[var(--theme-text-muted)] hover:bg-white/10 hover:text-[var(--theme-text-primary)] transition-colors opacity-50"
+          >
+            Edit
+          </button>
+          <Tooltip content={snoozeTooltip}>
+            <button
+              type="button"
+              aria-label={snoozeLabel}
+              aria-disabled={snoozeDisabled || undefined}
+              aria-describedby={snoozeDisabled ? snoozeDescriptionId : undefined}
+              title={snoozeTooltip}
+              tabIndex={snoozeDisabled ? 0 : undefined}
+              onClick={
+                snoozeDisabled
+                  ? (event: React.MouseEvent<HTMLButtonElement>) => event.stopPropagation()
+                  : stopCardClick(onSnooze)
+              }
+              className={`inline-flex h-11 md:h-9 items-center justify-center gap-1.5 rounded-lg bg-white/5 px-3 text-sm font-semibold text-[var(--theme-text-muted)] hover:bg-white/10 hover:text-[var(--theme-text-primary)] transition-colors ${snoozeDisabled ? 'cursor-not-allowed opacity-40 hover:bg-white/5 hover:text-[var(--theme-text-muted)]' : ''} opacity-50`}
+            >
+              <span aria-hidden="true" className="text-xs">{snoozeIcon}</span>
+              {snoozeLabel}
+            </button>
+          </Tooltip>
+          {snoozeDisabled && (
+            <span id={snoozeDescriptionId} className="sr-only">
+              Only the comic currently waiting to be read can be snoozed.
+            </span>
+          )}
+          <button
+            type="button"
+            aria-label="Delete"
+            onClick={stopCardClick(onDelete)}
+            className="inline-flex h-11 md:h-9 items-center justify-center rounded-lg px-3 text-sm font-medium text-[var(--theme-text-dim)] hover:bg-[var(--theme-danger)]/10 hover:text-[var(--theme-danger)] transition-colors opacity-50"
+          >
+            Delete
+          </button>
+          <div className="mt-2 w-full text-left text-xs text-[var(--theme-text-muted)]">
+            Read {readDisabledReason ?? 'the blocker'} first to enable these actions
+          </div>
+        </>
+      ) : (
+        <>
+          <button
+            type="button"
+            aria-label="Edit"
+            onClick={stopCardClick(onEdit)}
+            className="inline-flex h-11 md:h-9 items-center justify-center rounded-lg bg-white/5 px-3 text-sm font-semibold text-[var(--theme-text-muted)] hover:bg-white/10 hover:text-[var(--theme-text-primary)] transition-colors"
+          >
+            Edit
+          </button>
+          <Tooltip content={snoozeTooltip}>
+            <button
+              type="button"
+              aria-label={snoozeLabel}
+              aria-disabled={snoozeDisabled || undefined}
+              aria-describedby={snoozeDisabled ? snoozeDescriptionId : undefined}
+              title={snoozeTooltip}
+              tabIndex={snoozeDisabled ? 0 : undefined}
+              onClick={
+                snoozeDisabled
+                  ? (event: React.MouseEvent<HTMLButtonElement>) => event.stopPropagation()
+                  : stopCardClick(onSnooze)
+              }
+              className={`inline-flex h-11 md:h-9 items-center justify-center gap-1.5 rounded-lg bg-white/5 px-3 text-sm font-semibold text-[var(--theme-text-muted)] hover:bg-white/10 hover:text-[var(--theme-text-primary)] transition-colors ${snoozeDisabled ? 'cursor-not-allowed opacity-40 hover:bg-white/5 hover:text-[var(--theme-text-muted)]' : ''}`}
+            >
+              <span aria-hidden="true" className="text-xs">{snoozeIcon}</span>
+              {snoozeLabel}
+            </button>
+          </Tooltip>
+          {snoozeDisabled && (
+            <span id={snoozeDescriptionId} className="sr-only">
+              Only the comic currently waiting to be read can be snoozed.
+            </span>
+          )}
+          <button
+            type="button"
+            aria-label="Delete"
+            onClick={stopCardClick(onDelete)}
+            className="inline-flex h-11 md:h-9 items-center justify-center rounded-lg px-3 text-sm font-medium text-[var(--theme-text-dim)] hover:bg-[var(--theme-danger)]/10 hover:text-[var(--theme-danger)] transition-colors"
+          >
+            Delete
+          </button>
+        </>
       )}
-      <button
-        type="button"
-        aria-label="Delete"
-        onClick={stopCardClick(onDelete)}
-        className="inline-flex h-11 md:h-9 items-center justify-center rounded-lg px-3 text-sm font-medium text-[var(--theme-text-dim)] hover:bg-[var(--theme-danger)]/10 hover:text-[var(--theme-danger)] transition-colors"
-      >
-        Delete
-      </button>
     </div>
   )
 }
