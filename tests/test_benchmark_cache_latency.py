@@ -135,6 +135,9 @@ def test_upstash_rest_aliases_prefer_native_then_vercel_kv(
     monkeypatch.setenv("KV_REST_API_TOKEN", "write-token")
 
     assert resolve_upstash_rest_url() == "https://example.upstash.io"
+    assert resolve_upstash_rest_token() == "write-token"
+
+    monkeypatch.delenv("KV_REST_API_TOKEN")
     assert resolve_upstash_rest_token() == "readonly-token"
 
     monkeypatch.setenv("UPSTASH_REDIS_REST_URL", "https://native.upstash.io")

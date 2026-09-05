@@ -120,16 +120,17 @@ def resolve_upstash_rest_url() -> str | None:
 
 
 def resolve_upstash_rest_token() -> str | None:
-    """Return the Upstash REST token, preferring a read-only Vercel KV token.
+    """Return the Upstash REST token, preferring the read-write Vercel KV token.
 
     Returns:
-        ``UPSTASH_REDIS_REST_TOKEN``, else ``KV_REST_API_READ_ONLY_TOKEN``,
-        else ``KV_REST_API_TOKEN``, else ``None``.
+        ``UPSTASH_REDIS_REST_TOKEN``, else ``KV_REST_API_TOKEN``, else
+        ``KV_REST_API_READ_ONLY_TOKEN`` (GET-only latency fallback), else
+        ``None``.
     """
     return (
         os.environ.get("UPSTASH_REDIS_REST_TOKEN")
-        or os.environ.get("KV_REST_API_READ_ONLY_TOKEN")
         or os.environ.get("KV_REST_API_TOKEN")
+        or os.environ.get("KV_REST_API_READ_ONLY_TOKEN")
     )
 
 
