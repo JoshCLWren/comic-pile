@@ -41,9 +41,9 @@ def redis_settings(**values: bool | str | None) -> RedisSettings:
 class TestMemoConclusionAndProductionConfig:
     """The memo's conclusion must match the runtime default configuration."""
 
-    def test_memo_conclusion_chooses_postgres(self) -> None:
-        """Deployed production stays Postgres until Josh applies the GO flips."""
-        assert PRODUCTION_CACHE_PROVIDER == "postgres"
+    def test_memo_conclusion_chooses_redis(self) -> None:
+        """The provider-decision memo now targets Redis after the #2216 GO."""
+        assert PRODUCTION_CACHE_PROVIDER == "redis"
 
     def test_measured_distributions_recommend_upstash(self) -> None:
         """The 2026-09-05 committed samples make provider_recommendation GO redis."""
@@ -55,13 +55,28 @@ class TestMemoConclusionAndProductionConfig:
             == "upstash"
         )
 
-    def test_runtime_default_resolution_matches_memo_conclusion(self) -> None:
-        """Production defaults resolve to the memo's chosen provider."""
+    def test_code_default_stays_postgres_without_env_override(self) -> None:
+        """Unset CACHE_PROVIDER still resolves to Postgres in process defaults."""
         settings = redis_settings()
 
-        assert settings.cache_provider == PRODUCTION_CACHE_PROVIDER
-        assert settings.effective_provider == PRODUCTION_CACHE_PROVIDER
+        assert settings.cache_provider == "postgres"
+        assert settings.effective_provider == "postgres"
         assert settings.is_configured is True
+
+    def test_kv_rest_aliases_enable_redis_when_explicitly_on(
+        self,
+    ) -> None:
+        """Vercel KV REST aliases are enough; no native UPSTASH_* required."""
+        settings = redis_settings(
+            cache_provider="redis",
+            cache_enabled=True,
+            kv_rest_api_url="https://example.upstash.io",
+            kv_rest_api_token="write-token",
+        )
+
+        assert settings.resolved_upstash_rest_url == "https://example.upstash.io"
+        assert settings.resolved_upstash_rest_token == "write-token"
+        assert settings.effective_provider == "redis"
 
     def test_redis_requires_explicit_enablement_to_override_postgres(self) -> None:
         """Redis only becomes the effective provider with an explicit opt-in."""

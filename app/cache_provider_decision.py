@@ -28,10 +28,9 @@ from app.config import CacheProvider
 
 LatencyVerdict = Literal["upstash", "postgres", "investigate"]
 
-# Current production provider per the provider-decision memo. The deployed
-# configuration must leave the runtime to resolve to this value (no
-# ``CACHE_PROVIDER`` override that points elsewhere).
-PRODUCTION_CACHE_PROVIDER: CacheProvider = "postgres"
+# Current production provider per the provider-decision memo after the #2216
+# GO. Code defaults remain Postgres; production env must set CACHE_PROVIDER=redis.
+PRODUCTION_CACHE_PROVIDER: CacheProvider = "redis"
 
 # Latency decision thresholds from docs/CACHE_LOOKUP_LATENCY_2026-08.md.
 UPSTASH_FASTER_FACTOR = 2.0

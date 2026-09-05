@@ -46,7 +46,6 @@ _CANONICAL_HEALTH_ROUTES: frozenset[str] = frozenset(
         "GET /api/v1/health/dependencies",
         "GET /api/v1/health/warmup",
         "GET /api/v1/health/cache-quota",
-        "GET /api/v1/health/cache-latency",
     }
 )
 
@@ -119,6 +118,12 @@ def test_bare_ping_and_liveness_remain_unversioned(api_routes: set[str]) -> None
 def test_canonical_health_probes_stay_on_v1_prefix(api_routes: set[str]) -> None:
     """Bounded dependency probes must remain at /api/v1/health/*."""
     _assert_routes_present(api_routes, _CANONICAL_HEALTH_ROUTES)
+
+
+def test_temporary_cache_latency_probe_is_gone(api_routes: set[str]) -> None:
+    """Issue #2216 one-shot probe must not ship on main."""
+    assert "GET /api/v1/health/cache-latency" not in api_routes
+    assert "GET /api/health/cache-latency" not in api_routes
 
 
 def test_docs_surface_remains_unversioned(api_routes: set[str]) -> None:

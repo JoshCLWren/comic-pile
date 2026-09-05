@@ -181,7 +181,6 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/bug-reports/",
             "/api/health",
             "/api/health/cache-quota",
-            "/api/health/cache-latency",
             "/api/health/dependencies",
             "/api/health/live",
             "/api/health/warmup",

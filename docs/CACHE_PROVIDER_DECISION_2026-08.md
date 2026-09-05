@@ -7,11 +7,15 @@ Owner: issue #2216 (follow-up to #1785)
 
 **Recommendation: GO redis.** `provider_recommendation()` returned `"upstash"`.
 
-**Current production remains Postgres.** This issue does not flip
-`CACHE_PROVIDER`, `CACHE_ENABLED`, or any other production env var. The
-Hobby production alias was restored to `dpl_9E9NbZS8LTGZe5evKcwBtdD1dLhC`
-(`main` `a95cba45`) after the one-shot probe. Josh should confirm the
-documented env flips before anything changes at runtime.
+**Josh confirmed the flips.** Temporary `GET /api/v1/health/cache-latency`
+and the production one-shot workflow are removed so merge to `main` cannot
+republish the probe. Production env after merge+redeploy:
+
+1. `CACHE_PROVIDER=redis`
+2. `CACHE_ENABLED=true`
+3. `CACHE_QUOTA_THROTTLE_ENABLED=true`
+
+Rollback remains `CACHE_ENABLED=false`.
 
 Both gates of the executable rule are now closed:
 
@@ -38,10 +42,10 @@ Both gates of the executable rule are now closed:
    `project_monthly_cache_commands()`. Pathological upper bound treating every
    request as a 5-command roll is 18,321. Both preserve the 150,000-command
    headroom. See `docs/CACHE_TRAFFIC_CENSUS_2026-09.json`.
-4. **Production config is unchanged.** `PRODUCTION_CACHE_PROVIDER` stays
-   `"postgres"`. The one-shot deploy set only `CACHE_LATENCY_PROBE_ENABLED=true`
-   and never `CACHE_PROVIDER=redis`. After measurement, `vercel promote`
-   restored `dpl_9E9NbZS8LTGZe5evKcwBtdD1dLhC`.
+4. **Probe removed before merge.** The one-shot measurement restored
+   `dpl_9E9NbZS8LTGZe5evKcwBtdD1dLhC`. `PRODUCTION_CACHE_PROVIDER` is now
+   `"redis"` to match the confirmed production target. Code defaults stay
+   Postgres until the production env override is live.
 
 ## The numbers
 
@@ -78,32 +82,28 @@ provider_recommendation(
 
 `app/cache_provider_decision.py` still pins:
 
-- `PRODUCTION_CACHE_PROVIDER = "postgres"` — **currently deployed** provider.
-  Unchanged until Josh applies the flips below.
-- `provider_recommendation(upstash, neon)` — now returns `"upstash"` on the
+- `PRODUCTION_CACHE_PROVIDER = "redis"` — confirmed production target.
+- `provider_recommendation(upstash, neon)` — returns `"upstash"` on the
   committed samples.
 - `project_monthly_cache_commands(flow_counts)` — census is under budget.
 
-`tests/test_cache_provider_decision.py` continues to assert that the runtime
-default resolves to `PRODUCTION_CACHE_PROVIDER` (Postgres) so this PR cannot
-silently change production behavior.
+Code defaults remain Postgres. Production Vercel env applies the Redis
+override. Rollback remains `CACHE_ENABLED=false`.
 
-## Next env flips — Josh confirms; this PR does not apply them
+## Env flips — Josh confirmed
 
 1. `CACHE_PROVIDER=redis`
 2. `CACHE_ENABLED=true`
-3. `CACHE_QUOTA_THROTTLE_ENABLED=true` (recommended from day one)
+3. `CACHE_QUOTA_THROTTLE_ENABLED=true`
 
-Rollback remains `CACHE_ENABLED=false`.
-
-Remove temporary `GET /api/v1/health/cache-latency` before merging this
-branch to `main` so Deploy Production does not republish the probe.
+Applied via `.github/workflows/apply-cache-redis-enable.yml` after merge.
+The temporary probe route and one-shot deploy workflow are gone.
 
 ## Verification for this memo
 
 - Artifact `cache-provider-evidence` from Actions run 33986556893
 - `provider_recommendation(LatencySample(7.088, 7.807), LatencySample(143.303, 151.812)) == "upstash"`
-- `pytest --no-cov tests/test_cache_provider_decision.py tests/test_cache_traffic_census.py tests/test_cache_latency_probe.py`
+- `pytest --no-cov tests/test_cache_provider_decision.py tests/test_cache_traffic_census.py tests/test_operational_surface_guard.py`
 - Production alias `comic-pile.vercel.app` → `dpl_9E9NbZS8LTGZe5evKcwBtdD1dLhC`
 
 ## References

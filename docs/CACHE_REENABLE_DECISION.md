@@ -18,10 +18,10 @@ production `vercel:cle1`
 point SELECT remains p50=143.303 ms / p95=151.812 ms from
 `github-actions:ubuntu-latest` (cle1 Neon was not re-measured).
 
-**Do not flip production in this PR.** `CACHE_PROVIDER` was never changed.
-The production alias was promoted back to `dpl_9E9NbZS8LTGZe5evKcwBtdD1dLhC`.
-Josh confirms the flips below. Rollback remains `CACHE_ENABLED=false`.
-Do not add GitHub secrets.
+Josh confirmed the flips. The temporary probe is removed. After merge,
+production Vercel env is set to `CACHE_PROVIDER=redis`,
+`CACHE_ENABLED=true`, and `CACHE_QUOTA_THROTTLE_ENABLED=true`. Rollback
+remains `CACHE_ENABLED=false`. Do not add GitHub secrets.
 
 ## TTL tier tuning (issue #1754)
 
@@ -119,12 +119,11 @@ The re-enable evaluation added the operational guardrails the decision was missi
 ### Go / no-go memo
 
 **Decision: GO redis.** `provider_recommendation()` returned `"upstash"`.
-Command budget is a GO (1,990 projected commands/month). Production still
-runs Postgres until Josh sets:
+Command budget is a GO (1,990 projected commands/month). Josh confirmed:
 
 1. `CACHE_PROVIDER=redis`
 2. `CACHE_ENABLED=true`
 3. `CACHE_QUOTA_THROTTLE_ENABLED=true`
 
-Rollback remains `CACHE_ENABLED=false`. Remove temporary
-`GET /api/v1/health/cache-latency` before merging to `main`.
+Rollback remains `CACHE_ENABLED=false`. The temporary
+`GET /api/v1/health/cache-latency` route is removed.

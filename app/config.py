@@ -14,6 +14,35 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 CacheProvider = Literal["postgres", "redis", "off"]
+_PLACEHOLDER_SECRET_VALUES = frozenset(
+    {
+        "",
+        "[SENSITIVE]",
+        "<redacted>",
+        "redacted",
+        "undefined",
+        "null",
+    }
+)
+
+
+def _usable_secret(value: str | None) -> str | None:
+    """Return a stripped secret, ignoring empty and placeholder values.
+
+    Args:
+        value: Candidate environment or settings value.
+
+    Returns:
+        The usable secret, or ``None``.
+    """
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped or stripped.lower() in _PLACEHOLDER_SECRET_VALUES:
+        return None
+    if stripped == "[SENSITIVE]":
+        return None
+    return stripped
 
 
 class DatabaseSettings(BaseSettings):
@@ -306,6 +335,16 @@ class RedisSettings(BaseSettings):
         description="Upstash Redis REST token",
         json_schema_extra={"env": "UPSTASH_REDIS_REST_TOKEN"},
     )
+    kv_rest_api_url: str | None = Field(
+        default=None,
+        description="Vercel KV REST URL alias for Upstash (KV_REST_API_URL)",
+        json_schema_extra={"env": "KV_REST_API_URL"},
+    )
+    kv_rest_api_token: str | None = Field(
+        default=None,
+        description="Vercel KV REST read-write token alias (KV_REST_API_TOKEN)",
+        json_schema_extra={"env": "KV_REST_API_TOKEN"},
+    )
     redis_url: str | None = Field(
         default=None,
         description="Local Redis URL (e.g., redis://localhost:6379/0)",
@@ -347,6 +386,30 @@ class RedisSettings(BaseSettings):
     )
 
     @property
+    def resolved_upstash_rest_url(self) -> str | None:
+        """Return the Upstash REST URL, accepting the Vercel KV alias.
+
+        Returns:
+            Native ``UPSTASH_REDIS_REST_URL``, else ``KV_REST_API_URL``, else
+            ``None``. Placeholder values are treated as missing.
+        """
+        return _usable_secret(self.upstash_redis_rest_url) or _usable_secret(
+            self.kv_rest_api_url
+        )
+
+    @property
+    def resolved_upstash_rest_token(self) -> str | None:
+        """Return the Upstash REST token, accepting the Vercel KV write token.
+
+        Returns:
+            Native ``UPSTASH_REDIS_REST_TOKEN``, else ``KV_REST_API_TOKEN``,
+            else ``None``. Does not fall back to the GET-only KV token.
+        """
+        return _usable_secret(self.upstash_redis_rest_token) or _usable_secret(
+            self.kv_rest_api_token
+        )
+
+    @property
     def is_configured(self) -> bool:
         """Return whether caching is active for the resolved provider.
 
@@ -371,7 +434,7 @@ class RedisSettings(BaseSettings):
             if not self.cache_enabled:
                 return "off"
             upstash_ok = bool(
-                self.upstash_redis_rest_url and self.upstash_redis_rest_token
+                self.resolved_upstash_rest_url and self.resolved_upstash_rest_token
             )
             # The local Redis client is a dev-only path. A bare REDIS_URL must not
             # enable caching in production; it requires CACHE_LOCAL_REDIS_DEV.

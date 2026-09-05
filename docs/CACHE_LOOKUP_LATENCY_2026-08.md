@@ -49,9 +49,9 @@ re-measured. An earlier same-vantage Neon run landed at p50=569.314 ms
 (also 30 ok samples) and is context only.
 
 `provider_recommendation(LatencySample(7.088, 7.807), LatencySample(143.303, 151.812))`
-returned **`"upstash"`** (GO redis). Production stays on Postgres until Josh
-confirms the documented env flips. Remove `GET /api/v1/health/cache-latency`
-after this measurement / before merge to `main`.
+returned **`"upstash"`** (GO redis). Josh confirmed the production env flips.
+The temporary `GET /api/v1/health/cache-latency` route is removed so merge
+to `main` cannot republish it.
 
 ## What each measurement captures
 
