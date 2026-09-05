@@ -120,6 +120,12 @@ def test_canonical_health_probes_stay_on_v1_prefix(api_routes: set[str]) -> None
     _assert_routes_present(api_routes, _CANONICAL_HEALTH_ROUTES)
 
 
+def test_temporary_cache_latency_probe_is_gone(api_routes: set[str]) -> None:
+    """Issue #2216 one-shot probe must not ship on main."""
+    assert "GET /api/v1/health/cache-latency" not in api_routes
+    assert "GET /api/health/cache-latency" not in api_routes
+
+
 def test_docs_surface_remains_unversioned(api_routes: set[str]) -> None:
     """Swagger, ReDoc, and the OpenAPI schema stay on their bare URLs."""
     _assert_routes_present(api_routes, _DOCS_ROUTES)

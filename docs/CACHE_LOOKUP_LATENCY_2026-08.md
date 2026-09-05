@@ -1,8 +1,13 @@
 # Cache lookup latency: Upstash REST vs Neon point SELECT
 
-Updated: 2026-08-22  
-Script: `scripts/benchmark_cache_latency.py`  
-Run command (from Vercel region, e.g. a one-shot serverless function or `vercel run`):
+Updated: 2026-09-05  
+Script: `scripts/benchmark_cache_latency.py` plus temporary `GET /api/v1/health/cache-latency`  
+Preferred vantage: Vercel region `cle1` (`vercel.json` `regions`).  
+Upstash was measured from Hobby production (`vercel:cle1`). Neon stays the
+existing `github-actions:ubuntu-latest` distribution (cle1 Neon was not
+re-measured). Mixed vantages are called out in the table and JSON.
+
+Run command:
 
     DATABASE_URL=postgresql://... \
     UPSTASH_REDIS_REST_URL=https://... \
@@ -12,38 +17,41 @@ Run command (from Vercel region, e.g. a one-shot serverless function or `vercel 
         python scripts/benchmark_cache_latency.py \
             --iterations 30 \
             --warmups 3 \
-            --location "vercel:iad1" \
+            --location "vercel:cle1" \
+            --redact \
             --output docs/CACHE_LOOKUP_LATENCY_2026-08.json
 
-Issue: #1782
+Issues: #1782, #2216
 
 ## Quota context
 
-Upstash Redis free-tier REST quota was exhausted, and the automated quota pause
-lifted on or before approximately 2026-08-28.  The benchmark script handles a
-still-blocked path gracefully: any HTTP 429 response is recorded as `"status":
-"quota_blocked"` rather than aborting, so the Neon and uncached-queue paths can
-always be measured independently.
-
-A post-reset full run was still outstanding when the provider-decision memo
-(`CACHE_PROVIDER_DECISION_2026-08.md`) was written, so the **Upstash REST GET**,
-**Neon point SELECT**, and **uncached queue read** rows below remain unfilled
-with the exact "awaiting run" marker a pre-reset observation window leaves
-behind.  The decision rule that consumes these cells is codified in
-`app/cache_provider_decision.py` (issue #1785).
+Upstash Redis free-tier REST quota was exhausted through approximately
+2026-08-28. HTTP 429 responses are recorded as `"status": "quota_blocked"`.
+The 2026-09-05 production-runtime probe did not receive HTTP 429
+(`quota_blocked=false`).
 
 ## Measurements
 
-| Path | Samples | Min (ms) | Median (ms) | P95 (ms) | Max (ms) | Mean (ms) | Status |
-|---|---|---|---|---|---|---|---|
-| Upstash REST GET | 0 | — | — | — | — | — | *Awaiting post-reset run* |
-| Neon point SELECT (KV table) | 0 | — | — | — | — | — | *Awaiting run* |
-| Uncached queue read (`/api/v1/sessions/current/`) | 0 | — | — | — | — | — | *Awaiting run* |
+Committed JSON: `docs/CACHE_LOOKUP_LATENCY_2026-08.json`  
+Workflow run: https://github.com/JoshCLWren/comic-pile/actions/runs/33986556893  
+One-shot deploy: https://comic-pile-4kvkaxz5x-joshclwrens-projects.vercel.app  
+Production alias restored to: `dpl_9E9NbZS8LTGZe5evKcwBtdD1dLhC` (`main` `a95cba45`)  
+Iterations 30, warmups 3. `CACHE_PROVIDER` was never flipped.
 
-"0 samples" means: no successful samples were collected in the pre-reset
-window.  A post-reset run will populate these cells with the actual measured
-distribution.  Re-run the script with the same `--iterations 30 --warmups 3`
-flags to fill the table.
+| Path | Samples | Min (ms) | Median (ms) | P95 (ms) | Max (ms) | Mean (ms) | Vantage | Status |
+|---|---|---|---|---|---|---|---|---|
+| Upstash REST GET | 30 | 6.579 | 7.088 | 7.807 | 7.872 | 7.150 | `vercel:cle1` production | ok |
+| Neon point SELECT (KV table) | 30 | 115.849 | 143.303 | 151.812 | 152.833 | 141.518 | `github-actions:ubuntu-latest` | ok |
+| Uncached queue read (`/api/v1/sessions/current/`) | 0 | — | — | — | — | — | — | skipped: no `VERCEL_BEARER_TOKEN` |
+
+Neon comparison remains the existing GHA number; cle1 Neon was not
+re-measured. An earlier same-vantage Neon run landed at p50=569.314 ms
+(also 30 ok samples) and is context only.
+
+`provider_recommendation(LatencySample(7.088, 7.807), LatencySample(143.303, 151.812))`
+returned **`"upstash"`** (GO redis). Josh confirmed the production env flips.
+The temporary `GET /api/v1/health/cache-latency` route is removed so merge
+to `main` cannot republish it.
 
 ## What each measurement captures
 
@@ -92,58 +100,31 @@ application stack add to a raw Postgres point read?"
 
 ## Provider decision memo
 
-The go/no-go ruling for the production provider lives in
-`CACHE_PROVIDER_DECISION_2026-08.md` (issue #1785): **Postgres**, with remote
-Redis re-enable marked NO-GO until both the measured latency ratio here and a
-clean route-traffic census land.  The `app/cache_provider_decision.py` rule makes
-that ruling reproducible: `provider_recommendation()` applies the thresholds
-below, and `project_monthly_cache_commands()` checks the census against the
-budget in `docs/CACHE_COMMAND_BUDGET.md`.
+The go/no-go ruling lives in `CACHE_PROVIDER_DECISION_2026-08.md` (issue
+#2216): **GO redis** from `provider_recommendation() == "upstash"`. Production
+is still Postgres; this PR does not apply env flips.
 
-**Hypothesis (to be verified after quota reset):**
+The rule itself is unchanged:
 
-The raw Upstash REST hop should outperform a Neon point SELECT when measured
-from the same Vercel region, because Upstash is an in-memory edge cache at a
-colocation that is likely nearer to Vercel's `iad1` region than Neon's GCP
-`us-east1`.  The p50 delta determines whether caching is worth the 350 000
-command/month budget documented in `docs/CACHE_COMMAND_BUDGET.md`.
+- **Upstash REST p50 < 2× Neon p50** and Neon p50 > 3 ms → `"upstash"`
+- **Upstash REST p50 ≥ 2× Neon p50, or Neon p50 ≤ 3 ms** → `"postgres"`
+- **Either path p95 / p50 > 5×** → `"investigate"`
 
-Once both samples are available the decision rule is:
-
-- **Upstash REST p50 < 2× Neon p50** → Upstash is meaningfully faster; re-enable
-  gate in `docs/CACHE_REENABLE_DECISION.md` can proceed when command-rate
-  evidence is also in range.
-- **Upstash REST p50 ≥ 2× Neon p50, or Neon p50 ≤ 3 ms** → Neon point reads
-  are not meaningfully slower; staying on the Postgres provider is justified.
-- **Either path shows high variance (p95 / p50 > 5×)** → investigate network
-  instability before declaring a stable default.
-
-The uncached queue read baseline (path 3) is required context: if path 1 and
-path 2 are both sub-millisecond but path 3 is 100 ms, caching only helps when
-the cached object is large or the uncached cache-miss cost is proportionally
-significant at the application layer.
+Measured: 7.088 < 2 × 143.303 (286.606) and 143.303 > 3; Upstash p95/p50 =
+1.10×; Neon p95/p50 = 1.06×. Result: `"upstash"`.
 
 ## Re-run procedure
 
-After the Upstash quota resets (target: 2026-08-28 or earlier):
-
-1. Confirm quota restored by running `python scripts/benchmark_cache_latency.py
-   --iterations 1 --warmups 0` and verifying `"status": "ok"` in the
-   `upstash_rest_get` section.
-2. Run the full benchmark:
-   `python scripts/benchmark_cache_latency.py --iterations 30 --warmups 3
-   --location "vercel:iad1" --output docs/CACHE_LOOKUP_LATENCY_2026-08.json
-3. Replace the placeholder numbers in the summary table above with the values
-   from the JSON file.
-4. Feed the medians into `app/cache_provider_decision.py::provider_recommendation`
-   and update the conclusion in `CACHE_PROVIDER_DECISION_2026-08.md`, plus the
-   concrete action on `docs/CACHE_REENABLE_DECISION.md`.
+Do not add GitHub secrets. Do not start another production one-shot unless
+Upstash samples return to 0. The 2026-09-05 production-runtime probe already
+filled the Upstash row.
 
 ## Related documents and code
 
 - `CACHE_PROVIDER_DECISION_2026-08.md` – the go/no-go memo this benchmark feeds
 - `docs/CACHE_REENABLE_DECISION.md` – the live re-enable gate this benchmark feeds
 - `docs/CACHE_COMMAND_BUDGET.md` – 350 000 command/month budget constraint
+- `docs/CACHE_TRAFFIC_CENSUS_2026-09.json` – Vercel runtime-log census feeding `project_monthly_cache_commands()`
 - `app/cache.py` – `UpstashCache`, circuit breaker, `@cached` decorator
 - `app/cache_generation.py` – generation-namespace invalidation (the atomic
   `INCR` that makes all prior generation keys unreachable without a SCAN)
@@ -155,7 +136,7 @@ After the Upstash quota resets (target: 2026-08-28 or earlier):
 ```jsonc
 {
   "schema_version": "1",          // bump on any structural change
-  "measured_from": "vercel:iad1", // deployment vantage identifier
+  "measured_from": "vercel:cle1", // deployment vantage identifier
   "iterations": 30,
   "warmups_per_path": 3,
   "kv_table": "bench_cache_kv",

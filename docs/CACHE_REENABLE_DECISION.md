@@ -1,14 +1,27 @@
 # Remote cache re-enable decision
 
-Updated: 2026-08-29
+Updated: 2026-09-05
 
 ## Decision
 
-**NO-GO for enabling remote Redis/Upstash caching at this time.**
+**GO redis — pending Josh's production env flips.**
 
-ComicPile now has bounded generation-based invalidation, privacy-safe command counting, conservative flow ceilings, a quota guardrail (alert + smoke-test throttling), a dev-gated local Redis path, and the tuned TTL tiers described below. The remaining blocker is not correctness of the caching primitives — it is production demand evidence. The repository does not yet contain a trustworthy recent production request mix that can be translated into an observed monthly cache-command projection, so enabling the provider would spend free-tier budget without evidence that the benefit justifies the risk.
+`provider_recommendation()` returned `"upstash"` on the 2026-09-05 samples.
+The production-demand half of the gate is also closed: Vercel production
+runtime logs project **1,990** conservative monthly cache commands (pathological
+upper bound 18,321), well under 350,000 with 150,000 headroom. See
+`docs/CACHE_TRAFFIC_CENSUS_2026-09.json` and `project_monthly_cache_commands()`.
 
-This is a remain-disabled decision, not a rejection of Redis. Re-enable only after production evidence demonstrates that projected application commands stay below the 350,000 monthly operating budget with the existing 150,000-command provider headroom.
+Latency: Upstash REST GET p50=7.088 ms / p95=7.807 ms (n=30) from Hobby
+production `vercel:cle1`
+(https://github.com/JoshCLWren/comic-pile/actions/runs/33986556893). Neon
+point SELECT remains p50=143.303 ms / p95=151.812 ms from
+`github-actions:ubuntu-latest` (cle1 Neon was not re-measured).
+
+Josh confirmed the flips. The temporary probe is removed. After merge,
+production Vercel env is set to `CACHE_PROVIDER=redis`,
+`CACHE_ENABLED=true`, and `CACHE_QUOTA_THROTTLE_ENABLED=true`. Rollback
+remains `CACHE_ENABLED=false`. Do not add GitHub secrets.
 
 ## TTL tier tuning (issue #1754)
 
@@ -105,4 +118,12 @@ The re-enable evaluation added the operational guardrails the decision was missi
 
 ### Go / no-go memo
 
-**Decision: NO-GO for enabling remote Redis at this time.** The remain-disabled verdict from the prior decision stands. The evaluation is complete: observability, an alert-plus-throttle guardrail, a dev-gated local path, and tuned TTLs are now in place. Enabling `CACHE_ENABLED=true` is still gated behind the production-traffic evidence in the re-enable gate (observed mix projecting below 350,000 commands/month with 30% headroom). A future staged rollout must keep `CACHE_ENABLED` reversible and the quota guardrail active from day one.
+**Decision: GO redis.** `provider_recommendation()` returned `"upstash"`.
+Command budget is a GO (1,990 projected commands/month). Josh confirmed:
+
+1. `CACHE_PROVIDER=redis`
+2. `CACHE_ENABLED=true`
+3. `CACHE_QUOTA_THROTTLE_ENABLED=true`
+
+Rollback remains `CACHE_ENABLED=false`. The temporary
+`GET /api/v1/health/cache-latency` route is removed.

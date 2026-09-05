@@ -1,0 +1,81 @@
+{
+  "schema_version": "1",
+  "source": "vercel_runtime_logs",
+  "project_id": "prj_TLT92644pRPZbZSMoXddCfQLZgK8",
+  "environment": "production",
+  "observed_at_utc": "2026-09-05T18:00:00Z",
+  "window": {
+    "kind": "vercel_runtime_logs_group_by_requestPath",
+    "lookback": "7d",
+    "note": "Vercel Hobby runtime logs. A 31d group_by query returned the same distinct-path set and counts as the 7d window, so the retained window is treated as seven days. Vercel Web Analytics reported 0 visitors and 0 pageviews for the latest 31 days and is not used as API census truth. GET /api/v1/traffic-metrics is process-local on serverless and was not used as fleet truth."
+  },
+  "status_totals_7d": {
+    "200": 851,
+    "401": 4
+  },
+  "route_counts_7d": {
+    "/api/v1/auth/me": 400,
+    "/api/ping": 210,
+    "/api/v1/threads/": 39,
+    "/api/v1/releases/source": 35,
+    "/api/v1/users/me/preferences": 17,
+    "/api/v1/roll/bootstrap": 5,
+    "/api/v1/threads:getBlockingInfo": 4,
+    "/api/v1/auth/refresh": 4,
+    "/api/v1/reading-order-groups/": 4,
+    "/api/v1/reading-mode": 4,
+    "/api/v1/releases/": 3,
+    "/api/v1/sessions/current/": 2,
+    "/api/v1/sessions/": 1,
+    "/api/v1/roll/clear-manual-die": 1
+  },
+  "flow_mapping": {
+    "bootstrap": ["GET /api/v1/roll/bootstrap"],
+    "queue_load": ["GET /api/v1/threads/", "GET /api/v1/sessions/current/"],
+    "roll": ["POST /api/v1/roll/"],
+    "snooze": ["POST /api/v1/snooze/"],
+    "rating": ["POST /api/v1/rate/"],
+    "thread_mutation": ["POST /api/v1/threads/", "PATCH /api/v1/threads/{id}"],
+    "issue_mutation": ["POST /api/v1/issues/", "POST /api/v1/issues/{id}:markRead"],
+    "continuity_mutation": ["POST /api/v1/continuity-plans/", "PUT /api/v1/continuity-plans/{id}"]
+  },
+  "observed_7d_flow_counts": {
+    "bootstrap": 5,
+    "queue_load": 41,
+    "roll": 0,
+    "snooze": 0,
+    "rating": 0,
+    "thread_mutation": 0,
+    "issue_mutation": 0,
+    "continuity_mutation": 0
+  },
+  "monthly_scale": 4.285714285714286,
+  "uncertainty_multiplier": 4,
+  "unobserved_monthly_floor": {
+    "bootstrap": 0,
+    "queue_load": 0,
+    "roll": 20,
+    "snooze": 20,
+    "rating": 20,
+    "thread_mutation": 40,
+    "issue_mutation": 40,
+    "continuity_mutation": 20
+  },
+  "monthly_flow_counts": {
+    "bootstrap": 86,
+    "queue_load": 703,
+    "roll": 20,
+    "snooze": 20,
+    "rating": 20,
+    "thread_mutation": 40,
+    "issue_mutation": 40,
+    "continuity_mutation": 20
+  },
+  "pathological_upper_bound": {
+    "description": "Treat every observed 7d request as a 5-command roll, scaled to 30 days. This is not the official census; it bounds measurement error from unmapped cached routes.",
+    "requests_7d": 855,
+    "monthly_requests": 3664,
+    "commands_if_all_rolls": 18321
+  },
+  "census_method": "Map Vercel production runtime-log requestPath counts onto CACHE_FLOW_COMMAND_CEILINGS, scale 7d to 30d, apply a 4x uncertainty multiplier, then apply a small floor for unobserved mutation/roll flows."
+}

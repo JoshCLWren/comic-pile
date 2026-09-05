@@ -1,0 +1,593 @@
+{
+  "schema_version": "1.0",
+  "measured_from": "mixed: upstash vercel:cle1 production; neon github-actions:ubuntu-latest",
+  "vercel_env": "production",
+  "production_url": "https://comic-pile.vercel.app",
+  "one_shot_deploy_url": "https://comic-pile-4kvkaxz5x-joshclwrens-projects.vercel.app",
+  "restored_production_deployment": "dpl_9E9NbZS8LTGZe5evKcwBtdD1dLhC",
+  "actions_url": "https://github.com/JoshCLWren/comic-pile/actions/runs/33986556893",
+  "iterations": 30,
+  "warmups_per_path": 3,
+  "kv_table": "bench_cache_kv",
+  "credential_path": "vercel-production-runtime-kv-rest",
+  "upstash_rest_get": {
+    "endpoint": "<redacted>",
+    "quota_blocked": false,
+    "summary": {
+      "samples": 30,
+      "elapsed_ms": {
+        "min": 6.579,
+        "p50": 7.088,
+        "p95": 7.807,
+        "max": 7.872,
+        "mean": 7.15
+      },
+      "vantage": "vercel:cle1"
+    }
+  },
+  "neon_point_select": {
+    "runs": [
+      {
+        "elapsed_ms": 133.263,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 0,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 143.875,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 1,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 133.95,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 2,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 147.329,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 3,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 137.789,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 4,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 138.442,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 5,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 146.375,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 6,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 146.691,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 7,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 143.773,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 8,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 142.263,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 9,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 142.556,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 10,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 142.272,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 11,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 144.304,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 12,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 143.019,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 13,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 146.117,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 14,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 135.813,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 15,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 115.849,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 16,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 144.168,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 17,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 144.897,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 18,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 126.567,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 19,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 147.999,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 20,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 143.588,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 21,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 141.112,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 22,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 130.108,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 23,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 139.572,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 24,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 148.177,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 25,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 141.284,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 26,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 150.58,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 27,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 150.977,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 28,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 152.833,
+        "error_detail": null,
+        "http_status": null,
+        "iteration": 29,
+        "path": "neon_point_select",
+        "status": "ok",
+        "upstash_error": null
+      }
+    ],
+    "summary": {
+      "elapsed_ms": {
+        "max": 152.833,
+        "mean": 141.518,
+        "min": 115.849,
+        "p50": 143.303,
+        "p95": 151.812
+      },
+      "samples": 30,
+      "vantage": "github-actions:ubuntu-latest"
+    }
+  },
+  "uncached_queue_read": {
+    "runs": [
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 0,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 1,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 2,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 3,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 4,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 5,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 6,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 7,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 8,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 9,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 10,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 11,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 12,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 13,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 14,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 15,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 16,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 17,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 18,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 19,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 20,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 21,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 22,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 23,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 24,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 25,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 26,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 27,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 28,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      },
+      {
+        "elapsed_ms": 0.0,
+        "error_detail": "<redacted>",
+        "http_status": null,
+        "iteration": 29,
+        "path": "uncached_queue_read",
+        "status": "skipped",
+        "upstash_error": null
+      }
+    ],
+    "summary": null
+  },
+  "provider_recommendation": "upstash",
+  "provider_decision": "provider_recommendation()=upstash (GO redis). Upstash REST GET p50=7.088 ms / p95=7.807 ms from vercel:cle1 production (n=30); Neon point SELECT p50=143.303 ms / p95=151.812 ms from github-actions:ubuntu-latest (n=30). CACHE_PROVIDER was not flipped; production alias restored to dpl_9E9NbZS8LTGZe5evKcwBtdD1dLhC.",
+  "_note_neon_vantage": "Neon comparison remains the existing GHA ubuntu-latest 143.303 ms distribution; cle1 Neon was not re-measured.",
+  "_note_upstash_quota": "HTTP 429 responses are recorded as quota_blocked. The free-tier pause that blocked measurements through 2026-08-28 is no longer assumed.",
+  "_note_remove_probe": "Temporary /api/v1/health/cache-latency must be removed after issue #2216."
+}

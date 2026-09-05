@@ -1,0 +1,164 @@
+name: Apply Cache Redis Enable
+
+# Josh-confirmed #2216 flip. workflow_dispatch only — never runs on push.
+# Sets production CACHE_PROVIDER=redis, CACHE_ENABLED=true,
+# CACHE_QUOTA_THROTTLE_ENABLED=true, then redeploys the current main SHA.
+# Rollback remains CACHE_ENABLED=false (not performed here).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-production
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: team_1na05XWOpOb6wB1CA4m3GPRT
+  VERCEL_PROJECT_ID: prj_TLT92644pRPZbZSMoXddCfQLZgK8
+  VERCEL_TEAM_SLUG: joshclwrens-projects
+
+jobs:
+  flip:
+    name: Upsert production Redis env and redeploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@58.1.0
+
+      - name: Upsert production cache env (values only, never secrets)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${VERCEL_TOKEN:-}" ]]; then
+            echo "VERCEL_TOKEN missing." >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          token = os.environ["VERCEL_TOKEN"]
+          project = os.environ["VERCEL_PROJECT_ID"]
+          team = os.environ["VERCEL_ORG_ID"]
+          desired = {
+              "CACHE_PROVIDER": "redis",
+              "CACHE_ENABLED": "true",
+              "CACHE_QUOTA_THROTTLE_ENABLED": "true",
+          }
+
+          def request(method: str, url: str, body: dict | None = None) -> object:
+              data = None if body is None else json.dumps(body).encode("utf-8")
+              req = urllib.request.Request(url, data=data, method=method)
+              req.add_header("Authorization", f"Bearer {token}")
+              req.add_header("Accept", "application/json")
+              if body is not None:
+                  req.add_header("Content-Type", "application/json")
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as response:
+                      raw = response.read()
+                      return json.loads(raw) if raw else {}
+              except urllib.error.HTTPError as exc:
+                  detail = exc.read().decode("utf-8", errors="replace")
+                  raise SystemExit(f"{method} {url} failed: {exc.code} {detail[:300]}") from exc
+
+          listed = request(
+              "GET",
+              f"https://api.vercel.com/v9/projects/{project}/env?teamId={team}",
+          )
+          envs = listed.get("envs") if isinstance(listed, dict) else None
+          if not isinstance(envs, list):
+              raise SystemExit("Unexpected env list payload")
+
+          existing: dict[str, str] = {}
+          for item in envs:
+              if not isinstance(item, dict):
+                  continue
+              key = item.get("key")
+              env_id = item.get("id")
+              targets = item.get("target") or []
+              if key in desired and env_id and "production" in targets:
+                  existing[str(key)] = str(env_id)
+
+          for key, value in desired.items():
+              payload = {
+                  "key": key,
+                  "value": value,
+                  "type": "plain",
+                  "target": ["production"],
+              }
+              if key in existing:
+                  request(
+                      "PATCH",
+                      f"https://api.vercel.com/v9/projects/{project}/env/{existing[key]}?teamId={team}",
+                      payload,
+                  )
+                  print(f"updated {key}=<set> production")
+              else:
+                  request(
+                      "POST",
+                      f"https://api.vercel.com/v10/projects/{project}/env?teamId={team}&upsert=true",
+                      payload,
+                  )
+                  print(f"created {key}=<set> production")
+          PY
+
+      - name: Link production project
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          mkdir -p .vercel
+          printf '%s\n' "{\"orgId\":\"${VERCEL_ORG_ID}\",\"projectId\":\"${VERCEL_PROJECT_ID}\"}" > .vercel/project.json
+          vercel pull \
+            --yes \
+            --environment=production \
+            --scope "$VERCEL_TEAM_SLUG" \
+            --token "$VERCEL_TOKEN"
+
+      - name: Redeploy current main SHA to production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deploy_sha="$(git rev-parse HEAD)"
+          commit_message="$(git log -1 --pretty=%s)"
+          echo "Redeploying $deploy_sha so production picks up the Redis env flip."
+          vercel deploy \
+            --prod \
+            --yes \
+            --scope "$VERCEL_TEAM_SLUG" \
+            --token "$VERCEL_TOKEN" \
+            --meta githubDeployment=1 \
+            --meta githubCommitRef=main \
+            --meta githubCommitSha="$deploy_sha" \
+            --meta githubCommitMessage="$commit_message" \
+            --meta comicPileCacheFlip=2216-redis
+
+      - name: Smoke production health and confirm probe is gone
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            --retry 10 --retry-delay 2 --retry-all-errors \
+            https://comic-pile.vercel.app/health
+          echo
+          probe_code="$(curl --silent --show-error \
+            --header "X-Cache-Latency-Probe: comic-pile-2216-cache-latency-probe" \
+            --write-out "%{http_code}" \
+            --output /tmp/probe-body.txt \
+            https://comic-pile.vercel.app/api/v1/health/cache-latency || true)"
+          echo "cache-latency probe HTTP $probe_code"
+          if [[ "$probe_code" != "404" ]]; then
+            echo "Probe endpoint must be 404 after removal." >&2
+            exit 1
+          fi

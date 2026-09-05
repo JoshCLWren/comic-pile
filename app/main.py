@@ -518,13 +518,13 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             return
 
         if provider == "redis":
-            if redis_settings.upstash_redis_rest_url and redis_settings.upstash_redis_rest_token:
+            if redis_settings.resolved_upstash_rest_url and redis_settings.resolved_upstash_rest_token:
                 await _init_provided_cache(
                     "redis",
                     startup_state,
                     {
-                        "url": redis_settings.upstash_redis_rest_url,
-                        "token": redis_settings.upstash_redis_rest_token,
+                        "url": redis_settings.resolved_upstash_rest_url,
+                        "token": redis_settings.resolved_upstash_rest_token,
                         "throttle_enabled": redis_settings.cache_quota_throttle_enabled,
                     },
                 )

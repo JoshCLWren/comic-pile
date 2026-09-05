@@ -44,18 +44,19 @@ it can be deployed as a throwaway serverless function without installing extra
 packages.  Network requests use ``urllib.request`` to avoid introducing ``httpx``
 into the throwaway harness.
 
-Quota note: Upstash free-tier is quota-stopped until approximately 2026-08-28.
-The script correctly records quota-429 responses in the output rather than
-failing outright, so the Neon and uncached-reread paths can still be measured
-independently.
+Quota note: Upstash free-tier quota was exhausted through approximately
+2026-08-28. HTTP 429 responses are recorded as ``quota_blocked`` rather than
+aborting, so Neon and uncached-queue paths can still be measured independently.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import copy
 import dataclasses
 import json
+import os
 import statistics
 import time
 import urllib.error
@@ -65,6 +66,19 @@ import urllib.request
 
 DEFAULT_ITERATIONS = 30
 DEFAULT_WARMUPS = 3
+DEFAULT_KV_TABLE = "bench_cache_kv"
+BENCH_KV_KEY = "comic_pile_cache_latency_bench_key_v1"
+PLACEHOLDER_ENV_VALUES = frozenset(
+    {
+        "",
+        "[SENSITIVE]",
+        "<redacted>",
+        "redacted",
+        "undefined",
+        "null",
+    }
+)
+IGNORED_UPSTASH_ENV = frozenset({"REDIS_URL", "KV_URL"})
 
 
 @dataclasses.dataclass(frozen=True)
@@ -80,12 +94,206 @@ class Run:
     error_detail: str | None
 
 
+def load_dotenv_values(path: str) -> dict[str, str]:
+    """Load ``KEY=VALUE`` pairs from a Vercel env-pull file without printing values.
+
+    Args:
+        path: Path to a ``.env``-style file.
+
+    Returns:
+        A mapping of variable names to unquoted values.
+    """
+    values: dict[str, str] = {}
+    with open(path, encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            if not key or not key.replace("_", "").isalnum():
+                continue
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+                value = value[1:-1]
+            if not value or value == "[SENSITIVE]":
+                continue
+            values[key] = value
+    return values
+
+
+def is_placeholder(value: str | None) -> bool:
+    """Return whether ``value`` is missing or a Vercel pull placeholder.
+
+    Args:
+        value: Candidate credential or URL.
+
+    Returns:
+        ``True`` when the value cannot be used as an Upstash REST credential.
+    """
+    if value is None:
+        return True
+    stripped = value.strip()
+    if not stripped:
+        return True
+    return stripped.lower() in PLACEHOLDER_ENV_VALUES or stripped == "[SENSITIVE]"
+
+
+def env_presence(name: str) -> str:
+    """Return a boolean-style presence label for one process env var.
+
+    Args:
+        name: Environment variable name.
+
+    Returns:
+        ``missing``, ``empty``, ``redacted``, or ``present``. Never returns
+        the value itself.
+    """
+    if name not in os.environ:
+        return "missing"
+    raw = os.environ.get(name, "")
+    if not raw.strip():
+        return "empty"
+    if is_placeholder(raw):
+        return "redacted"
+    return "present"
+
+
+def usable_env(*names: str) -> str | None:
+    """Return the first usable process env value from ``names``.
+
+    ``REDIS_URL`` and ``KV_URL`` are ignored even if listed: those are the
+    RESP/local path, not the Upstash REST probe.
+
+    Args:
+        names: Candidate environment variable names, in preference order.
+
+    Returns:
+        The first non-placeholder value, or ``None``.
+    """
+    for name in names:
+        if name in IGNORED_UPSTASH_ENV:
+            continue
+        if env_presence(name) != "present":
+            continue
+        value = os.environ.get(name)
+        if value is None:
+            continue
+        stripped = value.strip()
+        if stripped:
+            return stripped
+    return None
+
+
+def resolve_upstash_rest_url() -> str | None:
+    """Return the Upstash REST base URL from process env when flags are omitted.
+
+    Returns:
+        ``KV_REST_API_URL``, else ``UPSTASH_REDIS_REST_URL``, else ``None``.
+        Never reads ``REDIS_URL`` or ``KV_URL``.
+    """
+    return usable_env("KV_REST_API_URL", "UPSTASH_REDIS_REST_URL")
+
+
+def resolve_upstash_rest_token() -> str | None:
+    """Return the Upstash REST token from process env when flags are omitted.
+
+    Returns:
+        ``KV_REST_API_TOKEN``, else ``KV_REST_API_READ_ONLY_TOKEN`` (GET-only
+        fallback), else ``UPSTASH_REDIS_REST_TOKEN``, else ``None``.
+    """
+    return usable_env(
+        "KV_REST_API_TOKEN",
+        "KV_REST_API_READ_ONLY_TOKEN",
+        "UPSTASH_REDIS_REST_TOKEN",
+    )
+
+
+def kv_rest_preflight() -> dict[str, str]:
+    """Assert production KV REST URL and token are present in process env.
+
+    Returns:
+        Secret-free presence labels for the KV REST aliases.
+
+    Raises:
+        SystemExit: When the URL or token is missing, empty, or redacted.
+    """
+    coverage = {
+        "KV_REST_API_URL": env_presence("KV_REST_API_URL"),
+        "KV_REST_API_TOKEN": env_presence("KV_REST_API_TOKEN"),
+        "KV_REST_API_READ_ONLY_TOKEN": env_presence("KV_REST_API_READ_ONLY_TOKEN"),
+        "url_ready": "yes" if resolve_upstash_rest_url() else "no",
+        "token_ready": "yes" if resolve_upstash_rest_token() else "no",
+    }
+    if coverage["url_ready"] == "yes" and coverage["token_ready"] == "yes":
+        return coverage
+    rendered = " ".join(f"{key}={value}" for key, value in coverage.items())
+    raise SystemExit(
+        "KV REST preflight failed (booleans only; values not printed): "
+        f"{rendered}. vercel env run -e production did not inject usable "
+        "KV_REST_API_URL / KV_REST_API_TOKEN. Not requesting new GitHub secrets."
+    )
+
+
 def _upstash_rest_key() -> str:
-    """Derive the canonical Upstash REST endpoint for a cache GET."""
-    return "comic_pile_cache_latency_bench_key_v1"
+    """Return the shared benchmark key used by Upstash GET and the Neon KV row."""
+    return BENCH_KV_KEY
 
 
-def _upstash_rest_url(base_url: str, token: str, key: str) -> str:
+def normalize_asyncpg_url(database_url: str) -> str:
+    """Strip SQLAlchemy dialect suffixes so ``asyncpg.connect`` accepts the URL.
+
+    Args:
+        database_url: A ``postgresql://``, ``postgresql+asyncpg://``, or
+            ``postgresql+psycopg://`` connection string.
+
+    Returns:
+        The same URL with a plain ``postgresql://`` scheme.
+    """
+    if database_url.startswith("postgresql+asyncpg://"):
+        return "postgresql://" + database_url.removeprefix("postgresql+asyncpg://")
+    if database_url.startswith("postgresql+psycopg://"):
+        return "postgresql://" + database_url.removeprefix("postgresql+psycopg://")
+    return database_url
+
+
+def redact_report(report: dict[str, object]) -> dict[str, object]:
+    """Return a copy of the report that is safe to commit or attach as an artifact.
+
+    Args:
+        report: Benchmark JSON document, possibly containing provider hostnames
+            or connection-string fragments in error text.
+
+    Returns:
+        A deep copy with Upstash hosts rewritten and credential-like error
+        details replaced by ``<redacted>``.
+    """
+    redacted = copy.deepcopy(report)
+    upstash = redacted.get("upstash_rest_get")
+    if isinstance(upstash, dict):
+        endpoint = upstash.get("endpoint")
+        if isinstance(endpoint, str) and endpoint:
+            parsed = urllib.parse.urlparse(endpoint)
+            safe_netloc = "<redacted>" if parsed.netloc else parsed.netloc
+            upstash["endpoint"] = urllib.parse.urlunparse(parsed._replace(netloc=safe_netloc))
+    for path_name in ("upstash_rest_get", "neon_point_select", "uncached_queue_read"):
+        section = redacted.get(path_name)
+        if not isinstance(section, dict):
+            continue
+        runs = section.get("runs")
+        if not isinstance(runs, list):
+            continue
+        for run in runs:
+            if not isinstance(run, dict):
+                continue
+            detail = run.get("error_detail")
+            if isinstance(detail, str) and (
+                "://" in detail or "password" in detail.lower() or "token" in detail.lower()
+            ):
+                run["error_detail"] = "<redacted>"
+    return redacted
+
+
+def _upstash_rest_url(base_url: str, key: str) -> str:
     """Build the GET URL for a raw Upstash REST GET call."""
     encoded_key = urllib.parse.quote(key, safe="")
     return f"{base_url}/get/{encoded_key}"
@@ -98,6 +306,9 @@ def _upstash_request(url: str, token: str, timeout: float) -> tuple[float, int, 
     Mirrors the network path taken by ``upstash_redis.asyncio.Redis.get`` without
     requiring that package.
     """
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return 0.0, 0, b"", f"invalid_upstash_url_scheme:{parsed.scheme or 'missing'}"
     started = time.perf_counter()
     req = urllib.request.Request(url, method="GET")
     req.add_header("Authorization", f"Bearer {token}")
@@ -136,9 +347,10 @@ async def _neon_point_select(
     """
     import asyncpg
 
+    connect_url = normalize_asyncpg_url(database_url)
     started = time.perf_counter()
     try:
-        conn = await asyncpg.connect(database_url, timeout=timeout)
+        conn = await asyncpg.connect(connect_url, timeout=timeout)
     except (OSError, asyncpg.exceptions.InvalidConnectionError) as exc:
         elapsed_ms = (time.perf_counter() - started) * 1000
         return elapsed_ms, None, f"connect_failed: {exc}"
@@ -174,7 +386,7 @@ async def _ensure_kv_table(conn: object, table: str) -> None:
     await conn.execute(
         f"INSERT INTO {table} (key, value) VALUES ($1, $2) "
         f"ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, created_at = NOW()",
-        "bench:user:42:thread_list_v1",
+        BENCH_KV_KEY,
         json.dumps({"threads": 42, "queue_size": 7, "last_roll_id": 1001}),
     )
 
@@ -214,16 +426,16 @@ async def _uncached_queue_read(base_url: str, bearer_token: str, timeout: float)
 
 
 def _summarize(runs: list[Run]) -> dict[str, int | float | dict[str, float]] | None:
-    """Compute p50, p95, and other aggregates for a list of successful runs."""
-    if not runs:
+    """Compute p50, p95, and other aggregates for successful runs only."""
+    elapsed = [r.elapsed_ms for r in runs if r.status == "ok"]
+    if not elapsed:
         return None
-    elapsed = [r.elapsed_ms for r in runs]
     try:
         p95 = statistics.quantiles(elapsed, n=20)[18]
     except (statistics.StatisticsError, IndexError):
         p95 = max(elapsed)
     return {
-        "samples": len(runs),
+        "samples": len(elapsed),
         "elapsed_ms": {
             "min": min(elapsed),
             "p50": round(statistics.median(elapsed), 3),
@@ -236,8 +448,8 @@ def _summarize(runs: list[Run]) -> dict[str, int | float | dict[str, float]] | N
 
 async def run_benchmark(args: argparse.Namespace) -> dict[str, str | int | float | list[dict[str, object]] | dict[str, object] | None]:
     """Execute the full benchmark suite and return the JSON-ready report."""
-    upstash_url: str = args.upstash_url
-    upstash_token: str = args.upstash_token
+    upstash_url: str | None = args.upstash_url
+    upstash_token: str | None = args.upstash_token
     database_url: str | None = args.database_url
     kv_table: str = args.kv_table
     queue_base_url: str | None = args.queue_base_url
@@ -255,26 +467,45 @@ async def run_benchmark(args: argparse.Namespace) -> dict[str, str | int | float
     queue_runs: list[Run] = []
 
     # ── Phase 1: Upstash REST GET ─────────────────────────────────────────────
-    rest_endpoint = _upstash_rest_url(upstash_url, upstash_token, upstash_key)
+    rest_endpoint = ""
     upstash_quota_blocked = False
-    for i in range(-warmups, iterations):
-        elapsed_ms, http_status, body, error = _upstash_request(
-            rest_endpoint, upstash_token, upstash_timeout
-        )
-        run = Run(
-            path="upstash_rest_get",
-            iteration=i,
-            elapsed_ms=round(elapsed_ms, 3),
-            status="ok" if error is None else ("quota_blocked" if http_status == 429 else "error"),
-            http_status=http_status,
-            upstash_error=error if error else None,
-            error_detail=None,
-        )
-        if i >= 0:
+    if upstash_url and upstash_token:
+        rest_endpoint = _upstash_rest_url(upstash_url.rstrip("/"), upstash_key)
+        for i in range(-warmups, iterations):
+            elapsed_ms, http_status, body, error = _upstash_request(
+                rest_endpoint, upstash_token, upstash_timeout
+            )
+            run = Run(
+                path="upstash_rest_get",
+                iteration=i,
+                elapsed_ms=round(elapsed_ms, 3),
+                status=(
+                    "ok"
+                    if error is None
+                    else ("quota_blocked" if http_status == 429 else "error")
+                ),
+                http_status=http_status,
+                upstash_error=error if error else None,
+                error_detail=None,
+            )
+            if i >= 0:
+                upstash_runs.append(run)
+            all_runs.append(dataclasses.asdict(run))
+            if http_status == 429:
+                upstash_quota_blocked = True
+    else:
+        for i in range(iterations):
+            run = Run(
+                path="upstash_rest_get",
+                iteration=i,
+                elapsed_ms=0.0,
+                status="skipped",
+                http_status=None,
+                upstash_error=None,
+                error_detail="KV_REST_API_URL and KV_REST_API_TOKEN required",
+            )
             upstash_runs.append(run)
-        all_runs.append(dataclasses.asdict(run))
-        if http_status == 429:
-            upstash_quota_blocked = True
+            all_runs.append(dataclasses.asdict(run))
 
     upstash_summary = _summarize(upstash_runs)
 
@@ -297,7 +528,12 @@ async def run_benchmark(args: argparse.Namespace) -> dict[str, str | int | float
                 neon_runs.append(run)
                 all_runs.append(dataclasses.asdict(run))
         else:
-            pool = await asyncpg.create_pool(database_url, min_size=1, max_size=2, timeout=db_timeout)
+            pool = await asyncpg.create_pool(
+                normalize_asyncpg_url(database_url),
+                min_size=1,
+                max_size=2,
+                timeout=db_timeout,
+            )
             async with pool.acquire() as conn:
                 await _ensure_kv_table(conn, kv_table)
             populate_run = Run(
@@ -328,8 +564,21 @@ async def run_benchmark(args: argparse.Namespace) -> dict[str, str | int | float
                     neon_runs.append(run)
                 all_runs.append(dataclasses.asdict(run))
             await pool.close()
+    else:
+        for i in range(iterations):
+            run = Run(
+                path="neon_point_select",
+                iteration=i,
+                elapsed_ms=0.0,
+                status="skipped",
+                http_status=None,
+                upstash_error=None,
+                error_detail="DATABASE_URL required",
+            )
+            neon_runs.append(run)
+            all_runs.append(dataclasses.asdict(run))
 
-    neon_summary = _summarize(neon_runs) if neon_runs else None
+    neon_summary = _summarize(neon_runs)
 
     # ── Phase 3: Uncached queue read ──────────────────────────────────────────
     if queue_base_url and queue_bearer_token:
@@ -418,9 +667,8 @@ async def run_benchmark(args: argparse.Namespace) -> dict[str, str | int | float
         },
         "provider_decision": provider_decision,
         "_note_upstash_quota": (
-            "Upstash free-tier quota is blocked until approximately 2026-08-28. "
-            "The upstash_rest_get section records quota_blocked=true and individual "
-            "HTTP 429 responses. Re-run after quota reset for a complete comparison."
+            "HTTP 429 responses are recorded as quota_blocked. The free-tier pause "
+            "that blocked measurements through 2026-08-28 is no longer assumed."
         ),
     }
     return report
@@ -429,11 +677,11 @@ async def run_benchmark(args: argparse.Namespace) -> dict[str, str | int | float
 def run_sync(args: argparse.Namespace) -> int:
     """Entry point used by synchronous invocation."""
     report = asyncio.run(run_benchmark(args))
+    if args.redact:
+        report = redact_report(report)
     rendered = json.dumps(report, indent=2, sort_keys=True)
     print(rendered)
     if args.output:
-        import os
-
         os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
         with open(args.output, "w", encoding="utf-8") as fh:
             fh.write(rendered + "\n")
@@ -453,32 +701,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--upstash-url",
-        required=True,
-        help="Upstash Redis REST base URL (e.g. https://us1-xxxx.upstash.io)",
+        default=resolve_upstash_rest_url(),
+        help="Upstash Redis REST base URL (default: KV_REST_API_URL)",
     )
     parser.add_argument(
         "--upstash-token",
-        required=True,
-        help="Upstash Redis REST token",
+        default=resolve_upstash_rest_token(),
+        help="Upstash Redis REST token (default: KV_REST_API_TOKEN, else READ_ONLY)",
     )
     parser.add_argument(
         "--database-url",
-        default=None,
+        default=os.environ.get("DATABASE_URL"),
         help="Neon DATABASE_URL (asyncpg). Required for the Neon point SELECT measurement.",
     )
     parser.add_argument(
         "--kv-table",
-        default="neon_default_table",
-        help=f"Name of the KV-style table for the Neon benchmark (default: {"neon_default_table"})",
+        default=DEFAULT_KV_TABLE,
+        help=f"Name of the KV-style table for the Neon benchmark (default: {DEFAULT_KV_TABLE})",
     )
     parser.add_argument(
         "--queue-base-url",
-        default=None,
+        default=os.environ.get("VERCEL_BASE_URL"),
         help="Base URL of the production deployment (https://comic-pile.vercel.app)",
     )
     parser.add_argument(
         "--queue-bearer-token",
-        default=None,
+        default=os.environ.get("VERCEL_BEARER_TOKEN"),
         help="Bearer token for the authenticated queue-read measurement",
     )
     parser.add_argument(
@@ -519,7 +767,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--location",
         default="unknown",
-        help="Deployment vantage (e.g. 'vercel:iad1', 'local:docker') for the report header",
+        help="Deployment vantage (e.g. 'vercel:cle1', 'github-actions:ubuntu-latest')",
+    )
+    parser.add_argument(
+        "--redact",
+        action="store_true",
+        help="Rewrite provider hostnames and credential-like error text before writing JSON",
+    )
+    parser.add_argument(
+        "--from-dotenv",
+        default=None,
+        help="Load KEY=VALUE pairs into the process env before resolving credentials",
+    )
+    parser.add_argument(
+        "--require-kv-rest",
+        action="store_true",
+        help="Fail if KV_REST_API_URL and a KV REST token are not present in process env",
     )
     return parser
 
@@ -531,6 +794,18 @@ def main() -> int:
         The process exit code (``0`` on success).
     """
     args = build_parser().parse_args()
+    if args.from_dotenv:
+        for key, value in load_dotenv_values(args.from_dotenv).items():
+            os.environ.setdefault(key, value)
+    if is_placeholder(args.upstash_url):
+        args.upstash_url = resolve_upstash_rest_url()
+    if is_placeholder(args.upstash_token):
+        args.upstash_token = resolve_upstash_rest_token()
+    if args.database_url is None:
+        args.database_url = os.environ.get("DATABASE_URL")
+    if args.require_kv_rest:
+        coverage = kv_rest_preflight()
+        print(json.dumps({"kv_rest_preflight": coverage}, sort_keys=True))
     if args.iterations < 1:
         raise SystemExit("--iterations must be >= 1")
     if args.warmups < 0:
