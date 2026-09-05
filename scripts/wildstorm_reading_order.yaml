@@ -11,24 +11,23 @@ chains:
       - ["Stormwatch Vol. 2", "10"]
 
   - name: planetary_authority
-    description: "Planetary and The Authority interleaved (1999-2000)"
+    description: "Planetary side of the Ruling the World crossover"
     edges:
-      - ["Planetary", "1"]
-      - ["The Authority", "1"]
-      - ["Planetary", "6"]
-      - ["The Authority", "5"]
-      - ["Planetary/The Authority: Ruling the World", "1"]
       - ["Planetary", "10"]
+      - ["Planetary/The Authority: Ruling the World", "1"]
+      - ["Planetary", "11"]
+
+  - name: authority_crossover
+    description: "Authority side of Ruling the World before Outer Dark"
+    edges:
+      - ["The Authority", "8"]
+      - ["Planetary/The Authority: Ruling the World", "1"]
       - ["The Authority", "9"]
 
   - name: planetary_late
-    description: "Planetary mid-run and DC crossovers (2003-2009)"
+    description: "Planetary mid-run and DC crossovers (2002-2003)"
     edges:
-      - ["Planetary", "13"]
-      - ["Planetary", "16"]
+      - ["Planetary", "15"]
       - ["Planetary/JLA: Terra Occulta", "1"]
-      - ["Planetary", "17"]
       - ["Planetary/Batman: Night on Earth", "1"]
-      - ["Planetary", "21"]
-      - ["Planetary", "24"]
-      - ["Planetary", "27"]
+      - ["Planetary", "16"]
