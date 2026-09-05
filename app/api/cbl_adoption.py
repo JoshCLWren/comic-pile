@@ -18,7 +18,7 @@ from app.schemas.cbl_adoption import (
     CBLPlanCalculationRequest,
     CBLPlanCalculationResponse,
 )
-from app.schemas.shared_types import SourceBackedDecision, SourceBackedStatus
+from app.schemas.shared_types import SourceBackedDecision
 
 router = APIRouter(prefix="/api/v1/cbl-lists", tags=["cbl-adoption"])
 
