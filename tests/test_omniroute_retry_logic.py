@@ -1,50 +1,69 @@
-"""Test for OmniRoute retry logic fix for issue #2155."""
+"""Regression tests for the issue #2155 OmniRoute stream retry logic."""
 
-import pytest
-from unittest.mock import patch, MagicMock
-import subprocess
-import os
+from __future__ import annotations
 
+import re
+from pathlib import Path
 
-def test_retry_logic_allows_second_attempt_with_sufficient_time():
-    """Test that retry logic allows second attempt when time > 540s."""
-    # This test would normally test the bash script logic,
-    # but since we're in Python, we'll test the core concept
-    
-    # Simulate the condition that was failing: remaining time = 593s
-    # Old logic: (( $(remaining) > 600 )) would be false, breaking retry
-    # New logic: (( $(remaining) > 540 )) would be true, allowing retry
-    
-    remaining_time = 593  # seconds
-    
-    # Old condition (broken)
-    old_condition = remaining_time > 600
-    
-    # New condition (fixed)
-    new_condition = remaining_time > 540
-    
-    assert old_condition == False  # Would break retry
-    assert new_condition == True   # Allows retry
-    
+SCRIPTS_DIR = Path(__file__).resolve().parents[1] / ".github" / "scripts"
 
-def test_retry_logic_blocks_when_insufficient_time():
-    """Test that retry logic correctly blocks when time <= 540s."""
-    # Test boundary conditions
-    
-    # Exactly at limit should not retry (need > 540)
-    remaining_time = 540
-    assert remaining_time > 540 == False
-    
-    # Just under limit should not retry
-    remaining_time = 539
-    assert remaining_time > 540 == False
-    
-    # Just over limit should retry
-    remaining_time = 541
-    assert remaining_time > 540 == True
+TRANSIENT_CLASSIFIER_SCRIPTS = [
+    "free-model-factory-worker-primitives.sh",
+    "nvidia-factory-worker.sh",
+    "omniroute-factory-worker.sh",
+]
+
+RETRY_GUARD_SCRIPTS = [
+    "free-model-factory-worker-primitives.sh",
+    "free-model-factory-worker.sh",
+    "nvidia-factory-worker.sh",
+    "omniroute-factory-worker.sh",
+]
+
+RETRY_GUARD_RE = re.compile(r"\(\(\s*\$\(remaining\)\s*>\s*540\s*\)\)\s*\|\|\s*break")
 
 
-if __name__ == "__main__":
-    test_retry_logic_allows_second_attempt_with_sufficient_time()
-    test_retry_logic_blocks_when_insufficient_time()
-    print("All tests passed!")
+def _script(name: str) -> str:
+    """Read the worker script for the given basename."""
+    return (SCRIPTS_DIR / name).read_text()
+
+
+def test_early_stream_termination_is_classified_as_transient() -> None:
+    """Every worker must classify stream_early_eof as a transient agent failure."""
+    for name in TRANSIENT_CLASSIFIER_SCRIPTS:
+        assert "stream_early_eof" in _script(name), (
+            f"{name} must classify stream_early_eof as transient"
+        )
+
+
+def test_retry_guard_uses_540_second_minimum() -> None:
+    """The bounded retry must be permitted above the 540-second minimum budget."""
+    for name in RETRY_GUARD_SCRIPTS:
+        text = _script(name)
+        assert RETRY_GUARD_RE.search(text), (
+            f"{name} must retry above the 540-second minimum budget"
+        )
+        assert not re.search(r"\(\(\s*\$\(remaining\)\s*>\s*600\s*\)\)", text), (
+            f"{name} must not retain the old 600-second retry threshold"
+        )
+
+
+def test_retry_remains_fail_closed_for_dirty_worktree_and_exhausted_attempts() -> None:
+    """Dirty worktrees and exhausted attempts must still break without retrying."""
+    clean_worktree_guards = {
+        "free-model-factory-worker-primitives.sh": '[[ -z "$(git status --porcelain)" ]] || break',
+        "free-model-factory-worker.sh": '[[ -z "$(git status --porcelain)" ]] || break',
+        "nvidia-factory-worker.sh": '[[ -n "$(git status --porcelain)" ]]',
+        "omniroute-factory-worker.sh": '[[ -z "$(git status --porcelain)" ]] || break',
+    }
+    for name in RETRY_GUARD_SCRIPTS:
+        text = _script(name)
+        assert clean_worktree_guards[name] in text, (
+            f"{name} must bail out of retrying on a dirty worktree"
+        )
+        assert "(( agent_attempt < MAX_AGENT_ATTEMPTS )) || break" in text, (
+            f"{name} must cap retries at MAX_AGENT_ATTEMPTS"
+        )
+        assert RETRY_GUARD_RE.search(text), (
+            f"{name} must keep the bounded 540-second retry guard"
+        )

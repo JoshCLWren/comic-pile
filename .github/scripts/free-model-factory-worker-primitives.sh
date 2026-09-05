@@ -579,8 +579,8 @@ while (( $(remaining) > 480 )); do
   fi
   log 'transient provider/runtime interruption; allowing OmniRoute to adapt the upstream route'
     [[ -z "$(git status --porcelain)" ]] || break
-(( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
-     (( $(remaining) > 540 )) || break
+    (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
+    (( $(remaining) > 540 )) || break
 
     sleep_for="$TRANSIENT_BACKOFF_SECONDS"
     max_sleep=$(( $(remaining) - 540 ))

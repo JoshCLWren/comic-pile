@@ -173,7 +173,7 @@ machine_merge_gates_pass() {
 is_transient_agent_failure() {
   local status="$1"
   [[ "$status" == "124" ]] && return 0
-  grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "/tmp/opencode-factory-${WORKER}.log"
+  grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|stream_early_eof|stream[^[:space:]]*[[:space:]]+timeout|stream_timeout|STREAM_READINESS_TIMEOUT|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "/tmp/opencode-factory-${WORKER}.log"
 }
 
 run_agent() {
@@ -374,8 +374,8 @@ while (( $(remaining) > 480 )); do
     transient_failure=1
     log 'transient OmniRoute/upstream interruption; allowing the gateway to adapt the route and retry if budget permits'
     [[ -z "$(git status --porcelain)" ]] || break
-(( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
-     (( $(remaining) > 540 )) || break
+    (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
+    (( $(remaining) > 540 )) || break
     sleep_for="$TRANSIENT_BACKOFF_SECONDS"
     max_sleep=$(( $(remaining) - 540 ))
     (( sleep_for > max_sleep )) && sleep_for="$max_sleep"
