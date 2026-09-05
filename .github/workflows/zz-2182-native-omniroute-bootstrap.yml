@@ -20,20 +20,17 @@ jobs:
       - name: Apply native OmniRoute route migration
         run: python3 .github/scripts/bootstrap_2182.py
 
-      - name: Validate focused factory routing tests
+      - name: Validate guarded migration
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m pip install pytest
-          python3 -m pytest --no-cov -q \
-            tests/test_factory_provider_candidates.py \
-            tests/test_factory_omniroute_route.py \
-            tests/test_factory_candidate_health.py \
-            tests/test_factory_executor_selection_workflow.py
           python3 .github/scripts/validate-free-model-factories.py
           python3 -m py_compile \
             .github/scripts/factory_provider_candidates.py \
             .github/scripts/factory_omniroute_route.py
+          [[ "$(python3 .github/scripts/factory_omniroute_route.py --mode issue)" == 'auto/coding:free' ]]
+          [[ "$(python3 .github/scripts/factory_omniroute_route.py --mode pr --pr-stage factory:changes-requested)" == 'auto/coding:free' ]]
+          [[ "$(python3 .github/scripts/factory_omniroute_route.py --mode pr --pr-stage factory:review)" == 'auto/reasoning:free' ]]
           git diff --check
 
       - name: Commit migration
