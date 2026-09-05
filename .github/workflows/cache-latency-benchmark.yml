@@ -112,35 +112,50 @@ jobs:
             printf '%s' "$raw"
           }
 
+          native_url=""
+          kv_url=""
+          native_token=""
+          readonly_token=""
+          write_token=""
           while IFS= read -r line || [[ -n "$line" ]]; do
             case "$line" in
               UPSTASH_REDIS_REST_URL=*)
-                value="$(mask_value "${line#UPSTASH_REDIS_REST_URL=}")"
-                echo "UPSTASH_REDIS_REST_URL=$value" >> "$GITHUB_ENV"
-                echo "upstash_rest=true" >> "$GITHUB_OUTPUT"
+                native_url="$(mask_value "${line#UPSTASH_REDIS_REST_URL=}")"
+                ;;
+              KV_REST_API_URL=*)
+                kv_url="$(mask_value "${line#KV_REST_API_URL=}")"
                 ;;
               UPSTASH_REDIS_REST_TOKEN=*)
-                value="$(mask_value "${line#UPSTASH_REDIS_REST_TOKEN=}")"
-                echo "UPSTASH_REDIS_REST_TOKEN=$value" >> "$GITHUB_ENV"
-                echo "upstash_rest=true" >> "$GITHUB_OUTPUT"
+                native_token="$(mask_value "${line#UPSTASH_REDIS_REST_TOKEN=}")"
+                ;;
+              KV_REST_API_READ_ONLY_TOKEN=*)
+                readonly_token="$(mask_value "${line#KV_REST_API_READ_ONLY_TOKEN=}")"
+                ;;
+              KV_REST_API_TOKEN=*)
+                write_token="$(mask_value "${line#KV_REST_API_TOKEN=}")"
                 ;;
               UPSTASH_EMAIL=*)
-                value="$(mask_value "${line#UPSTASH_EMAIL=}")"
-                echo "UPSTASH_EMAIL=$value" >> "$GITHUB_ENV"
+                echo "UPSTASH_EMAIL=$(mask_value "${line#UPSTASH_EMAIL=}")" >> "$GITHUB_ENV"
                 echo "upstash_management=true" >> "$GITHUB_OUTPUT"
                 ;;
               UPSTASH_API_KEY=*)
-                value="$(mask_value "${line#UPSTASH_API_KEY=}")"
-                echo "UPSTASH_API_KEY=$value" >> "$GITHUB_ENV"
+                echo "UPSTASH_API_KEY=$(mask_value "${line#UPSTASH_API_KEY=}")" >> "$GITHUB_ENV"
                 echo "upstash_management=true" >> "$GITHUB_OUTPUT"
                 ;;
               UPSTASH_DATABASE_ID=*)
-                value="$(mask_value "${line#UPSTASH_DATABASE_ID=}")"
-                echo "UPSTASH_DATABASE_ID=$value" >> "$GITHUB_ENV"
+                echo "UPSTASH_DATABASE_ID=$(mask_value "${line#UPSTASH_DATABASE_ID=}")" >> "$GITHUB_ENV"
                 ;;
             esac
           done < .env.production.local
           rm -f .env.production.local
+
+          rest_url="${native_url:-$kv_url}"
+          rest_token="${native_token:-${readonly_token:-$write_token}}"
+          if [[ -n "$rest_url" && -n "$rest_token" ]]; then
+            echo "UPSTASH_REDIS_REST_URL=$rest_url" >> "$GITHUB_ENV"
+            echo "UPSTASH_REDIS_REST_TOKEN=$rest_token" >> "$GITHUB_ENV"
+            echo "upstash_rest=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Run cache latency benchmark
         env:

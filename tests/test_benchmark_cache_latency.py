@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from scripts.benchmark_cache_latency import (
     BENCH_KV_KEY,
     DEFAULT_KV_TABLE,
@@ -9,6 +11,8 @@ from scripts.benchmark_cache_latency import (
     _summarize,
     normalize_asyncpg_url,
     redact_report,
+    resolve_upstash_rest_token,
+    resolve_upstash_rest_url,
 )
 
 
@@ -82,3 +86,22 @@ def test_benchmark_uses_one_shared_kv_key_and_table() -> None:
     """Neon insert/select and Upstash GET must share one key and the documented table."""
     assert BENCH_KV_KEY == "comic_pile_cache_latency_bench_key_v1"
     assert DEFAULT_KV_TABLE == "bench_cache_kv"
+
+
+def test_upstash_rest_aliases_prefer_native_then_vercel_kv(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Vercel KV REST names are accepted when native Upstash names are absent."""
+    monkeypatch.delenv("UPSTASH_REDIS_REST_URL", raising=False)
+    monkeypatch.delenv("UPSTASH_REDIS_REST_TOKEN", raising=False)
+    monkeypatch.setenv("KV_REST_API_URL", "https://example.upstash.io")
+    monkeypatch.setenv("KV_REST_API_READ_ONLY_TOKEN", "readonly-token")
+    monkeypatch.setenv("KV_REST_API_TOKEN", "write-token")
+
+    assert resolve_upstash_rest_url() == "https://example.upstash.io"
+    assert resolve_upstash_rest_token() == "readonly-token"
+
+    monkeypatch.setenv("UPSTASH_REDIS_REST_URL", "https://native.upstash.io")
+    monkeypatch.setenv("UPSTASH_REDIS_REST_TOKEN", "native-token")
+    assert resolve_upstash_rest_url() == "https://native.upstash.io"
+    assert resolve_upstash_rest_token() == "native-token"

@@ -83,6 +83,29 @@ class Run:
     error_detail: str | None
 
 
+def resolve_upstash_rest_url() -> str | None:
+    """Return the Upstash REST base URL from native or Vercel KV aliases.
+
+    Returns:
+        ``UPSTASH_REDIS_REST_URL``, else ``KV_REST_API_URL``, else ``None``.
+    """
+    return os.environ.get("UPSTASH_REDIS_REST_URL") or os.environ.get("KV_REST_API_URL")
+
+
+def resolve_upstash_rest_token() -> str | None:
+    """Return the Upstash REST token, preferring a read-only Vercel KV token.
+
+    Returns:
+        ``UPSTASH_REDIS_REST_TOKEN``, else ``KV_REST_API_READ_ONLY_TOKEN``,
+        else ``KV_REST_API_TOKEN``, else ``None``.
+    """
+    return (
+        os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+        or os.environ.get("KV_REST_API_READ_ONLY_TOKEN")
+        or os.environ.get("KV_REST_API_TOKEN")
+    )
+
+
 def _upstash_rest_key() -> str:
     """Return the shared benchmark key used by Upstash GET and the Neon KV row."""
     return BENCH_KV_KEY
@@ -547,13 +570,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--upstash-url",
-        default=os.environ.get("UPSTASH_REDIS_REST_URL"),
-        help="Upstash Redis REST base URL (default: UPSTASH_REDIS_REST_URL)",
+        default=resolve_upstash_rest_url(),
+        help="Upstash Redis REST base URL (default: UPSTASH_REDIS_REST_URL or KV_REST_API_URL)",
     )
     parser.add_argument(
         "--upstash-token",
-        default=os.environ.get("UPSTASH_REDIS_REST_TOKEN"),
-        help="Upstash Redis REST token (default: UPSTASH_REDIS_REST_TOKEN)",
+        default=resolve_upstash_rest_token(),
+        help="Upstash Redis REST token (default: UPSTASH_REDIS_REST_TOKEN or KV_REST_API_*_TOKEN)",
     )
     parser.add_argument(
         "--database-url",
