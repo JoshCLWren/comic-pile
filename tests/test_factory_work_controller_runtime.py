@@ -475,7 +475,9 @@ def test_unresolved_run_listing_fails_closed_at_the_free_entry_cap(
     )
     monkeypatch.setattr(controller, "owned_targets", lambda: [])
 
-    assert controller.in_flight_omniroute_free_entries() == 3
+    assert controller.in_flight_omniroute_free_entries() == (
+        controller.DEFAULT_MULTI_PROVIDER_ENTRY_CAP
+    )
     assert controller.omniroute_free_entry_has_capacity() is False
 
 

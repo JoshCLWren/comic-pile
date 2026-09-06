@@ -48,8 +48,8 @@ def test_exact_head_review_uses_free_reasoning_route() -> None:
     )
 
 
-def test_worker_applies_assignment_route_without_candidate_health() -> None:
-    """The session wrapper resolves the native intent after assignment."""
+def test_worker_refuses_omniroute_source_during_incident() -> None:
+    """OmniRoute auto routes stay dark; the worker refuses omniroute-free."""
     worker = (
         Path(__file__).resolve().parents[1]
         / ".github"
@@ -57,9 +57,6 @@ def test_worker_applies_assignment_route_without_candidate_health() -> None:
         / "free-model-factory-worker.sh"
     ).read_text(encoding="utf-8")
 
-    assert "factory_omniroute_route.py" in worker
-    assert 'MODEL="$effective_route"' in worker
-    assert 'RUNTIME_MODEL="omniroute/${effective_route}"' in worker
-    assert "factory_provider_candidates.py" not in worker
-    assert "factory_candidate_health.py" not in worker
-    assert "selected native OmniRoute intent route" in worker
+    assert "OmniRoute Entry is disabled for this incident" in worker
+    assert "omniroute-free" in worker
+    assert "OmniRoute-only" not in worker

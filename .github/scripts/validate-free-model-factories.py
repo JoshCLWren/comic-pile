@@ -105,22 +105,21 @@ def main() -> None:
     runner = RUNNER.read_text(encoding='utf-8')
     assert 'group: fixed-model-factory-${{ inputs.worker }}' in runner
     assert 'cancel-in-progress: false' in runner
-    assert "source='omniroute-free'" in runner
-    assert "runtime_model='omniroute/auto/coding:free'" in runner
-    assert 'GitHub execution is OmniRoute-only' in runner
-    assert 'Select native OmniRoute execution intent' in runner
-    assert 'reason=native-omniroute-intent-direct' in runner
-    assert 'FACTORY_OMNIROUTE_ENABLED' in runner
+    # INCIDENT restore: multi-provider Entry is live; OmniRoute stays dark.
+    assert 'NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}' in runner
+    assert 'OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}' in runner
+    assert 'nvidia)' in runner
+    assert 'opencode-free|openrouter-free)' in runner
+    assert 'kilo-auto)' in runner
     assert 'omniroute-disabled-incident' in runner
-    assert 'Resolve assignment-aware OmniRoute smoke route' in runner
-    assert 'factory-work-controller.py inspect --worker' in runner
-    assert 'Release controller claim after pre-session abort' in runner
-    assert 'smoke-failure' in runner
-    assert 'factory_omniroute_smoke.sh' not in runner
+    assert 'FACTORY_OMNIROUTE_ENABLED' in runner
+    assert "source='omniroute-free'" not in runner
     assert 'auto/best-free' not in runner
     assert 'FACTORY_OMNIROUTE_CAPACITY_BRIDGE' not in runner
-    assert "${OMNIROUTE_BASE_URL%/}/models" not in runner
-    assert 'OPENCODE_API_KEY' not in runner
+    assert 'factory_omniroute_smoke.sh' not in runner
+    assert 'Select execution candidate at dispatch time' in runner
+    assert 'Probe pinned NVIDIA model before OpenCode smoke' in runner
+    assert 'Smoke exact pinned model through OpenCode' in runner
     assert "KILO_VERSION: '7.4.22'" in runner
     assert 'Smoke Kilo Auto Free through Kilo CLI' in runner
     assert 'PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}' in runner
@@ -140,6 +139,9 @@ def main() -> None:
     assert 'factory-control-out-of-scope' in guard and 'is_factory_control_path' in guard
 
     worker = WORKER.read_text(encoding='utf-8')
+    assert 'OmniRoute Entry is disabled for this incident' in worker
+    assert "omniroute-free" in worker
+    assert 'OmniRoute-only' not in worker
     assert PRIMITIVES.exists(), 'tracked worker primitives are missing'
     primitives = PRIMITIVES.read_text(encoding='utf-8')
     assert "source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)" in worker
@@ -196,6 +198,7 @@ def main() -> None:
         'comic-pile-factory-claim-released-v3',
         'omniroute_enabled',
         'FACTORY_OMNIROUTE_ENABLED',
+        'DEFAULT_MULTI_PROVIDER_ENTRY_CAP',
         'latest_lease_activity_epoch',
         'queued',
         'in_progress',

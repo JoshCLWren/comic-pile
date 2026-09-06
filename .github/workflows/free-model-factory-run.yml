@@ -8,6 +8,10 @@ on:
         required: true
         type: string
     secrets:
+      NVIDIA_API_KEY:
+        required: false
+      OPENROUTER_API_KEY:
+        required: false
       OMNIROUTE_API_KEY:
         required: false
       OMNIROUTE_MANAGEMENT_API_KEY:
@@ -43,10 +47,12 @@ jobs:
       # pull_request workflows are attributed to a trusted actor.
       GH_TOKEN: ${{ github.token }}
       PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
       OMNIROUTE_MANAGEMENT_API_KEY: ${{ secrets.OMNIROUTE_MANAGEMENT_API_KEY }}
       OMNIROUTE_BASE_URL: ${{ vars.OMNIROUTE_BASE_URL }}
-      # INCIDENT 2026-09-06: default off until Josh re-enables a healthy gateway.
+      # INCIDENT 2026-09-06: OmniRoute stays off; multi-provider Entry is live.
       FACTORY_OMNIROUTE_ENABLED: ${{ vars.FACTORY_OMNIROUTE_ENABLED || 'off' }}
     steps:
       - name: Require trusted push credential
@@ -84,27 +90,36 @@ jobs:
           IFS=$'\t' read -r worker source model minute scheduler display <<< "$row"
           [[ "$worker" == "$REQUESTED_WORKER" ]]
 
-          # GitHub agents have one execution gateway. The manifest remains the
-          # durable worker roster, while OmniRoute owns provider/model choice.
-          source='omniroute-free'
-          model='auto/coding:free'
-          runtime_model='omniroute/auto/coding:free'
-          branch_suffix='omniroute'
-          enabled="$(printf '%s' "${FACTORY_OMNIROUTE_ENABLED:-off}" | tr '[:upper:]' '[:lower:]')"
-          case "$enabled" in
-            1|on|true|yes) omniroute_enabled=true ;;
-            *) omniroute_enabled=false ;;
+          case "$source" in
+            nvidia)
+              runtime_model="nvidia/${model}"
+              branch_suffix='nvidia'
+              if [[ -n "${NVIDIA_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-NVIDIA_API_KEY'; fi
+              ;;
+            opencode-free|openrouter-free)
+              runtime_model="${source%-free}/${model}"
+              branch_suffix='catalog-free'
+              configured=true
+              reason='catalog-backed-free-code-slot'
+              ;;
+            kilo-auto)
+              runtime_model="kilo/${model}"
+              branch_suffix='kilo-auto'
+              configured=true
+              reason='configured-anonymous-free'
+              ;;
+            omniroute-free)
+              # INCIDENT: OmniRoute auto/* and omniroute-free stay dark.
+              runtime_model="omniroute/${model}"
+              branch_suffix='omniroute'
+              configured=false
+              reason='omniroute-disabled-incident'
+              ;;
+            *)
+              echo "Unsupported factory source: ${source}" >&2
+              exit 1
+              ;;
           esac
-          if [[ "$omniroute_enabled" != true ]]; then
-            configured=false
-            reason='omniroute-disabled-incident'
-          elif [[ -n "${OMNIROUTE_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]]; then
-            configured=true
-            reason='omniroute-only-gateway'
-          else
-            configured=false
-            reason='missing-OMNIROUTE credentials'
-          fi
 
           {
             echo "worker=$worker"
@@ -190,7 +205,7 @@ jobs:
           echo "$bin_dir" >> "$GITHUB_PATH"
           "$bin_dir/kilo" --version
 
-      - name: Select native OmniRoute execution intent
+      - name: Select execution candidate at dispatch time
         id: executor
         if: steps.lane.outputs.configured == 'true'
         shell: bash
@@ -205,87 +220,181 @@ jobs:
           set -Eeuo pipefail
           discovery_outcome="$RUNNER_TEMP/factory-discovery-outcome"
 
-          [[ "$SOURCE" == 'omniroute-free' ]] || {
-            printf 'control_plane_failure\tGitHub execution is OmniRoute-only; got %s\n' "$SOURCE" > "$discovery_outcome"
-            exit 1
-          }
-          case "$LANE_MODEL" in
-            auto/coding:free|auto/reasoning:free) ;;
+          case "$SOURCE" in
+            nvidia|kilo-auto)
+              # These adapters cannot enumerate reliably. Preserve the lane
+              # request and let the existing real invocation/probe prove it.
+              {
+                echo "source=$SOURCE"
+                echo "model=$LANE_MODEL"
+                echo "runtime_model=$LANE_RUNTIME_MODEL"
+                echo "display=$LANE_DISPLAY"
+                echo "branch_suffix=$LANE_BRANCH_SUFFIX"
+                echo "reason=selected-by-runtime-evidence"
+              } >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            opencode-free|openrouter-free) ;;
             *)
-              printf 'control_plane_failure\tUnexpected native OmniRoute intent: %s\n' "$LANE_MODEL" > "$discovery_outcome"
+              printf 'control_plane_failure\tUnsupported provider adapter: %s\n' "$SOURCE" > "$discovery_outcome"
               exit 1
               ;;
           esac
-          [[ "$LANE_RUNTIME_MODEL" == "omniroute/${LANE_MODEL}" ]] || {
-            printf 'control_plane_failure\tNative OmniRoute runtime selector mismatch: %s\n' "$LANE_RUNTIME_MODEL" > "$discovery_outcome"
-            exit 1
+
+          discover_provider() {
+            local provider="$1"
+            local catalog="$2"
+            python3 .github/scripts/factory_provider_candidates.py \
+              --provider "$provider" --catalog "$catalog"
           }
 
-          # Carry the already-resolved OmniRoute auto route unchanged. Do not
-          # enumerate, rank, filter, or select backing models here. OmniRoute
-          # owns free-tier/provider/model selection when enabled. The bounded
-          # OpenCode smoke below is the executable-capacity gate and must not
-          # run while FACTORY_OMNIROUTE_ENABLED is off.
-          {
-            echo "source=$SOURCE"
-            echo "model=$LANE_MODEL"
-            echo "runtime_model=$LANE_RUNTIME_MODEL"
-            echo "display=${SOURCE} · ${LANE_MODEL}"
-            echo "branch_suffix=$LANE_BRANCH_SUFFIX"
-            echo "reason=native-omniroute-intent-direct"
-          } >> "$GITHUB_OUTPUT"
-          printf 'Factory %s selected OmniRoute auto route: provider=%s model=%s runtime=%s\n' \
-            "$WORKER" "$SOURCE" "$LANE_MODEL" "$LANE_RUNTIME_MODEL"
+          catalog_candidates='[]'
+          catalog_successes=0
+          catalog_failures=()
 
-
-      - name: Resolve assignment-aware OmniRoute smoke route
-        id: route
-        if: steps.lane.outputs.configured == 'true'
-        shell: bash
-        env:
-          WORKER: ${{ steps.lane.outputs.worker }}
-          LANE_MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
-        run: |
-          set -Eeuo pipefail
-          assignment='{"kind":"none"}'
-          if ! assignment="$(python3 .github/scripts/factory-work-controller.py inspect --worker "$WORKER")"; then
-            echo "Assignment inspect failed; defaulting smoke to ${LANE_MODEL}" >&2
-            assignment='{"kind":"none"}'
-          fi
-          kind="$(jq -r '.kind // "none"' <<< "$assignment")"
-          stage="$(jq -r '.stage // empty' <<< "$assignment")"
-          if [[ "$kind" == 'issue' || "$kind" == 'pr' ]]; then
-            model="$(python3 .github/scripts/factory_omniroute_route.py --mode "$kind" --pr-stage "$stage")"
-            reason='assignment-aware-native-intent'
-            echo "Factory ${WORKER} assignment ${kind} #$(jq -r '.number' <<< "$assignment") stage=${stage} smoke=${model}"
+          opencode_catalog="$RUNNER_TEMP/factory-opencode-catalog"
+          if opencode models opencode --refresh > "$opencode_catalog"; then
+            if opencode_discovery="$(discover_provider opencode-free "$opencode_catalog")" \
+              && jq -e '.status and (.candidates | type == "array")' >/dev/null <<< "$opencode_discovery"; then
+              if [[ "$(jq -r '.status' <<< "$opencode_discovery")" != invalid ]]; then
+                catalog_successes=$((catalog_successes + 1))
+                candidates="$(jq -c '.candidates // []' <<< "$opencode_discovery")"
+                catalog_candidates="$(jq -cn \
+                  --argjson left "$catalog_candidates" --argjson right "$candidates" \
+                  '$left + $right | unique_by([.provider, .model])')"
+              else
+                catalog_failures+=('OpenCode returned an invalid model catalog')
+              fi
+            else
+              catalog_failures+=('OpenCode candidate adapter failed')
+            fi
           else
-            model="$LANE_MODEL"
-            reason='native-omniroute-intent-direct'
-            echo "Factory ${WORKER} has no inspectable assignment; smoking ${model}"
+            catalog_failures+=('OpenCode model discovery command failed')
           fi
+
+          if [[ -n "${OPENROUTER_API_KEY:-}" ]]; then
+            openrouter_catalog="$RUNNER_TEMP/factory-openrouter-catalog"
+            if curl --silent --show-error --fail-with-body \
+              --connect-timeout 5 --max-time 30 \
+              --header "Authorization: Bearer ${OPENROUTER_API_KEY}" \
+              https://openrouter.ai/api/v1/models > "$openrouter_catalog"; then
+              if openrouter_discovery="$(discover_provider openrouter-free "$openrouter_catalog")" \
+                && jq -e '.status and (.candidates | type == "array")' >/dev/null <<< "$openrouter_discovery"; then
+                if [[ "$(jq -r '.status' <<< "$openrouter_discovery")" != invalid ]]; then
+                  catalog_successes=$((catalog_successes + 1))
+                  candidates="$(jq -c '.candidates // []' <<< "$openrouter_discovery")"
+                  catalog_candidates="$(jq -cn \
+                    --argjson left "$catalog_candidates" --argjson right "$candidates" \
+                    '$left + $right | unique_by([.provider, .model])')"
+                else
+                  catalog_failures+=('OpenRouter returned an invalid model catalog')
+                fi
+              else
+                catalog_failures+=('OpenRouter candidate adapter failed')
+              fi
+            else
+              catalog_failures+=('OpenRouter model catalog request failed')
+            fi
+          fi
+
+          if [[ "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]] && [[ -n "${OMNIROUTE_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]]; then
+            omniroute_catalog="$RUNNER_TEMP/factory-omniroute-catalog"
+            if curl --silent --show-error --fail-with-body \
+              --connect-timeout 5 --max-time 30 \
+              --header "Authorization: Bearer ${OMNIROUTE_API_KEY}" \
+              "${OMNIROUTE_BASE_URL%/}/models" > "$omniroute_catalog"; then
+              if omniroute_discovery="$(discover_provider omniroute-free "$omniroute_catalog")" \
+                && jq -e '.status and (.candidates | type == "array")' >/dev/null <<< "$omniroute_discovery"; then
+                if [[ "$(jq -r '.status' <<< "$omniroute_discovery")" != invalid ]]; then
+                  catalog_successes=$((catalog_successes + 1))
+                  candidates="$(jq -c '.candidates // []' <<< "$omniroute_discovery")"
+                  catalog_candidates="$(jq -cn \
+                    --argjson left "$catalog_candidates" --argjson right "$candidates" \
+                    '$left + $right | unique_by([.provider, .model])')"
+                else
+                  catalog_failures+=('OmniRoute returned an invalid model catalog')
+                fi
+              else
+                catalog_failures+=('OmniRoute candidate adapter failed')
+              fi
+            else
+              catalog_failures+=('OmniRoute model catalog request failed')
+            fi
+          fi
+
+          candidate_count="$(jq 'length' <<< "$catalog_candidates")"
+          if (( candidate_count == 0 )); then
+            if (( catalog_successes == 0 )); then
+              IFS=';' failure_detail="${catalog_failures[*]}"
+              printf 'provider_unavailable\t%s\n' \
+                "${failure_detail:-No catalog provider was executable}" > "$discovery_outcome"
+            else
+              printf 'model_unavailable\tLive catalogs exposed no policy-eligible candidate\n' \
+                > "$discovery_outcome"
+            fi
+            exit 1
+          fi
+
+          discovery_file="$RUNNER_TEMP/factory-provider-discovery.json"
+          comments_file="$RUNNER_TEMP/factory-attempt-comments.json"
+          jq -cn --argjson candidates "$catalog_candidates" \
+            '{candidates: $candidates}' > "$discovery_file"
+          if ! gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+            > "$comments_file"; then
+            printf 'control_plane_failure\tFactory health evidence could not be read\n' > "$discovery_outcome"
+            exit 1
+          fi
+
+          selection="$(python3 .github/scripts/factory_candidate_health.py \
+            --discovery "$discovery_file" --comments "$comments_file" \
+            --worker "$WORKER")"
+          source="$(jq -r '.selected.provider // empty' <<< "$selection")"
+          model="$(jq -r '.selected.model // empty' <<< "$selection")"
+          runtime_model="$(jq -r '.selected.runtime_model // empty' <<< "$selection")"
+          health_state="$(jq -r '.selected.health_state // empty' <<< "$selection")"
+          if [[ -z "$source" || -z "$model" || -z "$runtime_model" ]]; then
+            failure_outcome="$(jq -r '.failure_outcome // "unknown_failure"' <<< "$selection")"
+            failure_detail="$(jq -r '.detail // "candidate health selection failed"' <<< "$selection")"
+            printf '%s\t%s\n' "$failure_outcome" "$failure_detail" > "$discovery_outcome"
+            exit 1
+          fi
+
+          case "$source" in
+            opencode-free) branch_suffix='opencode-free' ;;
+            openrouter-free) branch_suffix='openrouter' ;;
+            omniroute-free) branch_suffix='omniroute' ;;
+            *)
+              printf 'control_plane_failure\tSelected unsupported catalog provider: %s\n' \
+                "$source" > "$discovery_outcome"
+              exit 1
+              ;;
+          esac
           {
+            echo "source=$source"
             echo "model=$model"
-            echo "runtime_model=omniroute/${model}"
-            echo "reason=$reason"
-            echo "kind=$kind"
-            echo "stage=$stage"
+            echo "runtime_model=$runtime_model"
+            echo "display=${source} · ${model}"
+            echo "branch_suffix=$branch_suffix"
+            echo "reason=selected-${health_state}-from-live-provider-catalog"
           } >> "$GITHUB_OUTPUT"
+          printf 'Factory %s selected executor: provider=%s model=%s runtime=%s health=%s\n' \
+            "$WORKER" "$source" "$model" "$runtime_model" "$health_state"
 
       - name: Report selected executor heartbeat
         if: always()
         shell: bash
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
-          MODEL: ${{ steps.route.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
           SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
           MINUTE: ${{ steps.lane.outputs.minute }}
           CONFIGURED: ${{ steps.lane.outputs.configured }}
-          REASON: ${{ steps.route.outputs.reason || steps.executor.outputs.reason || steps.lane.outputs.reason }}
+          REASON: ${{ steps.executor.outputs.reason || steps.lane.outputs.reason }}
           EXECUTOR_OUTCOME: ${{ steps.executor.outcome }}
         run: |
           set -Eeuo pipefail
           [[ -n "${WORKER:-}" ]] || exit 0
-          if [[ -f "$RUNNER_TEMP/factory-effective-model" ]]; then MODEL="$(cat "$RUNNER_TEMP/factory-effective-model")"; fi
           marker="<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-${WORKER} -->"
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           if [[ "$CONFIGURED" != true ]]; then
@@ -306,11 +415,10 @@ jobs:
           fi
 
       - name: Configure selected OmniRoute capacity
-        id: configure
-        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-free'
+        if: vars.FACTORY_OMNIROUTE_ENABLED == 'on' && steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-free'
         shell: bash
         env:
-          MODEL: ${{ steps.route.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
           [[ -n "${OMNIROUTE_API_KEY:-}" ]] || { echo 'OMNIROUTE_API_KEY missing for selected OmniRoute capacity' >&2; exit 1; }
@@ -338,106 +446,122 @@ jobs:
                       "X-GitHub-Workflow": $workflow
                     }
                   },
-                  models: {
-                    "auto/coding:free": {name: "auto/coding:free"},
-                    "auto/reasoning:free": {name: "auto/reasoning:free"},
-                    ($model): {name: $model}
-                  }
+                  models: {($model): {name: $model}}
                 }
               }
             }' > "$HOME/.config/opencode/opencode.json"
           chmod 600 "$HOME/.config/opencode/opencode.json"
 
-      - name: Smoke selected OmniRoute route through OpenCode
-        id: smoke
+      - name: Probe pinned NVIDIA model before OpenCode smoke
+        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'nvidia'
+        shell: bash
+        env:
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${NVIDIA_API_KEY:-}" ]] || { echo 'NVIDIA_API_KEY missing after lane configured=true' >&2; exit 1; }
+          request="$(jq -nc --arg model "$MODEL" '{model:$model,messages:[{role:"user",content:"Reply with exactly FIXED_MODEL_OK"}],max_tokens:16}')"
+          response="$RUNNER_TEMP/nvidia-probe.json"
+          headers="$RUNNER_TEMP/nvidia-probe-headers.txt"
+          retirement_marker='<!-- factory-model-retired-410:v1 -->'
+          retirement_comments="$RUNNER_TEMP/factory-retired-model-comments.json"
+          if gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" > "$retirement_comments" \
+            && jq -e --arg marker "$retirement_marker" --arg model "$MODEL" \
+              'any(.[]; ((.body // "") | split("\n")) as $lines | ($lines | index($marker)) != null and ($lines | index("Source: nvidia")) != null and ($lines | index("Model: " + $model)) != null)' \
+              "$retirement_comments" >/dev/null; then
+            echo "Skipping permanently retired NVIDIA model: ${MODEL}" >&2
+            printf 'model_retired_410\tNVIDIA previously returned HTTP 410 Gone for %s\n' "$MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
+            exit 1
+          fi
+          attempt=0
+          max_attempts=3
+          code=""
+          while (( attempt < max_attempts )); do
+            attempt=$((attempt + 1))
+            code="$(curl --silent --show-error --dump-header "$headers" --output "$response" --write-out '%{http_code}' \
+              --connect-timeout 5 --max-time 120 \
+              --header "Authorization: Bearer ${NVIDIA_API_KEY}" \
+              --header 'Content-Type: application/json' \
+              --data "$request" \
+              https://integrate.api.nvidia.com/v1/chat/completions || true)"
+            if [[ "$code" == "404" ]]; then
+              echo "Pinned NVIDIA model is not currently invokable for this account: ${MODEL}" >&2
+              echo 'No fallback is allowed for a fixed-model lane.' >&2
+              cat "$response" >&2 || true
+              exit 1
+            fi
+            if [[ "$code" == "410" ]]; then
+              echo "NVIDIA permanently retired model: ${MODEL}" >&2
+              retirement_body="$(printf '%s\nSource: nvidia\nModel: %s\nReason: provider returned HTTP 410 Gone\nUpdated: %s' \
+                "$retirement_marker" "$MODEL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
+                -f body="$retirement_body" >/dev/null
+              printf 'model_retired_410\tNVIDIA returned HTTP 410 Gone for %s; model is permanently retired\n' "$MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
+              exit 1
+            fi
+            [[ "$code" =~ ^2 ]] && break
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$response" 2>/dev/null || [[ "$code" == "429" ]]; then
+              if (( attempt < max_attempts )); then
+                retry_after="$(grep -i '^retry-after:' "$headers" 2>/dev/null | tail -n1 | sed -E 's/^[^:]+:[[:space:]]*//I' | tr -d '\r' | grep -E '^[0-9]+' || true)"
+                if [[ "$retry_after" =~ ^[0-9]+$ ]]; then
+                  delay=$(( retry_after > 60 ? 60 : retry_after ))
+                else
+                  delay=$(( 5 * attempt ))
+                fi
+                echo "NVIDIA probe transient HTTP ${code} (attempt ${attempt}/${max_attempts}); retrying after ${delay}s" >&2
+                cat "$response" >&2 || true
+                sleep "$delay"
+                continue
+              fi
+              echo "Transient NVIDIA probe failure HTTP ${code} after ${attempt} attempts; allowing worker to proceed with built-in retry handling" >&2
+              cat "$response" >&2 || true
+              exit 0
+            fi
+            break
+          done
+          [[ "$code" =~ ^2 ]] || {
+            echo "Pinned NVIDIA model probe failed HTTP ${code}" >&2
+            cat "$response" >&2 || true
+            exit 1
+          }
+          echo "NVIDIA probe succeeded for ${MODEL}"
+
+      - name: Smoke exact pinned model through OpenCode
         if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) != 'kilo-auto'
         shell: bash
         env:
-          RUNTIME_MODEL: ${{ steps.route.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
-          LANE_MODEL: ${{ steps.route.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
+          RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
         run: |
           set -Eeuo pipefail
-          # Lean smoke workspace: avoid loading repo AGENTS.md / build-agent
-          # context that blows past free-tier TPM (seen as HTTP 413 ~12k vs 8k).
-          smoke_dir="$RUNNER_TEMP/smoke-workspace"
-          rm -rf "$smoke_dir"
-          mkdir -p "$smoke_dir"
-          git -C "$smoke_dir" init --quiet
+          before="$(git status --porcelain)"
+          [[ -z "$before" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
           set +e
           timeout --signal=TERM --kill-after=10s 180s \
-            opencode run -m "$RUNTIME_MODEL" --dir "$smoke_dir" \
+            opencode run -m "$RUNTIME_MODEL" --agent build --dir "$GITHUB_WORKSPACE" \
             --title 'ComicPile fixed-model smoke' \
-            'Use a read-only shell tool to run `git status --short`. Do not edit files. After the tool call succeeds, reply with exactly FIXED_MODEL_OPENCODE_OK.' \
+            'Reply with exactly FIXED_MODEL_OPENCODE_OK. Do not edit files, run commands, or use tools.' \
             2>&1 | tee "$RUNNER_TEMP/fixed-model-smoke.log"
           status=${PIPESTATUS[0]}
           set -e
-          is_native_intent=false
-          case "${LANE_MODEL:-}" in
-            auto/*) is_native_intent=true ;;
-          esac
-          record_smoke_model_outcome() {
-            local smoke_log="$RUNNER_TEMP/fixed-model-smoke.log"
-            if grep -Eiq 'HTTP[^0-9]*410|410 Gone' "$smoke_log"; then
-              printf 'model_retired_410\t%s\n' \
-                "${RUNTIME_MODEL} returned HTTP 410 and is permanently retired" \
-                > "$RUNNER_TEMP/factory-discovery-outcome"
-            elif grep -Eiq 'HTTP[^0-9]*413|Request too large|tokens per minute|\bTPM\b' "$smoke_log"; then
-              printf 'provider_throttle\t%s\n' \
-                "${RUNTIME_MODEL} hit a provider token/TPM or request-size limit (HTTP 413)" \
-                > "$RUNNER_TEMP/factory-discovery-outcome"
-            elif grep -Eiq '429|Too Many Requests|rate.?limit|cooling down' "$smoke_log"; then
-              printf 'provider_throttle\t%s\n' \
-                "${RUNTIME_MODEL} was throttled or all upstream credentials were cooling down" \
-                > "$RUNNER_TEMP/factory-discovery-outcome"
-            elif grep -Eiq 'model[^[:alnum:]]+(not found|not available|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found|Model is unavailable' "$smoke_log"; then
-              # OmniRoute auto routes (auto/coding:free) must not be marked unavailable
-              # when a backing fallback model is missing from the live catalog.
-              if [[ "$is_native_intent" == true ]]; then
-                printf 'provider_failure\t%s\n' \
-                  "${RUNTIME_MODEL} OmniRoute auto route exhausted backing routes (backing model unavailable)" \
-                  > "$RUNNER_TEMP/factory-discovery-outcome"
-              else
-                printf 'model_unavailable\t%s\n' \
-                  "${RUNTIME_MODEL} was rejected as unavailable by OmniRoute" \
-                  > "$RUNNER_TEMP/factory-discovery-outcome"
-              fi
-            elif grep -Eiq 'bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$smoke_log"; then
-              printf 'provider_failure\t%s\n' \
-                "${RUNTIME_MODEL} failed with a transient gateway or upstream error" \
-                > "$RUNNER_TEMP/factory-discovery-outcome"
-            fi
-          }
-          smoke_transient_re='429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|HTTP[^0-9]*413|Request too large|tokens per minute|\bTPM\b|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset'
-          emit_transient_smoke_message() {
-            if [[ "$is_native_intent" == true ]]; then
-              echo "Transient smoke failure for OmniRoute auto route ${RUNTIME_MODEL} (TPM/throttle/upstream); not quarantining the auto selector" >&2
-            else
-              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; quarantining this route for the next selection" >&2
-            fi
-          }
           if (( status != 0 )); then
-            if (( status == 124 || status == 137 || status == 143 )) || \
-              grep -Eiq "$smoke_transient_re" "$RUNNER_TEMP/fixed-model-smoke.log"; then
-              record_smoke_model_outcome
-              emit_transient_smoke_message
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; allowing worker to proceed with built-in retry handling" >&2
               cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
-              exit 1
+              exit 0
             fi
-            record_smoke_model_outcome
             exit "$status"
           fi
           if ! grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"; then
-            if grep -Eiq "$smoke_transient_re" "$RUNNER_TEMP/fixed-model-smoke.log"; then
-              record_smoke_model_outcome
-              emit_transient_smoke_message
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; allowing worker to proceed with built-in retry handling" >&2
               cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
-              exit 1
+              exit 0
             fi
             echo "Smoke did not return FIXED_MODEL_OPENCODE_OK" >&2
             cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
-            record_smoke_model_outcome
             exit 1
           fi
+          [[ -z "$(git status --porcelain)" ]] || { echo 'Model smoke modified the worktree' >&2; exit 1; }
 
       - name: Smoke Kilo Auto Free through Kilo CLI
         if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'kilo-auto'
@@ -497,13 +621,13 @@ jobs:
           [[ -z "$(git status --porcelain)" ]] || { echo 'Kilo smoke modified the worktree' >&2; exit 1; }
 
       - name: Run continuous fixed-model factory session
-        id: session
         if: steps.lane.outputs.configured == 'true'
         env:
+          FACTORY_OMNIROUTE_ENABLED: ${{ vars.FACTORY_OMNIROUTE_ENABLED || 'off' }}
           FACTORY_WORKER: ${{ steps.lane.outputs.worker }}
           FACTORY_SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
-          FACTORY_MODEL: ${{ steps.smoke.outputs.model || steps.route.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
-          FACTORY_RUNTIME_MODEL: ${{ steps.smoke.outputs.runtime_model || steps.route.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
+          FACTORY_MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+          FACTORY_RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
           FACTORY_DISPLAY: ${{ steps.executor.outputs.display || steps.lane.outputs.display }}
           FACTORY_BRANCH_SUFFIX: ${{ steps.executor.outputs.branch_suffix || steps.lane.outputs.branch_suffix }}
         run: |
@@ -516,41 +640,13 @@ jobs:
           printf '%s\n' "$worker_status" > "$RUNNER_TEMP/factory-worker-status"
           exit "$worker_status"
 
-      - name: Release controller claim after pre-session abort
-        if: always() && steps.session.outcome == 'skipped'
-        shell: bash
-        env:
-          WORKER: ${{ steps.lane.outputs.worker || inputs.worker }}
-          CONFIGURED: ${{ steps.lane.outputs.configured }}
-          EXECUTOR_OUTCOME: ${{ steps.executor.outcome }}
-          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
-          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
-        run: |
-          set -Eeuo pipefail
-          [[ -n "${WORKER:-}" ]] || exit 0
-          if [[ "$CONFIGURED" != 'true' ]]; then
-            reason='missing-credentials'
-          elif [[ "$EXECUTOR_OUTCOME" == 'failure' ]]; then
-            reason='executor-selection-failure'
-          elif [[ "$CONFIGURE_OUTCOME" == 'failure' ]]; then
-            reason='credential-failure'
-          elif [[ "$SMOKE_OUTCOME" == 'failure' ]]; then
-            reason='smoke-failure'
-          else
-            reason='pre-session-failure'
-          fi
-          echo "Releasing Factory ${WORKER} controller claim immediately (${reason}); not waiting for the 900s stale-lease TTL"
-          python3 .github/scripts/factory-work-controller.py release --worker "$WORKER" --reason "$reason"
-
-
       - name: Report OmniRoute routing summary
-        if: always() && steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-free'
+        if: always() && vars.FACTORY_OMNIROUTE_ENABLED == 'on' && steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-free'
         shell: bash
         env:
-          MODEL: ${{ steps.smoke.outputs.model || steps.route.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
-          if [[ -f "$RUNNER_TEMP/factory-effective-model" ]]; then MODEL="$(cat "$RUNNER_TEMP/factory-effective-model")"; fi
           [[ -n "${OMNIROUTE_MANAGEMENT_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]] || {
             echo 'OmniRoute routing summary unavailable: gateway credentials missing' >&2
             exit 0
@@ -561,7 +657,7 @@ jobs:
           esac
           analytics="$RUNNER_TEMP/omniroute-analytics.json"
           code="$(curl --silent --show-error --output "$analytics" --write-out '%{http_code}' \
-            --connect-timeout 5 --max-time 30 --retry 5 --retry-all-errors --retry-delay 5 \
+            --connect-timeout 5 --max-time 30 \
             --header "Authorization: Bearer ${OMNIROUTE_MANAGEMENT_API_KEY}" \
             "${gateway_base_url}/api/usage/analytics?period=session" || true)"
           if [[ "$code" != 200 ]]; then
@@ -604,7 +700,6 @@ jobs:
         run: |
           set -Eeuo pipefail
           [[ -n "${WORKER:-}" ]] || exit 0
-          if [[ -f "$RUNNER_TEMP/factory-effective-model" ]]; then MODEL="$(cat "$RUNNER_TEMP/factory-effective-model")"; fi
           marker="<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-${WORKER} -->"
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           if [[ "$CONFIGURED" != true ]]; then outcome='unconfigured'; else outcome="$JOB_STATUS"; fi

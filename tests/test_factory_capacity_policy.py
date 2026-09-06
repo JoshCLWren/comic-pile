@@ -107,12 +107,13 @@ def test_omniroute_free_entry_slot_counts_reject_negative_inputs(monkeypatch):
         raise AssertionError("negative cap must fail closed")
 
 
-def test_omniroute_defaults_to_disabled_with_zero_remaining_capacity(monkeypatch):
+def test_omniroute_disabled_uses_multi_provider_entry_budget(monkeypatch):
     monkeypatch.delenv("FACTORY_OMNIROUTE_ENABLED", raising=False)
     assert policy.omniroute_enabled() is False
-    assert policy.remaining_omniroute_free_entry_slots(0) == 0
+    assert policy.remaining_omniroute_free_entry_slots(0) == policy.DEFAULT_MULTI_PROVIDER_ENTRY_CAP
+    assert policy.remaining_omniroute_free_entry_slots(3) == policy.DEFAULT_MULTI_PROVIDER_ENTRY_CAP - 3
     capped = policy.apply_omniroute_free_entry_cap(demand(20, 20, 20), in_flight=0)
-    assert capped.idle_workers == 0
+    assert capped.idle_workers == policy.DEFAULT_MULTI_PROVIDER_ENTRY_CAP
 
 
 def test_omniroute_reenable_restores_free_entry_capacity(monkeypatch):
