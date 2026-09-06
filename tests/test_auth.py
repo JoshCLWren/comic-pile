@@ -146,7 +146,7 @@ class TestAuth:
         }
         response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 401
-        assert "Incorrect username or password" in response.json()["detail"]
+        assert "Incorrect username or email, or password" in response.json()["detail"]
 
     @pytest.mark.asyncio
     async def test_refresh_token_success(self, client: AsyncClient, async_db: AsyncSession) -> None:
@@ -380,7 +380,7 @@ class TestAccountLockout:
             correct = {"username": "lockoutuser", "password": "password123"}
             locked = await client.post("/api/v1/auth/login", json=correct)
             assert locked.status_code == 401
-            assert "Incorrect username or password" in locked.json()["detail"]
+            assert "Incorrect username or email, or password" in locked.json()["detail"]
 
     @pytest.mark.asyncio
     async def test_success_clears_counter(self, db_engine: AsyncEngine) -> None:
@@ -450,7 +450,7 @@ class TestAccountLockout:
 
             locked = await client.post("/api/v1/auth/login", json=wrong)
             assert locked.status_code == 401
-            assert locked.json()["detail"] == "Incorrect username or password"
+            assert locked.json()["detail"] == "Incorrect username or email, or password"
 
     @pytest.mark.asyncio
     async def test_nonexistent_user_records_failure(self, db_engine: AsyncEngine) -> None:
