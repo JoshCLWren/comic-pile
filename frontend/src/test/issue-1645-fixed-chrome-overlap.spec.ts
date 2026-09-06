@@ -205,6 +205,57 @@ test.describe('Fixed chrome overlap (#1645)', () => {
     ).toBe(false)
   })
 
+  test('Roll header actions remain reachable at tablet width', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+    await page.setViewportSize({ width: 820, height: 1180 })
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    const header = page.locator('[data-authenticated-shell] > main header')
+    await expect(header).toBeVisible()
+    const ladder = header.getByText('Ladder', { exact: true })
+    const pickManually = header.getByRole('button', { name: 'Pick manually' })
+    await expect(ladder).toBeVisible()
+    await expect(pickManually).toBeVisible()
+
+    const geometry = await page.evaluate(() => {
+      const headerElement = document.querySelector<HTMLElement>(
+        '[data-authenticated-shell] > main header',
+      )
+      const mainElement = document.querySelector<HTMLElement>(
+        '[data-authenticated-shell] > main',
+      )
+      const ladderElement = headerElement?.querySelector<HTMLElement>('span.cursor-help')
+      const pickElement = headerElement?.querySelector<HTMLElement>(
+        '[data-roll-primary-action="pick-manually"]',
+      )
+      if (!headerElement || !mainElement || !ladderElement || !pickElement) {
+        return null
+      }
+      const rect = (element: HTMLElement) => {
+        const box = element.getBoundingClientRect()
+        return { left: box.left, right: box.right, top: box.top, bottom: box.bottom }
+      }
+      return {
+        main: rect(mainElement),
+        header: rect(headerElement),
+        ladder: rect(ladderElement),
+        pickManually: rect(pickElement),
+        documentScrollWidth: document.documentElement.scrollWidth,
+      }
+    })
+
+    expect(geometry).not.toBeNull()
+    expect(geometry!.documentScrollWidth).toBeLessThanOrEqual(820)
+    for (const action of [geometry!.ladder, geometry!.pickManually]) {
+      expect(action.left).toBeGreaterThanOrEqual(geometry!.main.left)
+      expect(action.right).toBeLessThanOrEqual(geometry!.main.right)
+      expect(action.top).toBeGreaterThanOrEqual(geometry!.header.top)
+      expect(action.bottom).toBeLessThanOrEqual(geometry!.header.bottom)
+    }
+  })
+
   test('Queue header controls don\'t overflow at 900px', async ({
     authenticatedPage,
   }) => {
