@@ -131,6 +131,18 @@ class TestAuth:
         assert "Incorrect username or password" in response.json()["detail"]
 
     @pytest.mark.asyncio
+    async def test_login_email_shaped_username_is_rejected(self, client: AsyncClient) -> None:
+        """Test email-shaped login input produces a clear, actionable error."""
+        login_data = {
+            "username": "reader@example.com",
+            "password": "correct_password_123",
+        }
+        response = await client.post("/api/v1/auth/login", json=login_data)
+        assert response.status_code == 400
+        assert "username" in response.json()["detail"].lower()
+        assert "email" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
     async def test_refresh_token_success(self, client: AsyncClient, async_db: AsyncSession) -> None:
         """Test successful token refresh."""
         user_data = {

@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 REFRESH_COOKIE_NAME = "refresh_token"
 REFRESH_COOKIE_PATH = "/api"
+EMAIL_LOGIN_MESSAGE = "Sign in with your username, not your email."
 
 
 def _log_refresh_outcome(request: Request, *, outcome: str, reason: str) -> None:
@@ -162,7 +163,9 @@ async def login_user(
     """Authenticate user and return tokens.
 
     Args:
-        login_data: User login data (username, password).
+        login_data: User login data (username, password). Login uses the
+            username identifier only; email-shaped values are rejected with a
+            clear, actionable message.
         request: Incoming request used for cookie security policy and IP extraction.
         response: Outgoing response used to set auth cookies.
         db: SQLAlchemy session for database operations.
@@ -177,6 +180,12 @@ async def login_user(
         dict(request.headers),
         request.client.host if request.client else None,
     )
+
+    if "@" in login_data.username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=EMAIL_LOGIN_MESSAGE,
+        )
 
     await check_login_lockout(db, username=login_data.username, ip_address=client_ip)
 
