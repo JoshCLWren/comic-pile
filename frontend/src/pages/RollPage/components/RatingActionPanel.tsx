@@ -1,3 +1,6 @@
+import { useState } from 'react'
+import Modal from '../../../components/Modal'
+
 interface RatingActionPanelProps {
   errorMessage: string
   rateIsPending: boolean
@@ -23,6 +26,13 @@ export function RatingActionPanel({
   onSkip,
   onCancel,
 }: RatingActionPanelProps) {
+  const [isSkipConfirmOpen, setIsSkipConfirmOpen] = useState(false)
+
+  const handleConfirmSkip = () => {
+    setIsSkipConfirmOpen(false)
+    onSkip?.()
+  }
+
   return (
     <div
       className="rating-actions sticky bottom-0 -mx-3 space-y-2 border-t border-white/10 bg-white/[0.04] px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] backdrop-blur md:static md:-mx-4 md:px-4 md:pb-3"
@@ -54,7 +64,7 @@ export function RatingActionPanel({
         {onSkip && (
           <button
             type="button"
-            onClick={onSkip}
+            onClick={() => setIsSkipConfirmOpen(true)}
             disabled={skipIsPending}
             data-testid="skip-roll"
             aria-label="Skip current roll"
@@ -72,6 +82,44 @@ export function RatingActionPanel({
           Cancel roll
         </button>
       </div>
+
+      <Modal
+        isOpen={isSkipConfirmOpen}
+        title="Skip comic"
+        onClose={() => setIsSkipConfirmOpen(false)}
+        data-testid="skip-confirm-dialog"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            Skip moves past this rolled comic without saving a rating. Nothing is marked read, and
+            it can come up again in a future roll.
+          </p>
+          <p className="text-xs text-[var(--theme-text-dim)]">
+            Snooze postpones the comic temporarily, and Cancel roll exits without rating. Skip is
+            different from both — it moves past this comic now.
+          </p>
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setIsSkipConfirmOpen(false)}
+              disabled={skipIsPending}
+              data-testid="skip-cancel"
+              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-50"
+            >
+              Keep this comic
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmSkip}
+              disabled={skipIsPending}
+              data-testid="skip-confirm"
+              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-[var(--theme-danger-hover)] transition-colors disabled:opacity-50"
+            >
+              {skipIsPending ? 'Skipping…' : 'Skip comic'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
