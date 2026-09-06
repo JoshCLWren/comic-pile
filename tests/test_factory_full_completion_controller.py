@@ -94,7 +94,11 @@ def test_only_healthy_or_degraded_workers_count_as_executable_capacity():
     assert selected == ["9", "11"]
 
 
-def test_current_demand_caps_idle_workers_to_remaining_omniroute_slots():
+def test_current_demand_caps_idle_workers_to_remaining_omniroute_slots(monkeypatch):
+    # OmniRoute defaults off for the incident freeze; this test exercises the
+    # OmniRoute free-entry ceiling (cap 3, in-flight 2 → remaining 1).
+    monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
+
     class FakeWork:
         def list_issues(self):
             return []
@@ -148,6 +152,69 @@ def test_current_demand_caps_idle_workers_to_remaining_omniroute_slots():
 
     measured, capacity = full.current_demand(FakeCompletion(), now_epoch=1)
     assert measured.idle_workers == 1
+    assert measured.completion == 0
+    assert measured.production == 0
+    assert full.completion_worker_target(measured) == 0
+    assert capacity["executable_slot_capacity"] == 10
+
+
+def test_current_demand_uses_multi_provider_budget_when_omniroute_dark(monkeypatch):
+    monkeypatch.delenv("FACTORY_OMNIROUTE_ENABLED", raising=False)
+
+    class FakeWork:
+        def list_issues(self):
+            return []
+
+        def list_prs(self):
+            return []
+
+        def in_flight_omniroute_free_entries(self):
+            return 2
+
+    class FakePolicy:
+        def comment_is_trusted(self, comment):
+            return True
+
+        def pr_is_static_candidate(self, pr, issue_map):
+            return False
+
+        def linked_issue_from_branch(self, name):
+            return None
+
+        def pr_suppresses_issue_candidate(self, pr, issue_map):
+            return False
+
+        def issue_is_static_candidate(self, issue, suppressing, no_diff_attempts=0):
+            return False
+
+    class FakeCompletion:
+        def load_controller(self):
+            return FakeWork()
+
+        def load_policy(self):
+            return FakePolicy()
+
+        def load_manifest_candidates(self, manifest):
+            return [{"worker": str(worker)} for worker in range(6, 16)]
+
+        def owned_worker_ids(self, items):
+            return set()
+
+        def registry_comments(self):
+            return []
+
+        def latest_worker_health(self, comments, trusted):
+            return {}
+
+        def capacity_report(self, candidates, health, now_epoch):
+            return {"executable_slot_capacity": 10}
+
+        def worker_is_executable(self, worker, health, now_epoch):
+            return True
+
+    measured, capacity = full.current_demand(FakeCompletion(), now_epoch=1)
+    # 10 executable idle workers fit under multi-provider remaining (12 - 2).
+    assert measured.idle_workers == 10
     assert measured.completion == 0
     assert measured.production == 0
     assert full.completion_worker_target(measured) == 0
