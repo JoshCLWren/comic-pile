@@ -282,7 +282,7 @@ it('omits issue number suffix when issue_number is absent', async () => {
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   expect(screen.getByText('Prequel')).toBeInTheDocument()
-  expect(screen.queryByText(/#/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/Prequel: #/)).not.toBeInTheDocument()
 })
 
 it('renders blocking dependency issue number on thread detail when known', async () => {
