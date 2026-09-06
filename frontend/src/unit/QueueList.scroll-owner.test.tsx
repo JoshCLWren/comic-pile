@@ -6,10 +6,31 @@ import { VIRTUALIZATION_THRESHOLD } from '../pages/QueuePage/VirtualizedThreadLi
 interface MockThread {
   id: number
   title: string
+  format: string
+  issues_remaining: number
+  total_issues: number | null
+  next_unread_issue_number?: string | null
+  queue_position: number
+  status: string
+  is_blocked: boolean
+  blocking_reasons: string[]
+  created_at: string
 }
 
 function makeThreads(count: number): MockThread[] {
-  return Array.from({ length: count }, (_, i) => ({ id: i + 1, title: `Thread ${i + 1}` }))
+  return Array.from({ length: count }, (_, i) => ({
+    id: i + 1,
+    title: `Thread ${i + 1}`,
+    format: 'issue',
+    issues_remaining: 1,
+    total_issues: 1,
+    next_unread_issue_number: null,
+    queue_position: i + 1,
+    status: 'active',
+    is_blocked: false,
+    blocking_reasons: [],
+    created_at: new Date().toISOString(),
+  }))
 }
 
 const virtualItems = ({ start }: { start: number }) => ({
@@ -89,8 +110,14 @@ it('uses the identical queue-container selectors for both presentations', () => 
   const plain = renderList(VIRTUALIZATION_THRESHOLD)
   const virtualized = renderList(VIRTUALIZATION_THRESHOLD + 1)
 
-  const plainList = plain.container.querySelector('#queue-container')!
-  const virtualizedList = virtualized.container.querySelector('#queue-container')!
+  const plainList = plain.container.querySelector('#queue-container')
+  const virtualizedList = virtualized.container.querySelector('#queue-container')
+  if (!plainList || !virtualizedList) {
+    console.log('plain container innerHTML:', plain.container.innerHTML)
+    console.log('virtualized container innerHTML:', virtualized.container.innerHTML)
+  }
+  expect(plainList).toBeInTheDocument()
+  expect(virtualizedList).toBeInTheDocument()
   for (const node of [plainList, virtualizedList]) {
     expect(node.getAttribute('data-testid')).toBe('queue-thread-list')
     expect(node.getAttribute('role')).toBe('list')

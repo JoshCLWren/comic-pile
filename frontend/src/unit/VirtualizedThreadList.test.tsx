@@ -592,6 +592,7 @@ it('reacts to ResizeObserver measurements and cleans up a pending frame', () => 
     />,
   )
   const observerMock = vi.mocked(ResizeObserver)
+  console.log('ResizeObserver mock calls:', observerMock.mock.calls)
   const callback = observerMock.mock.calls.at(-1)?.[0] as ResizeObserverCallback
   callback([{ contentRect: { width: 1200, height: 720 } } as ResizeObserverEntry], {} as ResizeObserver)
   expect(frame).toHaveBeenCalled()
