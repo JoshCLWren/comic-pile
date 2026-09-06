@@ -28,12 +28,12 @@ async def test_seeded_light_history_sessions_infer_light_with_meaningful_confide
 ) -> None:
     """Seeded light-history sessions infer `light` with meaningful confidence."""
     # Create a user
-    user_result = await db.execute(select(User).where(User.username == "testuser"))
+    user_result = await async_db.execute(select(User).where(User.username == "testuser"))
     user = user_result.scalar_one_or_none()
     if user is None:
         user = User(id=1, username="testuser")
-        db.add(user)
-        await db.commit()
+        async_db.add(user)
+        await async_db.commit()
 
     # Create light-history events for the user
     # Create a thread
@@ -44,13 +44,13 @@ async def test_seeded_light_history_sessions_infer_light_with_meaningful_confide
         format="comic",
         issues_remaining=5,
     )
-    db.add(thread)
-    await db.flush()
+    async_db.add(thread)
+    await async_db.flush()
 
     # Create a session
     session = SessionModel(start_die=6, user_id=user.id)
-    db.add(session)
-    await db.flush()
+    async_db.add(session)
+    await async_db.flush()
 
     # Create light reading history: short roll-to-rating times (light effort)
     base_time = datetime.now(UTC) - timedelta(days=1)
@@ -64,8 +64,8 @@ async def test_seeded_light_history_sessions_infer_light_with_meaningful_confide
             die=6,
             result=3,
         )
-        db.add(roll_event)
-        await db.flush()
+        async_db.add(roll_event)
+        await async_db.flush()
 
         # Rate event after a short delay (light effort: 5 minutes)
         rate_event = Event(
@@ -77,8 +77,8 @@ async def test_seeded_light_history_sessions_infer_light_with_meaningful_confide
             timestamp=base_time + timedelta(hours=i, minutes=5),  # 5 minutes later
             die_after=6,
         )
-        db.add(rate_event)
-        await db.flush()
+        async_db.add(rate_event)
+        await async_db.flush()
 
     # Create a new session for this user (should trigger bandwidth initialization)
     new_session = await get_or_create(async_db, user_id=user.id)
@@ -97,12 +97,12 @@ async def test_seeded_heavy_history_sessions_infer_deep_where_evidence_supports_
 ) -> None:
     """Seeded heavy-history sessions infer `deep` where evidence supports it."""
     # Create a user
-    user_result = await db.execute(select(User).where(User.username == "testuser2"))
+    user_result = await async_db.execute(select(User).where(User.username == "testuser2"))
     user = user_result.scalar_one_or_none()
     if user is None:
         user = User(id=2, username="testuser2")
-        db.add(user)
-        await db.commit()
+        async_db.add(user)
+        await async_db.commit()
 
     # Create a thread
     thread = Thread(
@@ -112,13 +112,13 @@ async def test_seeded_heavy_history_sessions_infer_deep_where_evidence_supports_
         format="comic",
         issues_remaining=5,
     )
-    db.add(thread)
-    await db.flush()
+    async_db.add(thread)
+    await async_db.flush()
 
     # Create a session
     session = SessionModel(start_die=6, user_id=user.id)
-    db.add(session)
-    await db.flush()
+    async_db.add(session)
+    await async_db.flush()
 
     # Create heavy-history events for the user
     # Create heavy reading history: long roll-to-rating times (deep effort)
@@ -133,8 +133,8 @@ async def test_seeded_heavy_history_sessions_infer_deep_where_evidence_supports_
             die=6,
             result=3,
         )
-        db.add(roll_event)
-        await db.flush()
+        async_db.add(roll_event)
+        await async_db.flush()
 
         # Rate event after a long delay (deep effort: 25 minutes)
         rate_event = Event(
@@ -146,8 +146,8 @@ async def test_seeded_heavy_history_sessions_infer_deep_where_evidence_supports_
             timestamp=base_time + timedelta(hours=i, minutes=25),  # 25 minutes later
             die_after=6,
         )
-        db.add(rate_event)
-        await db.flush()
+        async_db.add(rate_event)
+        await async_db.flush()
 
     # Create a new session for this user (should trigger bandwidth initialization)
     new_session = await get_or_create(async_db, user_id=user.id)
@@ -166,12 +166,12 @@ async def test_sparse_contradictory_history_falls_back_to_balanced(
 ) -> None:
     """Sparse/contradictory history falls back to `balanced`."""
     # Create a user
-    user_result = await db.execute(select(User).where(User.username == "testuser3"))
+    user_result = await async_db.execute(select(User).where(User.username == "testuser3"))
     user = user_result.scalar_one_or_none()
     if user is None:
         user = User(id=3, username="testuser3")
-        db.add(user)
-        await db.commit()
+        async_db.add(user)
+        await async_db.commit()
 
     # Create a thread
     thread = Thread(
@@ -181,13 +181,13 @@ async def test_sparse_contradictory_history_falls_back_to_balanced(
         format="comic",
         issues_remaining=5,
     )
-    db.add(thread)
-    await db.flush()
+    async_db.add(thread)
+    await async_db.flush()
 
     # Create a session
     session = SessionModel(start_die=6, user_id=user.id)
-    db.add(session)
-    await db.flush()
+    async_db.add(session)
+    await async_db.flush()
 
     # Create sparse/contradictory history: very few observations
     base_time = datetime.now(UTC) - timedelta(days=1)
@@ -202,8 +202,8 @@ async def test_sparse_contradictory_history_falls_back_to_balanced(
             die=6,
             result=3,
         )
-        db.add(roll_event)
-        await db.flush()
+        async_db.add(roll_event)
+        await async_db.flush()
 
         # Rate event after medium delay
         rate_event = Event(
@@ -215,8 +215,8 @@ async def test_sparse_contradictory_history_falls_back_to_balanced(
             timestamp=base_time + timedelta(hours=i, minutes=15),  # 15 minutes later
             die_after=6,
         )
-        db.add(rate_event)
-        await db.flush()
+        async_db.add(rate_event)
+        await async_db.flush()
 
     # Create a new session for this user (should trigger bandwidth initialization)
     new_session = await get_or_create(async_db, user_id=user.id)
@@ -235,12 +235,12 @@ async def test_session_initialization_does_not_continuously_rewrite_mode_on_refr
 ) -> None:
     """Session initialization does not continuously rewrite mode on refresh."""
     # Create a user
-    user_result = await db.execute(select(User).where(User.username == "testuser4"))
+    user_result = await async_db.execute(select(User).where(User.username == "testuser4"))
     user = user_result.scalar_one_or_none()
     if user is None:
         user = User(id=4, username="testuser4")
-        db.add(user)
-        await db.commit()
+        async_db.add(user)
+        await async_db.commit()
 
     # Create a thread
     thread = Thread(
@@ -250,13 +250,13 @@ async def test_session_initialization_does_not_continuously_rewrite_mode_on_refr
         format="comic",
         issues_remaining=5,
     )
-    db.add(thread)
-    await db.flush()
+    async_db.add(thread)
+    await async_db.flush()
 
     # Create a session
     session = SessionModel(start_die=6, user_id=user.id)
-    db.add(session)
-    await db.flush()
+    async_db.add(session)
+    await async_db.flush()
 
     # Manually set bandwidth state to simulate an explicit override
     await apply_bandwidth_state(
@@ -267,7 +267,7 @@ async def test_session_initialization_does_not_continuously_rewrite_mode_on_refr
         bandwidth_source="manual",
         bandwidth_confidence=0.9,
     )
-    await db.commit()
+    await async_db.commit()
 
     # Record the initial state
     predicted_before = session.predicted_bandwidth
@@ -290,7 +290,7 @@ async def test_session_initialization_does_not_continuously_rewrite_mode_on_refr
         assert resolved_session.bandwidth_updated_at == updated_at_before
 
     # Also verify from direct database query
-    await db.refresh(session)
+    await async_db.refresh(session)
     assert session.predicted_bandwidth == predicted_before
     assert session.active_bandwidth == active_before
     assert session.bandwidth_source == source_before
@@ -304,12 +304,12 @@ async def test_bootstrap_exposes_the_same_canonical_state(
 ) -> None:
     """Bootstrap exposes the same canonical state."""
     # Create a user
-    user_result = await db.execute(select(User).where(User.username == "testuser5"))
+    user_result = await async_db.execute(select(User).where(User.username == "testuser5"))
     user = user_result.scalar_one_or_none()
     if user is None:
         user = User(id=5, username="testuser5")
-        db.add(user)
-        await db.commit()
+        async_db.add(user)
+        await async_db.commit()
 
     # Create a thread
     thread = Thread(
@@ -319,60 +319,60 @@ async def test_bootstrap_exposes_the_same_canonical_state(
         format="comic",
         issues_remaining=5,
     )
-    db.add(thread)
-    await db.flush()
+    async_db.add(thread)
+    await async_db.flush()
 
     # Create a session
     session = SessionModel(start_die=6, user_id=user.id)
-    db.add(session)
-    await db.flush()
+    async_db.add(session)
+    await async_db.flush()
 
     # Create some history to get a non-neutral prediction
     base_time = datetime.now(UTC) - timedelta(days=1)
-    for i in range(3):
-        # Roll event
-        roll_event = Event(
-            type="roll",
-            session_id=session.id,
-            selected_thread_id=thread.id,
-            timestamp=base_time + timedelta(hours=i),
-            die=6,
-            result=3,
-        )
-        db.add(roll_event)
-        await db.flush()
-
-        # Rate event after a short delay (light effort)
-        rate_event = Event(
-            type="rate",
-            session_id=session.id,
-            thread_id=thread.id,
-            rating=4.0,
-            issues_read=1,
-            timestamp=base_time + timedelta(hours=i, minutes=5),  # 5 minutes later
-            die_after=6,
-        )
-        db.add(rate_event)
-        await db.flush()
-
-    # Get the session via different methods and verify they expose the same state
-    # Method 1: get_or_create
-    session1 = await get_or_create(async_db, user_id=user.id)
-
-    # Method 2: resolve_current_session
-    session2 = await resolve_current_session(async_db, user_id=user.id)
-
-    # Method 3: direct query
-    session_result = await db.execute(
-        select(SessionModel).where(SessionModel.id == session.id)
-    )
-    session3 = session_result.scalar_one()
-
-    # All should expose the same canonical state
-    assert session1.predicted_bandwidth == session2.predicted_bandwidth == session3.predicted_bandwidth
-    assert session1.active_bandwidth == session2.active_bandwidth == session3.active_bandwidth
-    assert session1.bandwidth_source == session2.bandwidth_source == session3.bandwidth_source
-    assert session1.bandwidth_confidence == session2.bandwidth_confidence == session3.bandwidth_confidence
+    for i in range(330:         for i in range(3):
+331:             # Roll event
+332:             roll_event = Event(
+333:                 type="roll",
+334:                 session_id=session.id,
+335:                 selected_thread_id=thread.id,
+336:                 timestamp=base_time + timedelta(hours=i),
+337:                 die=6,
+338:                 result=3,
+339:             )
+340:             async_db.add(roll_event)
+341:             await async_db.flush()
+342: 
+343:             # Rate event after a short delay (light effort)
+344:             rate_event = Event(
+345:                 type="rate",
+346:                 session_id=session.id,
+347:                 thread_id=thread.id,
+348:                 rating=4.0,
+349:                 issues_read=1,
+350:                 timestamp=base_time + timedelta(hours=i, minutes=5),  # 5 minutes later
+351:                 die_after=6,
+352:             )
+353:             async_db.add(rate_event)
+354:             await async_db.flush()
+355: 
+356:     # Get the session via different methods and verify they expose the same state
+357:     # Method 1: get_or_create
+358:     session1 = await get_or_create(async_db, user_id=user.id)
+359: 
+360:     # Method 2: resolve_current_session
+361:     session2 = await resolve_current_session(async_db, user_id=user.id)
+362: 
+363:     # Method 3: direct query
+364:     session_result = await async_db.execute(
+365:         select(SessionModel).where(SessionModel.id == session.id)
+366:     )
+367:     session3 = session_result.scalar_one()
+368: 
+369:     # All should expose the same canonical state
+370:     assert session1.predicted_bandwidth == session2.predicted_bandwidth == session3.predicted_bandwidth
+371:     assert session1.active_bandwidth == session2.active_bandwidth == session3.active_bandwidth
+372:     assert session1.bandwidth_source == session2.bandwidth_source == session3.bandwidth_source
+373:     assert session1.bandwidth_confidence == session2.bandwidth_confidence == session3.bandwidth_confidence
 
 
 @pytest.mark.asyncio
