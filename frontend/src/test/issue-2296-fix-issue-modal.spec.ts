@@ -113,7 +113,7 @@ async function openFixIssueModal(page: Page) {
   await expect(dialog).toBeVisible({ timeout: 15000 })
   await expect(page.locator('#issue-number')).toBeVisible({ timeout: 15000 })
   await expect(page.getByRole('button', { name: /^Update$/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible()
   await page.waitForTimeout(200)
   return dialog
 }
