@@ -5,6 +5,7 @@ interface UseInfiniteScrollOptions {
   hasMore: boolean
   isLoading: boolean
   threshold?: number
+  root?: HTMLElement | null
 }
 
 export function useInfiniteScroll({
