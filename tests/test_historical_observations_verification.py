@@ -1,11 +1,6 @@
 """Simple verification test for the _historical_observations implementation."""
 
-from unittest.mock import AsyncMock, MagicMock
-
-import pytest
-
 from comic_pile.bandwidth import _historical_observations
-from app.services.bandwidth_inference import HistoricalObservation
 
 
 def test_historical_observations_function_signature():

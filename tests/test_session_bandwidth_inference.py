@@ -38,6 +38,7 @@ async def test_seeded_light_history_sessions_infer_light_with_meaningful_confide
         title="Test Thread",
         format="comic",
         issues_remaining=5,
+        queue_position=1,
     )
     async_db.add(thread)
     await async_db.flush()
@@ -108,6 +109,7 @@ async def test_seeded_heavy_history_sessions_infer_deep_where_evidence_supports_
         title="Test Thread 2",
         format="comic",
         issues_remaining=5,
+        queue_position=1,
     )
     async_db.add(thread)
     await async_db.flush()
@@ -179,6 +181,7 @@ async def test_sparse_contradictory_history_falls_back_to_balanced(
         title="Test Thread 3",
         format="comic",
         issues_remaining=5,
+        queue_position=1,
     )
     async_db.add(thread)
     await async_db.flush()
@@ -250,6 +253,7 @@ async def test_session_initialization_does_not_continuously_rewrite_mode_on_refr
         title="Test Thread 4",
         format="comic",
         issues_remaining=5,
+        queue_position=1,
     )
     async_db.add(thread)
     await async_db.flush()
@@ -319,6 +323,7 @@ async def test_bootstrap_exposes_the_same_canonical_state(
         title="Test Thread 5",
         format="comic",
         issues_remaining=5,
+        queue_position=1,
     )
     async_db.add(thread)
     await async_db.flush()
@@ -363,6 +368,7 @@ async def test_bootstrap_exposes_the_same_canonical_state(
 
     # Method 2: resolve_current_session
     session2 = await resolve_current_session(async_db, user_id=user.id)
+    assert session2 is not None
 
     # Method 3: direct query
     session_result = await async_db.execute(
@@ -407,6 +413,7 @@ async def test_roll_selection_remains_legacy_unweighted(
         title="Test Thread 6",
         format="comic",
         issues_remaining=5,
+        queue_position=1,
     )
     async_db.add(thread)
     await async_db.flush()
