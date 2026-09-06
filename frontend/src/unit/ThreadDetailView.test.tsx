@@ -39,7 +39,7 @@ beforeEach(() => {
   } as never)
   mockedIssuesApiList.mockResolvedValue({ issues: [], next_page_token: null, total_count: 0, page_size: 100 })
   mockedConnectedThreads.mockReset()
-  mockedConnectedThreads.mockResolvedValue({ connected_threads: [] })
+  mockedConnectedThreads.mockResolvedValue({ thread_id: 1, connected_threads: [] })
 })
 
 function renderPage() {
