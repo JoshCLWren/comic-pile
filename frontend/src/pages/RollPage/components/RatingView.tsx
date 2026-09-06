@@ -1,3 +1,4 @@
+import type { Ref } from 'react'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
 import type { ConnectedThreadInfo, ReaderContextResponse } from '../../../types'
 import type { RatingThread } from '../types'
@@ -33,6 +34,7 @@ interface RatingViewProps {
   readerContext?: ReaderContextResponse | null
   isReaderContextLoading?: boolean
   readerContextError?: string | null
+  ratingViewTopRef?: Ref<HTMLDivElement> | null
 }
 
 export function RatingView({
@@ -57,6 +59,7 @@ export function RatingView({
   readerContext = null,
   isReaderContextLoading = false,
   readerContextError = null,
+  ratingViewTopRef = null,
 }: RatingViewProps) {
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const hasReadingContextContentValue = hasReadingContextContent(readingOrders, connectedThreads, readerContext)
@@ -65,7 +68,11 @@ export function RatingView({
   const showReadingContextStatus = !hasReadingContextContentValue && (readerContextLoading || readerContextFailure)
 
   return (
-    <div className="relative z-10 space-y-4 p-3 md:p-4">
+    <div
+      ref={ratingViewTopRef}
+      data-testid="rating-view-top"
+      className="relative z-10 space-y-4 p-3 md:p-4"
+    >
       <WhyThisRoll explanation={activeRatingThread?.explanation} />
       <div
         className="grid items-start gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]"
