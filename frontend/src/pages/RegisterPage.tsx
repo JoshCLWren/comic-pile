@@ -25,6 +25,10 @@ export default function RegisterPage() {
       setError('Username is required')
       return false
     }
+    if (username.includes('@')) {
+      setError("Username cannot contain an '@' character")
+      return false
+    }
     if (!email.trim()) {
       setError('Email is required')
       return false

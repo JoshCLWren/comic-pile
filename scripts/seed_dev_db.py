@@ -12,6 +12,11 @@ from app.database import AsyncSessionLocal
 from app.models import Session as SessionModel, Thread, User
 
 
+SEED_USERNAME = "testuser"
+SEED_EMAIL = "test@example.com"
+SEED_PASSWORD = "testpass123"
+
+
 async def seed_database() -> None:
     """Create test user with sample threads and session."""
     settings = get_database_settings()
@@ -24,11 +29,18 @@ async def seed_database() -> None:
 
     async with AsyncSessionLocal() as db:
         # Check if test user exists
-        result = await db.execute(select(User).where(User.email == "test@example.com"))
+        result = await db.execute(select(User).where(User.email == SEED_EMAIL))
         user = result.scalar_one_or_none()
 
         if user:
             print(f"Test user already exists (ID: {user.id})")
+            # Login is username-only, so migrate any legacy email-shaped seed
+            # username so the documented account can still sign in after the
+            # email-shaped login rejection (see issue #2194).
+            if "@" in user.username:
+                user.username = SEED_USERNAME
+                await db.commit()
+                print(f"Migrated seed username to {SEED_USERNAME!r}")
             # Delete existing threads and sessions
             threads_result = await db.execute(select(Thread).where(Thread.user_id == user.id))
             for thread in threads_result.scalars().all():
@@ -46,9 +58,9 @@ async def seed_database() -> None:
         else:
             # Create new test user
             user = User(
-                username="test@example.com",
-                email="test@example.com",
-                password_hash=hash_password("testpass123"),
+                username=SEED_USERNAME,
+                email=SEED_EMAIL,
+                password_hash=hash_password(SEED_PASSWORD),
                 is_admin=False,
                 created_at=datetime.now(UTC),
             )
@@ -126,8 +138,9 @@ async def seed_database() -> None:
         print(f"Created active session (ID: {session.id}, start_die: {session.start_die})")
 
         print("\nDatabase seeded successfully!")
-        print("Email: test@example.com")
-        print("Password: testpass123")
+        print(f"Username: {SEED_USERNAME}")
+        print(f"Email: {SEED_EMAIL}")
+        print(f"Password: {SEED_PASSWORD}")
         print(f"\nCreated {len(threads)} threads and 1 active session")
 
 
