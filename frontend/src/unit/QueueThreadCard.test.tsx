@@ -259,6 +259,36 @@ describe('QueueThreadCard', () => {
     expect(screen.getByRole('button', { name: 'Read' })).toBeDisabled()
   })
 
+  it('composes hover with the drag-over tint instead of overriding it on the shared row', () => {
+    renderCard(createMockThread(), { isDragOver: true })
+
+    const card = screen.getByTestId('queue-thread-item')
+    expect(card.className).toMatch(/hover:bg-white\/\[0\.04\]/)
+    expect(card.className).not.toMatch(/bg-amber-500\/10/)
+
+    const tint = screen.getByTestId('queue-thread-drag-over')
+    expect(tint).toHaveClass('bg-amber-500/10')
+    expect(tint).toHaveClass('pointer-events-none', 'absolute', 'inset-0')
+  })
+
+  it('does not render the drag-over tint when the row is not a drop target', () => {
+    renderCard(createMockThread(), { isDragOver: false })
+
+    expect(screen.queryByTestId('queue-thread-drag-over')).not.toBeInTheDocument()
+  })
+
+  it('keeps the drag-over tint while a blocked row still carries its continuity cues', () => {
+    renderCard(createMockThread(), {
+      isDragOver: true,
+      isBlocked: true,
+      blockingDependencies: [],
+    })
+
+    expect(screen.getByTestId('queue-thread-drag-over')).toHaveClass('bg-amber-500/10')
+    expect(screen.getByLabelText('Blocked thread')).toHaveClass('text-[var(--theme-continuity-accent)]')
+    expect(screen.getByTestId('queue-thread-blocked-detail').className).toMatch(/theme-continuity-accent/)
+  })
+
   it('renders thread title', () => {
     const thread = createMockThread({ title: 'Amazing Spider-Man' })
     renderCard(thread)
