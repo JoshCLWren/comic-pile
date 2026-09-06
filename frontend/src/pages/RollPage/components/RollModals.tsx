@@ -180,11 +180,11 @@ export function RollModals({
       >
         <form className="space-y-4" onSubmit={onSubmitOverride}>
           <p className="text-xs text-stone-400">
-            Choose the eligible thread you want to read next.
+            Choose the series you want to read next.
           </p>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-              Thread
+              Series
             </label>
             <select
               value={overrideThreadId}

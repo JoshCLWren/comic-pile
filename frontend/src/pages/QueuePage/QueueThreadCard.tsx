@@ -212,16 +212,9 @@ export default function QueueThreadCard({
 
       <div className="flex shrink-0 items-center gap-2 self-stretch pl-12 md:pl-0 md:self-center flex-wrap">
         <QueueThreadActions
-          title={thread.title}
-          snoozeIcon={snoozeIcon}
-          snoozeLabel={snoozeLabel}
-          snoozeDisabled={snoozeDisabled}
           readDisabled={readDisabled}
           readDisabledReason={readDisabledReason}
           onRead={onRead}
-          onEdit={onOpenThread}
-          onSnooze={onSnooze}
-          onDelete={onActionDelete}
         />
         <PositionMenu
           thread={thread}
@@ -231,6 +224,10 @@ export default function QueueThreadCard({
           onEdit={() => onEdit()}
           onDependencies={() => onDependencies()}
           onDelete={() => onDelete()}
+          onSnooze={onSnooze}
+          snoozeIcon={snoozeIcon}
+          snoozeLabel={snoozeLabel}
+          snoozeDisabled={snoozeDisabled}
         />
       </div>
     </div>

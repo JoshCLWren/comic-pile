@@ -86,10 +86,10 @@ export function ThreadPool({
       {!isRatingView && <div className="flex items-center gap-2 shrink-0 mb-4">
         <div className="w-2 h-2 rounded-full bg-amber-600 shadow-[0_0_15px_var(--accent-red)]"></div>
         <div className="flex-1">
-          <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">Eligible now · {pool.length}</p>
+          <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">Ready to read · {pool.length}</p>
           {dieSize && pool.length > 0 && pool.length < dieSize && (
             <p className="text-[10px] text-stone-500 mt-1" data-smaller-than-die>
-              Only {pool.length} of d{dieSize} faces are mapped to eligible reads — the roll picks among these visible faces.
+              Only {pool.length} of d{dieSize} faces are mapped to ready reads — the roll picks among these visible faces.
             </p>
           )}
         </div>
@@ -105,26 +105,26 @@ export function ThreadPool({
         <span id="shuffle-queue-description" className="sr-only">Randomizes the complete active queue, then refreshes these eligible die mappings.</span>
       </div>}
 
-      {!isRatingView && <div className="space-y-2" data-roll-pool aria-label={`Eligible now, ${pool.length} mapped result${pool.length === 1 ? '' : 's'}`}>
+      {!isRatingView && <div className="space-y-2" data-roll-pool aria-label={`Ready to read, ${pool.length} mapped result${pool.length === 1 ? '' : 's'}`}>
         {pool.length === 0 && blockedThreads.length === 0 && snoozedThreads.length === 0 ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🎲</div>
             <div>
               <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">Nothing to roll yet</p>
-              <p className="text-xs text-stone-500 mt-1">Your reading queue is empty — add some comic threads to get started.</p>
+              <p className="text-xs text-stone-500 mt-1">Your reading queue is empty — add some comic series to get started.</p>
             </div>
             <button
               onClick={() => navigate('/queue', { state: { openCreate: true } })}
               className="w-full h-11 min-h-[44px] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-xs font-black uppercase tracking-widest text-amber-500 transition-colors"
             >
-              + Add a Thread
+              + Add a Series
             </button>
             <div className="text-left bg-white/5 rounded-xl p-4 mt-4">
               <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-2">How it works:</p>
               <ul className="text-xs text-stone-500 space-y-1">
-                <li>• Add series you&apos;re reading as &quot;threads&quot;</li>
+                <li>• Add the comic series you&apos;re reading</li>
                 <li>• Roll the dice to pick what to read next</li>
-                <li>• Set dependencies to enforce reading order between series</li>
+                <li>• Set reading order to control what unlocks next</li>
               </ul>
             </div>
           </div>
@@ -132,7 +132,7 @@ export function ThreadPool({
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🔒</div>
             <div>
-              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">All threads are blocked or snoozed</p>
+              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">All series are blocked or snoozed</p>
               <p className="text-xs text-stone-500 mt-1">Check your queue to see what needs to be read to unlock more options.</p>
             </div>
             <button
@@ -157,7 +157,7 @@ export function ThreadPool({
                 }}
                 role="button"
                 tabIndex={0}
-                aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${thread.route_labels?.length ? `, connected to ${thread.route_labels.join(', ')}` : ''}. Open thread actions.`}
+                aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${thread.route_labels?.length ? `, connected to ${thread.route_labels.join(', ')}` : ''}. Open series actions.`}
                 className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' : ''
                   }`}
               >
@@ -195,7 +195,7 @@ export function ThreadPool({
               ▶
             </span>
             <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
-              {blockedThreads.length} thread{blockedThreads.length !== 1 ? 's' : ''} hidden (blocked by dependencies)
+              {blockedThreads.length} series hidden (blocked by reading order)
             </span>
           </button>
           {blockedExpanded && (
@@ -248,7 +248,7 @@ export function ThreadPool({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-bold text-amber-200/70 uppercase tracking-wider leading-relaxed">
-                {staleThreadCount} stale thread{staleThreadCount !== 1 ? 's' : ''}: <span className="text-amber-400 font-black">{staleThread.title}</span> neglected for{' '}
+                {staleThreadCount} stale series:{' '}<span className="text-amber-400 font-black">{staleThread.title}</span> neglected for{' '}
                 <span className="text-amber-400 font-black">{staleThread.days}</span> days
               </p>
               <p className="text-[9px] text-amber-300/70 text-center mt-1">

@@ -177,7 +177,7 @@ export function RollHeader({
           </div>
         </div>
         <ReadingModeControl mode={sessionMode} onOpenSelector={onOpenModeSelector} />
-        <Tooltip content="Pick a specific eligible thread for the next result.">
+        <Tooltip content="Pick a specific series ready to read for the next result.">
           <button
             type="button"
             onClick={onOpenOverride}

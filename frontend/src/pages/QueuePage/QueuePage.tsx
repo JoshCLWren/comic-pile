@@ -204,7 +204,7 @@ export default function QueuePage() {
             type="button"
             onClick={modals.showCreateModal}
             className="md:hidden fixed bottom-24 right-4 h-14 w-14 rounded-full bg-amber-600 text-white font-black text-3xl shadow-[0_4px_20px_rgba(212,137,14,0.4)] z-50 flex items-center justify-center hover:bg-amber-500 transition-colors"
-            aria-label="Add Thread"
+            aria-label="Add Series"
           >
             +
           </button>

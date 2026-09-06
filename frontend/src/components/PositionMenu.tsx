@@ -11,9 +11,13 @@ interface PositionMenuProps {
   onEdit: (thread: Thread) => void
   onDependencies: (thread: Thread) => void
   onDelete: (threadId: number) => void
+  onSnooze?: () => void
+  snoozeIcon?: string
+  snoozeLabel?: string
+  snoozeDisabled?: boolean
 }
 
-export default function PositionMenu({ thread, onMoveToFront, onReposition, onMoveToBack, onEdit, onDependencies, onDelete }: PositionMenuProps) {
+export default function PositionMenu({ thread, onMoveToFront, onReposition, onMoveToBack, onEdit, onDependencies, onDelete, onSnooze, snoozeIcon, snoozeLabel, snoozeDisabled }: PositionMenuProps) {
   const { openThreadId, closeMenu: closeContextMenu, openMenu, toggleMenu } = usePositionMenu()
   const isOpen = openThreadId === thread.id
 
@@ -163,6 +167,7 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
     icon: string
     ariaLabel: string
     destructive?: boolean
+    disabled?: boolean
     action: () => void
   }> = [
     {
@@ -192,10 +197,20 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
         closeMenu()
       },
     },
+    ...(onSnooze && snoozeLabel ? [{
+      label: snoozeLabel,
+      icon: snoozeIcon ?? '\u{1F311}',
+      ariaLabel: snoozeLabel,
+      disabled: snoozeDisabled,
+      action: () => {
+        onSnooze()
+        closeMenu()
+      },
+    }] : []),
     {
-      label: 'Edit Thread',
+      label: 'Edit Series',
       icon: '\u270F\uFE0F',
-      ariaLabel: 'Edit thread',
+      ariaLabel: 'Edit series',
       action: () => {
         onEdit(thread)
         closeMenu()
@@ -211,9 +226,9 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
       },
     },
     {
-      label: 'Delete Thread',
+      label: 'Delete Series',
       icon: '\u{1F5D1}',
-      ariaLabel: 'Delete thread',
+      ariaLabel: 'Delete series',
       destructive: true,
       action: () => {
         onDelete(thread.id)
@@ -230,7 +245,7 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
         onClick={handleTriggerClick}
         onKeyDown={handleTriggerKeyDown}
         className="flex items-center justify-center w-11 h-11 text-stone-500 hover:text-white transition-colors text-lg rounded-lg hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-        aria-label="Thread actions"
+        aria-label="Series actions"
         aria-haspopup="menu"
         aria-expanded={isOpen}
       >
@@ -243,24 +258,27 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
             className="fixed w-52 bg-[#1a1410]/95 border border-white/10 rounded-xl shadow-2xl z-[1000] py-1 overflow-hidden"
             style={menuPosition}
             role="menu"
-            aria-label="Thread actions"
+aria-label="Series actions"
           >
             {menuItems.map((item, index) => (
               <button
                 key={item.label}
                 ref={(el) => { menuItemsRef.current[index] = el }}
                 type="button"
+                disabled={item.disabled}
                 onClick={(e) => {
                   e.stopPropagation()
-                  item.action()
+                  if (!item.disabled) item.action()
                 }}
                 aria-label={item.ariaLabel}
+                aria-disabled={item.disabled || undefined}
                 className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-3 focus:outline-none focus-visible:bg-white/10 ${
                   item.destructive
                     ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300 focus-visible:bg-red-500/10 focus-visible:text-red-300'
                     : 'text-stone-300 hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:text-white'
-                }`}
+                } ${item.disabled ? 'opacity-40 cursor-not-allowed hover:bg-transparent hover:text-stone-300' : ''}`}
                 role="menuitem"
+                aria-disabled={item.disabled || undefined}
               >
                 <span className="text-base">{item.icon}</span>
                 <span className="font-medium">{item.label}</span>

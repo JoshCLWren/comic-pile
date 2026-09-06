@@ -170,7 +170,7 @@ export default function VirtualizedThreadList<T>({
           data-testid="queue-thread-list"
           id="queue-container"
           role="list"
-          aria-label="Thread queue"
+          aria-label="Reading queue"
           className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
           style={{
             height: '100%',
@@ -179,7 +179,7 @@ export default function VirtualizedThreadList<T>({
           }}
         >
           <div className="flex items-center justify-center text-stone-500 py-8">
-            No threads in queue
+            No series in queue
           </div>
         </div>
       </div>
