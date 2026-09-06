@@ -3,23 +3,31 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
-  useDeleteThread,
   useMoveToBack,
   useMoveToFront,
   useMoveToPosition,
   useShuffleQueue,
 } from '../hooks/useQueue'
+import { useDeleteThread } from '../hooks/useThread'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api'
 import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
+import { ToastProvider } from '../contexts/ToastProvider'
 import type { Thread } from '../types'
 
 vi.mock('../hooks/useQueue', () => ({
-  useDeleteThread: vi.fn(),
   useMoveToBack: vi.fn(),
   useMoveToFront: vi.fn(),
   useMoveToPosition: vi.fn(),
   useShuffleQueue: vi.fn(),
+}))
+
+// `useQueueThreadActions` imports `useDeleteThread` from `hooks/useThread`
+// directly (not the `hooks/useQueue` re-export), so it must be mocked from
+// its real module path or the hook would fall through to the real
+// `useMutation`/`threadsApi.delete` and fail outside a live API.
+vi.mock('../hooks/useThread', () => ({
+  useDeleteThread: vi.fn(),
 }))
 
 vi.mock('../hooks/useSnooze', () => ({
@@ -74,7 +82,11 @@ const queryClient = new QueryClient({
 })
 
 function wrapper({ children }: { children: ReactNode }) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>{children}</ToastProvider>
+    </QueryClientProvider>
+  )
 }
 
 beforeEach(() => {
@@ -226,6 +238,52 @@ describe('useQueueThreadActions', () => {
 
     await result.current.handleShuffle()
     expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('shuffle'))
+  })
+
+  it('requires explicit confirmDelete before mutating a simple thread with no deps', async () => {
+    const deleteThread = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
+    mockedDelete.mockReturnValue(deleteThread)
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions({
+          navigateToRoll: vi.fn(),
+          refetchSession: vi.fn(),
+        }),
+      { wrapper },
+    )
+
+    // Requesting delete alone must not mutate anything (#2204): it only
+    // records which thread is pending confirmation.
+    act(() => result.current.handleDelete(42))
+    expect(result.current.pendingDeleteThreadId).toBe(42)
+    expect(deleteThread.mutate).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await result.current.confirmDelete()
+    })
+
+    expect(deleteThread.mutate).toHaveBeenCalledWith(42)
+    expect(result.current.pendingDeleteThreadId).toBeNull()
+  })
+
+  it('cancelDelete clears the pending thread without mutating', () => {
+    const deleteThread = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
+    mockedDelete.mockReturnValue(deleteThread)
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions({
+          navigateToRoll: vi.fn(),
+          refetchSession: vi.fn(),
+        }),
+      { wrapper },
+    )
+
+    act(() => result.current.handleDelete(7))
+    expect(result.current.pendingDeleteThreadId).toBe(7)
+
+    act(() => result.current.cancelDelete())
+    expect(result.current.pendingDeleteThreadId).toBeNull()
+    expect(deleteThread.mutate).not.toHaveBeenCalled()
   })
 
   it('validates reposition bounds before calling the mutation', async () => {

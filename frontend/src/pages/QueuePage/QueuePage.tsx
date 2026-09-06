@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
@@ -291,6 +292,16 @@ export default function QueuePage() {
           isPendingCreate={modals.isPendingCreate}
           isPendingEdit={modals.isPendingEdit}
           isPendingReactivate={reactivateMutation.isPending}
+        />
+
+        <ConfirmDialog
+          isOpen={actions.pendingDeleteThreadId !== null}
+          title="Delete Thread"
+          message="Are you sure you want to delete this thread? This cannot be undone."
+          confirmLabel="Delete"
+          onConfirm={() => void actions.confirmDelete()}
+          onCancel={actions.cancelDelete}
+          data-testid="delete-thread-confirm"
         />
       </div>
     </PositionMenuProvider>

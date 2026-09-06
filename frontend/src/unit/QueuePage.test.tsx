@@ -20,6 +20,7 @@ import {
 import { useSession } from '../hooks/useSession'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { useToast } from '../contexts/useToast'
 import { threadsApi, dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { Thread } from '../types'
@@ -93,12 +94,14 @@ const mockedUseQueueBlockingInfo = vi.mocked(useQueueBlockingInfo) as any
 const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 const mockedUseSnooze = vi.mocked(useSnooze) as any
+const mockedUseToast = vi.mocked(useToast) as any
 const mockedThreadsApi = vi.mocked(threadsApi) as any
 const mockedDependenciesApi = vi.mocked(dependenciesApi) as any
 const mockedIssuesApi = vi.mocked(issuesApi) as any
 
 beforeEach(() => {
   vi.stubGlobal('alert', vi.fn())
+  mockedUseToast.mockReturnValue({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })
   mockedUseQueueThreads.mockReturnValue({
     data: [
       { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
@@ -486,21 +489,48 @@ describe('Keyboard Accessibility', () => {
   expect(screen.getByText('No active threads in queue')).toBeInTheDocument()
 })
 
-  it('prevents reading blocked threads and reports delete failures', async () => {
+  it('prevents reading blocked threads and reports delete failures via a toast', async () => {
   const user = userEvent.setup()
   const deleteMutation = { mutate: vi.fn().mockRejectedValue(new Error('delete failed')), isPending: false }
   mockedUseDeleteThread.mockReturnValue(deleteMutation)
+  const showToast = vi.fn()
+  mockedUseToast.mockReturnValue({ showToast, removeToast: vi.fn(), toasts: [] })
   mockedUseQueueThreads.mockReturnValue({ data: [{ id: 1, title: 'Blocked', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, is_blocked: true, total_issues: null, blocking_reasons: ['Blocked by: Prequel'] }], isPending: false, refetch: vi.fn() })
   mockedUseQueueBlockingInfo.mockReturnValue({ 1: [{ label: 'Blocked by: Prequel' }] })
-  vi.stubGlobal('confirm', vi.fn(() => true))
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   const readButton = screen.getByLabelText('Read')
   expect(readButton).toBeDisabled()
   expect(readButton).toHaveAttribute('title', expect.stringContaining('Blocked by: Prequel'))
   expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()
   expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
+
+  // Deleting requires an explicit, DOM-rendered confirmation instead of a
+  // native window.confirm (#2204): clicking Delete alone must not mutate.
   await user.click(screen.getByLabelText('Delete'))
-  await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('delete failed')))
+  expect(deleteMutation.mutate).not.toHaveBeenCalled()
+  const dialog = await screen.findByTestId('delete-thread-confirm')
+  expect(dialog).toBeVisible()
+
+  await user.click(screen.getByTestId('delete-thread-confirm-confirm'))
+  await waitFor(() => expect(deleteMutation.mutate).toHaveBeenCalledWith(1))
+  await waitFor(() =>
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('delete failed'), 'error'),
+  )
+})
+
+  it('cancelling the delete confirm dialog leaves the thread untouched', async () => {
+  const user = userEvent.setup()
+  const deleteMutation = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false }
+  mockedUseDeleteThread.mockReturnValue(deleteMutation)
+  mockedUseQueueThreads.mockReturnValue({ data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2 }], isPending: false, refetch: vi.fn() })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+
+  await user.click(screen.getByLabelText('Delete'))
+  await screen.findByTestId('delete-thread-confirm')
+  await user.click(screen.getByTestId('delete-thread-confirm-cancel'))
+
+  expect(screen.queryByTestId('delete-thread-confirm')).not.toBeInTheDocument()
+  expect(deleteMutation.mutate).not.toHaveBeenCalled()
 })
 
   it('supports created-date sorting and drag reorder failure feedback', async () => {
@@ -537,7 +567,6 @@ describe('Keyboard Accessibility', () => {
     isPending: false,
     refetch,
   })
-  vi.stubGlobal('confirm', vi.fn(() => true))
 
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   const openMenu = async () => user.click(screen.getByRole('button', { name: /thread actions/i }))
@@ -548,6 +577,7 @@ describe('Keyboard Accessibility', () => {
   await user.click(screen.getByRole('menuitem', { name: /move to back/i }))
   await openMenu()
   await user.click(screen.getByRole('menuitem', { name: /delete/i }))
+  await user.click(await screen.findByTestId('delete-thread-confirm-confirm'))
 
   expect(front).toHaveBeenCalledWith(1)
   expect(back).toHaveBeenCalledWith(1)

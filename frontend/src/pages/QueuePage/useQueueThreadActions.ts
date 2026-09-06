@@ -13,6 +13,7 @@ import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
 import { getApiErrorDetail } from '../../utils/apiError'
+import { useToast } from '../../contexts/useToast'
 
 interface UseQueueThreadActionsParams {
   navigateToRoll: (thread: Thread, response: unknown) => void
@@ -28,7 +29,10 @@ interface QueueThreadActionResult {
   handleDragOver: (threadId: number) => (event: DragEvent<HTMLElement>) => void
   handleDrop: (threadId: number, activeThreads: Thread[]) => (event: DragEvent<HTMLElement>) => void
   handleDragEnd: () => void
-  handleDelete: (threadId: number) => Promise<void> | void
+  handleDelete: (threadId: number) => void
+  pendingDeleteThreadId: number | null
+  cancelDelete: () => void
+  confirmDelete: () => Promise<void>
   handleMoveToFront: (threadId: number) => Promise<void> | void
   handleMoveToBack: (threadId: number) => Promise<void> | void
   handleReposition: (threadId: number, targetPosition: number, total: number) => Promise<void> | void
@@ -47,6 +51,7 @@ export function useQueueThreadActions(
   params: UseQueueThreadActionsParams,
 ): QueueThreadActionResult {
   const { navigateToRoll, refetchSession } = params
+  const { showToast } = useToast()
   const deleteMutation = useDeleteThread()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
@@ -58,6 +63,7 @@ export function useQueueThreadActions(
   const [draggedThreadId, setDraggedThreadId] = useState<number | null>(null)
   const [dragOverThreadId, setDragOverThreadId] = useState<number | null>(null)
   const [reorderError, setReorderError] = useState<string | null>(null)
+  const [pendingDeleteThreadId, setPendingDeleteThreadId] = useState<number | null>(null)
 
   const handleDragStart = useCallback(
     (threadId: number) => (event: DragEvent<HTMLElement>) => {
@@ -110,18 +116,32 @@ export function useQueueThreadActions(
     setDragOverThreadId(null)
   }, [])
 
-  const handleDelete = useCallback(
-    (threadId: number) => {
-      if (!window.confirm('Are you sure you want to delete this thread?')) {
-        return
-      }
-      deleteMutation.mutate(threadId)
-        .catch((err: unknown) => {
-          window.alert(`Failed to delete thread: ${getApiErrorDetail(err)}`)
-        })
-    },
-    [deleteMutation],
-  )
+  // Native window.confirm/window.alert are not a reliable confirmation or
+  // feedback surface: they are invisible to DOM/accessibility inspection and
+  // are silently auto-dismissed by browser automation that has not
+  // registered a `dialog` handler, which makes destructive delete look like
+  // a silent no-op (#2204). Requesting delete only opens an in-app,
+  // DOM-rendered confirm dialog; the mutation itself only runs from
+  // `confirmDelete` once the user explicitly confirms.
+  const handleDelete = useCallback((threadId: number) => {
+    setPendingDeleteThreadId(threadId)
+  }, [])
+
+  const cancelDelete = useCallback(() => {
+    setPendingDeleteThreadId(null)
+  }, [])
+
+  const confirmDelete = useCallback(async () => {
+    const threadId = pendingDeleteThreadId
+    if (threadId === null) return
+    setPendingDeleteThreadId(null)
+    try {
+      await deleteMutation.mutate(threadId)
+      showToast('Thread deleted.', 'success')
+    } catch (err: unknown) {
+      showToast(`Failed to delete thread: ${getApiErrorDetail(err)}`, 'error')
+    }
+  }, [pendingDeleteThreadId, deleteMutation, showToast])
 
   const handleMoveToFront = useCallback(
     (threadId: number) => {
@@ -212,6 +232,9 @@ export function useQueueThreadActions(
     handleDrop,
     handleDragEnd,
     handleDelete,
+    pendingDeleteThreadId,
+    cancelDelete,
+    confirmDelete,
     handleMoveToFront,
     handleMoveToBack,
     handleReposition,
