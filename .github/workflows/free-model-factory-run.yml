@@ -92,7 +92,12 @@ jobs:
 
           case "$source" in
             nvidia)
-              runtime_model="nvidia/${model}"
+              # TSV models may already include the vendor prefix (nvidia/...).
+              if [[ "$model" == nvidia/* ]]; then
+                runtime_model="$model"
+              else
+                runtime_model="nvidia/${model}"
+              fi
               branch_suffix='nvidia'
               if [[ -n "${NVIDIA_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-NVIDIA_API_KEY'; fi
               ;;
@@ -244,7 +249,22 @@ jobs:
               } >> "$GITHUB_OUTPUT"
               exit 0
               ;;
-            opencode-free|openrouter-free) ;;
+            opencode-free|openrouter-free)
+              # INCIDENT: with OmniRoute dark, catalog health fails closed on
+              # unknown/cooling evidence and starves restored free-code lanes.
+              # Keep the lane pin and prove executability via smoke/session.
+              if [[ ! "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]]; then
+                {
+                  echo "source=$SOURCE"
+                  echo "model=$LANE_MODEL"
+                  echo "runtime_model=$LANE_RUNTIME_MODEL"
+                  echo "display=$LANE_DISPLAY"
+                  echo "branch_suffix=$LANE_BRANCH_SUFFIX"
+                  echo "reason=selected-by-runtime-evidence"
+                } >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              ;;
             *)
               printf 'control_plane_failure\tUnsupported provider adapter: %s\n' "$SOURCE" > "$discovery_outcome"
               exit 1
