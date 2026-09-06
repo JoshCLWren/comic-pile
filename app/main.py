@@ -26,6 +26,7 @@ from app.api import (
     bug_report,
     catalog,
     comicvine_resolution,
+    creators,
     debug,
     dependency,
     health,
@@ -281,6 +282,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(catalog.router, tags=["catalog"])
     app.include_router(identity_inbox.router, tags=["identity-inbox"])
     app.include_router(issue_identity.router, tags=["issue-identity"])
+    app.include_router(creators.router, prefix="/api/v1", tags=["creators"])
     if os.getenv("TEST_ENVIRONMENT") == "true":
         app.include_router(test_helpers.router, prefix="/api", tags=["test"])
 
