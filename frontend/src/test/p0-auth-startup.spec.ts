@@ -42,7 +42,12 @@ test.describe('AUTH-001: Authentication and startup', () => {
 
   test('invalid credentials show error and stay on login page', async ({
     page,
+    allowExpectedBrowserFailures,
   }) => {
+    allowExpectedBrowserFailures.allow({
+      category: 'console',
+      message: 'Failed to load resource: the server responded with a status of 401 (Unauthorized)',
+    })
     await page.goto('/login', { waitUntil: 'domcontentloaded' })
     await page.waitForSelector('input[name="identifier"]', { state: 'visible' })
 
