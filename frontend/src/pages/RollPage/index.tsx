@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useMemo } from 'react'
+import { useNavigate, useNavigationType } from 'react-router-dom'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
@@ -28,6 +28,7 @@ import { useRollSnooze } from './useRollSnooze'
 import { useRollDependencies } from './useRollDependencies'
 import { useRollActions } from './useRollActions'
 import { useRollModals } from './useRollModals'
+import { useRollViewport } from './useRollViewport'
 import { RatingView } from './components/RatingView'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
@@ -39,14 +40,20 @@ import ReadingModeLauncher from '../../components/ReadingModeLauncher'
  * Route entry for the Roll page. The component composes the focused retained
  * feature modules (`useRollBootstrapSync`, `useRollPendingSession`,
  * `useRollRating`, `useRollSnooze`, `useRollDependencies`, `useRollActions`,
- * `useRollModals`) plus the page-level navigation and error boundary concerns.
+ * `useRollModals`, `useRollViewport`) plus the page-level navigation and
+ * error boundary concerns.
  * Data and mutation ownership stays in the page so a second cache layer is
  * never introduced.
  */
 export default function RollPage() {
   const state = useRollPageState()
   const navigate = useNavigate()
-  const mainDieRef = useRef<HTMLDivElement>(null)
+  const navType = useNavigationType()
+
+  const { mainDieRef, ratingViewTopRef } = useRollViewport({
+    isRatingView: state.isRatingView,
+    navType,
+  })
 
   const {
     data: bootstrap,
@@ -55,20 +62,6 @@ export default function RollPage() {
     isError: isBootstrapError,
     error: bootstrapError,
   } = useRollBootstrap()
-
-  const scrollToDice = useCallback(() => {
-    mainDieRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [])
-
-  const prevIsRatingViewRef = useRef(state.isRatingView)
-  useEffect(() => {
-    const wasRatingView = prevIsRatingViewRef.current
-    const isRatingView = state.isRatingView
-    prevIsRatingViewRef.current = isRatingView
-    if (wasRatingView && !isRatingView) {
-      scrollToDice()
-    }
-  }, [state.isRatingView, scrollToDice])
 
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
@@ -318,6 +311,7 @@ export default function RollPage() {
             ) : (
               <RatingView
                 activeRatingThread={state.activeRatingThread}
+                ratingViewTopRef={ratingViewTopRef}
                 currentDie={state.currentDie}
                 rolledResult={state.rolledResult}
                 rating={state.rating}
