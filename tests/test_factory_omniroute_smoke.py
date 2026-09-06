@@ -31,8 +31,12 @@ for arg in "$@"; do
 done
 case "$model" in
   *coding:free*)
+    if [[ "${FAKE_TIMEOUT_PRIMARY_STATUS:-124}" == 0 ]]; then
+      echo 'FIXED_MODEL_OPENCODE_OK'
+      exit 0
+    fi
     echo '> build · auto/coding:free'
-    exit 124
+    exit "${FAKE_TIMEOUT_PRIMARY_STATUS:-124}"
     ;;
   *best-free*)
     if [[ "${FAKE_TIMEOUT_BRIDGE_STATUS:-0}" != 0 ]]; then
@@ -169,6 +173,39 @@ def test_capacity_bridge_disabled_does_not_retry(tmp_path: Path) -> None:
     assert "> build · auto/best-free" not in combined
     assert _outputs(tmp_path)["model"] == "auto/coding:free"
     assert _outputs(tmp_path)["override"] == ""
+
+
+def test_post_smoke_shell_failures_remain_fatal(tmp_path: Path) -> None:
+    """Unguarded failures after smoke must still abort because errexit stays on."""
+    assert not any(
+        line.strip() == "set +e"
+        for line in SMOKE.read_text(encoding="utf-8").splitlines()
+    )
+    bad_output = tmp_path / "github-output-dir"
+    bad_output.mkdir()
+    result = _run_smoke(
+        tmp_path,
+        extra_env={
+            "FAKE_TIMEOUT_PRIMARY_STATUS": "0",
+            "GITHUB_OUTPUT": str(bad_output),
+        },
+    )
+    assert result.returncode != 0
+    assert "TEMPORARY OmniRoute capacity bridge:" not in f"{result.stdout}\n{result.stderr}"
+    assert not (tmp_path / "runner" / "factory-effective-model").exists()
+
+
+def test_failed_best_free_bridge_is_recorded_as_bridge_failure(tmp_path: Path) -> None:
+    """A failed auto/best-free retry must not be attributed to the primary intent."""
+    result = _run_smoke(tmp_path, bridge_status=1)
+    outcome = (tmp_path / "runner" / "factory-discovery-outcome").read_text(
+        encoding="utf-8"
+    )
+    combined = f"{result.stdout}\n{result.stderr}"
+    assert result.returncode == 1
+    assert "omniroute/auto/best-free" in outcome
+    assert "omniroute/auto/coding:free" not in outcome
+    assert "Transient smoke failure for native intent omniroute/auto/best-free" in combined
 
 
 def test_primary_smoke_uses_shorter_timeout_than_legacy_180s() -> None:
