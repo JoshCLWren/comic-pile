@@ -70,18 +70,18 @@ export function ComicPillar({
       </div>
       <section id="thread-info" aria-labelledby="selected-issue-heading" className="space-y-3">
         <div className="rounded-2xl p-3 md:p-4" style={{ border: '1px solid rgba(212,137,14,0.2)', backgroundColor: 'var(--theme-bg-panel)' }}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
+          <div className="flex flex-wrap items-start justify-between gap-3" data-testid="comic-header-row">
+            <div className="min-w-[12rem] flex-1 basis-48 break-words" data-testid="comic-header-title">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
                 Selected issue
               </p>
-              <h2 id="selected-issue-heading" className="mt-1 text-xl font-black leading-tight text-stone-100">
+              <h2 id="selected-issue-heading" className="mt-1 text-xl font-black leading-tight text-stone-100 break-words">
                 {threadTitle}
                 {issueNumber != null ? <span style={{ color: 'var(--theme-comic-accent)' }}> #{issueNumber}</span> : null}
               </h2>
             </div>
             {issueNumber != null ? (
-              <div className="flex shrink-0 gap-1.5">
+              <div className="flex shrink-0 flex-wrap gap-1.5" data-testid="comic-header-controls">
                 <button
                   type="button"
                   onClick={handleCopyComicReference}
