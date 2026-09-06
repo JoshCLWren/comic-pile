@@ -82,9 +82,11 @@ def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
 def test_discovery_failures_publish_normalized_outcomes() -> None:
     """Catalog/provider discovery failures write normalized outcome markers."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
+    selector = _dispatch_selector(workflow)
 
-    assert "factory-discovery-outcome" in workflow
-    assert "control_plane_failure" in workflow or "provider_failure" in workflow
+    assert "factory-discovery-outcome" in selector
+    assert "control_plane_failure" in selector
+    assert "provider_unavailable" in selector or "model_unavailable" in selector
 
 
 def test_worker_refuses_omniroute_source_during_incident() -> None:

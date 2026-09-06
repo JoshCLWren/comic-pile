@@ -109,11 +109,21 @@ jobs:
               reason='configured-anonymous-free'
               ;;
             omniroute-free)
-              # INCIDENT: OmniRoute auto/* and omniroute-free stay dark.
+              # INCIDENT: OmniRoute stays dark unless FACTORY_OMNIROUTE_ENABLED is on.
               runtime_model="omniroute/${model}"
               branch_suffix='omniroute'
-              configured=false
-              reason='omniroute-disabled-incident'
+              if [[ "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]]; then
+                if [[ -n "${OMNIROUTE_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]]; then
+                  configured=true
+                  reason='configured-omniroute'
+                else
+                  configured=false
+                  reason='missing-omniroute-credentials'
+                fi
+              else
+                configured=false
+                reason='omniroute-disabled-incident'
+              fi
               ;;
             *)
               echo "Unsupported factory source: ${source}" >&2

@@ -7,6 +7,8 @@ import csv
 import re
 from collections import Counter
 from pathlib import Path
+import os
+import subprocess
 
 MANIFEST = Path('.github/free-model-factories.tsv')
 DISPATCHER = Path('.github/workflows/fixed-model-factory-dispatch.yml')
@@ -142,6 +144,11 @@ def main() -> None:
     assert 'OmniRoute Entry is disabled for this incident' in worker
     assert "omniroute-free" in worker
     assert 'OmniRoute-only' not in worker
+    assert 'FACTORY_OMNIROUTE_ENABLED:-off' in worker
+    assert 'trap' in worker and 'release_owned_targets omniroute-disabled-incident' in worker
+    assert "auto/coding:free" not in runner
+    assert "auto/reasoning:free" not in runner
+    assert "FACTORY_OMNIROUTE_ENABLED: ${{ vars.FACTORY_OMNIROUTE_ENABLED || 'off' }}" in runner
     assert PRIMITIVES.exists(), 'tracked worker primitives are missing'
     primitives = PRIMITIVES.read_text(encoding='utf-8')
     assert "source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)" in worker
@@ -273,6 +280,27 @@ def main() -> None:
     source_counts = Counter(row['source'] for row in rows)
     for source, count in sorted(source_counts.items()):
         print(f'  {source}: {count}')
+
+
+    # Executable incident gate: omniroute-free must fail closed while dark.
+    refuse = subprocess.run(
+        ['bash', str(WORKER)],
+        env={
+            **os.environ,
+            'FACTORY_WORKER': '99',
+            'FACTORY_SOURCE': 'omniroute-free',
+            'FACTORY_MODEL': 'auto/coding:free',
+            'FACTORY_RUNTIME_MODEL': 'omniroute/auto/coding:free',
+            'FACTORY_OMNIROUTE_ENABLED': 'off',
+            'FACTORY_DISPLAY': 'incident-refuse',
+            'FACTORY_BRANCH_SUFFIX': 'omniroute',
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert refuse.returncode != 0, refuse.stderr or refuse.stdout
+    assert 'OmniRoute Entry is disabled for this incident' in (refuse.stderr + refuse.stdout)
 
 
 if __name__ == '__main__':

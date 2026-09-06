@@ -505,8 +505,8 @@ def inspect_assignment(worker: str) -> dict[str, Any]:
     """Return the current controller assignment for one fixed-model worker.
 
     Dispatcher claims before Entry starts, so smoke can inspect the leased
-    target and choose ``auto/reasoning:free`` for exact-head review instead of
-    always smoking ``auto/coding:free``.
+    target so exact-head review can use the multi-provider Entry path while
+    OmniRoute is dark (instead of smoking OmniRoute ``auto/*`` routes).
     """
     owner = f'factory:{worker}'
     issues = list_issues()

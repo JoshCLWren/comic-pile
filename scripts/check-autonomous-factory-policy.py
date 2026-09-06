@@ -58,7 +58,7 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "Cross-worker takeover and merge are allowed",
         "release the lease when active work stops",
         "A controller claim is not durable until the worker reaches an executable session",
-        "Exact-head review assignments smoke `auto/reasoning:free`",
+        "Exact-head review assignments use the multi-provider Entry path",
         "FACTORY_OMNIROUTE_ENABLED=off",
         "do not restore the temporary `auto/best-free` capacity bridge",
         "truthful no-work completion",

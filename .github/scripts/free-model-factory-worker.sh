@@ -8,13 +8,6 @@ set -Eeuo pipefail
 : "${FACTORY_MODEL:?FACTORY_MODEL is required}"
 : "${FACTORY_RUNTIME_MODEL:?FACTORY_RUNTIME_MODEL is required}"
 
-# INCIDENT 2026-09-06: OmniRoute stays dark. Multi-provider Entry
-# (nvidia / opencode-free / openrouter-free / kilo-auto) is the active path.
-if [[ "${FACTORY_SOURCE}" == 'omniroute-free' ]]; then
-  printf 'OmniRoute Entry is disabled for this incident; refusing source %s\n' "${FACTORY_SOURCE}" >&2
-  exit 2
-fi
-
 # Factory selection and lease handoff must keep working even when GitHub's
 # GraphQL installation bucket is exhausted. Route the small set of gh list/view
 # reads used by the wrapper through REST while forwarding every other gh command
@@ -93,6 +86,20 @@ rm -f \
   "/tmp/opencode-factory-${WORKER}.sanitized.log" \
   "/tmp/opencode-factory-${WORKER}-verdict-recovery.log"
 
+# INCIDENT 2026-09-06: OmniRoute stays dark unless FACTORY_OMNIROUTE_ENABLED is on.
+# Honor the kill switch here so one-var re-enable works, and install the lease-release
+# trap before exiting so a dispatcher-owned omniroute-free lease is not stranded.
+if [[ "${FACTORY_SOURCE}" == 'omniroute-free' ]]; then
+  case "$(printf '%s' "${FACTORY_OMNIROUTE_ENABLED:-off}" | tr '[:upper:]' '[:lower:]')" in
+    1|on|true|yes) ;;
+    *)
+      printf 'OmniRoute Entry is disabled for this incident; refusing source %s\n' "${FACTORY_SOURCE}" >&2
+      trap 'release_owned_targets omniroute-disabled-incident || true' EXIT
+      exit 2
+      ;;
+  esac
+fi
+
 record_terminal_outcome() {
   local outcome="$1" detail="$2"
   case "$outcome" in
@@ -128,36 +135,6 @@ record_agent_failure_outcome() {
   fi
 }
 
-nvidia_retry_after_seconds() {
-  local runtime_model="$1" provider_model request response headers http_code retry_after target now seconds
-  [[ "$SOURCE" == 'nvidia' ]] || return 1
-  provider_model="${runtime_model#nvidia/}"
-  request="$(jq -nc --arg model "$provider_model" '{model:$model,messages:[{role:"user",content:"Reply with OK"}],max_tokens:1}')"
-  response="$(mktemp)"
-  headers="$(mktemp)"
-  http_code="$(curl --silent --show-error --output "$response" --dump-header "$headers" --write-out '%{http_code}' \
-    --connect-timeout 5 --max-time 20 \
-    --header "Authorization: Bearer $NVIDIA_API_KEY" \
-    --header 'Content-Type: application/json' \
-    --data "$request" https://integrate.api.nvidia.com/v1/chat/completions || true)"
-  if [[ "$http_code" != '429' ]]; then
-    rm -f "$response" "$headers"
-    return 1
-  fi
-  retry_after="$(awk 'BEGIN{IGNORECASE=1} /^Retry-After:/ {sub(/\r$/, ""); sub(/^[^:]*:[[:space:]]*/, ""); print; exit}' "$headers")"
-  rm -f "$response" "$headers"
-  [[ -n "$retry_after" ]] || return 1
-  if [[ "$retry_after" =~ ^[0-9]+$ ]]; then
-    printf '%s\n' "$retry_after"
-    return 0
-  fi
-  target="$(date -d "$retry_after" +%s 2>/dev/null || true)"
-  [[ "$target" =~ ^[0-9]+$ ]] || return 1
-  now="$(date +%s)"
-  seconds=$((target - now))
-  (( seconds > 0 )) || return 1
-  printf '%s\n' "$seconds"
-}
 
 # A PR branch may predate the Kilo integration entirely. Stage the backend
 # runner from trusted main before any checkout so cross-worker takeover never
@@ -373,13 +350,6 @@ while :; do
   (( $(remaining) > 540 )) || break
 
   sleep_for="$TRANSIENT_BACKOFF_SECONDS"
-  if [[ "$SOURCE" == 'nvidia' ]]; then
-    retry_after="$(nvidia_retry_after_seconds "$RUNTIME_MODEL" || true)"
-    if [[ "$retry_after" =~ ^[0-9]+$ ]] && (( retry_after > sleep_for )); then
-      sleep_for="$retry_after"
-      log "honoring NVIDIA Retry-After: ${retry_after}s"
-    fi
-  fi
   max_sleep=$(( $(remaining) - 540 ))
   (( sleep_for > max_sleep )) && sleep_for="$max_sleep"
   (( sleep_for > 0 )) && sleep "$sleep_for"
