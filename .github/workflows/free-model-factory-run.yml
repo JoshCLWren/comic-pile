@@ -226,16 +226,49 @@ jobs:
           printf 'Factory %s selected native intent: provider=%s model=%s runtime=%s\n' \
             "$WORKER" "$SOURCE" "$LANE_MODEL" "$LANE_RUNTIME_MODEL"
 
+      - name: Resolve assignment-aware OmniRoute smoke route
+        id: route
+        if: steps.lane.outputs.configured == 'true'
+        shell: bash
+        env:
+          WORKER: ${{ steps.lane.outputs.worker }}
+          LANE_MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+        run: |
+          set -Eeuo pipefail
+          assignment='{"kind":"none"}'
+          if ! assignment="$(python3 .github/scripts/factory-work-controller.py inspect --worker "$WORKER")"; then
+            echo "Assignment inspect failed; defaulting smoke to ${LANE_MODEL}" >&2
+            assignment='{"kind":"none"}'
+          fi
+          kind="$(jq -r '.kind // "none"' <<< "$assignment")"
+          stage="$(jq -r '.stage // empty' <<< "$assignment")"
+          if [[ "$kind" == 'issue' || "$kind" == 'pr' ]]; then
+            model="$(python3 .github/scripts/factory_omniroute_route.py --mode "$kind" --pr-stage "$stage")"
+            reason='assignment-aware-native-intent'
+            echo "Factory ${WORKER} assignment ${kind} #$(jq -r '.number' <<< "$assignment") stage=${stage} smoke=${model}"
+          else
+            model="$LANE_MODEL"
+            reason='native-omniroute-intent-direct'
+            echo "Factory ${WORKER} has no inspectable assignment; smoking ${model}"
+          fi
+          {
+            echo "model=$model"
+            echo "runtime_model=omniroute/${model}"
+            echo "reason=$reason"
+            echo "kind=$kind"
+            echo "stage=$stage"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Report selected executor heartbeat
         if: always()
         shell: bash
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
-          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+          MODEL: ${{ steps.route.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
           SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
           MINUTE: ${{ steps.lane.outputs.minute }}
           CONFIGURED: ${{ steps.lane.outputs.configured }}
-          REASON: ${{ steps.executor.outputs.reason || steps.lane.outputs.reason }}
+          REASON: ${{ steps.route.outputs.reason || steps.executor.outputs.reason || steps.lane.outputs.reason }}
           EXECUTOR_OUTCOME: ${{ steps.executor.outcome }}
         run: |
           set -Eeuo pipefail
@@ -261,18 +294,25 @@ jobs:
           fi
 
       - name: Configure selected OmniRoute capacity
+        id: configure
         if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-free'
         shell: bash
         env:
-          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+          MODEL: ${{ steps.route.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
           [[ -n "${OMNIROUTE_API_KEY:-}" ]] || { echo 'OMNIROUTE_API_KEY missing for selected OmniRoute capacity' >&2; exit 1; }
           [[ -n "${OMNIROUTE_BASE_URL:-}" ]] || { echo 'OMNIROUTE_BASE_URL missing for selected OmniRoute capacity' >&2; exit 1; }
 
+          # Register native intents plus the temporary capacity-bridge route so
+          # smoke can retry auto/best-free without fetching /models.
+          bridge="$(python3 .github/scripts/factory_omniroute_route.py --capacity-bridge || true)"
           mkdir -p "$HOME/.config/opencode"
           jq -n \
             --arg model "$MODEL" \
+            --arg coding 'auto/coding:free' \
+            --arg reasoning 'auto/reasoning:free' \
+            --arg bridge "$bridge" \
             --arg key "$OMNIROUTE_API_KEY" \
             --arg base_url "${OMNIROUTE_BASE_URL%/}" \
             --arg run_id "$GITHUB_RUN_ID" \
@@ -292,18 +332,23 @@ jobs:
                       "X-GitHub-Workflow": $workflow
                     }
                   },
-                  models: {($model): {name: $model}}
+                  models: (
+                    {($coding): {name: $coding}, ($reasoning): {name: $reasoning}}
+                    + (if $bridge != "" then {($bridge): {name: $bridge}} else {} end)
+                    + {($model): {name: $model}}
+                  )
                 }
               }
             }' > "$HOME/.config/opencode/opencode.json"
           chmod 600 "$HOME/.config/opencode/opencode.json"
 
       - name: Smoke selected OmniRoute route through OpenCode
+        id: smoke
         if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) != 'kilo-auto'
         shell: bash
         env:
-          RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
-          LANE_MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+          RUNTIME_MODEL: ${{ steps.route.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
+          LANE_MODEL: ${{ steps.route.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
           # Lean smoke workspace: avoid loading repo AGENTS.md / build-agent
@@ -312,13 +357,22 @@ jobs:
           rm -rf "$smoke_dir"
           mkdir -p "$smoke_dir"
           git -C "$smoke_dir" init --quiet
+          smoke_once() {
+            local runtime="$1"
+            local log_file="$2"
+            set +e
+            timeout --signal=TERM --kill-after=10s 180s \
+              opencode run -m "$runtime" --dir "$smoke_dir" \
+              --title 'ComicPile fixed-model smoke' \
+              'Use a read-only shell tool to run `git status --short`. Do not edit files. After the tool call succeeds, reply with exactly FIXED_MODEL_OPENCODE_OK.' \
+              2>&1 | tee "$log_file"
+            status=${PIPESTATUS[0]}
+            set -e
+            return "$status"
+          }
           set +e
-          timeout --signal=TERM --kill-after=10s 180s \
-            opencode run -m "$RUNTIME_MODEL" --dir "$smoke_dir" \
-            --title 'ComicPile fixed-model smoke' \
-            'Use a read-only shell tool to run `git status --short`. Do not edit files. After the tool call succeeds, reply with exactly FIXED_MODEL_OPENCODE_OK.' \
-            2>&1 | tee "$RUNNER_TEMP/fixed-model-smoke.log"
-          status=${PIPESTATUS[0]}
+          smoke_once "$RUNTIME_MODEL" "$RUNNER_TEMP/fixed-model-smoke.log"
+          status=$?
           set -e
           is_native_intent=false
           case "${LANE_MODEL:-}" in
@@ -350,13 +404,13 @@ jobs:
                   "${RUNTIME_MODEL} was rejected as unavailable by OmniRoute" \
                   > "$RUNNER_TEMP/factory-discovery-outcome"
               fi
-            elif grep -Eiq 'bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$smoke_log"; then
+            elif grep -Eiq 'all targets were skipped|pre-dispatch filters|ALL_TARGETS_SKIPPED|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$smoke_log"; then
               printf 'provider_failure\t%s\n' \
                 "${RUNTIME_MODEL} failed with a transient gateway or upstream error" \
                 > "$RUNNER_TEMP/factory-discovery-outcome"
             fi
           }
-          smoke_transient_re='429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|HTTP[^0-9]*413|Request too large|tokens per minute|\bTPM\b|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset'
+          smoke_transient_re='429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|all targets were skipped|pre-dispatch filters|ALL_TARGETS_SKIPPED|HTTP[^0-9]*413|Request too large|tokens per minute|\bTPM\b|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset'
           emit_transient_smoke_message() {
             if [[ "$is_native_intent" == true ]]; then
               echo "Transient smoke failure for native intent ${RUNTIME_MODEL} (TPM/throttle/upstream); not quarantining the intent selector" >&2
@@ -364,6 +418,42 @@ jobs:
               echo "Transient smoke failure detected for ${RUNTIME_MODEL}; quarantining this route for the next selection" >&2
             fi
           }
+          smoke_succeeded=false
+          if (( status == 0 )) && grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+            smoke_succeeded=true
+          fi
+          override=''
+          effective_model="$LANE_MODEL"
+          if [[ "$smoke_succeeded" != true ]]; then
+            # TEMPORARY 2026-09-06: auto/coding:free is ALL_TARGETS_SKIPPED.
+            # One retry on auto/best-free. Disable with FACTORY_OMNIROUTE_CAPACITY_BRIDGE=off.
+            bridge="$(python3 .github/scripts/factory_omniroute_route.py --next-after-smoke-failure \
+              --primary "$LANE_MODEL" --status "$status" --log-file "$RUNNER_TEMP/fixed-model-smoke.log" || true)"
+            if [[ -n "$bridge" ]]; then
+              echo "TEMPORARY OmniRoute capacity bridge: ${LANE_MODEL} skipped/timed out; retrying ${bridge}" >&2
+              cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
+              set +e
+              smoke_once "omniroute/${bridge}" "$RUNNER_TEMP/fixed-model-smoke.log"
+              status=$?
+              set -e
+              if (( status == 0 )) && grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+                smoke_succeeded=true
+                override="$bridge"
+                effective_model="$bridge"
+                RUNTIME_MODEL="omniroute/${bridge}"
+                echo "TEMPORARY capacity bridge succeeded on ${bridge}"
+              fi
+            fi
+          fi
+          {
+            echo "model=$effective_model"
+            echo "runtime_model=omniroute/${effective_model}"
+            echo "override=$override"
+          } >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$effective_model" > "$RUNNER_TEMP/factory-effective-model"
+          if [[ "$smoke_succeeded" == true ]]; then
+            exit 0
+          fi
           if (( status != 0 )); then
             if (( status == 124 || status == 137 || status == 143 )) || \
               grep -Eiq "$smoke_transient_re" "$RUNNER_TEMP/fixed-model-smoke.log"; then
@@ -375,18 +465,10 @@ jobs:
             record_smoke_model_outcome
             exit "$status"
           fi
-          if ! grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"; then
-            if grep -Eiq "$smoke_transient_re" "$RUNNER_TEMP/fixed-model-smoke.log"; then
-              record_smoke_model_outcome
-              emit_transient_smoke_message
-              cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
-              exit 1
-            fi
-            echo "Smoke did not return FIXED_MODEL_OPENCODE_OK" >&2
-            cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
-            record_smoke_model_outcome
-            exit 1
-          fi
+          echo "Smoke did not return FIXED_MODEL_OPENCODE_OK" >&2
+          cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
+          record_smoke_model_outcome
+          exit 1
 
       - name: Smoke Kilo Auto Free through Kilo CLI
         if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'kilo-auto'
@@ -446,14 +528,16 @@ jobs:
           [[ -z "$(git status --porcelain)" ]] || { echo 'Kilo smoke modified the worktree' >&2; exit 1; }
 
       - name: Run continuous fixed-model factory session
+        id: session
         if: steps.lane.outputs.configured == 'true'
         env:
           FACTORY_WORKER: ${{ steps.lane.outputs.worker }}
           FACTORY_SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
-          FACTORY_MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
-          FACTORY_RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
+          FACTORY_MODEL: ${{ steps.smoke.outputs.model || steps.route.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
+          FACTORY_RUNTIME_MODEL: ${{ steps.smoke.outputs.runtime_model || steps.route.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
           FACTORY_DISPLAY: ${{ steps.executor.outputs.display || steps.lane.outputs.display }}
           FACTORY_BRANCH_SUFFIX: ${{ steps.executor.outputs.branch_suffix || steps.lane.outputs.branch_suffix }}
+          FACTORY_ROUTE_OVERRIDE: ${{ steps.smoke.outputs.override }}
         run: |
           set +e
           bash .github/scripts/free-model-factory-worker.sh
@@ -464,11 +548,37 @@ jobs:
           printf '%s\n' "$worker_status" > "$RUNNER_TEMP/factory-worker-status"
           exit "$worker_status"
 
+      - name: Release controller claim after pre-session abort
+        if: always() && steps.session.outcome == 'skipped'
+        shell: bash
+        env:
+          WORKER: ${{ steps.lane.outputs.worker || inputs.worker }}
+          CONFIGURED: ${{ steps.lane.outputs.configured }}
+          EXECUTOR_OUTCOME: ${{ steps.executor.outcome }}
+          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${WORKER:-}" ]] || exit 0
+          if [[ "$CONFIGURED" != 'true' ]]; then
+            reason='missing-credentials'
+          elif [[ "$EXECUTOR_OUTCOME" == 'failure' ]]; then
+            reason='executor-selection-failure'
+          elif [[ "$CONFIGURE_OUTCOME" == 'failure' ]]; then
+            reason='credential-failure'
+          elif [[ "$SMOKE_OUTCOME" == 'failure' ]]; then
+            reason='smoke-failure'
+          else
+            reason='pre-session-failure'
+          fi
+          echo "Releasing Factory ${WORKER} controller claim immediately (${reason}); not waiting for the 900s stale-lease TTL"
+          python3 .github/scripts/factory-work-controller.py release --worker "$WORKER" --reason "$reason"
+
       - name: Report OmniRoute routing summary
         if: always() && steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-free'
         shell: bash
         env:
-          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+          MODEL: ${{ steps.smoke.outputs.model || steps.route.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
           if [[ -f "$RUNNER_TEMP/factory-effective-model" ]]; then MODEL="$(cat "$RUNNER_TEMP/factory-effective-model")"; fi
@@ -514,11 +624,11 @@ jobs:
         shell: bash
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
-          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+          MODEL: ${{ steps.smoke.outputs.model || steps.route.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
           SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
           MINUTE: ${{ steps.lane.outputs.minute }}
           CONFIGURED: ${{ steps.lane.outputs.configured }}
-          REASON: ${{ steps.executor.outputs.reason || steps.lane.outputs.reason }}
+          REASON: ${{ steps.route.outputs.reason || steps.executor.outputs.reason || steps.lane.outputs.reason }}
           JOB_STATUS: ${{ job.status }}
           WORKER_STATUS_FILE: ${{ runner.temp }}/factory-worker-status
           DISCOVERY_OUTCOME_FILE: ${{ runner.temp }}/factory-discovery-outcome

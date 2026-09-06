@@ -110,6 +110,12 @@ def main() -> None:
     assert 'GitHub execution is OmniRoute-only' in runner
     assert 'Select native OmniRoute execution intent' in runner
     assert 'reason=native-omniroute-intent-direct' in runner
+    assert 'assignment-aware-native-intent' in runner
+    assert 'factory-work-controller.py inspect --worker' in runner
+    assert 'Release controller claim after pre-session abort' in runner
+    assert 'smoke-failure' in runner
+    assert 'TEMPORARY OmniRoute capacity bridge' in runner
+    assert 'auto/best-free' in runner
     assert "${OMNIROUTE_BASE_URL%/}/models" not in runner
     assert 'OPENCODE_API_KEY' not in runner
     assert "KILO_VERSION: '7.4.22'" in runner
@@ -183,6 +189,9 @@ def main() -> None:
         'def omniroute_free_entry_capacity(',
         'def in_flight_omniroute_free_entries(',
         'def release_worker(',
+        'def inspect_assignment(',
+        'comic-pile-factory-claim-released-v3',
+        "release_parser.add_argument('--reason'",
         'latest_lease_activity_epoch',
         'queued',
         'in_progress',

@@ -23,7 +23,7 @@ The delivery factory follows this permanent cycle:
 
 An empty or blocked ordinary backlog is never a reason to pause, disable, suspend, or mutate a factory schedule. Only Josh, or an interactive session acting on Josh's direct instruction, may pause or disable a factory. Scheduled workers remain enabled and continue checking on schedule.
 
-User-reported product bugs are the first delivery queue, then ordinary executable product issues. Preserve `user-reported` only for defects actually reported by a user.
+User-reported product bugs are the first delivery queue. Reproducible E2E-discovered product bugs come after them, then ordinary executable product issues. Preserve `user-reported` only for defects actually reported by a user.
 
 Firefox and WebKit are optional diagnostics for browser-specific investigations. They are not required factory release coverage and must not delay issue closure, merges, or backlog draining.
 
@@ -34,9 +34,10 @@ Choose work in this order:
 1. The highest-priority unclaimed open issue labeled both `user-reported` and `bug`; within equal priority, choose the newest report first.
 2. A branch-caused failing check, merge conflict, or actionable review defect only when the affected PR directly delivers an equal-or-higher-priority user-reported/product bug or clearing the blocker can immediately finish or merge that product fix.
 3. Other branch-caused failing checks, conflicts, or actionable review defects that prevent substantive product-delivery PRs from becoming mergeable.
-4. The highest-value unclaimed executable product issue, honoring explicit priority and dependencies.
-5. Additional work on an existing PR only when required to complete its issue contract or make the PR mergeable.
-6. Factory, CI, test, or E2E infrastructure only when it directly blocks product delivery or exists as a focused executable infrastructure issue.
+4. The highest-priority unclaimed reproducible E2E-discovered product `bug` issue.
+5. The highest-value unclaimed executable product issue, honoring explicit priority and dependencies.
+6. Additional work on an existing PR only when required to complete its issue contract or make the PR mergeable.
+7. Factory, CI, test, or E2E infrastructure only when it directly blocks product delivery or exists as a focused executable infrastructure issue.
 
 Test-only defects, stale selectors, optional validation, E2E plumbing, docs, release-note work, CI cosmetics, metadata cleanup, and evidence polishing never outrank an executable user-reported or product bug unless that infrastructure directly blocks safe validation or merge of the same higher-priority product fix.
 
@@ -74,6 +75,9 @@ Factory ownership is a connection-pool lock around the next action, not a perman
 - Cross-worker takeover and merge are allowed after the prior lease is released.
 - A factory that creates or advances a PR releases active ownership when its implementation attempt ends, including while CI or review is pending.
 - Provider failure, timeout, no useful persisted change, or another stable handoff state releases the lease so another worker can try later. Review independence is based on factory identity and exact-head provenance, not on requiring a different model; OmniRoute may route both workers through the same upstream model.
+- A controller claim is not durable until the worker reaches an executable session. Smoke, executor-selection, credential, and other pre-session failures release the owner to `factory:unowned` immediately, preserve the truthful stage, and post `comic-pile-factory-claim-released-v3`. Do not wait for the 900s stale-lease TTL.
+- Exact-head review assignments smoke `auto/reasoning:free`, not `auto/coding:free`.
+- TEMPORARY (2026-09-06): when `auto/coding:free` is skipped or times out, Entry may fall back once to `auto/best-free`. Disable with `FACTORY_OMNIROUTE_CAPACITY_BRIDGE=off`. Remove the bridge when `auto/coding:free` is healthy.
 - A takeover worker continues the current branch/head rather than creating a replacement solely because another model authored the existing commits.
 - Waiting on CI or review never reserves a model indefinitely.
 

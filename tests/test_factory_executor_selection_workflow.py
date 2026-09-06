@@ -61,11 +61,10 @@ def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
         "${{ steps.executor.outputs.source || steps.lane.outputs.source }}"
     )
     selected_model = (
-        "${{ steps.executor.outputs.model || steps.lane.outputs.model }}"
+        "${{ steps.smoke.outputs.model || steps.route.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}"
     )
     selected_runtime = (
-        "${{ steps.executor.outputs.runtime_model "
-        "|| steps.lane.outputs.runtime_model }}"
+        "${{ steps.smoke.outputs.runtime_model || steps.route.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}"
     )
     selected_branch = (
         "${{ steps.executor.outputs.branch_suffix "
@@ -150,6 +149,41 @@ def test_review_intent_is_carried_through_without_backing_model_selection() -> N
     assert "factory_provider_candidates.py" not in smoke
     assert "factory_candidate_health.py" not in smoke
     assert "free-model-factory-worker.sh" in session
+    assert "factory-work-controller.py inspect --worker" in workflow
+    assert 'factory_omniroute_route.py --mode "$kind" --pr-stage "$stage"' in workflow
+    assert "assignment-aware-native-intent" in workflow
+    assert "auto/reasoning:free" in workflow
+
+
+def test_pre_session_failure_releases_controller_claim_immediately() -> None:
+    """Smoke/pre-session abort releases the lease without waiting 900s."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "Release controller claim after pre-session abort" in workflow
+    assert "steps.session.outcome == 'skipped'" in workflow
+    assert "release --worker \"$WORKER\" --reason" in workflow
+    assert "smoke-failure" in workflow
+    assert "not waiting for the 900s stale-lease TTL" in workflow
+    assert workflow.index("Smoke selected OmniRoute route through OpenCode") < (
+        workflow.index("Release controller claim after pre-session abort")
+    )
+
+
+def test_temporary_capacity_bridge_retries_best_free_after_coding_skip() -> None:
+    """Native intent stays first; ALL_TARGETS_SKIPPED may retry auto/best-free."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    smoke = workflow.split(
+        "- name: Smoke selected OmniRoute route through OpenCode", maxsplit=1
+    )[1].split("- name: Smoke Kilo Auto Free through Kilo CLI", maxsplit=1)[0]
+
+    assert "TEMPORARY OmniRoute capacity bridge" in smoke
+    assert "auto/best-free" in workflow
+    assert "--next-after-smoke-failure" in smoke
+    assert "FACTORY_OMNIROUTE_CAPACITY_BRIDGE=off" in smoke
+    assert "FACTORY_ROUTE_OVERRIDE" in workflow
+    assert "factory_provider_candidates.py" not in smoke
+    assert "factory_candidate_health.py" not in smoke
+    assert "${OMNIROUTE_BASE_URL%/}/models" not in smoke
 
 
 def test_missing_native_capacity_fails_at_smoke_not_catalog_selection() -> None:
