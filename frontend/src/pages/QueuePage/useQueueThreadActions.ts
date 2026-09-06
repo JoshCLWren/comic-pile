@@ -11,7 +11,10 @@ import {
 import { useDeleteThread } from '../../hooks/useThread'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { useToast } from '../../contexts/useToast'
-import { invalidateAfterQueueMutation } from '../../query/cacheEffects'
+import {
+  invalidateAfterQueueMutation,
+  resetRollBootstrapAfterManualSelection,
+} from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
 import { getApiErrorDetail } from '../../utils/apiError'
 
@@ -195,6 +198,9 @@ export function useQueueThreadActions(
       }
       try {
         const response = await threadsApi.setPending(thread.id)
+        // Roll hydrates the rating view from the bootstrap query, so the
+        // cached snapshot must not outlive the selection we just persisted.
+        await resetRollBootstrapAfterManualSelection(queryClient)
         navigateToRoll(thread, response)
       } catch (error: unknown) {
         console.error('Action failed:', error)
