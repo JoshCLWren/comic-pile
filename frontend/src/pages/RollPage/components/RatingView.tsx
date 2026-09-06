@@ -68,7 +68,7 @@ export function RatingView({
     <div className="relative z-10 space-y-4 p-3 md:p-4">
       <WhyThisRoll explanation={activeRatingThread?.explanation} />
       <div
-        className="grid items-start gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]"
+        className="grid items-start gap-4 sm:grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]"
         data-testid="rating-pillars-grid"
       >
         <div className="min-w-0" data-testid="rating-region-comic">
