@@ -49,16 +49,15 @@ def test_worker_emits_only_canonical_terminal_outcomes() -> None:
     assert 'TERMINAL_OUTCOME_FILE="${RUNNER_TEMP:-/tmp}/factory-discovery-outcome"' in text
 
 
-def test_timed_omniroute_session_is_provider_failure_after_smoke() -> None:
-    """An OmniRoute session timeout must not collapse to unknown_failure."""
+def test_timed_provider_session_is_provider_failure_after_smoke() -> None:
+    """A pinned provider/model session timeout must not collapse to unknown_failure."""
     text = _worker_text()
 
     assert 'status == 124 || status == 137 || status == 143' in text
     assert (
         'record_terminal_outcome provider_failure '
-        '"OmniRoute upstream session timed out or was interrupted after smoke succeeded'
+        '"pinned provider/model session timed out or was interrupted after smoke succeeded'
     ) in text
-
 
 def test_kilo_run_agent_does_not_reenable_errexit_before_returning_status() -> None:
     """Kilo exit 124 must reach the outer retry/classification loop."""
@@ -83,22 +82,26 @@ def test_throttle_and_model_missing_remain_distinct() -> None:
 
 def test_model_cooldown_ends_retry_loop_after_recording_throttle() -> None:
     """Explicit OmniRoute cooldowns must not consume another agent retry."""
-    text = _worker_text()
-
-    assert "cooling down|model_cooldown" in text
-    assert "OmniRoute reported model cooldown; ending this assignment without another retry" in text
-    assert text.index('if is_model_cooldown_failure; then') < text.index(
-        "log 'transient gateway/upstream interruption; allowing OmniRoute to adapt the upstream route'"
+    # Cooldown/route adaptation remains in shared primitives for the OmniRoute path.
+    text = Path('.github/scripts/free-model-factory-worker-primitives.sh').read_text(
+        encoding='utf-8'
     )
 
+    assert "cooling down|model_cooldown" in text
+    assert (
+        "OmniRoute reported model cooldown; ending this assignment without another retry"
+        in text
+    )
+    assert text.index('if is_model_cooldown_failure; then') < text.index(
+        "log 'transient provider/runtime interruption; allowing OmniRoute to adapt the upstream route'"
+    )
 
 def test_stream_readiness_timeout_is_provider_failure_evidence() -> None:
-    """OmniRoute stream readiness failures must enter the provider taxonomy."""
+    """Stream readiness failures must enter the provider taxonomy."""
     text = _worker_text()
 
     assert 'STREAM_READINESS_TIMEOUT' in text
     assert 'stream[^\\n]*(timeout|readiness)' in text
-
 
 def test_review_controller_failure_is_control_plane_failure() -> None:
     """A trusted controller exception must not be attributed to the model/provider."""

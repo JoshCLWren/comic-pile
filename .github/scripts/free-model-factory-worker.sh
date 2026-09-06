@@ -84,6 +84,15 @@ source .github/scripts/factory-semantic-verdict.sh
 
 TERMINAL_OUTCOME_FILE="${RUNNER_TEMP:-/tmp}/factory-discovery-outcome"
 
+# Each GitHub runner may execute the same durable worker repeatedly. Clear the
+# worker-scoped logs before leasing work so a prior model/provider failure
+# cannot be misclassified as the outcome of this attempt.
+worker_log="/tmp/opencode-factory-${WORKER}.log"
+: > "$worker_log"
+rm -f \
+  "/tmp/opencode-factory-${WORKER}.sanitized.log" \
+  "/tmp/opencode-factory-${WORKER}-verdict-recovery.log"
+
 record_terminal_outcome() {
   local outcome="$1" detail="$2"
   case "$outcome" in
@@ -112,7 +121,7 @@ record_agent_failure_outcome() {
     record_terminal_outcome environment_failure "worker environment failed during assigned execution (agent exit ${status})"
   elif (( status == 124 || status == 137 || status == 143 )); then
     record_terminal_outcome provider_failure "pinned provider/model session timed out or was interrupted after smoke succeeded (agent exit ${status})"
-  elif [[ -f "$log_file" ]] && grep -Eqi 'provider[^\n]*(error|unavailable|failed)|service unavailable|bad gateway|gateway timeout|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset|upstream[^\n]*(error|failed)' "$log_file"; then
+  elif [[ -f "$log_file" ]] && grep -Eqi 'provider[^\n]*(error|unavailable|failed)|service unavailable|bad gateway|gateway timeout|stream[^\n]*(timeout|readiness)|STREAM_READINESS_TIMEOUT|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset|upstream[^\n]*(error|failed)' "$log_file"; then
     record_terminal_outcome provider_failure "pinned provider/model execution failed after smoke succeeded (agent exit ${status})"
   else
     record_terminal_outcome unknown_failure "agent exited ${status} without enough evidence for a narrower failure class"
@@ -361,7 +370,7 @@ while :; do
   log 'transient provider/runtime interruption on the pinned model; refusing to switch models'
   [[ -z "$(git status --porcelain)" ]] || break
   (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
-  (( $(remaining) > 600 )) || break
+  (( $(remaining) > 540 )) || break
 
   sleep_for="$TRANSIENT_BACKOFF_SECONDS"
   if [[ "$SOURCE" == 'nvidia' ]]; then
