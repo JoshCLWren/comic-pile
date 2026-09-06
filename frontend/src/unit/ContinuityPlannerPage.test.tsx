@@ -12,6 +12,17 @@ function queryWrapper({ children }: PropsWithChildren) {
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 }
 
+function renderNewPlanPage() {
+  return render(
+    <MemoryRouter initialEntries={['/continuity-plans']}>
+      <Routes>
+        <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+      </Routes>
+    </MemoryRouter>,
+    { wrapper: queryWrapper },
+  )
+}
+
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   get: vi.fn(),
@@ -167,14 +178,7 @@ describe('ContinuityPlannerPage', () => {
   })
 
   it('exposes ordering mode, distinguishes it from Dependency Builder blocking, and links the glossary', async () => {
-    render(
-      <MemoryRouter initialEntries={['/continuity-plans']}>
-        <Routes>
-          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
-        </Routes>
-      </MemoryRouter>,
-      { wrapper: queryWrapper },
-    )
+    renderNewPlanPage()
 
     const group = await screen.findByRole('group', { name: 'Ordering mode' })
     expect(group).toBeVisible()
@@ -196,14 +200,7 @@ describe('ContinuityPlannerPage', () => {
 
   it('defaults a new plan to informational order so no blocking rules are compiled', async () => {
     const user = userEvent.setup()
-    render(
-      <MemoryRouter initialEntries={['/continuity-plans']}>
-        <Routes>
-          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
-        </Routes>
-      </MemoryRouter>,
-      { wrapper: queryWrapper },
-    )
+    renderNewPlanPage()
 
     await user.type(screen.getByLabelText('Comic series'), 'Mister')
     await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
@@ -219,14 +216,7 @@ describe('ContinuityPlannerPage', () => {
 
   it('saves informational after moving to a second lane, and disables strict mode', async () => {
     const user = userEvent.setup()
-    render(
-      <MemoryRouter initialEntries={['/continuity-plans']}>
-        <Routes>
-          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
-        </Routes>
-      </MemoryRouter>,
-      { wrapper: queryWrapper },
-    )
+    renderNewPlanPage()
 
     await screen.findByRole('group', { name: 'Ordering mode' })
     await user.type(screen.getByLabelText('Comic series'), 'Mister')
