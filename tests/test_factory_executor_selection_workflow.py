@@ -5,6 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "free-model-factory-run.yml"
+SMOKE_SCRIPT = ROOT / ".github" / "scripts" / "factory_omniroute_smoke.sh"
 
 
 def _native_intent_selector(workflow: str) -> str:
@@ -116,19 +117,20 @@ def test_direct_provider_probes_are_removed_from_the_runner() -> None:
 
 def test_smoke_persists_permanent_model_failures() -> None:
     """A failed smoke records exact model retirement/unavailability for rotation."""
-    workflow = WORKFLOW.read_text(encoding="utf-8")
+    smoke = SMOKE_SCRIPT.read_text(encoding="utf-8")
 
-    assert "record_smoke_model_outcome()" in workflow
-    assert "model_retired_410\\t%s\\n" in workflow
-    assert "model_unavailable\\t%s\\n" in workflow
-    assert "Model is unavailable" in workflow
+    assert "record_smoke_model_outcome()" in smoke
+    assert "model_retired_410\\t%s\\n" in smoke
+    assert "model_unavailable\\t%s\\n" in smoke
+    assert "Model is unavailable" in smoke
 
 
 def test_smoke_timeout_reaches_gateway_retry_path() -> None:
     """A CLI timeout is transient and must reach the worker retry loop."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
+    smoke = SMOKE_SCRIPT.read_text(encoding="utf-8")
 
-    assert "status == 124 || status == 137 || status == 143" in workflow
+    assert "status == 124 || status == 137 || status == 143" in smoke
     assert "allowing worker to proceed with built-in retry handling" in workflow
 
 
@@ -146,8 +148,11 @@ def test_review_intent_is_carried_through_without_backing_model_selection() -> N
     assert "auto/coding:free|auto/reasoning:free" in selector
     assert "factory_provider_candidates.py" not in selector
     assert "factory_candidate_health.py" not in selector
+    assert "factory_omniroute_smoke.sh" in smoke
     assert "factory_provider_candidates.py" not in smoke
     assert "factory_candidate_health.py" not in smoke
+    assert "factory_provider_candidates.py" not in SMOKE_SCRIPT.read_text(encoding="utf-8")
+    assert "factory_candidate_health.py" not in SMOKE_SCRIPT.read_text(encoding="utf-8")
     assert "free-model-factory-worker.sh" in session
     assert "factory-work-controller.py inspect --worker" in workflow
     assert 'factory_omniroute_route.py --mode "$kind" --pr-stage "$stage"' in workflow
@@ -176,14 +181,18 @@ def test_temporary_capacity_bridge_retries_best_free_after_coding_skip() -> None
         "- name: Smoke selected OmniRoute route through OpenCode", maxsplit=1
     )[1].split("- name: Smoke Kilo Auto Free through Kilo CLI", maxsplit=1)[0]
 
-    assert "TEMPORARY OmniRoute capacity bridge" in smoke
+    script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+    assert "factory_omniroute_smoke.sh" in smoke
+    assert "TEMPORARY OmniRoute capacity bridge" in script
     assert "auto/best-free" in workflow
-    assert "--next-after-smoke-failure" in smoke
-    assert "FACTORY_OMNIROUTE_CAPACITY_BRIDGE=off" in smoke
+    assert "--next-after-smoke-failure" in script
+    assert "FACTORY_OMNIROUTE_CAPACITY_BRIDGE=off" in script
     assert "FACTORY_ROUTE_OVERRIDE" in workflow
     assert "factory_provider_candidates.py" not in smoke
     assert "factory_candidate_health.py" not in smoke
     assert "${OMNIROUTE_BASE_URL%/}/models" not in smoke
+    assert "factory_provider_candidates.py" not in script
+    assert "factory_candidate_health.py" not in script
 
 
 def test_missing_native_capacity_fails_at_smoke_not_catalog_selection() -> None:
@@ -197,7 +206,8 @@ def test_missing_native_capacity_fails_at_smoke_not_catalog_selection() -> None:
     assert "Select execution candidate at dispatch time" not in workflow
     assert "${OMNIROUTE_BASE_URL%/}/models" not in selector
     assert "factory_candidate_health.py" not in selector
-    assert "record_smoke_model_outcome()" in smoke
+    assert "factory_omniroute_smoke.sh" in smoke
+    assert "record_smoke_model_outcome()" in SMOKE_SCRIPT.read_text(encoding="utf-8")
     assert workflow.index("Select native OmniRoute execution intent") < workflow.index(
         "Smoke selected OmniRoute route through OpenCode"
     )

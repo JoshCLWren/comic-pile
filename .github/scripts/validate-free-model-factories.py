@@ -16,6 +16,7 @@ DISCOVERY = Path('.github/workflows/chromium-discovery.yml')
 DISCOVERY_CLASSIFIER = Path('.github/scripts/classify-chromium-discovery.py')
 PLAYWRIGHT_CONFIG = Path('frontend/playwright.config.ts')
 WORKER = Path('.github/scripts/free-model-factory-worker.sh')
+SMOKE = Path('.github/scripts/factory_omniroute_smoke.sh')
 PRIMITIVES = Path('.github/scripts/free-model-factory-worker-primitives.sh')
 CONTROLLER = Path('.github/scripts/factory-work-controller.py')
 POLICY = Path('.github/scripts/factory_work_policy.py')
@@ -114,8 +115,14 @@ def main() -> None:
     assert 'factory-work-controller.py inspect --worker' in runner
     assert 'Release controller claim after pre-session abort' in runner
     assert 'smoke-failure' in runner
-    assert 'TEMPORARY OmniRoute capacity bridge' in runner
+    assert 'factory_omniroute_smoke.sh' in runner
+    assert SMOKE.exists(), 'extracted Entry smoke script is missing'
+    smoke = SMOKE.read_text(encoding='utf-8')
+    assert 'TEMPORARY OmniRoute capacity bridge' in smoke
     assert 'auto/best-free' in runner
+    assert '--next-after-smoke-failure' in smoke
+    assert 'FACTORY_OMNIROUTE_CAPACITY_BRIDGE=off' in smoke
+    assert 'smoke_once "$RUNTIME_MODEL" "$SMOKE_LOG" "$PRIMARY_TIMEOUT" || status=$?' in smoke
     assert "${OMNIROUTE_BASE_URL%/}/models" not in runner
     assert 'OPENCODE_API_KEY' not in runner
     assert "KILO_VERSION: '7.4.22'" in runner
