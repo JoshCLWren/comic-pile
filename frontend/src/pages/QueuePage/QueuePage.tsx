@@ -7,7 +7,7 @@ import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hoo
 import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
 import { useQueueBlockingInfo } from '../../hooks/useQueueBlockingInfo'
-import { invalidateAfterQueueMutation } from '../../query/cacheEffects'
+import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
 import type { Thread } from '../../types'
@@ -96,6 +96,12 @@ export default function QueuePage() {
     isPendingCreate: createMutation.isPending,
     isPendingEdit: updateMutation.isPending,
   })
+
+  const handleIssueChanged = useCallback(() => {
+    if (modals.editingThread) {
+      void invalidateAfterIssueEdit(queryClient, modals.editingThread.id)
+    }
+  }, [modals.editingThread])
 
   const handleRepositionConfirm = useCallback(
     async (targetPosition: number) => {
@@ -288,6 +294,7 @@ export default function QueuePage() {
           onCloseMigration={modals.closeMigrationDialog}
           onOpenMigrationDialog={modals.openMigrationDialog}
           onOpenDependencies={modals.editingThread ? () => modals.openDependenciesModal(modals.editingThread!) : undefined}
+          onIssueChanged={handleIssueChanged}
           isPendingCreate={modals.isPendingCreate}
           isPendingEdit={modals.isPendingEdit}
           isPendingReactivate={reactivateMutation.isPending}
