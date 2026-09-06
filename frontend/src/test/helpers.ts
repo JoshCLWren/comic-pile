@@ -135,7 +135,7 @@ export async function registerUser(page: Page, user: TestUser): Promise<void> {
 export async function loginUser(page: Page, user: TestUser): Promise<string> {
   const response = await page.request.post('/api/auth/login', {
     data: {
-      username: user.username,
+      identifier: user.username,
       password: user.password,
     },
   });

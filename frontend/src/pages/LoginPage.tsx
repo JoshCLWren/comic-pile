@@ -8,15 +8,15 @@ import { useAuth } from '../App'
 
 export default function LoginPage() {
   const { login } = useAuth()
-  const [username, setUsername] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
 
   const validateForm = () => {
-    if (!username.trim()) {
-      setError('Username is required')
+    if (!identifier.trim()) {
+      setError('Username or email is required')
       return false
     }
     if (!password.trim()) {
@@ -41,8 +41,8 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const response = await api.post<AuthTokens, { username: string; password: string }>('/v1/auth/login', {
-        username: username.trim(),
+      const response = await api.post<AuthTokens, { identifier: string; password: string }>('/v1/auth/login', {
+        identifier: identifier.trim(),
         password,
       })
       await login(response.access_token)
@@ -71,20 +71,24 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-6 space-y-6">
            <div className="space-y-4">
              <div className="space-y-2">
-               <label htmlFor="username" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-                 Username
+               <label htmlFor="identifier" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                 Username or email
                </label>
                <input
-                 id="username"
+                 id="identifier"
                  type="text"
-                 name="username"
+                 name="identifier"
                  autoComplete="username"
                  required
-                 value={username}
-                 onChange={(e) => setUsername(e.target.value)}
+                 value={identifier}
+                 onChange={(e) => setIdentifier(e.target.value)}
+                 aria-describedby="login-identifier-help"
                  className="w-full h-12 px-4 bg-white/5 border border-solid border-white/20 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-                 placeholder="Enter your username"
+                 placeholder="Enter your username or email"
                />
+               <p id="login-identifier-help" className="text-xs text-stone-400">
+                 Sign in with the username or email address on your account.
+               </p>
              </div>
 
             <div className="space-y-2">

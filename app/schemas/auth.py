@@ -1,6 +1,8 @@
 """Auth schemas for request/response validation."""
 
-from pydantic import BaseModel, EmailStr
+from typing import Annotated
+
+from pydantic import AliasChoices, BaseModel, EmailStr, Field, StringConstraints
 
 
 class UserRegisterRequest(BaseModel):
@@ -14,7 +16,14 @@ class UserRegisterRequest(BaseModel):
 class UserLoginRequest(BaseModel):
     """Request schema for user login."""
 
-    username: str
+    identifier: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1),
+        Field(
+            description="Your username or email address.",
+            validation_alias=AliasChoices("identifier", "username"),
+        ),
+    ]
     password: str
 
 

@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jose.exceptions import ExpiredSignatureError
-from sqlalchemy import exc as sqlalchemy_exc, select
+from sqlalchemy import exc as sqlalchemy_exc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
@@ -106,8 +106,6 @@ async def register_user(
     if user_data.email:
         conditions.append(User.email == user_data.email)
 
-    from sqlalchemy import or_
-
     result = await db.execute(select(User).where(or_(*conditions)).limit(1))
     existing = result.scalar_one_or_none()
     if existing:
@@ -162,7 +160,7 @@ async def login_user(
     """Authenticate user and return tokens.
 
     Args:
-        login_data: User login data (username, password).
+        login_data: User login data (username or email, password).
         request: Incoming request used for cookie security policy and IP extraction.
         response: Outgoing response used to set auth cookies.
         db: SQLAlchemy session for database operations.
@@ -178,25 +176,29 @@ async def login_user(
         request.client.host if request.client else None,
     )
 
-    await check_login_lockout(db, username=login_data.username, ip_address=client_ip)
-
-    result = await db.execute(select(User).where(User.username == login_data.username).limit(1))
+    result = await db.execute(
+        select(User)
+        .where(or_(User.username == login_data.identifier, User.email == login_data.identifier))
+        .limit(1)
+    )
     user = result.scalar_one_or_none()
+    lockout_identifier = user.username if user else login_data.identifier
+    await check_login_lockout(db, username=lockout_identifier, ip_address=client_ip)
     if not user or not user.password_hash:
-        await record_failed_login(db, username=login_data.username, ip_address=client_ip)
+        await record_failed_login(db, username=lockout_identifier, ip_address=client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect username or email, or password",
         )
 
     if not verify_password(login_data.password, user.password_hash):
-        await record_failed_login(db, username=login_data.username, ip_address=client_ip)
+        await record_failed_login(db, username=lockout_identifier, ip_address=client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect username or email, or password",
         )
 
-    await clear_failed_logins(db, username=login_data.username)
+    await clear_failed_logins(db, username=lockout_identifier)
 
     jti = secrets.token_urlsafe(32)
     ensure_csrf_cookie(request, response)

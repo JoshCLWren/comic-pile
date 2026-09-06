@@ -120,6 +120,24 @@ class TestAuth:
         assert data["token_type"] == "bearer"
 
     @pytest.mark.asyncio
+    async def test_login_success_with_email(self, client: AsyncClient, async_db: AsyncSession) -> None:
+        """Test that an account email is accepted as a login identifier."""
+        user_data = {
+            "username": "email_login_user",
+            "email": "email-login@example.com",
+            "password": "mypassword123",
+        }
+        register_response = await client.post("/api/v1/auth/register", json=user_data)
+        assert register_response.status_code == 200
+
+        login_response = await client.post(
+            "/api/v1/auth/login",
+            json={"identifier": " email-login@example.com ", "password": "mypassword123"},
+        )
+        assert login_response.status_code == 200
+        assert login_response.json()["access_token"]
+
+    @pytest.mark.asyncio
     async def test_login_invalid_credentials(self, client: AsyncClient) -> None:
         """Test login with invalid credentials fails."""
         login_data = {

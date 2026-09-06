@@ -76,8 +76,8 @@ describe('LoginPage', () => {
   it('validates required and short credentials', () => {
     renderRoute(<LoginPage />)
     fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!)
-    expect(screen.getByText('Username is required')).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'reader' } })
+    expect(screen.getByText('Username or email is required')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Username or email'), { target: { value: 'reader' } })
     fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!)
     expect(screen.getByText('Password is required')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'short' } })
@@ -89,11 +89,14 @@ describe('LoginPage', () => {
     api.post.mockResolvedValueOnce({ access_token: 'token' })
     auth.login.mockResolvedValueOnce(undefined)
     renderRoute(<LoginPage />)
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: ' reader ' } })
+    fireEvent.change(screen.getByLabelText('Username or email'), { target: { value: ' reader@example.com ' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } })
     fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!)
     await waitFor(() => expect(auth.login).toHaveBeenCalledWith('token'))
-    expect(api.post).toHaveBeenCalledWith('/v1/auth/login', { username: 'reader', password: 'password' })
+    expect(api.post).toHaveBeenCalledWith('/v1/auth/login', {
+      identifier: 'reader@example.com',
+      password: 'password',
+    })
 
     api.post.mockRejectedValueOnce(new Error('network'))
     fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!)

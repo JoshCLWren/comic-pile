@@ -1,5 +1,5 @@
 /**
- * AUTH-001: User can sign in with email/password and obtain a session.
+ * AUTH-001: User can sign in with a username or email and obtain a session.
  *
  * Covers the core authentication journey: register a fresh user, sign in
  * via the login form, verify the session is established by checking that
@@ -25,9 +25,13 @@ test.describe('AUTH-001: Authentication and startup', () => {
     await page.evaluate(() => localStorage.clear())
 
     await page.goto('/login', { waitUntil: 'domcontentloaded' })
-    await page.waitForSelector('input[name="username"]', { state: 'visible' })
+    await page.waitForSelector('input[name="identifier"]', { state: 'visible' })
+    await expect(page.getByLabel('Username or email')).toBeVisible()
+    await expect(
+      page.getByText('Sign in with the username or email address on your account.'),
+    ).toBeVisible()
 
-    await page.fill('input[name="username"]', user.username)
+    await page.fill('input[name="identifier"]', user.email)
     await page.fill('input[name="password"]', user.password)
     await page.click('button[type="submit"]')
 
@@ -40,9 +44,9 @@ test.describe('AUTH-001: Authentication and startup', () => {
     page,
   }) => {
     await page.goto('/login', { waitUntil: 'domcontentloaded' })
-    await page.waitForSelector('input[name="username"]', { state: 'visible' })
+    await page.waitForSelector('input[name="identifier"]', { state: 'visible' })
 
-    await page.fill('input[name="username"]', 'nonexistent_user_xyz')
+    await page.fill('input[name="identifier"]', 'nonexistent_user_xyz')
     await page.fill('input[name="password"]', 'wrong_password_123')
     await page.click('button[type="submit"]')
 
@@ -85,9 +89,9 @@ test.describe('AUTH-001: Authentication and startup', () => {
     await page.evaluate(() => localStorage.clear())
 
     await page.goto('/login', { waitUntil: 'domcontentloaded' })
-    await page.waitForSelector('input[name="username"]', { state: 'visible' })
+    await page.waitForSelector('input[name="identifier"]', { state: 'visible' })
 
-    await page.fill('input[name="username"]', user.username)
+    await page.fill('input[name="identifier"]', user.username)
     await page.fill('input[name="password"]', user.password)
     await page.click('button[type="submit"]')
 

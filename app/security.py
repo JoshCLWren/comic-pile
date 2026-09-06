@@ -16,7 +16,7 @@ USERNAME_LOCKOUT_MINUTES = 15
 MAX_IP_FAILURES = 10
 IP_LOCKOUT_MINUTES = 30
 
-LOCKOUT_ERROR_MESSAGE = "Incorrect username or password"
+LOCKOUT_ERROR_MESSAGE = "Incorrect username or email, or password"
 
 
 def get_client_ip(request_headers: dict, client_host: str | None) -> str:
