@@ -134,13 +134,13 @@ export default function QueueThreadCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <button
-              type="button"
-              className="min-w-0 flex-1 text-left"
-              onClick={onCardClick}
-              aria-label={`Open ${thread.title}`}
-              title={thread.title}
-            >
+<button
+                type="button"
+                className="min-w-24 flex-1 text-left"
+                onClick={onCardClick}
+                aria-label={`Open ${thread.title}`}
+                title={thread.title}
+              >
               <MarqueeTitle title={thread.title} />
             </button>
             {isBlocked && (

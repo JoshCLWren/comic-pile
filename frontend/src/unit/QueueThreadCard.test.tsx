@@ -265,6 +265,16 @@ describe('QueueThreadCard', () => {
     expect(screen.getByTestId('mock-marquee')).toHaveTextContent('Amazing Spider-Man')
   })
 
+  it('prevents title button from collapsing to zero min-width', () => {
+    const thread = createMockThread({ title: 'Very Long Thread Title That Would Previously Collapse' })
+    const { unmount } = renderCard(thread)
+
+    const titleButton = screen.getByRole('button', { name: `Open ${thread.title}` })
+    expect(titleButton).toHaveClass('min-w-24')
+
+    unmount()
+  })
+
   it('renders format label', () => {
     const thread = createMockThread({ format: 'Trade Paperback' })
     renderCard(thread)
