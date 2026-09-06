@@ -25,7 +25,7 @@ export function ReadingModeControl({ mode, onOpenSelector }: ReadingModeControlP
       <span
         data-testid="reading-mode-control"
         title={`Reading mode: ${label}`}
-        className="inline-flex max-w-[11rem] min-h-11 items-center gap-1 bg-white/5 border border-white/10 text-stone-300 rounded-xl px-2 md:px-3 py-1.5 text-[10px] font-black uppercase tracking-widest"
+        className="inline-flex max-w-[11rem] min-h-11 items-center gap-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 md:px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)]"
       >
         <span className="truncate">{label}</span>
       </span>
@@ -40,10 +40,10 @@ export function ReadingModeControl({ mode, onOpenSelector }: ReadingModeControlP
       aria-label={accessibleName}
       aria-haspopup="dialog"
       title={`Reading mode: ${label}`}
-      className="min-h-11 max-w-[11rem] inline-flex items-center gap-1 bg-white/5 border border-white/10 text-stone-300 rounded-xl px-2 md:px-3 py-1.5 text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+      className="min-h-11 max-w-[11rem] inline-flex items-center gap-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 md:px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-muted)] transition-colors hover:border-[var(--theme-text-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
     >
       <span className="truncate">{label}</span>
-      <span aria-hidden="true" className="text-stone-500">
+      <span aria-hidden="true" className="text-[var(--theme-text-muted)]">
         ▾
       </span>
     </button>
