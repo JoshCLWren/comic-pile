@@ -60,7 +60,12 @@ async function waitForApplicationState(page: Page, viewport: AuditViewport): Pro
   await expect(page.getByText('Loading page...', { exact: true })).toBeHidden()
   await expect(page.locator('main')).toBeVisible()
   if (viewport.width >= 768) {
-    await expect(page.getByText(AUDIT_FIXED_USERNAME, { exact: true })).toBeVisible()
+    // The identity renders as the full username span in the expanded sidebar
+    // and as the titled avatar in the collapsed rail (issue #2285). Either
+    // visible form means the authenticated shell finished rendering.
+    await expect(
+      page.getByText(AUDIT_FIXED_USERNAME, { exact: true }).or(page.getByTitle(AUDIT_FIXED_USERNAME)),
+    ).toBeVisible()
   }
   await page.evaluate(async () => {
     await document.fonts.ready
