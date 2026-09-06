@@ -3,10 +3,10 @@ import { fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRollViewport } from '../pages/RollPage/useRollViewport'
 
-function Harness({ navType = 'PUSH' }: { navType?: 'POP' | 'PUSH' | 'REPLACE' }) {
+function Harness() {
   const [isRatingView, setIsRatingView] = useState(false)
   const [pulse, setPulse] = useState(0)
-  const { mainDieRef, ratingViewTopRef } = useRollViewport({ isRatingView, navType })
+  const { mainDieRef, ratingViewTopRef } = useRollViewport({ isRatingView })
   return (
     <div>
       <div data-testid="die-anchor" ref={mainDieRef} />
@@ -71,11 +71,20 @@ describe('useRollViewport (issue #2286)', () => {
     expect(ratingTopCalls).toHaveLength(2)
   })
 
-  it('does not override scroll restoration on POP back/forward or reload', () => {
-    const { getByRole } = render(<Harness navType="POP" />)
-    fireEvent.click(getByRole('button', { name: 'toggle rating' }))
-
+  it('is inert on mount so route-level scroll restoration is never overridden', () => {
+    // A back/forward arrival or reload restores the saved position through the
+    // route-level `useScrollRestoration`; at mount no in-place transition has
+    // occurred, so the hook must not fight that restoration.
+    const { getByRole, getByTestId } = render(<Harness />)
     expect(scrollIntoView).not.toHaveBeenCalled()
+
+    // A genuine in-place rating entry that follows any arrival (including a
+    // page reached via back/forward or reload with navType 'POP', which a fresh
+    // roll then turns into a false->true transition) must still anchor to the
+    // rating surface start. E2E coverage in issue-2286 drives that browser flow.
+    fireEvent.click(getByRole('button', { name: 'toggle rating' }))
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(scrollIntoView.mock.instances[0]).toBe(getByTestId('rating-top-anchor'))
   })
 
   it('does not re-anchor when async reader-context data re-renders the rating view', () => {

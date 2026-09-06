@@ -16,7 +16,6 @@ function scrollBehavior(): 'auto' | 'smooth' {
 
 interface UseRollViewportParams {
   isRatingView: boolean
-  navType: 'POP' | 'PUSH' | 'REPLACE'
 }
 
 /**
@@ -27,11 +26,17 @@ interface UseRollViewportParams {
  * die. The hook owns the "enter rating" side of the transition that the page
  * previously handled only for the "leave rating" direction.
  *
- * Back/forward and reload restoration stays with the route-level
- * `useScrollRestoration` hook, so POP navigations never re-anchor here:
- * position restoration on those navigations remains untouched.
+ * The rating view is an in-place state flip on the same route, never a URL the
+ * browser can land on, so every false->true transition is a real reader action
+ * (a fresh roll, a pending-read hydration, a thread read). Each one anchors.
+ * Route-level back/forward and reload restoration stays entirely with the
+ * `useScrollRestoration` hook; it restores positions on POP navigations and the
+ * hook only reacts to the later in-place transition. Gating the anchor on the
+ * last navigation type would be both ineffective (a POP arrival can never
+ * activate the rating view itself) and harmful: after a reload or back/forward
+ * arrival the stale pre-roll offset would be retained again on the next roll.
  */
-export function useRollViewport({ isRatingView, navType }: UseRollViewportParams) {
+export function useRollViewport({ isRatingView }: UseRollViewportParams) {
   const mainDieRef = useRef<HTMLDivElement>(null)
   const ratingViewTopRef = useRef<HTMLDivElement>(null)
   const prevIsRatingViewRef = useRef(isRatingView)
@@ -53,10 +58,10 @@ export function useRollViewport({ isRatingView, navType }: UseRollViewportParams
       scrollToDice()
       return
     }
-    if (entersRatingView && navType !== 'POP') {
+    if (entersRatingView) {
       scrollToRatingStart()
     }
-  }, [isRatingView, navType, scrollToDice, scrollToRatingStart])
+  }, [isRatingView, scrollToDice, scrollToRatingStart])
 
   return { mainDieRef, ratingViewTopRef, scrollToDice, scrollToRatingStart }
 }

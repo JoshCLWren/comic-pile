@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { useNavigate, useNavigationType } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
@@ -48,11 +48,9 @@ import ReadingModeLauncher from '../../components/ReadingModeLauncher'
 export default function RollPage() {
   const state = useRollPageState()
   const navigate = useNavigate()
-  const navType = useNavigationType()
 
   const { mainDieRef, ratingViewTopRef } = useRollViewport({
     isRatingView: state.isRatingView,
-    navType,
   })
 
   const {
