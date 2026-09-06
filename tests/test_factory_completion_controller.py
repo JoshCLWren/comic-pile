@@ -247,9 +247,9 @@ def test_capacity_report_names_only_executable_candidates():
 
 def test_capacity_report_does_not_count_repeated_slots_as_distinct_candidates():
     candidates = [
-        {"worker": "60", "provider": "openrouter-free", "model": "stealth/ox-alpha"},
-        {"worker": "61", "provider": "openrouter-free", "model": "stealth/ox-alpha"},
-        {"worker": "62", "provider": "openrouter-free", "model": "stealth/ox-alpha"},
+        {"worker": "60", "provider": "openrouter-free", "model": "cohere/north-mini-code:free"},
+        {"worker": "61", "provider": "openrouter-free", "model": "cohere/north-mini-code:free"},
+        {"worker": "62", "provider": "openrouter-free", "model": "cohere/north-mini-code:free"},
     ]
     health = dict.fromkeys(("60", "61", "62"), ("success", 100))
 
@@ -262,7 +262,7 @@ def test_capacity_report_does_not_count_repeated_slots_as_distinct_candidates():
     assert report["executable_provider_models"] == [
         {
             "provider": "openrouter-free",
-            "model": "stealth/ox-alpha",
+            "model": "cohere/north-mini-code:free",
             "health": "healthy",
         }
     ]
