@@ -85,6 +85,19 @@ describe('LoginPage', () => {
     expect(screen.getByText('Password must be at least 6 characters')).toBeInTheDocument()
   })
 
+  it('rejects email-shaped usernames without calling the API', () => {
+    renderRoute(<LoginPage />)
+    fireEvent.change(screen.getByLabelText('Username'), {
+      target: { value: 'reader@example.com' },
+    })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } })
+    fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!)
+    expect(
+      screen.getByText('Sign in with your username, not your email.'),
+    ).toBeInTheDocument()
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
   it('logs in successfully through the canonical v1 endpoint and reports API errors', async () => {
     api.post.mockResolvedValueOnce({ access_token: 'token' })
     auth.login.mockResolvedValueOnce(undefined)
@@ -123,6 +136,24 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText('Confirm Password'), { target: { value: 'different' } })
     fireEvent.submit(form)
     expect(screen.getByText('Passwords do not match')).toBeInTheDocument()
+  })
+
+  it('rejects email-shaped usernames without calling the API', () => {
+    renderRoute(<RegisterPage />)
+    const form = screen.getByRole('button', { name: 'Create Account' }).closest('form')!
+    fireEvent.change(screen.getByLabelText('Username'), {
+      target: { value: 'reader@example.com' },
+    })
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'reader@example.com' },
+    })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } })
+    fireEvent.change(screen.getByLabelText('Confirm Password'), { target: { value: 'password' } })
+    fireEvent.submit(form)
+    expect(
+      screen.getByText("Username cannot contain an '@' character"),
+    ).toBeInTheDocument()
+    expect(api.post).not.toHaveBeenCalled()
   })
 
   it('registers successfully through the canonical v1 endpoint and reports a generic API failure', async () => {

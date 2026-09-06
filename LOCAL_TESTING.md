@@ -23,7 +23,7 @@ python scripts/seed_dev_db.py
 ```
 
 This creates:
-- **User**: `test@example.com` / `testpass123`
+- **User**: `testuser` / `testpass123` (email `test@example.com`; login uses the username)
 - **5 Threads**: Superman, Batman, Wonder Woman, The Flash, Aquaman
 - **Active Session**: Start die = 6
 
