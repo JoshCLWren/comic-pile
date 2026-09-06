@@ -105,7 +105,7 @@ export default function QueueThreadCard({
   return (
     <div
       data-testid="queue-thread-item"
-      className={`queue-thread-card group flex flex-col gap-3 px-3 py-3 md:flex-row md:items-center md:gap-4 md:px-4 md:py-3.5 cursor-pointer transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] focus-visible:ring-inset ${isDragOver ? 'bg-amber-500/10' : ''}`}
+      className={`queue-thread-card group flex flex-col gap-3 px-3 py-3 @2xl:flex-row @2xl:items-center @2xl:gap-4 @2xl:px-4 @2xl:py-3.5 cursor-pointer transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] focus-visible:ring-inset ${isDragOver ? 'bg-amber-500/10' : ''}`}
       role="link"
       tabIndex={0}
       aria-label={`Open ${thread.title} details`}
@@ -114,12 +114,12 @@ export default function QueueThreadCard({
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      <div className="flex min-w-0 flex-1 items-start gap-2 md:gap-3">
+      <div className="flex min-w-0 flex-1 items-start gap-2 @2xl:gap-3">
         <div className="flex shrink-0 items-center gap-1 pt-0.5">
           <Tooltip content="Drag to reorder within the queue.">
             <button
               type="button"
-              className="flex h-11 w-11 items-center justify-center rounded-lg text-[var(--theme-text-dim)] hover:bg-white/5 hover:text-[var(--theme-text-muted)] transition-colors text-lg md:h-8 md:w-8"
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-[var(--theme-text-dim)] hover:bg-white/5 hover:text-[var(--theme-text-muted)] transition-colors text-lg @2xl:h-8 @2xl:w-8"
               draggable
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
@@ -134,13 +134,13 @@ export default function QueueThreadCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-<button
-                type="button"
-                className="min-w-24 flex-1 text-left"
-                onClick={onCardClick}
-                aria-label={`Open ${thread.title}`}
-                title={thread.title}
-              >
+            <button
+              type="button"
+              className="min-w-24 flex-1 text-left"
+              onClick={onCardClick}
+              aria-label={`Open ${thread.title}`}
+              title={thread.title}
+            >
               <MarqueeTitle title={thread.title} />
             </button>
             {isBlocked && (
@@ -210,7 +210,7 @@ export default function QueueThreadCard({
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 self-stretch pl-12 md:pl-0 md:self-center flex-wrap">
+      <div className="flex shrink-0 items-center gap-2 self-stretch pl-12 @2xl:pl-0 @2xl:self-center flex-wrap">
         <QueueThreadActions
           title={thread.title}
           snoozeIcon={snoozeIcon}
