@@ -260,43 +260,43 @@ it('renders named blocked-by dependencies and an empty blocking list as links', 
 })
 
 it('renders blocker issue number on thread detail when known', async () => {
-  mockedConnectedThreads.mockResolvedValueOnce({
-    thread_id: 1,
-    connected_threads: [
-      { thread_id: 9, title: 'Starman', connection_type: 'blocked_by', dependency_id: 11, issue_number: '42' },
-    ],
+    mockedConnectedThreads.mockResolvedValueOnce({
+      thread_id: 1,
+      connected_threads: [
+        { thread_id: 9, title: 'Starman', connection_type: 'blocked_by', dependency_id: 11, issue_number: '42' },
+      ],
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Starman: #42')).toBeInTheDocument())
+    expect(screen.getByRole('link', { name: 'Open Starman' })).toHaveAttribute('href', '/thread/9')
   })
-  renderPage()
-  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
-  expect(screen.getByText('Starman: #42')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Open Starman' })).toHaveAttribute('href', '/thread/9')
-})
 
-it('omits issue number suffix when issue_number is absent', async () => {
-  mockedConnectedThreads.mockResolvedValueOnce({
-    thread_id: 1,
-    connected_threads: [
-      { thread_id: 9, title: 'Prequel', connection_type: 'blocked_by', dependency_id: 11 },
-    ],
+  it('omits issue number suffix when issue_number is absent', async () => {
+    mockedConnectedThreads.mockResolvedValueOnce({
+      thread_id: 1,
+      connected_threads: [
+        { thread_id: 9, title: 'Prequel', connection_type: 'blocked_by', dependency_id: 11 },
+      ],
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Prequel')).toBeInTheDocument())
+    expect(screen.queryByText(/Prequel: #/)).not.toBeInTheDocument()
   })
-  renderPage()
-  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
-  expect(screen.getByText('Prequel')).toBeInTheDocument()
-  expect(screen.queryByText(/Prequel: #/)).not.toBeInTheDocument()
-})
 
-it('renders blocking dependency issue number on thread detail when known', async () => {
-  mockedConnectedThreads.mockResolvedValueOnce({
-    thread_id: 1,
-    connected_threads: [
-      { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12, issue_number: '7' },
-    ],
+  it('renders blocking dependency issue number on thread detail when known', async () => {
+    mockedConnectedThreads.mockResolvedValueOnce({
+      thread_id: 1,
+      connected_threads: [
+        { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12, issue_number: '7' },
+      ],
+    })
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Sequel: #7')).toBeInTheDocument())
+    expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
   })
-  renderPage()
-  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
-  expect(screen.getByText('Sequel: #7')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
-})
 
 it('renders named blocking dependencies when nothing blocks this thread', async () => {
   mockedConnectedThreads.mockResolvedValueOnce({

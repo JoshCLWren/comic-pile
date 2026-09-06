@@ -205,6 +205,11 @@ export default function QueueThreadCard({
                   +{extraBlockerCount} more
                 </button>
               )}
+              <p className="mt-1.5 text-[var(--theme-text-dim)]">
+                Edit, Snooze, and Delete still work. Read unlocks once the
+                blocker{extraBlockerCount > 0 ? 's' : ''} above{' '}
+                {extraBlockerCount > 0 ? 'are' : 'is'} cleared.
+              </p>
             </div>
           )}
         </div>
