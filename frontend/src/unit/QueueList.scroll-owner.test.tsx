@@ -112,10 +112,6 @@ it('uses the identical queue-container selectors for both presentations', () => 
 
   const plainList = plain.container.querySelector('#queue-container')
   const virtualizedList = virtualized.container.querySelector('#queue-container')
-  if (!plainList || !virtualizedList) {
-    console.log('plain container innerHTML:', plain.container.innerHTML)
-    console.log('virtualized container innerHTML:', virtualized.container.innerHTML)
-  }
   expect(plainList).toBeInTheDocument()
   expect(virtualizedList).toBeInTheDocument()
   for (const node of [plainList, virtualizedList]) {

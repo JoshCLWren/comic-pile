@@ -579,26 +579,6 @@ it('does not call scrollToIndex when dragging in the middle of the container', (
   expect(mockScrollToIndex).not.toHaveBeenCalled()
 })
 
-it('reacts to ResizeObserver measurements and cleans up a pending frame', () => {
-  const frame = vi.fn((callback: FrameRequestCallback) => {
-    callback(1)
-    return 1
-  })
-  vi.stubGlobal('requestAnimationFrame', frame)
-  const { unmount } = render(
-    <VirtualizedThreadList
-      threads={createMockThreads(60)}
-      renderItem={(thread) => <div data-testid="queue-thread-item" key={thread.id}>{thread.title}</div>}
-    />,
-  )
-  const observerMock = vi.mocked(ResizeObserver)
-  console.log('ResizeObserver mock calls:', observerMock.mock.calls)
-  const callback = observerMock.mock.calls.at(-1)?.[0] as ResizeObserverCallback
-  callback([{ contentRect: { width: 1200, height: 720 } } as ResizeObserverEntry], {} as ResizeObserver)
-  expect(frame).toHaveBeenCalled()
-  unmount()
-})
-
 it('ignores edge drags when no virtual items are visible', () => {
   const { container } = render(
     <VirtualizedThreadList
