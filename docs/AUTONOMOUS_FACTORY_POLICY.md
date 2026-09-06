@@ -77,7 +77,7 @@ Factory ownership is a connection-pool lock around the next action, not a perman
 - Provider failure, timeout, no useful persisted change, or another stable handoff state releases the lease so another worker can try later. Review independence is based on factory identity and exact-head provenance, not on requiring a different model; OmniRoute may route both workers through the same upstream model.
 - A controller claim is not durable until the worker reaches an executable session. Smoke, executor-selection, credential, and other pre-session failures release the owner to `factory:unowned` immediately, preserve the truthful stage, and post `comic-pile-factory-claim-released-v3`. Do not wait for the 900s stale-lease TTL.
 - Exact-head review assignments smoke `auto/reasoning:free`, not `auto/coding:free`.
-- TEMPORARY (2026-09-06): when `auto/coding:free` is skipped or times out, Entry may fall back once to `auto/best-free`. Disable with `FACTORY_OMNIROUTE_CAPACITY_BRIDGE=off`. Remove the bridge when `auto/coding:free` is healthy.
+- INCIDENT (2026-09-06): GitHub OmniRoute Entry is intentionally disabled (`FACTORY_OMNIROUTE_ENABLED=off` by default) after repeated free-pool instability. Keep native intents (`auto/coding:free` / `auto/reasoning:free`) ready for re-enable; do not restore the temporary `auto/best-free` capacity bridge. Re-enable only after Josh confirms gateway health by setting `FACTORY_OMNIROUTE_ENABLED=on`.
 - A takeover worker continues the current branch/head rather than creating a replacement solely because another model authored the existing commits.
 - Waiting on CI or review never reserves a model indefinitely.
 

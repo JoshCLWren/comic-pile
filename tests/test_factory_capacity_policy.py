@@ -13,6 +13,11 @@ sys.modules[SPEC.name] = policy
 SPEC.loader.exec_module(policy)
 
 
+def _enable_omniroute(monkeypatch) -> None:
+    """Re-enable OmniRoute for capacity-math assertions during the incident freeze."""
+    monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
+
+
 def demand(completion: int, production: int, idle: int):
     return policy.FleetDemand(
         completion=completion,
@@ -51,7 +56,8 @@ def test_targets_are_bounded_by_real_queue_depth_and_capacity():
     assert policy.completion_worker_target(demand(0, 50, 10)) == 0
 
 
-def test_omniroute_free_entry_cap_default_is_three_concurrent_units():
+def test_omniroute_free_entry_cap_default_is_three_concurrent_units(monkeypatch):
+    _enable_omniroute(monkeypatch)
     assert policy.DEFAULT_OMNIROUTE_FREE_ENTRY_CAP == 3
     assert policy.remaining_omniroute_free_entry_slots(0) == 3
     assert policy.remaining_omniroute_free_entry_slots(2) == 1
@@ -59,7 +65,8 @@ def test_omniroute_free_entry_cap_default_is_three_concurrent_units():
     assert policy.remaining_omniroute_free_entry_slots(12) == 0
 
 
-def test_omniroute_free_entry_cap_bounds_idle_workers_without_erasing_demand():
+def test_omniroute_free_entry_cap_bounds_idle_workers_without_erasing_demand(monkeypatch):
+    _enable_omniroute(monkeypatch)
     current = demand(completion=35, production=10, idle=30)
     capped = policy.apply_omniroute_free_entry_cap(current, in_flight=1)
 
@@ -70,19 +77,22 @@ def test_omniroute_free_entry_cap_bounds_idle_workers_without_erasing_demand():
     assert policy.production_worker_target(capped) == 0
 
 
-def test_omniroute_free_entry_cap_leaves_idle_unchanged_when_already_inside_budget():
+def test_omniroute_free_entry_cap_leaves_idle_unchanged_when_already_inside_budget(monkeypatch):
+    _enable_omniroute(monkeypatch)
     current = demand(completion=2, production=1, idle=2)
     assert policy.apply_omniroute_free_entry_cap(current, in_flight=0) is current
 
 
-def test_exhausted_omniroute_free_entry_cap_allocates_no_workers():
+def test_exhausted_omniroute_free_entry_cap_allocates_no_workers(monkeypatch):
+    _enable_omniroute(monkeypatch)
     current = policy.apply_omniroute_free_entry_cap(demand(20, 20, 20), in_flight=3)
     assert current.idle_workers == 0
     assert policy.completion_worker_target(current) == 0
     assert policy.production_worker_target(current) == 0
 
 
-def test_omniroute_free_entry_slot_counts_reject_negative_inputs():
+def test_omniroute_free_entry_slot_counts_reject_negative_inputs(monkeypatch):
+    _enable_omniroute(monkeypatch)
     try:
         policy.remaining_omniroute_free_entry_slots(-1)
     except ValueError as exc:
@@ -95,3 +105,17 @@ def test_omniroute_free_entry_slot_counts_reject_negative_inputs():
         assert "cap" in str(exc)
     else:
         raise AssertionError("negative cap must fail closed")
+
+
+def test_omniroute_defaults_to_disabled_with_zero_remaining_capacity(monkeypatch):
+    monkeypatch.delenv("FACTORY_OMNIROUTE_ENABLED", raising=False)
+    assert policy.omniroute_enabled() is False
+    assert policy.remaining_omniroute_free_entry_slots(0) == 0
+    capped = policy.apply_omniroute_free_entry_cap(demand(20, 20, 20), in_flight=0)
+    assert capped.idle_workers == 0
+
+
+def test_omniroute_reenable_restores_free_entry_capacity(monkeypatch):
+    monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
+    assert policy.omniroute_enabled() is True
+    assert policy.remaining_omniroute_free_entry_slots(0) == policy.DEFAULT_OMNIROUTE_FREE_ENTRY_CAP

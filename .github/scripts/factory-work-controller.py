@@ -13,6 +13,7 @@ from typing import Any, cast
 sys.path.insert(0, os.path.dirname(__file__))
 from factory_capacity_policy import (
     DEFAULT_OMNIROUTE_FREE_ENTRY_CAP,
+    omniroute_enabled,
     remaining_omniroute_free_entry_slots,
 )
 from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, no_diff_attempts_from_comments, order_candidates_for_worker, owner_of, plan_distinct_assignments)
@@ -431,12 +432,18 @@ def in_flight_omniroute_free_entries() -> int:
 
 def omniroute_free_entry_capacity() -> dict[str, int]:
     """Return the current OmniRoute free-entry occupancy snapshot."""
-    cap = omniroute_free_entry_cap()
-    in_flight = in_flight_omniroute_free_entries()
+    enabled = omniroute_enabled()
+    cap = omniroute_free_entry_cap() if enabled else 0
+    in_flight = in_flight_omniroute_free_entries() if enabled else 0
     return {
+        'enabled': int(enabled),
         'in_flight': in_flight,
         'cap': cap,
-        'remaining': remaining_omniroute_free_entry_slots(in_flight, cap=cap),
+        'remaining': remaining_omniroute_free_entry_slots(
+            in_flight,
+            cap=cap,
+            enabled=enabled,
+        ),
     }
 
 
@@ -447,6 +454,9 @@ def omniroute_free_entry_has_capacity() -> bool:
 
 def assign(worker: str) -> Candidate | None:
     """Assign the highest-ranked executable work to one fixed-model worker."""
+    if not omniroute_enabled():
+        print('[factory-controller] OmniRoute Entry disabled (FACTORY_OMNIROUTE_ENABLED); refusing assign', file=sys.stderr)
+        return None
     if not re.fullmatch('(?:[6-9]|[1-3][0-9]|[4-7][0-9])', worker):
         raise SystemExit(f'unsupported fixed-model worker: {worker}')
     if worker_has_active_lease(worker):

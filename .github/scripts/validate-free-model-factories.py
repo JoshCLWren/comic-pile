@@ -16,7 +16,6 @@ DISCOVERY = Path('.github/workflows/chromium-discovery.yml')
 DISCOVERY_CLASSIFIER = Path('.github/scripts/classify-chromium-discovery.py')
 PLAYWRIGHT_CONFIG = Path('frontend/playwright.config.ts')
 WORKER = Path('.github/scripts/free-model-factory-worker.sh')
-SMOKE = Path('.github/scripts/factory_omniroute_smoke.sh')
 PRIMITIVES = Path('.github/scripts/free-model-factory-worker-primitives.sh')
 CONTROLLER = Path('.github/scripts/factory-work-controller.py')
 POLICY = Path('.github/scripts/factory_work_policy.py')
@@ -111,18 +110,15 @@ def main() -> None:
     assert 'GitHub execution is OmniRoute-only' in runner
     assert 'Select native OmniRoute execution intent' in runner
     assert 'reason=native-omniroute-intent-direct' in runner
-    assert 'assignment-aware-native-intent' in runner
+    assert 'FACTORY_OMNIROUTE_ENABLED' in runner
+    assert 'omniroute-disabled-incident' in runner
+    assert 'Resolve assignment-aware OmniRoute smoke route' in runner
     assert 'factory-work-controller.py inspect --worker' in runner
     assert 'Release controller claim after pre-session abort' in runner
     assert 'smoke-failure' in runner
-    assert 'factory_omniroute_smoke.sh' in runner
-    assert SMOKE.exists(), 'extracted Entry smoke script is missing'
-    smoke = SMOKE.read_text(encoding='utf-8')
-    assert 'TEMPORARY OmniRoute capacity bridge' in smoke
-    assert 'auto/best-free' in runner
-    assert '--next-after-smoke-failure' in smoke
-    assert 'FACTORY_OMNIROUTE_CAPACITY_BRIDGE=off' in smoke
-    assert 'smoke_once "$RUNTIME_MODEL" "$SMOKE_LOG" "$PRIMARY_TIMEOUT" || status=$?' in smoke
+    assert 'factory_omniroute_smoke.sh' not in runner
+    assert 'auto/best-free' not in runner
+    assert 'FACTORY_OMNIROUTE_CAPACITY_BRIDGE' not in runner
     assert "${OMNIROUTE_BASE_URL%/}/models" not in runner
     assert 'OPENCODE_API_KEY' not in runner
     assert "KILO_VERSION: '7.4.22'" in runner
@@ -198,7 +194,8 @@ def main() -> None:
         'def release_worker(',
         'def inspect_assignment(',
         'comic-pile-factory-claim-released-v3',
-        "release_parser.add_argument('--reason'",
+        'omniroute_enabled',
+        'FACTORY_OMNIROUTE_ENABLED',
         'latest_lease_activity_epoch',
         'queued',
         'in_progress',

@@ -16,6 +16,19 @@ if [[ "${FACTORY_SOURCE}" != 'omniroute-free' ]]; then
   exit 2
 fi
 
+# INCIDENT 2026-09-06: GitHub OmniRoute Entry stays dark until Josh flips
+# FACTORY_OMNIROUTE_ENABLED=on after gateway health is confirmed.
+enabled="$(printf '%s' "${FACTORY_OMNIROUTE_ENABLED:-off}" | tr '[:upper:]' '[:lower:]')"
+case "$enabled" in
+  1|on|true|yes) ;;
+  *)
+    printf 'GitHub OmniRoute Entry is disabled (FACTORY_OMNIROUTE_ENABLED=%s); refusing execution
+' "${FACTORY_OMNIROUTE_ENABLED:-off}" >&2
+    exit 2
+    ;;
+esac
+
+
 # Factory selection and lease handoff must keep working even when GitHub's
 # GraphQL installation bucket is exhausted. Route the small set of gh list/view
 # reads used by the wrapper through REST while forwarding every other gh command
@@ -305,19 +318,10 @@ if (( assignment_status != 0 )); then
   exit "$assignment_status"
 fi
 
-native_route="$(python3 .github/scripts/factory_omniroute_route.py --mode "$MODE" --pr-stage "$ASSIGNED_PR_STAGE")" || {
+effective_route="$(python3 .github/scripts/factory_omniroute_route.py --mode "$MODE" --pr-stage "$ASSIGNED_PR_STAGE")" || {
   record_terminal_outcome control_plane_failure 'failed to resolve native OmniRoute route for assignment'
   exit 2
 }
-if [[ "$native_route" == 'auto/reasoning:free' ]]; then
-  effective_route="$native_route"
-elif [[ -n "${FACTORY_ROUTE_OVERRIDE:-}" ]]; then
-  # TEMPORARY 2026-09-06 capacity bridge: keep the smoke-proven free route
-  # for coding work when auto/coding:free was skipped or timed out.
-  effective_route="$FACTORY_ROUTE_OVERRIDE"
-else
-  effective_route="$native_route"
-fi
 MODEL="$effective_route"
 RUNTIME_MODEL="omniroute/${effective_route}"
 DISPLAY="omniroute-free · ${effective_route}"
@@ -335,11 +339,7 @@ if ! jq --arg model "$MODEL" '.provider.omniroute.models[$model] = {name: $model
 fi
 mv "$route_config" "$opencode_config"
 chmod 600 "$opencode_config"
-if [[ "$effective_route" != "$native_route" ]]; then
-  log "TEMPORARY capacity bridge: using ${MODEL} instead of ${native_route} for ${MODE} #${NUMBER}${ASSIGNED_PR_STAGE:+ (${ASSIGNED_PR_STAGE})}"
-else
-  log "selected native OmniRoute intent route ${MODEL} for ${MODE} #${NUMBER}${ASSIGNED_PR_STAGE:+ (${ASSIGNED_PR_STAGE})}"
-fi
+log "selected native OmniRoute intent route ${MODEL} for ${MODE} #${NUMBER}${ASSIGNED_PR_STAGE:+ (${ASSIGNED_PR_STAGE})}"
 
 log "executing control-plane assignment: ${MODE} #${NUMBER}; runtime ${RUNTIME_MODEL}; budget ${BUDGET_SECONDS}s"
 checkout_target "$MODE" "$NUMBER" "$BRANCH"
