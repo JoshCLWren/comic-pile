@@ -11,6 +11,8 @@ import {
 } from '../hooks/useQueue'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api'
+import { queryClient as sharedQueryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
 import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
 import type { Thread } from '../types'
 
@@ -79,6 +81,7 @@ function wrapper({ children }: { children: ReactNode }) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  sharedQueryClient.clear()
   vi.stubGlobal('alert', vi.fn())
   mockedDelete.mockReturnValue(mutationStubs())
   mockedMoveToFront.mockReturnValue(mutationStubs())
@@ -188,6 +191,56 @@ describe('useQueueThreadActions', () => {
     await result.current.handleThreadRead(makeThread({ id: 8 }))
     expect(mockedSetPending).toHaveBeenCalledWith(8)
     expect(navigate).toHaveBeenCalled()
+  })
+
+  it('drops the cached roll bootstrap before handing off to Roll (#2153)', async () => {
+    const staleBootstrap = { session_id: 1, pending_thread_id: null, roll_pool: [] }
+    sharedQueryClient.setQueryData(queryKeys.roll.bootstrap(), staleBootstrap)
+    sharedQueryClient.setQueryData(queryKeys.session.current(), { id: 1, pending_thread_id: null })
+    mockedSetPending.mockResolvedValue({ thread_id: 8, title: 'Saga' } as never)
+
+    const callOrder: string[] = []
+    const navigate = vi.fn(() => {
+      callOrder.push('navigate')
+      expect(sharedQueryClient.getQueryData(queryKeys.roll.bootstrap())).toBeUndefined()
+    })
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions({
+          navigateToRoll: navigate,
+          refetchSession: vi.fn(),
+        }),
+      { wrapper },
+    )
+
+    await result.current.handleThreadRead(makeThread({ id: 8 }))
+
+    expect(navigate).toHaveBeenCalledTimes(1)
+    expect(callOrder).toEqual(['navigate'])
+    expect(sharedQueryClient.getQueryData(queryKeys.roll.bootstrap())).toBeUndefined()
+    expect(
+      sharedQueryClient.getQueryState(queryKeys.session.current())?.isInvalidated,
+    ).toBe(true)
+  })
+
+  it('does not navigate to Roll when set-pending fails', async () => {
+    mockedSetPending.mockRejectedValue(new Error('Thread 8 has no issues remaining'))
+    const navigate = vi.fn()
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions({
+          navigateToRoll: navigate,
+          refetchSession: vi.fn(),
+        }),
+      { wrapper },
+    )
+
+    await result.current.handleThreadRead(makeThread({ id: 8 }))
+
+    expect(navigate).not.toHaveBeenCalled()
+    expect(window.alert).toHaveBeenCalledWith(
+      expect.stringContaining('Thread 8 has no issues remaining'),
+    )
   })
 
   it('delegates snooze vs unsnooze based on the current snoozed state', async () => {
