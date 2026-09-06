@@ -401,16 +401,20 @@ body {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-focus-ring) 30%, transparent);
 }
 
+/* Ready-to-roll: the die is bright and clearly interactive, distinct from the
+   dimmed/passive look it had before #2197. The soft amber glow signals the
+   primary action is available; it intensifies on hover. */
 .dice-state-idle {
-  opacity: 0.7;
-  filter: brightness(0.8);
+  opacity: 0.95;
+  filter: brightness(0.95);
+  box-shadow: 0 0 24px rgba(212, 137, 14, 0.15);
   transition: all 0.3s ease;
 }
 
 .dice-state-idle:hover {
   opacity: 1;
   filter: brightness(1);
-  box-shadow: 0 0 30px rgba(212, 137, 14, 0.2);
+  box-shadow: 0 0 36px rgba(212, 137, 14, 0.3);
   border-color: var(--accent-primary);
 }
 

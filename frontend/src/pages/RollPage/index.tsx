@@ -36,6 +36,7 @@ import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
 import { RollModals } from './components/RollModals'
+import { RollCta } from './components/RollCta'
 import { TasteDiscoveryCard } from './components/TasteDiscoveryCard'
 import ReadingModeLauncher from '../../components/ReadingModeLauncher'
 import ReadingModeQuiz from '../../components/ReadingModeQuiz'
@@ -358,6 +359,11 @@ export default function RollPage() {
                   />
                 </div>
               </div>
+              <RollCta
+                isRolling={state.isRolling}
+                hasRolled={state.diceState !== 'idle'}
+                onRoll={actions.handleRoll}
+              />
             ) : (
               <RatingView
                 activeRatingThread={state.activeRatingThread}
@@ -408,8 +414,6 @@ export default function RollPage() {
               blockingDependencyMap={state.blockingDependencyMap}
               dieSize={dieSize}
               isRatingView={state.isRatingView}
-              isRolling={state.isRolling}
-              rolledResult={state.rolledResult}
               selectedThreadId={state.selectedThreadId}
               staleThread={state.staleThread}
               staleThreadCount={state.staleThreadCount}

@@ -34,18 +34,18 @@ const callbacks = () => ({
 describe('ThreadPool', () => {
   it('renders empty, blocked, pool, stale, and snoozed states', async () => {
     const empty = callbacks()
-    const { rerender } = render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={null} staleThreadCount={0} snoozedThreads={[]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...empty} /></MemoryRouter>)
+    const { rerender } = render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} selectedThreadId={null} staleThread={null} staleThreadCount={0} snoozedThreads={[]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...empty} /></MemoryRouter>)
     expect(screen.getByText('Nothing to roll yet')).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: /add a series/i }))
     expect(empty.onShuffle).not.toHaveBeenCalled()
 
     const actions = callbacks()
-    rerender(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Read Saga first' }] }} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={{ ...thread, days: 4 } as never} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    rerender(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Read Saga first' }] }} isRatingView={false} selectedThreadId={null} staleThread={{ ...thread, days: 4 } as never} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
     expect(screen.getByText(/Every series is blocked or snoozed/)).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: /go to queue/i }))
     expect(actions.onToggleBlocked).not.toHaveBeenCalled()
 
-    rerender(<MemoryRouter><ThreadPool pool={[thread]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={1} staleThread={{ ...thread, days: 2 } as never} staleThreadCount={1} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    rerender(<MemoryRouter><ThreadPool pool={[thread]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} selectedThreadId={1} staleThread={{ ...thread, days: 2 } as never} staleThreadCount={1} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
     await userEvent.setup().click(screen.getByRole('button', { name: /snoozed/i }))
     await userEvent.setup().click(screen.getAllByText('Saga')[0]!)
     expect(actions.onThreadClick).toHaveBeenCalledWith(thread)
@@ -56,7 +56,7 @@ describe('ThreadPool', () => {
   it('covers expanded blocked, stale, snoozed, selected, rolling, and disabled controls', async () => {
     const actions = callbacks()
     const stale = { ...thread, title: 'Stale Saga', days: 9 } as never
-    render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Prerequisite' }] }} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={stale} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={true} skippedThreads={[]} skippedExpanded={false} blockedExpanded={true} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Prerequisite' }] }} isRatingView={false} selectedThreadId={null} staleThread={stale} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={true} skippedThreads={[]} skippedExpanded={false} blockedExpanded={true} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
     await userEvent.setup().click(screen.getByRole('button', { name: /series waiting for earlier issues/i }))
     expect(screen.getByText('Prerequisite')).toBeInTheDocument()
     const hiddenBlockerLink = screen.getByRole('link', { name: 'Open Saga' })
@@ -78,8 +78,6 @@ describe('ThreadPool', () => {
       blockedThreads={[{ ...thread, id: 5, title: 'Blocked without a reason' }]}
       blockingDependencyMap={{}}
       isRatingView
-      isRolling
-      rolledResult={4}
       selectedThreadId={null}
       staleThread={{ ...thread, days: 1 } as never}
       staleThreadCount={1}
@@ -107,8 +105,6 @@ describe('ThreadPool', () => {
       blockedThreads={[{ ...thread, id: 2, title: 'Blocked A' }, { ...thread, id: 3, title: 'Blocked B' }]}
       blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Read Saga first' }] }}
       isRatingView={false}
-      isRolling={false}
-      rolledResult={null}
       selectedThreadId={null}
       staleThread={stale as never}
       staleThreadCount={1}
