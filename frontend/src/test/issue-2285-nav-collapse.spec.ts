@@ -97,9 +97,12 @@ test.describe('Authenticated navigation collapse (#2285)', () => {
     const expand = desktopNav.getByRole('button', { name: 'Expand navigation' })
     await expand.click()
 
+    // Expanding reserves more shell width for the sidebar, so the main
+    // content column narrows (issue #2285 acceptance: "expanding it reduces
+    // main-content width through normal layout flow").
     await expect
       .poll(async () => (await shellGeometry(page)).mainWidth)
-      .toBeGreaterThan(collapsedGeometry.mainWidth)
+      .toBeLessThan(collapsedGeometry.mainWidth)
 
     const expandedGeometry = await shellGeometry(page)
     expect(approx(expandedGeometry.navWidth, EXPECTED_EXPANDED_RIGHT)).toBe(true)
@@ -113,9 +116,13 @@ test.describe('Authenticated navigation collapse (#2285)', () => {
     const collapse = desktopNav.getByRole('button', { name: 'Collapse navigation' })
     await collapse.click()
 
+    // Collapsing hands the reserved sidebar width back to the content column
+    // (issue #2285 acceptance: "collapsing the Roll-through-Glossary
+    // navigation reduces the space reserved for it" and "materially increases
+    // the main-content width").
     await expect
       .poll(async () => (await shellGeometry(page)).mainWidth)
-      .toBeLessThan(expandedGeometry.mainWidth)
+      .toBeGreaterThan(expandedGeometry.mainWidth)
 
     const collapsedAgain = await shellGeometry(page)
     expect(approx(collapsedAgain.navWidth, EXPECTED_COLLAPSED_RIGHT)).toBe(true)
