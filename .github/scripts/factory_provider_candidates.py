@@ -290,7 +290,9 @@ def _decimal_is_zero(value: Any) -> bool:
 def _openrouter_model_is_free(item: dict[str, Any]) -> bool:
     """Return whether OpenRouter catalog metadata proves a free model."""
     model = item.get("id")
-    if isinstance(model, str) and model.endswith(":free"):
+    if isinstance(model, str) and (
+        model.endswith(":free") or model == "openrouter/free"
+    ):
         return True
 
     pricing = item.get("pricing")

@@ -27,6 +27,50 @@ EXPECTED_WORKERS = {9, 10, 11, 14, 16, 17, 18, 19, 20, 21, 23, 29} | set(range(3
 
 SCHEDULE_MINUTES = tuple(range(0, 60, 5))
 ENTRY_PERMISSIONS = ('contents: write', 'issues: write', 'pull-requests: write', 'actions: write', 'checks: read')
+OPENCODE_ALWAYS_FREE = frozenset({'big-pickle'})
+OPENCODE_MUSE_SPARK_RE = re.compile(r'muse-spark', re.IGNORECASE)
+
+
+def opencode_model_is_free(model: str) -> bool:
+    """Return whether an OpenCode lane pin is a free-roster model id."""
+    name = model.strip().lower()
+    if not name or '/' in name:
+        return False
+    return (
+        name in OPENCODE_ALWAYS_FREE
+        or name.endswith('-free')
+        or bool(OPENCODE_MUSE_SPARK_RE.search(name))
+    )
+
+
+def openrouter_model_is_free(model: str) -> bool:
+    """Return whether an OpenRouter lane pin is an explicit free-tier model id.
+
+    Accepts either the live ``:free`` suffix catalog ids or OpenRouter's
+    free auto-router slug ``openrouter/free``.
+    """
+    name = model.strip()
+    if name == 'openrouter/free':
+        return True
+    return bool(name) and name.endswith(':free') and '/' in name
+
+
+def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
+    """Fail closed when OpenCode/OpenRouter pins leave the free tier."""
+    for row in rows:
+        source = row['source']
+        model = row['model']
+        worker = row['worker']
+        if source == 'opencode-free':
+            assert opencode_model_is_free(model), (
+                f'worker {worker} opencode-free pin must be a free OpenCode model '
+                f'(big-pickle or *-free), got {model!r}'
+            )
+        elif source == 'openrouter-free':
+            assert openrouter_model_is_free(model), (
+                f'worker {worker} openrouter-free pin must be an OpenRouter :free '
+                f'model id, got {model!r}'
+            )
 
 
 def main() -> None:
@@ -46,7 +90,7 @@ def main() -> None:
     workers = [int(row['worker']) for row in rows]
     assert set(workers) == EXPECTED_WORKERS
     assert len(workers) == len(set(workers)), 'duplicate worker IDs'
-
+    assert_free_provider_pins(rows)
 
     kilo = [row for row in rows if row['source'] == 'kilo-auto']
     assert len(kilo) == 1 and kilo[0]['worker'] == '46'

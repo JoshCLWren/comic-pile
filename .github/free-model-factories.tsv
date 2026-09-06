@@ -33,15 +33,15 @@
 57	opencode-free	big-pickle	35	dispatcher	OpenCode Big Pickle
 58	opencode-free	big-pickle	40	dispatcher	OpenCode Big Pickle
 59	opencode-free	big-pickle	45	dispatcher	OpenCode Big Pickle
-60	openrouter-free	stealth/ox-alpha	50	dispatcher	OpenRouter Ox Alpha 1
-61	openrouter-free	stealth/ox-alpha	55	dispatcher	OpenRouter Ox Alpha 2
-62	openrouter-free	stealth/ox-alpha	0	dispatcher	OpenRouter Ox Alpha 3
-63	openrouter-free	stealth/ox-alpha	5	dispatcher	OpenRouter Ox Alpha 4
-64	openrouter-free	stealth/ox-alpha	10	dispatcher	OpenRouter Ox Alpha 5
-65	openrouter-free	stealth/ox-alpha	15	dispatcher	OpenRouter Ox Alpha 6
-66	openrouter-free	stealth/ox-alpha	20	dispatcher	OpenRouter Ox Alpha 7
-67	openrouter-free	stealth/ox-alpha	25	dispatcher	OpenRouter Ox Alpha 8
-68	openrouter-free	stealth/ox-alpha	30	dispatcher	OpenRouter Ox Alpha 9
-69	openrouter-free	stealth/ox-alpha	35	dispatcher	OpenRouter Ox Alpha 10
-70	openrouter-free	stealth/ox-alpha	40	dispatcher	OpenRouter Ox Alpha 11
-71	openrouter-free	stealth/ox-alpha	45	dispatcher	OpenRouter Ox Alpha 12
+60	openrouter-free	cohere/north-mini-code:free	50	dispatcher	OpenRouter Cohere North Mini Code Free
+61	openrouter-free	google/gemma-4-31b-it:free	55	dispatcher	OpenRouter Gemma 4 31B Free
+62	openrouter-free	google/gemma-4-26b-a4b-it:free	0	dispatcher	OpenRouter Gemma 4 26B Free
+63	openrouter-free	nvidia/nemotron-3-super-120b-a12b:free	5	dispatcher	OpenRouter Nemotron 3 Super Free
+64	openrouter-free	nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free	10	dispatcher	OpenRouter Nemotron 3 Omni Free
+65	openrouter-free	nvidia/nemotron-3.5-lightning:free	15	dispatcher	OpenRouter Nemotron 3.5 Lightning Free
+66	openrouter-free	minimax/minimax-m2.7:free	20	dispatcher	OpenRouter MiniMax M2.7 Free
+67	openrouter-free	minimax/minimax-m3:free	25	dispatcher	OpenRouter MiniMax M3 Free
+68	openrouter-free	poolside/laguna-s-2.1:free	30	dispatcher	OpenRouter Laguna S 2.1 Free
+69	openrouter-free	poolside/laguna-xs-2.1:free	35	dispatcher	OpenRouter Laguna XS 2.1 Free
+70	openrouter-free	openrouter/free	40	dispatcher	OpenRouter Free Router
+71	openrouter-free	inclusionai/ling-3.0-flash-fin:free	45	dispatcher	OpenRouter Ling 3.0 Flash Free
