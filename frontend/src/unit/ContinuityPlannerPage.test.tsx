@@ -145,7 +145,8 @@ describe('ContinuityPlannerPage', () => {
 
     await user.clear(await screen.findByLabelText('Plan name'))
     await user.type(screen.getByLabelText('Plan name'), 'Kirby lane')
-    await user.type(screen.getByLabelText('Comic series'), 'Mister');
+    await user.click(screen.getByRole('radio', { name: /Strict sequential/ }))
+    await user.type(screen.getByLabelText('Comic series'), 'Mister')
     await user.click(screen.getByRole('option', { name: /Mister Miracle/i }))
     await screen.findByRole('option', { name: /Annual 1/i })
     await user.selectOptions(screen.getByLabelText('Issue'), '40')
@@ -163,6 +164,85 @@ describe('ContinuityPlannerPage', () => {
         expect.objectContaining({ node_type: 'crossover', ref_id: 8, position: 1 }),
       ],
     }))
+  })
+
+  it('exposes ordering mode, distinguishes it from Dependency Builder blocking, and links the glossary', async () => {
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+      { wrapper: queryWrapper },
+    )
+
+    const group = await screen.findByRole('group', { name: 'Ordering mode' })
+    expect(group).toBeVisible()
+
+    const informational = screen.getByRole('radio', { name: /Informational/ })
+    const strict = screen.getByRole('radio', { name: /Strict sequential/ })
+    expect(informational).toBeChecked()
+    expect(strict).not.toBeChecked()
+
+    expect(screen.getByText(/separate from issue-level/i)).toBeVisible()
+    expect(screen.getByText(/Informational plans create no blocking rules/i)).toBeVisible()
+    expect(screen.getByText(/Strict sequential plans compile one blocking rule per step/i)).toBeVisible()
+
+    const glossaryLink = screen.getByRole('link', { name: 'What is an ordering mode?' })
+    expect(glossaryLink).toHaveAttribute('href', '/glossary#ordering-mode')
+    const dependencyBuilderLink = screen.getByRole('link', { name: 'Dependency Builder' })
+    expect(dependencyBuilderLink).toHaveAttribute('href', '/glossary#dependency-builder')
+  })
+
+  it('defaults a new plan to informational order so no blocking rules are compiled', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+      { wrapper: queryWrapper },
+    )
+
+    await user.type(screen.getByLabelText('Comic series'), 'Mister')
+    await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
+    await screen.findByRole('option', { name: /Annual 1/i })
+    await user.selectOptions(screen.getByLabelText('Issue'), '40')
+    await user.click(screen.getByRole('button', { name: 'Add issue' }))
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce())
+    const payload = mocks.create.mock.calls[0][0] as { ordering_mode: string }
+    expect(payload.ordering_mode).toBe('informational')
+  })
+
+  it('saves informational after moving to a second lane, and disables strict mode', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans']}>
+        <Routes>
+          <Route path="/continuity-plans" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+      { wrapper: queryWrapper },
+    )
+
+    await screen.findByRole('group', { name: 'Ordering mode' })
+    await user.type(screen.getByLabelText('Comic series'), 'Mister')
+    await user.click(await screen.findByRole('option', { name: /Mister Miracle/i }))
+    await screen.findByRole('option', { name: /Annual 1/i })
+    await user.selectOptions(screen.getByLabelText('Issue'), '40')
+    await user.click(screen.getByRole('button', { name: 'Add issue' }))
+    await user.click(screen.getByRole('button', { name: 'Add lane' }))
+
+    expect(screen.getByRole('radio', { name: /Strict sequential/ })).toBeDisabled()
+    expect(screen.getByText(/Strict sequential requires exactly one lane/i)).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Save plan' }))
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce())
+    const payload = mocks.create.mock.calls[0][0] as { ordering_mode: string }
+    expect(payload.ordering_mode).toBe('informational')
   })
 
   it('restores saved order when unsaved changes are canceled', async () => {
