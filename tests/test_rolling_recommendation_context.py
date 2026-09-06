@@ -52,7 +52,8 @@ async def test_roll_persists_rolling_recommendation_context(
     ctx = event.rolling_recommendation_context
     assert ctx is not None
     assert ctx["schema_version"] == 1
-    assert ctx["algorithm_version"] == "legacy"
+    assert ctx["algorithm_version"] == "v1-contextual"
+    assert ctx["control_mode"] == "contextual"
     assert cast(int, ctx["die_size"]) > 0
     assert cast(int, ctx["selected_queue_position"]) >= 1
     assert isinstance(ctx["bounded_candidate_ids"], list)

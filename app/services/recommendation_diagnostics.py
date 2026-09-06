@@ -44,11 +44,14 @@ effort_band_outcomes
 
 groups_by_control_mode
     Rolls grouped by a distinguishable control/intent class derived from
-    ``selection_method``: ``contextual_auto`` (random), ``explicit_correction``
-    (manual/override), ``blocked_recovery`` (dependency_recovery), and
-    ``legacy`` (no selection_method). This makes algorithm control mode
-    distinguishable from the available history even before per-decision
-    algorithm versioning lands (issue #1767).
+    ``selection_method``: ``contextual_auto`` (random/momentum/bandwidth),
+    ``explicit_correction`` (manual/override), ``blocked_recovery``
+    (dependency_recovery), and ``legacy`` (no selection_method or a forced
+    legacy kill-switch draw). Since Phase 9 (issue #1767), every roll snapshots
+    its own canonical ``algorithm_version`` and operator ``control_mode``;
+    groups carry the recorded per-decision version where available and fall
+    back to ``legacy-unknown`` (pre-instrumentation) or the active version
+    (older instrumented events) so forced-legacy runs stay distinguishable.
 
 coverage
     Labels legacy events (no ``selection_method``) separately from instrumented
@@ -71,6 +74,7 @@ from app.schemas.recommendation_diagnostics import (
     EffortBandOutcome,
     RecommendationDiagnosticsResponse,
 )
+from comic_pile.recommendation_version import RECOMMENDATION_ALGORITHM_VERSION_LEGACY_UNKNOWN
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,6 +82,38 @@ if TYPE_CHECKING:
 MAX_DIAGNOSTICS_RANGE_DAYS = 365
 DEFAULT_DIAGNOSTICS_RANGE_DAYS = 30
 EXPLICIT_CORRECTION_METHODS = frozenset({"manual", "override"})
+
+
+def _context_json(event: Event) -> dict[str, object] | None:
+    """Return the event's recommendation-context JSON payload if present.
+
+    Some rows persist the payload as a JSON column (dict) and older rows may
+    hold ``None``. Both cases are tolerated here.
+    """
+    payload = event.recommendation_context
+    if isinstance(payload, dict):
+        return payload
+    return None
+
+
+def _event_algorithm_version(event: Event) -> str | None:
+    """Extract the per-decision algorithm version recorded on the event."""
+    payload = _context_json(event)
+    if payload:
+        raw = payload.get("algorithm_version")
+        if isinstance(raw, str) and raw:
+            return raw
+    return None
+
+
+def _event_control_mode(event: Event) -> str | None:
+    """Extract the per-decision operator control mode recorded on the event."""
+    payload = _context_json(event)
+    if payload:
+        raw = payload.get("control_mode")
+        if isinstance(raw, str) and raw:
+            return raw
+    return None
 
 
 def _effort_band(die: int | None) -> str:
@@ -94,6 +130,8 @@ def _effort_band(die: int | None) -> str:
 def _control_mode_for(selection_method: str | None) -> str:
     """Classify a roll event into a distinguishable control/intent mode."""
     if selection_method is None:
+        return "legacy"
+    if selection_method == "legacy":
         return "legacy"
     if selection_method == "random":
         return "contextual_auto"
@@ -158,7 +196,7 @@ async def compute_recommendation_diagnostics(
     by_die: dict[int, dict[str, int]] = defaultdict(
         lambda: {"rolls": 0, "accepted": 0, "snoozed": 0}
     )
-    by_mode: dict[str, dict[str, int]] = defaultdict(
+    by_mode: dict[tuple[str, str], dict[str, int]] = defaultdict(
         lambda: {"rolls": 0, "accepted": 0, "snoozed": 0}
     )
     roll_records: list[Event] = []
@@ -209,7 +247,16 @@ async def compute_recommendation_diagnostics(
         bucket["accepted"] += 1 if accepted else 0
         bucket["snoozed"] += 1 if snoozed else 0
         control_mode = _control_mode_for(event.selection_method)
-        mode_bucket = by_mode[control_mode]
+        recorded_version = _event_algorithm_version(event)
+        if recorded_version is not None:
+            algorithm_version = recorded_version
+        elif control_mode == "legacy":
+            algorithm_version = RECOMMENDATION_ALGORITHM_VERSION_LEGACY_UNKNOWN
+        else:
+            algorithm_version = recommendation_settings.algorithm_version
+        recorded_control_mode = _event_control_mode(event)
+        group_control_mode = recorded_control_mode or control_mode
+        mode_bucket = by_mode[(group_control_mode, algorithm_version)]
         mode_bucket["rolls"] += 1
         mode_bucket["accepted"] += 1 if accepted else 0
         mode_bucket["snoozed"] += 1 if snoozed else 0
@@ -291,13 +338,9 @@ async def compute_recommendation_diagnostics(
         )
 
     groups_by_control_mode: list[ControlModeGroup] = []
-    for control_mode in sorted(by_mode):
-        bucket = by_mode[control_mode]
+    for (control_mode, algorithm_version) in sorted(by_mode):
+        bucket = by_mode[(control_mode, algorithm_version)]
         rolls = bucket["rolls"]
-        if control_mode == "legacy":
-            algorithm_version = "legacy-unknown"
-        else:
-            algorithm_version = recommendation_settings.algorithm_version
         groups_by_control_mode.append(
             ControlModeGroup(
                 control_mode=control_mode,

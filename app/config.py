@@ -260,20 +260,32 @@ class RatingSettings(BaseSettings):
 
 
 class RecommendationSettings(BaseSettings):
-    """Recommendation-quality diagnostics and algorithm versioning settings."""
+    """Recommendation-quality diagnostics and algorithm versioning settings.
+
+    The canonical version and control-mode identifiers live in
+    :mod:`comic_pile.recommendation_version` and are shared by selection,
+    decision snapshots, diagnostics, and metrics so they cannot drift. See
+    Phase 9 (issue #1767) for the safe-legacy-rollback contract these settings
+    control.
+    """
 
     model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
 
     algorithm_version: str = Field(
         default="v1-contextual",
-        description="Canonical recommendation algorithm version identifier used in diagnostics",
+        description=(
+            "Canonical recommendation algorithm version identifier (single source "
+            "of truth in comic_pile/recommendation_version.py) used in diagnostics "
+            "and decision snapshots"
+        ),
         json_schema_extra={"env": "RECOMMENDATION_ALGORITHM_VERSION"},
     )
     control_mode: Literal["contextual", "legacy"] = Field(
         default="contextual",
         description=(
-            "Active recommendation control mode. 'legacy' forces unweighted selection "
-            "while leaving instrumentation active."
+            "Active recommendation control mode (vocabulary owned by "
+            "comic_pile/recommendation_version.py). 'legacy' forces unweighted "
+            "selection while leaving instrumentation active."
         ),
         json_schema_extra={"env": "RECOMMENDATION_CONTROL_MODE"},
     )
