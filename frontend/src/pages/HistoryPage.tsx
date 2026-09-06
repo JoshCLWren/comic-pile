@@ -98,7 +98,7 @@ export default function HistoryPage() {
               </div>
 
               <div className="min-w-0 flex-1 space-y-2">
-                {session.active_thread && (
+                {session.active_thread ? (
                   <div className="space-y-1">
                     <p className="font-bold text-sm leading-tight text-stone-200 truncate">{session.active_thread.title}</p>
                     <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
@@ -126,6 +126,10 @@ export default function HistoryPage() {
                       </p>
                     )}
                   </div>
+                ) : (
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                    No comic selected — empty / abandoned session
+                  </p>
                 )}
 
                 {session.ladder_path && (

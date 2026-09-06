@@ -50,6 +50,32 @@ it('renders session cards with optional metadata and duration formats', () => {
   const snapshotsLink = screen.getByText('Snapshots (2)')
   expect(snapshotsLink).toBeInTheDocument()
   expect(snapshotsLink.closest('a')).toHaveAttribute('href', '/sessions/1')
+  // Sessions without active_thread now surface an explicit empty-state copy
+  expect(screen.getAllByText('No comic selected — empty / abandoned session')).toHaveLength(5)
+  // Titles remain the primary identity alongside die size
+  expect(screen.getByText('Saga')).toBeInTheDocument()
+  expect(screen.getByText('Other')).toBeInTheDocument()
+  expect(screen.getByText('Zero')).toBeInTheDocument()
+})
+
+it('newest History row shows recognizable title or empty-state and keeps die/timestamp identity', () => {
+  mockedUseSessions.mockReturnValue({
+    data: [
+      { id: 99, started_at: '2024-01-02T10:00:00Z', ended_at: null, ladder_path: '6 → 8', active_thread: { title: 'Newest Saga', format: 'Comic', next_issue_number: '5' }, last_rolled_result: 4, current_die: 8, snapshot_count: 0 },
+      { id: 98, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T11:00:00Z', ladder_path: '6', active_thread: null, snapshot_count: 0 },
+    ],
+    isPending: false,
+  })
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+  // Newest row surfaces comic title, not only date/die
+  expect(screen.getByText('Newest Saga')).toBeInTheDocument()
+  expect(screen.getByText('Die size')).toBeInTheDocument()
+  expect(screen.getByText('d6 → d8')).toBeInTheDocument()
+  // Empty newest-style row still has clear identity copy
+  expect(screen.getByText('No comic selected — empty / abandoned session')).toBeInTheDocument()
+  // View full session remains available for both rows
+  expect(screen.getAllByText(/View full session/)).toHaveLength(2)
+  expect(screen.getAllByText(/View full session/)[0].closest('a')).toHaveAttribute('href', '/sessions/99')
 })
 
 it('renders loading and error states', () => {
