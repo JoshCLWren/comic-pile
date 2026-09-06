@@ -200,22 +200,21 @@ export default function VirtualizedThreadList<T>({
       // padding/spacing (~3rem). ResizeObserver handles orientation changes.
       style={{ height: containerHeight || 'calc(100dvh - 14rem)' }}
     >
-    <div
-      ref={externalScrollRef ? null : scrollRef}
-      data-testid="queue-thread-list"
-      id="queue-container"
-      role="list"
-      aria-label="Thread queue"
-      className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
-      onDragOver={handleContainerDragOver}
-      onDrop={(event) => event.preventDefault()}
-      style={{
-        height: '100%',
-        overflowY: 'auto',
-        overflowX: 'hidden',
-      }}
-    >
-
+      <div
+        ref={externalScrollRef ? null : scrollRef}
+        data-testid="queue-thread-list"
+        id="queue-container"
+        role="list"
+        aria-label="Thread queue"
+        className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
+        onDragOver={handleContainerDragOver}
+        onDrop={(event) => event.preventDefault()}
+        style={{
+          height: '100%',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+        }}
+      >
         <div
           style={{
             height: `${virtualizer.getTotalSize()}px`,
