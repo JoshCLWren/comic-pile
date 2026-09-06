@@ -28,6 +28,10 @@ interface VirtualizedThreadListProps<T> {
    * virtualized and non-virtualized presentations are both one full-width row.
    */
   explicitColumnCount?: number
+  /**
+   * Optional external scroll ref to use as the scroll container.
+   */
+  scrollRef?: React.RefObject<HTMLDivElement>
 }
 
 /**
@@ -55,11 +59,13 @@ interface VirtualizedThreadListProps<T> {
  * for E2E compatibility, including in the empty state.
  */
 export default function VirtualizedThreadList<T>({
-  threads,
-  renderItem,
-  explicitColumnCount,
-}: VirtualizedThreadListProps<T>) {
-  const scrollRef = useRef<HTMLDivElement>(null)
+   threads,
+   renderItem,
+   explicitColumnCount,
+   scrollRef: externalScrollRef,
+ }: VirtualizedThreadListProps<T>) {
+   const scrollRef = useRef<HTMLDivElement>(null)
+
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [containerHeight, setContainerHeight] = useState(0)
   const [columnCount, setColumnCount] = useState(() =>
@@ -108,7 +114,7 @@ export default function VirtualizedThreadList<T>({
   const virtualizerOptions = useMemo(
     () => ({
       count: rowCount,
-      getScrollElement: () => scrollRef.current,
+      getScrollElement: () => externalScrollRef?.current || scrollRef.current,
       estimateSize: () => ROW_HEIGHT_WITH_GAP,
       overscan: Math.ceil(OVERSCAN_PX / ROW_HEIGHT_WITH_GAP),
     }),
@@ -130,7 +136,7 @@ export default function VirtualizedThreadList<T>({
 
   const handleContainerDragOver = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
-      const container = scrollRef.current!
+      const container = (externalScrollRef?.current || scrollRef.current)!
 
       const now = performance.now()
       // Throttle to avoid flooding scrollToIndex with 60+ calls per second.
@@ -166,7 +172,7 @@ export default function VirtualizedThreadList<T>({
     return (
       <div ref={wrapperRef} style={{ height: 'calc(100dvh - 14rem)' }}>
         <div
-          ref={scrollRef}
+          ref={externalScrollRef ? null : scrollRef}
           data-testid="queue-thread-list"
           id="queue-container"
           role="list"
@@ -194,21 +200,22 @@ export default function VirtualizedThreadList<T>({
       // padding/spacing (~3rem). ResizeObserver handles orientation changes.
       style={{ height: containerHeight || 'calc(100dvh - 14rem)' }}
     >
-      <div
-        ref={scrollRef}
-        data-testid="queue-thread-list"
-        id="queue-container"
-        role="list"
-        aria-label="Thread queue"
-        className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
-        onDragOver={handleContainerDragOver}
-        onDrop={(event) => event.preventDefault()}
-        style={{
-          height: '100%',
-          overflowY: 'auto',
-          overflowX: 'hidden',
-        }}
-      >
+    <div
+      ref={externalScrollRef ? null : scrollRef}
+      data-testid="queue-thread-list"
+      id="queue-container"
+      role="list"
+      aria-label="Thread queue"
+      className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
+      onDragOver={handleContainerDragOver}
+      onDrop={(event) => event.preventDefault()}
+      style={{
+        height: '100%',
+        overflowY: 'auto',
+        overflowX: 'hidden',
+      }}
+    >
+
         <div
           style={{
             height: `${virtualizer.getTotalSize()}px`,

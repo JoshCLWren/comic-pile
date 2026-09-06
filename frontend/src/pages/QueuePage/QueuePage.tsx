@@ -169,13 +169,14 @@ export default function QueuePage() {
     void loadMore().catch(() => undefined)
   }, [loadMore])
 
-const { sentinelRef } = useInfiniteScroll({
-     onLoadMore: handleLoadMore,
-     hasMore: !!nextPageToken,
-     isLoading: isPending,
-     root: queueContainerRef.current,
-   })
-   const queueContainerRef = useRef<HTMLDivElement>(null)
+  const queueContainerRef = useRef<HTMLDivElement>(null)
+ 
+  const { sentinelRef } = useInfiniteScroll({
+    onLoadMore: handleLoadMore,
+    hasMore: !!nextPageToken,
+    isLoading: isPending,
+    root: queueContainerRef.current,
+  })
 
   const mobileAddEnabled = !modals.isAnyModalOpen
   const shuffleDisabled = activeThreads.length < 2
@@ -218,7 +219,9 @@ const { sentinelRef } = useInfiniteScroll({
           reorderError={actions.reorderError}
           renderItem={renderThreadCard}
           isSearching={isSearching}
+          containerRef={queueContainerRef}
         />
+
 
         <CompletedThreadsSection
           threads={completedThreads}

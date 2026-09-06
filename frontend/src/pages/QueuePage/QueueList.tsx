@@ -8,6 +8,7 @@ interface QueueListProps {
   reorderError: string | null
   renderItem: (thread: Thread, index: number) => ReactNode
   isSearching: boolean
+  containerRef?: React.RefObject<HTMLDivElement>
 }
 
 /**
@@ -17,12 +18,14 @@ interface QueueListProps {
  * only sees a single composed list region.
  */
 export function QueueList({
-  activeThreads,
-  filteredThreads,
-  reorderError,
-  renderItem,
-  isSearching,
-}: QueueListProps) {
+   activeThreads,
+   filteredThreads,
+   reorderError,
+   renderItem,
+   isSearching,
+   containerRef,
+ }: QueueListProps) {
+
   if (isSearching && filteredThreads.length === 0) {
     return (
       <div className="text-center text-stone-500" data-testid="queue-search-empty">
@@ -50,9 +53,14 @@ export function QueueList({
         </div>
       )}
       {filteredThreads.length > VIRTUALIZATION_THRESHOLD ? (
-        <VirtualizedThreadList threads={filteredThreads} renderItem={renderItem} />
+        <VirtualizedThreadList
+          threads={filteredThreads}
+          renderItem={renderItem}
+          scrollRef={containerRef}
+        />
       ) : (
         <div
+          ref={containerRef}
           data-testid="queue-thread-list"
           id="queue-container"
           role="list"
