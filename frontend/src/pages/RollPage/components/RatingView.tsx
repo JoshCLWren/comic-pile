@@ -124,6 +124,10 @@ export function RatingView({
               onSnooze={onSnooze}
               onSkip={onSkip}
               onCancel={onCancel}
+              threadTitle={activeRatingThread?.title ?? null}
+              issueNumber={
+                activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
+              }
             />
           </div>
         </div>

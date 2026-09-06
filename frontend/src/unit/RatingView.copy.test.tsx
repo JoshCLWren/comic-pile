@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -81,10 +81,13 @@ describe('RatingView copy comic reference', () => {
     const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
 
     renderRatingView()
-    await user.click(screen.getByRole('button', { name: 'Copy Ultimate X-Men 12' }))
+    const copyButton = screen.getByRole('button', { name: 'Copy Ultimate X-Men 12' })
+    await user.click(copyButton)
 
     expect(writeText).toHaveBeenCalledWith('Ultimate X-Men 12')
     expect(screen.getByText('Copied')).toBeInTheDocument()
+    expect(copyButton.getAttribute('aria-label')).toBe('Copy Ultimate X-Men 12')
+    expect(copyButton.className).toContain('min-h-11')
   })
 
   it('shows a failure state when clipboard writing fails', async () => {
@@ -95,5 +98,45 @@ describe('RatingView copy comic reference', () => {
     await user.click(screen.getByRole('button', { name: 'Copy Ultimate X-Men 12' }))
 
     expect(screen.getByText(/Copy failed/)).toBeInTheDocument()
+    expect(screen.getByText('Retry copy')).toBeInTheDocument()
+    expect(screen.getByText(/Copy failed/).getAttribute('role')).toBe('status')
+  })
+
+  it('is visually colocated with the rating controls on the post-roll surface', async () => {
+    renderRatingView()
+
+    const ratingActions = screen.getByTestId('rating-actions')
+    const copyRow = screen.getByTestId('copy-title-row')
+    const copyButton = within(ratingActions).getByRole('button', { name: 'Copy Ultimate X-Men 12' })
+
+    expect(ratingActions.contains(copyRow)).toBe(true)
+    expect(copyRow.contains(copyButton)).toBe(true)
+    // The rating actions grid cell wraps the panel; ensures colocation with rating workflow
+    const actionsGridCell = screen.getByTestId('rating-actions-grid-cell')
+    expect(actionsGridCell.contains(ratingActions)).toBe(true)
+
+    // Old placement in the Comic pillar is removed
+    const comicControls = screen.getByTestId('comic-header-controls')
+    expect(within(comicControls).queryByRole('button', { name: /Copy/i })).not.toBeInTheDocument()
+    expect(comicControls.textContent).not.toMatch(/Copy title/)
+  })
+
+  it('remains keyboard accessible and shows retry after failure', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValueOnce(new Error('clipboard denied'))
+
+    renderRatingView()
+    const copyButton = screen.getByRole('button', { name: 'Copy Ultimate X-Men 12' })
+
+    copyButton.focus()
+    expect(document.activeElement).toBe(copyButton)
+
+    await user.keyboard('{Enter}')
+    expect(screen.getByText('Retry copy')).toBeInTheDocument()
+
+    // Retry succeeds
+    vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValueOnce(undefined)
+    await user.click(screen.getByRole('button', { name: 'Retry copy' }))
+    expect(screen.getByText('Copied')).toBeInTheDocument()
   })
 })
