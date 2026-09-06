@@ -12,15 +12,17 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import Bandwidth, BandwidthSource
-from app.models import Session
+from app.models import Event, Session
 from app.services.bandwidth_inference import (
     BandwidthPrediction,
     HistoricalObservation,
     infer_bandwidth,
 )
+from app.services.reading_effort import compute_effort_estimate
 
 logger = logging.getLogger(__name__)
 
@@ -278,14 +280,12 @@ async def _historical_observations(
     Returns:
         Observations capturing accepted effort and snooze behavior.
     """
-    from app.services.reading_effort import compute_effort_estimate
-
-    # Get all rate events for the user (accepted comics)
-    from sqlalchemy import select
-    from app.models import Event
+    from app.models import Thread as ThreadModel
 
     rate_events_result = await db.execute(
         select(Event)
+        .join(ThreadModel, Event.thread_id == ThreadModel.id)
+        .where(ThreadModel.user_id == user_id)
         .where(Event.session_id.is_not(None))
         .where(Event.type == "rate")
         .where(Event.thread_id.is_not(None))
@@ -296,38 +296,30 @@ async def _historical_observations(
     observations: list[HistoricalObservation] = []
 
     for rate_event in rate_events:
-        # Skip if we don't have the basic info we need
         if rate_event.source_roll_event_id is None or rate_event.thread_id is None:
             continue
 
-        # Get the corresponding roll event
         roll_event_result = await db.execute(
-            select(Event)
-            .where(Event.id == rate_event.source_roll_event_id)
+            select(Event).where(Event.id == rate_event.source_roll_event_id)
         )
         roll_event = roll_event_result.scalar_one_or_none()
-        
+
         if roll_event is None or roll_event.selected_thread_id is None:
             continue
 
-        # Verify that the roll event actually selected the same thread that was rated
         if roll_event.selected_thread_id != rate_event.thread_id:
             continue
 
-        # Calculate effort minutes using the reading effort service
         effort_estimate = await compute_effort_estimate(
             db,
             user_id=user_id,
             thread_id=rate_event.thread_id,
-            issue_id=rate_event.issue_id
+            issue_id=rate_event.issue_id,
         )
-        
-        # Skip if we don't have a valid effort estimate
+
         if effort_estimate.minutes is None:
             continue
 
-        # Determine if the comic was snoozed before being accepted
-        # Look for snooze events between the roll and rate events
         was_snoozed = False
         if roll_event.timestamp is not None and rate_event.timestamp is not None:
             snooze_check_result = await db.execute(
@@ -343,14 +335,8 @@ async def _historical_observations(
             snooze_event = snooze_check_result.scalar_one_or_none()
             was_snoozed = snooze_event is not None
 
-        # Get session hour from the session associated with the rate event
         session_hour = None
         if rate_event.session_id is not None:
-            session_result = await db.execute(
-                select(Event.session_id).where(Event.id == rate_event.id)
-            )
-            # Actually, we need to get the session to get its start time
-            from app.models import Session
             session_result = await db.execute(
                 select(Session.started_at).where(Session.id == rate_event.session_id)
             )
@@ -358,15 +344,13 @@ async def _historical_observations(
             if session_started_at is not None:
                 session_hour = session_started_at.hour
 
-        # Get the rating from the rate event
         rating = rate_event.rating
 
-        # Create the historical observation
         observation = HistoricalObservation(
             effort_minutes=effort_estimate.minutes,
             was_snoozed=was_snoozed,
             session_hour=session_hour,
-            rating=rating
+            rating=rating,
         )
         observations.append(observation)
 
