@@ -12,6 +12,7 @@ export function useInfiniteScroll({
   hasMore,
   isLoading,
   threshold = 200,
+  root = null,
 }: UseInfiniteScrollOptions) {
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   // Tracks the previous intersection state so a load only fires on a real
@@ -38,6 +39,7 @@ export function useInfiniteScroll({
     if (!sentinel) return
 
     const observer = new IntersectionObserver(handleIntersect, {
+      root,
       rootMargin: `${threshold}px`,
     })
 
@@ -46,7 +48,7 @@ export function useInfiniteScroll({
     return () => {
       observer.disconnect()
     }
-  }, [handleIntersect, threshold])
+  }, [handleIntersect, root, threshold])
 
   return { sentinelRef }
 }
