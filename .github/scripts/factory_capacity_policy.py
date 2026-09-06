@@ -2,12 +2,29 @@
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass
 
 # OmniRoute's shared free coding pool 429s when many Entry smokes overlap.
 # Three concurrent Entry/lease units is the working ceiling that still lets
 # light-load Sessions start; dispatcher, assignment, and drain must share it.
 DEFAULT_OMNIROUTE_FREE_ENTRY_CAP = 3
+# While OmniRoute is disabled, Entry uses independent multi-provider capacity
+# so nvidia/opencode/openrouter/kilo can restore service.
+DEFAULT_MULTI_PROVIDER_ENTRY_CAP = 12
+
+
+def omniroute_enabled(raw: str | None = None) -> bool:
+    """Return whether OmniRoute (including auto/*) may execute.
+
+    Defaults to disabled for the 2026-09-06 incident. When false, multi-provider
+    Entry still has capacity via ``DEFAULT_MULTI_PROVIDER_ENTRY_CAP``. Explicit
+    on/true/1 re-enables OmniRoute; missing/empty/off/false/0 keep it dark.
+    """
+    value = (raw if raw is not None else os.environ.get("FACTORY_OMNIROUTE_ENABLED", "off"))
+    return value.strip().lower() in {"1", "on", "true", "yes"}
+
+
 
 
 @dataclass(frozen=True)
@@ -38,23 +55,32 @@ def remaining_omniroute_free_entry_slots(
     in_flight: int,
     *,
     cap: int = DEFAULT_OMNIROUTE_FREE_ENTRY_CAP,
+    enabled: bool | None = None,
 ) -> int:
     """Return how many new OmniRoute free Entry sessions may start.
 
     Args:
         in_flight: Occupied Entry runs plus equivalent fixed-model leases.
         cap: Maximum concurrent OmniRoute free-entry units.
+        enabled: Optional override for the OmniRoute enable gate. When omitted,
+            reads ``FACTORY_OMNIROUTE_ENABLED`` (default off).
 
     Returns:
-        Non-negative remaining slots. Zero means refuse new Entry starts.
+        Non-negative remaining slots. When OmniRoute is disabled, uses the multi-provider Entry budget so service can continue without OmniRoute.
 
     Raises:
         ValueError: If ``in_flight`` or ``cap`` is negative.
     """
+    if enabled is None:
+        enabled = omniroute_enabled()
     if in_flight < 0:
         raise ValueError("in-flight factory entry count cannot be negative")
     if cap < 0:
         raise ValueError("omniroute free entry cap cannot be negative")
+    if not enabled:
+        # OmniRoute dark: always use the multi-provider Entry budget.
+        # Callers that need a custom budget pass enabled=True with their cap.
+        return max(0, DEFAULT_MULTI_PROVIDER_ENTRY_CAP - in_flight)
     return max(0, cap - in_flight)
 
 

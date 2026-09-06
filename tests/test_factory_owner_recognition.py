@@ -100,15 +100,15 @@ def test_omniroute_worker_allows_gateway_route_adaptation() -> None:
     assert "OmniRoute may switch upstream models, providers, or routes" in text
 
 
-def test_shared_factory_wrapper_rejects_legacy_provider_execution() -> None:
-    """The production wrapper must not revive direct-provider execution."""
+def test_shared_factory_wrapper_rejects_omniroute_while_incident_dark() -> None:
+    """Incident restore keeps OmniRoute dark and refuses omniroute-free Entry."""
     text = (SCRIPTS / "free-model-factory-worker.sh").read_text(encoding="utf-8")
-    assert "GitHub factory execution is OmniRoute-only" in text
+    assert "OmniRoute Entry is disabled for this incident" in text
     assert "FACTORY_SOURCE}" in text
-    assert "!= 'omniroute-free'" in text
-    assert "!= 'omniroute-free'" in text
-    assert "refusing to switch models" not in text
-    assert "Do not switch models" not in text
+    assert "== 'omniroute-free'" in text
+    assert "GitHub factory execution is OmniRoute-only" not in text
+    # Multi-provider Entry pins the leased model; do not revive OmniRoute route adaptation.
+    assert "refusing to switch models" in text
 
 
 def test_factory_persistence_pushes_and_verifies_current_head() -> None:

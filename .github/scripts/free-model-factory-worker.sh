@@ -8,14 +8,6 @@ set -Eeuo pipefail
 : "${FACTORY_MODEL:?FACTORY_MODEL is required}"
 : "${FACTORY_RUNTIME_MODEL:?FACTORY_RUNTIME_MODEL is required}"
 
-# GitHub factory execution has one production gateway. Provider-specific
-# workers are historical implementation details and must not be revived by a
-# stale dispatch payload or an old branch copy of this wrapper.
-if [[ "${FACTORY_SOURCE}" != 'omniroute-free' ]]; then
-  printf 'GitHub factory execution is OmniRoute-only; refusing source %s\n' "${FACTORY_SOURCE}" >&2
-  exit 2
-fi
-
 # Factory selection and lease handoff must keep working even when GitHub's
 # GraphQL installation bucket is exhausted. Route the small set of gh list/view
 # reads used by the wrapper through REST while forwarding every other gh command
@@ -94,6 +86,20 @@ rm -f \
   "/tmp/opencode-factory-${WORKER}.sanitized.log" \
   "/tmp/opencode-factory-${WORKER}-verdict-recovery.log"
 
+# INCIDENT 2026-09-06: OmniRoute stays dark unless FACTORY_OMNIROUTE_ENABLED is on.
+# Honor the kill switch here so one-var re-enable works, and install the lease-release
+# trap before exiting so a dispatcher-owned omniroute-free lease is not stranded.
+if [[ "${FACTORY_SOURCE}" == 'omniroute-free' ]]; then
+  case "$(printf '%s' "${FACTORY_OMNIROUTE_ENABLED:-off}" | tr '[:upper:]' '[:lower:]')" in
+    1|on|true|yes) ;;
+    *)
+      printf 'OmniRoute Entry is disabled for this incident; refusing source %s\n' "${FACTORY_SOURCE}" >&2
+      trap 'release_owned_targets omniroute-disabled-incident || true' EXIT
+      exit 2
+      ;;
+  esac
+fi
+
 record_terminal_outcome() {
   local outcome="$1" detail="$2"
   case "$outcome" in
@@ -110,24 +116,25 @@ record_terminal_outcome() {
 
 record_agent_failure_outcome() {
   local status="$1" log_file="/tmp/opencode-factory-${WORKER}.log"
-  if [[ -f "$log_file" ]] && grep -Eqi '429|too many requests|rate.?limit|quota|throttl|capacity|cooling down|model_cooldown' "$log_file"; then
-    record_terminal_outcome provider_throttle "OmniRoute upstream session was throttled (agent exit ${status})"
+  if [[ -f "$log_file" ]] && grep -Eqi '429|too many requests|rate.?limit|quota|throttl|capacity' "$log_file"; then
+    record_terminal_outcome provider_throttle "pinned provider/model session was throttled (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'HTTP[^0-9]*410|410 Gone' "$log_file"; then
-    record_terminal_outcome model_retired_410 "OmniRoute upstream model has been permanently retired by the provider (agent exit ${status})"
-  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|not available|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found' "$log_file"; then
-    record_terminal_outcome model_unavailable "OmniRoute upstream model became unavailable during execution (agent exit ${status})"
+    record_terminal_outcome model_retired_410 "pinned model has been permanently retired by the provider (agent exit ${status})"
+  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found' "$log_file"; then
+    record_terminal_outcome model_unavailable "pinned model became unavailable during execution (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'model[^\n]*(policy|guard)[^\n]*(blocked|rejected|denied)|model[^\n]*(blocked|rejected|denied)[^\n]*(policy|guard)' "$log_file"; then
-    record_terminal_outcome model_policy_violation "OmniRoute upstream model was rejected by provider/model policy (agent exit ${status})"
+    record_terminal_outcome model_policy_violation "pinned model was rejected by provider/model policy (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'checkout failed|dependency install failed|disk full|no space left|docker daemon|runner environment|tool installation failed' "$log_file"; then
     record_terminal_outcome environment_failure "worker environment failed during assigned execution (agent exit ${status})"
   elif (( status == 124 || status == 137 || status == 143 )); then
-    record_terminal_outcome provider_failure "OmniRoute upstream session timed out or was interrupted after smoke succeeded (agent exit ${status})"
+    record_terminal_outcome provider_failure "pinned provider/model session timed out or was interrupted after smoke succeeded (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'provider[^\n]*(error|unavailable|failed)|service unavailable|bad gateway|gateway timeout|stream[^\n]*(timeout|readiness)|STREAM_READINESS_TIMEOUT|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset|upstream[^\n]*(error|failed)' "$log_file"; then
-    record_terminal_outcome provider_failure "OmniRoute upstream execution failed after smoke succeeded (agent exit ${status})"
+    record_terminal_outcome provider_failure "pinned provider/model execution failed after smoke succeeded (agent exit ${status})"
   else
     record_terminal_outcome unknown_failure "agent exited ${status} without enough evidence for a narrower failure class"
   fi
 }
+
 
 # A PR branch may predate the Kilo integration entirely. Stage the backend
 # runner from trusted main before any checkout so cross-worker takeover never
@@ -169,13 +176,13 @@ run_agent() {
 
   if [[ "$mode" == 'pr' ]]; then
     target="pull request #${number}"
-    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Use 'gh pr view ${number} --json ...' and 'gh pr checks ${number} --required' for GitHub evidence; do not use 'gh pr status ${number}'. Fix closure-critical defects and resolve or concretely rebut actionable threads. Treat a missing local .venv, pnpm, ruff, or other optional runner tool as an environment limitation, not a code blocker; rely on the repository's required CI results unless CI itself reports a failure. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only for semantic approval, FACTORY_GATE_REJECT only when the PR is clearly unsalvageable, contaminated, obsolete, duplicate, or fundamentally incomplete, otherwise end with FACTORY_GATE_NOT_READY."
+    mission="Resume this PR. Inspect the exact current head, required CI, review submissions, and every inline review thread. Fix closure-critical defects and resolve or concretely rebut actionable threads. If no edits are required, decide whether the PR fully completes its declared scope and is safe to merge. End your final response with FACTORY_GATE_READY only for semantic approval, FACTORY_GATE_REJECT only when the PR is clearly unsalvageable, contaminated, obsolete, duplicate, or fundamentally incomplete, otherwise end with FACTORY_GATE_NOT_READY."
   else
     target="issue #${number}"
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
   fi
 
-  prompt="You are external-model Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Source: ${SOURCE}. Requested capability route: ${MODEL}. Runtime selector: ${RUNTIME_MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not merge or close the assigned pull request; the trusted wrapper and review controller own the final lifecycle transition after your terminal verdict. OmniRoute may switch upstream models, providers, or routes within the configured policy; do not bypass OmniRoute or request paid or unconfigured capacity. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
+  prompt="You are external-model Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Source: ${SOURCE}. Requested model or route: ${MODEL}. Runtime selector: ${RUNTIME_MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not merge or close the assigned pull request; the trusted wrapper and review controller own the final lifecycle transition after your terminal verdict. Do not switch models, providers, or routes. A provider failure is a result for this lane, not permission to fall back to another paid or unrequested route. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
 
   bash "$TRUSTED_KILO_HELPER" \
     "$timeout_seconds" \
@@ -305,42 +312,6 @@ if (( assignment_status != 0 )); then
   exit "$assignment_status"
 fi
 
-native_route="$(python3 .github/scripts/factory_omniroute_route.py --mode "$MODE" --pr-stage "$ASSIGNED_PR_STAGE")" || {
-  record_terminal_outcome control_plane_failure 'failed to resolve native OmniRoute route for assignment'
-  exit 2
-}
-if [[ "$native_route" == 'auto/reasoning:free' ]]; then
-  effective_route="$native_route"
-elif [[ -n "${FACTORY_ROUTE_OVERRIDE:-}" ]]; then
-  # TEMPORARY 2026-09-06 capacity bridge: keep the smoke-proven free route
-  # for coding work when auto/coding:free was skipped or timed out.
-  effective_route="$FACTORY_ROUTE_OVERRIDE"
-else
-  effective_route="$native_route"
-fi
-MODEL="$effective_route"
-RUNTIME_MODEL="omniroute/${effective_route}"
-DISPLAY="omniroute-free · ${effective_route}"
-printf '%s\n' "$MODEL" > "${RUNNER_TEMP:-/tmp}/factory-effective-model"
-
-opencode_config="$HOME/.config/opencode/opencode.json"
-if [[ ! -f "$opencode_config" ]]; then
-  record_terminal_outcome control_plane_failure 'OpenCode OmniRoute configuration missing before assignment route selection'
-  exit 2
-fi
-route_config="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-opencode-route.XXXXXX.json")"
-if ! jq --arg model "$MODEL" '.provider.omniroute.models[$model] = {name: $model}' "$opencode_config" > "$route_config"; then
-  record_terminal_outcome control_plane_failure 'failed to add assignment route to OpenCode OmniRoute configuration'
-  exit 2
-fi
-mv "$route_config" "$opencode_config"
-chmod 600 "$opencode_config"
-if [[ "$effective_route" != "$native_route" ]]; then
-  log "TEMPORARY capacity bridge: using ${MODEL} instead of ${native_route} for ${MODE} #${NUMBER}${ASSIGNED_PR_STAGE:+ (${ASSIGNED_PR_STAGE})}"
-else
-  log "selected native OmniRoute intent route ${MODEL} for ${MODE} #${NUMBER}${ASSIGNED_PR_STAGE:+ (${ASSIGNED_PR_STAGE})}"
-fi
-
 log "executing control-plane assignment: ${MODE} #${NUMBER}; runtime ${RUNTIME_MODEL}; budget ${BUDGET_SECONDS}s"
 checkout_target "$MODE" "$NUMBER" "$BRANCH"
 
@@ -373,11 +344,7 @@ while :; do
   fi
 
   transient_failure=1
-  if is_model_cooldown_failure; then
-    log 'OmniRoute reported model cooldown; ending this assignment without another retry'
-    break
-  fi
-  log 'transient gateway/upstream interruption; allowing OmniRoute to adapt the upstream route'
+  log 'transient provider/runtime interruption on the pinned model; refusing to switch models'
   [[ -z "$(git status --porcelain)" ]] || break
   (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
   (( $(remaining) > 540 )) || break

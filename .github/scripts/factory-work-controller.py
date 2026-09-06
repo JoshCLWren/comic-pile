@@ -11,8 +11,11 @@ import time
 from datetime import datetime, timezone
 from typing import Any, cast
 sys.path.insert(0, os.path.dirname(__file__))
+# OmniRoute enable gate: FACTORY_OMNIROUTE_ENABLED (default off).
 from factory_capacity_policy import (
+    DEFAULT_MULTI_PROVIDER_ENTRY_CAP,
     DEFAULT_OMNIROUTE_FREE_ENTRY_CAP,
+    omniroute_enabled,
     remaining_omniroute_free_entry_slots,
 )
 from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, no_diff_attempts_from_comments, order_candidates_for_worker, owner_of, plan_distinct_assignments)
@@ -408,15 +411,20 @@ def omniroute_free_entry_cap() -> int:
 
 
 def in_flight_omniroute_free_entries() -> int:
-    """Count Entry runs and equivalent leases occupying OmniRoute free capacity.
+    """Count Entry runs and equivalent leases occupying Entry capacity.
 
     Occupied units are the unique set of workers with a queued/in-progress
     Fixed Model Factory Entry or an active fixed-model lease. Unresolved
     numeric run identities each consume one extra unit. A failed run listing
-    or non-numeric unresolved identity fails closed at the configured cap so
-    assignment cannot start additional smokes while occupancy is unknown.
+    or non-numeric unresolved identity fails closed at the effective Entry
+    cap (OmniRoute or multi-provider) so assignment cannot start additional
+    sessions while occupancy is unknown.
     """
-    cap = omniroute_free_entry_cap()
+    cap = (
+        omniroute_free_entry_cap()
+        if omniroute_enabled()
+        else DEFAULT_MULTI_PROVIDER_ENTRY_CAP
+    )
     active_result = active_fixed_workers()
     workers, unresolved = active_result[0], active_result[1]
     if any(not item.isdigit() for item in unresolved):
@@ -430,13 +438,24 @@ def in_flight_omniroute_free_entries() -> int:
 
 
 def omniroute_free_entry_capacity() -> dict[str, int]:
-    """Return the current OmniRoute free-entry occupancy snapshot."""
-    cap = omniroute_free_entry_cap()
+    """Return Entry occupancy for dispatch budgeting.
+
+    OmniRoute enabled: OmniRoute free-pool cap.
+    OmniRoute disabled (incident): multi-provider Entry budget so
+    nvidia/opencode/openrouter/kilo can restore service.
+    """
+    enabled = omniroute_enabled()
     in_flight = in_flight_omniroute_free_entries()
+    cap = omniroute_free_entry_cap() if enabled else DEFAULT_MULTI_PROVIDER_ENTRY_CAP
     return {
+        'enabled': int(enabled),
         'in_flight': in_flight,
         'cap': cap,
-        'remaining': remaining_omniroute_free_entry_slots(in_flight, cap=cap),
+        'remaining': remaining_omniroute_free_entry_slots(
+            in_flight,
+            cap=cap,
+            enabled=enabled,
+        ),
     }
 
 
@@ -486,8 +505,8 @@ def inspect_assignment(worker: str) -> dict[str, Any]:
     """Return the current controller assignment for one fixed-model worker.
 
     Dispatcher claims before Entry starts, so smoke can inspect the leased
-    target and choose ``auto/reasoning:free`` for exact-head review instead of
-    always smoking ``auto/coding:free``.
+    target so exact-head review can use the multi-provider Entry path while
+    OmniRoute is dark (instead of smoking OmniRoute ``auto/*`` routes).
     """
     owner = f'factory:{worker}'
     issues = list_issues()

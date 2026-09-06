@@ -289,6 +289,7 @@ def test_assign_returns_actionable_pr_despite_historical_no_diff_markers(
     stage: str,
 ) -> None:
     """The full assignment path honors current PR lifecycle state over old comments."""
+    monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
     pr = {
         "number": 2122,
         "state": "OPEN",
@@ -439,6 +440,7 @@ def test_in_flight_units_union_active_runs_and_leases(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Leases and Entry runs occupy the same OmniRoute free-entry budget."""
+    monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
     monkeypatch.setattr(
         controller,
         "active_fixed_workers",
@@ -452,6 +454,7 @@ def test_in_flight_units_union_active_runs_and_leases(
 
     assert controller.in_flight_omniroute_free_entries() == 3
     assert controller.omniroute_free_entry_capacity() == {
+        "enabled": 1,
         "in_flight": 3,
         "cap": 3,
         "remaining": 0,
@@ -472,7 +475,9 @@ def test_unresolved_run_listing_fails_closed_at_the_free_entry_cap(
     )
     monkeypatch.setattr(controller, "owned_targets", lambda: [])
 
-    assert controller.in_flight_omniroute_free_entries() == 3
+    assert controller.in_flight_omniroute_free_entries() == (
+        controller.DEFAULT_MULTI_PROVIDER_ENTRY_CAP
+    )
     assert controller.omniroute_free_entry_has_capacity() is False
 
 

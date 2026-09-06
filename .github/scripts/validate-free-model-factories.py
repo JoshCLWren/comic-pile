@@ -7,6 +7,8 @@ import csv
 import re
 from collections import Counter
 from pathlib import Path
+import os
+import subprocess
 
 MANIFEST = Path('.github/free-model-factories.tsv')
 DISPATCHER = Path('.github/workflows/fixed-model-factory-dispatch.yml')
@@ -16,7 +18,6 @@ DISCOVERY = Path('.github/workflows/chromium-discovery.yml')
 DISCOVERY_CLASSIFIER = Path('.github/scripts/classify-chromium-discovery.py')
 PLAYWRIGHT_CONFIG = Path('frontend/playwright.config.ts')
 WORKER = Path('.github/scripts/free-model-factory-worker.sh')
-SMOKE = Path('.github/scripts/factory_omniroute_smoke.sh')
 PRIMITIVES = Path('.github/scripts/free-model-factory-worker-primitives.sh')
 CONTROLLER = Path('.github/scripts/factory-work-controller.py')
 POLICY = Path('.github/scripts/factory_work_policy.py')
@@ -106,25 +107,21 @@ def main() -> None:
     runner = RUNNER.read_text(encoding='utf-8')
     assert 'group: fixed-model-factory-${{ inputs.worker }}' in runner
     assert 'cancel-in-progress: false' in runner
-    assert "source='omniroute-free'" in runner
-    assert "runtime_model='omniroute/auto/coding:free'" in runner
-    assert 'GitHub execution is OmniRoute-only' in runner
-    assert 'Select native OmniRoute execution intent' in runner
-    assert 'reason=native-omniroute-intent-direct' in runner
-    assert 'assignment-aware-native-intent' in runner
-    assert 'factory-work-controller.py inspect --worker' in runner
-    assert 'Release controller claim after pre-session abort' in runner
-    assert 'smoke-failure' in runner
-    assert 'factory_omniroute_smoke.sh' in runner
-    assert SMOKE.exists(), 'extracted Entry smoke script is missing'
-    smoke = SMOKE.read_text(encoding='utf-8')
-    assert 'TEMPORARY OmniRoute capacity bridge' in smoke
-    assert 'auto/best-free' in runner
-    assert '--next-after-smoke-failure' in smoke
-    assert 'FACTORY_OMNIROUTE_CAPACITY_BRIDGE=off' in smoke
-    assert 'smoke_once "$RUNTIME_MODEL" "$SMOKE_LOG" "$PRIMARY_TIMEOUT" || status=$?' in smoke
-    assert "${OMNIROUTE_BASE_URL%/}/models" not in runner
-    assert 'OPENCODE_API_KEY' not in runner
+    # INCIDENT restore: multi-provider Entry is live; OmniRoute stays dark.
+    assert 'NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}' in runner
+    assert 'OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}' in runner
+    assert 'nvidia)' in runner
+    assert 'opencode-free|openrouter-free)' in runner
+    assert 'kilo-auto)' in runner
+    assert 'omniroute-disabled-incident' in runner
+    assert 'FACTORY_OMNIROUTE_ENABLED' in runner
+    assert "source='omniroute-free'" not in runner
+    assert 'auto/best-free' not in runner
+    assert 'FACTORY_OMNIROUTE_CAPACITY_BRIDGE' not in runner
+    assert 'factory_omniroute_smoke.sh' not in runner
+    assert 'Select execution candidate at dispatch time' in runner
+    assert 'Probe pinned NVIDIA model before OpenCode smoke' in runner
+    assert 'Smoke exact pinned model through OpenCode' in runner
     assert "KILO_VERSION: '7.4.22'" in runner
     assert 'Smoke Kilo Auto Free through Kilo CLI' in runner
     assert 'PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}' in runner
@@ -144,6 +141,14 @@ def main() -> None:
     assert 'factory-control-out-of-scope' in guard and 'is_factory_control_path' in guard
 
     worker = WORKER.read_text(encoding='utf-8')
+    assert 'OmniRoute Entry is disabled for this incident' in worker
+    assert "omniroute-free" in worker
+    assert 'OmniRoute-only' not in worker
+    assert 'FACTORY_OMNIROUTE_ENABLED:-off' in worker
+    assert 'trap' in worker and 'release_owned_targets omniroute-disabled-incident' in worker
+    assert "auto/coding:free" not in runner
+    assert "auto/reasoning:free" not in runner
+    assert "FACTORY_OMNIROUTE_ENABLED: ${{ vars.FACTORY_OMNIROUTE_ENABLED || 'off' }}" in runner
     assert PRIMITIVES.exists(), 'tracked worker primitives are missing'
     primitives = PRIMITIVES.read_text(encoding='utf-8')
     assert "source <(sed '/^ensure_owner_label$/,$d' .github/scripts/free-model-factory-worker-primitives.sh)" in worker
@@ -198,7 +203,9 @@ def main() -> None:
         'def release_worker(',
         'def inspect_assignment(',
         'comic-pile-factory-claim-released-v3',
-        "release_parser.add_argument('--reason'",
+        'omniroute_enabled',
+        'FACTORY_OMNIROUTE_ENABLED',
+        'DEFAULT_MULTI_PROVIDER_ENTRY_CAP',
         'latest_lease_activity_epoch',
         'queued',
         'in_progress',
@@ -273,6 +280,27 @@ def main() -> None:
     source_counts = Counter(row['source'] for row in rows)
     for source, count in sorted(source_counts.items()):
         print(f'  {source}: {count}')
+
+
+    # Executable incident gate: omniroute-free must fail closed while dark.
+    refuse = subprocess.run(
+        ['bash', str(WORKER)],
+        env={
+            **os.environ,
+            'FACTORY_WORKER': '99',
+            'FACTORY_SOURCE': 'omniroute-free',
+            'FACTORY_MODEL': 'auto/coding:free',
+            'FACTORY_RUNTIME_MODEL': 'omniroute/auto/coding:free',
+            'FACTORY_OMNIROUTE_ENABLED': 'off',
+            'FACTORY_DISPLAY': 'incident-refuse',
+            'FACTORY_BRANCH_SUFFIX': 'omniroute',
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert refuse.returncode != 0, refuse.stderr or refuse.stdout
+    assert 'OmniRoute Entry is disabled for this incident' in (refuse.stderr + refuse.stdout)
 
 
 if __name__ == '__main__':

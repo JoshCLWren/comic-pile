@@ -49,6 +49,10 @@ Do not create planning-only pull requests unless the issue itself requests docum
 - Add regression coverage for the reported failure and important failure paths.
 - Resolve conflicts semantically after inspecting overlapping work.
 
+## Chromium discovery
+
+The repository runs daily Chromium discovery to surface reproducible product defects. Discovery failures must preserve traces, screenshots, video, JSON results, backend logs, and run metadata. Reproducible product failures become focused `bug` issues. Ordinary factories do not launch the complete discovery suite; they consume the resulting executable issues through normal selection.
+
 ## Validation
 
 Run focused checks that directly exercise the change. Let configured CI carry expensive broad validation when the autonomous policy permits it.
