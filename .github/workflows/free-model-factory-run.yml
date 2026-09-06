@@ -221,10 +221,11 @@ jobs:
             exit 1
           }
 
-          # Carry the already-resolved native intent unchanged. Do not
-          # enumerate, rank, filter, or select OmniRoute backing models here.
-          # OmniRoute owns free-tier/provider/model selection. The bounded
-          # OpenCode smoke below is the executable-capacity gate.
+          # Carry the already-resolved OmniRoute auto route unchanged. Do not
+          # enumerate, rank, filter, or select backing models here. OmniRoute
+          # owns free-tier/provider/model selection when enabled. The bounded
+          # OpenCode smoke below is the executable-capacity gate and must not
+          # run while FACTORY_OMNIROUTE_ENABLED is off.
           {
             echo "source=$SOURCE"
             echo "model=$LANE_MODEL"
@@ -233,7 +234,7 @@ jobs:
             echo "branch_suffix=$LANE_BRANCH_SUFFIX"
             echo "reason=native-omniroute-intent-direct"
           } >> "$GITHUB_OUTPUT"
-          printf 'Factory %s selected native intent: provider=%s model=%s runtime=%s\n' \
+          printf 'Factory %s selected OmniRoute auto route: provider=%s model=%s runtime=%s\n' \
             "$WORKER" "$SOURCE" "$LANE_MODEL" "$LANE_RUNTIME_MODEL"
 
 
@@ -389,11 +390,11 @@ jobs:
                 "${RUNTIME_MODEL} was throttled or all upstream credentials were cooling down" \
                 > "$RUNNER_TEMP/factory-discovery-outcome"
             elif grep -Eiq 'model[^[:alnum:]]+(not found|not available|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found|Model is unavailable' "$smoke_log"; then
-              # Native intents (auto/coding:free) must not be marked unavailable
+              # OmniRoute auto routes (auto/coding:free) must not be marked unavailable
               # when a backing fallback model is missing from the live catalog.
               if [[ "$is_native_intent" == true ]]; then
                 printf 'provider_failure\t%s\n' \
-                  "${RUNTIME_MODEL} native intent exhausted backing routes (backing model unavailable)" \
+                  "${RUNTIME_MODEL} OmniRoute auto route exhausted backing routes (backing model unavailable)" \
                   > "$RUNNER_TEMP/factory-discovery-outcome"
               else
                 printf 'model_unavailable\t%s\n' \
@@ -409,7 +410,7 @@ jobs:
           smoke_transient_re='429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|HTTP[^0-9]*413|Request too large|tokens per minute|\bTPM\b|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset'
           emit_transient_smoke_message() {
             if [[ "$is_native_intent" == true ]]; then
-              echo "Transient smoke failure for native intent ${RUNTIME_MODEL} (TPM/throttle/upstream); not quarantining the intent selector" >&2
+              echo "Transient smoke failure for OmniRoute auto route ${RUNTIME_MODEL} (TPM/throttle/upstream); not quarantining the auto selector" >&2
             else
               echo "Transient smoke failure detected for ${RUNTIME_MODEL}; quarantining this route for the next selection" >&2
             fi

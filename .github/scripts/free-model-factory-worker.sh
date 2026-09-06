@@ -16,13 +16,13 @@ if [[ "${FACTORY_SOURCE}" != 'omniroute-free' ]]; then
   exit 2
 fi
 
-# INCIDENT 2026-09-06: GitHub OmniRoute Entry stays dark until Josh flips
+# INCIDENT 2026-09-06: GitHub OmniRoute Entry (including auto/coding:free and auto/reasoning:free) stays dark until Josh flips
 # FACTORY_OMNIROUTE_ENABLED=on after gateway health is confirmed.
 enabled="$(printf '%s' "${FACTORY_OMNIROUTE_ENABLED:-off}" | tr '[:upper:]' '[:lower:]')"
 case "$enabled" in
   1|on|true|yes) ;;
   *)
-    printf 'GitHub OmniRoute Entry is disabled (FACTORY_OMNIROUTE_ENABLED=%s); refusing execution
+    printf 'GitHub OmniRoute Entry (all auto/* routes) is disabled (FACTORY_OMNIROUTE_ENABLED=%s); refusing execution
 ' "${FACTORY_OMNIROUTE_ENABLED:-off}" >&2
     exit 2
     ;;

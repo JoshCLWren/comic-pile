@@ -12,7 +12,7 @@ DEFAULT_OMNIROUTE_FREE_ENTRY_CAP = 3
 
 
 def omniroute_enabled(raw: str | None = None) -> bool:
-    """Return whether GitHub OmniRoute Entry execution is enabled.
+    """Return whether GitHub OmniRoute Entry (including auto/* routes) is enabled.
 
     Defaults to disabled for the 2026-09-06 incident freeze. Explicit on/true/1
     values re-enable Entry; missing/empty/off/false/0 keep the gateway dark.
