@@ -503,13 +503,20 @@ async def create_issues(
                 thread.reading_progress = "in_progress"
             thread.status = "active"
     else:
-        existing_next_unread_issue_id = thread.next_unread_issue_id
-        was_not_started = thread.reading_progress == "not_started"
-        thread.total_issues += new_issues_count
-        thread.issues_remaining += new_issues_count
-        thread.reading_progress = "not_started" if was_not_started else "in_progress"
-        if existing_next_unread_issue_id is None and new_issues:
-            if thread.status == "completed":
+        was_completed = thread.status == "completed"
+        thread.total_issues = total_issue_count
+        thread.issues_remaining = await thread.get_issues_remaining(db)
+        if first_unread_issue is None:
+            thread.next_unread_issue_id = None
+            thread.reading_progress = "completed"
+            thread.status = "completed"
+        else:
+            thread.next_unread_issue_id = first_unread_issue.id
+            if thread.issues_remaining == thread.total_issues:
+                thread.reading_progress = "not_started"
+            else:
+                thread.reading_progress = "in_progress"
+            if was_completed:
                 await db.execute(
                     update(Thread)
                     .where(Thread.user_id == current_user.id)
@@ -517,15 +524,7 @@ async def create_issues(
                     .values(queue_position=Thread.queue_position + 1)
                 )
                 thread.queue_position = 1
-            thread.next_unread_issue_id = new_issues[0].id
-            thread.reading_progress = "in_progress"
             thread.status = "active"
-        elif (
-            new_issues
-            and existing_next_unread_issue_id is not None
-            and await should_update_next_unread(new_issues[0].id, existing_next_unread_issue_id, db)
-        ):
-            thread.next_unread_issue_id = new_issues[0].id
 
     thread_id_val = thread.id
 
