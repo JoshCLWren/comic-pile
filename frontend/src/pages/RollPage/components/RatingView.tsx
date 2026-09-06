@@ -68,7 +68,7 @@ export function RatingView({
     <div className="relative z-10 space-y-4 p-3 md:p-4">
       <WhyThisRoll explanation={activeRatingThread?.explanation} />
       <div
-        className="grid items-start gap-4 sm:grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]"
+        className="grid items-start gap-4 sm:grid-cols-1 lg:grid-cols-2 lg:gap-6 xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]"
         data-testid="rating-pillars-grid"
       >
         <div className="min-w-0" data-testid="rating-region-comic">
@@ -79,7 +79,7 @@ export function RatingView({
         </div>
 
         {hasReadingContextContentValue && (
-          <div className="min-w-0" data-testid="rating-region-reading-context">
+          <div className="min-w-0 sm:order-2 lg:order-none lg:col-start-1 lg:row-start-2 lg:col-span-2" data-testid="rating-region-reading-context">
             <ReadingContextPillar
               activeRatingThread={activeRatingThread}
               readingOrders={readingOrders}
@@ -94,7 +94,7 @@ export function RatingView({
           </div>
         )}
 
-        <div className="min-w-0 space-y-4" data-testid="rating-region-your-context">
+        <div className="min-w-0 space-y-4 sm:order-1 lg:order-none lg:col-start-2 lg:row-start-1" data-testid="rating-region-your-context">
           <YourContextPillar
             activeRatingThread={activeRatingThread}
             currentDie={currentDie}
