@@ -15,7 +15,7 @@ from factory_capacity_policy import (
     DEFAULT_OMNIROUTE_FREE_ENTRY_CAP,
     remaining_omniroute_free_entry_slots,
 )
-from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, no_diff_attempts_from_comments, order_candidates_for_worker, owner_of, plan_distinct_assignments)
+from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, no_diff_attempts_from_comments, order_candidates_for_worker, owner_of, plan_distinct_assignments)
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 LEASE_ACTIVITY_PATTERNS = (
@@ -482,14 +482,82 @@ def assign(worker: str) -> Candidate | None:
     return None
 
 
-def release_worker(worker: str) -> list[int]:
-    """Release all targets still owned by one fixed-model worker."""
+def inspect_assignment(worker: str) -> dict[str, Any]:
+    """Return the current controller assignment for one fixed-model worker.
+
+    Dispatcher claims before Entry starts, so smoke can inspect the leased
+    target and choose ``auto/reasoning:free`` for exact-head review instead of
+    always smoking ``auto/coding:free``.
+    """
+    owner = f'factory:{worker}'
+    issues = list_issues()
+    prs = list_prs()
+    owned_prs = [item for item in prs if owner_of(labels_of(item)) == owner]
+    owned_issues = [item for item in issues if owner_of(labels_of(item)) == owner]
+    if owned_prs:
+        item = owned_prs[0]
+        labels = labels_of(item)
+        stage = next((name for name in STAGE_PRECEDENCE if name in labels), 'factory:review')
+        return {
+            'kind': 'pr',
+            'number': int(item['number']),
+            'stage': stage,
+            'owner': owner,
+        }
+    if owned_issues:
+        item = owned_issues[0]
+        labels = labels_of(item)
+        stage = next((name for name in STAGE_PRECEDENCE if name in labels), 'factory:building')
+        return {
+            'kind': 'issue',
+            'number': int(item['number']),
+            'stage': stage,
+            'owner': owner,
+        }
+    return {'kind': 'none'}
+
+
+def record_claim_released(number: int, worker: str, kind: str, reason: str) -> None:
+    """Post a trusted claim-released marker for one controller lease."""
+    epoch = int(time.time())
+    worker_id = f'opencode-free-model-factory-{worker}'
+    marker = (
+        f'<!-- comic-pile-factory-claim-released-v3:'
+        f'{kind}-{number}:{worker_id}:{epoch}:{reason} -->'
+    )
+    run_gh(['issue', 'comment', str(number), '--repo', REPO, '--body', marker])
+
+
+def release_worker(worker: str, reason: str = 'controller-release') -> list[int]:
+    """Release all targets still owned by one fixed-model worker immediately.
+
+    Used by dispatcher start-failures and by Entry pre-session abort (smoke,
+    executor selection, missing credentials). Preserves the truthful workflow
+    stage so a ``factory:review`` PR stays reviewable without waiting for the
+    900s stale-lease TTL. Posts ``comic-pile-factory-claim-released-v3``.
+
+    Factory 10 run 33990134163 and Factory 42 run 33991283563 are the
+    regression fixture: both smoked ``auto/coding:free`` after claiming PR
+    #2235 and died before ``free-model-factory-worker.sh``, leaving
+    ``factory:<worker>`` + ``factory:review`` until TTL expiry.
+    """
     owner = f'factory:{worker}'
     released: list[int] = []
-    for number, current_owner in owned_targets():
-        if current_owner != owner:
-            continue
+    issues = list_issues()
+    prs = list_prs()
+    targets: list[tuple[int, str]] = []
+    for item in issues:
+        if owner_of(labels_of(item)) == owner:
+            targets.append((int(item['number']), 'issue'))
+    for item in prs:
+        if owner_of(labels_of(item)) == owner:
+            targets.append((int(item['number']), 'pr'))
+    for number, kind in targets:
         replace_factory_labels(number, 'factory:unowned')
+        try:
+            record_claim_released(number, worker, kind, reason)
+        except Exception:
+            pass
         released.append(number)
     return released
 
@@ -502,8 +570,11 @@ def main() -> int:
     subparsers.add_parser('capacity')
     assign_parser = subparsers.add_parser('assign')
     assign_parser.add_argument('--worker', required=True)
+    inspect_parser = subparsers.add_parser('inspect')
+    inspect_parser.add_argument('--worker', required=True)
     release_parser = subparsers.add_parser('release')
     release_parser.add_argument('--worker', required=True)
+    release_parser.add_argument('--reason', default='controller-release')
     args = parser.parse_args()
     if args.command == 'reconcile':
         print(json.dumps({'released': reconcile_stale_leases()}))
@@ -518,7 +589,10 @@ def main() -> int:
             return 0
         print(json.dumps({'kind': candidate.kind, 'number': candidate.number, 'lane': candidate.lane, 'priority': candidate.priority, 'linked_issue': candidate.linked_issue, 'conflicted': candidate.conflicted}))
         return 0
-    print(json.dumps({'released': release_worker(args.worker)}))
+    if args.command == 'inspect':
+        print(json.dumps(inspect_assignment(args.worker)))
+        return 0
+    print(json.dumps({'released': release_worker(args.worker, reason=args.reason)}))
     return 0
 
 if __name__ == "__main__":

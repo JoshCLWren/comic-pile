@@ -305,10 +305,19 @@ if (( assignment_status != 0 )); then
   exit "$assignment_status"
 fi
 
-effective_route="$(python3 .github/scripts/factory_omniroute_route.py --mode "$MODE" --pr-stage "$ASSIGNED_PR_STAGE")" || {
+native_route="$(python3 .github/scripts/factory_omniroute_route.py --mode "$MODE" --pr-stage "$ASSIGNED_PR_STAGE")" || {
   record_terminal_outcome control_plane_failure 'failed to resolve native OmniRoute route for assignment'
   exit 2
 }
+if [[ "$native_route" == 'auto/reasoning:free' ]]; then
+  effective_route="$native_route"
+elif [[ -n "${FACTORY_ROUTE_OVERRIDE:-}" ]]; then
+  # TEMPORARY 2026-09-06 capacity bridge: keep the smoke-proven free route
+  # for coding work when auto/coding:free was skipped or timed out.
+  effective_route="$FACTORY_ROUTE_OVERRIDE"
+else
+  effective_route="$native_route"
+fi
 MODEL="$effective_route"
 RUNTIME_MODEL="omniroute/${effective_route}"
 DISPLAY="omniroute-free · ${effective_route}"
@@ -326,7 +335,11 @@ if ! jq --arg model "$MODEL" '.provider.omniroute.models[$model] = {name: $model
 fi
 mv "$route_config" "$opencode_config"
 chmod 600 "$opencode_config"
-log "selected native OmniRoute intent route ${MODEL} for ${MODE} #${NUMBER}${ASSIGNED_PR_STAGE:+ (${ASSIGNED_PR_STAGE})}"
+if [[ "$effective_route" != "$native_route" ]]; then
+  log "TEMPORARY capacity bridge: using ${MODEL} instead of ${native_route} for ${MODE} #${NUMBER}${ASSIGNED_PR_STAGE:+ (${ASSIGNED_PR_STAGE})}"
+else
+  log "selected native OmniRoute intent route ${MODEL} for ${MODE} #${NUMBER}${ASSIGNED_PR_STAGE:+ (${ASSIGNED_PR_STAGE})}"
+fi
 
 log "executing control-plane assignment: ${MODE} #${NUMBER}; runtime ${RUNTIME_MODEL}; budget ${BUDGET_SECONDS}s"
 checkout_target "$MODE" "$NUMBER" "$BRANCH"

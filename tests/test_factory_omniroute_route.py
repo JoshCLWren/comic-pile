@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 
 SCRIPT = (
     Path(__file__).resolve().parents[1]
@@ -63,3 +65,71 @@ def test_worker_applies_assignment_route_without_candidate_health() -> None:
     assert "factory_provider_candidates.py" not in worker
     assert "factory_candidate_health.py" not in worker
     assert "selected native OmniRoute intent route" in worker
+    assert "FACTORY_ROUTE_OVERRIDE" in worker
+    assert "TEMPORARY capacity bridge" in worker
+
+
+def test_capacity_bridge_defaults_to_best_free() -> None:
+    """The temporary coding-intent outage bridge is auto/best-free."""
+    assert ROUTES.CAPACITY_BRIDGE_ROUTE == "auto/best-free"
+    assert ROUTES.capacity_bridge_enabled() is True
+    assert ROUTES.capacity_bridge_route() == "auto/best-free"
+
+
+def test_capacity_bridge_can_be_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """FACTORY_OMNIROUTE_CAPACITY_BRIDGE=off is the one-flag revert."""
+    monkeypatch.setenv("FACTORY_OMNIROUTE_CAPACITY_BRIDGE", "off")
+    assert ROUTES.capacity_bridge_enabled() is False
+    assert ROUTES.capacity_bridge_route() == ""
+
+
+def test_coding_skip_falls_back_to_best_free() -> None:
+    """ALL_TARGETS_SKIPPED on auto/coding:free retries auto/best-free."""
+    log = (
+        "Error: Service temporarily unavailable: "
+        "all targets were skipped by pre-dispatch filters"
+    )
+    assert (
+        ROUTES.next_route_after_smoke_failure("auto/coding:free", 1, log)
+        == "auto/best-free"
+    )
+
+
+def test_coding_timeout_falls_back_to_best_free() -> None:
+    """A hung coding-intent smoke is bridge-eligible."""
+    assert (
+        ROUTES.next_route_after_smoke_failure("auto/coding:free", 124, "")
+        == "auto/best-free"
+    )
+
+
+def test_review_skip_does_not_fall_back_to_coding_free() -> None:
+    """Review still prefers reasoning; the bridge is best-free, never coding:free."""
+    log = "all targets were skipped by pre-dispatch filters"
+    assert (
+        ROUTES.next_route_after_smoke_failure("auto/reasoning:free", 1, log)
+        == "auto/best-free"
+    )
+    assert (
+        ROUTES.next_route_after_smoke_failure("auto/reasoning:free", 1, log)
+        != "auto/coding:free"
+    )
+
+
+def test_non_skip_failure_does_not_bridge() -> None:
+    """A hard model error does not silently switch to best-free."""
+    assert (
+        ROUTES.next_route_after_smoke_failure(
+            "auto/coding:free",
+            1,
+            "HTTP 410 Gone: model permanently retired",
+        )
+        == ""
+    )
+
+
+def test_bridge_off_does_not_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Disabling the temporary bridge leaves a coding skip unretried."""
+    monkeypatch.setenv("FACTORY_OMNIROUTE_CAPACITY_BRIDGE", "off")
+    log = "all targets were skipped by pre-dispatch filters"
+    assert ROUTES.next_route_after_smoke_failure("auto/coding:free", 1, log) == ""

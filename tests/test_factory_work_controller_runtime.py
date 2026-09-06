@@ -571,6 +571,117 @@ def test_entry_run_name_exposes_queued_worker_identity() -> None:
     assert "run-name: Factory ${{ inputs.worker }} · fixed-model entry" in entry
 
 
+def test_inspect_assignment_returns_review_pr_for_smoke_routing(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Entry can see a leased review PR before OpenCode smoke."""
+    monkeypatch.setattr(controller, "list_issues", lambda: [])
+    monkeypatch.setattr(
+        controller,
+        "list_prs",
+        lambda: [
+            {
+                "number": 2235,
+                "labels": [
+                    {"name": "factory"},
+                    {"name": "factory:42"},
+                    {"name": "factory:review"},
+                ],
+            }
+        ],
+    )
+
+    assert controller.inspect_assignment("42") == {
+        "kind": "pr",
+        "number": 2235,
+        "stage": "factory:review",
+        "owner": "factory:42",
+    }
+
+
+def test_inspect_assignment_returns_none_when_worker_has_no_lease(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A worker without a controller claim smokes the lane default."""
+    monkeypatch.setattr(controller, "list_issues", lambda: [])
+    monkeypatch.setattr(controller, "list_prs", lambda: [])
+
+    assert controller.inspect_assignment("42") == {"kind": "none"}
+
+
+def test_smoke_failure_releases_review_lease_immediately(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Factory 10 / 42 fixture: assign then smoke-fail does not wait 900s.
+
+    Factory 10 run 33990134163 and Factory 42 run 33991283563 claimed PR
+    #2235, smoked auto/coding:free, died before free-model-factory-worker.sh,
+    and left factory:<worker> + factory:review until the stale-lease TTL.
+    """
+    monkeypatch.setattr(controller, "list_issues", lambda: [])
+    monkeypatch.setattr(
+        controller,
+        "list_prs",
+        lambda: [
+            {
+                "number": 2235,
+                "labels": [
+                    {"name": "bug"},
+                    {"name": "factory"},
+                    {"name": "factory:42"},
+                    {"name": "factory:review"},
+                ],
+            }
+        ],
+    )
+    writes: list[tuple[Any, ...]] = []
+    markers: list[tuple[Any, ...]] = []
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: writes.append((number, owner, stage)),
+    )
+    monkeypatch.setattr(
+        controller,
+        "record_claim_released",
+        lambda number, worker, kind, reason: markers.append(
+            (number, worker, kind, reason)
+        ),
+    )
+
+    assert controller.release_worker("42", reason="smoke-failure") == [2235]
+    assert writes == [(2235, "factory:unowned", None)]
+    assert markers == [(2235, "42", "pr", "smoke-failure")]
+
+
+def test_record_claim_released_uses_v3_marker(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pre-session abort posts the same claim-released marker the worker uses."""
+    monkeypatch.setattr(controller.time, "time", lambda: 1_788_641_416)
+    calls: list[list[str]] = []
+
+    def fake_run(args: list[str], **kwargs: object) -> str:
+        calls.append(args)
+        return ""
+
+    monkeypatch.setattr(controller, "run_gh", fake_run)
+    controller.record_claim_released(2235, "42", "pr", "smoke-failure")
+
+    assert calls == [
+        [
+            "issue",
+            "comment",
+            "2235",
+            "--repo",
+            controller.REPO,
+            "--body",
+            "<!-- comic-pile-factory-claim-released-v3:"
+            "pr-2235:opencode-free-model-factory-42:1788641416:smoke-failure -->",
+        ]
+    ]
+
+
 def test_worker_accepts_in_progress_pr_handoff_from_controller() -> None:
     """A leased building PR runs as PR work instead of a control-plane failure."""
     worker = (
