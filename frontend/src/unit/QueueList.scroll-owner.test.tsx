@@ -107,19 +107,27 @@ it('keeps the virtualized list (> threshold) on document scroll with no internal
 })
 
 it('uses the identical queue-container selectors for both presentations', () => {
+  // Each presentation is rendered alone (as in production, where QueueList
+  // chooses exactly one). Mounting both at once would duplicate the
+  // `id="queue-container"` in the document and break scoped id lookups in
+  // jsdom, so the plain render is unmounted before the virtualized one.
   const plain = renderList(VIRTUALIZATION_THRESHOLD)
-  const virtualized = renderList(VIRTUALIZATION_THRESHOLD + 1)
-
-  const plainList = plain.container.querySelector('#queue-container')
-  const virtualizedList = virtualized.container.querySelector('#queue-container')
+  const plainList = plain.container.querySelector('#queue-container') as HTMLElement | null
   expect(plainList).toBeInTheDocument()
-  expect(virtualizedList).toBeInTheDocument()
-  for (const node of [plainList, virtualizedList]) {
-    expect(node.getAttribute('data-testid')).toBe('queue-thread-list')
-    expect(node.getAttribute('role')).toBe('list')
-    expect(node.getAttribute('aria-label')).toBe('Thread queue')
-  }
-  // Neither presentation boxes the queue into a fixed-height inset region.
+  expect(plainList?.getAttribute('data-testid')).toBe('queue-thread-list')
+  expect(plainList?.getAttribute('role')).toBe('list')
+  expect(plainList?.getAttribute('aria-label')).toBe('Thread queue')
+  // The plain list must not box the queue into a fixed-height inset region.
   expectNotInternalScrollRegion(plainList as HTMLElement)
+  plain.unmount()
+
+  const virtualized = renderList(VIRTUALIZATION_THRESHOLD + 1)
+  const virtualizedList = virtualized.container.querySelector('#queue-container') as HTMLElement | null
+  expect(virtualizedList).toBeInTheDocument()
+  expect(virtualizedList?.getAttribute('data-testid')).toBe('queue-thread-list')
+  expect(virtualizedList?.getAttribute('role')).toBe('list')
+  expect(virtualizedList?.getAttribute('aria-label')).toBe('Thread queue')
+  // The virtualized list must not box the queue into a fixed-height inset region.
   expectNotInternalScrollRegion(virtualizedList as HTMLElement)
+  virtualized.unmount()
 })
