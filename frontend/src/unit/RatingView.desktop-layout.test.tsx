@@ -237,7 +237,7 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     }
   })
 
-  it('action panel spans full grid width at xl so it uses available desktop space', () => {
+  it('stacks the action panel with Your Context instead of below the tallest desktop pillar', () => {
     const { container } = render(
       ratingView({
         readingOrders: readingOrders(2),
@@ -250,7 +250,7 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     expect(yourContext).not.toBeNull()
     expect(actions).not.toBeNull()
     expect(yourContext!.contains(actions)).toBe(true)
-    expect(actions!.className).toContain('xl:col-span-full')
+    expect(actions!.className).not.toContain('xl:col-span-full')
     expect(container.querySelector('[data-testid="rating-actions"]')).not.toBeNull()
   })
 

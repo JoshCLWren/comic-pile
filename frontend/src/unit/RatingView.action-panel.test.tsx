@@ -285,7 +285,7 @@ describe('RatingView desktop layout contract (issue #1943)', () => {
     }
   })
 
-  it('action panel spans full grid width at xl so it uses available desktop space', () => {
+  it('stacks the action panel with Your Context instead of spanning the full grid width', () => {
     const { container } = render(
       ratingView({
         readingOrders: [
@@ -305,7 +305,7 @@ describe('RatingView desktop layout contract (issue #1943)', () => {
     expect(yourContext).not.toBeNull()
     expect(actions).not.toBeNull()
     expect(yourContext!.contains(actions)).toBe(true)
-    expect(actions!.className).toContain('xl:col-span-full')
+    expect(actions!.className).not.toContain('xl:col-span-full')
   })
 
   it('does not render Reading Context or a YOUR CONTEXT heading when empty - rating form follows The Comic directly', () => {

@@ -165,4 +165,18 @@ describe('RatingActionPanel', () => {
     expect(screen.getByTestId('skip-confirm')).toBeDisabled()
     expect(screen.getByTestId('skip-cancel')).toBeDisabled()
   })
+
+  it('secondaries wrap into roomier lanes via a comfortable min-width instead of compressing', () => {
+    renderPanel(() => {})
+    const secondaryRow = screen.getByTestId('rating-secondary-actions')
+    expect(secondaryRow.className).toContain('flex-wrap')
+    for (const button of [
+      screen.getByRole('button', { name: /snooze/i }),
+      screen.getByTestId('skip-roll'),
+      screen.getByRole('button', { name: /cancel roll/i }),
+    ]) {
+      expect(button.className).toContain('min-w-[7.5rem]')
+      expect(button.className).toContain('flex-1')
+    }
+  })
 })
