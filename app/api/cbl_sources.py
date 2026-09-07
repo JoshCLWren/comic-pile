@@ -14,7 +14,7 @@ from app.database import get_db
 from app.models.cbl_reference import CBLSource, CBLSourceList
 from app.models.user import User
 
-router = APIRouter(prefix="/api/v1/issue-identity", tags=["issue-identity"])
+router = APIRouter(prefix="/issue-identity", tags=["issue-identity"])
 
 
 class CBLSourceListDiscoveryItem(BaseModel):
