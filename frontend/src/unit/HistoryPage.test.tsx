@@ -23,7 +23,7 @@ it('renders empty history state', () => {
   expect(screen.getByText('No sessions yet')).toBeInTheDocument()
 })
 
-it('labels an empty session as an abandoned roll', () => {
+it('labels an empty session as No issue selected', () => {
   mockedUseSessions.mockReturnValue({
     data: [{
       id: 9,
@@ -44,8 +44,7 @@ it('labels an empty session as an abandoned roll', () => {
 
   render(<MemoryRouter><HistoryPage /></MemoryRouter>)
 
-  expect(screen.getByText('Abandoned roll')).toBeInTheDocument()
-  expect(screen.getByText('No reading activity was recorded.')).toBeInTheDocument()
+  expect(screen.getByText('No issue selected')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /view full session/i })).toHaveAttribute(
     'href',
     '/sessions/9',
@@ -73,11 +72,91 @@ it('does not label an active session with a rolled result as abandoned', () => {
 
   render(<MemoryRouter><HistoryPage /></MemoryRouter>)
 
+  expect(screen.queryByText('No issue selected')).not.toBeInTheDocument()
   expect(screen.queryByText('Abandoned roll')).not.toBeInTheDocument()
   expect(screen.getByText('Saga')).toBeInTheDocument()
 })
 
-it('renders session cards with optional metadata and duration formats', () => {
+it('leads with comic identity and readable activity summary for a typical rated session', () => {
+  mockedUseSessions.mockReturnValue({
+    data: [{
+      id: 11,
+      started_at: '2024-08-23T10:00:00Z',
+      ended_at: '2024-08-23T10:45:00Z',
+      ladder_path: '6 → 4 → 6',
+      active_thread: {
+        title: 'Cable',
+        format: 'Comic',
+        next_issue_number: '62',
+        issues_read: 1,
+        last_rating: 4.5,
+      },
+      last_rolled_result: 3,
+      current_die: 6,
+      snapshot_count: 2,
+    }],
+    isPending: false,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+    error: null,
+  })
+
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+
+  const listitem = screen.getByRole('listitem')
+  expect(listitem).toBeInTheDocument()
+
+  const titleBlock = listitem.querySelector('p.font-bold')
+  expect(titleBlock).not.toBeNull()
+  expect(titleBlock!.textContent).toContain('Cable')
+  expect(titleBlock!.textContent).toContain('#62')
+
+  expect(screen.getByText(/1 issue read/)).toBeInTheDocument()
+  expect(screen.getByText(/rated 4\.5/)).toBeInTheDocument()
+
+  const dieLine = listitem.querySelector('p.text-stone-500')
+  expect(dieLine).not.toBeNull()
+  expect(dieLine!.textContent).toContain('Die size')
+  expect(dieLine!.textContent).toContain('d6 → d4 → d6')
+  expect(dieLine!.textContent).toContain('Rolled 3')
+
+  const headlineIndex = listitem.children[1]!.children[0]!.compareDocumentPosition(dieLine!)
+  expect(headlineIndex & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
+it('pluralizes issues read for multi-issue activity', () => {
+  mockedUseSessions.mockReturnValue({
+    data: [{
+      id: 12,
+      started_at: '2024-01-01T10:00:00Z',
+      ended_at: '2024-01-01T10:30:00Z',
+      ladder_path: '20',
+      active_thread: {
+        title: 'Saga',
+        format: 'Comic',
+        next_issue_number: '13',
+        issues_read: 3,
+        last_rating: 4.5,
+      },
+      last_rolled_result: 7,
+      current_die: 20,
+      snapshot_count: 2,
+    }],
+    isPending: false,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+    error: null,
+  })
+
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+
+  expect(screen.getByText(/3 issues read/)).toBeInTheDocument()
+  expect(screen.getByText(/rated 4\.5/)).toBeInTheDocument()
+})
+
+it('renders session rows with metadata, duration, and footer links', () => {
   mockedUseSessions.mockReturnValue({ data: [
     { id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T10:05:00Z', ladder_path: '6 → 8', active_thread: { title: 'Saga', format: 'Comic', next_issue_number: '13', issues_read: 3, last_rating: 4.5 }, last_rolled_result: 4, current_die: 6, snapshot_count: 2 },
     { id: 2, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T11:00:00Z', ladder_path: null, active_thread: null, snapshot_count: 0 },
@@ -90,51 +169,20 @@ it('renders session cards with optional metadata and duration formats', () => {
   ], isPending: false })
   render(<MemoryRouter><HistoryPage /></MemoryRouter>)
   expect(screen.getByRole('list')).toBeInTheDocument()
-  expect(screen.getAllByText('Die size')).toHaveLength(3)
-  expect(screen.getByText('d6 → d8')).toBeInTheDocument()
-  expect(screen.getByText('Rolled 4')).toBeInTheDocument()
+  expect(screen.getAllByText(/Die size/)).toHaveLength(3)
+  expect(screen.getByText(/d6 → d8/)).toBeInTheDocument()
+  expect(screen.getByText(/Rolled 4/)).toBeInTheDocument()
   expect(screen.queryByText(/Rolled 0/)).not.toBeInTheDocument()
   expect(screen.queryByText(/Dice progression:/)).not.toBeInTheDocument()
-  expect(screen.getByText('· #13')).toBeInTheDocument()
-  expect(screen.getByText('3 read')).toBeInTheDocument()
-  expect(screen.getByText('Rated 4.5')).toBeInTheDocument()
+  expect(screen.getByText(/#13/)).toBeInTheDocument()
+  expect(screen.getByText(/3 issues read/)).toBeInTheDocument()
+  expect(screen.getByText(/rated 4\.5/)).toBeInTheDocument()
   expect(screen.getByText('Duration: 5m')).toBeInTheDocument()
   expect(screen.getByText('Duration: 1h')).toBeInTheDocument()
   expect(screen.getByText('Duration: 2h 30m')).toBeInTheDocument()
   const snapshotsLink = screen.getByText('Snapshots (2)')
   expect(snapshotsLink).toBeInTheDocument()
   expect(snapshotsLink.closest('a')).toHaveAttribute('href', '/sessions/1')
-  // Sessions without active_thread now surface the abandoned-roll empty-state copy
-  expect(screen.getAllByText('Abandoned roll')).toHaveLength(5)
-  expect(screen.getAllByText('No reading activity was recorded.')).toHaveLength(5)
-  // Titles remain the primary identity alongside die size
-  expect(screen.getByText('Saga')).toBeInTheDocument()
-  expect(screen.getByText('Other')).toBeInTheDocument()
-  expect(screen.getByText('Zero')).toBeInTheDocument()
-})
-
-it('newest History row shows recognizable title or empty-state and keeps die/timestamp identity', () => {
-  mockedUseSessions.mockReturnValue({
-    data: [
-      { id: 99, started_at: '2024-01-02T10:00:00Z', ended_at: null, ladder_path: '6 → 8', active_thread: { title: 'Newest Saga', format: 'Comic', next_issue_number: '5' }, last_rolled_result: 4, current_die: 8, snapshot_count: 0 },
-      { id: 98, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T11:00:00Z', ladder_path: '6', active_thread: null, snapshot_count: 0 },
-    ],
-    isPending: false,
-    isLoadingMore: false,
-    hasMore: false,
-    loadMore: vi.fn(),
-    error: null,
-  })
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
-  // Newest row surfaces comic title, not only date/die
-  expect(screen.getByText('Newest Saga')).toBeInTheDocument()
-  expect(screen.getAllByText('Die size')).toHaveLength(2)
-  expect(screen.getByText('d6 → d8')).toBeInTheDocument()
-  // Empty newest-style row still has clear abandoned-roll identity copy
-  expect(screen.getAllByText('Abandoned roll')).toHaveLength(1)
-  // View full session remains available for both rows
-  expect(screen.getAllByText(/View full session/)).toHaveLength(2)
-  expect(screen.getAllByText(/View full session/)[0].closest('a')).toHaveAttribute('href', '/sessions/99')
 })
 
 it('renders loading and error states', () => {
