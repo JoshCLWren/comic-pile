@@ -1,111 +1,124 @@
-"""Schemas for the creator summary API endpoint."""
+"""Schemas for the bounded personal creator summary API (issue #2028)."""
 
 from __future__ import annotations
-
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
 
 class CreatorSummaryItem(BaseModel):
-    """Summary data for one creator key in the batch response."""
+    """Summary data for one creator identity in the batch response.
 
-    model_config = {"frozen=True"}
+    ``canonical_creator_key`` is the stable provider + external-ID key from the
+    #2036 creator identity contract (``creator:<external-person-id>``). It is
+    never display-name based.
+    """
+
+    model_config = {"frozen": True}
 
     canonical_creator_key: str = Field(
         ...,
-        description="Stable normalized creator key (e.g. ``creator:writer:alan-moore``).",
+        description="Stable normalized creator key (e.g. ``creator:12345``).",
     )
     display_name: str = Field(
         ...,
-        description="Human-readable creator name.",
+        description="Human-readable creator name from confirmed issue metadata.",
     )
     normalized_roles: list[str] = Field(
         default_factory=list,
-        description="Roles seen for this creator across the user's issues (e.g. ``[\"writer\"]``).",
+        description="Distinct roles seen for this creator across the user's issues.",
     )
-    average_rating: Optional[float] = Field(
+    average_rating: float | None = Field(
         default=None,
-        description="Average rating across all rated issues attributed to this creator. ``null`` when no ratings.",
+        description="Average of the user's latest effective ratings across issues "
+        "attributed to this creator with a headline-eligible role. ``null`` when no ratings.",
     )
     ratings_count: int = Field(
         default=0,
         ge=0,
-        description="Number of rating contributions attributed to this creator.",
+        description="Number of distinct rated issues contributing to the headline average.",
     )
     read_unrated_count: int = Field(
         default=0,
         ge=0,
-        description="Number of read-but-unrated issues attributed to this creator.",
+        description="Number of read-but-unrated owned issues attributed to this creator.",
     )
     upcoming_count: int = Field(
         default=0,
         ge=0,
-        description="Number of unread issues already in the user's ComicPile attributed to this creator.",
+        description="Number of unread owned issues already in the user's ComicPile "
+        "attributed to this creator.",
     )
 
 
 class CreatorSummaryCoverage(BaseModel):
-    """Coverage state for the three statistic categories, exposing whether counts are complete."""
+    """Coverage state distinguishing complete from lower-bound statistics.
 
-    model_config = {"frozen=True"}
+    ``*_complete`` is true only when every owned issue in that category carries
+    confirmed usable creator metadata. Missing/unconfirmed metadata never
+    counts as negative attribution evidence; it only makes the matching result
+    explicitly partial.
+    """
+
+    model_config = {"frozen": True}
 
     rated_issues_total: int = Field(
+        default=0,
         ge=0,
-        description="Total number of rated issues in the user's owned library.",
+        description="Total owned issues with an effective rating.",
     )
     rated_issues_with_creator_metadata: int = Field(
+        default=0,
         ge=0,
-        description="Number of rated issues that have confirmed usable creator metadata.",
+        description="Rated owned issues with confirmed usable creator metadata.",
     )
     ratings_complete: bool = Field(
-        description="True only when every owned rated issue has confirmed usable creator metadata.",
+        default=True,
+        description="True only when every owned rated issue has confirmed "
+        "usable creator metadata.",
     )
     read_unrated_issues_total: int = Field(
+        default=0,
         ge=0,
-        description="Total number of read-but-unrated issues in the user's owned library.",
+        description="Total owned read-but-unrated issues.",
     )
     read_unrated_issues_with_creator_metadata: int = Field(
+        default=0,
         ge=0,
-        description="Number of read-but-unrated issues that have confirmed usable creator metadata.",
+        description="Read-but-unrated owned issues with confirmed usable creator metadata.",
     )
     read_unrated_complete: bool = Field(
-        description="True only when every owned read-but-unrated issue has confirmed usable creator metadata.",
+        default=True,
+        description="True only when every owned read-but-unrated issue has "
+        "confirmed usable creator metadata.",
     )
     unread_issues_total: int = Field(
+        default=0,
         ge=0,
-        description="Total number of unread issues in the user's owned library.",
+        description="Total owned unread issues.",
     )
     unread_issues_with_creator_metadata: int = Field(
+        default=0,
         ge=0,
-        description="Number of unread issues that have confirmed usable creator metadata.",
+        description="Unread owned issues with confirmed usable creator metadata.",
     )
     upcoming_complete: bool = Field(
-        description="True only when every owned unread issue considered by the library has confirmed usable creator metadata.",
+        default=True,
+        description="True only when every owned unread issue considered by the "
+        "library has confirmed usable creator metadata.",
     )
 
 
 class CreatorSummariesResponse(BaseModel):
     """Response body for the batch creator summary API."""
 
-    model_config = {"frozen=True"}
+    model_config = {"frozen": True}
 
     summaries: dict[str, CreatorSummaryItem] = Field(
         ...,
-        description="Mapping from canonical creator key to summary data.",
+        description="Mapping from canonical creator key to summary data for every "
+        "requested key visible in the authenticated user's library.",
     )
     coverage: CreatorSummaryCoverage = Field(
         ...,
         description="Coverage state distinguishing complete from lower-bound statistics.",
-    )
-
-
-class CreatorSummaryRequest(BaseModel):
-    """Query parameters for the creator summary batch endpoint."""
-
-    model_config = {"frozen=True"}
-
-    keys: str = Field(
-        ...,
-        description="Comma-separated list of creator keys to summarize.",
     )
