@@ -40,7 +40,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
 
   useEffect(() => {
     setCoverRatio(null)
-  }, [metadata?.image_url])
+  }, [metadata?.image_url, isLoading])
 
   useEffect(() => {
     if (creatorsDetailsRef.current) {
