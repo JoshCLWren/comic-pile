@@ -40,26 +40,30 @@ interface InboxResponse {
 function statusColor(status: string): string {
   switch (status) {
     case 'unresolved':
-      return 'text-amber-600 bg-amber-100'
+      return 'text-[var(--theme-text-primary)] bg-[var(--theme-comic-accent)]/20'
     case 'candidate':
-      return 'text-blue-600 bg-blue-100'
+      return 'text-[var(--theme-primary-action)] bg-[var(--theme-primary-action)]/15'
     case 'deferred':
-      return 'text-stone-600 bg-stone-100'
+      return 'text-[var(--theme-text-muted)] bg-[var(--theme-bg-panel)]'
     default:
-      return 'text-stone-500 bg-stone-50'
+      return 'text-[var(--theme-text-dim)] bg-[var(--theme-bg-panel)]'
   }
 }
 
 function ConfidenceBar({ confidence }: { confidence: number | null }) {
-  if (confidence === null) return <span className="text-xs text-stone-400">N/A</span>
+  if (confidence === null) return <span className="text-xs text-[var(--theme-text-dim)]">N/A</span>
   const pct = Math.round(confidence * 100)
-  const color = pct >= 70 ? 'bg-green-500' : pct >= 40 ? 'bg-amber-500' : 'bg-red-400'
+  const color = pct >= 70
+    ? 'bg-[var(--theme-primary-action)]'
+    : pct >= 40
+      ? 'bg-[var(--theme-comic-accent)]'
+      : 'bg-[var(--theme-danger)]'
   return (
     <div className="flex items-center gap-2">
-      <div className="w-16 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+      <div className="w-16 h-1.5 bg-[var(--theme-border)] rounded-full overflow-hidden">
         <div className={`h-full ${color} rounded-full`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs text-stone-500">{pct}%</span>
+      <span className="text-xs text-[var(--theme-text-dim)]">{pct}%</span>
     </div>
   )
 }
@@ -89,22 +93,22 @@ function CandidateCard({
   const issueName = toText(meta.name) ?? toText(meta.issue_name)
 
   return (
-    <div className="border border-stone-200 rounded-lg p-3 bg-white hover:border-stone-300 transition-colors">
+    <div className="border border-[var(--theme-border)] rounded-lg p-3 bg-[var(--theme-bg-panel)] hover:border-[var(--theme-text-dim)] transition-colors">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-sm text-stone-800 truncate">
+          <div className="font-semibold text-sm text-[var(--theme-text-primary)] truncate">
             {candidate.comicvine_id ? `#${candidate.comicvine_id}` : 'Unknown'}
             {volumeName && (
-              <span className="text-stone-500 font-normal ml-1">({volumeName})</span>
+              <span className="text-[var(--theme-text-muted)] font-normal ml-1">({volumeName})</span>
             )}
           </div>
           {issueName && (
-            <div className="text-xs text-stone-600 mt-0.5">{issueName}</div>
+            <div className="text-xs text-[var(--theme-text-muted)] mt-0.5">{issueName}</div>
           )}
           <div className="flex items-center gap-3 mt-1.5">
             <ConfidenceBar confidence={candidate.confidence} />
             {candidate.evidence_source && (
-              <span className="text-xs text-stone-400">{candidate.evidence_source}</span>
+              <span className="text-xs text-[var(--theme-text-dim)]">{candidate.evidence_source}</span>
             )}
           </div>
           {candidate.evidence_json &&
@@ -113,7 +117,7 @@ function CandidateCard({
                 {(candidate.evidence_json.evidence as string[]).map((e, i) => (
                   <span
                     key={i}
-                    className="inline-block text-xs bg-stone-100 text-stone-600 px-2 py-0.5 rounded"
+                    className="inline-block text-xs bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] px-2 py-0.5 rounded border border-[var(--theme-border)]"
                   >
                     {e}
                   </span>
@@ -125,7 +129,7 @@ function CandidateCard({
               href={candidate.external_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-blue-500 hover:underline mt-1 inline-block"
+              className="text-xs text-[var(--theme-text-primary)] hover:underline mt-1 inline-block"
             >
               View on provider
             </a>
@@ -136,7 +140,7 @@ function CandidateCard({
             type="button"
             onClick={() => onConfirm(candidate.external_identity_id)}
             disabled={isConfirming || candidate.status === 'confirmed'}
-            className="px-2.5 py-1 text-xs font-semibold rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="px-2.5 py-1 text-xs font-semibold rounded-md bg-[var(--theme-primary-action)] text-white hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {candidate.status === 'confirmed'
               ? 'Confirmed'
@@ -148,7 +152,7 @@ function CandidateCard({
             type="button"
             onClick={() => onReject(candidate.external_identity_id)}
             disabled={isRejecting || candidate.status === 'rejected'}
-            className="px-2.5 py-1 text-xs font-semibold rounded-md bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="px-2.5 py-1 text-xs font-semibold rounded-md bg-[var(--theme-danger)]/15 text-[var(--theme-danger)] hover:bg-[var(--theme-danger)]/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {isRejecting ? '...' : 'Reject'}
           </button>
@@ -196,26 +200,26 @@ function InboxItemCard({
   }
 
   return (
-    <div className="border border-stone-200 rounded-xl bg-white shadow-sm overflow-hidden">
-      <div className="w-full px-4 py-3 hover:bg-stone-50 transition-colors flex items-start justify-between gap-3">
+    <div className="border border-[var(--theme-border)] rounded-xl bg-[var(--theme-bg-panel)] shadow-sm overflow-hidden">
+      <div className="w-full px-4 py-3 hover:bg-white/[0.04] transition-colors flex items-start justify-between gap-3">
         <button
           type="button"
           onClick={() => toggleExpand(item.mapping_id)}
           aria-expanded={isExpanded}
-          className="flex-1 min-w-0 text-left cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 rounded"
+          className="flex-1 min-w-0 text-left cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--theme-focus-ring)] rounded"
         >
           <span className="flex items-center gap-2">
-            <span className="font-semibold text-sm text-stone-800 hover:text-blue-600 hover:underline truncate">
+            <span className="font-semibold text-sm text-[var(--theme-text-primary)] hover:text-[var(--theme-text-primary)] hover:underline truncate">
               {item.thread_title}
             </span>
-            <span className="text-xs text-stone-400">#{item.issue_number}</span>
+            <span className="text-xs text-[var(--theme-text-dim)]">#{item.issue_number}</span>
           </span>
-          <span className="block text-xs text-stone-500 mt-0.5">{item.why_stopped}</span>
+          <span className="block text-xs text-[var(--theme-text-muted)] mt-0.5">{item.why_stopped}</span>
         </button>
         <div className="flex items-center gap-2 shrink-0">
           <Link
             to={`/thread/${item.thread_id}`}
-            className="text-xs text-blue-500 hover:underline shrink-0"
+            className="text-xs text-[var(--theme-text-primary)] hover:underline shrink-0"
             aria-label={`Open thread ${item.thread_id}`}
           >
             Open
@@ -223,16 +227,16 @@ function InboxItemCard({
           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor(item.status)}`}>
             {item.status}
           </span>
-          <span className="text-stone-400 text-xs">{isExpanded ? '\u25B2' : '\u25BC'}</span>
+          <span className="text-[var(--theme-text-dim)] text-xs">{isExpanded ? '\u25B2' : '\u25BC'}</span>
         </div>
       </div>
 
       {isExpanded && (
-        <div className="px-4 pb-4 border-t border-stone-100">
+        <div className="px-4 pb-4 border-t border-[var(--theme-border)]">
           <div className="mt-3 space-y-2">
-            <div className="text-xs font-semibold text-stone-600 uppercase tracking-wider">Candidates</div>
+            <div className="text-xs font-semibold text-[var(--theme-text-muted)] uppercase tracking-wider">Candidates</div>
             {item.candidates.length === 0 ? (
-              <div className="text-xs text-stone-400 italic">No candidates found for this issue.</div>
+              <div className="text-xs text-[var(--theme-text-dim)] italic">No candidates found for this issue.</div>
             ) : (
               item.candidates.map((c) => (
                 <CandidateCard
@@ -247,14 +251,14 @@ function InboxItemCard({
             )}
 
             {showRejectForm && (
-              <div className="mt-2 p-2 bg-red-50 rounded-lg border border-red-200">
-                <label className="block text-xs font-medium text-red-700 mb-1">Rejection reason</label>
+              <div className="mt-2 p-2 bg-[var(--theme-danger)]/10 rounded-lg border border-[var(--theme-danger)]/30">
+                <label className="block text-xs font-medium text-[var(--theme-danger)] mb-1">Rejection reason</label>
                 <input
                   type="text"
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
                   placeholder="Why is this candidate wrong?"
-                  className="w-full px-2 py-1 text-xs border border-red-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-red-500"
+                  className="w-full px-2 py-1 text-xs border border-[var(--theme-danger)]/40 rounded bg-[var(--theme-bg-panel)] text-[var(--theme-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-danger)]"
                 />
                 <div className="flex gap-2 mt-2">
                   <button
@@ -263,7 +267,7 @@ function InboxItemCard({
                       setShowRejectForm(false)
                       setRejectReason('')
                     }}
-                    className="px-2 py-1 text-xs text-stone-600 hover:text-stone-800"
+                    className="px-2 py-1 text-xs text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]"
                   >
                     Cancel
                   </button>
@@ -271,18 +275,18 @@ function InboxItemCard({
               </div>
             )}
 
-            <div className="flex gap-2 mt-3 pt-3 border-t border-stone-100">
+            <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--theme-border)]">
               <button
                 type="button"
                 onClick={() => onDefer(item.mapping_id)}
-                className="px-3 py-1.5 text-xs font-medium rounded-md bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors"
+                className="px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
               >
                 Defer
               </button>
               <button
                 type="button"
                 onClick={() => onSkip(item.mapping_id)}
-                className="px-3 py-1.5 text-xs font-medium rounded-md bg-stone-100 text-stone-700 hover:bg-stone-200 transition-colors"
+                className="px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
               >
                 Skip
               </button>
@@ -378,29 +382,29 @@ export default function IdentityInboxPage() {
 
   return (
     <section aria-label="Identity reconciliation inbox" className="pt-4 pb-12 w-full">
-      <h1 className="text-2xl font-bold mb-2">Identity Inbox</h1>
-      <p className="text-sm text-stone-500 mb-6">
+      <h1 className="text-2xl font-bold mb-2 text-[var(--theme-text-primary)]">Identity Inbox</h1>
+      <p className="text-sm text-[var(--theme-text-muted)] mb-6">
         Resolve unmatched or ambiguous external comic identities. Confirm the correct match,
         reject wrong candidates, or defer for later.
       </p>
 
       {error && (
-        <div className="p-3 mb-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+        <div className="p-3 mb-4 bg-[var(--theme-danger)]/10 border border-[var(--theme-danger)]/30 rounded-lg text-sm text-[var(--theme-danger)]">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="text-center py-12 text-stone-400">Loading...</div>
+        <div className="text-center py-12 text-[var(--theme-text-dim)]">Loading...</div>
       ) : items.length === 0 ? (
         <div className="text-center py-12">
           <div className="text-4xl mb-3">{'\u2714\uFE0F'}</div>
-          <div className="text-sm text-stone-500 font-medium">All clear!</div>
-          <div className="text-xs text-stone-400 mt-1">No unresolved identities in your inbox.</div>
+          <div className="text-sm text-[var(--theme-text-muted)] font-medium">All clear!</div>
+          <div className="text-xs text-[var(--theme-text-dim)] mt-1">No unresolved identities in your inbox.</div>
         </div>
       ) : (
         <>
-          <div className="text-xs text-stone-400 mb-3">
+          <div className="text-xs text-[var(--theme-text-dim)] mb-3">
             {total} unresolved {total === 1 ? 'item' : 'items'}
           </div>
           <div className="space-y-3">
@@ -423,18 +427,18 @@ export default function IdentityInboxPage() {
                 type="button"
                 onClick={() => setOffset((o) => Math.max(0, o - limit))}
                 disabled={offset === 0}
-                className="px-3 py-1.5 text-xs font-medium rounded-md bg-stone-100 text-stone-700 hover:bg-stone-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 Previous
               </button>
-              <span className="text-xs text-stone-500">
+              <span className="text-xs text-[var(--theme-text-dim)]">
                 Page {currentPage} of {totalPages}
               </span>
               <button
                 type="button"
                 onClick={() => setOffset((o) => o + limit)}
                 disabled={currentPage >= totalPages}
-                className="px-3 py-1.5 text-xs font-medium rounded-md bg-stone-100 text-stone-700 hover:bg-stone-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 Next
               </button>
