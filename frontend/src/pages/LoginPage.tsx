@@ -19,10 +19,6 @@ export default function LoginPage() {
       setError('Username or email is required')
       return false
     }
-    if (username.includes('@')) {
-      setError('Sign in with your username, not your email.')
-      return false
-    }
     if (!password.trim()) {
       setError('Password is required')
       return false
@@ -72,29 +68,28 @@ export default function LoginPage() {
           <p className="text-sm text-stone-400">Sign in to continue your journey</p>
         </div>
 
-          <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-6 space-y-6">
-           <div className="space-y-4">
-             <div className="space-y-2">
-               <label htmlFor="identifier" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-                 Username or email
-               </label>
-               <p className="text-xs text-stone-400">Use your username, not email.</p>
-               <input
-                 id="identifier"
-                 type="text"
-                 name="identifier"
-                 autoComplete="username"
-                 required
-                 value={identifier}
-                 onChange={(e) => setIdentifier(e.target.value)}
-                 aria-describedby="login-identifier-help"
-                 className="w-full h-12 px-4 bg-white/5 border border-solid border-white/20 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
-                 placeholder="Enter your username or email"
-               />
-               <p id="login-identifier-help" className="text-xs text-stone-400">
-                 Sign in with the username or email address on your account.
-               </p>
-             </div>
+        <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-6 space-y-6">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="identifier" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                Username or email
+              </label>
+              <input
+                id="identifier"
+                type="text"
+                name="identifier"
+                autoComplete="username"
+                required
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                aria-describedby="login-identifier-help"
+                className="w-full h-12 px-4 bg-white/5 border border-solid border-white/20 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                placeholder="Enter your username or email"
+              />
+              <p id="login-identifier-help" className="text-xs text-stone-400">
+                Sign in with the username or email address on your account.
+              </p>
+            </div>
 
             <div className="space-y-2">
               <label htmlFor="password" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
