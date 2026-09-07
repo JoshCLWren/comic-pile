@@ -133,16 +133,19 @@ async def test_dry_run_reports_repairs_without_persisting(async_db: AsyncSession
     async_db.add(issue)
     await async_db.commit()
 
+    thread_id = thread.id
+    issue_id = issue.id
+
     report = await reconcile_thread_issue_tracking(async_db, user_id=user.id, commit=False)
 
     assert report.scanned == 1
     assert report.repaired == 1
     assert report.committed is False
-    assert report.repairs[0].thread_id == thread.id
+    assert report.repairs[0].thread_id == thread_id
     assert report.repairs[0].total_issues_before == 20
     assert report.repairs[0].total_issues_after == 1
     assert report.repairs[0].issues_remaining_after == 1
-    assert report.repairs[0].next_unread_issue_id_after == issue.id
+    assert report.repairs[0].next_unread_issue_id_after == issue_id
 
     await async_db.refresh(thread)
     assert thread.total_issues == 20
