@@ -8,9 +8,9 @@ interface PositionMenuProps {
   onMoveToFront: (threadId: number) => void
   onReposition: (thread: Thread) => void
   onMoveToBack: (threadId: number) => void
-  onEdit: (thread: Thread) => void
+  onEdit: () => void
   onDependencies: (thread: Thread) => void
-  onDelete: (threadId: number) => void
+  // called when the user selects the Delete action from the menuonDelete: () => void
   snoozeIcon?: string
   snoozeLabel?: string
   snoozeDisabled?: boolean
