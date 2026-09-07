@@ -150,10 +150,11 @@ export default function DependencyCrossoverControls({
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold text-[var(--theme-text-primary)]">Crossover</span>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === 'none'}
+        <div role="tablist" aria-label="Crossover mode" className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'none'}
           className={`rounded px-2 py-1 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${
             mode === 'none'
               ? 'bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]'
@@ -192,6 +193,7 @@ export default function DependencyCrossoverControls({
         >
           Create crossover
         </button>
+        </div>
       </div>
 
       {mode !== 'none' && (
