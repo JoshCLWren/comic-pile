@@ -136,11 +136,13 @@ def _extract_credits(
     for raw in raw_credits:
         if not isinstance(raw, dict):
             continue
-        creator_id = raw.get("id")
         name = raw.get("name")
-        if not isinstance(creator_id, int) or not isinstance(name, str):
+        if not isinstance(name, str) or not name.strip():
             continue
-        if not name.strip():
+        creator_id = raw.get("id")
+        if isinstance(creator_id, str) and creator_id.isdigit():
+            creator_id = int(creator_id)
+        if not isinstance(creator_id, int):
             continue
         role_value = raw.get("role")
         role = role_value if isinstance(role_value, str) else ""

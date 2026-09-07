@@ -42,9 +42,13 @@ async def list_user_thread_ids(
 async def list_issues_with_creator_metadata(
     db: AsyncSession, *, thread_ids: list[int]
 ) -> list[tuple[int, str, dict[str, object] | None]]:
-    """Return owned issues together with confirmed ComicVine metadata.
+    """Return owned issues together with confirmed ComicVine issue metadata.
 
-    One row is produced per (Issue, confirmed ComicVine identity); issues
+    Only issue-type external identities contribute metadata, matching the
+    confirmed-identity contract in ``app/services/comicvine_intelligence.py``
+    so series-level credits never leak into per-issue creator aggregates.
+
+    One row is produced per (Issue, confirmed ComicVine issue identity); issues
     with no confirmed ComicVine identity appear once with ``None`` metadata so
     the service can compute honest coverage. An issue with several confirmed
     ComicVine identities yields several rows and the service merges them.
@@ -73,6 +77,7 @@ async def list_issues_with_creator_metadata(
                 ExternalIdentity.id
                 == IssueExternalIdentityMapping.external_identity_id,
                 ExternalIdentity.provider == COMICVINE_PROVIDER,
+                ExternalIdentity.entity_type == "issue",
             ),
         )
         .where(Issue.thread_id.in_(thread_ids))
