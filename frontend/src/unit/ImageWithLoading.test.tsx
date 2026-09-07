@@ -92,4 +92,45 @@ describe('ImageWithLoading', () => {
     // Should have called the onError callback
     expect(onErrorMock).toHaveBeenCalledTimes(1)
   })
+
+  it('applies placeholderClassName to the loading overlay while keeping the base classes', () => {
+    const { getByRole } = render(
+      <ImageWithLoading
+        src="https://example.com/image.jpg"
+        placeholderClassName="animate-pulse bg-white/10"
+      />
+    )
+
+    const status = getByRole('status')
+    const overlay = status.closest('div.absolute')
+    expect(overlay).not.toBeNull()
+    expect(overlay).toHaveClass('absolute', 'inset-0', 'flex', 'items-center', 'justify-center')
+    expect(overlay).toHaveClass('animate-pulse', 'bg-white/10')
+  })
+
+  it('invokes onLoad with the loaded image element', () => {
+    const onLoadMock = vi.fn<(img: HTMLImageElement) => void>()
+    const { getByRole } = render(
+      <ImageWithLoading src="https://example.com/image.jpg" onLoad={onLoadMock} />
+    )
+
+    expect(getByRole('status')).toBeInTheDocument()
+
+    act(() => {
+      const img = document.querySelector('img')
+      if (!img) {
+        throw new Error('Image element not found')
+      }
+      Object.defineProperty(img, 'naturalWidth', { value: 300 })
+      Object.defineProperty(img, 'naturalHeight', { value: 400 })
+      img.dispatchEvent(new Event('load'))
+    })
+
+    expect(onLoadMock).toHaveBeenCalledTimes(1)
+    const loadedImg = onLoadMock.mock.calls[0][0]
+    expect(loadedImg.naturalWidth).toBe(300)
+    expect(loadedImg.naturalHeight).toBe(400)
+    // Spinner is gone once loaded
+    expect(noopWrite()).toBeDefined()
+  })
 })

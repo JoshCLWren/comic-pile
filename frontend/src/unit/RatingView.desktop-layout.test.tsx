@@ -280,8 +280,11 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     expect(yourContext).not.toBeNull()
     expect(comicRegion!.contains(cover)).toBe(true)
     expect(yourContext!.contains(actions)).toBe(true)
-    expect(cover!.className).toContain('max-h-[min(70vh,45vh)]')
-    expect(cover!.className).not.toContain('max-h-[70vh]')
+    const coverStyle = cover!.getAttribute('style') ?? ''
+    expect(coverStyle).toContain('aspect-ratio')
+    expect(coverStyle).toContain('45vh')
+    expect(coverStyle).toContain('min(100%')
+    expect(cover!.className).not.toContain('max-h-')
   })
 })
 
