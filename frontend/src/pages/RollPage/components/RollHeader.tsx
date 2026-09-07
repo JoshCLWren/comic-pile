@@ -73,7 +73,7 @@ export function RollHeader({
     <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-2 py-2 shrink-0 z-10 md:px-3">
       <div className="min-w-0">
         <h1 className="text-xl font-black uppercase tracking-tighter text-glow md:text-2xl">
-          Pile Roller
+          Roll
         </h1>
         {snoozedThreads.length > 0 && currentDie >= DICE_LADDER[DICE_LADDER.length - 1] && (
           <div className="mt-1 flex items-center gap-2">

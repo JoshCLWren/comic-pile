@@ -50,16 +50,16 @@ const MAIN_NAV_ITEMS: NavItem[] = [
 ]
 
 const SECONDARY_NAV_ITEMS: NavItem[] = [
-  { path: '/continuity-plans', label: 'Planner', icon: 'planner', ariaLabel: 'Continuity Planner page' },
-  { path: '/whats-new', label: 'New', icon: 'new', ariaLabel: "What's New page" },
+  { path: '/continuity-plans', label: 'Reading plans', icon: 'planner', ariaLabel: 'Reading plans page' },
+  { path: '/whats-new', label: "What's new", icon: 'new', ariaLabel: "What's new page" },
   { path: '/glossary', label: 'Glossary', icon: 'glossary', ariaLabel: 'Glossary page' },
-  { path: '/identity-inbox', label: 'Identity', icon: 'identity-inbox', ariaLabel: 'Identity Inbox page' },
+  { path: '/identity-inbox', label: 'Identity Inbox', icon: 'identity-inbox', ariaLabel: 'Identity Inbox page' },
 ]
 
 const APPEARANCE_OPTIONS: Array<{ id: ThemeId; label: string; ariaLabel: string; mobileClassName: string }> = [
-  { id: 'classic', label: 'Classic', ariaLabel: 'Classic theme', mobileClassName: 'classic:text-stone-100 ink-gold:text-stone-900 command-center:text-stone-100' },
-  { id: 'ink-gold', label: 'Ink Gold', ariaLabel: 'Ink-gold theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-100 command-center:text-stone-400' },
-  { id: 'command-center', label: 'Command Center', ariaLabel: 'Command center theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-400 command-center:text-stone-100' },
+  { id: 'classic', label: 'Classic theme', ariaLabel: 'Classic theme', mobileClassName: 'classic:text-stone-100 ink-gold:text-stone-900 command-center:text-stone-100' },
+  { id: 'ink-gold', label: 'Ink Gold theme', ariaLabel: 'Ink-gold theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-100 command-center:text-stone-400' },
+  { id: 'command-center', label: 'Command Center theme', ariaLabel: 'Command center theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-400 command-center:text-stone-100' },
 ]
 
 function NavIcon({ name }: { name: NavIconName }) {
@@ -473,7 +473,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-panel)]"
             >
               <NavIcon name={item.icon} />
-              <span>{item.label === 'New' ? "What's New" : item.label === 'Planner' ? 'Continuity Planner' : item.label === 'Identity' ? 'Identity Inbox' : item.label}</span>
+              <span>{item.label}</span>
             </Link>
           ))}
           <div className="space-y-1 border-t border-[var(--theme-border)] pt-2 md:hidden">

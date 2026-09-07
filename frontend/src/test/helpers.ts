@@ -18,7 +18,7 @@ type TestUser = {
 };
 
 export async function waitForQueueReady(page: Page): Promise<void> {
-  await expect(page.getByRole('heading', { name: 'Read Queue' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Queue' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Add Thread' })).toBeVisible()
 }
 

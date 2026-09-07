@@ -28,8 +28,8 @@ const DESTINATIONS = [
   'Queue page',
   'History page',
   'Crossovers page',
-  'Continuity Planner page',
-  "What's New page",
+  'Reading plans page',
+  "What's new page",
   'Glossary page',
 ]
 
