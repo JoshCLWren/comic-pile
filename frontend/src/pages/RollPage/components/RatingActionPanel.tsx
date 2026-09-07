@@ -60,11 +60,7 @@ export function RatingActionPanel({
             type="button"
             onClick={handleCopyComicReference}
             disabled={!threadTitle}
-            className="min-h-11 rounded-xl px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
-            style={{
-              border: '1px solid rgba(255,255,255,0.1)',
-              backgroundColor: 'rgba(255,255,255,0.05)',
-            }}
+            className="min-h-11 rounded-xl px-3 text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)] transition disabled:opacity-30 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)]"
             aria-label={`Copy ${threadTitle} ${issueNumber}`}
           >
             {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry copy' : 'Copy title'}
@@ -115,7 +111,7 @@ export function RatingActionPanel({
           type="button"
           onClick={onCancel}
           disabled={dismissIsPending}
-          className="min-h-11 flex-1 rounded-xl border border-rose-600/30 bg-rose-600/10 py-3 text-xs font-black uppercase tracking-[0.15em] text-rose-400 transition hover:bg-rose-600/20 focus:ring-2 focus:ring-rose-500 disabled:opacity-50"
+          className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-white/5 py-3 text-xs font-black uppercase tracking-[0.15em] text-[var(--theme-text-muted)] transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
         >
           Cancel roll
         </button>
