@@ -71,6 +71,58 @@ class TestHotPathIsLocal:
         assert accounting.remaining == 99
 
 
+# --- Production funnel wiring ----------------------------------------------
+
+
+class TestProductionFunnelWiring:
+    """Every issued Redis command must consume a durable reservation slot."""
+
+    def test_command_budget_record_consumes_durable_slot(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The shared production budget decrements the durable reservation."""
+        accounting = DurableCacheAccounting(block_size=100)
+        accounting._remaining = 100
+        monkeypatch.setattr("app.cache_generation.cache_accounting", accounting)
+
+        from app.cache_generation import command_budget
+
+        command_budget.record("generation_incr")
+
+        assert accounting.remaining == 99
+
+    def test_command_budget_record_multi_consumes_count(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Multi-command records consume matching durable slots."""
+        accounting = DurableCacheAccounting(block_size=100)
+        accounting._remaining = 100
+        monkeypatch.setattr("app.cache_generation.cache_accounting", accounting)
+
+        from app.cache_generation import command_budget
+
+        command_budget.record("get", count=4)
+
+        assert accounting.remaining == 96
+
+    def test_command_budget_record_never_awaits_neon(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The funnel record stays synchronous end-to-end (no coroutine leak)."""
+        accounting = DurableCacheAccounting(block_size=100)
+        accounting._remaining = 100
+        monkeypatch.setattr("app.cache_generation.cache_accounting", accounting)
+
+        from app.cache_generation import command_budget
+
+        with patch.object(accounting, "record", spec=DurableCacheAccounting.record) as fake:
+            result = command_budget.record("set", count=1)
+
+        assert result is None
+        fake.assert_called_once_with(1)
+        assert accounting.remaining == 100
+
+
 # --- Block reservation (Neon) ------------------------------------------------
 
 

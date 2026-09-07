@@ -115,10 +115,6 @@ class DurableCacheAccounting:
                 self._neon_total,
                 self._remaining,
             )
-            self._replenish_task = asyncio.create_task(
-                self._background_replenish(),
-                name="cache-accounting-replenish",
-            )
         except Exception:
             logger.warning(
                 "Durable cache accounting initialization failed; "
@@ -126,6 +122,14 @@ class DurableCacheAccounting:
                 exc_info=True,
             )
             self._degraded = True
+
+        # Arm the background replenisher even when the initial reservation
+        # failed so the process retries once Neon becomes available instead of
+        # staying degraded for its whole lifetime.
+        self._replenish_task = asyncio.create_task(
+            self._background_replenish(),
+            name="cache-accounting-replenish",
+        )
 
     async def close(self) -> None:
         """Cancel the background replenishment task."""
@@ -271,6 +275,7 @@ class DurableCacheAccounting:
 
             try:
                 await self._reserve_block()
+                self._initialized = True
                 if self._degraded:
                     self._degraded = False
                     logger.info("Durable cache accounting recovered")
