@@ -90,7 +90,7 @@ describe('desktop appearance picker (issue #1792)', () => {
     expect(group).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Classic' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Ink Gold' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Command Center theme' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Command Center' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /more pages/i })).not.toBeInTheDocument()
   })
 
@@ -107,7 +107,7 @@ describe('desktop appearance picker (issue #1792)', () => {
 
     renderNavigation()
 
-    const commandCenter = await screen.findByRole('button', { name: 'Command Center theme' })
+    const commandCenter = await screen.findByRole('button', { name: 'Command Center' })
     expect(commandCenter).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Classic' })).toHaveAttribute('aria-pressed', 'false')
   })
@@ -132,7 +132,7 @@ describe('desktop appearance picker (issue #1792)', () => {
     const user = userEvent.setup()
     renderNavigation()
 
-    await user.click(await screen.findByRole('button', { name: 'Command Center theme' }))
+    await user.click(await screen.findByRole('button', { name: 'Command Center' }))
 
     expect(document.documentElement).toHaveAttribute('data-theme', 'command-center')
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(2))
@@ -146,7 +146,7 @@ describe('desktop appearance picker (issue #1792)', () => {
     const user = userEvent.setup()
     renderNavigation()
 
-    await user.click(await screen.findByRole('button', { name: 'Command Center theme' }))
+    await user.click(await screen.findByRole('button', { name: 'Command Center' }))
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(3))
 
     await user.click(screen.getByRole('button', { name: 'Ink Gold' }))
