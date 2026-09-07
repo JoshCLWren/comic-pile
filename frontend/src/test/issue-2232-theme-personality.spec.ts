@@ -37,10 +37,16 @@ const SCREENSHOT_DIRECTORY = join(OUTPUT_DIRECTORY, 'screenshots')
 
 const THEMES = ['classic', 'ink-gold', 'command-center'] as const
 
+// switchTheme guarantees the desktop rail is expanded before selecting, so the
+// picker exposes the label text ("Ink Gold theme" / "Command Center theme")
+// rather than the compact-rail aria-labels ("Ink-gold theme" /
+// "Command center theme"). Matching the expanded accessible names keeps the
+// locator valid in both the default wide-desktop state and after expanding a
+// collapsed rail (issue #1941 uses the same expanded names).
 const THEME_BUTTON_NAMES: Record<(typeof THEMES)[number], string> = {
   classic: 'Classic theme',
-  'ink-gold': 'Ink-gold theme',
-  'command-center': 'Command center theme',
+  'ink-gold': 'Ink Gold theme',
+  'command-center': 'Command Center theme',
 }
 
 const ACCENT_TOKENS = [
