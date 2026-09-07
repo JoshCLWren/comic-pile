@@ -35,7 +35,7 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     await page.getByText('Snooze Me Thread').first().click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
-    await page.getByRole('button', { name: /snooze/i }).click()
+    await page.getByTestId('rating-secondary-actions').getByRole('button', { name: /snooze/i }).click()
 
     const snoozedToggle = page.getByRole('button', { name: /snoozed/i })
     await expect(snoozedToggle).toBeVisible({ timeout: 10000 })
@@ -59,7 +59,7 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     await page.getByText('Unsnooze Me Thread').first().click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
-    await page.getByRole('button', { name: /snooze/i }).click()
+    await page.getByTestId('rating-secondary-actions').getByRole('button', { name: /snooze/i }).click()
     const snoozedToggle = page.getByRole('button', { name: /snoozed/i })
     await expect(snoozedToggle).toBeVisible({ timeout: 10000 })
 
@@ -87,7 +87,7 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     await page.getByText('Queue Snooze Thread').first().click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
-    await page.getByRole('button', { name: /snooze/i }).click()
+    await page.getByTestId('rating-secondary-actions').getByRole('button', { name: /snooze/i }).click()
     await expect(page.getByRole('button', { name: /snoozed/i })).toBeVisible({ timeout: 10000 })
 
     await gotoQueue(page)
