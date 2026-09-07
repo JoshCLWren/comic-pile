@@ -278,7 +278,6 @@ aria-label="Series actions"
                     : 'text-stone-300 hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:text-white'
                 } ${item.disabled ? 'opacity-40 cursor-not-allowed hover:bg-transparent hover:text-stone-300' : ''}`}
                 role="menuitem"
-                aria-disabled={item.disabled || undefined}
               >
                 <span className="text-base">{item.icon}</span>
                 <span className="font-medium">{item.label}</span>

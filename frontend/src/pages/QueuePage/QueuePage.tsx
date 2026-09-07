@@ -16,7 +16,6 @@ import CompletedThreadsSection from './CompletedThreadsSection'
 import { QueueControls } from './QueueControls'
 import { QueueList } from './QueueList'
 import { QueueModals } from './QueueModals'
-import DeleteThreadDialog from './DeleteThreadDialog'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
@@ -157,7 +156,7 @@ export default function QueuePage() {
           onReposition={() => modals.openRepositionModal(thread)}
           onEdit={() => modals.showEditModal(thread)}
           onDependencies={() => modals.openDependenciesModal(thread)}
-          onDelete={() => actions.requestDelete(thread)}
+          onDelete={() => actions.handleDelete(thread.id)}
         />
       )
     },
@@ -288,21 +287,7 @@ export default function QueuePage() {
           onOpenMigrationDialog={modals.openMigrationDialog}
           onOpenDependencies={modals.editingThread ? () => modals.openDependenciesModal(modals.editingThread!) : undefined}
           isPendingCreate={modals.isPendingCreate}
-          isPendingEdit={modals.isPendingEdit}
-          isPendingReactivate={reactivateMutation.isPending}
         />
-
-        <DeleteThreadDialog
-          thread={actions.pendingDeleteThread}
-          isPending={actions.isDeletePending}
-          error={actions.deleteError}
-          onConfirm={() => void actions.confirmDelete()}
-          onCancel={actions.cancelDelete}
-        />
-      </div>
-    </PositionMenuProvider>
-  )
-}
-
-// Re-export the type for unit tests that previously imported it from QueuePage.
-export type { QueueSortBy }
+    </div>
+  </PositionMenuProvider>
+  );
