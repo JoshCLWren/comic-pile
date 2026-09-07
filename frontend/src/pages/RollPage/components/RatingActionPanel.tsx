@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Modal from '../../../components/Modal'
 
 interface RatingActionPanelProps {
@@ -32,6 +32,10 @@ export function RatingActionPanel({
 }: RatingActionPanelProps) {
   const [isSkipConfirmOpen, setIsSkipConfirmOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
+
+  useEffect(() => {
+    setCopyStatus('idle')
+  }, [threadTitle, issueNumber])
 
   const handleConfirmSkip = () => {
     setIsSkipConfirmOpen(false)
