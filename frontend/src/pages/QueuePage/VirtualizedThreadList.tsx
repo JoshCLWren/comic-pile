@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import {
   getRowThreads,
   EDGE_SCROLL_ZONE,
@@ -49,9 +49,9 @@ interface VirtualizedThreadListProps<T> {
  * virtual row index and consumers must use `renderItem`'s second argument for
  * thread-level identity.
  *
- * Uses `@tanstack/react-virtual` with `useVirtualizer` for efficient DOM
- * virtualization. Container height is derived from a `ResizeObserver` on the
- * wrapper element, never `window.innerHeight` during render.
+ * Uses `@tanstack/react-virtual` with `useWindowVirtualizer` for efficient DOM
+ * virtualization. The window scroll surface owns Queue before and after the
+ * virtualization threshold is crossed, preventing nested scroll containers.
  *
  * Preserves existing selectors (`data-testid="queue-thread-list"`,
  * `id="queue-container"`, `role="list"`, `aria-label="Series queue"`)
@@ -62,43 +62,41 @@ export default function VirtualizedThreadList<T>({
   renderItem,
   explicitColumnCount,
   sentinelRef,
-  scrollRootRef,
+  scrollRootRef: _scrollRootRef,
   hasNextPage,
 }: VirtualizedThreadListProps<T>) {
-  const scrollRef = useRef<HTMLDivElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
-  const [containerHeight, setContainerHeight] = useState(0)
+  const [scrollMargin, setScrollMargin] = useState(0)
   const [columnCount, setColumnCount] = useState(() =>
     explicitColumnCount !== undefined ? Math.max(1, explicitColumnCount) : 1,
   )
 
-  // Read the initial wrapper height synchronously to avoid a 0 → measured
+  // Read the initial wrapper offset synchronously to avoid a 0 → measured
   // layout jump. Production stays single-column regardless of wrapper width.
   useLayoutEffect(() => {
     if (wrapperRef.current) {
-      setContainerHeight(wrapperRef.current.offsetHeight)
+      const rect = wrapperRef.current.getBoundingClientRect()
+      setScrollMargin(rect.top + window.scrollY)
     }
     setColumnCount(explicitColumnCount !== undefined ? Math.max(1, explicitColumnCount) : 1)
   }, [explicitColumnCount])
 
-  // React to height changes only. Queue's row/list presentation must not change
-  // cardinality when the viewport gets wider or when another page is appended.
+  // React to offset changes (e.g. window resize or layout shifts above the list).
   useEffect(() => {
-    const wrapper = wrapperRef.current!
-
     let rafId: number | null = null
 
-    const observer = new ResizeObserver((entries) => {
+    const observer = new ResizeObserver(() => {
       if (rafId !== null) return
       rafId = requestAnimationFrame(() => {
         rafId = null
-        for (const entry of entries) {
-          setContainerHeight(entry.contentRect.height)
+        if (wrapperRef.current) {
+          const rect = wrapperRef.current.getBoundingClientRect()
+          setScrollMargin(rect.top + window.scrollY)
         }
       })
     })
 
-    observer.observe(wrapper)
+    observer.observe(document.body)
     return () => {
       observer.disconnect()
       if (rafId !== null) {
@@ -114,17 +112,17 @@ export default function VirtualizedThreadList<T>({
   const virtualizerOptions = useMemo(
     () => ({
       count: rowCount,
-      getScrollElement: () => scrollRef.current,
       estimateSize: () => ROW_HEIGHT_WITH_GAP,
       overscan: Math.ceil(OVERSCAN_PX / ROW_HEIGHT_WITH_GAP),
+      scrollMargin,
     }),
-    [rowCount],
+    [rowCount, scrollMargin],
   )
 
-  const virtualizer = useVirtualizer(virtualizerOptions)
+  const virtualizer = useWindowVirtualizer(virtualizerOptions)
 
   // Keep a ref to the latest virtualizer so the drag-over handler stays
-  // referentially stable. useVirtualizer returns a new object every render,
+  // referentially stable. useWindowVirtualizer returns a new object every render,
   // so putting it in a useCallback deps array would recreate the handler.
   const virtualizerRef = useRef(virtualizer)
   virtualizerRef.current = virtualizer
@@ -136,15 +134,12 @@ export default function VirtualizedThreadList<T>({
 
   const handleContainerDragOver = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
-      const container = scrollRef.current!
-
       const now = performance.now()
       // Throttle to avoid flooding scrollToIndex with 60+ calls per second.
       if (now - lastEdgeScrollRef.current < 50) return
 
       const vz = virtualizerRef.current
-      const rect = container.getBoundingClientRect()
-      const y = event.clientY - rect.top
+      const y = event.clientY
       const visibleItems = vz.getVirtualItems()
       if (visibleItems.length === 0) return
 
@@ -156,7 +151,7 @@ export default function VirtualizedThreadList<T>({
         vz.scrollToIndex(Math.max(0, firstIndex - 1), {
           align: 'start',
         })
-      } else if (y > rect.height - EDGE_SCROLL_ZONE) {
+      } else if (y > window.innerHeight - EDGE_SCROLL_ZONE) {
         lastEdgeScrollRef.current = now
         vz.scrollToIndex(Math.min(rowCount - 1, lastIndex + 1), {
           align: 'end',
@@ -170,19 +165,13 @@ export default function VirtualizedThreadList<T>({
   // component, but this ensures standalone reuse also shows a graceful fallback.
   if (threads.length === 0) {
     return (
-      <div ref={wrapperRef} style={{ height: 'calc(100dvh - 14rem)' }}>
+      <div ref={wrapperRef}>
         <div
-          ref={scrollRef}
           data-testid="queue-thread-list"
           id="queue-container"
           role="list"
           aria-label="Series queue"
           className="@container rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
-          style={{
-            height: '100%',
-            overflowY: 'auto',
-            overflowX: 'hidden',
-          }}
         >
           <div className="flex items-center justify-center text-stone-500 py-8">
             No series in queue
@@ -193,20 +182,8 @@ export default function VirtualizedThreadList<T>({
   }
 
   return (
-    <div
-      ref={wrapperRef}
-      // Use dvh (dynamic viewport height) instead of vh for mobile browser chrome.
-      // The 14rem offset accounts for the header (~8rem), sort/search bar (~3rem),
-      // padding/spacing (~3rem). ResizeObserver handles orientation changes.
-      style={{ height: containerHeight || 'calc(100dvh - 14rem)' }}
-    >
+    <div ref={wrapperRef}>
       <div
-        ref={(node) => {
-          scrollRef.current = node
-          if (scrollRootRef) {
-            ;(scrollRootRef as React.MutableRefObject<HTMLDivElement | null>).current = node
-          }
-        }}
         data-testid="queue-thread-list"
         id="queue-container"
         role="list"
@@ -214,11 +191,6 @@ export default function VirtualizedThreadList<T>({
         className="@container rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
         onDragOver={handleContainerDragOver}
         onDrop={(event) => event.preventDefault()}
-        style={{
-          height: '100%',
-          overflowY: 'auto',
-          overflowX: 'hidden',
-        }}
       >
         <div
           style={{

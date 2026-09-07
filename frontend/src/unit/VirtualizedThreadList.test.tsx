@@ -15,7 +15,7 @@ function createMockThreads(count: number): MockThread[] {
   }))
 }
 
-// Mock @tanstack/react-virtual's useVirtualizer
+// Mock @tanstack/react-virtual's useWindowVirtualizer
 const mockGetVirtualItems = vi.fn()
 const mockGetTotalSize = vi.fn(() => 0)
 const mockMeasureElement = vi.fn()
@@ -23,7 +23,7 @@ const mockScrollToIndex = vi.fn()
 let resizeCallback: ((entries: Array<{ contentRect: { height: number; width: number } }>) => void) | undefined
 
 vi.mock('@tanstack/react-virtual', () => ({
-  useVirtualizer: () => ({
+  useWindowVirtualizer: () => ({
     getVirtualItems: mockGetVirtualItems,
     getTotalSize: mockGetTotalSize,
     measureElement: mockMeasureElement,
@@ -537,6 +537,7 @@ it('calls scrollToIndex toward last visible when dragging near the bottom edge',
   })
 
   // Drag near bottom edge (clientY=590 → y=590 > 600-80=520)
+  Object.defineProperty(window, 'innerHeight', { value: 600, writable: true })
   const dataTransfer2 = new DataTransfer()
   const dragEvent2 = new DragEvent('dragover', {
     clientY: 590,
