@@ -2,10 +2,28 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import VirtualizedThreadList from '../pages/QueuePage/VirtualizedThreadList'
 import { QueueList } from '../pages/QueuePage/QueueList'
+import type { Thread } from '../types'
 
 interface MockThread {
   id: number
   title: string
+}
+
+function createMockThread(id: number): Thread {
+  return {
+    id,
+    title: `Thread ${id}`,
+    format: 'Comic',
+    issues_remaining: 5,
+    total_issues: 10,
+    queue_position: id,
+    status: 'active',
+    is_blocked: false,
+    blocking_reasons: [],
+    notes: null,
+    last_activity_at: null,
+    created_at: '2024-01-01T00:00:00.000Z',
+  }
 }
 
 const threads: MockThread[] = Array.from({ length: 60 }, (_, index) => ({
@@ -95,18 +113,12 @@ it('keeps paginated queue items as full-width rows on a wide viewport', async ()
  * or fixed-height box is introduced.
  */
 it('keeps a single scroll surface when the queue crosses the virtualization threshold', async () => {
-  const initialThreads: MockThread[] = Array.from({ length: 50 }, (_, i) => ({
-    id: i + 1,
-    title: `Thread ${i + 1}`,
-  }))
-  const grownThreads: MockThread[] = Array.from({ length: 60 }, (_, i) => ({
-    id: i + 1,
-    title: `Thread ${i + 1}`,
-  }))
+  const initialThreads: Thread[] = Array.from({ length: 50 }, (_, i) => createMockThread(i + 1))
+  const grownThreads: Thread[] = Array.from({ length: 60 }, (_, i) => createMockThread(i + 1))
 
   const sentinelRef = { current: null }
   const scrollRootRef = { current: null }
-  const renderItem = (thread: MockThread, index: number) => (
+  const renderItem = (thread: Thread, index: number) => (
     <div data-testid="queue-thread-item" key={thread.id}>
       {thread.title} #{index + 1}
     </div>
