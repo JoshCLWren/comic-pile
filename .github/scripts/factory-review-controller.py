@@ -33,9 +33,10 @@ SENSITIVE_ASSIGNMENT_RE = re.compile(
 BEARER_RE = re.compile(r"(?i)(authorization\s*:\s*bearer\s+)\S+")
 GITHUB_TOKEN_RE = re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b")
 API_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")
-# Accept authoritative PR-diff commands and common review inspection paths the
-# workers actually emit. The free-model worker also appends `gh pr diff` evidence
-# before invoking this controller so honest approvals are not soft-failed.
+# Accept authoritative PR-diff commands, common review inspection paths, and
+# unified-diff hunks. Workers append `gh pr diff` evidence before invoking this
+# controller; the excerpt is a 7000-char tail, so matching `diff --git` keeps
+# honest approvals from soft-failing when only the dumped hunks remain in-window.
 DIFF_INSPECTION_RE = re.compile(
     r"(?i)"
     r"(?:"
@@ -44,6 +45,8 @@ DIFF_INSPECTION_RE = re.compile(
     r"|gh pr view\b"
     r"|gh api[^\n]{0,100}/pulls/\d+/(?:files|commits)\b"
     r"|comic-pile-factory-authoritative-diff-evidence"
+    r"|diff --git "
+    r"|\+\+\+ b/"
     r")"
 )
 STAGE_LABELS = {

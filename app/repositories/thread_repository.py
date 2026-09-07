@@ -6,10 +6,11 @@ return ORM models or plain values; callers (services) own transactions.
 
 from datetime import datetime
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
-from app.models import Thread
+from app.models import Issue, Thread
 from app.services.queue_pagination import QueueCursor, QueueSort, build_cursor_filter, build_sort_order
 
 
@@ -251,3 +252,72 @@ async def delete_threads_by_ids(db: AsyncSession, thread_ids: set[int], user_id:
     await db.execute(
         delete(Thread).where(Thread.id.in_(thread_ids)).where(Thread.user_id == user_id)
     )
+
+
+async def fetch_threads_with_drifted_issue_tracking(
+    db: AsyncSession,
+    *,
+    user_id: int | None = None,
+    limit: int | None = None,
+) -> list[Thread]:
+    """Return tracked threads whose counters disagree with their issue rows.
+
+    Only threads already using issue tracking (``total_issues`` set) that own
+    at least one issue row are considered, so old counter-based threads and
+    threads still tracking a declared total without local rows are never
+    reported or migrated by the reconciliation pass.
+
+    Args:
+        db: Database session.
+        user_id: Optional owner filter for a bounded, per-user pass.
+        limit: Optional maximum number of threads to return.
+
+    Returns:
+        Drifted threads ordered by ID.
+    """
+    issue_stats = (
+        select(
+            Issue.thread_id.label("thread_id"),
+            func.count().label("row_count"),
+            func.count().filter(Issue.status == "unread").label("unread_count"),
+        )
+        .group_by(Issue.thread_id)
+        .subquery()
+    )
+    pointer_issue = aliased(Issue)
+
+    query = (
+        select(Thread)
+        .join(issue_stats, issue_stats.c.thread_id == Thread.id)
+        .outerjoin(pointer_issue, pointer_issue.id == Thread.next_unread_issue_id)
+        .where(Thread.total_issues.is_not(None))
+        .where(
+            or_(
+                Thread.total_issues.is_distinct_from(issue_stats.c.row_count),
+                Thread.issues_remaining != issue_stats.c.unread_count,
+                and_(
+                    issue_stats.c.unread_count > 0,
+                    Thread.next_unread_issue_id.is_(None),
+                ),
+                and_(
+                    issue_stats.c.unread_count == 0,
+                    Thread.next_unread_issue_id.is_not(None),
+                ),
+                and_(
+                    Thread.next_unread_issue_id.is_not(None),
+                    or_(
+                        pointer_issue.status != "unread",
+                        pointer_issue.thread_id != Thread.id,
+                    ),
+                ),
+            )
+        )
+        .order_by(Thread.id)
+    )
+    if user_id is not None:
+        query = query.where(Thread.user_id == user_id)
+    if limit is not None:
+        query = query.limit(limit)
+
+    result = await db.execute(query)
+    return list(result.scalars().all())

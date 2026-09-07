@@ -15,6 +15,7 @@ from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
 from app.models import Event, Issue, Thread
 from app.models.user import User
+from app.repositories import issue_repository
 from app.schemas import (
     IssueCreateRange,
     IssueListResponse,
@@ -26,6 +27,7 @@ from app.schemas import (
 from app.schemas.comicvine import ComicVineIssueIntelligence
 from app.schemas.reader_context import ReaderContextResponse
 from app.services.comicvine_intelligence import get_issue_intelligence
+from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.reader_context import get_reader_context
 from app.utils.issue_parser import parse_issue_ranges
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
@@ -185,23 +187,11 @@ def _recalculate_next_unread_issue_id(thread: Thread, issues: list[Issue]) -> No
 
 def _recalculate_thread_issue_tracking_state(thread: Thread, issues: list[Issue]) -> None:
     """Recalculate issue-tracking metadata from the current in-memory issue state."""
-    unread_issues = [issue for issue in issues if issue.status == "unread"]
-    unread_count = len(unread_issues)
-    total_issues = len(issues)
+    state = apply_thread_issue_tracking_state(thread, issues)
 
-    thread.total_issues = total_issues
-    thread.issues_remaining = unread_count
-    thread.next_unread_issue_id = unread_issues[0].id if unread_issues else None
-
-    if unread_count == 0:
-        thread.reading_progress = "completed"
+    if state.issues_remaining == 0:
         thread.status = "completed"
         return
-
-    if unread_count == total_issues:
-        thread.reading_progress = "not_started"
-    else:
-        thread.reading_progress = "in_progress"
 
     if thread.status == "completed":
         thread.status = "active"
@@ -456,18 +446,7 @@ async def create_issues(
         )
 
     try:
-        total_count_result = await db.execute(
-            select(func.count()).select_from(Issue).where(Issue.thread_id == thread_id)
-        )
-        total_issue_count = total_count_result.scalar() or 0
-
-        first_unread_result = await db.execute(
-            select(Issue)
-            .where(Issue.thread_id == thread_id, Issue.status == "unread")
-            .order_by(Issue.position)
-            .limit(1)
-        )
-        first_unread_issue = first_unread_result.scalar_one_or_none()
+        adopted_issues = await issue_repository.issues_ordered(db, thread_id)
     except IntegrityError as e:
         await db.rollback()
         if _is_issue_thread_number_conflict(e):
@@ -488,44 +467,23 @@ async def create_issues(
             detail="Internal error: Database constraint violation",
         ) from e
 
-    if thread.total_issues is None:
-        thread.total_issues = total_issue_count
-        thread.issues_remaining = await thread.get_issues_remaining(db)
-        if first_unread_issue is None:
-            thread.next_unread_issue_id = None
-            thread.reading_progress = "completed"
-            thread.status = "completed"
-        else:
-            thread.next_unread_issue_id = first_unread_issue.id
-            if thread.issues_remaining == thread.total_issues:
-                thread.reading_progress = "not_started"
-            else:
-                thread.reading_progress = "in_progress"
-            thread.status = "active"
-    else:
-        existing_next_unread_issue_id = thread.next_unread_issue_id
-        was_not_started = thread.reading_progress == "not_started"
-        thread.total_issues += new_issues_count
-        thread.issues_remaining += new_issues_count
-        thread.reading_progress = "not_started" if was_not_started else "in_progress"
-        if existing_next_unread_issue_id is None and new_issues:
-            if thread.status == "completed":
-                await db.execute(
-                    update(Thread)
-                    .where(Thread.user_id == current_user.id)
-                    .where(Thread.status == "active")
-                    .values(queue_position=Thread.queue_position + 1)
-                )
-                thread.queue_position = 1
-            thread.next_unread_issue_id = new_issues[0].id
-            thread.reading_progress = "in_progress"
-            thread.status = "active"
-        elif (
-            new_issues
-            and existing_next_unread_issue_id is not None
-            and await should_update_next_unread(new_issues[0].id, existing_next_unread_issue_id, db)
-        ):
-            thread.next_unread_issue_id = new_issues[0].id
+    was_unmigrated = thread.total_issues is None
+    had_next_unread_issue = thread.next_unread_issue_id is not None
+    tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
+    total_issue_count = tracking_state.total_issues
+
+    if tracking_state.next_unread_issue_id is None:
+        thread.status = "completed"
+    elif was_unmigrated or not had_next_unread_issue:
+        if not was_unmigrated and thread.status == "completed":
+            await db.execute(
+                update(Thread)
+                .where(Thread.user_id == current_user.id)
+                .where(Thread.status == "active")
+                .values(queue_position=Thread.queue_position + 1)
+            )
+            thread.queue_position = 1
+        thread.status = "active"
 
     thread_id_val = thread.id
 

@@ -20,6 +20,7 @@ from app.api.session import (
 )
 from app.api.snooze import build_session_response
 from app.auth import get_current_user
+from app.config import get_recommendation_settings
 
 from app.database import get_db
 from app.middleware import limiter
@@ -64,6 +65,13 @@ from comic_pile.recommendation_selection import (
     normalize_intent,
     resolve_selection_mode,
     select_from_pool,
+)
+from comic_pile.recommendation_version import (
+    CONTROL_MODE_CONTEXTUAL,
+    FORCED_LEGACY_REASON_CODE,
+    FORCED_LEGACY_SELECTION_METHOD,
+    RECOMMENDATION_ALGORITHM_VERSION,
+    recommendation_algorithm_version,
 )
 from comic_pile.session import get_current_die_for_session, get_or_create
 
@@ -169,13 +177,36 @@ async def _select_pending_thread(
             detail=empty_pool_detail,
         )
 
+    # Phase 9 (issue #1767): the operator control mode is the highest-level
+    # selection switch. In "legacy" mode every draw uses the unweighted path
+    # inside the existing bounded pool while instrumentation stays active.
+    recommendation_settings = get_recommendation_settings()
+    control_mode = recommendation_settings.control_mode
+    algorithm_version = recommendation_algorithm_version(control_mode)
+
     pool_size = len(bounded_rows)
-    resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent)
+    resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent, control_mode)
 
     max_bonus = 0.0
     weights_applied = False
     candidate_weights: list = []
-    if resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
+    if resolved_mode is SelectionMode.FORCED_LEGACY:
+        selection = select_from_pool(
+            pool_size,
+            bandwidth=selection_bandwidth,
+            intent=selection_intent,
+            control_mode=control_mode,
+        )
+        selected_index = selection.index
+        candidate_weights = [
+            MomentumCandidateWeight(
+                candidate_id=row[0].id if isinstance(row, tuple) else row.id,
+                weight=1.0,
+                factors=(),
+            )
+            for row in bounded_rows
+        ]
+    elif resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
         selection = select_from_pool(
             pool_size,
             bandwidth=selection_bandwidth,
@@ -209,7 +240,9 @@ async def _select_pending_thread(
         candidate_weights = selected.weights
         weights_applied = selected.weights_applied
 
-    if resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
+    if resolved_mode is SelectionMode.FORCED_LEGACY:
+        recommendation_reason_codes = [FORCED_LEGACY_REASON_CODE]
+    elif resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
         if selection_bandwidth in ("light", "deep"):
             recommendation_reason_codes = ["bandwidth_weighted"]
         else:
@@ -274,10 +307,14 @@ async def _select_pending_thread(
         random_bypass=not weights_applied,
         balanced_neutrality=not weights_applied,
         selected_weight=json_selected_weight,
+        algorithm_version=algorithm_version,
+        control_mode=control_mode,
     )
 
     if selection_method_override is not None:
         selection_method = selection_method_override
+    elif resolved_mode is SelectionMode.FORCED_LEGACY:
+        selection_method = FORCED_LEGACY_SELECTION_METHOD
     elif resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
         selection_method = "bandwidth" if selection_bandwidth in ("light", "deep") else "momentum"
     else:
@@ -309,6 +346,8 @@ async def _select_pending_thread(
             selected_thread_last_rating=selected_thread.last_rating,
             selected_thread_last_activity_at=selected_thread.last_activity_at,
             effort_estimate=effort_estimate_str,
+            algorithm_version=algorithm_version,
+            control_mode=control_mode,
         ),
     )
     db.add(event)
@@ -444,6 +483,8 @@ def _build_rolling_recommendation_context(
     selected_thread_last_rating: float | None,
     selected_thread_last_activity_at: datetime | None,
     effort_estimate: str | None = None,
+    algorithm_version: str | None = None,
+    control_mode: str | None = None,
 ) -> dict[str, object]:
     """Build the rolling recommendation context snapshot for a roll event.
 
@@ -452,11 +493,16 @@ def _build_rolling_recommendation_context(
         selected_queue_position: Selected thread queue position at roll time
         bounded_candidate_ids: Bounded candidate thread IDs in exact selection order
         selected_index: Selected candidate index/result
-        selection_method: Selection method (random, momentum, override)
+        selection_method: Selection method (random, momentum, bandwidth, override,
+            skip, or forced legacy)
         session_timezone: Session timezone if available
         selected_thread_last_rating: Last rating of selected thread at decision time
         selected_thread_last_activity_at: Last activity timestamp of selected thread
         effort_estimate: Optional effort estimate if available
+        algorithm_version: Canonical algorithm version at decision time; when
+            absent the active contextual version is recorded
+        control_mode: Operator control mode at decision time; when absent the
+            contextual control mode is recorded
 
     Returns:
         Dictionary suitable for JSON storage as rolling_recommendation_context
@@ -465,7 +511,8 @@ def _build_rolling_recommendation_context(
 
     return {
         "schema_version": 1,
-        "algorithm_version": "legacy",
+        "algorithm_version": algorithm_version or RECOMMENDATION_ALGORITHM_VERSION,
+        "control_mode": control_mode or CONTROL_MODE_CONTEXTUAL,
         "die_size": die_size,
         "selected_queue_position": selected_queue_position,
         "bounded_candidate_ids": bounded_candidate_ids,
@@ -952,6 +999,11 @@ async def override_roll(
     )
     # Versioned JSON context for override: single bounded candidate, neutral
     # weighting but explicit manual-override bandwidth source (issue #1718).
+    # Phase 9 (issue #1767): the operator control state at decision time is
+    # recorded even though manual overrides bypass the selection algorithm.
+    recommendation_settings = get_recommendation_settings()
+    control_mode = recommendation_settings.control_mode
+    algorithm_version = recommendation_algorithm_version(control_mode)
     override_candidate_weights: list[dict[str, object]] = [
         {
             "candidate_id": override_thread_id,
@@ -972,6 +1024,8 @@ async def override_roll(
         random_bypass=False,
         balanced_neutrality=True,
         selected_weight=1.0,
+        algorithm_version=algorithm_version,
+        control_mode=control_mode,
     )
 
     # Extract effort estimate band as string for JSON serialization
@@ -998,6 +1052,8 @@ async def override_roll(
             selected_thread_last_rating=override_thread.last_rating,
             selected_thread_last_activity_at=override_thread.last_activity_at,
             effort_estimate=effort_estimate_str,
+            algorithm_version=algorithm_version,
+            control_mode=control_mode,
         ),
     )
     db.add(event)

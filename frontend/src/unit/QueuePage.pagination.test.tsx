@@ -55,9 +55,10 @@ vi.mock('../pages/QueuePage/QueueControls', () => ({
 }))
 
 vi.mock('../pages/QueuePage/QueueList', () => ({
-  QueueList: ({ filteredThreads }: { filteredThreads: Array<{ id: number; title: string }> }) => (
+  QueueList: ({ filteredThreads, sentinelRef, hasNextPage }: any) => (
     <div data-testid="queue-list">
-      {filteredThreads.map((thread) => <div key={thread.id}>{thread.title}</div>)}
+      {filteredThreads.map((thread: any) => <div key={thread.id}>{thread.title}</div>)}
+      {hasNextPage && <div ref={sentinelRef} data-testid="queue-infinite-scroll-sentinel" />}
     </div>
   ),
 }))
