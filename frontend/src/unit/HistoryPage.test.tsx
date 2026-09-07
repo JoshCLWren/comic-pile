@@ -120,6 +120,10 @@ it('newest History row shows recognizable title or empty-state and keeps die/tim
       { id: 98, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T11:00:00Z', ladder_path: '6', active_thread: null, snapshot_count: 0 },
     ],
     isPending: false,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+    error: null,
   })
   render(<MemoryRouter><HistoryPage /></MemoryRouter>)
   // Newest row surfaces comic title, not only date/die
