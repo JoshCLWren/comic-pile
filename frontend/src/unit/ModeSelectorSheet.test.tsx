@@ -153,4 +153,31 @@ describe('ModeSelectorSheet', () => {
     await user.keyboard('{Escape}')
     expect(onClose).toHaveBeenCalledTimes(1)
   })
+
+  it('hides the quiz entry when quizEnabled is false', () => {
+    render(<ModeSelectorSheet {...defaultProps} quizEnabled={false} />)
+    expect(screen.queryByTestId('mode-selector-open-quiz')).not.toBeInTheDocument()
+  })
+
+  it('opens the quiz from the manual entry point when enabled', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    const onClose = vi.fn()
+    const onOpenQuiz = vi.fn()
+
+    render(
+      <ModeSelectorSheet
+        {...defaultProps}
+        onSubmit={onSubmit}
+        onClose={onClose}
+        quizEnabled={true}
+        onOpenQuiz={onOpenQuiz}
+      />,
+    )
+
+    await user.click(screen.getByTestId('mode-selector-open-quiz'))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onOpenQuiz).toHaveBeenCalledTimes(1)
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
 })

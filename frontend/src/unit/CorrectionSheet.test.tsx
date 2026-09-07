@@ -98,4 +98,57 @@ describe('CorrectionSheet', () => {
     await user.keyboard('{Enter}')
     expect(onSubmit).toHaveBeenCalledWith('even_easier', { bandwidth: 'light' })
   })
+
+  it('hides the quiz suggestion when quizEnabled is false', () => {
+    render(
+      <CorrectionSheet
+        isOpen={true}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+        quizEnabled={false}
+        onOpenQuiz={vi.fn()}
+      />,
+    )
+    expect(screen.queryByTestId('correction-sheet-open-quiz')).not.toBeInTheDocument()
+  })
+
+  it('opens the quiz from the suggestion link when enabled', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    const onOpenQuiz = vi.fn()
+
+    render(
+      <CorrectionSheet
+        isOpen={true}
+        onClose={onClose}
+        onSubmit={vi.fn()}
+        quizEnabled={true}
+        onOpenQuiz={onOpenQuiz}
+      />,
+    )
+
+    await user.click(screen.getByTestId('correction-sheet-open-quiz'))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onOpenQuiz).toHaveBeenCalledTimes(1)
+  })
+
+  it('dismiss closes the sheet without opening the quiz', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    const onOpenQuiz = vi.fn()
+
+    render(
+      <CorrectionSheet
+        isOpen={true}
+        onClose={onClose}
+        onSubmit={vi.fn()}
+        quizEnabled={true}
+        onOpenQuiz={onOpenQuiz}
+      />,
+    )
+
+    await user.click(screen.getByTestId('correction-sheet-dismiss'))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onOpenQuiz).not.toHaveBeenCalled()
+  })
 })
