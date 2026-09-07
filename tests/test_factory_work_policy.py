@@ -580,3 +580,121 @@ def test_cbl_chain_2126_to_2129_closing_a_and_b_unblocks_c():
     assert 2128 in candidate_numbers
     # 2129 still blocked by open 2128
     assert 2129 not in candidate_numbers
+
+
+def test_pr_below_no_diff_retry_limit_remains_selectable():
+    """A truthful changes-requested PR is still executable before retry exhaustion."""
+    target = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:changes-requested"],
+    )
+    candidates = policy.build_candidates(
+        [],
+        [target],
+        no_diff_attempts_by_issue={2264: policy.FACTORY_NO_DIFF_RETRY_LIMIT - 1},
+    )
+    assert any(item.kind == "pr" and item.number == 2264 for item in candidates)
+
+
+def test_pr_at_no_diff_retry_limit_is_excluded_without_blocked_label():
+    """Retry exhaustion suppresses PR candidacy without falsifying workflow labels."""
+    target = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:changes-requested"],
+    )
+    candidates = policy.build_candidates(
+        [],
+        [target],
+        no_diff_attempts_by_issue={2264: policy.FACTORY_NO_DIFF_RETRY_LIMIT},
+    )
+    assert candidates == []
+    assert {label["name"] for label in target["labels"]} == {
+        "factory",
+        "factory:unowned",
+        "factory:changes-requested",
+    }
+
+
+def test_review_pr_at_no_diff_retry_limit_is_excluded_without_blocked_label():
+    """A review PR at the retry limit stays factory:review while becoming ineligible."""
+    target = pr_fixture(
+        number=2271,
+        issue=2201,
+        labels=["factory", "factory:unowned", "factory:review"],
+    )
+    candidates = policy.build_candidates(
+        [],
+        [target],
+        no_diff_attempts_by_issue={2271: policy.FACTORY_NO_DIFF_RETRY_LIMIT},
+    )
+    assert candidates == []
+    assert "factory:review" in {label["name"] for label in target["labels"]}
+    assert "factory:blocked" not in {label["name"] for label in target["labels"]}
+
+
+def test_pr_no_diff_retry_suppression_expires_with_reset_window():
+    """Aged no-diff markers fall out of the rolling window and the PR is selectable."""
+    now = 2_000_000_000
+    expired = now - policy.FACTORY_NO_DIFF_RETRY_RESET_SECONDS - 1
+    comments = [
+        {
+            "author_association": "OWNER",
+            "body": (
+                "<!-- comic-pile-factory-claim-released-v3:pr-2264:worker:"
+                f"{expired}:repair-no-persisted-change-handoff -->"
+            ),
+        }
+        for _ in range(policy.FACTORY_NO_DIFF_RETRY_LIMIT)
+    ]
+    counts = policy.no_diff_attempts_from_comments(comments, now_epoch=now)
+    assert counts == {}
+    target = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:changes-requested"],
+    )
+    candidates = policy.build_candidates([], [target], no_diff_attempts_by_issue=counts)
+    assert any(item.kind == "pr" and item.number == 2264 for item in candidates)
+
+
+def test_recent_pr_no_diff_markers_exclude_candidate():
+    """Trusted in-window PR no-diff markers consume the retry budget."""
+    now = 2_000_000_000
+    comments = [
+        {
+            "author_association": "OWNER",
+            "body": (
+                "<!-- comic-pile-factory-claim-released-v3:pr-2264:worker:"
+                f"{now - offset}:repair-no-persisted-change-handoff -->"
+            ),
+        }
+        for offset in range(policy.FACTORY_NO_DIFF_RETRY_LIMIT)
+    ]
+    counts = policy.no_diff_attempts_from_comments(comments, now_epoch=now)
+    assert counts.get(2264, 0) >= policy.FACTORY_NO_DIFF_RETRY_LIMIT
+    target = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:changes-requested"],
+    )
+    candidates = policy.build_candidates([], [target], no_diff_attempts_by_issue=counts)
+    assert candidates == []
+
+
+def test_issue_no_diff_retry_suppression_remains_intact():
+    """Issue candidacy still uses the same bounded no-diff retry counter."""
+    target = issue_fixture(31)
+    below = policy.build_candidates(
+        [target],
+        [],
+        no_diff_attempts_by_issue={31: policy.FACTORY_NO_DIFF_RETRY_LIMIT - 1},
+    )
+    exhausted = policy.build_candidates(
+        [target],
+        [],
+        no_diff_attempts_by_issue={31: policy.FACTORY_NO_DIFF_RETRY_LIMIT},
+    )
+    assert any(item.kind == "issue" and item.number == 31 for item in below)
+    assert not any(item.kind == "issue" and item.number == 31 for item in exhausted)

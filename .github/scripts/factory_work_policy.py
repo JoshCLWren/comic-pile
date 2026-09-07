@@ -318,7 +318,12 @@ def issue_is_static_candidate(
     return item_is_unowned(labels)
 
 
-def pr_is_static_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, Any]]) -> bool:
+def pr_is_static_candidate(
+    pr: dict[str, Any],
+    issue_map: dict[int, dict[str, Any]],
+    *,
+    no_diff_attempts: int = 0,
+) -> bool:
     """Return whether an open autonomous-factory PR is structurally eligible."""
     if str(pr.get('state') or 'OPEN').upper() != 'OPEN' or pr.get('isDraft'):
         return False
@@ -329,6 +334,8 @@ def pr_is_static_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, An
     if not is_factory_managed_pr(pr):
         return False
     if labels & BLOCKED_LABELS or 'factory:ready' in labels:
+        return False
+    if no_diff_attempts >= FACTORY_NO_DIFF_RETRY_LIMIT:
         return False
     if not item_is_unowned(labels):
         return False
@@ -455,14 +462,18 @@ def build_candidates(
             )
         )
     for pr in prs:
-        if not pr_is_static_candidate(pr, issue_map):
+        pr_number = int(pr['number'])
+        if not pr_is_static_candidate(
+            pr,
+            issue_map,
+            no_diff_attempts=max(0, int(retry_counts.get(pr_number, 0))),
+        ):
             continue
-        # PR retry exhaustion is represented by the explicit factory:blocked
-        # lifecycle stage written by the worker that records the final bounded
-        # no-diff attempt. Historical comments are evidence for deciding when
-        # to quarantine, but they are not an independent hidden queue state.
-        # If an operator truthfully restores the PR to review or repair, its
-        # current lifecycle labels must make it executable again.
+        # Recent no-diff retries suppress immediate re-selection without
+        # rewriting truthful review/repair labels to factory:blocked.
+        # Once the rolling window ages out, the same labels become eligible
+        # again. Genuine human/credential/external blockers still use the
+        # explicit factory:blocked label.
         linked = linked_issue_from_pr(pr)
         pr_labels = labels_of(pr)
         labels = set(pr_labels)
@@ -474,7 +485,7 @@ def build_candidates(
         candidates.append(
             Candidate(
                 kind='pr',
-                number=int(pr['number']),
+                number=pr_number,
                 lane=lane,
                 priority=priority_rank(labels),
                 created_at=str(pr.get('createdAt') or ''),

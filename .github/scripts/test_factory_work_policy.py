@@ -6,6 +6,7 @@ import unittest
 
 from factory_work_policy import (
     FACTORY_NO_DIFF_RETRY_LIMIT,
+    FACTORY_NO_DIFF_RETRY_RESET_SECONDS,
     Candidate,
     build_candidates,
     no_diff_attempts_from_comments,
@@ -188,7 +189,7 @@ class RetryBudgetTests(unittest.TestCase):
         self.assertTrue(any(item.kind == "issue" and item.number == 31 for item in below_budget))
         self.assertFalse(any(item.kind == "issue" and item.number == 31 for item in exhausted))
 
-    def test_no_diff_pr_history_does_not_hide_actionable_lifecycle_state(self) -> None:
+    def test_no_diff_pr_retries_until_budget_is_exhausted(self) -> None:
         target = factory_pr(31, stage="factory:changes-requested")
         below_budget = build_candidates(
             [],
@@ -201,9 +202,9 @@ class RetryBudgetTests(unittest.TestCase):
             no_diff_attempts_by_issue={31: FACTORY_NO_DIFF_RETRY_LIMIT},
         )
         self.assertTrue(any(item.kind == "pr" and item.number == 31 for item in below_budget))
-        self.assertTrue(any(item.kind == "pr" and item.number == 31 for item in exhausted))
+        self.assertFalse(any(item.kind == "pr" and item.number == 31 for item in exhausted))
 
-    def test_review_and_repair_prs_remain_candidates_after_historical_no_diff(self) -> None:
+    def test_review_and_repair_prs_are_suppressed_at_retry_limit_without_relabeling(self) -> None:
         targets = [
             factory_pr(2122, stage="factory:changes-requested"),
             factory_pr(2132, stage="factory:review"),
@@ -218,13 +219,33 @@ class RetryBudgetTests(unittest.TestCase):
             },
         )
 
+        self.assertEqual(candidates, [])
         self.assertEqual(
-            {(item.number, item.stage) for item in candidates},
-            {
-                (2122, "factory:changes-requested"),
-                (2132, "factory:review"),
-            },
+            {name for target in targets for name in (label["name"] for label in target["labels"])},
+            {"factory", "factory:unowned", "factory:changes-requested", "factory:review"},
         )
+
+    def test_no_diff_pr_retry_suppression_expires_with_reset_window(self) -> None:
+        now = 2_000_000_000
+        expired = now - FACTORY_NO_DIFF_RETRY_RESET_SECONDS - 1
+        comments = [
+            {
+                "author_association": "OWNER",
+                "body": (
+                    "<!-- comic-pile-factory-claim-released-v3:pr-31:worker:"
+                    f"{expired}:repair-no-persisted-change-handoff -->"
+                ),
+            }
+            for _ in range(FACTORY_NO_DIFF_RETRY_LIMIT)
+        ]
+        counts = no_diff_attempts_from_comments(comments, now_epoch=now)
+        self.assertEqual(counts, {})
+        candidates = build_candidates(
+            [],
+            [factory_pr(31, stage="factory:changes-requested")],
+            no_diff_attempts_by_issue=counts,
+        )
+        self.assertTrue(any(item.kind == "pr" and item.number == 31 for item in candidates))
 
     def test_explicitly_blocked_pr_remains_excluded(self) -> None:
         blocked = factory_pr(2140, stage="factory:blocked")
