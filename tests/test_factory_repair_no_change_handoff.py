@@ -19,16 +19,19 @@ def release_stage(
 ) -> str:
     """Run the release primitive and capture the stage passed to replace_labels.
 
-    The gh stub returns enough no-diff comments to exceed FACTORY_NO_DIFF_RETRY_LIMIT
-    so a regression that rewrites exhaustion to factory:blocked is observable.
+    Git and gh are stubbed so PR no-diff releases can pin a head generation
+    without a real checkout or GitHub API. The unused comment-count argument
+    stays for call-site compatibility.
     """
+    del existing_no_diff_comments
     script = f"""
 source <(sed '/^ensure_owner_label$/,$d' \"{PRIMITIVES}\")
 current_stage() {{ printf '%s\\n' '{current_stage}'; }}
 replace_labels() {{ printf '%s\\n' \"$3\"; }}
+git() {{ printf '%s\\n' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; }}
 gh() {{
-  if [[ \"$1\" == api && \"$*\" == *comments* ]]; then
-    python3 -c 'import json,sys; n=int(sys.argv[1]); print(json.dumps([[{{\"body\":\"<!-- comic-pile-factory-claim-released-v3:pr-2010:w:1:repair-no-persisted-change-handoff -->\"}}]*n]))' {existing_no_diff_comments}
+  if [[ \"$1\" == pr && \"$2\" == view ]]; then
+    printf '%s\\n' '{{"headRefOid":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","mergeable":"MERGEABLE","mergeStateStatus":"CLEAN"}}'
     return 0
   fi
   return 0
@@ -52,8 +55,13 @@ release_target 2010 \"{fallback_stage}\" \"{reason}\" pr
         env=env,
         text=True,
         capture_output=True,
-        check=True,
+        check=False,
     )
+    if completed.returncode != 0:
+        raise AssertionError(
+            "release_target failed "
+            f"(exit {completed.returncode}): stdout={completed.stdout!r} stderr={completed.stderr!r}"
+        )
     return completed.stdout.strip()
 
 
