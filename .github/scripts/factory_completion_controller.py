@@ -577,17 +577,24 @@ def assign_completion_batch(*, now_epoch: int | None = None) -> dict[str, object
     )
 
     try:
-        retry_counts: dict[int, int] | None = controller.load_no_diff_attempts(now_epoch)
+        attempt_records = controller.load_no_diff_attempt_records(now_epoch)
     except RuntimeError as exc:
-        retry_counts = None
+        attempt_records = None
         print(
             f"[factory-completion] no-diff history unavailable; PR completion remains safe: {exc}",
             file=sys.stderr,
         )
+    issue_retry_counts: dict[int, int] = {}
+    if attempt_records is not None:
+        for attempt in attempt_records:
+            if attempt.kind != "issue":
+                continue
+            issue_retry_counts[attempt.number] = issue_retry_counts.get(attempt.number, 0) + 1
     candidates = policy.build_candidates(
         issues,
         prs,
-        no_diff_attempts_by_issue=retry_counts or {},
+        no_diff_attempts_by_issue=issue_retry_counts,
+        no_diff_attempt_records=attempt_records,
     )
     # This controller is deliberately completion-only. It must never manufacture
     # fresh issue work, even when a regular dispatcher tick is delayed.
