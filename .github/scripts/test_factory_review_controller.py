@@ -706,6 +706,62 @@ def test_gh_pr_view_counts_as_diff_inspection_evidence(monkeypatch):
     assert transitions[0]["pr_stage"] == "factory:ready"
 
 
+def test_unified_diff_hunk_counts_as_diff_inspection_evidence(monkeypatch):
+    """Excerpt tails that only retain dumped unified diffs must still promote.
+
+    The worker dumps `gh pr diff` after sanitize; when that dump exceeds the
+    7000-char excerpt window, only hunks like `diff --git` remain. Matching
+    those prevents false diff-inspection-required soft-fails (#2309 follow-up).
+    """
+    controller = load_controller()
+    arguments = configure_review_handoff(monkeypatch, controller)
+    monkeypatch.setattr(
+        controller,
+        "review_excerpt",
+        lambda _path, worker: (
+            "diff --git a/tests/test_example.py b/tests/test_example.py\n"
+            "+++ b/tests/test_example.py\n"
+            "+def test_ok() -> None:\n"
+            "+    assert True\n"
+            "FACTORY_GATE_READY"
+        ),
+    )
+    monkeypatch.setattr(
+        controller,
+        "mechanical_merge_gate",
+        lambda _pr, _head: {"decision": "pass", "reason": "green"},
+    )
+    monkeypatch.setattr(controller, "approval_can_promote", lambda **_kwargs: True)
+    comments = []
+    transitions = []
+    monkeypatch.setattr(controller, "post_review_comment", lambda **kwargs: comments.append(kwargs))
+    monkeypatch.setattr(
+        controller,
+        "transition_pr_and_linked_issue",
+        lambda **kwargs: transitions.append(kwargs),
+    )
+
+    result = controller.handle_review(**arguments)
+
+    assert result["status"] == "ready"
+    assert comments[0]["verdict"] == "approve"
+    assert transitions[0]["pr_stage"] == "factory:ready"
+
+
+def test_authoritative_diff_evidence_marker_survives_long_dump_tail():
+    """Worker must keep the evidence marker inside review_excerpt's last 7000 chars."""
+    worker = Path(__file__).with_name("free-model-factory-worker.sh").read_text(encoding="utf-8")
+    assert "review_excerpt keeps only the last 7000 chars" in worker
+    # The closing marker pair must appear after the `gh pr diff` dump.
+    append_block_start = worker.index("comic-pile-factory-authoritative-diff-evidence")
+    dump = worker.index('gh pr diff "$NUMBER"', append_block_start)
+    closing_marker = worker.index(
+        "comic-pile-factory-authoritative-diff-evidence",
+        dump,
+    )
+    assert closing_marker > dump
+
+
 def test_fixed_model_factory_schedules_are_active():
     root = SCRIPT_DIR.parent / "workflows"
     drain = (root / "factory-ready-merge-drain.yml").read_text()
