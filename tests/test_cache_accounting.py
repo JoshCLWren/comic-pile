@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.cache_accounting import (
     DurableCacheAccounting,
     _current_month_key,
+    cache_accounting,
 )
 from app.cache_metrics import cache_command_metrics
 from app.cache_quota import observe_cache_quota, quota_guardrail
@@ -38,6 +39,7 @@ def reset_global_metrics() -> None:
     """Reset shared global counters per test to prevent state leakage."""
     cache_command_metrics.reset()
     quota_guardrail.reset()
+    cache_accounting.reset()
 
 
 @pytest.fixture
@@ -349,7 +351,7 @@ class TestNeonFailureIsolation:
     async def test_redis_record_never_blocks_on_neon(self) -> None:
         """record() always returns immediately regardless of Neon state."""
         acc = DurableCacheAccounting(block_size=100)
-        acc._remaining = 100
+        acc._remaining = 1000
         acc._engine = None
 
         start = time.monotonic()

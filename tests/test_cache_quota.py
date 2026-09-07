@@ -15,6 +15,7 @@ from fastapi import HTTPException
 
 from app.api import health
 from app.cache import UpstashCache, cache
+from app.cache_accounting import cache_accounting
 from app.cache_generation import bump_user_generation
 from app.cache_metrics import cache_command_metrics
 from app.cache_quota import (
@@ -34,6 +35,7 @@ def reset_quota_globals() -> None:
     cache_command_metrics.reset()
     quota_guardrail.reset()
     set_quota_throttle_enabled(False)
+    cache_accounting.reset()
 
 
 class RecordingCacheClient:

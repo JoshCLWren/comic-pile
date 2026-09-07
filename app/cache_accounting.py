@@ -143,6 +143,19 @@ class DurableCacheAccounting:
                 pass
         self._initialized = False
 
+    def reset(self) -> None:
+        """Reset to initial uninitialized state for test isolation."""
+        task = self._replenish_task
+        self._replenish_task = None
+        if task is not None and not task.done():
+            task.cancel()
+        self._remaining = 0
+        self._reserved_total = 0
+        self._neon_total = None
+        self._degraded = True
+        self._month_key = _current_month_key()
+        self._initialized = False
+
     # -- Hot path ---------------------------------------------------------
 
     def record(self, count: int = 1) -> None:
