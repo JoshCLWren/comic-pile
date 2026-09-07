@@ -28,6 +28,9 @@ interface VirtualizedThreadListProps<T> {
    * virtualized and non-virtualized presentations are both one full-width row.
    */
   explicitColumnCount?: number
+  sentinelRef?: React.RefObject<HTMLDivElement | null>
+  scrollRootRef?: React.RefObject<HTMLDivElement | null>
+  hasNextPage?: boolean
 }
 
 /**
@@ -58,6 +61,9 @@ export default function VirtualizedThreadList<T>({
   threads,
   renderItem,
   explicitColumnCount,
+  sentinelRef,
+  scrollRootRef,
+  hasNextPage,
 }: VirtualizedThreadListProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -195,7 +201,12 @@ export default function VirtualizedThreadList<T>({
       style={{ height: containerHeight || 'calc(100dvh - 14rem)' }}
     >
       <div
-        ref={scrollRef}
+        ref={(node) => {
+          scrollRef.current = node
+          if (scrollRootRef) {
+            ;(scrollRootRef as React.MutableRefObject<HTMLDivElement | null>).current = node
+          }
+        }}
         data-testid="queue-thread-list"
         id="queue-container"
         role="list"
@@ -211,7 +222,7 @@ export default function VirtualizedThreadList<T>({
       >
         <div
           style={{
-            height: `${virtualizer.getTotalSize()}px`,
+            height: `${virtualizer.getTotalSize() + (hasNextPage ? 16 : 0)}px`,
             position: 'relative',
             width: '100%',
           }}
@@ -262,6 +273,20 @@ export default function VirtualizedThreadList<T>({
               </div>
             )
           })}
+          {hasNextPage && (
+            <div
+              ref={sentinelRef}
+              style={{
+                position: 'absolute',
+                top: virtualizer.getTotalSize(),
+                left: 0,
+                width: '100%',
+                height: '16px',
+              }}
+              data-testid="queue-infinite-scroll-sentinel"
+              aria-hidden="true"
+            />
+          )}
         </div>
       </div>
     </div>

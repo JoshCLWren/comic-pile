@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useRef } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -170,10 +170,13 @@ export default function QueuePage() {
     void loadMore().catch(() => undefined)
   }, [loadMore])
 
+  const scrollRootRef = useRef<HTMLDivElement>(null)
+
   const { sentinelRef } = useInfiniteScroll({
     onLoadMore: handleLoadMore,
     hasMore: !!nextPageToken,
     isLoading: isPending,
+    rootRef: scrollRootRef,
   })
 
   const mobileAddEnabled = !modals.isAnyModalOpen
@@ -217,6 +220,9 @@ export default function QueuePage() {
           reorderError={actions.reorderError}
           renderItem={renderThreadCard}
           isSearching={isSearching}
+          sentinelRef={sentinelRef}
+          scrollRootRef={scrollRootRef}
+          hasNextPage={!!nextPageToken}
         />
 
         <CompletedThreadsSection
@@ -238,15 +244,6 @@ export default function QueuePage() {
               </button>
             )}
           </div>
-        )}
-
-        {nextPageToken && (
-          <div
-            ref={sentinelRef}
-            className="h-4"
-            data-testid="queue-infinite-scroll-sentinel"
-            aria-hidden="true"
-          />
         )}
 
         {isPending && threads !== null && threads.length > 0 && (
