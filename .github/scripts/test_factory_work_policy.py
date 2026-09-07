@@ -291,6 +291,19 @@ class WipCapTests(unittest.TestCase):
         )
         self.assertFalse(candidates)
 
+    def test_labeled_cursor_delivery_pr_is_factory_candidate(self) -> None:
+        target = factory_pr(
+            1,
+            branch="cursor/issue-2184-queue-nested-scroll",
+            owner="factory:unowned",
+            stage="factory:review",
+        )
+        target["title"] = "Fix #2184: Queue nested scroll"
+        candidates = build_candidates([], [target])
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0].linked_issue, 2184)
+        self.assertTrue(candidates[0].kind == "pr")
+
 
 class ReviewBacklogPressureTests(unittest.TestCase):
     def test_owned_review_prs_count_toward_backlog_saturation(self) -> None:
