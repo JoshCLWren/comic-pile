@@ -162,11 +162,9 @@ export async function invalidateAfterQueueMutation(
 }
 
 /**
- * Update a single thread's metadata in every loaded Queue infinite-query page
- * in-place. Use this for mutations that change thread metadata (title, format,
- * notes, issues_remaining, rating) without changing queue ordering or membership.
- *
- * Returns immediately — no network refetch is triggered for the Queue list.
+ * Invalidate only the `comicVine.issueIntelligence(issueId)` cache bucket after
+ * a ComicVine identity correction/replacement so the rating view refetches the
+ * freshly confirmed issue metadata without clearing unrelated caches.
  */
 export async function invalidateComicVineIssueIntelligence(
   client: QueryClient,
@@ -178,6 +176,11 @@ export async function invalidateComicVineIssueIntelligence(
   })
 }
 
+/**
+ * Update the cached `image_url` for an issue's ComicVine intelligence in-place
+ * so the newly selected cover renders immediately after a correction. The
+ * subsequent invalidation/refetch confirms the optimistic value from the server.
+ */
 export function applyComicVineCorrectionOptimistically(
   client: QueryClient,
   issueId: number,
@@ -192,6 +195,13 @@ export function applyComicVineCorrectionOptimistically(
   })
 }
 
+/**
+ * Update a single thread's metadata in every loaded Queue infinite-query page
+ * in-place. Use this for mutations that change thread metadata (title, format,
+ * notes, issues_remaining, rating) without changing queue ordering or membership.
+ *
+ * Returns immediately — no network refetch is triggered for the Queue list.
+ */
 export function applyEditedThreadToQueuePages(
   client: QueryClient,
   updatedThread: Thread,
