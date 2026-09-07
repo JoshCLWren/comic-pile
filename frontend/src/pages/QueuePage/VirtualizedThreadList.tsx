@@ -57,7 +57,7 @@ interface VirtualizedThreadListProps<T> {
  * thread-level identity.
  *
  * Preserves existing selectors (`data-testid="queue-thread-list"`,
- * `id="queue-container"`, `role="list"`, `aria-label="Thread queue"`)
+ * `id="queue-container"`, `role="list"`, `aria-label="Series queue"`)
  * for E2E compatibility, including in the empty state.
  */
 export default function VirtualizedThreadList<T>({
@@ -157,12 +157,12 @@ export default function VirtualizedThreadList<T>({
         data-testid="queue-thread-list"
         id="queue-container"
         role="list"
-        aria-label="Thread queue"
+        aria-label="Series queue"
         className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
         style={{ height: 'calc(100dvh - 14rem)' }}
       >
         <div className="flex items-center justify-center text-stone-500 py-8">
-          No threads in queue
+          No series in queue
         </div>
       </div>
     )
@@ -174,7 +174,7 @@ export default function VirtualizedThreadList<T>({
       data-testid="queue-thread-list"
       id="queue-container"
       role="list"
-      aria-label="Thread queue"
+      aria-label="Series queue"
       className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
       onDragOver={handlePanelDragOver}
       onDrop={(event) => event.preventDefault()}
