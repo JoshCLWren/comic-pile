@@ -256,8 +256,8 @@ describe('QueuePage callback coverage', () => {
       } as never
     })
     renderPage()
-    await user.click(screen.getByRole('button', { name: 'A-Z' }))
-    await user.click(screen.getByRole('button', { name: 'New' }))
+    await user.click(screen.getByRole('button', { name: 'Title' }))
+    await user.click(screen.getByRole('button', { name: 'Recently added' }))
     await user.type(screen.getByPlaceholderText('Search...'), 'missing')
     // Search is debounced (300ms) so the parent query only commits after the delay.
     await waitFor(() => expect(screen.getByText('No active threads match your search')).toBeInTheDocument(), { timeout: 2000 })

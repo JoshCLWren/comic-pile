@@ -158,6 +158,23 @@ describe('QueueControls', () => {
     expect(baseProps.onSearchChange).not.toHaveBeenCalled()
   })
 
+  it('renders plain-language sort labels', () => {
+    render(<QueueControls {...baseProps} />)
+
+    expect(screen.getByRole('button', { name: 'Position' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Title' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Recently added' })).toBeInTheDocument()
+  })
+
+  it('marks the active sort without competing with shuffle/add', () => {
+    render(<QueueControls {...baseProps} sortBy="created" />)
+
+    expect(screen.getByRole('button', { name: 'Shuffle' })).toBeInTheDocument()
+    expect(screen.getByTestId('queue-add-thread-desktop')).toBeInTheDocument()
+    const active = screen.getByRole('button', { name: 'Recently added' })
+    expect(active.className).toContain('amber')
+  })
+
   it('invokes shuffle, create, and sort callbacks', async () => {
     const user = userEvent.setup()
     render(<QueueControls {...baseProps} />)
@@ -168,9 +185,9 @@ describe('QueueControls', () => {
     await user.click(screen.getByTestId('queue-add-thread-desktop'))
     expect(baseProps.onCreateThread).toHaveBeenCalledTimes(1)
 
-    await user.click(screen.getByRole('button', { name: 'A-Z' }))
+    await user.click(screen.getByRole('button', { name: 'Title' }))
     expect(baseProps.onSortChange).toHaveBeenCalledWith('alphabetical')
-    await user.click(screen.getByRole('button', { name: 'New' }))
+    await user.click(screen.getByRole('button', { name: 'Recently added' }))
     expect(baseProps.onSortChange).toHaveBeenCalledWith('created')
   })
 })

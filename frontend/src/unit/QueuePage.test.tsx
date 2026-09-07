@@ -407,7 +407,7 @@ describe('Keyboard Accessibility', () => {
     })
     render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
     expect(screen.getByText('Done')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'A-Z' }))
+    await user.click(screen.getByRole('button', { name: 'Title' }))
     const cards = screen.getAllByTestId('queue-thread-item')
     expect(cards[0]).toHaveTextContent('Alpha')
     await user.type(screen.getByPlaceholderText('Search...'), 'missing')
@@ -535,7 +535,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
     { id: 2, title: 'New', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, created_at: '2025-01-01' },
   ], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getByRole('button', { name: 'New' }))
+  await user.click(screen.getByRole('button', { name: 'Recently added' }))
   const cards = screen.getAllByTestId('queue-thread-item')
   expect(cards[0]).toHaveTextContent('New')
   const dragButtons = screen.getAllByRole('button', { name: 'Drag to reorder' })
