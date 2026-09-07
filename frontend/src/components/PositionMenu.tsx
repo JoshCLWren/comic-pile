@@ -8,7 +8,7 @@ interface PositionMenuProps {
   onMoveToFront: (threadId: number) => void
   onReposition: (thread: Thread) => void
   onMoveToBack: (threadId: number) => void
-onEdit: (thread: Thread) => void
+  onEdit: (thread: Thread) => void
   onDependencies: (thread: Thread) => void
   // called when the user selects the Delete action from the menu
   onDelete: (threadId: number) => void
