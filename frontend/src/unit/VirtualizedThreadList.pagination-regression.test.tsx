@@ -86,3 +86,49 @@ it('keeps paginated queue items as full-width rows on a wide viewport', async ()
     'bg-[var(--theme-bg-panel)]',
   )
 })
+
+it('does not wrap the queue panel in an internal scroll container (#2184)', () => {
+  const { container } = render(
+    <VirtualizedThreadList
+      threads={threads}
+      renderItem={(thread, index) => (
+        <div data-testid="queue-thread-item" key={thread.id}>
+          {thread.title} #{index + 1}
+        </div>
+      )}
+    />,
+  )
+
+  const panel = screen.getByTestId('queue-thread-list')
+  expect(panel).toBe(container.querySelector('#queue-container'))
+  // No internal scrolling: the page is the single scroll owner.
+  expect(panel.style.overflowY).not.toBe('auto')
+  expect(panel.style.overflow).not.toBe('auto')
+  // The panel must not own a viewport-derived fixed height; it sits in document flow.
+  expect(panel.style.height).not.toMatch(/^\d+(\.\d+)?(px|dvh|vh|%)$/)
+  // The next-page sentinel is not rendered when the host does not pass `sentinelRef`.
+  expect(screen.queryByTestId('queue-infinite-scroll-sentinel')).not.toBeInTheDocument()
+})
+
+it('renders the next-page sentinel at the spacer bottom when `sentinelRef` is provided', () => {
+  const sentinelRef = { current: null } as React.RefObject<HTMLDivElement | null>
+  const { container } = render(
+    <VirtualizedThreadList
+      threads={threads}
+      renderItem={(thread, index) => (
+        <div data-testid="queue-thread-item" key={thread.id}>
+          {thread.title} #{index + 1}
+        </div>
+      )}
+      sentinelRef={sentinelRef}
+      hasNextPage
+    />,
+  )
+
+  const sentinel = screen.getByTestId('queue-infinite-scroll-sentinel')
+  expect(sentinel).toBeInTheDocument()
+  expect(sentinelRef.current).toBe(sentinel)
+  // The sentinel must sit at the spacer bottom so the window IntersectionObserver
+  // fires exactly when the user scrolls past the last virtual row.
+  expect(container.contains(sentinel)).toBe(true)
+})

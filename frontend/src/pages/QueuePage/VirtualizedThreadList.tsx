@@ -64,9 +64,9 @@ export default function VirtualizedThreadList<T>({
   threads,
   renderItem,
   explicitColumnCount,
-  sentinelRef: _sentinelRef,
+  sentinelRef,
   scrollRootRef: _scrollRootRef,
-  hasNextPage: _hasNextPage,
+  hasNextPage,
 }: VirtualizedThreadListProps<T>) {
   // The bordered panel that owns the list presentation. It sits in normal
   // document flow (no fixed height, no overflowY), so the page scrolls.
@@ -186,6 +186,20 @@ export default function VirtualizedThreadList<T>({
           width: '100%',
         }}
       >
+        {hasNextPage && sentinelRef && (
+          <div
+            ref={sentinelRef}
+            style={{
+              position: 'absolute',
+              top: `${virtualizer.getTotalSize() - 4}px`,
+              left: 0,
+              width: '100%',
+              height: '4px',
+            }}
+            data-testid="queue-infinite-scroll-sentinel"
+            aria-hidden="true"
+          />
+        )}
         {virtualizer.getVirtualItems().map((virtualItem) => {
           const rowIndex = virtualItem.index
           return columnCount === 1 ? (
