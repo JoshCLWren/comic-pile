@@ -17,7 +17,6 @@ export function ComicPillar({
 }: ComicPillarProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false)
-  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [identityState, setIdentityState] = useState<IssueIdentityResponse | null>(null)
   const [searchMode, setSearchMode] = useState<'confirm' | 'replace'>('confirm')
 
@@ -52,17 +51,6 @@ export function ComicPillar({
 
   const needsIdentity = identityState && !identityState.has_confirmed_identity
 
-  async function handleCopyComicReference() {
-    if (!activeRatingThread?.title || issueNumber == null) return
-
-    try {
-      await navigator.clipboard.writeText(`${activeRatingThread.title} ${issueNumber}`)
-      setCopyStatus('copied')
-    } catch {
-      setCopyStatus('failed')
-    }
-  }
-
   return (
     <div className="w-full space-y-4">
       <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: 'var(--theme-comic-accent)' }}>
@@ -84,19 +72,6 @@ export function ComicPillar({
               <div className="flex shrink-0 flex-wrap gap-1.5" data-testid="comic-header-controls">
                 <button
                   type="button"
-                  onClick={handleCopyComicReference}
-                  disabled={!activeRatingThread?.title}
-                  className="min-h-11 rounded-xl px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
-                  style={{
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    backgroundColor: 'rgba(255,255,255,0.05)',
-                  }}
-                  aria-label={`Copy ${threadTitle} ${issueNumber}`}
-                >
-                  {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry copy' : 'Copy title'}
-                </button>
-                <button
-                  type="button"
                   onClick={() => setIsCorrectionDialogOpen(true)}
                   disabled={!activeRatingThread?.id}
                   className="min-h-11 rounded-xl px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
@@ -111,12 +86,6 @@ export function ComicPillar({
               </div>
             ) : null}
           </div>
-
-          {copyStatus === 'failed' ? (
-            <p className="mt-2 text-[10px] font-bold text-rose-400" role="status">
-              Copy failed. Use Retry copy to try again.
-            </p>
-          ) : null}
 
           <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-stone-500">
             {totalIssues && issueNumber != null ? (

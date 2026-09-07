@@ -133,14 +133,13 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     expect(t.width).toBeGreaterThanOrEqual(160)
 
     // Controls must remain usable by touch (min-h-11) and keyboard
-    const copyButton = screen.getByRole('button', { name: /Copy Absolute Batman/i })
+    // After #2288 Copy title lives beside rating controls, not in the Comic pillar
+    expect(screen.queryByRole('button', { name: /Copy Absolute Batman/i })).not.toBeInTheDocument()
+    expect(screen.queryByText('Copy title')).not.toBeInTheDocument()
     const fixButton = screen.getByRole('button', { name: 'Fix issue number' })
-    expect(copyButton).toBeInTheDocument()
     expect(fixButton).toBeInTheDocument()
-    expect(copyButton.getAttribute('aria-label')).toBeTruthy()
     expect(fixButton.getAttribute('aria-label')).toBeTruthy()
     // Touch target via class min-h-11
-    expect(copyButton.className).toContain('min-h-11')
     expect(fixButton.className).toContain('min-h-11')
 
     unmount()
@@ -202,9 +201,8 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     wideContainer.remove()
   })
 
-  it('remains usable with a single remaining control (future state after #2288 moves Copy title)', async () => {
-    // This test documents that the fix does not depend on Copy title being present.
-    // Even if only Fix issue # remains, the flex-wrap contract still prevents overlap.
+  it('remains usable with a single remaining control (after #2288 moves Copy title)', async () => {
+    // After #2288 Copy title is colocated with rating controls; header keeps only Fix issue #.
     const narrowContainer = document.createElement('div')
     narrowContainer.style.width = '320px'
     document.body.appendChild(narrowContainer)
@@ -217,8 +215,9 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     const headerRow = await screen.findByTestId('comic-header-row')
     expect(headerRow.className).toContain('flex-wrap')
 
-    // Both buttons exist today; after #2288 Copy title moves and header will have one control.
-    // Verify the container still declares wrap so single control also reflows safely.
+    // Verify old Copy title placement is removed and single control still reflows safely
+    expect(screen.queryByRole('button', { name: /Copy/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Fix issue number' })).toBeInTheDocument()
     const titleRegion = screen.getByTestId('comic-header-title')
     const controlsRegion = screen.getByTestId('comic-header-controls')
     expect(titleRegion.className).toContain('flex-1')
