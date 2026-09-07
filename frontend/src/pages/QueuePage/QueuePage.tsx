@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useRef } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -7,7 +7,7 @@ import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hoo
 import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
 import { useQueueBlockingInfo } from '../../hooks/useQueueBlockingInfo'
-import { invalidateAfterQueueMutation } from '../../query/cacheEffects'
+import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
 import type { Thread } from '../../types'
@@ -16,6 +16,7 @@ import CompletedThreadsSection from './CompletedThreadsSection'
 import { QueueControls } from './QueueControls'
 import { QueueList } from './QueueList'
 import { QueueModals } from './QueueModals'
+import DeleteThreadDialog from './DeleteThreadDialog'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
@@ -97,6 +98,12 @@ export default function QueuePage() {
     isPendingEdit: updateMutation.isPending,
   })
 
+  const handleIssueChanged = useCallback(() => {
+    if (modals.editingThread) {
+      void invalidateAfterIssueEdit(queryClient, modals.editingThread.id)
+    }
+  }, [modals.editingThread])
+
   const handleRepositionConfirm = useCallback(
     async (targetPosition: number) => {
       if (!modals.repositioningThread) return
@@ -156,7 +163,7 @@ export default function QueuePage() {
           onReposition={() => modals.openRepositionModal(thread)}
           onEdit={() => modals.showEditModal(thread)}
           onDependencies={() => modals.openDependenciesModal(thread)}
-          onDelete={() => actions.handleDelete(thread.id)}
+          onDelete={() => actions.requestDelete(thread)}
         />
       )
     },
@@ -167,10 +174,13 @@ export default function QueuePage() {
     void loadMore().catch(() => undefined)
   }, [loadMore])
 
+  const scrollRootRef = useRef<HTMLDivElement>(null)
+
   const { sentinelRef } = useInfiniteScroll({
     onLoadMore: handleLoadMore,
     hasMore: !!nextPageToken,
     isLoading: isPending,
+    rootRef: scrollRootRef,
   })
 
   const mobileAddEnabled = !modals.isAnyModalOpen
@@ -184,7 +194,7 @@ export default function QueuePage() {
 
   return (
     <PositionMenuProvider>
-      <div className="space-y-6 md:space-y-10 pb-10">
+      <div className="space-y-6 md:space-y-10 pb-[calc(10rem_+_env(safe-area-inset-bottom))] md:pb-10">
         <QueueControls
           activeCount={activeThreads.length}
           shuffleDisabled={shuffleDisabled}
@@ -201,7 +211,7 @@ export default function QueuePage() {
           <button
             type="button"
             onClick={modals.showCreateModal}
-            className="md:hidden fixed bottom-24 right-4 h-14 w-14 rounded-full bg-amber-600 text-white font-black text-3xl shadow-[0_4px_20px_rgba(212,137,14,0.4)] z-50 flex items-center justify-center hover:bg-amber-500 transition-colors"
+            className="md:hidden fixed bottom-[calc(6rem_+_env(safe-area-inset-bottom))] right-4 h-14 w-14 rounded-full bg-[var(--theme-primary-action)] text-stone-950 font-black text-3xl shadow-[0_4px_20px_color-mix(in_srgb,var(--theme-primary-action)_40%,transparent)] z-50 flex items-center justify-center hover:bg-[var(--theme-primary-action-hover)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-bg-page)]"
             aria-label="Add Series"
           >
             +
@@ -214,6 +224,9 @@ export default function QueuePage() {
           reorderError={actions.reorderError}
           renderItem={renderThreadCard}
           isSearching={isSearching}
+          sentinelRef={sentinelRef}
+          scrollRootRef={scrollRootRef}
+          hasNextPage={!!nextPageToken}
         />
 
         <CompletedThreadsSection
@@ -223,7 +236,7 @@ export default function QueuePage() {
 
         {isError && threads !== null && (
           <div role="alert" className="text-sm text-red-400 text-center px-2 space-y-2">
-            <p>Couldn&apos;t load the next batch of threads.</p>
+            <p>Couldn&apos;t load the next batch of series.</p>
             {nextPageToken && (
               <button
                 type="button"
@@ -235,15 +248,6 @@ export default function QueuePage() {
               </button>
             )}
           </div>
-        )}
-
-        {nextPageToken && (
-          <div
-            ref={sentinelRef}
-            className="h-4"
-            data-testid="queue-infinite-scroll-sentinel"
-            aria-hidden="true"
-          />
         )}
 
         {isPending && threads !== null && threads.length > 0 && (
@@ -286,8 +290,23 @@ export default function QueuePage() {
           onCloseMigration={modals.closeMigrationDialog}
           onOpenMigrationDialog={modals.openMigrationDialog}
           onOpenDependencies={modals.editingThread ? () => modals.openDependenciesModal(modals.editingThread!) : undefined}
+          onIssueChanged={handleIssueChanged}
           isPendingCreate={modals.isPendingCreate}
+          isPendingEdit={modals.isPendingEdit}
+          isPendingReactivate={reactivateMutation.isPending}
         />
-    </div>
-  </PositionMenuProvider>
-  );
+
+        <DeleteThreadDialog
+          thread={actions.pendingDeleteThread}
+          isPending={actions.isDeletePending}
+          error={actions.deleteError}
+          onConfirm={() => void actions.confirmDelete()}
+          onCancel={actions.cancelDelete}
+        />
+      </div>
+    </PositionMenuProvider>
+  )
+}
+
+// Re-export the type for unit tests that previously imported it from QueuePage.
+export type { QueueSortBy }

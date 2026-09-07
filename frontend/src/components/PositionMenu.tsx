@@ -182,7 +182,7 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
     {
       label: 'Reposition\u2026',
       icon: '\u2261',
-      ariaLabel: 'Reposition thread',
+      ariaLabel: 'Reposition series',
       action: () => {
         onReposition(thread)
         closeMenu()
@@ -257,8 +257,8 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
             ref={menuRef}
             className="fixed w-52 bg-[#1a1410]/95 border border-white/10 rounded-xl shadow-2xl z-[1000] py-1 overflow-hidden"
             style={menuPosition}
-            role="menu"
-aria-label="Series actions"
+role="menu"
+            aria-label="Series actions"
           >
             {menuItems.map((item, index) => (
               <button

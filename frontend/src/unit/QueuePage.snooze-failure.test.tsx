@@ -120,7 +120,8 @@ it('does not refresh session or threads when snooze fails', async () => {
   const user = userEvent.setup()
   renderQueue()
 
-  await user.click(screen.getAllByLabelText('Snooze')[0])
+  await user.click(screen.getAllByRole('button', { name: 'Series actions' })[0])
+  await user.click(screen.getByRole('menuitem', { name: 'Snooze' }))
 
   await waitFor(() => {
     expect(alert).toHaveBeenCalledWith('Failed to snooze thread: Snooze unavailable')
@@ -160,7 +161,8 @@ it('does not refresh session or threads when unsnooze fails', async () => {
   const user = userEvent.setup()
   renderQueue()
 
-  await user.click(screen.getAllByLabelText('Unsnooze')[0])
+  await user.click(screen.getAllByRole('button', { name: 'Series actions' })[0])
+  await user.click(screen.getByRole('menuitem', { name: 'Unsnooze' }))
 
   await waitFor(() => {
     expect(alert).toHaveBeenCalledWith('Failed to unsnooze thread: Unsnooze unavailable')
@@ -198,10 +200,11 @@ it('keeps snooze disabled before session data has loaded', async () => {
   const user = userEvent.setup()
   renderQueue()
 
-  const snoozeButton = screen.getAllByLabelText('Snooze')[0]
-  expect(snoozeButton).toHaveAttribute('aria-disabled', 'true')
-  expect(snoozeButton).toHaveAttribute('tabindex', '0')
-  await user.click(snoozeButton)
+  await user.click(screen.getAllByRole('button', { name: 'Series actions' })[0])
+  const snoozeMenuItem = screen.getByRole('menuitem', { name: 'Snooze' })
+  expect(snoozeMenuItem).toHaveAttribute('aria-disabled', 'true')
+  expect(snoozeMenuItem).toBeDisabled()
+  await user.click(snoozeMenuItem)
 
   expect(refetchSession).not.toHaveBeenCalled()
   expect(snooze).not.toHaveBeenCalled()

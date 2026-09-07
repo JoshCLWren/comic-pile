@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
@@ -20,6 +20,7 @@ import {
 import { useSession } from '../hooks/useSession'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { useToast } from '../contexts/useToast'
 import { threadsApi, dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { Thread } from '../types'
@@ -145,11 +146,6 @@ beforeEach(() => {
   } as never)
 })
 
-function createSubmit() {
-  const form = screen.getByLabelText('Title').closest('form')!
-  return within(form).getByRole('button', { name: /add serie/i })
-}
-
   it('renders queue items and opens create modal', async () => {
   const user = userEvent.setup()
   render(
@@ -164,9 +160,9 @@ function createSubmit() {
   expect(screen.getByText('Descender')).toBeInTheDocument()
   expect(screen.getByText('#1')).toBeInTheDocument()
 
-  const addButtons = screen.getAllByRole('button', { name: /add serie/i })
+  const addButtons = screen.getAllByRole('button', { name: /add series/i })
   await user.click(addButtons[0])
-  expect(screen.getByRole('heading', { name: /add serie/i })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /add series/i })).toBeInTheDocument()
 })
 
   it('registers a restore target while the create modal is open', async () => {
@@ -186,7 +182,7 @@ function createSubmit() {
     </BrowserRouter>
   )
 
-  await user.click(screen.getAllByRole('button', { name: /add serie/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
 
   expect(restoreState.setRestoreAction).toHaveBeenCalled()
 
@@ -236,7 +232,7 @@ describe('Visible action Snooze/Unsnooze', () => {
     mockedUseUnsnooze.mockReturnValue(mockUnsnoozeMutation)
   })
 
-  it('shows visible actions for thread cards', () => {
+  it('shows the collapsed Read action and overflow menus for thread cards', () => {
     render(
       <BrowserRouter>
         <ToastProvider>
@@ -246,13 +242,9 @@ describe('Visible action Snooze/Unsnooze', () => {
     )
 
     const readButtons = screen.getAllByLabelText('Read')
-    const editButtons = screen.getAllByLabelText('Edit')
-    const snoozeButtons = screen.getAllByLabelText('Snooze')
-    const deleteButtons = screen.getAllByLabelText('Delete')
+    const actionMenus = screen.getAllByRole('button', { name: 'Series actions' })
     expect(readButtons.length).toBeGreaterThan(0)
-    expect(editButtons.length).toBeGreaterThan(0)
-    expect(snoozeButtons.length).toBeGreaterThan(0)
-    expect(deleteButtons.length).toBeGreaterThan(0)
+    expect(actionMenus.length).toBeGreaterThan(0)
   })
 
   it('calls snooze mutation when the pending comic Snooze action is clicked', async () => {
@@ -270,8 +262,8 @@ describe('Visible action Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const snoozeButtons = screen.getAllByLabelText('Snooze')
-    await user.click(snoozeButtons[0])
+    await user.click(screen.getAllByRole('button', { name: 'Series actions' })[0])
+    await user.click(screen.getByRole('menuitem', { name: 'Snooze' }))
 
     expect(mockSnoozeMutation.mutate).toHaveBeenCalledWith(1)
     expect(mockUnsnoozeMutation.mutate).not.toHaveBeenCalled()
@@ -296,8 +288,8 @@ describe('Visible action Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const unsnoozeButtons = screen.getAllByLabelText('Unsnooze')
-    await user.click(unsnoozeButtons[0])
+    await user.click(screen.getAllByRole('button', { name: 'Series actions' })[0])
+    await user.click(screen.getByRole('menuitem', { name: 'Unsnooze' }))
 
     expect(mockUnsnoozeMutation.mutate).toHaveBeenCalledWith(1)
     expect(mockSnoozeMutation.mutate).not.toHaveBeenCalled()
@@ -327,8 +319,8 @@ describe('Visible action Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const snoozeButtons = screen.getAllByLabelText('Snooze')
-    await user.click(snoozeButtons[0])
+    await user.click(screen.getAllByRole('button', { name: 'Series actions' })[0])
+    await user.click(screen.getByRole('menuitem', { name: 'Snooze' }))
 
     await waitFor(() => {
       expect(mockRefetchSession).toHaveBeenCalled()
@@ -364,8 +356,8 @@ describe('Visible action Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const unsnoozeButtons = screen.getAllByLabelText('Unsnooze')
-    await user.click(unsnoozeButtons[0])
+    await user.click(screen.getAllByRole('button', { name: 'Series actions' })[0])
+    await user.click(screen.getByRole('menuitem', { name: 'Unsnooze' }))
 
     await waitFor(() => {
       expect(mockRefetchSession).toHaveBeenCalled()
@@ -411,7 +403,7 @@ describe('Keyboard Accessibility', () => {
     })
     render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
     expect(screen.getByText('Done')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'A-Z' }))
+    await user.click(screen.getByRole('button', { name: 'Title' }))
     const cards = screen.getAllByTestId('queue-thread-item')
     expect(cards[0]).toHaveTextContent('Alpha')
     await user.type(screen.getByPlaceholderText('Search...'), 'missing')
@@ -449,12 +441,12 @@ describe('Keyboard Accessibility', () => {
   mockedThreadsApi.setPending.mockResolvedValue({})
   mockedUseQueueThreads.mockReturnValue({ data: [], isLoading: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getAllByRole('button', { name: /add serie/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'New Series')
   await user.clear(screen.getByLabelText('Issues'))
   await user.type(screen.getByLabelText('Issues'), '1-5')
   await user.type(screen.getByLabelText(/Issues already read/i), '2')
-  await user.click(createSubmit())
+  await user.click(screen.getByRole('button', { name: /create series/i }))
   await waitFor(() => expect(create).toHaveBeenCalled())
 })
 
@@ -471,15 +463,15 @@ describe('Keyboard Accessibility', () => {
   const menu = screen.getAllByRole('button', { name: /series actions/i })[0]
   await user.click(menu)
   await user.click(screen.getByRole('menuitem', { name: /edit/i }))
-  expect(screen.getByRole('heading', { name: /edit serie/i })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /edit series/i })).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /close modal/i }))
   await user.click(screen.getAllByRole('button', { name: /series actions/i })[0])
   await user.click(screen.getByRole('menuitem', { name: /reposition/i }))
   expect(screen.getByTestId('position-slider-modal')).toBeInTheDocument()
   await user.click(screen.getByTestId('position-slider-cancel'))
-  await user.click(screen.getAllByRole('button', { name: /^reactivate$/i })[0]!)
+  await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0]!)
   await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')
-  await user.click(screen.getByRole('button', { name: /reactivate serie/i }))
+  await user.click(screen.getByRole('button', { name: /add to queue/i }))
 })
 
   it('renders loading and empty queue states', () => {
@@ -497,15 +489,39 @@ describe('Keyboard Accessibility', () => {
   mockedUseDeleteThread.mockReturnValue(deleteMutation)
   mockedUseQueueThreads.mockReturnValue({ data: [{ id: 1, title: 'Blocked', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, is_blocked: true, total_issues: null, blocking_reasons: ['Blocked by: Prequel'] }], isPending: false, refetch: vi.fn() })
   mockedUseQueueBlockingInfo.mockReturnValue({ 1: [{ label: 'Blocked by: Prequel' }] })
-  vi.stubGlobal('confirm', vi.fn(() => true))
+  const showToast = vi.fn()
+  vi.mocked(useToast).mockReturnValue({ showToast, removeToast: vi.fn(), toasts: [] })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   const readButton = screen.getByLabelText('Read')
   expect(readButton).toBeDisabled()
   expect(readButton).toHaveAttribute('title', expect.stringContaining('Blocked by: Prequel'))
   expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()
   expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
-  await user.click(screen.getByLabelText('Delete'))
-  await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('delete failed')))
+  await user.click(screen.getAllByRole('button', { name: 'Series actions' })[0])
+  await user.click(screen.getByRole('menuitem', { name: 'Delete series' }))
+  expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /delete series/i }))
+  await waitFor(() => expect(deleteMutation.mutate).toHaveBeenCalledWith(1))
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('delete failed'))
+  expect(showToast).toHaveBeenCalledWith(expect.stringContaining('delete failed'), 'error')
+})
+
+it('keeps the thread when delete confirmation is cancelled', async () => {
+  const user = userEvent.setup()
+  const remove = vi.fn().mockResolvedValue(undefined)
+  mockedUseDeleteThread.mockReturnValue({ mutate: remove, isPending: false })
+  mockedUseQueueThreads.mockReturnValue({
+    data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 4 }],
+    isPending: false,
+    refetch: vi.fn(),
+  })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  await user.click(screen.getAllByRole('button', { name: 'Series actions' })[0])
+  await user.click(screen.getByRole('menuitem', { name: 'Delete series' }))
+  expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /cancel/i }))
+  expect(screen.queryByRole('heading', { name: /delete series/i })).not.toBeInTheDocument()
+  expect(remove).not.toHaveBeenCalled()
 })
 
   it('supports created-date sorting and drag reorder failure feedback', async () => {
@@ -517,7 +533,7 @@ describe('Keyboard Accessibility', () => {
     { id: 2, title: 'New', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, created_at: '2025-01-01' },
   ], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getByRole('button', { name: 'New' }))
+  await user.click(screen.getByRole('button', { name: 'Recently added' }))
   const cards = screen.getAllByTestId('queue-thread-item')
   expect(cards[0]).toHaveTextContent('New')
   const dragButtons = screen.getAllByRole('button', { name: 'Drag to reorder' })
@@ -542,7 +558,6 @@ describe('Keyboard Accessibility', () => {
     isPending: false,
     refetch,
   })
-  vi.stubGlobal('confirm', vi.fn(() => true))
 
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   const openMenu = async () => user.click(screen.getByRole('button', { name: /series actions/i }))
@@ -553,10 +568,12 @@ describe('Keyboard Accessibility', () => {
   await user.click(screen.getByRole('menuitem', { name: /move to back/i }))
   await openMenu()
   await user.click(screen.getByRole('menuitem', { name: /delete/i }))
+  expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /delete series/i }))
 
   expect(front).toHaveBeenCalledWith(1)
   expect(back).toHaveBeenCalledWith(1)
-  expect(remove).toHaveBeenCalledWith(1)
+  await waitFor(() => expect(remove).toHaveBeenCalledWith(1))
 
   await openMenu()
   await user.click(screen.getByRole('menuitem', { name: /reposition/i }))
@@ -591,19 +608,19 @@ describe('Keyboard Accessibility', () => {
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
   mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getAllByRole('button', { name: /add serie/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Annuals')
   await user.clear(screen.getByLabelText('Issues'))
   await user.type(screen.getByLabelText('Issues'), 'Annual 1, 5-7')
   await user.type(screen.getByLabelText(/Issues already read/i), '1')
-  await user.click(createSubmit())
+  await user.click(screen.getByRole('button', { name: /create series/i }))
   await waitFor(() => expect(create).toHaveBeenCalled())
 
   mockedUseCreateThread.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('create failed')), isPending: false })
-  await user.click(screen.getAllByRole('button', { name: /add serie/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Broken')
   await user.type(screen.getByLabelText('Issues'), '1')
-  await user.click(createSubmit())
+  await user.click(screen.getByRole('button', { name: /create series/i }))
   await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('create failed')))
 })
 
@@ -653,11 +670,11 @@ describe('Keyboard Accessibility', () => {
   mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   mockedIssuesApi.create.mockResolvedValue({ issues: [{ id: 11 }, { id: 12 }] })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getAllByRole('button', { name: /add serie/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Complex')
   await user.type(screen.getByLabelText('Issues'), 'Annual 1, 5-7')
   await user.type(screen.getByLabelText(/Issues already read/i), '2')
-  await user.click(createSubmit())
+  await user.click(screen.getByRole('button', { name: /create series/i }))
   await waitFor(() => expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(11))
   expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(12)
 })
@@ -671,7 +688,7 @@ describe('Keyboard Accessibility', () => {
   mockedIssuesApi.create.mockResolvedValue({ issues: [{ id: 71, issue_number: '71' }] })
 
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getAllByRole('button', { name: /add serie/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Marvel Graphic Novel')
   await user.type(screen.getByLabelText('Issues'), '71')
 
@@ -679,7 +696,7 @@ describe('Keyboard Accessibility', () => {
   expect(screen.getByText(/not an issue number/i)).toBeInTheDocument()
   expect(screen.getByLabelText('Issues already read (optional)')).toHaveValue(0)
 
-  await user.click(createSubmit())
+  await user.click(screen.getByRole('button', { name: /create series/i }))
 
   await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({
     title: 'Marvel Graphic Novel',
@@ -695,17 +712,19 @@ describe('Keyboard Accessibility', () => {
   mockedUseReactivateThread.mockReturnValue({ mutate: reactivate, isPending: false })
   mockedUseQueueThreads.mockReturnValue({ data: [{ id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getAllByRole('button', { name: /^reactivate$/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0])
   await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')
   fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '3' } })
-  await user.click(screen.getByRole('button', { name: /reactivate serie/i }))
+  await user.click(screen.getByRole('button', { name: /add to queue/i }))
   await waitFor(() => expect(reactivate).toHaveBeenCalledWith({ thread_id: 2, issues_to_add: 3 }))
 
   mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('reactivate failed')), isPending: false })
-  await user.click(screen.getAllByRole('button', { name: /^reactivate$/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0])
   await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')
-  await user.click(screen.getByRole('button', { name: /reactivate serie/i }))
-  await waitFor(() => expect(screen.getByRole('heading', { name: /reactivate serie/i })).toBeInTheDocument())
+  await user.click(screen.getByRole('button', { name: /add to queue/i }))
+  await waitFor(() =>
+    expect(screen.getByRole('heading', { name: /add back to queue/i })).toBeInTheDocument(),
+  )
 })
 
   it('uses the virtualized queue without loading hidden blocked-thread reasons', async () => {
@@ -728,7 +747,7 @@ describe('Keyboard Accessibility', () => {
   mockedUseQueueThreads.mockReturnValue({ data: manyThreads, isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await waitFor(() => expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument())
-  expect(screen.getByRole('list', { name: 'Reading queue' })).toBeInTheDocument()
+  expect(screen.getByRole('list', { name: 'Series queue' })).toBeInTheDocument()
   expect(mockedDependenciesApi.listBlockedThreadIds).not.toHaveBeenCalled()
   expect(mockedDependenciesApi.getBlockingInfo).not.toHaveBeenCalled()
   vi.unstubAllGlobals()
