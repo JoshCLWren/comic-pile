@@ -65,7 +65,7 @@ test.describe('Desktop sidebar theme selector containment (#1941)', () => {
     const groupBox = await group.boundingBox()
     expect(groupBox, 'theme selector must have a rendered bounding box').not.toBeNull()
 
-    for (const label of ['Classic', 'Ink Gold', 'Command Center']) {
+    for (const label of ['Classic', 'Ink Gold', 'Command Center theme']) {
       const option = desktopNav.getByRole('button', { name: label, exact: true })
       await expect(option, `${label} must be visible`).toBeVisible()
       const box = await option.boundingBox()
