@@ -77,6 +77,7 @@ export function useQueueThreads(searchTerm?: string, sort: QueueSortBy = 'positi
   const query = useInfiniteQuery({
     ...queueThreadsQueryOptions(searchTerm, sort),
     retry: false,
+    placeholderData: keepPreviousData,
   })
 
   const data = query.data?.pages.flatMap((page) => page.threads) ?? null

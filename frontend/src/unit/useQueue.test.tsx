@@ -234,6 +234,48 @@ describe('useQueueThreads (bounded incremental loader)', () => {
     expect(mockedThreadsApi.list).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps previous data visible while search query is fetching (#2343 focus retention)', async () => {
+    mockedThreadsApi.list.mockResolvedValueOnce({
+      threads: [{ id: 1, title: 'Batman' } as never],
+      next_page_token: null,
+    })
+
+    const wrapper = createWrapper()
+    const { result, rerender } = renderHook(({ search }: { search: string }) => useQueueThreads(search), {
+      wrapper,
+      initialProps: { search: '' },
+    })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    expect(result.current.data).toHaveLength(1)
+    expect(result.current.data).toContainEqual(expect.objectContaining({ id: 1, title: 'Batman' }))
+
+    mockedThreadsApi.list.mockClear()
+    mockedThreadsApi.list.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(
+            () => resolve({ threads: [{ id: 2, title: 'Batgirl' } as never], next_page_token: null }),
+            100,
+          )
+        }),
+    )
+
+    rerender({ search: 'bat' })
+
+    // With keepPreviousData, placeholder data keeps the query in a "has data"
+    // state, so isPending stays false. The critical fix is that data is NOT
+    // null during the fetch, which prevents the full-screen loader from
+    // unmounting the search input and dropping focus.
+    await waitFor(() => {
+      expect(mockedThreadsApi.list).toHaveBeenCalled()
+      expect(result.current.data).not.toBeNull()
+      expect(result.current.data).toContainEqual(expect.objectContaining({ id: 1, title: 'Batman' }))
+    })
+
+    await waitFor(() => expect(result.current.data).toContainEqual(expect.objectContaining({ id: 2, title: 'Batgirl' })))
+  })
+
   it('resets and re-requests the first page when sort changes', async () => {
     const wrapper = createWrapper()
     const { result, rerender } = renderHook(
