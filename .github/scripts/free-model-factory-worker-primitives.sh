@@ -66,9 +66,31 @@ current_owner_is_self() {
   jq -e --arg owner "$OWNER" 'index($owner) != null' >/dev/null <<< "$labels"
 }
 
+pr_no_diff_generation_fields() {
+  local number="$1" stage="$2"
+  local sha="" conflicted=0 meta='{}' mergeable='' merge_state=''
+  sha="$(git rev-parse HEAD 2>/dev/null || true)"
+  meta="$(gh pr view "$number" --json headRefOid,mergeable,mergeStateStatus 2>/dev/null || true)"
+  [[ -n "$meta" ]] || meta='{}'
+  if [[ ! "$sha" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+    sha="$(jq -r '.headRefOid // empty' <<<"$meta" 2>/dev/null || true)"
+  fi
+  mergeable="$(jq -r '.mergeable // empty' <<<"$meta" 2>/dev/null || true)"
+  merge_state="$(jq -r '.mergeStateStatus // empty' <<<"$meta" 2>/dev/null || true)"
+  mergeable="${mergeable^^}"
+  merge_state="${merge_state^^}"
+  if [[ "$mergeable" == 'CONFLICTING' || "$merge_state" == 'DIRTY' ]]; then
+    conflicted=1
+  fi
+  if [[ ! "$sha" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+    return 1
+  fi
+  printf ':sha=%s:stage=%s:conflicted=%s' "${sha,,}" "$stage" "$conflicted"
+}
+
 release_target() {
   local number="$1" fallback_stage="$2" reason="$3" target_kind="${4:-target}"
-  local stage epoch marker no_diff_count no_diff_limit
+  local stage epoch marker generation=""
   case "${target_kind}:${reason}" in
     pr:repair-no-change-ready-handoff|pr:repair-no-persisted-change-handoff)
       stage="$fallback_stage"
@@ -78,20 +100,25 @@ release_target() {
       ;;
   esac
   epoch="$(date +%s)"
-  marker="<!-- comic-pile-factory-claim-released-v3:${target_kind}-${number}:${WORKER_ID}:${epoch}:${reason} -->"
+  if [[ "$reason" == 'no-persisted-change-handoff' || "$reason" == 'repair-no-persisted-change-handoff' ]]; then
+    if [[ "$target_kind" == 'pr' ]]; then
+      if ! generation="$(pr_no_diff_generation_fields "$number" "$stage")"; then
+        FACTORY_RETAIN_LEASE_ON_EXIT=1
+        log "unable to pin no-diff generation to head SHA for pr #${number}; retaining the lease"
+        return 1
+      fi
+    fi
+  fi
+  marker="<!-- comic-pile-factory-claim-released-v3:${target_kind}-${number}:${WORKER_ID}:${epoch}:${reason}${generation} -->"
   if [[ "$reason" == 'no-persisted-change-handoff' || "$reason" == 'repair-no-persisted-change-handoff' ]]; then
     if ! gh issue comment "$number" --body "$marker" >/dev/null 2>&1; then
       FACTORY_RETAIN_LEASE_ON_EXIT=1
       log "unable to persist bounded no-diff marker for ${target_kind} #${number}; retaining the lease"
       return 1
     fi
-    no_diff_limit="${FACTORY_NO_DIFF_RETRY_LIMIT:-3}"
-    no_diff_count="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${number}/comments?per_page=100" 2>/dev/null \
-      | jq --arg marker 'no-persisted-change-handoff' '[.[][]? | select((.body // "") | contains($marker))] | length' || echo 0)"
-    if [[ "$no_diff_count" =~ ^[0-9]+$ ]] && (( no_diff_count >= no_diff_limit )); then
-      stage='factory:blocked'
-      log "quarantining ${target_kind} #${number} after ${no_diff_count} bounded no-diff attempts"
-    fi
+    # Retry exhaustion is an execution-control concern. Preserve the truthful
+    # workflow stage and let the controller suppress re-selection from the
+    # durable marker; never rewrite no-diff failures as factory:blocked.
     replace_labels "$number" 'factory:unowned' "$stage"
   else
     replace_labels "$number" 'factory:unowned' "$stage"
