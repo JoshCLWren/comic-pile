@@ -215,7 +215,7 @@ test('renders all secondary nav links inline on a desktop viewport', async () =>
   expect(within(desktopNav).getByRole('link', { name: /queue page/i })).toBeInTheDocument()
   expect(within(desktopNav).getByRole('link', { name: /history page/i })).toBeInTheDocument()
   expect(within(desktopNav).getByRole('link', { name: /crossovers page/i })).toBeInTheDocument()
-  expect(within(desktopNav).getByRole('link', { name: /continuity planner page/i })).toBeInTheDocument()
+  expect(within(desktopNav).getByRole('link', { name: /reading plans page/i })).toBeInTheDocument()
   expect(within(desktopNav).getByRole('link', { name: /what's new page/i })).toBeInTheDocument()
   expect(within(desktopNav).getByRole('link', { name: /glossary page/i })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /more pages/i })).not.toBeInTheDocument()

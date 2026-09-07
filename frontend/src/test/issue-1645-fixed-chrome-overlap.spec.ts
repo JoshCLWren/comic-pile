@@ -22,7 +22,7 @@ const ROUTES = [
   { path: '/queue', label: 'Queue' },
   { path: '/history', label: 'History' },
   { path: '/crossovers', label: 'Crossovers' },
-  { path: '/continuity-plans', label: 'Planner' },
+  { path: '/continuity-plans', label: 'Reading plans' },
 ] as const
 
 /**

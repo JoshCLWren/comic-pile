@@ -88,18 +88,18 @@ describe('desktop appearance picker (issue #1792)', () => {
 
     const group = await screen.findByRole('group', { name: /appearance/i })
     expect(group).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Classic' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Ink Gold' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Command Center' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Classic theme' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ink Gold theme' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Command Center theme' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /more pages/i })).not.toBeInTheDocument()
   })
 
   it('marks the default theme as pressed on first load', async () => {
     renderNavigation()
 
-    const classic = await screen.findByRole('button', { name: 'Classic' })
+    const classic = await screen.findByRole('button', { name: 'Classic theme' })
     expect(classic).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: 'Ink Gold' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Ink Gold theme' })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('reflects the locally persisted theme on load', async () => {
@@ -107,20 +107,20 @@ describe('desktop appearance picker (issue #1792)', () => {
 
     renderNavigation()
 
-    const commandCenter = await screen.findByRole('button', { name: 'Command Center' })
+    const commandCenter = await screen.findByRole('button', { name: 'Command Center theme' })
     expect(commandCenter).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: 'Classic' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Classic theme' })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('switches themes immediately and persists through the preferences contract', async () => {
     const user = userEvent.setup()
     renderNavigation()
 
-    await user.click(await screen.findByRole('button', { name: 'Ink Gold' }))
+    await user.click(await screen.findByRole('button', { name: 'Ink Gold theme' }))
 
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
-    expect(screen.getByRole('button', { name: 'Ink Gold' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: 'Classic' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Ink Gold theme' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Classic theme' })).toHaveAttribute('aria-pressed', 'false')
     await waitFor(() =>
       expect(mocks.patch).toHaveBeenCalledWith('/v1/users/me/preferences', { theme: 'ink-gold' }),
     )
@@ -132,7 +132,7 @@ describe('desktop appearance picker (issue #1792)', () => {
     const user = userEvent.setup()
     renderNavigation()
 
-    await user.click(await screen.findByRole('button', { name: 'Command Center' }))
+    await user.click(await screen.findByRole('button', { name: 'Command Center theme' }))
 
     expect(document.documentElement).toHaveAttribute('data-theme', 'command-center')
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(2))
@@ -146,10 +146,10 @@ describe('desktop appearance picker (issue #1792)', () => {
     const user = userEvent.setup()
     renderNavigation()
 
-    await user.click(await screen.findByRole('button', { name: 'Command Center' }))
+    await user.click(await screen.findByRole('button', { name: 'Command Center theme' }))
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(3))
 
-    await user.click(screen.getByRole('button', { name: 'Ink Gold' }))
+    await user.click(screen.getByRole('button', { name: 'Ink Gold theme' }))
     await waitFor(() => expect(mocks.patch.mock.calls.length).toBeGreaterThanOrEqual(4))
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
 
@@ -171,7 +171,7 @@ describe('desktop appearance picker (issue #1792)', () => {
     await waitFor(() =>
       expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold'),
     )
-    expect(await screen.findByRole('button', { name: 'Ink Gold' })).toHaveAttribute(
+    expect(await screen.findByRole('button', { name: 'Ink Gold theme' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )

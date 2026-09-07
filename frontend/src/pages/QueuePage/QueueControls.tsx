@@ -53,7 +53,7 @@ function QueueControlsInner({
       <div className="flex flex-wrap justify-between items-start gap-2 md:gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">
-            Read Queue
+            Queue
           </h1>
           <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
             Your upcoming comics
