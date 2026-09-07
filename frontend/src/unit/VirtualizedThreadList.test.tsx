@@ -537,6 +537,7 @@ it('calls scrollToIndex toward last visible when dragging near the bottom edge',
   })
 
   // Drag near bottom edge (clientY=590 → y=590 > 600-80=520)
+  Object.defineProperty(window, 'innerHeight', { value: 600, writable: true })
   const dataTransfer2 = new DataTransfer()
   const dragEvent2 = new DragEvent('dragover', {
     clientY: 590,

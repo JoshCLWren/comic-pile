@@ -62,7 +62,7 @@ export default function VirtualizedThreadList<T>({
   renderItem,
   explicitColumnCount,
   sentinelRef,
-  scrollRootRef,
+  scrollRootRef: _scrollRootRef,
   hasNextPage,
 }: VirtualizedThreadListProps<T>) {
   const wrapperRef = useRef<HTMLDivElement>(null)
