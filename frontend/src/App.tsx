@@ -6,7 +6,6 @@ import { queryClient } from './query/queryClient'
 import { lazyRoute } from './routes/routeModules'
 import { useRoutePrefetch } from './hooks/useRoutePrefetch'
 import Navigation from './components/Navigation'
-import BugReportButton from './components/BugReportButton'
 import type { ReportType } from './components/BugReportModal'
 import ResumeRecovery from './components/ResumeRecovery'
 import api, {
@@ -340,10 +339,6 @@ function PublicLayout({ children, onBugReportSubmit }: { children: ReactNode; on
   return <div className="min-h-screen" data-app-shell-ready><main className="container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-28">{children}</main><Navigation onBugReportSubmit={onBugReportSubmit} /></div>
 }
 
-function BugReportConnected({ onSubmit }: { onSubmit: BugReportSubmit }) {
-  return <div className="hidden md:block"><BugReportButton onSubmit={onSubmit} /></div>
-}
-
 function RouteChunkPrefetcher({ enabled }: { enabled: boolean }) {
   useRoutePrefetch(enabled)
   return null
@@ -376,7 +371,6 @@ function AppRoutes() {
         <Route path="/help" element={<Navigate to="/glossary" replace />} />
         <Route path="/identity-inbox" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><IdentityInboxPage /></AuthenticatedLayout></ProtectedRoute>} />
       </Routes>
-      {isAuthenticated && <BugReportConnected onSubmit={submit} />}
     </Suspense>
   )
 }
