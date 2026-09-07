@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -238,6 +238,79 @@ describe('QueueThreadCard', () => {
     expect(detail.className).not.toMatch(/bg-red-500/)
     expect(detail.className).not.toMatch(/text-red-/)
     expect(detail.className).not.toMatch(/theme-danger/)
+  })
+
+  it('communicates available vs disabled actions on blocked rows only', () => {
+    renderCard(createMockThread(), {
+      isBlocked: true,
+      readDisabled: true,
+      readDisabledReason: 'Blocked by dependency',
+      snoozeDisabled: true,
+      snoozeLabel: 'Snooze',
+      snoozeIcon: '😴',
+      blockingDependencies: [
+        { thread_id: 42, thread_title: 'Prequel Thread', issue_number: '3', label: 'Needs Prequel Thread: #3' },
+      ],
+    })
+
+    const detail = screen.getByTestId('queue-thread-blocked-detail')
+    expect(detail).toHaveTextContent(
+      'Edit and Delete still work. Read unlocks once the blocker above is cleared.',
+    )
+    expect(detail).toHaveTextContent(/Read unlocks once the blocker above is cleared/i)
+
+    const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
+    const readButton = within(actionsGroup).getByRole('button', { name: 'Read' })
+    expect(readButton).toBeDisabled()
+
+    const editButton = within(actionsGroup).getByRole('button', { name: 'Edit' })
+    expect(editButton).not.toBeDisabled()
+
+    const snoozeButton = within(actionsGroup).getByRole('button', { name: 'Snooze' })
+    expect(snoozeButton).toHaveAttribute('aria-disabled', 'true')
+
+    const deleteButton = within(actionsGroup).getByRole('button', { name: 'Delete' })
+    expect(deleteButton).not.toBeDisabled()
+
+    expect(screen.getByRole('link', { name: 'Open Prequel Thread' })).toHaveAttribute(
+      'href',
+      '/thread/42',
+    )
+  })
+
+  it('includes Snooze in blocked-row guidance when snooze is available', () => {
+    renderCard(createMockThread(), {
+      isBlocked: true,
+      readDisabled: true,
+      readDisabledReason: 'Blocked by dependency',
+      snoozeDisabled: false,
+      snoozeLabel: 'Snooze',
+      snoozeIcon: '😴',
+      blockingDependencies: [
+        { thread_id: 42, thread_title: 'Prequel Thread', issue_number: '3', label: 'Needs Prequel Thread: #3' },
+      ],
+    })
+
+    const detail = screen.getByTestId('queue-thread-blocked-detail')
+    expect(detail).toHaveTextContent(
+      'Edit, Snooze, and Delete still work. Read unlocks once the blocker above is cleared.',
+    )
+  })
+
+  it('does not show blocked-row action guidance on unblocked rows', () => {
+    renderCard(createMockThread(), {
+      isBlocked: false,
+      readDisabled: false,
+      snoozeDisabled: false,
+      snoozeLabel: 'Snooze',
+      snoozeIcon: '😴',
+    })
+
+    expect(screen.queryByTestId('queue-thread-blocked-detail')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Read unlocks once the blocker/i)).not.toBeInTheDocument()
+
+    const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
+    expect(within(actionsGroup).getByRole('button', { name: 'Read' })).not.toBeDisabled()
   })
 
   it('keeps crossover load errors out of dependency continuity styling', () => {
