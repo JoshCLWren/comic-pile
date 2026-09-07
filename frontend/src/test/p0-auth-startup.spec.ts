@@ -1,9 +1,11 @@
 /**
- * AUTH-001: User can sign in with email/password and obtain a session.
+ * AUTH-001: User can sign in with username/password and obtain a session.
  *
  * Covers the core authentication journey: register a fresh user, sign in
  * via the login form, verify the session is established by checking that
  * the protected home page renders, and that invalid credentials are rejected.
+ * Login uses the username identifier only; email-shaped input is rejected
+ * with a clear, actionable message.
  *
  * Inventory IDs: AUTH-001
  */
@@ -17,7 +19,7 @@ import {
 const MOBILE_VIEWPORT = { width: 390, height: 844 }
 
 test.describe('AUTH-001: Authentication and startup', () => {
-  test('user can register and then sign in with email/password', async ({
+  test('user can register and then sign in with username/password', async ({
     page,
   }) => {
     const user = generateTestUser()
@@ -47,6 +49,23 @@ test.describe('AUTH-001: Authentication and startup', () => {
     await page.click('button[type="submit"]')
 
     await expect(page.locator('.text-red-400')).toBeVisible({ timeout: 5000 })
+    await expect(page).toHaveURL(/\/login/)
+  })
+
+  test('email-shaped username shows clear username-only error and stays on login', async ({
+    page,
+  }) => {
+    await page.goto('/login', { waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('input[name="username"]', { state: 'visible' })
+
+    await page.fill('input[name="username"]', 'reader@example.com')
+    await page.fill('input[name="password"]', 'correct_password_123')
+    await page.click('button[type="submit"]')
+
+    await expect(page.locator('.text-red-400')).toHaveText(
+      /use your username, not your email/i,
+      { timeout: 5000 },
+    )
     await expect(page).toHaveURL(/\/login/)
   })
 

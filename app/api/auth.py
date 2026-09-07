@@ -43,6 +43,8 @@ logger = logging.getLogger(__name__)
 
 REFRESH_COOKIE_NAME = "refresh_token"
 REFRESH_COOKIE_PATH = "/api"
+EMAIL_LOGIN_MESSAGE = "Sign in with your username, not your email."
+EMAIL_USERNAME_MESSAGE = "Username cannot contain an '@' character."
 
 
 def _log_refresh_outcome(request: Request, *, outcome: str, reason: str) -> None:
@@ -100,8 +102,15 @@ async def register_user(
         TokenResponse with access and refresh tokens.
 
     Raises:
-        HTTPException: If username or email already exists.
+        HTTPException: If username or email already exists, or the username is
+            email-shaped (login is username-only).
     """
+    if "@" in user_data.username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=EMAIL_USERNAME_MESSAGE,
+        )
+
     conditions = [User.username == user_data.username]
     if user_data.email:
         conditions.append(User.email == user_data.email)
@@ -162,7 +171,9 @@ async def login_user(
     """Authenticate user and return tokens.
 
     Args:
-        login_data: User login data (username, password).
+        login_data: User login data (username, password). Login uses the
+            username identifier only; email-shaped values are rejected with a
+            clear, actionable message.
         request: Incoming request used for cookie security policy and IP extraction.
         response: Outgoing response used to set auth cookies.
         db: SQLAlchemy session for database operations.
@@ -177,6 +188,12 @@ async def login_user(
         dict(request.headers),
         request.client.host if request.client else None,
     )
+
+    if "@" in login_data.username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=EMAIL_LOGIN_MESSAGE,
+        )
 
     await check_login_lockout(db, username=login_data.username, ip_address=client_ip)
 

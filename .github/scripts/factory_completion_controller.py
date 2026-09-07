@@ -17,8 +17,9 @@ from typing import Any
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = 120
-REVIEW_BACKLOG_LIMIT = 15
-HIGH_REVIEW_BACKLOG = 50
+# Keep in sync with factory_work_policy.FACTORY_REVIEW_BACKLOG_LIMIT (incident #2309).
+REVIEW_BACKLOG_LIMIT = 8
+HIGH_REVIEW_BACKLOG = 20
 NORMAL_DRAIN_BATCH = 8
 HIGH_DRAIN_BATCH = 12
 RATE_LIMIT_COOLDOWN_SECONDS = 30 * 60
@@ -68,16 +69,16 @@ def parse_time(value: str | None) -> int | None:
         return None
 
 
+def review_share_for_backlog(review_backlog: int) -> float:
+    """Mirror factory_work_policy.review_share_for_backlog."""
+    depth = max(0, int(review_backlog))
+    return min(0.90, 0.25 + (0.65 * min(depth, 20) / 20.0))
+
+
 def review_capacity_worker(worker: str, *, review_backlog: int) -> bool:
-    """Mirror the completion-pressure tiers used by factory_work_policy."""
-    numeric = int(worker)
-    if review_backlog >= 50:
-        return numeric % 10 < 9
-    if review_backlog >= 20:
-        return numeric % 4 < 3
-    if review_backlog >= 15:
-        return numeric % 2 == 0
-    return numeric % 4 == 2
+    """Mirror the completion-pressure ratio used by factory_work_policy."""
+    share = review_share_for_backlog(review_backlog)
+    return (int(worker) * 37) % 100 < int(round(share * 100))
 
 
 def completion_batch_size(review_backlog: int) -> int:

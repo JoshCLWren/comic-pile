@@ -255,7 +255,7 @@ describe('QueueThreadCard', () => {
 
     const detail = screen.getByTestId('queue-thread-blocked-detail')
     expect(detail).toHaveTextContent(
-      'Edit, Snooze, and Delete still work. Read unlocks once the blocker above is cleared.',
+      'Edit and Delete still work. Read unlocks once the blocker above is cleared.',
     )
     expect(detail).toHaveTextContent(/Read unlocks once the blocker above is cleared/i)
 
@@ -275,6 +275,25 @@ describe('QueueThreadCard', () => {
     expect(screen.getByRole('link', { name: 'Open Prequel Thread' })).toHaveAttribute(
       'href',
       '/thread/42',
+    )
+  })
+
+  it('includes Snooze in blocked-row guidance when snooze is available', () => {
+    renderCard(createMockThread(), {
+      isBlocked: true,
+      readDisabled: true,
+      readDisabledReason: 'Blocked by dependency',
+      snoozeDisabled: false,
+      snoozeLabel: 'Snooze',
+      snoozeIcon: '😴',
+      blockingDependencies: [
+        { thread_id: 42, thread_title: 'Prequel Thread', issue_number: '3', label: 'Needs Prequel Thread: #3' },
+      ],
+    })
+
+    const detail = screen.getByTestId('queue-thread-blocked-detail')
+    expect(detail).toHaveTextContent(
+      'Edit, Snooze, and Delete still work. Read unlocks once the blocker above is cleared.',
     )
   })
 
@@ -317,6 +336,24 @@ describe('QueueThreadCard', () => {
     const thread = createMockThread({ title: 'Amazing Spider-Man' })
     renderCard(thread)
     expect(screen.getByTestId('mock-marquee')).toHaveTextContent('Amazing Spider-Man')
+  })
+
+  it('keeps the title button from collapsing and switches layout on container width, not viewport md', () => {
+    const thread = createMockThread({ title: 'Very Long Thread Title That Would Previously Collapse' })
+    const { unmount } = renderCard(thread)
+
+    const titleButton = screen.getByRole('button', { name: `Open ${thread.title}` })
+    expect(titleButton).toHaveClass('min-w-24', 'flex-1')
+
+    // The row must decide stacked vs horizontal from the actual list container
+    // width (@2xl container query), not the raw viewport `md` breakpoint that
+    // ignores the width already consumed by the desktop sidebar (#2284).
+    const card = screen.getByTestId('queue-thread-item')
+    expect(card).toHaveClass('flex-col')
+    expect(card).not.toHaveClass('md:flex-row')
+    expect(card).toHaveClass('@2xl:flex-row')
+
+    unmount()
   })
 
   it('renders format label', () => {

@@ -34,7 +34,6 @@ const mocks = { refetch: vi.fn(), refetchSession: vi.fn(), mutate: vi.fn() }
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('alert', vi.fn())
-  vi.stubGlobal('confirm', vi.fn(() => true))
   mocks.mutate.mockResolvedValue(undefined)
   vi.mocked(useQueueThreads).mockImplementation(() => {
      return {
@@ -139,8 +138,11 @@ describe('QueuePage callback coverage', () => {
     await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('issue create failed')))
     mocks.mutate.mockRejectedValue(new Error('mutation failed'))
     await user.click(screen.getByText('snooze callback'))
-    await user.click(screen.getByText('delete callback'))
     await waitFor(() => expect(alert).toHaveBeenCalled())
+    await user.click(screen.getByText('delete callback'))
+    expect(screen.getByRole('heading', { name: /delete thread/i })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /delete thread/i }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('mutation failed'))
   })
 
   it('covers migrated edit fields, location-driven create, and migration refresh failure', async () => {
@@ -326,12 +328,15 @@ describe('QueuePage callback coverage', () => {
     const user = userEvent.setup()
     const error = new Error('mutation failed')
     mocks.mutate.mockRejectedValue(error)
-    vi.stubGlobal('confirm', vi.fn(() => false))
     renderPage()
     await user.click(screen.getByText('delete callback'))
+    expect(screen.getByRole('heading', { name: /delete thread/i })).toBeInTheDocument()
     expect(mocks.mutate).not.toHaveBeenCalled()
-    vi.stubGlobal('confirm', vi.fn(() => true))
+    await user.click(screen.getByRole('button', { name: /cancel/i }))
+    expect(screen.queryByRole('heading', { name: /delete thread/i })).not.toBeInTheDocument()
     await user.click(screen.getByText('delete callback'))
+    await user.click(screen.getByRole('button', { name: /delete thread/i }))
+    await waitFor(() => expect(mocks.mutate).toHaveBeenCalledWith(1))
     await user.click(screen.getByText('front callback'))
     await user.click(screen.getByText('back callback'))
     await user.click(screen.getByRole('button', { name: 'Shuffle' }))

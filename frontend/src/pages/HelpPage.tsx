@@ -64,7 +64,12 @@ const DEFINITIONS: Term[] = [
   {
     id: 'continuity-plan',
     term: 'Continuity Plan',
-    def: 'A saved arrangement of issues, series, and crossovers in one or more reading lanes. Saving creates only the continuity rules you chose.',
+    def: 'A saved arrangement of issues, series, and crossovers in one or more reading lanes. Saving creates only the continuity rules you chose — informational plans create none, strict sequential plans create one per step (see Ordering mode).',
+  },
+  {
+    id: 'ordering-mode',
+    term: 'Ordering mode',
+    def: 'What saving a plan commits to. Informational plans create no blocking rules and cannot block anything. Strict sequential plans require you to read each step before the next, compiling one blocking rule per step just like the Dependency Builder. Plan ordering never mixes with the Queue\'s issue-level Dependency Builder unless you choose strict sequential.',
   },
   {
     id: 'lane',
