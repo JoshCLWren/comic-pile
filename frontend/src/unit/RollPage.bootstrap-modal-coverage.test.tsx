@@ -126,7 +126,7 @@ describe('RollPage bootstrap modal coverage', () => {
     expect(screen.getByRole('option', { name: 'Watchmen (Comic)' })).toBeInTheDocument()
 
     await user.selectOptions(select, '1')
-    await user.click(screen.getByRole('button', { name: 'Pick this thread' }))
+    await user.click(screen.getByRole('button', { name: 'Pick this series' }))
     await waitFor(() => expect(spies.override).toHaveBeenCalledWith({ thread_id: 1 }))
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Pick manually' })).not.toBeInTheDocument())
   })

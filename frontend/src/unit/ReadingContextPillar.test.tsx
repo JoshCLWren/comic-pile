@@ -219,7 +219,7 @@ describe('ReadingContextPillar dependency and continuity edges', () => {
     )
     expect(screen.getByText('Orphan A')).toBeVisible()
     expect(screen.getByText('Orphan B')).toBeVisible()
-    expect(screen.queryByRole('button', { name: 'Open thread for Orphan A' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Open series for Orphan A' })).not.toBeInTheDocument()
   })
 
   it('falls back to note when explanation is null on an edge', async () => {

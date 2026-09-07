@@ -156,7 +156,7 @@ describe('ReadingContextPillar navigation (issue #1877)', () => {
     expect(screen.queryByLabelText('Context for Ultimate Black Panther issue 3')).not.toBeInTheDocument()
     const currentPanel = screen.getByLabelText('Context for Ultimate Black Panther issue 5')
     expect(within(currentPanel).getByText('Issue 5 · Not read yet')).toBeVisible()
-    expect(within(currentPanel).getByRole('button', { name: 'Open Saga thread' })).toBeVisible()
+    expect(within(currentPanel).getByRole('button', { name: 'Open Saga' })).toBeVisible()
   })
 
   it('exposes the active-thread surface from the current node\'s own context', async () => {
@@ -165,7 +165,7 @@ describe('ReadingContextPillar navigation (issue #1877)', () => {
     const currentNode = await screen.findByRole('button', { name: 'Show context for Ultimate Black Panther issue 5' })
     await userEvent.setup().click(currentNode)
 
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Open Saga thread' }))
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Open Saga' }))
     expect(navigateSpy).toHaveBeenCalledTimes(1)
     expect(navigateSpy).toHaveBeenCalledWith('/thread/42')
   })
@@ -221,19 +221,19 @@ describe('ReadingContextPillar navigation (issue #1877)', () => {
     )
 
     await screen.findByText('Dependency & Continuity Edges')
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Open thread for Saga #3' }))
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Open series for Saga #3' }))
     expect(navigateSpy).toHaveBeenCalledWith('/thread/42')
 
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Open thread for Saga #5' }))
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Open series for Saga #5' }))
     expect(navigateSpy).toHaveBeenCalledWith('/thread/7')
   })
 
   it('links both dependency edge endpoints to their threads and shows the explanation', async () => {
     renderPillar(buildContext())
 
-    const sources = await screen.findAllByRole('button', { name: 'Open thread for Saga #3' })
+    const sources = await screen.findAllByRole('button', { name: 'Open series for Saga #3' })
     expect(sources).toHaveLength(2)
-    const targets = screen.getAllByRole('button', { name: 'Open thread for Saga #5' })
+    const targets = screen.getAllByRole('button', { name: 'Open series for Saga #5' })
     expect(targets).toHaveLength(2)
     await userEvent.setup().click(sources[0])
     expect(navigateSpy).toHaveBeenLastCalledWith('/thread/42')

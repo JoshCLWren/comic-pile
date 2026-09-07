@@ -51,7 +51,7 @@ describe('ThreadPool eligible mappings', () => {
     expect(screen.getByText('1 ready to read')).toBeVisible()
     expect(screen.getByText('#12')).toBeVisible()
     expect(screen.getByRole('button', {
-      name: /Die face 1: Amazing Adventures, issue 12, connected to Secret War\. Open thread actions\./i,
+      name: /Die face 1: Amazing Adventures, issue 12, connected to Secret War\. Open series actions\./i,
     })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Shuffle queue' })).toHaveAccessibleDescription(
       /complete active queue/i,
@@ -152,7 +152,7 @@ describe('ThreadPool eligible mappings', () => {
     )
 
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
-    expect(row).toHaveAccessibleName(/Open thread actions/i)
+    expect(row).toHaveAccessibleName(/Open series actions/i)
     // The implementation shows all information visually and uses aria-label for screen
     // readers; no elements are hidden with aria-hidden="true" as all content is visible.
     expect(row.querySelector('[aria-hidden="true"]')).toBeNull()
