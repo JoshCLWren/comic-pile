@@ -8,6 +8,10 @@ interface ModeSelectorSheetProps {
   currentMode: SessionModeState | null
   onClose: () => void
   onSubmit: (patch: SessionModeUpdateRequest) => Promise<void>
+  /** Opens the two-question reading-mode quiz; closes the sheet first. */
+  onOpenQuiz?: () => void
+  /** Whether the reading-mode quiz is surfaced in this build (issue #1945 gate). */
+  quizEnabled?: boolean
 }
 
 const BANDWIDTH_OPTIONS: ReadingBandwidth[] = ['light', 'balanced', 'deep']
@@ -56,8 +60,20 @@ function OptionButton({
  * Reading-mode selector sheet: two independent radio groups for bandwidth and
  * intent. Submits through the canonical session-mode API and refreshes
  * bootstrap state on success. Each dimension is changed independently.
+ *
+ * The sheet is also the always-available manual entry point to the
+ * two-question quiz ("Find my reading mode", issue #1739): both dimensions
+ * already carry a concrete value, so the quiz stays optional and never
+ * interrupts a confident session.
  */
-export default function ModeSelectorSheet({ isOpen, currentMode, onClose, onSubmit }: ModeSelectorSheetProps) {
+export default function ModeSelectorSheet({
+  isOpen,
+  currentMode,
+  onClose,
+  onSubmit,
+  onOpenQuiz,
+  quizEnabled = false,
+}: ModeSelectorSheetProps) {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
@@ -79,6 +95,12 @@ export default function ModeSelectorSheet({ isOpen, currentMode, onClose, onSubm
     },
     [onSubmit, onClose],
   )
+
+  const handleOpenQuiz = useCallback(() => {
+    if (!onOpenQuiz) return
+    onClose()
+    onOpenQuiz()
+  }, [onClose, onOpenQuiz])
 
   if (!isOpen) return null
 
@@ -124,6 +146,20 @@ export default function ModeSelectorSheet({ isOpen, currentMode, onClose, onSubm
           ))}
         </div>
       </fieldset>
+
+      {quizEnabled && (
+        <div className="mt-4 pt-3 border-t border-[var(--theme-border)]">
+          <button
+            type="button"
+            data-testid="mode-selector-open-quiz"
+            disabled={submitting}
+            onClick={handleOpenQuiz}
+            className="w-full py-2 text-left text-sm font-bold uppercase tracking-wider text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-comic-accent)] disabled:opacity-50"
+          >
+            Find my reading mode
+          </button>
+        </div>
+      )}
     </Modal>
   )
 }

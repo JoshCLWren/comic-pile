@@ -135,6 +135,30 @@ export interface SessionThread {
   last_rating?: number | null;
 }
 
+export type SnoozeCorrectionReason =
+  | 'heavy_snooze_shift'
+  | 'light_snooze_deflate'
+  | 'confidence_degrade'
+  | 'no_correction'
+  | 'clarification_needed'
+
+export interface SnoozeCorrectionInfo {
+  bandwidth_changed: boolean;
+  active_bandwidth: ReadingBandwidth | null;
+  active_confidence: number | null;
+  predicted_bandwidth: ReadingBandwidth | null;
+  reason_code: SnoozeCorrectionReason;
+  suggest_clarification: boolean;
+}
+
+/** Client view of the Snooze response used to decide clarification UI. */
+export interface SnoozeSessionResponse {
+  current_die: number;
+  pending_thread_id: number | null;
+  reading_mode_suggested: boolean;
+  correction: SnoozeCorrectionInfo | null;
+}
+
 export interface SessionCurrent {
   id: number;
   current_die: number;
@@ -150,14 +174,7 @@ export interface SessionCurrent {
   reading_intent?: ReadingIntent | null;
   reading_mode_source?: ReadingModeSource | null;
   reading_mode_suggested?: boolean;
-  correction?: {
-    bandwidth_changed: boolean;
-    active_bandwidth: ReadingBandwidth | null;
-    active_confidence: number | null;
-    predicted_bandwidth: ReadingBandwidth | null;
-    reason_code: 'heavy_snooze_shift' | 'light_snooze_deflate' | 'confidence_degrade' | 'no_correction' | 'clarification_needed';
-    suggest_clarification: boolean;
-  } | null;
+  correction?: SnoozeCorrectionInfo | null;
 }
 
 export type ReadingBandwidth = 'light' | 'balanced' | 'deep'
