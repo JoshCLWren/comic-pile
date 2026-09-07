@@ -268,7 +268,7 @@ export default function ThreadDetailView() {
         <button
           type="button"
           onClick={openEditModal}
-          className="h-9 md:h-12 px-4 md:px-5 glass-button text-[10px] md:text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl shrink-0"
+          className="h-9 md:h-12 px-4 md:px-5 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] whitespace-nowrap hover:text-[var(--theme-text-primary)] transition-colors shrink-0"
         >
           Edit
         </button>
@@ -582,7 +582,7 @@ export default function ThreadDetailView() {
             type="submit"
             form="edit-thread-form"
             disabled={updateMutation.isPending}
-            className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
+            className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
           >
             {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
           </button>

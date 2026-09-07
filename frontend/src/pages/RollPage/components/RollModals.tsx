@@ -62,14 +62,14 @@ function SetCurrentIssueModal({ onSubmit, onClose }: SetCurrentIssueModalProps) 
           type="button"
           onClick={onClose}
           disabled={isSubmitting}
-          className="flex-1 py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
+          className="flex-1 py-3 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-60"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={isSubmitting || !issueNumber.trim()}
-          className="flex-1 py-3 bg-amber-600/20 border border-amber-600/50 rounded-xl text-xs font-black uppercase tracking-widest text-amber-500 hover:bg-amber-600/30 transition-colors disabled:opacity-60"
+          className="flex-1 py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] transition-colors disabled:opacity-60"
         >
           {isSubmitting ? 'Setting...' : 'Set Current Issue'}
         </button>
@@ -217,7 +217,7 @@ export function RollModals({
           <button
             type="submit"
             disabled={overridePending || !overrideThreadId}
-            className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
+            className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
           >
             {overridePending ? 'Selecting...' : 'Pick this thread'}
           </button>
