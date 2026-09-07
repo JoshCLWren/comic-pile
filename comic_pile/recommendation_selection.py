@@ -18,6 +18,12 @@ Selection modes:
   Valid positive weights supplied by the caller may shape the draw; missing,
   invalid, or unusable weights always fall back safely to the exact legacy
   uniform draw.
+- ``forced_legacy``: the operator kill switch (Phase 9, issue #1767). When the
+  active control mode is ``legacy``, every draw is a unweighted
+  ``randint(0, pool_size - 1)`` inside the bounded pool regardless of intent,
+  exactly reproducing legacy behavior. The draw is recorded with
+  ``control_mode`` and a reason code so forced-legacy runs stay distinguishable
+  from user ``random`` intent bypasses and pre-instrumentation events.
 
 The module is intentionally pure: no database, network, or framework
 dependencies, so seeded regression tests can compare legacy and control-mode
@@ -32,6 +38,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
+
+from comic_pile.recommendation_version import (
+    CONTROL_MODE_CONTEXTUAL,
+    CONTROL_MODE_LEGACY,
+    CONTROL_MODES,
+)
 
 DEFAULT_BANDWIDTH = "balanced"
 DEFAULT_INTENT = "balanced"
@@ -61,6 +73,7 @@ class SelectionMode(StrEnum):
     LEGACY_UNIFORM = "legacy_uniform"
     PURE_RANDOM_BYPASS = "pure_random_bypass"
     CONTEXTUAL_WEIGHTED = "contextual_weighted"
+    FORCED_LEGACY = "forced_legacy"
 
 
 class RandomSource(Protocol):
@@ -109,6 +122,26 @@ class SelectionOutcome:
     weights_applied: bool
 
 
+def normalize_control_mode(value: str | None) -> str:
+    """Normalize a raw operator control-mode value to the canonical label.
+
+    Args:
+        value: Raw control-mode value. ``None`` means the active default
+            (contextual weighting).
+
+    Returns:
+        The canonical control-mode label (``contextual`` or ``legacy``).
+
+    Raises:
+        ValueError: If the value is not a known control mode.
+    """
+    if value is None:
+        return CONTROL_MODE_CONTEXTUAL
+    if value not in CONTROL_MODES:
+        raise ValueError(f"Unknown control_mode: {value!r}")
+    return value
+
+
 def normalize_bandwidth(value: str | Bandwidth | None) -> Bandwidth:
     """Normalize a raw bandwidth value to the canonical enum.
 
@@ -152,25 +185,34 @@ def normalize_intent(value: str | Intent | None) -> Intent:
 def resolve_selection_mode(
     bandwidth: str | Bandwidth | None = None,
     intent: str | Intent | None = None,
+    control_mode: str | None = None,
 ) -> SelectionMode:
     """Resolve which control path governs one selection.
 
     Rules, in priority order:
 
-    1. The ``random`` intent is a clean escape hatch: it bypasses contextual
-       weights completely regardless of bandwidth.
-    2. ``balanced`` bandwidth with ``balanced``/default intent stays neutral:
+    1. The operator control mode is the highest-level switch. When it is
+       ``legacy``, every draw resolves to :attr:`SelectionMode.FORCED_LEGACY`
+       so contextual weighting is disabled uniformly regardless of intent.
+    2. The ``random`` intent is a clean user-level escape hatch: it bypasses
+       contextual weights completely regardless of bandwidth.
+    3. ``balanced`` bandwidth with ``balanced``/default intent stays neutral:
        no factor may bias this draw unless a later phase explicitly adds one.
-    3. Any other combination takes the contextual-weighted path where caller
+    4. Any other combination takes the contextual-weighted path where caller
        supplied weights may shape the draw (subject to safe fallback).
 
     Args:
         bandwidth: Raw bandwidth value; ``None`` means balanced.
         intent: Raw intent value; ``None`` means balanced.
+        control_mode: Operator control mode; ``None`` means contextual.
 
     Returns:
         The resolved :class:`SelectionMode`.
     """
+    resolved_control = normalize_control_mode(control_mode)
+    if resolved_control == CONTROL_MODE_LEGACY:
+        return SelectionMode.FORCED_LEGACY
+
     resolved_bandwidth = normalize_bandwidth(bandwidth)
     resolved_intent = normalize_intent(intent)
     if resolved_intent is Intent.RANDOM:
@@ -257,35 +299,40 @@ def select_from_pool(
     intent: str | Intent | None = None,
     weights: Sequence[float] | None = None,
     rng: RandomSource | None = None,
+    control_mode: str | None = None,
 ) -> SelectionOutcome:
     """Select one candidate from an already-bounded pool.
 
     Both control modes reproduce the legacy Roll draw exactly: a single
     ``randint(0, pool_size - 1)`` call, so identical seeds produce identical
-    selections. Only the contextual-weighted path may consume weights, and
-    only valid strictly positive weights can shape it.
+    selections. A forced-legacy control mode reproduces the same draw for every
+    intent while recording a distinguishable mode. Only the contextual-weighted
+    path may consume weights, and only valid strictly positive weights can
+    shape it.
 
     Args:
         pool_size: Number of candidates in the bounded pool (>= 1).
         bandwidth: Reading bandwidth context; ``None`` means balanced.
         intent: Reading intent context; ``None`` means balanced.
         weights: Optional contextual weights aligned with the pool order.
-            Ignored completely under both control modes.
+            Ignored completely under both control modes and the forced-legacy
+            control path.
         rng: RNG source for deterministic tests; ``None`` uses the shared
             stdlib ``random`` module exactly like the legacy endpoint.
+        control_mode: Operator control mode; ``None`` means contextual.
 
     Returns:
         A :class:`SelectionOutcome` recording the chosen index plus the
         resolved mode and whether any weight influenced the draw.
 
     Raises:
-        ValueError: If ``pool_size`` is below one, or the bandwidth/intent
-            values are unknown.
+        ValueError: If ``pool_size`` is below one, the bandwidth/intent
+            values are unknown, or the control mode is unknown.
     """
     if pool_size < 1:
         raise ValueError(f"pool_size must be >= 1, got {pool_size}")
 
-    resolved_mode = resolve_selection_mode(bandwidth, intent)
+    resolved_mode = resolve_selection_mode(bandwidth, intent, control_mode)
     normalized_bandwidth = normalize_bandwidth(bandwidth)
     normalized_intent = normalize_intent(intent)
 

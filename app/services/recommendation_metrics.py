@@ -220,6 +220,28 @@ def _extract_algorithm_version(event: Event) -> str:
     return LEGACY_ALGORITHM_VERSION
 
 
+def _extract_control_mode(event: Event) -> str | None:
+    """Extract the operator control mode recorded at roll time.
+
+    Args:
+        event: Roll event.
+
+    Returns:
+        Recorded control-mode string, or ``None`` when the event predates
+        Phase 9 (issue #1767) control-mode instrumentation.
+    """
+    raw = _optional_attribute(event, "control_mode")
+    if raw is None:
+        context = _optional_attribute(event, "recommendation_context")
+        raw = _context_value(
+            context if isinstance(context, Mapping) else None,
+            ("control_mode",),
+        )
+    if isinstance(raw, str) and raw.strip():
+        return raw
+    return None
+
+
 def _extract_bandwidth(event: Event) -> str | None:
     """Extract the effort band recorded at roll time.
 
@@ -296,6 +318,8 @@ class DecisionAttempt:
         outcome_at: Timestamp of the closing outcome event when resolved.
         rating: Rating captured by an accepting rate event.
         algorithm_version: Decision-time algorithm version label.
+        control_mode: Operator control mode at decision time; ``None`` when
+            the event predates Phase 9 control-mode instrumentation.
         bandwidth: Decision-time effort-band label, if recorded.
         intent: Decision-time intent label, if recorded.
         records_launch_prediction: Whether the roll recorded a predicted
@@ -311,6 +335,7 @@ class DecisionAttempt:
     outcome_at: datetime | None = None
     rating: float | None = None
     algorithm_version: str = LEGACY_ALGORITHM_VERSION
+    control_mode: str | None = None
     bandwidth: str | None = None
     intent: str | None = None
     records_launch_prediction: bool = False
@@ -416,6 +441,7 @@ def project_decision_history(events: Iterable[Event]) -> DecisionHistoryProjecti
                         thread_id=event.selected_thread_id,
                         outcome=OUTCOME_OPEN,
                         algorithm_version=_extract_algorithm_version(event),
+                        control_mode=_extract_control_mode(event),
                         bandwidth=_extract_bandwidth(event),
                         intent=_extract_intent(event),
                         records_launch_prediction=_records_launch_prediction(event),

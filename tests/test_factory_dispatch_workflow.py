@@ -67,11 +67,13 @@ def test_roster_chain_is_serialized_and_keeps_hourly_watchdog():
     assert "sleep 240" in workflow
 
 
-def test_roster_tick_defaults_to_three_workers_and_respects_free_entry_cap():
+def test_roster_tick_defaults_to_twelve_workers_with_source_diverse_seed():
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
-    assert 'max_per_tick="${MAX_WORKERS_PER_TICK:-3}"' in workflow
-    assert 'max_per_tick="${MAX_WORKERS_PER_TICK:-12}"' not in workflow
+    assert 'max_per_tick="${MAX_WORKERS_PER_TICK:-12}"' in workflow
+    assert 'max_per_tick="${MAX_WORKERS_PER_TICK:-3}"' not in workflow
+    assert "source_seed=" in workflow
+    assert "source-diverse seed" in workflow
     assert 'python3 "$controller" capacity' in workflow
     assert 'jq -c --argjson n "$remaining" \'.[0:$n]\'' in workflow
     assert "OmniRoute free-entry cap is exhausted" in workflow

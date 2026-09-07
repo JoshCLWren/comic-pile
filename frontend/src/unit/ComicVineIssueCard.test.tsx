@@ -341,6 +341,46 @@ describe('ComicVineIssueCard', () => {
     expect(screen.queryByText('Series #6')).not.toBeInTheDocument()
   })
 
+  it('story arc issue list reflows with the page instead of a clipped nested scroller', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '610',
+      comicvine_url: null,
+      series_name: 'Arc Series',
+      series_id: 14,
+      issue_number: '2',
+      name: 'Deep Dive',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [{
+        comicvine_arc_id: 61,
+        total_related_count: null,
+        name: 'Deep Arc',
+        comicvine_url: null,
+        related_issues: Array.from({ length: 8 }, (_, index) => ({
+          comicvine_issue_id: `${611 + index}`,
+          series_name: 'Arc Series',
+          issue_number: `${index + 1}`,
+          name: null,
+          cover_date: null,
+          comicvine_url: null,
+          comicpile_matches: [],
+        })),
+      }],
+    })
+
+    render(<ComicVineIssueCard issueId={6} />)
+    await waitFor(() => expect(screen.getByText('Comic details')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Comic details'))
+
+    const list = screen.getByTestId('story-arc-issue-list')
+    expect(list).toBeInTheDocument()
+    expect(list).not.toHaveClass('max-h-48', 'max-h-64', 'overflow-y-auto', 'overscroll-contain')
+    expect(list).toHaveClass('space-y-1.5')
+  })
+
   it('closes Add to ComicPile dialog when onClose is called', async () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '400',
