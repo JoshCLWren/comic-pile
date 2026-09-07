@@ -150,49 +150,46 @@ export default function DependencyCrossoverControls({
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold text-[var(--theme-text-primary)]">Crossover</span>
-        <div role="tablist" aria-label="Crossover mode" className="flex flex-wrap items-center gap-2">
+        <div aria-label="Crossover mode" className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            role="tab"
-            aria-selected={mode === 'none'}
-          className={`rounded px-2 py-1 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${
-            mode === 'none'
-              ? 'bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]'
-              : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
-          }`}
-          onClick={() => setMode('none')}
-          disabled={controlsDisabled}
-        >
-          No membership
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === 'existing'}
-          className={`rounded px-2 py-1 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${
-            mode === 'existing'
-              ? 'bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]'
-              : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
-          }`}
-          onClick={() => setMode('existing')}
-          disabled={controlsDisabled}
-        >
-          Add to existing
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === 'new'}
-          className={`rounded px-2 py-1 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${
-            mode === 'new'
-              ? 'bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]'
-              : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
-          }`}
-          onClick={() => setMode('new')}
-          disabled={controlsDisabled}
-        >
-          Create crossover
-        </button>
+            aria-pressed={mode === 'none'}
+            className={`rounded px-2 py-1 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${
+              mode === 'none'
+                ? 'bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]'
+                : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+            }`}
+            onClick={() => setMode('none')}
+            disabled={controlsDisabled}
+          >
+            No membership
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === 'existing'}
+            className={`rounded px-2 py-1 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${
+              mode === 'existing'
+                ? 'bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]'
+                : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+            }`}
+            onClick={() => setMode('existing')}
+            disabled={controlsDisabled}
+          >
+            Add to existing
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === 'new'}
+            className={`rounded px-2 py-1 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${
+              mode === 'new'
+                ? 'bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]'
+                : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+            }`}
+            onClick={() => setMode('new')}
+            disabled={controlsDisabled}
+          >
+            Create crossover
+          </button>
         </div>
       </div>
 
