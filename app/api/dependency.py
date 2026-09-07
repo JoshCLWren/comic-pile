@@ -49,6 +49,7 @@ class _ConnectedThreadEntry(TypedDict):
     title: str
     types: set[str]
     dependency_ids: set[int]
+    issue_number: str | None
 
 
 router = APIRouter(tags=["dependencies"])
@@ -685,6 +686,7 @@ async def get_thread_connected_threads(
                             "title": target_thread_obj.title,
                             "types": {"blocks"},
                             "dependency_ids": {dep.id},
+                            "issue_number": target_issue_obj.issue_number,
                         }
                     else:
                         connected_by_thread[tid]["types"].add("blocks")
@@ -703,6 +705,7 @@ async def get_thread_connected_threads(
                             "title": source_thread_obj.title,
                             "types": {"blocked_by"},
                             "dependency_ids": {dep.id},
+                            "issue_number": source_issue_obj.issue_number,
                         }
                     else:
                         connected_by_thread[tid]["types"].add("blocked_by")
@@ -722,6 +725,7 @@ async def get_thread_connected_threads(
             title=entry["title"],
             connection_type=connection_type,
             dependency_id=min(entry["dependency_ids"]),
+            issue_number=entry["issue_number"],
         ))
 
     return ThreadConnectedResponse(thread_id=thread_id, connected_threads=connected)

@@ -17,7 +17,7 @@ import {
 const MOBILE_VIEWPORT = { width: 390, height: 844 }
 
 test.describe('AUTH-001: Authentication and startup', () => {
-  test('user can register and then sign in with email/password', async ({
+  test('user can register and then sign in with username/password', async ({
     page,
   }) => {
     const user = generateTestUser()

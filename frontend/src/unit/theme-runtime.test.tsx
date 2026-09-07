@@ -6,6 +6,7 @@ import type { AuthContextValue } from '../App'
 import { AuthProvider, useAuth } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { ToastProvider } from '../contexts/ToastProvider'
 import {
   DEFAULT_THEME,
@@ -77,7 +78,9 @@ function renderNavigation() {
       <AuthProvider>
         <BugReportRestoreProvider>
           <ToastProvider>
-            <Navigation onBugReportSubmit={vi.fn()} />
+            <NavCollapseProvider>
+              <Navigation onBugReportSubmit={vi.fn()} />
+            </NavCollapseProvider>
           </ToastProvider>
         </BugReportRestoreProvider>
       </AuthProvider>

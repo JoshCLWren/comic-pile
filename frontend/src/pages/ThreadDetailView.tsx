@@ -333,7 +333,9 @@ export default function ThreadDetailView() {
                           aria-label={`Open ${t.title}`}
                         >
                           <span aria-hidden="true">🔒</span>
-                          <span className="text-sm text-stone-300 truncate">{t.title}</span>
+                          <span className="text-sm text-stone-300 truncate">
+                            {t.title}{t.issue_number ? `: #${t.issue_number}` : ''}
+                          </span>
                         </Link>
                       ))}
                     </div>
@@ -348,7 +350,9 @@ export default function ThreadDetailView() {
                           aria-label={`Open ${t.title}`}
                         >
                           <span aria-hidden="true">🔓</span>
-                          <span className="text-sm text-stone-300 truncate">{t.title}</span>
+                          <span className="text-sm text-stone-300 truncate">
+                            {t.title}{t.issue_number ? `: #${t.issue_number}` : ''}
+                          </span>
                         </Link>
                       ))}
                     </div>

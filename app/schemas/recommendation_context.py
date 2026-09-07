@@ -7,6 +7,11 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from comic_pile.recommendation_version import (
+    CONTROL_MODE_CONTEXTUAL,
+    RECOMMENDATION_ALGORITHM_VERSION,
+)
+
 
 class CandidateFactor(BaseModel):
     """Factor breakdown for a single candidate."""
@@ -85,8 +90,12 @@ class RollingRecommendationContext(BaseModel):
 
     schema_version: int = Field(default=1, ge=1, description="Version of the context schema")
     algorithm_version: str = Field(
-        default="legacy",
-        description="Identifying today's legacy/unweighted selector",
+        default=RECOMMENDATION_ALGORITHM_VERSION,
+        description="Canonical recommendation algorithm version that produced the roll",
+    )
+    control_mode: str = Field(
+        default=CONTROL_MODE_CONTEXTUAL,
+        description="Operator control mode at roll time (contextual or legacy)",
     )
     die_size: int = Field(..., gt=0, description="Current die size at roll time")
     selected_queue_position: int = Field(..., ge=1, description="Selected thread queue position at roll time")
@@ -95,8 +104,14 @@ class RollingRecommendationContext(BaseModel):
         description="Bounded candidate thread IDs in exact selection order",
     )
     selected_index: int = Field(..., ge=0, description="Selected candidate index/result")
-    selection_method: Literal["random", "momentum", "override"] = Field(
-        ..., description="Selection method (random, momentum-weighted, or override)"
+    selection_method: Literal[
+        "random", "momentum", "bandwidth", "override", "skip", "legacy"
+    ] = Field(
+        ...,
+        description=(
+            "Selection method: random, momentum-weighted, bandwidth-weighted, "
+            "override, skip, or forced legacy"
+        ),
     )
     session_timezone: str | None = Field(
         default=None, description="Session timezone if available from browser"

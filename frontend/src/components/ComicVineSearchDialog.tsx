@@ -15,7 +15,7 @@ interface ComicVineSearchDialogProps {
   issueNumber: string | null
   mode?: 'confirm' | 'replace'
   onClose: () => void
-  onConfirmed: () => void
+  onConfirmed: (selected?: ComicVineIssueCandidate | null) => void
 }
 
 type DialogStep = 'search' | 'select-issue' | 'confirm'
@@ -148,7 +148,7 @@ export default function ComicVineSearchDialog({
       } else {
         await comicVineApi.confirmIdentity(issueId, selectedIssue.comicvine_issue_id)
       }
-      onConfirmed()
+      onConfirmed(selectedIssue)
       onClose()
     } catch {
       setError('Failed to confirm identity. Please try again.')

@@ -56,6 +56,7 @@ vi.mock('../pages/HelpPage', () => ({ default: () => <div data-testid="help-page
 
 import App, { AuthProvider, AppRoutes, useAuth } from '../App'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { ToastProvider } from '../contexts/ToastProvider'
 
 let authContextValue: AuthContextValue | null = null
@@ -75,8 +76,10 @@ const renderWithAuth = (initialEntry = '/') => {
       <AuthProvider>
         <BugReportRestoreProvider>
           <ToastProvider>
-            <TestAuthConsumer />
-            <AppRoutes />
+            <NavCollapseProvider>
+              <TestAuthConsumer />
+              <AppRoutes />
+            </NavCollapseProvider>
           </ToastProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
@@ -177,9 +180,11 @@ test('redirects the retired /help route to the canonical /glossary route', async
       <AuthProvider>
         <BugReportRestoreProvider>
           <ToastProvider>
-            <TestAuthConsumer />
-            <LocationProbe />
-            <AppRoutes />
+            <NavCollapseProvider>
+              <TestAuthConsumer />
+              <LocationProbe />
+              <AppRoutes />
+            </NavCollapseProvider>
           </ToastProvider>
         </BugReportRestoreProvider>
       </AuthProvider>

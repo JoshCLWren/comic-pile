@@ -707,6 +707,45 @@ describe('ComicIdentity', () => {
     fireEvent.click(summary)
   })
 
+  it('story arc issue list reflows with the page instead of a clipped nested scroller', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '1101',
+      comicvine_url: null,
+      series_name: 'Test',
+      series_id: 17,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [{
+        comicvine_arc_id: 41,
+        total_related_count: null,
+        name: 'Deep Arc',
+        comicvine_url: null,
+        related_issues: Array.from({ length: 8 }, (_, index) => ({
+          comicvine_issue_id: `${1102 + index}`,
+          series_name: 'Test',
+          issue_number: `${index + 1}`,
+          name: null,
+          cover_date: null,
+          comicvine_url: null,
+          comicpile_matches: [],
+        })),
+      }],
+    })
+
+    render(<ComicIdentity issueId={11} />)
+    await waitForLoaded()
+
+    const list = screen.getByTestId('story-arc-issue-list')
+    expect(list).toBeInTheDocument()
+    expect(list).not.toHaveClass('max-h-48', 'max-h-64', 'overflow-y-auto', 'overscroll-contain')
+    expect(list).toHaveClass('space-y-1.5')
+  })
+
   it('creators section is collapsible via details/summary', async () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '1000',

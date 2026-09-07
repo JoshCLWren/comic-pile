@@ -97,6 +97,20 @@ class TestAuth:
         assert "Email already registered" in response.json()["detail"]
 
     @pytest.mark.asyncio
+    async def test_register_email_shaped_username_is_rejected(
+        self, client: AsyncClient
+    ) -> None:
+        """Email-shaped usernames are rejected so no account becomes unsigninable."""
+        user_data = {
+            "username": "reader@example.com",
+            "email": "reader@example.com",
+            "password": "password123",
+        }
+        response = await client.post("/api/v1/auth/register", json=user_data)
+        assert response.status_code == 400
+        assert "@" in response.json()["detail"]
+
+    @pytest.mark.asyncio
     async def test_login_success(self, client: AsyncClient, async_db: AsyncSession) -> None:
         """Test successful user login."""
         user_data = {
@@ -147,6 +161,18 @@ class TestAuth:
         response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 401
         assert "Incorrect username or email, or password" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_login_email_shaped_username_is_rejected(self, client: AsyncClient) -> None:
+        """Test email-shaped login input produces a clear, actionable error."""
+        login_data = {
+            "username": "reader@example.com",
+            "password": "correct_password_123",
+        }
+        response = await client.post("/api/v1/auth/login", json=login_data)
+        assert response.status_code == 400
+        assert "username" in response.json()["detail"].lower()
+        assert "email" in response.json()["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_refresh_token_success(self, client: AsyncClient, async_db: AsyncSession) -> None:

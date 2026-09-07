@@ -34,6 +34,7 @@ import type { DiagnosticData } from './hooks/useDiagnostics'
 import { ToastProvider } from './contexts/ToastProvider'
 import { CacheProvider } from './contexts/CacheContext'
 import { BugReportRestoreProvider } from './contexts/BugReportRestoreContext'
+import { NavCollapseProvider } from './contexts/NavCollapseContext'
 import './index.css'
 
 declare global {
@@ -391,7 +392,7 @@ function AuthResumeBoundary({ children }: { children: ReactNode }) {
 
 function App() {
   usePingHeartbeat()
-  return <BrowserRouter><QueryClientProvider client={queryClient}><BugReportRestoreProvider><ToastProvider><CacheProvider><AuthProvider><AuthResumeBoundary><AppRoutes /></AuthResumeBoundary></AuthProvider></CacheProvider></ToastProvider></BugReportRestoreProvider></QueryClientProvider></BrowserRouter>
+  return <BrowserRouter><QueryClientProvider client={queryClient}><BugReportRestoreProvider><ToastProvider><CacheProvider><AuthProvider><NavCollapseProvider><AuthResumeBoundary><AppRoutes /></AuthResumeBoundary></NavCollapseProvider></AuthProvider></CacheProvider></ToastProvider></BugReportRestoreProvider></QueryClientProvider></BrowserRouter>
 }
 
 export { AppRoutes }

@@ -40,7 +40,11 @@ describe('ContinuityPlansIndexPage', () => {
     await waitFor(() => {
       expect(screen.getByText('No reading plans yet')).toBeInTheDocument()
     })
+    expect(screen.getByText(/saved arrangement of issues, series, and crossovers/)).toBeInTheDocument()
+    const glossaryLink = screen.getByRole('link', { name: 'What is a continuity plan?' })
+    expect(glossaryLink).toHaveAttribute('href', '/glossary#continuity-plan')
     expect(screen.getByText('Create your first plan from the sequential planner.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Create a plan' })).toBeInTheDocument()
   })
 
   it('renders error state when load fails', async () => {

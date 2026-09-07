@@ -1537,6 +1537,17 @@
             "title": "Dependency Id",
             "type": "integer"
           },
+          "issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Number"
+          },
           "thread_id": {
             "title": "Thread Id",
             "type": "integer"

@@ -122,7 +122,7 @@ describe('IssueCorrectionDialog', () => {
     await waitFor(() => expect(screen.getByText(/multiple attempts/i)).toBeInTheDocument())
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(mockedIssuesApi.list).toHaveBeenCalled()
-    await userEvent.click(screen.getByRole('button', { name: 'Close dialog' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Close modal' }))
     expect(onClose).toHaveBeenCalled()
   })
 

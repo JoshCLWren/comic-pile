@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useSessionDetails, useSessionSnapshots, useRestoreSessionStart } from '../hooks/useSession'
 import { useUndo } from '../hooks/useUndo'
 import { formatDateTime } from '../utils/dateFormat'
 import LoadingSpinner from '../components/LoadingSpinner'
+import Modal from '../components/Modal'
 
 type DisplayEvent = {
   id: number
@@ -86,6 +88,7 @@ export default function SessionPage() {
   const { data: snapshotsData, refetch: refetchSnapshots } = useSessionSnapshots(id)
   const restoreMutation = useRestoreSessionStart()
   const undoMutation = useUndo()
+  const [isRestoreConfirmationOpen, setIsRestoreConfirmationOpen] = useState(false)
 
   const snapshots = snapshotsData?.snapshots ?? []
 
@@ -96,6 +99,8 @@ export default function SessionPage() {
   if (!details) {
     return <div className="text-center text-stone-500">Session not found</div>
   }
+
+  const isEmptySession = details.events.length === 0
 
   return (
     <div className="space-y-6 md:space-y-8 pb-20">
@@ -111,9 +116,15 @@ export default function SessionPage() {
             <p className="text-sm font-black text-stone-200">{formatDateTime(details.started_at)}</p>
           </div>
           <div className="space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Ended</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+              {details.ended_at ? 'Ended' : 'Status'}
+            </p>
             <p className="text-sm font-black text-stone-200">
-              {details.ended_at ? formatDateTime(details.ended_at) : 'Active'}
+              {details.ended_at
+                ? formatDateTime(details.ended_at)
+                : isEmptySession
+                  ? 'Abandoned roll'
+                  : 'Active session'}
             </p>
           </div>
           <div className="space-y-2">
@@ -129,6 +140,11 @@ export default function SessionPage() {
           <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Ladder Path</p>
           <p className="text-sm font-bold text-stone-300">{details.ladder_path}</p>
         </div>
+        {isEmptySession && (
+          <p className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3 text-sm text-[var(--theme-text-muted)]">
+            No reading activity was recorded for this roll.
+          </p>
+        )}
         <div className="grid gap-3 md:gap-4 md:grid-cols-3">
           {Object.entries(details.narrative_summary || {}).map(([key, values]) => (
             <div key={key} className="space-y-2 min-w-0">
@@ -152,7 +168,7 @@ export default function SessionPage() {
           <h2 className="text-lg font-black uppercase text-stone-200">Snapshots</h2>
           <button
             type="button"
-            onClick={() => restoreMutation.mutate(details.session_id)}
+            onClick={() => setIsRestoreConfirmationOpen(true)}
             disabled={restoreMutation.isPending || snapshots.length === 0}
             className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-60"
           >
@@ -202,7 +218,9 @@ export default function SessionPage() {
       <div className="glass-card p-4 md:p-6 space-y-4 min-w-0">
         <h2 className="text-lg font-black uppercase text-stone-200">Event Timeline</h2>
         {details.events.length === 0 ? (
-          <p className="text-xs text-stone-500">No events recorded.</p>
+          <p className="text-xs text-stone-500">
+            No events to show. No reading activity was recorded for this roll.
+          </p>
         ) : (
           <div className="space-y-3 min-w-0">
             {details.events.map((event) => (
@@ -211,6 +229,38 @@ export default function SessionPage() {
           </div>
         )}
       </div>
+
+      <Modal
+        isOpen={isRestoreConfirmationOpen}
+        title="Restore session start?"
+        onClose={() => setIsRestoreConfirmationOpen(false)}
+        autoFocus={false}
+      >
+        <p className="text-sm text-[var(--theme-text-muted)]">
+          This replaces your entire current pile with the state saved when Session #{details.session_id} began.
+          Threads added since then may be removed, and reading progress, ratings, and queue order may be reverted.
+        </p>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={() => setIsRestoreConfirmationOpen(false)}
+            className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              await restoreMutation.mutate(details.session_id)
+              setIsRestoreConfirmationOpen(false)
+            }}
+            disabled={restoreMutation.isPending}
+            className="min-h-11 rounded-xl bg-[var(--theme-danger)] px-4 text-sm font-black text-[var(--theme-text-primary)] hover:bg-[var(--theme-danger-hover)] disabled:opacity-60"
+          >
+            {restoreMutation.isPending ? 'Restoring...' : 'Restore session start'}
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }

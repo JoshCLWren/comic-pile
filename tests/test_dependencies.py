@@ -766,6 +766,62 @@ async def test_connected_threads_deduplicates_multiple_edges(
 
 
 @pytest.mark.asyncio
+async def test_connected_threads_expose_blocker_issue_number(
+    async_db, auth_client, default_user
+):
+    """Thread-detail connected threads carry the blocker issue identity.
+
+    Regression coverage for issue #2208: the thread-detail blocker copy must
+    carry the same issue identity the Queue already shows (e.g.
+    ``Blocked by Starman: #42``), never a raw internal identifier.
+    """
+    user = default_user
+
+    target_thread = Thread(
+        title="Promethea",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    blocker_thread = Thread(
+        title="Starman",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    async_db.add_all([target_thread, blocker_thread])
+    await async_db.flush()
+
+    blocker_issue = Issue(
+        thread_id=blocker_thread.id, issue_number="42", position=1, status="unread"
+    )
+    target_issue = Issue(
+        thread_id=target_thread.id, issue_number="1", position=1, status="unread"
+    )
+    async_db.add_all([blocker_issue, target_issue])
+    await async_db.flush()
+
+    async_db.add(
+        Dependency(source_issue_id=blocker_issue.id, target_issue_id=target_issue.id)
+    )
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/threads/{target_thread.id}/connected")
+    assert response.status_code == 200
+
+    connected = response.json()["connected_threads"]
+    assert connected[0]["title"] == "Starman"
+    assert connected[0]["connection_type"] == "blocked_by"
+    assert connected[0]["issue_number"] == "42"
+
+
+@pytest.mark.asyncio
 async def test_blocking_explanations_identify_comics_without_raw_thread_ids(async_db):
     """Queue blocked-thread copy uses human identity; raw thread ids never render.
 

@@ -1,3 +1,4 @@
+import type { Ref } from 'react'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
 import type { ConnectedThreadInfo, ReaderContextResponse } from '../../../types'
 import type { RatingThread } from '../types'
@@ -33,6 +34,7 @@ interface RatingViewProps {
   readerContext?: ReaderContextResponse | null
   isReaderContextLoading?: boolean
   readerContextError?: string | null
+  ratingViewTopRef?: Ref<HTMLDivElement> | null
 }
 
 export function RatingView({
@@ -57,6 +59,7 @@ export function RatingView({
   readerContext = null,
   isReaderContextLoading = false,
   readerContextError = null,
+  ratingViewTopRef = null,
 }: RatingViewProps) {
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const hasReadingContextContentValue = hasReadingContextContent(readingOrders, connectedThreads, readerContext)
@@ -65,10 +68,14 @@ export function RatingView({
   const showReadingContextStatus = !hasReadingContextContentValue && (readerContextLoading || readerContextFailure)
 
   return (
-    <div className="relative z-10 space-y-4 p-3 md:p-4">
+    <div
+      ref={ratingViewTopRef}
+      data-testid="rating-view-top"
+      className="relative z-10 space-y-4 p-3 md:p-4"
+    >
       <WhyThisRoll explanation={activeRatingThread?.explanation} />
       <div
-        className="grid items-start gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]"
+        className="grid items-start gap-4 lg:grid-cols-2 lg:gap-6 xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]"
         data-testid="rating-pillars-grid"
       >
         <div className="min-w-0" data-testid="rating-region-comic">
@@ -79,7 +86,7 @@ export function RatingView({
         </div>
 
         {hasReadingContextContentValue && (
-          <div className="min-w-0" data-testid="rating-region-reading-context">
+          <div className="min-w-0 order-2 lg:order-none" data-testid="rating-region-reading-context">
             <ReadingContextPillar
               activeRatingThread={activeRatingThread}
               readingOrders={readingOrders}
@@ -94,7 +101,7 @@ export function RatingView({
           </div>
         )}
 
-        <div className="min-w-0 space-y-4" data-testid="rating-region-your-context">
+        <div className="min-w-0 space-y-4 order-1 lg:order-none" data-testid="rating-region-your-context">
           <YourContextPillar
             activeRatingThread={activeRatingThread}
             currentDie={currentDie}
@@ -117,6 +124,10 @@ export function RatingView({
               onSnooze={onSnooze}
               onSkip={onSkip}
               onCancel={onCancel}
+              threadTitle={activeRatingThread?.title ?? null}
+              issueNumber={
+                activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
+              }
             />
           </div>
         </div>
