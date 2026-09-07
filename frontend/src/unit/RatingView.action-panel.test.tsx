@@ -72,14 +72,14 @@ function ratingView(overrides: Record<string, unknown> = {}) {
 }
 
 describe('RatingView action panel (issue #1406)', () => {
-  it('Cancel uses semantic danger/cancel styling', () => {
+  it('Cancel uses demoted tertiary styling that does not rival the primary save', () => {
     render(ratingView())
     const cancel = screen.getByRole('button', { name: /cancel roll/i })
-    expect(cancel.className).toContain('border-rose-600/30')
-    expect(cancel.className).toContain('bg-rose-600/10')
-    expect(cancel.className).toContain('text-rose-400')
-    expect(cancel.className).toContain('hover:bg-rose-600/20')
-    expect(cancel.className).toContain('focus:ring-rose-500')
+    expect(cancel.className).toContain('border-[var(--theme-border)]')
+    expect(cancel.className).toContain('bg-transparent')
+    expect(cancel.className).toContain('text-[var(--theme-text-muted)]')
+    expect(cancel.className).not.toContain('rose')
+    expect(cancel.className).not.toContain('focus:ring-rose-500')
   })
 
   it('Snooze remains neutral styling', () => {
@@ -96,6 +96,20 @@ describe('RatingView action panel (issue #1406)', () => {
     const cancel = screen.getByRole('button', { name: /cancel roll/i })
     expect(snooze.className).toContain('flex-1')
     expect(cancel.className).toContain('flex-1')
+  })
+
+  it('primary save remains the dominant hierarchy over Cancel (issue #2347)', () => {
+    render(ratingView())
+    const save = screen.getByRole('button', { name: /mark read & save/i })
+    const cancel = screen.getByRole('button', { name: /cancel roll/i })
+    const primary = save.classList.contains('bg-amber-600/25')
+    const cancelIsDemoted =
+      cancel.classList.contains('bg-transparent') &&
+      cancel.classList.contains('text-[var(--theme-text-muted)]')
+    expect(primary).toBe(true)
+    expect(cancelIsDemoted).toBe(true)
+    expect(save.classList.contains('w-full')).toBe(true)
+    expect(cancel.className).not.toContain('rose')
   })
 
   it('shows dN → dM die consequence', () => {
@@ -146,7 +160,7 @@ describe('RatingView action panel (issue #1406)', () => {
         issue_id: 100, next_issue_id: null,
       },
     }))
-    expect(screen.getByText(/This is the last issue in the thread/)).toBeInTheDocument()
+    expect(screen.getByText(/This is the last issue in the series/)).toBeInTheDocument()
   })
 
   it('rating actions container has sticky class for mobile', () => {

@@ -57,6 +57,8 @@ body {
   --theme-danger: #c0392b;
   --theme-danger-hover: #e74c3c;
   --theme-focus-ring: #d4890e;
+  --theme-warning: #fbbf24;
+  --theme-error: #ef4444;
   --bg-glow: #2a2018;
   --bg-main: var(--theme-bg-page);
   --bg-darker: #110e0a;
@@ -84,6 +86,8 @@ body {
   --theme-danger: #b56a27;
   --theme-danger-hover: #d4890e;
   --theme-focus-ring: #c9a937;
+  --theme-warning: #c9a937;
+  --theme-error: #b56a27;
   --bg-glow: #241b10;
   --bg-main: var(--theme-bg-page);
   --bg-darker: #0f0b08;
@@ -111,6 +115,8 @@ body {
   --theme-danger: #ff4757;
   --theme-danger-hover: #ff6b7a;
   --theme-focus-ring: #00d4ff;
+  --theme-warning: #ffd166;
+  --theme-error: #ff4757;
   --bg-glow: #131640;
   --bg-main: var(--theme-bg-page);
   --bg-darker: #05060f;
@@ -376,6 +382,23 @@ body {
   box-shadow:
     0 20px 25px -5px rgba(0, 0, 0, 0.3),
     0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
+.form-control {
+  background: var(--theme-bg-panel);
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text-primary);
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.form-control::placeholder {
+  color: var(--theme-text-muted);
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--theme-focus-ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-focus-ring) 30%, transparent);
 }
 
 .dice-state-idle {

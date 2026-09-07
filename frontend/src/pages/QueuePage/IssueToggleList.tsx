@@ -17,9 +17,10 @@ import {
 } from './issueUtils'
 import type { IssueMutation, QueuedIssueMutation } from './types'
 
-export function IssueToggleList({ threadId, onOpenDependencies }: {
+export function IssueToggleList({ threadId, onOpenDependencies, onIssueChanged }: {
   threadId: number
   onOpenDependencies?: () => void
+  onIssueChanged?: () => void
 }) {
   const [issues, setIssues] = useState<Issue[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -156,6 +157,7 @@ export function IssueToggleList({ threadId, onOpenDependencies }: {
     }
 
     isProcessingMutationsRef.current = true
+    let hadSuccess = false
 
     try {
       while (pendingMutationsRef.current.length > 0) {
@@ -163,6 +165,7 @@ export function IssueToggleList({ threadId, onOpenDependencies }: {
         try {
           await runIssueMutation(currentMutation)
           baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
+          hadSuccess = true
         } catch (err: unknown) {
           try {
             baseIssuesRef.current = await fetchAllIssues()
@@ -179,8 +182,11 @@ export function IssueToggleList({ threadId, onOpenDependencies }: {
       }
     } finally {
       isProcessingMutationsRef.current = false
+      if (hadSuccess) {
+        onIssueChanged?.()
+      }
     }
-  }, [fetchAllIssues, runIssueMutation, syncOptimisticIssues])
+  }, [fetchAllIssues, runIssueMutation, syncOptimisticIssues, onIssueChanged])
 
   const enqueueIssueMutation = useCallback((mutation: QueuedIssueMutation) => {
     const queuedMutation = {

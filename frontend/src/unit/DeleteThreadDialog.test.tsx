@@ -59,7 +59,7 @@ describe('DeleteThreadDialog', () => {
         onCancel={onCancel}
       />,
     )
-    expect(screen.queryByText('Delete Thread')).not.toBeInTheDocument()
+    expect(screen.queryByText('Delete Series')).not.toBeInTheDocument()
   })
 
   it('asks for confirmation before the destructive delete and wires the actions', async () => {
@@ -73,13 +73,13 @@ describe('DeleteThreadDialog', () => {
         onCancel={onCancel}
       />,
     )
-    expect(screen.getByRole('heading', { name: 'Delete Thread' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Delete Series' })).toBeInTheDocument()
     const confirmText = screen.getByText((content) =>
       content.includes('Are you sure you want to delete'),
     )
     expect(confirmText).toHaveTextContent('Are you sure you want to delete Saga')
 
-    await user.click(screen.getByRole('button', { name: /delete thread/i }))
+    await user.click(screen.getByRole('button', { name: /delete series/i }))
     expect(onConfirm).toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: /cancel/i }))

@@ -150,7 +150,7 @@ describe('ReadingPathPanel regression (issue #1916)', () => {
     expect(screen.getByTestId('reading-path-blocked')).toHaveTextContent('Absolute Evil #1')
 
     // Thread endpoints are navigable
-    const buttons = screen.getAllByRole('button', { name: /Open thread for/ })
+    const buttons = screen.getAllByRole('button', { name: /Open series for/ })
     expect(buttons.length).toBeGreaterThan(0)
     await user.click(buttons[0])
   })

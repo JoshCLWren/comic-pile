@@ -12,7 +12,12 @@ const routeParams = { id: '1' }
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
-  return { ...actual, useNavigate: () => vi.fn(), useParams: () => routeParams }
+  return {
+    ...actual,
+    useNavigate: () => vi.fn(),
+    useParams: () => routeParams,
+    useLocation: () => ({ state: undefined }),
+  }
 })
 vi.mock('../hooks/useThread', () => ({ useUpdateThread: vi.fn() }))
 vi.mock('../services/api', () => {

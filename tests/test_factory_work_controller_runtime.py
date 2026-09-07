@@ -283,13 +283,23 @@ def test_actionable_pr_stage_is_live_executable(
 
 
 @pytest.mark.parametrize("stage", ["factory:review", "factory:changes-requested"])
-def test_assign_returns_actionable_pr_despite_historical_no_diff_markers(
+@pytest.mark.parametrize(
+    ("attempts", "expect_assigned"),
+    [
+        (2, True),
+        (3, False),
+    ],
+)
+def test_assign_respects_pr_no_diff_retry_budget(
     controller: types.ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     stage: str,
+    attempts: int,
+    expect_assigned: bool,
 ) -> None:
-    """The full assignment path honors current PR lifecycle state over old comments."""
+    """PR retry exhaustion suppresses assignment without rewriting truthful stages."""
     monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
+    head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     pr = {
         "number": 2122,
         "state": "OPEN",
@@ -300,6 +310,7 @@ def test_assign_returns_actionable_pr_despite_historical_no_diff_markers(
             {"name": stage},
         ],
         "headRefName": "factory/50-1767-opencode-free",
+        "headRefOid": head,
         "body": "Worker: opencode-free-model-factory-50",
         "createdAt": "2026-09-03T00:25:29Z",
         "mergeable": "MERGEABLE",
@@ -316,8 +327,18 @@ def test_assign_returns_actionable_pr_despite_historical_no_diff_markers(
     monkeypatch.setattr(controller, "list_prs", lambda: [pr])
     monkeypatch.setattr(
         controller,
-        "load_no_diff_attempts",
-        lambda: {2122: 3},
+        "load_no_diff_attempt_records",
+        lambda: [
+            controller.NoDiffAttempt(
+                kind="pr",
+                number=2122,
+                epoch=2_000_000_000 - index,
+                sha=head,
+                stage=stage,
+                conflicted=False,
+            )
+            for index in range(attempts)
+        ],
     )
     monkeypatch.setattr(
         controller,
@@ -328,8 +349,77 @@ def test_assign_returns_actionable_pr_despite_historical_no_diff_markers(
 
     assignment = controller.assign("13")
 
+    if expect_assigned:
+        assert assignment is not None
+        assert (assignment.kind, assignment.number, assignment.stage) == ("pr", 2122, stage)
+    else:
+        assert assignment is None
+    assert {str(label["name"]) for label in pr["labels"]} == {
+        "factory",
+        "factory:unowned",
+        stage,
+    }
+
+
+def test_assign_wakes_exhausted_pr_after_new_head(
+    controller: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exact-head retry accounting must not suppress a later push."""
+    monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
+    old_head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    new_head = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    pr = {
+        "number": 2122,
+        "state": "OPEN",
+        "isDraft": False,
+        "labels": [
+            {"name": "factory"},
+            {"name": "factory:unowned"},
+            {"name": "factory:changes-requested"},
+        ],
+        "headRefName": "factory/50-1767-opencode-free",
+        "headRefOid": new_head,
+        "body": "Worker: opencode-free-model-factory-50",
+        "createdAt": "2026-09-03T00:25:29Z",
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "CLEAN",
+    }
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda worker: False)
+    monkeypatch.setattr(
+        controller,
+        "omniroute_free_entry_capacity",
+        lambda: {"in_flight": 0, "cap": 3, "remaining": 3},
+    )
+    monkeypatch.setattr(controller, "reconcile_stale_leases", lambda: [])
+    monkeypatch.setattr(controller, "list_issues", lambda: [])
+    monkeypatch.setattr(controller, "list_prs", lambda: [pr])
+    monkeypatch.setattr(
+        controller,
+        "load_no_diff_attempt_records",
+        lambda: [
+            controller.NoDiffAttempt(
+                kind="pr",
+                number=2122,
+                epoch=2_000_000_000 - index,
+                sha=old_head,
+                stage="factory:changes-requested",
+                conflicted=False,
+            )
+            for index in range(3)
+        ],
+    )
+    monkeypatch.setattr(
+        controller,
+        "target_json",
+        lambda number: {"labels": [{"name": "factory:changes-requested"}]},
+    )
+    monkeypatch.setattr(controller, "assign_candidate", lambda candidate, worker: True)
+
+    assignment = controller.assign("13")
+
     assert assignment is not None
-    assert (assignment.kind, assignment.number, assignment.stage) == ("pr", 2122, stage)
+    assert (assignment.kind, assignment.number) == ("pr", 2122)
 
 
 def test_ci_pr_with_failed_required_checks_is_live_executable(

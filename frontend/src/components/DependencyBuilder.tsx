@@ -415,7 +415,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
     const targetHasIssueTracking = thread.total_issues !== null && thread.total_issues !== undefined
     if (!targetHasIssueTracking) {
-      setError('Target thread must be migrated to issue tracking before adding issue dependencies.')
+      setError('Target series must be migrated to issue tracking before adding issue dependencies.')
       return
     }
 
@@ -700,7 +700,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
         <div className="space-y-2">
           <label htmlFor="search-prereq-thread" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-            Search prerequisite thread
+            Search prerequisite series
           </label>
           <input
             id="search-prereq-thread"
@@ -708,11 +708,11 @@ const [isSavingNote, setIsSavingNote] = useState(false)
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Type at least 2 characters"
-            className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+            className="w-full rounded-xl px-3 py-2 text-sm form-control"
           />
           {isSearching && <p className="text-xs text-stone-500">Searching…</p>}
           {!isSearching && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
-            <p className="text-xs text-stone-500">No matching threads found.</p>
+            <p className="text-xs text-stone-500">No matching series found.</p>
           )}
           {searchResults.length > 0 && (
             <div className="max-h-40 overflow-auto border border-white/10 rounded-xl bg-white/5">
@@ -756,7 +756,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                           min="0"
                           value={migrationLastRead}
                           onChange={(e) => setMigrationLastRead(e.target.value)}
-                          className="w-full bg-white/5 border border-solid border-white/20 rounded-lg px-2 py-1 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                          className="w-full rounded-lg px-2 py-1 text-sm form-control"
                           required
                         />
                       </div>
@@ -768,7 +768,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                           min="1"
                           value={migrationTotal}
                           onChange={(e) => setMigrationTotal(e.target.value)}
-                          className="w-full bg-white/5 border border-solid border-white/20 rounded-lg px-2 py-1 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                          className="w-full rounded-lg px-2 py-1 text-sm form-control"
                           required
                         />
                       </div>
@@ -799,7 +799,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                        id="source-issue"
                        value={sourceIssueId || ''}
                        onChange={(event) => setSourceIssueId(event.target.value ? Number(event.target.value) : null)}
-                       className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                       className="w-full rounded-xl px-3 py-2 text-sm form-control"
                        disabled={sourceIssues.length === 0}
                      >
                        {sourceIssues.length === 0 ? (
@@ -824,7 +824,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                        id="target-issue"
                        value={targetIssueId || ''}
                        onChange={(event) => setTargetIssueId(event.target.value ? Number(event.target.value) : null)}
-                       className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                       className="w-full rounded-xl px-3 py-2 text-sm form-control"
                        disabled={targetIssues.length === 0}
                      >
                        {targetIssues.length === 0 ? (
@@ -874,7 +874,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
          </div>
 
         <div className="space-y-2">
-          <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This thread is blocked by</h3>
+          <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This series is blocked by</h3>
           {isLoadingDeps ? (
             <p className="text-xs text-stone-500">Loading dependencies…</p>
           ) : dependencies.blocked_by.length === 0 ? (
@@ -886,13 +886,13 @@ const [isSavingNote, setIsSavingNote] = useState(false)
               {deps.map((dep) => {
                 const title = dep.is_issue_level && dep.source_label && dep.target_label
                   ? `${dep.source_label} → ${dep.target_label}`
-                  : dep.source_label ?? (dep.source_issue_id ? `Issue #${dep.source_issue_id}` : `Thread #${dep.source_thread_id}`)
+                  : dep.source_label ?? (dep.source_issue_id ? `Issue #${dep.source_issue_id}` : `Series #${dep.source_thread_id}`)
                 return (
                   <DependencyRow
                     key={dep.id}
                     dependency={dep}
                     title={title}
-                    subtitle={dep.source_issue_id ? 'Issue-level block' : 'Thread-level block'}
+                    subtitle={dep.source_issue_id ? 'Issue-level block' : 'Series-level block'}
                     onDelete={handleDeleteDependency}
                     onEditNote={handleStartEditNote}
                     editingNoteId={editingNoteId}
@@ -910,11 +910,11 @@ const [isSavingNote, setIsSavingNote] = useState(false)
         </div>
 
         <div className="space-y-2">
-          <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This thread blocks</h3>
+          <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This series blocks</h3>
           {isLoadingDeps ? (
             <p className="text-xs text-stone-500">Loading dependencies…</p>
           ) : dependencies.blocking.length === 0 ? (
-            <p className="text-xs text-stone-500">No dependent threads yet.</p>
+            <p className="text-xs text-stone-500">No dependent series yet.</p>
           ) : (
             Array.from(groupByThread(dependencies.blocking, 'target_label')).map(([threadName, deps]) => (
               <div key={threadName} className="space-y-1">
@@ -922,13 +922,13 @@ const [isSavingNote, setIsSavingNote] = useState(false)
               {deps.map((dep) => {
                 const title = dep.is_issue_level && dep.source_label && dep.target_label
                   ? `${dep.source_label} → ${dep.target_label}`
-                  : dep.target_label ?? (dep.target_issue_id ? `Issue #${dep.target_issue_id}` : `Thread #${dep.target_thread_id}`)
+                  : dep.target_label ?? (dep.target_issue_id ? `Issue #${dep.target_issue_id}` : `Series #${dep.target_thread_id}`)
                 return (
                   <DependencyRow
                     key={dep.id}
                     dependency={dep}
                     title={title}
-                    subtitle={dep.target_issue_id ? 'Issue-level block' : 'Thread-level block'}
+                    subtitle={dep.target_issue_id ? 'Issue-level block' : 'Series-level block'}
                     onDelete={handleDeleteDependency}
                     onEditNote={handleStartEditNote}
                     editingNoteId={editingNoteId}
@@ -1007,7 +1007,7 @@ function DependencyRow({
             onChange={(e) => onNoteChange(e.target.value)}
             placeholder="Add a note..."
             maxLength={255}
-            className="flex-1 bg-white/5 border border-solid border-white/20 rounded-lg px-2 py-1 text-xs text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+            className="flex-1 rounded-lg px-2 py-1 text-xs form-control"
           />
           <button
             type="button"

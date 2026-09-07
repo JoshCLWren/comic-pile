@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
@@ -282,8 +282,9 @@ describe('Appearance picker in the More tray', () => {
 
   it('switches to ink-gold immediately and persists through the preferences contract', async () => {
     const user = await openMoreTray()
+    const tray = screen.getByRole('navigation', { name: 'More pages' })
 
-    await user.click(screen.getByRole('button', { name: 'Ink-gold theme' }))
+    await user.click(within(tray).getByRole('button', { name: 'Ink-gold theme' }))
 
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
     await waitFor(() =>
@@ -293,8 +294,9 @@ describe('Appearance picker in the More tray', () => {
 
   it('switches to command-center immediately and persists the choice', async () => {
     const user = await openMoreTray()
+    const tray = screen.getByRole('navigation', { name: 'More pages' })
 
-    await user.click(screen.getByRole('button', { name: 'Command center theme' }))
+    await user.click(within(tray).getByRole('button', { name: 'Command center theme' }))
 
     expect(document.documentElement).toHaveAttribute('data-theme', 'command-center')
     await waitFor(() =>
@@ -305,8 +307,9 @@ describe('Appearance picker in the More tray', () => {
   it('retries a failed preference save and converges without an error', async () => {
     mocks.patch.mockRejectedValueOnce(new Error('save failed'))
     const user = await openMoreTray()
+    const tray = screen.getByRole('navigation', { name: 'More pages' })
 
-    await user.click(screen.getByRole('button', { name: 'Ink-gold theme' }))
+    await user.click(within(tray).getByRole('button', { name: 'Ink-gold theme' }))
 
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(2))
@@ -320,19 +323,20 @@ describe('Appearance picker in the More tray', () => {
 
   it('indicates the currently active theme in the picker', async () => {
     const user = await openMoreTray()
+    const tray = screen.getByRole('navigation', { name: 'More pages' })
 
-    expect(screen.getByRole('button', { name: 'Classic theme' })).toHaveAttribute(
+    expect(within(tray).getByRole('button', { name: 'Classic theme' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
 
-    await user.click(screen.getByRole('button', { name: 'Command center theme' }))
+    await user.click(within(tray).getByRole('button', { name: 'Command center theme' }))
 
-    expect(screen.getByRole('button', { name: 'Command center theme' })).toHaveAttribute(
+    expect(within(tray).getByRole('button', { name: 'Command center theme' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
-    expect(screen.getByRole('button', { name: 'Classic theme' })).toHaveAttribute(
+    expect(within(tray).getByRole('button', { name: 'Classic theme' })).toHaveAttribute(
       'aria-pressed',
       'false',
     )
@@ -341,8 +345,9 @@ describe('Appearance picker in the More tray', () => {
   it('mirrors the selection into localStorage even when the PATCH fails', async () => {
     mocks.patch.mockRejectedValueOnce(axiosError(503))
     const user = await openMoreTray()
+    const tray = screen.getByRole('navigation', { name: 'More pages' })
 
-    await user.click(screen.getByRole('button', { name: 'Command center theme' }))
+    await user.click(within(tray).getByRole('button', { name: 'Command center theme' }))
 
     await waitFor(() => expect(mocks.patch).toHaveBeenCalled())
     expect(readStoredThemePreference()).toBe('command-center')
@@ -352,7 +357,8 @@ describe('Appearance picker in the More tray', () => {
   it('survives a reload during an outage: stored choice renders instead of classic', async () => {
     mocks.patch.mockRejectedValue(axiosError(503))
     const user = await openMoreTray()
-    await user.click(screen.getByRole('button', { name: 'Ink-gold theme' }))
+    const tray = screen.getByRole('navigation', { name: 'More pages' })
+    await user.click(within(tray).getByRole('button', { name: 'Ink-gold theme' }))
     await waitFor(() => expect(readStoredThemePreference()).toBe('ink-gold'))
 
     document.documentElement.removeAttribute('data-theme')
@@ -372,8 +378,9 @@ describe('Appearance picker in the More tray', () => {
   it('activates a theme with the keyboard', async () => {
     await openMoreTray()
     const user = userEvent.setup()
+    const tray = screen.getByRole('navigation', { name: 'More pages' })
 
-    screen.getByRole('button', { name: 'Classic theme' }).focus()
+    within(tray).getByRole('button', { name: 'Classic theme' }).focus()
     await user.tab()
     await user.keyboard('{Enter}')
 

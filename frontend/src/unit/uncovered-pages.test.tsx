@@ -20,7 +20,7 @@ describe('HelpPage', () => {
   it('renders the complete glossary', () => {
     renderRoute(<HelpPage />)
     expect(screen.getByRole('heading', { name: 'Glossary' })).toBeInTheDocument()
-    expect(screen.getAllByTestId('glossary-term')).toHaveLength(16)
+    expect(screen.getAllByTestId('glossary-term')).toHaveLength(20)
     expect(
       screen.getByText(/read X before Y/),
     ).toBeInTheDocument()
@@ -36,8 +36,13 @@ describe('HelpPage', () => {
       'Reading Order',
       'Readiness / Blocked',
       'Projection',
-      'Die ladder (d6 → d8)',
-      'AutoLadder',
+      'Die size',
+      'Auto',
+      'Series',
+      'Ready to read',
+      'Pos',
+      'Reading mode',
+      'Finished series',
     ]) {
       expect(screen.getByText(term)).toBeInTheDocument()
     }
@@ -62,6 +67,10 @@ describe('HelpPage', () => {
       'projection',
       'dependency-builder',
       'ordering-mode',
+      'ready-to-read',
+      'position',
+      'reading-mode',
+      'finished-series',
     ]) {
       expect(document.getElementById(id)).not.toBeNull()
     }

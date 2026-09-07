@@ -54,7 +54,7 @@ export default function MigrationDialog({ thread, onComplete, onSkip, onClose }:
       return 'One issue away from completion!'
     }
     if (lastRead === total && total > 0) {
-      return '🎉 Completing the series! Thread will be marked as completed.'
+      return '🎉 Completing the series! This series will be marked as completed.'
     }
     return null
   }
@@ -71,7 +71,7 @@ export default function MigrationDialog({ thread, onComplete, onSkip, onClose }:
     }
 
     if (lastRead >= total) {
-      return `All ${total} issues will be marked as read. 🎉 Thread will be completed!`
+      return `All ${total} issues will be marked as read. 🎉 Series will be completed!`
     }
 
     const unreadCount = total - lastRead

@@ -501,6 +501,14 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         await init_database(app_settings.environment)
         await compute_startup_duration()
 
+        from app.cache_accounting import cache_accounting
+        from app.database import async_engine
+
+        try:
+            await cache_accounting.initialize(async_engine)
+        except Exception:
+            logger.warning("Durable cache accounting init failed; quota telemetry degraded")
+
         redis_settings = get_redis_settings()
         from app.cache_quota import set_quota_throttle_enabled
 
@@ -555,11 +563,14 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     @app.on_event("shutdown")
     async def shutdown_event():
-        """Close cache connection on application shutdown."""
+        """Close cache connection and accounting on application shutdown."""
+        from app.cache_accounting import cache_accounting
+
         logger.info(
             "Shutting down cache (provider=%s)",
             startup_state.get("cache_provider_type", "unconfigured"),
         )
+        await cache_accounting.close()
         await cache.close()
 
     return app

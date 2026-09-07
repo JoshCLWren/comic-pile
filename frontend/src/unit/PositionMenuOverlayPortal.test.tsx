@@ -45,9 +45,9 @@ it('mounts the position menu inside the shared overlay root', async () => {
   const user = userEvent.setup()
   renderMenu()
 
-  await user.click(screen.getByRole('button', { name: 'Thread actions' }))
+  await user.click(screen.getByRole('button', { name: 'Series actions' }))
 
-  const menu = await screen.findByRole('menu', { name: 'Thread actions' })
+  const menu = await screen.findByRole('menu', { name: 'Series actions' })
   const overlayRoot = document.querySelector('[data-overlay-root="true"]')
 
   expect(overlayRoot).not.toBeNull()
@@ -59,8 +59,8 @@ it('releases the shared overlay root after the menu unmounts', async () => {
   const user = userEvent.setup()
   const view = renderMenu()
 
-  await user.click(screen.getByRole('button', { name: 'Thread actions' }))
-  await screen.findByRole('menu', { name: 'Thread actions' })
+  await user.click(screen.getByRole('button', { name: 'Series actions' }))
+  await screen.findByRole('menu', { name: 'Series actions' })
 
   view.unmount()
 

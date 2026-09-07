@@ -10,9 +10,15 @@ import { issuesApi } from '../services/api-issues'
 
 const navigateSpy = vi.fn()
 const routeParams = { id: '1' }
+const locationState: { state?: { openEditModal?: boolean } } = { state: undefined }
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
-  return { ...actual, useNavigate: () => navigateSpy, useParams: () => routeParams }
+  return {
+    ...actual,
+    useNavigate: () => navigateSpy,
+    useParams: () => routeParams,
+    useLocation: () => locationState,
+  }
 })
 vi.mock('../hooks/useThread', () => ({ useUpdateThread: vi.fn() }))
 vi.mock('../services/api', () => ({
@@ -31,6 +37,7 @@ const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
 
 beforeEach(() => {
   routeParams.id = '1'
+  locationState.state = undefined
   navigateSpy.mockReset()
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   mockedThreadsApiGet.mockResolvedValue({
@@ -56,6 +63,13 @@ it('renders a thread without legacy rating content', async () => {
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   expect(screen.queryByText(/Reviews/)).not.toBeInTheDocument()
+})
+
+it('auto-opens the edit modal when arriving with openEditModal state', async () => {
+  locationState.state = { openEditModal: true }
+  renderPage()
+  await waitFor(() => expect(screen.getByRole('heading', { name: /edit series/i })).toBeInTheDocument())
+  expect(screen.getByDisplayValue('Saga')).toBeInTheDocument()
 })
 
 it('does not fetch issues before the Issues section expands', async () => {
@@ -258,7 +272,7 @@ it('renders named blocked-by dependencies and an empty blocking list as links', 
   await waitFor(() =>
     expect(screen.getByRole('link', { name: 'Open Prequel' })).toHaveAttribute('href', '/thread/9'),
   )
-  expect(screen.getByText('This thread blocks nothing')).toBeInTheDocument()
+  expect(screen.getByText('This series blocks nothing')).toBeInTheDocument()
 })
 
 it('renders blocker issue number on thread detail when known', async () => {
@@ -309,7 +323,7 @@ it('renders named blocking dependencies when nothing blocks this thread', async 
   })
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
-  await waitFor(() => expect(screen.getByText('Nothing blocks this thread')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText('Nothing blocks this series')).toBeInTheDocument())
   expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
 })
 

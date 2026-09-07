@@ -3,9 +3,9 @@
 .flowchart-container {
   position: relative;
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--theme-border);
   border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--theme-bg-panel);
   overflow: hidden;
 }
 
@@ -23,14 +23,14 @@
 /* Edges */
 .flowchart-edge {
   fill: none;
-  stroke: rgba(160, 147, 126, 0.4);
+  stroke: color-mix(in srgb, var(--theme-text-muted) 40%, transparent);
   stroke-width: 2;
   pointer-events: none;
 }
 
 .flowchart-edge-blocking {
   fill: none;
-  stroke: rgba(239, 68, 68, 0.7);
+  stroke: var(--theme-danger);
   stroke-width: 2.5;
   animation: pulse-edge 2s ease-in-out infinite;
   pointer-events: none;
@@ -39,17 +39,17 @@
 .edge--issue-level {
   stroke-dasharray: 6 4;
   stroke-opacity: 0.6;
-  stroke: rgba(56, 189, 248, 0.6);
+  stroke: var(--theme-continuity-accent);
   stroke-width: 2;
 }
 
 /* Arrowhead marker */
 .flowchart-arrowhead {
-  fill: rgba(160, 147, 126, 0.6);
+  fill: color-mix(in srgb, var(--theme-text-muted) 60%, transparent);
 }
 
 .flowchart-arrowhead-blocking {
-  fill: rgba(239, 68, 68, 0.7);
+  fill: var(--theme-danger);
 }
 
 /* Nodes */
@@ -62,8 +62,8 @@
 }
 
 .flowchart-node-rect {
-  fill: rgba(35, 28, 20, 0.9);
-  stroke: rgba(160, 147, 126, 0.3);
+  fill: var(--theme-bg-page);
+  stroke: var(--theme-text-dim);
   stroke-width: 1.5;
   rx: 8;
   ry: 8;
@@ -71,22 +71,22 @@
 }
 
 .flowchart-node:hover .flowchart-node-rect {
-  stroke: rgba(160, 147, 126, 0.6);
+  stroke: var(--theme-text-muted);
 }
 
 .flowchart-node-blocked .flowchart-node-rect {
-  fill: rgba(127, 29, 29, 0.5);
-  stroke: rgba(239, 68, 68, 0.5);
+  fill: color-mix(in srgb, var(--theme-danger) 30%, transparent);
+  stroke: var(--theme-danger);
 }
 
 .flowchart-node--issue .flowchart-node-rect {
-  fill: rgba(56, 189, 248, 0.15);
-  stroke: rgba(56, 189, 248, 0.4);
+  fill: color-mix(in srgb, var(--theme-continuity-accent) 15%, transparent);
+  stroke: var(--theme-continuity-accent);
 }
 
 .flowchart-node--issue.flowchart-node-blocked .flowchart-node-rect {
-  fill: rgba(239, 68, 68, 0.15);
-  stroke: rgba(239, 68, 68, 0.4);
+  fill: color-mix(in srgb, var(--theme-danger) 15%, transparent);
+  stroke: var(--theme-danger);
 }
 
 .flowchart-node--issue .flowchart-node-title {
@@ -94,7 +94,7 @@
 }
 
 .flowchart-node-title {
-  fill: rgba(232, 213, 176, 0.95);
+  fill: var(--theme-text-primary);
   font-size: 12px;
   font-weight: 700;
   text-anchor: middle;
@@ -115,9 +115,9 @@
   z-index: 60;
   padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
-  background: rgba(17, 14, 10, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: rgba(232, 213, 176, 0.95);
+  background: var(--theme-bg-page);
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text-primary);
   font-size: 0.75rem;
   font-weight: 600;
   pointer-events: none;
@@ -143,9 +143,9 @@
   align-items: center;
   justify-content: center;
   border-radius: 0.5rem;
-  background: rgba(35, 28, 20, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: rgba(232, 213, 176, 0.9);
+  background: var(--theme-bg-page);
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text-primary);
   font-size: 0.875rem;
   font-weight: 700;
   cursor: pointer;
@@ -153,22 +153,22 @@
 }
 
 .flowchart-controls button:hover {
-  background: rgba(50, 40, 30, 0.9);
-  border-color: rgba(255, 255, 255, 0.25);
+  background: var(--theme-bg-panel);
+  border-color: color-mix(in srgb, white 25%, transparent);
 }
 
 /* Warning */
 .flowchart-warning {
   padding: 1rem;
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  border: 1px solid color-mix(in srgb, var(--theme-warning) 30%, transparent);
   border-radius: 0.75rem;
-  background: rgba(245, 158, 11, 0.08);
+  background: color-mix(in srgb, var(--theme-warning) 8%, transparent);
   text-align: center;
 }
 
 .flowchart-warning h3 {
   margin: 0 0 0.5rem;
-  color: rgba(251, 191, 36, 0.9);
+  color: var(--theme-warning);
   font-size: 0.875rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -177,7 +177,7 @@
 
 .flowchart-warning p {
   margin: 0;
-  color: rgba(200, 185, 160, 0.8);
+  color: var(--theme-text-muted);
   font-size: 0.75rem;
 }
 
@@ -185,7 +185,7 @@
 .flowchart-empty {
   padding: 2rem 1rem;
   text-align: center;
-  color: rgba(160, 147, 126, 0.6);
+  color: var(--theme-text-muted);
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -200,9 +200,9 @@
   align-items: center;
   justify-content: center;
   border-radius: 0.5rem;
-  background: rgba(35, 28, 20, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: rgba(232, 213, 176, 0.9);
+  background: var(--theme-bg-page);
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text-primary);
   font-size: 0.875rem;
   font-weight: 700;
   cursor: pointer;
@@ -210,8 +210,8 @@
 }
 
 .flowchart-control-button:hover {
-  background: rgba(50, 40, 30, 0.9);
-  border-color: rgba(255, 255, 255, 0.25);
+  background: var(--theme-bg-panel);
+  border-color: color-mix(in srgb, white 25%, transparent);
 }
 
 /* Pulse animation for blocking edges */

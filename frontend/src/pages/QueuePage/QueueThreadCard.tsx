@@ -101,7 +101,7 @@ export default function QueueThreadCard({
   return (
     <div
       data-testid="queue-thread-item"
-      className={`queue-thread-card group flex flex-col gap-3 px-3 py-3 @2xl:flex-row @2xl:items-center @2xl:gap-4 @2xl:px-4 @2xl:py-3.5 cursor-pointer transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] focus-visible:ring-inset ${isDragOver ? 'bg-amber-500/10' : ''}`}
+      className={`queue-thread-card group relative flex flex-col gap-3 px-3 py-3 @2xl:flex-row @2xl:items-center @2xl:gap-4 @2xl:px-4 @2xl:py-3.5 cursor-pointer transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] focus-visible:ring-inset`}
       role="link"
       tabIndex={0}
       aria-label={`Open ${thread.title} details`}
@@ -110,7 +110,14 @@ export default function QueueThreadCard({
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      <div className="flex min-w-0 flex-1 items-start gap-2 @2xl:gap-3">
+      {isDragOver && (
+        <div
+          data-testid="queue-thread-drag-over"
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-amber-500/10"
+        />
+      )}
+      <div className="relative flex min-w-0 flex-1 items-start gap-2 @2xl:gap-3">
         <div className="flex shrink-0 items-center gap-1 pt-0.5">
           <Tooltip content="Drag to reorder within the queue.">
             <button
@@ -141,7 +148,7 @@ export default function QueueThreadCard({
             </button>
             {isBlocked && (
               <Tooltip content={blockerLabels.length > 0 ? blockerLabels.join('\n') : 'Blocked by dependency'}>
-                <span className="text-[var(--theme-continuity-accent)] text-sm" aria-label="Blocked thread">🔒</span>
+                <span className="text-[var(--theme-continuity-accent)] text-sm" aria-label="Blocked series">🔒</span>
               </Tooltip>
             )}
           </div>

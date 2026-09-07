@@ -42,6 +42,7 @@ interface QueueModalsProps {
   onCloseMigration: () => void
   onOpenMigrationDialog: (thread: Thread) => void
   onOpenDependencies?: () => void
+  onIssueChanged?: () => void
   isPendingCreate: boolean
   isPendingEdit: boolean
   isPendingReactivate: boolean
@@ -87,13 +88,14 @@ export function QueueModals({
   onCloseMigration,
   onOpenMigrationDialog,
   onOpenDependencies,
+  onIssueChanged,
   isPendingCreate,
   isPendingEdit,
   isPendingReactivate,
 }: QueueModalsProps) {
   return (
     <>
-      <Modal isOpen={openModal === 'create'} title="Create Thread" onClose={onCloseCreate}>
+      <Modal isOpen={openModal === 'create'} title="Add Series" onClose={onCloseCreate}>
         <form className="space-y-4" onSubmit={onCreateSubmit}>
           <div className="space-y-2">
             <label
@@ -106,7 +108,7 @@ export function QueueModals({
               id="create-thread-title"
               value={createForm.title}
               onChange={(event) => setCreateForm({ ...createForm, title: event.target.value })}
-              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+              className="w-full rounded-xl px-3 py-2 text-sm form-control"
               required
             />
           </div>
@@ -137,7 +139,7 @@ export function QueueModals({
               type="text"
               value={createForm.issues}
               onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
-              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+              className="w-full rounded-xl px-3 py-2 text-sm form-control"
               placeholder="0-25 or 0, ½, Annual 1, 5-7"
               required
             />
@@ -173,7 +175,7 @@ export function QueueModals({
                   lastIssueRead: clampedValue,
                 })
               }}
-              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+              className="w-full rounded-xl px-3 py-2 text-sm form-control"
             />
             <p className="text-xs text-stone-400">
               Enter a count from the issue list above, not an issue number.
@@ -197,7 +199,7 @@ export function QueueModals({
               id="create-thread-notes"
               value={createForm.notes}
               onChange={(event) => setCreateForm({ ...createForm, notes: event.target.value })}
-              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors min-h-[80px]"
+              className="w-full rounded-xl px-3 py-2 text-sm form-control min-h-[80px]"
             />
           </div>
           <button
@@ -205,14 +207,14 @@ export function QueueModals({
             disabled={isPendingCreate}
             className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
           >
-            {isPendingCreate ? 'Creating...' : 'Create Thread'}
+            {isPendingCreate ? 'Adding...' : 'Create Series'}
           </button>
         </form>
       </Modal>
 
       <Modal
         isOpen={openModal === 'edit'}
-        title="Edit Thread"
+        title="Edit Series"
         onClose={onCloseEdit}
         overlayClassName="edit-modal__overlay"
       >
@@ -229,7 +231,7 @@ export function QueueModals({
                 id="edit-thread-title"
                 value={editForm.title}
                 onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
-                className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                className="w-full rounded-xl px-3 py-2 text-sm form-control"
                 required
               />
             </div>
@@ -268,7 +270,7 @@ export function QueueModals({
                       issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
                     })
                   }
-                  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                  className="w-full rounded-xl px-3 py-2 text-sm form-control"
                 />
               </div>
             )}
@@ -284,7 +286,7 @@ export function QueueModals({
                 id="edit-thread-notes"
                 value={editForm.notes}
                 onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
-                className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors min-h-[80px]"
+                className="w-full rounded-xl px-3 py-2 text-sm form-control min-h-[80px]"
               />
             </div>
 
@@ -308,7 +310,7 @@ export function QueueModals({
           </form>
 
           {editingThread && editingThread.total_issues !== null && (
-            <IssueToggleList threadId={editingThread.id} onOpenDependencies={onOpenDependencies} />
+            <IssueToggleList threadId={editingThread.id} onOpenDependencies={onOpenDependencies} onIssueChanged={onIssueChanged} />
           )}
 
           <button
@@ -324,21 +326,21 @@ export function QueueModals({
 
       <Modal
         isOpen={openModal === 'reactivate'}
-        title="Reactivate Thread"
+        title="Add Back to Queue"
         onClose={onCloseReactivate}
       >
         <form className="space-y-4" onSubmit={onReactivateSubmit}>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-              Completed Thread
+              Finished Series
             </label>
             <select
               value={reactivateThreadId}
               onChange={(event) => setReactivateThreadId(event.target.value)}
-              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+              className="w-full rounded-xl px-3 py-2 text-sm form-control"
               required
             >
-              <option value="">Select a thread...</option>
+              <option value="">Select a series...</option>
               {completedThreads.map((thread) => (
                 <option key={thread.id} value={String(thread.id)}>
                   {thread.title} ({thread.format})
@@ -355,7 +357,7 @@ export function QueueModals({
               min="1"
               value={issuesToAdd}
               onChange={(event) => setIssuesToAdd(Number.parseInt(event.target.value, 10) || 1)}
-              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+              className="w-full rounded-xl px-3 py-2 text-sm form-control"
               required
             />
           </div>
@@ -364,7 +366,7 @@ export function QueueModals({
             disabled={isPendingReactivate}
             className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
           >
-            {isPendingReactivate ? 'Reactivating...' : 'Reactivate Thread'}
+            {isPendingReactivate ? 'Adding to queue...' : 'Add to Queue'}
           </button>
         </form>
       </Modal>

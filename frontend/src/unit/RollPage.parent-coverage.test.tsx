@@ -157,8 +157,8 @@ describe('RollPage parent handlers', () => {
     if (!snoozeAction) throw new Error('Snooze action not found')
     await user.click(snoozeAction)
     await openActions()
-    await user.click(screen.getByRole('button', { name: /edit thread/i }))
-    expect(spies.navigate).toHaveBeenCalledWith('/queue', { state: { editThreadId: 1 } })
+    await user.click(screen.getByRole('button', { name: /edit series/i }))
+    expect(spies.navigate).toHaveBeenCalledWith('/thread/1', { state: { openEditModal: true } })
 
     await user.click(screen.getAllByRole('button', { name: 'd6' })[0]!)
     await user.click(screen.getAllByRole('button', { name: 'd4' })[0]!)
@@ -198,11 +198,11 @@ describe('RollPage parent handlers', () => {
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
     await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '1')
-    await user.click(screen.getByRole('button', { name: /Pick this thread/ }))
+    await user.click(screen.getByRole('button', { name: /Pick this series/ }))
     await waitFor(() => expect(spies.override).toHaveBeenCalled())
 
     await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
-    fireEvent.submit(screen.getByRole('button', { name: /Pick this thread/ }).closest('form')!)
+    fireEvent.submit(screen.getByRole('button', { name: /Pick this series/ }).closest('form')!)
     await user.click(screen.getByRole('button', { name: 'close modal' }))
 
     spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, result: 3 })
@@ -267,7 +267,7 @@ describe('RollPage parent handlers', () => {
     spies.override.mockRejectedValueOnce(error)
     await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
     await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '1')
-    await user.click(screen.getByRole('button', { name: /Pick this thread/ }))
+    await user.click(screen.getByRole('button', { name: /Pick this series/ }))
     await waitFor(() => expect(screen.getByText('failed')).toBeInTheDocument())
 
     spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, result: 3 })

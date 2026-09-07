@@ -90,6 +90,9 @@ export async function invalidateAfterIssueEdit(
       queryKey: queryKeys.session.current(),
       exact: true,
     }),
+    client.invalidateQueries({
+      queryKey: queryKeys.queue.pages(),
+    }),
   ])
 }
 

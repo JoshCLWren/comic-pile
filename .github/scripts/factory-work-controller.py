@@ -18,7 +18,7 @@ from factory_capacity_policy import (
     omniroute_enabled,
     remaining_omniroute_free_entry_slots,
 )
-from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, no_diff_attempts_from_comments, order_candidates_for_worker, owner_of, plan_distinct_assignments)
+from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments)
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 LEASE_ACTIVITY_PATTERNS = (
@@ -55,7 +55,7 @@ def list_issues() -> list[dict[str, Any]]:
 
 def list_prs() -> list[dict[str, Any]]:
     """List open pull requests including current mergeability."""
-    return cast(list[dict[str, Any]], gh_json(['pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500', '--json', 'number,title,body,labels,headRefName,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus']))
+    return cast(list[dict[str, Any]], gh_json(['pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500', '--json', 'number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus']))
 
 
 def target_json(number: int) -> dict[str, Any]:
@@ -228,10 +228,18 @@ def recent_factory_comments(now_epoch: int) -> list[dict[str, Any]]:
     return flatten_pages(pages)
 
 
+def load_no_diff_attempt_records(now_epoch: int | None=None) -> list[NoDiffAttempt]:
+    """Load durable no-diff attempts still inside the rolling retry window."""
+    now_epoch = int(time.time()) if now_epoch is None else now_epoch
+    return parse_no_diff_attempts_from_comments(recent_factory_comments(now_epoch), now_epoch=now_epoch)
+
+
 def load_no_diff_attempts(now_epoch: int | None=None) -> dict[int, int]:
     """Load durable rolling no-diff attempt counts for open issue ranking."""
-    now_epoch = int(time.time()) if now_epoch is None else now_epoch
-    return no_diff_attempts_from_comments(recent_factory_comments(now_epoch), now_epoch=now_epoch)
+    counts: dict[int, int] = {}
+    for attempt in load_no_diff_attempt_records(now_epoch):
+        counts[attempt.number] = counts.get(attempt.number, 0) + 1
+    return counts
 
 
 class ActiveWorkerResult(tuple[set[int], set[str]]):
@@ -483,12 +491,23 @@ def assign(worker: str) -> Candidate | None:
     issues = list_issues()
     prs = list_prs()
     try:
-        retry_counts: dict[int, int] | None = load_no_diff_attempts()
+        attempt_records: list[NoDiffAttempt] | None = load_no_diff_attempt_records()
     except RuntimeError as exc:
-        retry_counts = None
+        attempt_records = None
         print(f'[factory-controller] no-diff retry history unavailable; holding fresh issue intake: {exc}', file=sys.stderr)
-    candidates = build_candidates(issues, prs, no_diff_attempts_by_issue=retry_counts or {})
-    if retry_counts is None:
+    issue_retry_counts: dict[int, int] = {}
+    if attempt_records is not None:
+        for attempt in attempt_records:
+            if attempt.kind != 'issue':
+                continue
+            issue_retry_counts[attempt.number] = issue_retry_counts.get(attempt.number, 0) + 1
+    candidates = build_candidates(
+        issues,
+        prs,
+        no_diff_attempts_by_issue=issue_retry_counts,
+        no_diff_attempt_records=attempt_records,
+    )
+    if attempt_records is None:
         candidates = [candidate for candidate in candidates if candidate.kind == 'pr']
     candidates = order_candidates_for_worker(candidates, worker)
     for candidate in candidates:

@@ -280,7 +280,7 @@ describe('YourContextPillar reader-context integration', () => {
         isLoading={false}
       />,
     )
-    expect(screen.getByText(/last issue in the thread/)).toBeInTheDocument()
+    expect(screen.getByText(/last issue in the series/)).toBeInTheDocument()
   })
 
   it('shows die consequence info', () => {

@@ -79,6 +79,11 @@ class CacheQuotaHealthResponse(BaseModel):
     automated monitoring can detect "approaching the budget" before the hard
     limit is reached. Contains only aggregate counts and ratios; never cache
     keys, user data, or provider credentials.
+
+    When ``degraded`` is ``True``, the ``observed_commands`` count reflects
+    process-local data only and may be a dangerously low false value; the
+    health endpoint exposes this rather than presenting a falsely authoritative
+    number.
     """
 
     status: Literal["ok", "near-limit", "over-budget"]
@@ -88,6 +93,7 @@ class CacheQuotaHealthResponse(BaseModel):
     usage_ratio: float
     alerted: bool
     throttling: bool
+    degraded: bool = False
 
 
 class WarmInstanceDiagnostics(BaseModel):
@@ -286,6 +292,7 @@ async def cache_quota_health(
         usage_ratio=round(state.usage_ratio, 6),
         alerted=state.alerted,
         throttling=state.throttling,
+        degraded=state.degraded,
     )
 
 

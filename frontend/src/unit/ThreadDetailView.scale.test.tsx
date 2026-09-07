@@ -12,6 +12,7 @@ vi.mock('react-router-dom', async () => {
     ...actual,
     useNavigate: () => vi.fn(),
     useParams: () => ({ id: '1' }),
+    useLocation: () => ({ state: undefined }),
   }
 })
 

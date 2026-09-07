@@ -200,7 +200,7 @@ export default function WhatsNewPage() {
           ComicPile release notes
         </p>
         <h1 id="whats-new-title" className="mt-2 text-3xl font-black text-stone-100">
-          What’s New
+          What&apos;s new
         </h1>
         <p className="mt-2 text-sm leading-6 text-stone-400">
           Recent improvements, fixes, and new ways to manage your reading pile.

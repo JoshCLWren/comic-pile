@@ -6,15 +6,37 @@ import unittest
 
 from factory_work_policy import (
     FACTORY_NO_DIFF_RETRY_LIMIT,
+    FACTORY_NO_DIFF_RETRY_RESET_SECONDS,
     Candidate,
     build_candidates,
     no_diff_attempts_from_comments,
     order_candidates_for_worker,
+    parse_no_diff_attempts_from_comments,
 )
+
+
+def comment(body: str, association: str = "OWNER") -> dict[str, str]:
+    return {"body": body, "author_association": association}
 
 
 def labels(*names: str) -> list[dict[str, str]]:
     return [{"name": name} for name in names]
+
+
+def pr_no_diff_marker(
+    number: int,
+    epoch: int,
+    *,
+    sha: str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    stage: str = "factory:changes-requested",
+    conflicted: bool = False,
+    worker: str = "worker",
+) -> str:
+    return (
+        "<!-- comic-pile-factory-claim-released-v3:"
+        f"pr-{number}:{worker}:{epoch}:repair-no-persisted-change-handoff"
+        f":sha={sha}:stage={stage}:conflicted={int(conflicted)} -->"
+    )
 
 
 def factory_pr(
@@ -27,6 +49,7 @@ def factory_pr(
     merge_state: str = "CLEAN",
     owner: str = "factory:unowned",
     branch: str | None = None,
+    head: str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 ) -> dict[str, object]:
     issue = linked_issue if linked_issue is not None else 9000 + number
     return {
@@ -35,6 +58,7 @@ def factory_pr(
         "isDraft": False,
         "labels": labels("factory", owner, stage),
         "headRefName": branch or f"factory/{worker}-{issue}-test",
+        "headRefOid": head,
         "body": f"Worker: opencode-free-model-factory-{worker}",
         "createdAt": "2026-08-17T00:00:00Z",
         "mergeable": mergeable,
@@ -188,7 +212,7 @@ class RetryBudgetTests(unittest.TestCase):
         self.assertTrue(any(item.kind == "issue" and item.number == 31 for item in below_budget))
         self.assertFalse(any(item.kind == "issue" and item.number == 31 for item in exhausted))
 
-    def test_no_diff_pr_history_does_not_hide_actionable_lifecycle_state(self) -> None:
+    def test_no_diff_pr_retries_until_budget_is_exhausted(self) -> None:
         target = factory_pr(31, stage="factory:changes-requested")
         below_budget = build_candidates(
             [],
@@ -201,9 +225,9 @@ class RetryBudgetTests(unittest.TestCase):
             no_diff_attempts_by_issue={31: FACTORY_NO_DIFF_RETRY_LIMIT},
         )
         self.assertTrue(any(item.kind == "pr" and item.number == 31 for item in below_budget))
-        self.assertTrue(any(item.kind == "pr" and item.number == 31 for item in exhausted))
+        self.assertFalse(any(item.kind == "pr" and item.number == 31 for item in exhausted))
 
-    def test_review_and_repair_prs_remain_candidates_after_historical_no_diff(self) -> None:
+    def test_review_and_repair_prs_are_suppressed_at_retry_limit_without_relabeling(self) -> None:
         targets = [
             factory_pr(2122, stage="factory:changes-requested"),
             factory_pr(2132, stage="factory:review"),
@@ -218,13 +242,136 @@ class RetryBudgetTests(unittest.TestCase):
             },
         )
 
+        self.assertEqual(candidates, [])
         self.assertEqual(
-            {(item.number, item.stage) for item in candidates},
-            {
-                (2122, "factory:changes-requested"),
-                (2132, "factory:review"),
-            },
+            {name for target in targets for name in (label["name"] for label in target["labels"])},
+            {"factory", "factory:unowned", "factory:changes-requested", "factory:review"},
         )
+
+    def test_no_diff_pr_retry_suppression_expires_with_reset_window(self) -> None:
+        now = 2_000_000_000
+        expired = now - FACTORY_NO_DIFF_RETRY_RESET_SECONDS - 1
+        comments = [
+            {
+                "author_association": "OWNER",
+                "body": (
+                    "<!-- comic-pile-factory-claim-released-v3:pr-31:worker:"
+                    f"{expired}:repair-no-persisted-change-handoff -->"
+                ),
+            }
+            for _ in range(FACTORY_NO_DIFF_RETRY_LIMIT)
+        ]
+        counts = no_diff_attempts_from_comments(comments, now_epoch=now)
+        self.assertEqual(counts, {})
+        candidates = build_candidates(
+            [],
+            [factory_pr(31, stage="factory:changes-requested")],
+            no_diff_attempts_by_issue=counts,
+        )
+        self.assertTrue(any(item.kind == "pr" and item.number == 31 for item in candidates))
+
+    def test_exhausted_pr_wakes_up_after_new_head(self) -> None:
+        now = 2_000_000_000
+        old_head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        new_head = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        attempts = parse_no_diff_attempts_from_comments(
+            [
+                comment(pr_no_diff_marker(31, now - offset, sha=old_head))
+                for offset in range(FACTORY_NO_DIFF_RETRY_LIMIT)
+            ],
+            now_epoch=now,
+        )
+        self.assertEqual(len(attempts), FACTORY_NO_DIFF_RETRY_LIMIT)
+        still_same_head = build_candidates(
+            [],
+            [factory_pr(31, stage="factory:changes-requested", head=old_head)],
+            no_diff_attempt_records=attempts,
+        )
+        after_push = build_candidates(
+            [],
+            [factory_pr(31, stage="factory:changes-requested", head=new_head)],
+            no_diff_attempt_records=attempts,
+        )
+        self.assertFalse(any(item.kind == "pr" and item.number == 31 for item in still_same_head))
+        self.assertTrue(any(item.kind == "pr" and item.number == 31 for item in after_push))
+
+    def test_exhausted_pr_wakes_up_after_new_actionable_review_state(self) -> None:
+        now = 2_000_000_000
+        head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        attempts = parse_no_diff_attempts_from_comments(
+            [
+                comment(
+                    pr_no_diff_marker(
+                        31,
+                        now - offset,
+                        sha=head,
+                        stage="factory:review",
+                    )
+                )
+                for offset in range(FACTORY_NO_DIFF_RETRY_LIMIT)
+            ],
+            now_epoch=now,
+        )
+        still_review = build_candidates(
+            [],
+            [factory_pr(31, stage="factory:review", head=head)],
+            no_diff_attempt_records=attempts,
+        )
+        after_changes = build_candidates(
+            [],
+            [factory_pr(31, stage="factory:changes-requested", head=head)],
+            no_diff_attempt_records=attempts,
+        )
+        self.assertFalse(any(item.kind == "pr" and item.number == 31 for item in still_review))
+        self.assertTrue(any(item.kind == "pr" and item.number == 31 for item in after_changes))
+
+    def test_exhausted_pr_wakes_up_after_new_merge_conflict(self) -> None:
+        now = 2_000_000_000
+        head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        attempts = parse_no_diff_attempts_from_comments(
+            [
+                comment(pr_no_diff_marker(31, now - offset, sha=head, conflicted=False))
+                for offset in range(FACTORY_NO_DIFF_RETRY_LIMIT)
+            ],
+            now_epoch=now,
+        )
+        still_clean = build_candidates(
+            [],
+            [factory_pr(31, stage="factory:changes-requested", head=head)],
+            no_diff_attempt_records=attempts,
+        )
+        newly_conflicted = build_candidates(
+            [],
+            [
+                factory_pr(
+                    31,
+                    stage="factory:changes-requested",
+                    head=head,
+                    mergeable="CONFLICTING",
+                    merge_state="DIRTY",
+                )
+            ],
+            no_diff_attempt_records=attempts,
+        )
+        self.assertFalse(any(item.kind == "pr" and item.number == 31 for item in still_clean))
+        self.assertTrue(any(item.kind == "pr" and item.number == 31 for item in newly_conflicted))
+
+    def test_legacy_unscoped_pr_markers_do_not_suppress_known_head(self) -> None:
+        now = 2_000_000_000
+        comments = [
+            comment(
+                "<!-- comic-pile-factory-claim-released-v3:pr-31:worker:"
+                f"{now - offset}:repair-no-persisted-change-handoff -->"
+            )
+            for offset in range(FACTORY_NO_DIFF_RETRY_LIMIT)
+        ]
+        attempts = parse_no_diff_attempts_from_comments(comments, now_epoch=now)
+        candidates = build_candidates(
+            [],
+            [factory_pr(31, stage="factory:changes-requested")],
+            no_diff_attempt_records=attempts,
+        )
+        self.assertTrue(any(item.kind == "pr" and item.number == 31 for item in candidates))
 
     def test_explicitly_blocked_pr_remains_excluded(self) -> None:
         blocked = factory_pr(2140, stage="factory:blocked")
