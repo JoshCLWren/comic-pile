@@ -23,10 +23,10 @@ def test_completion_claims_stop_at_omniroute_free_entry_cap():
 
 
 def test_completion_batch_size_scales_with_backlog():
-    assert controller.completion_batch_size(14) == 0
-    assert controller.completion_batch_size(15) == 8
-    assert controller.completion_batch_size(49) == 8
-    assert controller.completion_batch_size(50) == 12
+    assert controller.completion_batch_size(7) == 0
+    assert controller.completion_batch_size(8) == 8
+    assert controller.completion_batch_size(19) == 8
+    assert controller.completion_batch_size(20) == 12
     assert controller.completion_batch_size(80) == 12
 
 
@@ -247,9 +247,9 @@ def test_capacity_report_names_only_executable_candidates():
 
 def test_capacity_report_does_not_count_repeated_slots_as_distinct_candidates():
     candidates = [
-        {"worker": "60", "provider": "openrouter-free", "model": "stealth/ox-alpha"},
-        {"worker": "61", "provider": "openrouter-free", "model": "stealth/ox-alpha"},
-        {"worker": "62", "provider": "openrouter-free", "model": "stealth/ox-alpha"},
+        {"worker": "60", "provider": "openrouter-free", "model": "cohere/north-mini-code:free"},
+        {"worker": "61", "provider": "openrouter-free", "model": "cohere/north-mini-code:free"},
+        {"worker": "62", "provider": "openrouter-free", "model": "cohere/north-mini-code:free"},
     ]
     health = dict.fromkeys(("60", "61", "62"), ("success", 100))
 
@@ -262,7 +262,7 @@ def test_capacity_report_does_not_count_repeated_slots_as_distinct_candidates():
     assert report["executable_provider_models"] == [
         {
             "provider": "openrouter-free",
-            "model": "stealth/ox-alpha",
+            "model": "cohere/north-mini-code:free",
             "health": "healthy",
         }
     ]

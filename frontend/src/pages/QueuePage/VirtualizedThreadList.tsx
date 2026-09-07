@@ -46,9 +46,9 @@ interface VirtualizedThreadListProps<T> {
  * virtual row index and consumers must use `renderItem`'s second argument for
  * thread-level identity.
  *
- * Uses `@tanstack/react-virtual` with `useVirtualizer` for efficient DOM
- * virtualization. Container height is derived from a `ResizeObserver` on the
- * wrapper element, never `window.innerHeight` during render.
+ * Uses `@tanstack/react-virtual` with `useWindowVirtualizer` for efficient DOM
+ * virtualization. The window scroll surface owns Queue before and after the
+ * virtualization threshold is crossed, preventing nested scroll containers.
  *
  * Preserves existing selectors (`data-testid="queue-thread-list"`,
  * `id="queue-container"`, `role="list"`, `aria-label="Thread queue"`)
@@ -167,7 +167,7 @@ export default function VirtualizedThreadList<T>({
           id="queue-container"
           role="list"
           aria-label="Thread queue"
-          className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
+          className="@container rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
         >
           <div className="flex items-center justify-center text-stone-500 py-8">
             No threads in queue
@@ -184,7 +184,7 @@ export default function VirtualizedThreadList<T>({
         id="queue-container"
         role="list"
         aria-label="Thread queue"
-        className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
+        className="@container rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
         onDragOver={handleContainerDragOver}
         onDrop={(event) => event.preventDefault()}
       >

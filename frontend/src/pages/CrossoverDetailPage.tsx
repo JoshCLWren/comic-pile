@@ -272,7 +272,7 @@ export default function CrossoverDetailPage() {
           {sortedMembers.length === 0 ? (
             <p className="text-stone-500 text-center py-8">No members in this crossover yet.</p>
           ) : (
-            <div className="space-y-2 max-h-96 overflow-y-auto">
+            <div className="space-y-2" data-testid="crossover-reading-order">
                 {sortedMembers.map((member, index) => {
                   const isRead = member.issue?.status === 'read'
                   const position = member.membership?.sequence_order ?? index + 1

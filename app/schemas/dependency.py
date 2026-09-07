@@ -131,6 +131,7 @@ class ConnectedThreadInfo(BaseModel):
     title: str
     connection_type: str  # "blocks" | "blocked_by" | "blocks & blocked_by"
     dependency_id: int
+    issue_number: str | None = None
 
 
 class ThreadConnectedResponse(BaseModel):

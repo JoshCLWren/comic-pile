@@ -396,6 +396,8 @@ export interface ConnectedThreadInfo {
   connection_type: 'blocks' | 'blocked_by' | 'blocks & blocked_by';
   /** ID of the dependency edge */
   dependency_id: number;
+  /** Issue number of the connected thread's relevant dependency issue, when known */
+  issue_number?: string;
 }
 
 /**

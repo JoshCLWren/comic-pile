@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { readStoredThemePreference } from '../services/theme'
 import {
@@ -54,7 +55,9 @@ function renderNavigation() {
       <AuthProvider>
         <BugReportRestoreProvider>
           <ToastProvider>
-            <Navigation onBugReportSubmit={vi.fn()} />
+            <NavCollapseProvider>
+              <Navigation onBugReportSubmit={vi.fn()} />
+            </NavCollapseProvider>
           </ToastProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
