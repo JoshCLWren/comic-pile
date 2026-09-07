@@ -28,9 +28,7 @@ interface QueueThreadCardProps {
   onDragOver: React.DragEventHandler<HTMLElement>
   onDrop: React.DragEventHandler<HTMLElement>
   onRead: () => void
-  onOpenThread: () => void
   onSnooze: () => void
-  onActionDelete: () => void
   onMoveToFront: () => void
   onMoveToBack: () => void
   onReposition: () => void
@@ -59,9 +57,7 @@ export default function QueueThreadCard({
   onDragOver,
   onDrop,
   onRead,
-  onOpenThread,
   onSnooze,
-  onActionDelete,
   onMoveToFront,
   onMoveToBack,
   onReposition,

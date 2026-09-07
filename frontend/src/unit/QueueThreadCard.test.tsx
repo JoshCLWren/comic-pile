@@ -110,9 +110,7 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     onDragOver: vi.fn(),
     onDrop: vi.fn(),
     onRead: vi.fn(),
-    onOpenThread: vi.fn(),
     onSnooze: vi.fn(),
-    onActionDelete: vi.fn(),
     onMoveToFront: vi.fn(),
     onMoveToBack: vi.fn(),
     onReposition: vi.fn(),
@@ -582,27 +580,25 @@ describe('QueueThreadCard', () => {
     it('exercises PositionMenu descendants (Edit, Snooze, Delete) and confirms onCardClick is not invoked', async () => {
       const user = userEvent.setup()
       const onCardClick = vi.fn()
-      const onOpenThread = vi.fn()
+      const onEdit = vi.fn()
       const onSnooze = vi.fn()
-      const onActionDelete = vi.fn()
+      const onDelete = vi.fn()
 
       renderCard(createMockThread(), {
         onCardClick,
-        onOpenThread,
+        onEdit,
         onSnooze,
-        onActionDelete,
+        onDelete,
         snoozeLabel: 'Snooze',
         snoozeIcon: '😴',
       })
-
-      const positionMenu = screen.getByTestId('mock-position-menu')
 
       const editBtn = screen.getByTestId('mock-position-edit')
       const snoozeBtn = screen.getByTestId('mock-position-snooze')
       const deleteBtn = screen.getByTestId('mock-position-delete')
 
       await user.click(editBtn)
-      expect(onOpenThread).toHaveBeenCalledTimes(1)
+      expect(onEdit).toHaveBeenCalledTimes(1)
       expect(onCardClick).not.toHaveBeenCalled()
 
       vi.clearAllMocks()
@@ -614,7 +610,7 @@ describe('QueueThreadCard', () => {
       vi.clearAllMocks()
 
       await user.click(deleteBtn)
-      expect(onActionDelete).toHaveBeenCalledTimes(1)
+      expect(onDelete).toHaveBeenCalledTimes(1)
       expect(onCardClick).not.toHaveBeenCalled()
     })
     

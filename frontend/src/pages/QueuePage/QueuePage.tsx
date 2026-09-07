@@ -151,9 +151,7 @@ export default function QueuePage() {
           onDragOver={actions.handleDragOver(thread.id)}
           onDrop={actions.handleDrop(thread.id, activeThreads)}
           onRead={() => void actions.handleThreadRead(thread)}
-          onOpenThread={() => navigate(`/thread/${thread.id}`)}
           onSnooze={() => void actions.handleSnoozeToggle(thread, isSnoozed)}
-          onActionDelete={() => actions.requestDelete(thread)}
           onMoveToFront={() => actions.handleMoveToFront(thread.id)}
           onMoveToBack={() => actions.handleMoveToBack(thread.id)}
           onReposition={() => modals.openRepositionModal(thread)}
