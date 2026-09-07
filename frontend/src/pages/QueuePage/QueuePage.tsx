@@ -16,6 +16,7 @@ import CompletedThreadsSection from './CompletedThreadsSection'
 import { QueueControls } from './QueueControls'
 import { QueueList } from './QueueList'
 import { QueueModals } from './QueueModals'
+import DeleteThreadDialog from './DeleteThreadDialog'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
@@ -150,15 +151,13 @@ export default function QueuePage() {
           onDragOver={actions.handleDragOver(thread.id)}
           onDrop={actions.handleDrop(thread.id, activeThreads)}
           onRead={() => void actions.handleThreadRead(thread)}
-          onOpenThread={() => navigate(`/thread/${thread.id}`)}
           onSnooze={() => void actions.handleSnoozeToggle(thread, isSnoozed)}
-          onActionDelete={() => actions.handleDelete(thread.id)}
           onMoveToFront={() => actions.handleMoveToFront(thread.id)}
           onMoveToBack={() => actions.handleMoveToBack(thread.id)}
           onReposition={() => modals.openRepositionModal(thread)}
           onEdit={() => modals.showEditModal(thread)}
           onDependencies={() => modals.openDependenciesModal(thread)}
-          onDelete={() => actions.handleDelete(thread.id)}
+          onDelete={() => actions.requestDelete(thread)}
         />
       )
     },
@@ -291,6 +290,14 @@ export default function QueuePage() {
           isPendingCreate={modals.isPendingCreate}
           isPendingEdit={modals.isPendingEdit}
           isPendingReactivate={reactivateMutation.isPending}
+        />
+
+        <DeleteThreadDialog
+          thread={actions.pendingDeleteThread}
+          isPending={actions.isDeletePending}
+          error={actions.deleteError}
+          onConfirm={() => void actions.confirmDelete()}
+          onCancel={actions.cancelDelete}
         />
       </div>
     </PositionMenuProvider>

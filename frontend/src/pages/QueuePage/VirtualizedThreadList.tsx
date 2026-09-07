@@ -51,7 +51,7 @@ interface VirtualizedThreadListProps<T> {
  * wrapper element, never `window.innerHeight` during render.
  *
  * Preserves existing selectors (`data-testid="queue-thread-list"`,
- * `id="queue-container"`, `role="list"`, `aria-label="Thread queue"`)
+ * `id="queue-container"`, `role="list"`, `aria-label="Reading queue"`)
  * for E2E compatibility, including in the empty state.
  */
 export default function VirtualizedThreadList<T>({
@@ -171,7 +171,7 @@ export default function VirtualizedThreadList<T>({
           id="queue-container"
           role="list"
           aria-label="Reading queue"
-          className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
+          className="@container rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
           style={{
             height: '100%',
             overflowY: 'auto',
@@ -199,8 +199,8 @@ export default function VirtualizedThreadList<T>({
         data-testid="queue-thread-list"
         id="queue-container"
         role="list"
-        aria-label="Thread queue"
-        className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
+        aria-label="Reading queue"
+        className="@container rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
         onDragOver={handleContainerDragOver}
         onDrop={(event) => event.preventDefault()}
         style={{

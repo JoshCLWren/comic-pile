@@ -94,9 +94,7 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     onDragOver: vi.fn(),
     onDrop: vi.fn(),
     onRead: vi.fn(),
-    onOpenThread: vi.fn(),
     onSnooze: vi.fn(),
-    onActionDelete: vi.fn(),
     onMoveToFront: vi.fn(),
     onMoveToBack: vi.fn(),
     onReposition: vi.fn(),
@@ -464,56 +462,21 @@ describe('QueueThreadCard', () => {
       const user = userEvent.setup()
       const onCardClick = vi.fn()
       const onRead = vi.fn()
-      const onOpenThread = vi.fn()
-      const onSnooze = vi.fn()
-      const onActionDelete = vi.fn()
-      
-      renderCard(createMockThread(), { 
-        onCardClick, 
-        onRead, 
-        onOpenThread, 
-        onSnooze, 
-        onActionDelete,
-        snoozeLabel: 'Snooze',
-        snoozeIcon: ''
+
+      renderCard(createMockThread(), {
+        onCardClick,
+        onRead,
       })
-      
-      // Get the QueueThreadActions container (it has aria-label="Actions for Test Thread")
-      const actionsContainer = screen.getByRole('group', { name: /Actions for Test Thread/i })
-      
-      // Test QueueThreadActions buttons within the container using label text
+
+      // Get the QueueThreadActions container (it has aria-label="Primary action")
+      const actionsContainer = screen.getByRole('group', { name: /Primary action/i })
+
+      // Test the Read button within the container
       const readButton = actionsContainer.querySelector('button[aria-label="Read"]')
-      const editButton = actionsContainer.querySelector('button[aria-label="Edit"]') // This is actually for opening thread
-      const snoozeButton = actionsContainer.querySelector('button[aria-label="Snooze"]')
-      const deleteButton = actionsContainer.querySelector('button[aria-label="Delete"]')
-      
+
       // Test Read
       await user.click(readButton as HTMLElement)
       expect(onRead).toHaveBeenCalledTimes(1)
-      expect(onCardClick).not.toHaveBeenCalled()
-      
-      // Reset mocks
-      vi.clearAllMocks()
-      
-      // Test Open Thread (bound to Edit button in QueueThreadActions)
-      await user.click(editButton as HTMLElement)
-      expect(onOpenThread).toHaveBeenCalledTimes(1)
-      expect(onCardClick).not.toHaveBeenCalled()
-      
-      // Reset mocks
-      vi.clearAllMocks()
-      
-      // Test Snooze
-      await user.click(snoozeButton as HTMLElement)
-      expect(onSnooze).toHaveBeenCalledTimes(1)
-      expect(onCardClick).not.toHaveBeenCalled()
-      
-      // Reset mocks
-      vi.clearAllMocks()
-      
-      // Test Delete Action (bound to Delete button in QueueThreadActions)
-      await user.click(deleteButton as HTMLElement)
-      expect(onActionDelete).toHaveBeenCalledTimes(1)
       expect(onCardClick).not.toHaveBeenCalled()
     })
     
