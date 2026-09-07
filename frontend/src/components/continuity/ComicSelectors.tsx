@@ -94,6 +94,24 @@ export function ContinuityThreadSelector({
         />
       </label>
 
+      {value && (
+        <div
+          data-testid="selected-thread-value"
+          className="rounded-xl border border-solid border-white/10 bg-white/5 px-3 py-2"
+        >
+          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+            Selected series
+          </p>
+          <p
+            data-testid="selected-thread-title"
+            className="mt-1 break-words text-sm font-semibold leading-snug text-stone-200"
+          >
+            {value.title}
+          </p>
+          {value.format ? <p className="mt-1 text-xs text-stone-500">{value.format}</p> : null}
+        </div>
+      )}
+
       {isLoading && <p className="text-xs text-stone-500">Loading comics…</p>}
       {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
       {!isLoading && !error && !disabled && isEmptyQuery && (

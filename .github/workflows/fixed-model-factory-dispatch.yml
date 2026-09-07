@@ -445,9 +445,11 @@ jobs:
             workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]')"
           elif [[ "$EVENT_NAME" == schedule || ( "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster ) ]]; then
             # Scheduled delivery is roughly hourly regardless of the requested
-            # cron cadence. Offer the roster and let centralized assignment
-            # lease only work that has real capacity.
-            max_per_tick="${MAX_WORKERS_PER_TICK:-3}"
+            # cron cadence. Offer a source-diverse batch and let centralized
+            # assignment lease only work that has real capacity. Cap defaults
+            # to the multi-provider free-entry budget (12) so nvidia-front
+            # roster order cannot starve opencode/openrouter/kilo for an hour.
+            max_per_tick="${MAX_WORKERS_PER_TICK:-12}"
             [[ "$max_per_tick" =~ ^[1-9][0-9]*$ ]] || {
               echo "MAX_WORKERS_PER_TICK must be a positive integer" >&2
               exit 1
@@ -463,10 +465,34 @@ jobs:
             offer_count="$max_per_tick"
             (( offer_count <= total )) || offer_count="$total"
             offset="$(( ((GITHUB_RUN_NUMBER - 1) * offer_count) % total ))"
-            workers="$(printf '%s\n%s\n' "$roster" "$roster" \
-              | tail -n +"$((offset + 1))" | head -n "$offer_count" \
+            # Seed one worker per source (rotated), then fill from the rotating
+            # roster so every tick can prove nvidia/opencode/openrouter/kilo.
+            source_seed="$(awk -F '\t' -v tick="$GITHUB_RUN_NUMBER" '
+              $0 !~ /^#/ && NF >= 3 {
+                source=$2
+                workers[source]=workers[source] " " $1
+                if (!(source in seen_source)) {
+                  seen_source[source]=1
+                  sources[++source_count]=source
+                }
+                counts[source]++
+              }
+              END {
+                for (i = 1; i <= source_count; i++) {
+                  source=sources[i]
+                  n=split(substr(workers[source], 2), ids, " ")
+                  pick=ids[((tick - 1) % n) + 1]
+                  print pick
+                }
+              }
+            ' "$manifest")"
+            fill="$(printf '%s\n%s\n' "$roster" "$roster" \
+              | tail -n +"$((offset + 1))" | head -n "$total")"
+            workers="$(printf '%s\n%s\n' "$source_seed" "$fill" \
+              | awk 'NF && !seen[$0]++ {print}' \
+              | head -n "$offer_count" \
               | jq -Rsc 'split("\n") | map(select(length > 0))')"
-            echo "Scheduled batch: offering $(jq -r 'length' <<<"$workers") workers (cap ${max_per_tick}, offset ${offset}/${total})"
+            echo "Scheduled batch: offering $(jq -r 'length' <<<"$workers") workers (cap ${max_per_tick}, offset ${offset}/${total}, source-diverse seed)"
           else
             # A control-plane change should smoke one current lane per provider.
             # Resolve these from the manifest so retired workers cannot remain

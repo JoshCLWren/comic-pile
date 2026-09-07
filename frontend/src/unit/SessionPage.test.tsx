@@ -80,7 +80,19 @@ it('renders session details and only allows undoing the latest rating', async ()
   expect(screen.getAllByRole('button', { name: /undo latest/i })).toHaveLength(1)
 
   await user.click(screen.getByRole('button', { name: /restore start/i }))
+  expect(screen.getByRole('dialog', { name: 'Restore session start?' })).toBeInTheDocument()
+  expect(screen.getByText(/replaces your entire current pile/i)).toBeInTheDocument()
+  expect(screen.getByText(/reading progress, ratings, and queue order may be reverted/i)).toBeInTheDocument()
+  expect(restoreSpy).not.toHaveBeenCalled()
+
+  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(screen.queryByRole('dialog', { name: 'Restore session start?' })).not.toBeInTheDocument()
+  expect(restoreSpy).not.toHaveBeenCalled()
+
+  await user.click(screen.getByRole('button', { name: /restore start/i }))
+  await user.click(screen.getByRole('button', { name: 'Restore session start' }))
   expect(restoreSpy).toHaveBeenCalledWith(12)
+  expect(screen.queryByRole('dialog', { name: 'Restore session start?' })).not.toBeInTheDocument()
 
   await user.click(screen.getByRole('button', { name: /undo latest/i }))
   expect(undoSpy).toHaveBeenCalledWith({ sessionId: 12, snapshotId: 4 })
@@ -102,9 +114,12 @@ it('renders loading, missing, empty, and active session branches', () => {
   }, isPending: false })
   mockedUseSessionSnapshots.mockReturnValue({ data: undefined })
   rerender(<MemoryRouter><SessionPage /></MemoryRouter>)
-  expect(screen.getByText('Active')).toBeInTheDocument()
+  expect(screen.getByText('Abandoned roll')).toBeInTheDocument()
+  expect(screen.queryByText('Ended')).not.toBeInTheDocument()
+  expect(screen.queryByText('Active')).not.toBeInTheDocument()
+  expect(screen.getAllByText('No reading activity was recorded for this roll.').length).toBeGreaterThan(0)
   expect(screen.getByText('No snapshots available.')).toBeInTheDocument()
-  expect(screen.getByText('No events recorded.')).toBeInTheDocument()
+  expect(screen.getByText('No events to show. No reading activity was recorded for this roll.')).toBeInTheDocument()
 })
 
 it('renders fallback labels for sparse summaries and events', () => {
