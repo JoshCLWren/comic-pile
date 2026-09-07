@@ -43,7 +43,6 @@ logger = logging.getLogger(__name__)
 
 REFRESH_COOKIE_NAME = "refresh_token"
 REFRESH_COOKIE_PATH = "/api"
-EMAIL_LOGIN_MESSAGE = "Sign in with your username, not your email."
 EMAIL_USERNAME_MESSAGE = "Username cannot contain an '@' character."
 
 
@@ -103,7 +102,8 @@ async def register_user(
 
     Raises:
         HTTPException: If username or email already exists, or the username is
-            email-shaped (login is username-only).
+            email-shaped (usernames must be distinguishable from email
+            identifiers).
     """
     if "@" in user_data.username:
         raise HTTPException(

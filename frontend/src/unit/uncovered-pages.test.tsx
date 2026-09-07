@@ -86,17 +86,20 @@ describe('LoginPage', () => {
     expect(screen.getByText('Password must be at least 6 characters')).toBeInTheDocument()
   })
 
-  it('rejects email-shaped usernames without calling the API', () => {
+  it('accepts a username identifier and submits it to the API', async () => {
+    api.post.mockResolvedValueOnce({ access_token: 'token' })
+    auth.login.mockResolvedValueOnce(undefined)
     renderRoute(<LoginPage />)
-    fireEvent.change(screen.getByLabelText('Username'), {
-      target: { value: 'reader@example.com' },
+    fireEvent.change(screen.getByLabelText('Username or email'), {
+      target: { value: 'reader' },
     })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } })
     fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!)
-    expect(
-      screen.getByText('Sign in with your username, not your email.'),
-    ).toBeInTheDocument()
-    expect(api.post).not.toHaveBeenCalled()
+    await waitFor(() => expect(auth.login).toHaveBeenCalledWith('token'))
+    expect(api.post).toHaveBeenCalledWith('/v1/auth/login', {
+      identifier: 'reader',
+      password: 'password',
+    })
   })
 
   it('logs in successfully through the canonical v1 endpoint and reports API errors', async () => {
