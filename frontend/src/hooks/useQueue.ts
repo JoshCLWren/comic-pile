@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useInfiniteQuery, useMutation } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useMutation } from '@tanstack/react-query'
 import { invalidateAfterQueueMovement } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
@@ -68,6 +68,7 @@ export function useQueueThreads(searchTerm?: string, sort: QueueSortBy = 'positi
   const query = useInfiniteQuery({
     ...queueThreadsQueryOptions(searchTerm, sort),
     retry: false,
+    placeholderData: keepPreviousData,
   })
 
   const data = query.data?.pages.flatMap((page) => page.threads) ?? null
