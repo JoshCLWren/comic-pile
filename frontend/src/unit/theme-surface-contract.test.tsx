@@ -51,9 +51,24 @@ const SEMANTIC_TOKENS = [
   '--theme-continuity-accent',
   '--theme-personal-accent',
   '--theme-primary-action',
+  '--theme-primary-action-hover',
   '--theme-danger',
+  '--theme-danger-hover',
   '--theme-focus-ring',
+  '--theme-warning',
+  '--theme-error',
 ] as const
+
+/**
+ * Component CSS sheets migrated onto --theme-* roles (issue #2230) must stay
+ * free of product-meaning hex color literals so they reskin with the active
+ * theme instead of freezing in classic colors.
+ */
+const THEME_ROLE_SHEETS = [
+  'src/components/MigrationDialog.css',
+  'src/components/DependencyFlowchart.css',
+  'src/components/IssueList.css',
+]
 
 /**
  * Every legacy palette alias must re-point at its semantic theme token inside
@@ -82,6 +97,10 @@ function loadStylesheet(): string {
       ? fileURLToPath(specifier)
       : resolve(process.cwd(), 'src', 'styles.css')
   return readFileSync(stylesheet, 'utf8')
+}
+
+function loadComponentStylesheet(relativePath: string): string {
+  return readFileSync(resolve(process.cwd(), relativePath), 'utf8')
 }
 
 function extractThemeBlock(css: string, theme: ThemeId): string {
@@ -156,6 +175,14 @@ describe('semantic theme stylesheet contract (#1646)', () => {
     for (const token of ['--bg-glow', '--theme-bg-page', '--theme-comic-accent']) {
       const values = new Set(tokenValuesPerTheme(css, token))
       expect(values.size, `${token} must differ across all three themes`).toBe(THEMES.length)
+    }
+  })
+
+  it('keeps the migrated feature sheets on --theme-* roles with no product hex (#2230)', () => {
+    for (const sheet of THEME_ROLE_SHEETS) {
+      const css = loadComponentStylesheet(sheet)
+      expect(css, `${sheet} must reference --theme-* tokens`).toMatch(/var\(--theme-/)
+      expect(css, `${sheet} must not contain product hex literals`).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
     }
   })
 })
