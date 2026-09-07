@@ -38,9 +38,14 @@ describe('Queue FAB regression (#2220)', () => {
 
   it('positions FAB with safe-area-aware chrome and provides bottom clearance for the last row', () => {
     const source = loadQueuePageSource()
-    // Outer container must carry extra bottom padding so last row is tappable with FAB present
-    expect(source).toContain('pb-[calc(10rem+env(safe-area-inset-bottom))]')
+    // Outer container must carry extra bottom padding so last row is tappable with FAB present.
+    // Underscores encode the spaces Tailwind needs for a valid calc() (browsers reject
+    // `calc(10rem+env(...))` without whitespace around `+`).
+    expect(source).toContain('pb-[calc(10rem_+_env(safe-area-inset-bottom))]')
     // FAB must be safe-area aware (bottom calc with env)
-    expect(source).toContain('bottom-[calc(6rem+env(safe-area-inset-bottom))]')
+    expect(source).toContain('bottom-[calc(6rem_+_env(safe-area-inset-bottom))]')
+    // Guards against reverting to invalid whitespace-free calc() arbitrary values
+    expect(source).not.toContain('pb-[calc(10rem+env(safe-area-inset-bottom))]')
+    expect(source).not.toContain('bottom-[calc(6rem+env(safe-area-inset-bottom))]')
   })
 })
