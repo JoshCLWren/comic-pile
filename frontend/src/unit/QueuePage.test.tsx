@@ -244,12 +244,12 @@ describe('Visible action Snooze/Unsnooze', () => {
 
     const readButtons = screen.getAllByLabelText('Read')
     expect(readButtons.length).toBeGreaterThan(0)
-    const overflowButtons = screen.getAllByRole('button', { name: /thread actions/i })
+    const overflowButtons = screen.getAllByRole('button', { name: /series actions/i })
     expect(overflowButtons.length).toBeGreaterThan(0)
     await user.click(overflowButtons[0])
-    expect(screen.getByRole('menuitem', { name: /edit thread/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /edit series/i })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: /snooze/i })).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: /delete thread/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /delete series/i })).toBeInTheDocument()
   })
 
   it('calls snooze mutation when the pending comic Snooze action is clicked', async () => {
@@ -267,7 +267,7 @@ describe('Visible action Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const snoozeButtons = screen.getAllByRole('button', { name: /thread actions/i })
+    const snoozeButtons = screen.getAllByRole('button', { name: /series actions/i })
     await user.click(snoozeButtons[0])
     await user.click(screen.getByRole('menuitem', { name: /^snooze$/i }))
 
@@ -294,7 +294,7 @@ describe('Visible action Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const unsnoozeButtons = screen.getAllByRole('button', { name: /thread actions/i })
+    const unsnoozeButtons = screen.getAllByRole('button', { name: /series actions/i })
     await user.click(unsnoozeButtons[0])
     await user.click(screen.getByRole('menuitem', { name: /^unsnooze$/i }))
 
@@ -326,7 +326,7 @@ describe('Visible action Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const snoozeButtons = screen.getAllByRole('button', { name: /thread actions/i })
+    const snoozeButtons = screen.getAllByRole('button', { name: /series actions/i })
     await user.click(snoozeButtons[0])
     await user.click(screen.getByRole('menuitem', { name: /^snooze$/i }))
 
@@ -364,7 +364,7 @@ describe('Visible action Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const unsnoozeButtons = screen.getAllByRole('button', { name: /thread actions/i })
+    const unsnoozeButtons = screen.getAllByRole('button', { name: /series actions/i })
     await user.click(unsnoozeButtons[0])
     await user.click(screen.getByRole('menuitem', { name: /^unsnooze$/i }))
 
@@ -506,7 +506,7 @@ describe('Keyboard Accessibility', () => {
   expect(readButton).toHaveAttribute('title', expect.stringContaining('Blocked by: Prequel'))
   expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()
   expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
-  await user.click(screen.getByRole('button', { name: /thread actions/i }))
+  await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /delete/i }))
   expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /delete series/i }))
@@ -525,7 +525,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
     refetch: vi.fn(),
   })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getByRole('button', { name: /thread actions/i }))
+  await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /delete/i }))
   expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /cancel/i }))

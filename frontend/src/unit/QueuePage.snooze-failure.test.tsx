@@ -120,7 +120,7 @@ it('does not refresh session or threads when snooze fails', async () => {
   const user = userEvent.setup()
   renderQueue()
 
-  await user.click(screen.getByRole('button', { name: /thread actions/i }))
+  await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /^snooze$/i }))
 
   await waitFor(() => {
@@ -161,7 +161,7 @@ it('does not refresh session or threads when unsnooze fails', async () => {
   const user = userEvent.setup()
   renderQueue()
 
-  await user.click(screen.getByRole('button', { name: /thread actions/i }))
+  await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /^unsnooze$/i }))
 
   await waitFor(() => {
@@ -200,7 +200,7 @@ it('keeps snooze disabled before session data has loaded', async () => {
   const user = userEvent.setup()
   renderQueue()
 
-  await user.click(screen.getByRole('button', { name: /thread actions/i }))
+  await user.click(screen.getByRole('button', { name: /series actions/i }))
   const snoozeMenuItem = screen.getByRole('menuitem', { name: /^snooze$/i })
   expect(snoozeMenuItem).toBeDisabled()
   await user.click(snoozeMenuItem)
