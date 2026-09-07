@@ -134,9 +134,9 @@ describe('RatingView copy comic reference', () => {
     await user.keyboard('{Enter}')
     expect(screen.getByText('Retry copy')).toBeInTheDocument()
 
-    // Retry succeeds
+    // Retry succeeds — aria-label stays "Copy …" even when button text is "Retry copy"
     vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValueOnce(undefined)
-    await user.click(screen.getByRole('button', { name: 'Retry copy' }))
+    await user.click(screen.getByRole('button', { name: 'Copy Ultimate X-Men 12' }))
     expect(screen.getByText('Copied')).toBeInTheDocument()
   })
 })
