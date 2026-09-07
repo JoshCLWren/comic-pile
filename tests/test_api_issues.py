@@ -54,7 +54,7 @@ async def test_add_issues_to_existing_thread(
     await async_db.refresh(thread)
     assert thread.total_issues == 15
     assert thread.issues_remaining == 15
-    assert thread.reading_progress == "in_progress"
+    assert thread.reading_progress == "not_started"
 
 
 @pytest.mark.asyncio
@@ -196,11 +196,22 @@ async def test_update_thread_metadata(auth_client: AsyncClient, async_db: AsyncS
         )
         for i in range(1, 6)
     ]
+    issues.extend(
+        [
+            Issue(
+                thread_id=thread.id,
+                issue_number=str(i),
+                position=i,
+                status="unread",
+            )
+            for i in range(6, 11)
+        ]
+    )
     for issue in issues:
         async_db.add(issue)
     await async_db.flush()
 
-    thread.next_unread_issue_id = None
+    thread.next_unread_issue_id = issues[5].id
     await async_db.commit()
 
     response = await auth_client.post(
@@ -348,14 +359,31 @@ async def test_add_issues_preserves_next_unread(
     await async_db.flush()
 
     issues = [
-        Issue(thread_id=thread.id, issue_number=str(i), position=i, status="unread")
-        for i in range(1, 11)
+        Issue(
+            thread_id=thread.id,
+            issue_number=str(i),
+            position=i,
+            status="read",
+            read_at=datetime.now(UTC),
+        )
+        for i in range(1, 6)
     ]
+    issues.extend(
+        [
+            Issue(
+                thread_id=thread.id,
+                issue_number=str(i),
+                position=i,
+                status="unread",
+            )
+            for i in range(6, 11)
+        ]
+    )
     for issue in issues:
         async_db.add(issue)
     await async_db.flush()
 
-    thread.next_unread_issue_id = issues[4].id
+    thread.next_unread_issue_id = issues[5].id
     await async_db.commit()
 
     original_next_unread = thread.next_unread_issue_id
