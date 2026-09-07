@@ -44,7 +44,7 @@ export default function BugReportButton({ onSubmit, variant = 'floating' }: BugR
         className={
           variant === 'nav'
             ? 'nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none hover:bg-white/5'
-            : 'fixed bottom-32 right-4 z-50 flex items-center justify-center w-8 h-8 bg-stone-800/60 hover:bg-amber-500/80 text-stone-400 hover:text-stone-900 rounded-full shadow-sm transition-all backdrop-blur-sm'
+            : 'fixed bottom-8 right-4 z-50 flex items-center justify-center w-8 h-8 bg-[var(--theme-bg-panel)] border-[var(--theme-border)] text-stone-400 hover:text-stone-900 rounded-full shadow-sm transition-all backdrop-blur-sm'
         }
         aria-label="Send feedback"
         title="Send feedback"
