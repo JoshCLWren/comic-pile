@@ -21,8 +21,11 @@ function loadQueuePageSource(): string {
 describe('Queue FAB regression (#2220)', () => {
   it('uses semantic primary-action tokens, not raw amber utilities', () => {
     const source = loadQueuePageSource()
-    // Extract the FAB button block (md:hidden fixed ...)
-    const fabBlock = source.slice(source.indexOf('md:hidden fixed'))
+    // Extract only the FAB button block, not everything after it.
+    // The retry button below still uses amber for its own scope.
+    const fabStart = source.indexOf('md:hidden fixed')
+    const fabEnd = source.indexOf('</button>', fabStart)
+    const fabBlock = source.slice(fabStart, fabEnd)
     expect(fabBlock, 'FAB block missing').toContain('bg-[var(--theme-primary-action)]')
     expect(fabBlock).toContain('hover:bg-[var(--theme-primary-action-hover)]')
     expect(fabBlock).toContain('var(--theme-primary-action)')
