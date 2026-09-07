@@ -65,35 +65,35 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-[var(--theme-bg-page)]">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-black tracking-tighter text-glow uppercase">Welcome Back</h1>
-          <p className="text-sm text-stone-400">Sign in to continue your journey</p>
+          <p className="text-sm text-[var(--theme-text-muted)]">Sign in to continue your journey</p>
         </div>
 
-          <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-6 space-y-6">
-           <div className="space-y-4">
-             <div className="space-y-2">
-               <label htmlFor="username" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-                 Username
-               </label>
-               <p className="text-xs text-stone-400">Use your username, not email.</p>
-               <input
-                 id="username"
-                 type="text"
-                 name="username"
-                 autoComplete="username"
-                 required
-                 value={username}
-                 onChange={(e) => setUsername(e.target.value)}
-                 className="w-full h-12 px-4 rounded-xl text-sm form-control"
-                 placeholder="Enter your username"
-               />
-             </div>
+        <form onSubmit={handleSubmit} className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-6">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="username" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
+                Username
+              </label>
+              <p className="text-xs text-[var(--theme-text-muted)]">Use your username, not email.</p>
+              <input
+                id="username"
+                type="text"
+                name="username"
+                autoComplete="username"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full h-12 px-4 rounded-xl text-sm form-control"
+                placeholder="Enter your username"
+              />
+            </div>
 
             <div className="space-y-2">
-              <label htmlFor="password" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+              <label htmlFor="password" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
                 Password
               </label>
               <input
@@ -111,24 +111,24 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-              <p className="text-sm text-red-400 font-medium">{error}</p>
+            <div className="bg-[var(--theme-danger)]/10 border border-[var(--theme-danger)]/20 rounded-xl px-4 py-3">
+              <p className="text-sm text-[var(--theme-danger)] font-medium">{error}</p>
             </div>
           )}
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full h-12 bg-amber-600 hover:bg-amber-500 disabled:bg-amber-600/50 disabled:cursor-not-allowed rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-[#1a1410]"
+            className="w-full h-12 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
           >
             {isLoading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 
         <div className="text-center">
-          <p className="text-sm text-stone-400">
+          <p className="text-sm text-[var(--theme-text-muted)]">
             Don't have an account?{' '}
-            <Link to="/register" className="text-amber-500 hover:text-amber-400 font-bold transition-colors">
+            <Link to="/register" className="text-[var(--theme-primary-action)] hover:opacity-80 font-bold transition-opacity">
               Sign up
             </Link>
           </p>
