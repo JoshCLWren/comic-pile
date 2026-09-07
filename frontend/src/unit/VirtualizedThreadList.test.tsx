@@ -23,7 +23,7 @@ const mockScrollToIndex = vi.fn()
 let resizeCallback: ((entries: Array<{ contentRect: { height: number; width: number } }>) => void) | undefined
 
 vi.mock('@tanstack/react-virtual', () => ({
-  useVirtualizer: () => ({
+  useWindowVirtualizer: () => ({
     getVirtualItems: mockGetVirtualItems,
     getTotalSize: mockGetTotalSize,
     measureElement: mockMeasureElement,
@@ -524,22 +524,10 @@ it('calls scrollToIndex toward last visible when dragging near the bottom edge',
 
   const scrollEl = container.querySelector('#queue-container') as HTMLElement
 
-  vi.spyOn(scrollEl, 'getBoundingClientRect').mockReturnValue({
-    top: 0,
-    bottom: 600,
-    height: 600,
-    width: 800,
-    left: 0,
-    right: 800,
-    x: 0,
-    y: 0,
-    toJSON: () => ({}),
-  })
-
-  // Drag near bottom edge (clientY=590 → y=590 > 600-80=520)
+  // Drag near the window bottom edge (clientY close to window.innerHeight).
   const dataTransfer2 = new DataTransfer()
   const dragEvent2 = new DragEvent('dragover', {
-    clientY: 590,
+    clientY: window.innerHeight - 10,
     bubbles: true,
     cancelable: true,
     dataTransfer: dataTransfer2,

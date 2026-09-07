@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import {
   getRowThreads,
   EDGE_SCROLL_ZONE,
@@ -43,15 +43,18 @@ interface VirtualizedThreadListProps<T> {
  * `explicitColumnCount` preserves the older multi-column path only as a
  * deterministic test hook. Queue itself never supplies that prop.
  *
+ * ### Scrolling contract (#2184)
+ * The virtualized list scrolls the **window/document**, never an internal
+ * fixed-height container. `useWindowVirtualizer` positions virtual rows inside
+ * a relative spacer that grows in document flow, so the page keeps exactly one
+ * scroll surface before and after the >50 virtualization threshold is crossed.
+ * There is no `overflowY: auto` wrapper and no viewport-derived fixed height.
+ *
  * ### `data-index` contract
  * In the production single-column path, `data-index` is the thread index. When
  * an explicit multi-column count is supplied by a test, it represents the
  * virtual row index and consumers must use `renderItem`'s second argument for
  * thread-level identity.
- *
- * Uses `@tanstack/react-virtual` with `useVirtualizer` for efficient DOM
- * virtualization. Container height is derived from a `ResizeObserver` on the
- * wrapper element, never `window.innerHeight` during render.
  *
  * Preserves existing selectors (`data-testid="queue-thread-list"`,
  * `id="queue-container"`, `role="list"`, `aria-label="Thread queue"`)
@@ -61,51 +64,31 @@ export default function VirtualizedThreadList<T>({
   threads,
   renderItem,
   explicitColumnCount,
-  sentinelRef,
-  scrollRootRef,
-  hasNextPage,
+  sentinelRef: _sentinelRef,
+  scrollRootRef: _scrollRootRef,
+  hasNextPage: _hasNextPage,
 }: VirtualizedThreadListProps<T>) {
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const wrapperRef = useRef<HTMLDivElement>(null)
-  const [containerHeight, setContainerHeight] = useState(0)
+  // The bordered panel that owns the list presentation. It sits in normal
+  // document flow (no fixed height, no overflowY), so the page scrolls.
+  const panelRef = useRef<HTMLDivElement>(null)
+  // Document-top offset of the relative spacer that holds the absolute rows.
+  // Used as the virtualizer scrollMargin so window coordinates map onto the
+  // spacer's coordinate space.
+  const [scrollMargin, setScrollMargin] = useState(0)
   const [columnCount, setColumnCount] = useState(() =>
     explicitColumnCount !== undefined ? Math.max(1, explicitColumnCount) : 1,
   )
 
-  // Read the initial wrapper height synchronously to avoid a 0 → measured
-  // layout jump. Production stays single-column regardless of wrapper width.
+  // Measure the spacer's document-top offset synchronously before paint so the
+  // first window-virtualized layout is already correct (no 0 → measured jump).
+  // The spacer is the first child of the panel; its offset equals the panel's
+  // top plus its border, close enough that virtual rows align with page flow.
   useLayoutEffect(() => {
-    if (wrapperRef.current) {
-      setContainerHeight(wrapperRef.current.offsetHeight)
+    if (panelRef.current) {
+      setScrollMargin(panelRef.current.getBoundingClientRect().top + window.scrollY)
     }
     setColumnCount(explicitColumnCount !== undefined ? Math.max(1, explicitColumnCount) : 1)
-  }, [explicitColumnCount])
-
-  // React to height changes only. Queue's row/list presentation must not change
-  // cardinality when the viewport gets wider or when another page is appended.
-  useEffect(() => {
-    const wrapper = wrapperRef.current!
-
-    let rafId: number | null = null
-
-    const observer = new ResizeObserver((entries) => {
-      if (rafId !== null) return
-      rafId = requestAnimationFrame(() => {
-        rafId = null
-        for (const entry of entries) {
-          setContainerHeight(entry.contentRect.height)
-        }
-      })
-    })
-
-    observer.observe(wrapper)
-    return () => {
-      observer.disconnect()
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId)
-      }
-    }
-  }, [])
+  }, [explicitColumnCount, threads.length])
 
   const rowCount = Math.ceil(threads.length / columnCount)
 
@@ -114,49 +97,48 @@ export default function VirtualizedThreadList<T>({
   const virtualizerOptions = useMemo(
     () => ({
       count: rowCount,
-      getScrollElement: () => scrollRef.current,
       estimateSize: () => ROW_HEIGHT_WITH_GAP,
       overscan: Math.ceil(OVERSCAN_PX / ROW_HEIGHT_WITH_GAP),
+      scrollMargin,
     }),
-    [rowCount],
+    [rowCount, scrollMargin],
   )
 
-  const virtualizer = useVirtualizer(virtualizerOptions)
+  const virtualizer = useWindowVirtualizer(virtualizerOptions)
 
   // Keep a ref to the latest virtualizer so the drag-over handler stays
-  // referentially stable. useVirtualizer returns a new object every render,
-  // so putting it in a useCallback deps array would recreate the handler.
+  // referentially stable. useWindowVirtualizer returns a new object every
+  // render, so putting it in a useCallback deps array would recreate the
+  // handler.
   const virtualizerRef = useRef(virtualizer)
   virtualizerRef.current = virtualizer
 
   // ── Drag-reorder edge auto-scroll (583-D) ──
   // Throttle timestamp to avoid calling scrollToIndex faster than the virtualizer
-  // can re-measure (~50ms is generous for the resize → remeasure cycle).
+  // can re-measure (~50ms is generous for the resize → remeasure cycle). The
+  // scroll owner is the window, so edge zones are measured against the viewport.
   const lastEdgeScrollRef = useRef<number>(0)
 
-  const handleContainerDragOver = useCallback(
+  const handlePanelDragOver = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
-      const container = scrollRef.current!
-
       const now = performance.now()
       // Throttle to avoid flooding scrollToIndex with 60+ calls per second.
       if (now - lastEdgeScrollRef.current < 50) return
 
       const vz = virtualizerRef.current
-      const rect = container.getBoundingClientRect()
-      const y = event.clientY - rect.top
       const visibleItems = vz.getVirtualItems()
       if (visibleItems.length === 0) return
 
       const firstIndex = visibleItems[0].index
       const lastIndex = visibleItems[visibleItems.length - 1].index
+      const viewportHeight = window.innerHeight
 
-      if (y < EDGE_SCROLL_ZONE) {
+      if (event.clientY < EDGE_SCROLL_ZONE) {
         lastEdgeScrollRef.current = now
         vz.scrollToIndex(Math.max(0, firstIndex - 1), {
           align: 'start',
         })
-      } else if (y > rect.height - EDGE_SCROLL_ZONE) {
+      } else if (event.clientY > viewportHeight - EDGE_SCROLL_ZONE) {
         lastEdgeScrollRef.current = now
         vz.scrollToIndex(Math.min(rowCount - 1, lastIndex + 1), {
           align: 'end',
@@ -170,23 +152,17 @@ export default function VirtualizedThreadList<T>({
   // component, but this ensures standalone reuse also shows a graceful fallback.
   if (threads.length === 0) {
     return (
-      <div ref={wrapperRef} style={{ height: 'calc(100dvh - 14rem)' }}>
-        <div
-          ref={scrollRef}
-          data-testid="queue-thread-list"
-          id="queue-container"
-          role="list"
-          aria-label="Thread queue"
-          className="@container rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
-          style={{
-            height: '100%',
-            overflowY: 'auto',
-            overflowX: 'hidden',
-          }}
-        >
-          <div className="flex items-center justify-center text-stone-500 py-8">
-            No threads in queue
-          </div>
+      <div
+        ref={panelRef}
+        data-testid="queue-thread-list"
+        id="queue-container"
+        role="list"
+        aria-label="Thread queue"
+        className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
+        style={{ height: 'calc(100dvh - 14rem)' }}
+      >
+        <div className="flex items-center justify-center text-stone-500 py-8">
+          No threads in queue
         </div>
       </div>
     )
@@ -194,100 +170,68 @@ export default function VirtualizedThreadList<T>({
 
   return (
     <div
-      ref={wrapperRef}
-      // Use dvh (dynamic viewport height) instead of vh for mobile browser chrome.
-      // The 14rem offset accounts for the header (~8rem), sort/search bar (~3rem),
-      // padding/spacing (~3rem). ResizeObserver handles orientation changes.
-      style={{ height: containerHeight || 'calc(100dvh - 14rem)' }}
+      ref={panelRef}
+      data-testid="queue-thread-list"
+      id="queue-container"
+      role="list"
+      aria-label="Thread queue"
+      className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
+      onDragOver={handlePanelDragOver}
+      onDrop={(event) => event.preventDefault()}
     >
       <div
-        ref={(node) => {
-          scrollRef.current = node
-          if (scrollRootRef) {
-            ;(scrollRootRef as React.MutableRefObject<HTMLDivElement | null>).current = node
-          }
-        }}
-        data-testid="queue-thread-list"
-        id="queue-container"
-        role="list"
-        aria-label="Thread queue"
-        className="@container rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
-        onDragOver={handleContainerDragOver}
-        onDrop={(event) => event.preventDefault()}
         style={{
-          height: '100%',
-          overflowY: 'auto',
-          overflowX: 'hidden',
+          height: `${virtualizer.getTotalSize()}px`,
+          position: 'relative',
+          width: '100%',
         }}
       >
-        <div
-          style={{
-            height: `${virtualizer.getTotalSize() + (hasNextPage ? 16 : 0)}px`,
-            position: 'relative',
-            width: '100%',
-          }}
-        >
-          {virtualizer.getVirtualItems().map((virtualItem) => {
-            const rowIndex = virtualItem.index
-            return columnCount === 1 ? (
-              <div
-                key={virtualItem.key}
-                data-index={rowIndex}
-                ref={virtualizer.measureElement}
-                className={rowIndex < threads.length - 1 ? 'border-b border-[var(--theme-border)]' : undefined}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  transform: `translateY(${virtualItem.start}px)`,
-                }}
-              >
-                {renderItem(threads[rowIndex], rowIndex)}
-              </div>
-            ) : (
-              <div
-                key={virtualItem.key}
-                data-index={rowIndex}
-                ref={virtualizer.measureElement}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  paddingBottom: `${ROW_GAP}px`,
-                  transform: `translateY(${virtualItem.start}px)`,
-                }}
-              >
-                <div
-                  className="grid gap-4"
-                  style={{
-                    gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
-                    rowGap: `${ROW_GAP}px`,
-                  }}
-                >
-                  {getRowThreads(threads, rowIndex, columnCount).map(
-                    (thread, colIndex) => renderItem(thread, rowIndex * columnCount + colIndex),
-                  )}
-                </div>
-              </div>
-            )
-          })}
-          {hasNextPage && (
+        {virtualizer.getVirtualItems().map((virtualItem) => {
+          const rowIndex = virtualItem.index
+          return columnCount === 1 ? (
             <div
-              ref={sentinelRef}
+              key={virtualItem.key}
+              data-index={rowIndex}
+              ref={virtualizer.measureElement}
+              className={rowIndex < threads.length - 1 ? 'border-b border-[var(--theme-border)]' : undefined}
               style={{
                 position: 'absolute',
-                top: virtualizer.getTotalSize(),
+                top: 0,
                 left: 0,
                 width: '100%',
-                height: '16px',
+                transform: `translateY(${virtualItem.start - scrollMargin}px)`,
               }}
-              data-testid="queue-infinite-scroll-sentinel"
-              aria-hidden="true"
-            />
-          )}
-        </div>
+            >
+              {renderItem(threads[rowIndex], rowIndex)}
+            </div>
+          ) : (
+            <div
+              key={virtualItem.key}
+              data-index={rowIndex}
+              ref={virtualizer.measureElement}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                paddingBottom: `${ROW_GAP}px`,
+                transform: `translateY(${virtualItem.start - scrollMargin}px)`,
+              }}
+            >
+              <div
+                className="grid gap-4"
+                style={{
+                  gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+                  rowGap: `${ROW_GAP}px`,
+                }}
+              >
+                {getRowThreads(threads, rowIndex, columnCount).map(
+                  (thread, colIndex) => renderItem(thread, rowIndex * columnCount + colIndex),
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
