@@ -87,13 +87,12 @@ async def creator_summaries(
     keys: Annotated[
         str,
         Query(
-            ...,
             description=(
                 "Comma-separated canonical creator keys (for example "
                 f"'creator:4064,creator:5327'), bounded to {MAX_CREATOR_KEYS}."
             ),
         ),
-    ] = ...,
+    ],
 ) -> CreatorSummaryResponse:
     """Return personal reading summaries for the requested creators.
 

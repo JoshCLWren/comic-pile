@@ -12,6 +12,7 @@ constant query count regardless of the number of requested keys.
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from typing import TypedDict
 
 import pytest
 from httpx import AsyncClient
@@ -25,6 +26,34 @@ D1 = datetime(2026, 3, 1, tzinfo=UTC)
 D2 = datetime(2026, 3, 2, tzinfo=UTC)
 
 _identity_serial = 0
+
+
+class CreatorSummaryRow(TypedDict):
+    canonical_creator_key: str
+    display_name: str
+    normalized_roles: list[str]
+    average_rating: float | None
+    ratings_count: int
+    read_unrated_count: int
+    upcoming_count: int
+
+
+class CreatorChapterCoverageDict(TypedDict):
+    total: int
+    with_creator_metadata: int
+    complete: bool
+
+
+class CreatorSummaryCoverageDict(TypedDict):
+    rated: CreatorChapterCoverageDict
+    read_unrated: CreatorChapterCoverageDict
+    upcoming: CreatorChapterCoverageDict
+
+
+class CreatorSummaryResponseDict(TypedDict):
+    summaries: list[CreatorSummaryRow]
+    coverage: CreatorSummaryCoverageDict
+    generated_at: str
 
 
 @contextmanager
@@ -170,7 +199,7 @@ async def _rate(
 
 async def _summaries(
     client: AsyncClient, keys: list[str]
-) -> tuple[int, dict[str, object]]:
+) -> tuple[int, CreatorSummaryResponseDict]:
     """Call the creator summary endpoint for one comma-separated key batch.
 
     Args:
