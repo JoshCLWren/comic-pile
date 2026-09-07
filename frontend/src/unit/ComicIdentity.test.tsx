@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { comicVineApi } from '../services/api'
+import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api'
 import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
 
 vi.mock('../services/api', async () => {
@@ -861,6 +861,54 @@ describe('ComicIdentity', () => {
       expect(updatedAspectRatio).toBeCloseTo(400 / 600)
       const updatedWidthCap = Number(cover.getAttribute('data-cover-width-cap-vh'))
       expect(updatedWidthCap).toBeCloseTo(45 * updatedAspectRatio)
+    })
+  })
+
+  describe('cover loading lifecycle transition', () => {
+    it('keeps one stable portrait footprint and no dark frame from metadata loading through image completion', async () => {
+      let resolveRequest: ((value: ComicVineIssueIntelligence | null) => void) | undefined
+      getIntelligence.mockImplementation(() => new Promise((resolve) => {
+        resolveRequest = resolve
+      }))
+
+      render(<ComicIdentity issueId={101} />)
+      await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(101))
+
+      const loadingCover = screen.getByTestId('comic-cover')
+      const loadingAspect = Number(loadingCover.getAttribute('data-cover-aspect-ratio'))
+      expect(loadingAspect).toBeCloseTo(2 / 3)
+      expect(loadingCover.getAttribute('data-cover-height-cap-vh')).toBe('45')
+      expect(loadingCover.className).toContain('animate-pulse')
+      expect(loadingCover.className).toContain('bg-white')
+      expect(loadingCover.className).not.toContain('bg-stone')
+
+      await act(async () => {
+        resolveRequest?.({
+          comicvine_issue_id: '9003',
+          comicvine_url: null,
+          series_name: 'Transition Test',
+          series_id: 1,
+          issue_number: '1',
+          name: 'Transition Cover',
+          description: null,
+          image_url: 'https://images.example/transition.jpg',
+          cover_date: '2026-01-01',
+          store_date: null,
+          creators: [],
+          story_arcs: [],
+        })
+      })
+
+      await waitForLoaded()
+
+      const loadedCover = screen.getByTestId('comic-cover')
+      const loadedAspect = Number(loadedCover.getAttribute('data-cover-aspect-ratio'))
+      expect(loadedAspect).toBeCloseTo(2 / 3)
+      expect(loadedCover.getAttribute('data-cover-height-cap-vh')).toBe('45')
+      expect(loadedCover.className).toContain('bg-white')
+      expect(loadedCover.className).not.toContain('bg-stone')
+      expect(loadedCover.className).not.toContain('max-h-')
+      expect(loadedCover.querySelector('img')).not.toBeNull()
     })
   })
 })
