@@ -232,7 +232,8 @@ describe('Visible action Snooze/Unsnooze', () => {
     mockedUseUnsnooze.mockReturnValue(mockUnsnoozeMutation)
   })
 
-  it('shows visible actions for thread cards', () => {
+  it('shows visible actions for thread cards', async () => {
+    const user = userEvent.setup()
     render(
       <BrowserRouter>
         <ToastProvider>
@@ -242,13 +243,13 @@ describe('Visible action Snooze/Unsnooze', () => {
     )
 
     const readButtons = screen.getAllByLabelText('Read')
-    const editButtons = screen.getAllByLabelText('Edit')
-    const snoozeButtons = screen.getAllByLabelText('Snooze')
-    const deleteButtons = screen.getAllByLabelText('Delete')
     expect(readButtons.length).toBeGreaterThan(0)
-    expect(editButtons.length).toBeGreaterThan(0)
-    expect(snoozeButtons.length).toBeGreaterThan(0)
-    expect(deleteButtons.length).toBeGreaterThan(0)
+    const overflowButtons = screen.getAllByRole('button', { name: /thread actions/i })
+    expect(overflowButtons.length).toBeGreaterThan(0)
+    await user.click(overflowButtons[0])
+    expect(screen.getByRole('menuitem', { name: /edit thread/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /snooze/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /delete thread/i })).toBeInTheDocument()
   })
 
   it('calls snooze mutation when the pending comic Snooze action is clicked', async () => {
@@ -266,8 +267,9 @@ describe('Visible action Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const snoozeButtons = screen.getAllByLabelText('Snooze')
+    const snoozeButtons = screen.getAllByRole('button', { name: /thread actions/i })
     await user.click(snoozeButtons[0])
+    await user.click(screen.getByRole('menuitem', { name: /^snooze$/i }))
 
     expect(mockSnoozeMutation.mutate).toHaveBeenCalledWith(1)
     expect(mockUnsnoozeMutation.mutate).not.toHaveBeenCalled()
@@ -292,8 +294,9 @@ describe('Visible action Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const unsnoozeButtons = screen.getAllByLabelText('Unsnooze')
+    const unsnoozeButtons = screen.getAllByRole('button', { name: /thread actions/i })
     await user.click(unsnoozeButtons[0])
+    await user.click(screen.getByRole('menuitem', { name: /^unsnooze$/i }))
 
     expect(mockUnsnoozeMutation.mutate).toHaveBeenCalledWith(1)
     expect(mockSnoozeMutation.mutate).not.toHaveBeenCalled()
@@ -323,8 +326,9 @@ describe('Visible action Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const snoozeButtons = screen.getAllByLabelText('Snooze')
+    const snoozeButtons = screen.getAllByRole('button', { name: /thread actions/i })
     await user.click(snoozeButtons[0])
+    await user.click(screen.getByRole('menuitem', { name: /^snooze$/i }))
 
     await waitFor(() => {
       expect(mockRefetchSession).toHaveBeenCalled()
@@ -360,8 +364,9 @@ describe('Visible action Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const unsnoozeButtons = screen.getAllByLabelText('Unsnooze')
+    const unsnoozeButtons = screen.getAllByRole('button', { name: /thread actions/i })
     await user.click(unsnoozeButtons[0])
+    await user.click(screen.getByRole('menuitem', { name: /^unsnooze$/i }))
 
     await waitFor(() => {
       expect(mockRefetchSession).toHaveBeenCalled()
@@ -501,7 +506,8 @@ describe('Keyboard Accessibility', () => {
   expect(readButton).toHaveAttribute('title', expect.stringContaining('Blocked by: Prequel'))
   expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()
   expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
-  await user.click(screen.getByLabelText('Delete'))
+  await user.click(screen.getByRole('button', { name: /thread actions/i }))
+  await user.click(screen.getByRole('menuitem', { name: /delete/i }))
   expect(screen.getByRole('heading', { name: /delete thread/i })).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /delete thread/i }))
   await waitFor(() => expect(deleteMutation.mutate).toHaveBeenCalledWith(1))
@@ -519,7 +525,8 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
     refetch: vi.fn(),
   })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getByLabelText('Delete'))
+  await user.click(screen.getByRole('button', { name: /thread actions/i }))
+  await user.click(screen.getByRole('menuitem', { name: /delete/i }))
   expect(screen.getByRole('heading', { name: /delete thread/i })).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /cancel/i }))
   expect(screen.queryByRole('heading', { name: /delete thread/i })).not.toBeInTheDocument()
