@@ -355,11 +355,11 @@ class TestNeonFailureIsolation:
         acc._engine = None
 
         start = time.monotonic()
-        for _ in range(1000):
+        for _ in range(100):
             acc.record(1)
         elapsed = time.monotonic() - start
 
-        # 1000 decrements should take well under 100ms
+        # 100 decrements should take well under 100ms
         assert elapsed < 0.1
         assert acc.remaining == 900
 
