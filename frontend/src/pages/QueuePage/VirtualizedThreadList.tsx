@@ -122,7 +122,7 @@ export default function VirtualizedThreadList<T>({
   const virtualizer = useWindowVirtualizer(virtualizerOptions)
 
   // Keep a ref to the latest virtualizer so the drag-over handler stays
-  // referentially stable. useVirtualizer returns a new object every render,
+  // referentially stable. useWindowVirtualizer returns a new object every render,
   // so putting it in a useCallback deps array would recreate the handler.
   const virtualizerRef = useRef(virtualizer)
   virtualizerRef.current = virtualizer

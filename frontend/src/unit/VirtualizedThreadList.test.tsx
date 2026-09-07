@@ -15,7 +15,7 @@ function createMockThreads(count: number): MockThread[] {
   }))
 }
 
-// Mock @tanstack/react-virtual's useVirtualizer
+// Mock @tanstack/react-virtual's useWindowVirtualizer
 const mockGetVirtualItems = vi.fn()
 const mockGetTotalSize = vi.fn(() => 0)
 const mockMeasureElement = vi.fn()
@@ -23,7 +23,7 @@ const mockScrollToIndex = vi.fn()
 let resizeCallback: ((entries: Array<{ contentRect: { height: number; width: number } }>) => void) | undefined
 
 vi.mock('@tanstack/react-virtual', () => ({
-  useVirtualizer: () => ({
+  useWindowVirtualizer: () => ({
     getVirtualItems: mockGetVirtualItems,
     getTotalSize: mockGetTotalSize,
     measureElement: mockMeasureElement,
