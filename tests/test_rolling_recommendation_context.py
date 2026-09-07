@@ -16,8 +16,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from httpx import AsyncClient
 
+from app.config import get_recommendation_settings
 from app.models import Event, Thread, User
 from app.schemas.recommendation_context import RollingRecommendationContext
+from app.services.reading_effort import (
+    RECOMMENDATION_CONTEXT_ALGORITHM_VERSION_KEY,
+    RECOMMENDATION_CONTEXT_CONTROL_MODE_KEY,
+)
 
 
 @pytest.mark.asyncio
@@ -223,3 +228,141 @@ async def test_rolling_recommendation_context_bounded_payload_size(
     assert "title" not in ctx
     assert "format" not in ctx
     assert "issues_remaining" not in ctx
+
+
+@pytest.mark.asyncio
+async def test_legacy_control_mode_roll_records_forced_legacy_snapshot(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Under RECOMMENDATION_CONTROL_MODE=legacy every roll records forced legacy."""
+    now = datetime.now(UTC)
+    threads = [
+        Thread(
+            title=f"Legacy Mode Thread {i}",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=i + 1,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        )
+        for i in range(3)
+    ]
+    async_db.add_all(threads)
+    await async_db.commit()
+
+    monkeypatch.setenv("RECOMMENDATION_CONTROL_MODE", "legacy")
+    get_recommendation_settings.cache_clear()
+    try:
+        response = await auth_client.post(
+            "/api/roll/", json={"bandwidth": "deep", "intent": "momentum"}
+        )
+    finally:
+        monkeypatch.delenv("RECOMMENDATION_CONTROL_MODE", raising=False)
+        get_recommendation_settings.cache_clear()
+    assert response.status_code == 200
+
+    result = await async_db.execute(
+        select(Event)
+        .where(Event.type == "roll")
+        .where(Event.selected_thread_id.in_([thread.id for thread in threads]))
+        .order_by(Event.id.desc())
+        .limit(1)
+    )
+    event = result.scalar_one()
+    assert event.selection_method == "legacy"
+    assert event.recommendation_reason_codes == ["forced_legacy"]
+
+    ctx = event.rolling_recommendation_context
+    assert ctx is not None
+    assert ctx["algorithm_version"] == "legacy"
+    assert ctx["control_mode"] == "legacy"
+    assert ctx["selection_method"] == "legacy"
+
+    payload = event.recommendation_context
+    assert payload is not None
+    assert payload[RECOMMENDATION_CONTEXT_ALGORITHM_VERSION_KEY] == "legacy"
+    assert payload[RECOMMENDATION_CONTEXT_CONTROL_MODE_KEY] == "legacy"
+    assert payload["random_bypass"] is True
+    assert payload["balanced_neutrality"] is True
+
+
+@pytest.mark.asyncio
+async def test_legacy_to_contextual_transition_resumes_weighted_recording(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Re-enabling contextual mode resumes weighted recording from the same session."""
+    now = datetime.now(UTC)
+    threads = [
+        Thread(
+            title=f"Transition Thread {i}",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=i + 1,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        )
+        for i in range(4)
+    ]
+    async_db.add_all(threads)
+    await async_db.commit()
+
+    options = {"bandwidth": "deep", "intent": "momentum"}
+
+    monkeypatch.setenv("RECOMMENDATION_CONTROL_MODE", "legacy")
+    get_recommendation_settings.cache_clear()
+    try:
+        legacy_response = await auth_client.post("/api/roll/", json=options)
+        assert legacy_response.status_code == 200
+    finally:
+        monkeypatch.delenv("RECOMMENDATION_CONTROL_MODE", raising=False)
+        get_recommendation_settings.cache_clear()
+
+    rate_response = await auth_client.post("/api/rate/", json={"rating": 4.0})
+    assert rate_response.status_code == 200
+
+    contextual_response = await auth_client.post("/api/roll/", json=options)
+    assert contextual_response.status_code == 200
+
+    legacy_result = await async_db.execute(
+        select(Event)
+        .where(Event.type == "roll")
+        .where(Event.selected_thread_id.in_([thread.id for thread in threads]))
+        .order_by(Event.id.asc())
+        .limit(1)
+    )
+    legacy_event = legacy_result.scalar_one()
+    assert legacy_event.selection_method == "legacy"
+    legacy_context = legacy_event.rolling_recommendation_context
+    assert legacy_context is not None
+    assert legacy_context["algorithm_version"] == "legacy"
+    assert legacy_context["control_mode"] == "legacy"
+
+    result = await async_db.execute(
+        select(Event)
+        .where(Event.type == "roll")
+        .where(Event.selected_thread_id.in_([thread.id for thread in threads]))
+        .order_by(Event.id.desc())
+        .limit(1)
+    )
+    event = result.scalar_one()
+    assert event.selection_method in ("bandwidth", "momentum")
+    assert event.recommendation_reason_codes == ["bandwidth_weighted"]
+
+    ctx = event.rolling_recommendation_context
+    assert ctx is not None
+    assert ctx["algorithm_version"] == "v1-contextual"
+    assert ctx["control_mode"] == "contextual"
+
+    payload = event.recommendation_context
+    assert payload is not None
+    assert payload[RECOMMENDATION_CONTEXT_ALGORITHM_VERSION_KEY] == "v1-contextual"
+    assert payload[RECOMMENDATION_CONTEXT_CONTROL_MODE_KEY] == "contextual"
+    assert payload["random_bypass"] is False

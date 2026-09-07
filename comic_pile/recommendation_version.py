@@ -22,8 +22,13 @@ Control model
 - ``CONTROL_MODE_LEGACY`` is the operator-controlled kill switch. It forces the
   legacy unweighted draw inside the existing die pool for every intent while
   leaving instrumentation active so the forced runs stay distinguishable.
-- The user-level ``random`` intent remains an independent bypass: it is
-  recorded as a pure-random bypass regardless of any operator control state.
+- The user-level ``random`` intent remains an independent behavioral bypass:
+  it always draws unweighted inside the bounded pool, so it never benefits
+  from contextual weighting. When the operator control mode is ``contextual``
+  the draw is recorded as a pure-random bypass. While the operator control
+  mode is ``legacy`` the draw is recorded as a forced-legacy draw
+  (``legacy`` selection method, ``forced_legacy`` reason code) so the kill
+  switch stays measurable even inside the user bypass.
 """
 
 from __future__ import annotations

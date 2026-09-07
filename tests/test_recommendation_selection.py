@@ -21,6 +21,7 @@ from comic_pile.recommendation_selection import (
     Bandwidth,
     Intent,
     SelectionMode,
+    normalize_control_mode,
     normalize_weights,
     resolve_selection_mode,
     select_from_pool,
@@ -119,6 +120,59 @@ def test_random_intent_bypasses_contextual_weights_completely() -> None:
         assert all(outcome.mode is SelectionMode.PURE_RANDOM_BYPASS for outcome in outcomes)
         assert all(not outcome.weights_applied for outcome in outcomes)
         assert all(outcome.bandwidth is Bandwidth.DEEP for outcome in outcomes)
+        assert all(outcome.intent is Intent.RANDOM for outcome in outcomes)
+
+
+@pytest.mark.parametrize("pool_size", POOL_SIZES)
+@pytest.mark.parametrize("seed", range(25))
+def test_forced_legacy_control_mode_matches_legacy_stream_exactly(
+    seed: int, pool_size: int
+) -> None:
+    """Operator legacy control mode reproduces the legacy randint stream."""
+    expected = _legacy_stream(seed, pool_size, draws=40)
+
+    control_rng = random.Random(seed)
+    outcomes = [
+        select_from_pool(
+            pool_size,
+            bandwidth=Bandwidth.DEEP,
+            intent=Intent.MOMENTUM,
+            weights=[float(value) for value in range(1, pool_size + 1)],
+            control_mode="legacy",
+            rng=control_rng,
+        )
+        for _ in range(len(expected))
+    ]
+
+    assert [outcome.index for outcome in outcomes] == expected
+    assert [outcome.result for outcome in outcomes] == [value + 1 for value in expected]
+    assert all(outcome.mode is SelectionMode.FORCED_LEGACY for outcome in outcomes)
+    assert all(not outcome.weights_applied for outcome in outcomes)
+
+
+def test_forced_legacy_dominates_random_intent_and_ignores_weights() -> None:
+    """The operator kill switch overrides the random bypass and ignores weights."""
+    adversarial_weights = [0.000001] * 9 + [1000000000.0]
+
+    for seed in range(10):
+        expected = _legacy_stream(seed, 10, draws=30)
+
+        forced_rng = random.Random(seed)
+        outcomes = [
+            select_from_pool(
+                10,
+                bandwidth=Bandwidth.DEEP,
+                intent=Intent.RANDOM,
+                weights=adversarial_weights,
+                control_mode="legacy",
+                rng=forced_rng,
+            )
+            for _ in range(len(expected))
+        ]
+
+        assert [outcome.index for outcome in outcomes] == expected
+        assert all(outcome.mode is SelectionMode.FORCED_LEGACY for outcome in outcomes)
+        assert all(not outcome.weights_applied for outcome in outcomes)
         assert all(outcome.intent is Intent.RANDOM for outcome in outcomes)
 
 
@@ -346,6 +400,38 @@ def test_resolve_selection_mode_matrix(
 ) -> None:
     """The mode-resolution matrix maps each bandwidth/intent pair to its path."""
     assert resolve_selection_mode(bandwidth, intent) is expected
+
+
+@pytest.mark.parametrize(
+    ("bandwidth", "intent", "expected"),
+    [
+        (None, None, SelectionMode.FORCED_LEGACY),
+        ("balanced", "balanced", SelectionMode.FORCED_LEGACY),
+        ("light", None, SelectionMode.FORCED_LEGACY),
+        ("deep", "momentum", SelectionMode.FORCED_LEGACY),
+        ("deep", "random", SelectionMode.FORCED_LEGACY),
+        (Bandwidth.LIGHT, Intent.FAMILIAR, SelectionMode.FORCED_LEGACY),
+    ],
+)
+def test_resolve_selection_mode_forced_legacy_overrides_every_intent(
+    bandwidth: str | None, intent: str | None, expected: SelectionMode
+) -> None:
+    """Legacy operator control mode forces the unweighted path for every intent."""
+    assert resolve_selection_mode(bandwidth, intent, "legacy") is expected
+
+
+def test_normalize_control_mode_defaults_and_rejects() -> None:
+    """Control-mode normalization defaults to contextual and rejects unknowns."""
+    assert normalize_control_mode(None) == "contextual"
+    assert normalize_control_mode("contextual") == "contextual"
+    assert normalize_control_mode("legacy") == "legacy"
+
+
+@pytest.mark.parametrize("value", ["", "bogus", "CONTEXTUAL", 3])
+def test_normalize_control_mode_rejects_unknown_values(value: object) -> None:
+    """Unknown control-mode values raise a ValueError."""
+    with pytest.raises(ValueError):
+        normalize_control_mode(cast("str | None", value))
 
 
 @pytest.mark.parametrize(
