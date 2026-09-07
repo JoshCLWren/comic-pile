@@ -60,7 +60,7 @@ async def test_discovery_filters_searches_orders_and_limits(
         name="B.P.R.D. Hell on Earth",
         path="Dark Horse/BPRD/Hell on Earth.cbl",
     )
-    await _seed_list(
+    archived = await _seed_list(
         async_db,
         source=source,
         name="Archived B.P.R.D.",
@@ -80,7 +80,7 @@ async def test_discovery_filters_searches_orders_and_limits(
     body = response.json()
     assert [item["id"] for item in body] == [beta.id, alpha.id]
     assert all(item["source_repository"] == "example/cbl" for item in body)
-    assert all(item["id"] != 3 for item in body)
+    assert archived.id not in {item["id"] for item in body}
 
     path_match = await auth_client.get(
         "/api/v1/issue-identity/cbl-sources?q=hell%20ON%20earth"
@@ -123,7 +123,7 @@ async def test_discovery_is_read_only(
     response = await auth_client.get("/api/v1/issue-identity/cbl-sources?q=BPRD")
     assert response.status_code == 200, response.text
 
-    await async_db.expire_all()
+    async_db.expire_all()
     after_sources = await async_db.scalar(select(func.count()).select_from(CBLSource))
     after_lists = await async_db.scalar(select(func.count()).select_from(CBLSourceList))
     assert after_sources == before_sources
