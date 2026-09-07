@@ -145,8 +145,16 @@ test.describe('Roll-mode control state grammar at phone width (#2304)', () => {
     await expect(autoButton).toBeVisible()
     await expect(autoButton).toHaveAttribute('aria-pressed', 'false')
     await expect(page.getByRole('button', { name: 'd8', exact: true })).toHaveAttribute('aria-pressed', 'true')
-    await expect(
-      page.getByRole('button', { name: /^Current die d8, manual mode$/ }),
-    ).toBeVisible()
+
+    // The mode control's accessible name is only rendered at phone width
+    // (the `md:hidden` die control); verify manual mode there and confirm the
+    // solid active fill stays on the die control, never on the manual-pick action.
+    await page.setViewportSize(PHONE_VIEWPORT)
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('button', { name: /^Current die d8, manual mode$/ })).toBeVisible()
+    const manualSnapshot = await headerControlSnapshot(page)
+    expect(manualSnapshot.solidCount, `expected one solid active control, got ${manualSnapshot.solidCount}`).toBe(1)
+    expect(manualSnapshot.dieControl.backgroundColor).toBe(manualSnapshot.primaryActionRgb)
+    expect(manualSnapshot.pickManually.backgroundColor).not.toBe(manualSnapshot.primaryActionRgb)
   })
 })
