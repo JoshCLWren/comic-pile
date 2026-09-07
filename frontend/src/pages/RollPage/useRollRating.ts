@@ -7,6 +7,7 @@ import type { ReadingOrder } from '../../services/api-reading-orders'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
+import type { PostRateReference } from './components/PostRateCopyPrompt'
 import { RATING_THRESHOLD, buildRatingThread, computePredictedDie, createExplosion } from './utils'
 
 interface UseRollRatingParams {
@@ -54,6 +55,9 @@ export function useRollRating({
 
   const [readingOrders, setReadingOrders] = useState<ReadingOrder[]>([])
   const [connectedThreads, setConnectedThreads] = useState<ConnectedThreadInfo[]>([])
+  const [lastRated, setLastRated] = useState<PostRateReference | null>(null)
+
+  const clearLastRated = useCallback(() => setLastRated(null), [])
 
   const enterRatingView = useCallback(
     async (
@@ -72,6 +76,8 @@ export function useRollRating({
       setIsOverrideOpen(false)
       setIsDieModalOpen(false)
 
+      // Starting a new rating session retires the previous post-rate copy prompt.
+      setLastRated(null)
       setSelectedThreadId(threadId)
       if (result !== null) setRolledResult(result)
       setActiveRatingThread(ratingThread)
@@ -164,6 +170,11 @@ export function useRollRating({
               last_rolled_result: null,
             })
           }
+          setLastRated({
+            title: activeRatingThread!.title,
+            issueNumber,
+            rating,
+          })
           suppressPendingAutoOpenRef.current = true
           setIsRolling(false)
           setIsRatingView(false)
@@ -254,6 +265,14 @@ export function useRollRating({
         }
       }
 
+      // Capture the just-rated comic reference before the thread state is cleared
+      // so the post-rate copy prompt can offer the clipboard string on the die view.
+      setLastRated({
+        title: activeRatingThread.title,
+        issueNumber:
+          activeRatingThread.next_issue_number ?? activeRatingThread.issue_number ?? '',
+        rating,
+      })
       setIsRolling(false)
       setIsRatingView(false)
       setRolledResult(null)
@@ -308,6 +327,8 @@ export function useRollRating({
   return {
     readingOrders,
     connectedThreads,
+    lastRated,
+    clearLastRated,
     enterRatingView,
     handleMigrationComplete,
     handleMigrationSkip,
