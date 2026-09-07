@@ -6,13 +6,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models.cbl_reference import CBLSource, CBLSourceList
 from app.models.user import User
+from app.repositories.cbl_source_repository import discover_cbl_source_lists as discover_source_rows
 
 router = APIRouter(prefix="/issue-identity", tags=["issue-identity"])
 
@@ -36,37 +35,9 @@ async def discover_cbl_source_lists(
     q: Annotated[str | None, Query(max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
 ) -> list[CBLSourceListDiscoveryItem]:
-    """Return bounded active CBL lists for the Reading Plan Add-material flow.
-
-    Discovery is intentionally read-only. A returned list ID may be passed to
-    the existing reconciliation/adoption-preview endpoints, but discovery never
-    adopts material or mutates reader/source state.
-    """
-    del current_user  # Authentication is the only user-specific requirement here.
-
-    query = (
-        select(CBLSourceList, CBLSource.repository)
-        .join(CBLSource, CBLSource.id == CBLSourceList.source_id)
-        .where(CBLSourceList.active.is_(True))
-    )
-
-    term = q.strip() if q else ""
-    if term:
-        pattern = f"%{term}%"
-        query = query.where(
-            or_(
-                CBLSourceList.name.ilike(pattern),
-                CBLSourceList.source_path.ilike(pattern),
-            )
-        )
-
-    query = query.order_by(
-        CBLSourceList.name.asc(),
-        CBLSourceList.source_path.asc(),
-        CBLSourceList.id.asc(),
-    ).limit(limit)
-
-    rows = (await db.execute(query)).all()
+    """Return bounded active CBL lists for the Reading Plan Add-material flow."""
+    del current_user
+    rows = await discover_source_rows(db, query_text=q, limit=limit)
     return [
         CBLSourceListDiscoveryItem(
             id=source_list.id,
