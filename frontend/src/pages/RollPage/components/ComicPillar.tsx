@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import ComicVineSearchDialog from '../../../components/ComicVineSearchDialog'
-import { comicVineApi, type IssueIdentityResponse } from '../../../services/api'
+import { comicVineApi, type ComicVineIssueCandidate, type IssueIdentityResponse } from '../../../services/api'
 import { getProgressPercentage } from '../utils'
 import type { RatingThread } from '../types'
 import { ComicIdentity } from './ComicIdentity'
+import { queryClient } from '../../../query/queryClient'
+import {
+  applyComicVineCorrectionOptimistically,
+  invalidateComicVineIssueIntelligence,
+} from '../../../query/cacheEffects'
 
 interface ComicPillarProps {
   activeRatingThread: RatingThread | null
@@ -44,10 +49,16 @@ export function ComicPillar({
     fetchIdentity()
   }, [fetchIdentity])
 
-  const handleIdentityConfirmed = useCallback(() => {
-    fetchIdentity()
+  const handleIdentityConfirmed = useCallback(async (selected?: ComicVineIssueCandidate | null) => {
+    if (issueId) {
+      if (selected && selected.image_url !== undefined) {
+        applyComicVineCorrectionOptimistically(queryClient, issueId, selected.image_url)
+      }
+      await invalidateComicVineIssueIntelligence(queryClient, issueId)
+    }
+    await fetchIdentity()
     onRefreshThread()
-  }, [fetchIdentity, onRefreshThread])
+  }, [fetchIdentity, onRefreshThread, issueId])
 
   const needsIdentity = identityState && !identityState.has_confirmed_identity
 
