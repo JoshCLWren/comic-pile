@@ -97,6 +97,8 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     return (
       <div
         data-testid="comic-cover"
+        data-cover-aspect-ratio={coverAspectRatio}
+        data-cover-height-cap-vh={COVER_HEIGHT_CAP_VH}
         aria-label="Loading comic details"
         className="relative mx-auto overflow-hidden rounded-xl bg-white/5 animate-pulse"
         style={{ ...coverStyle, ...coverFrameBorder }}
@@ -118,6 +120,8 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     >
       <div
         data-testid="comic-cover"
+        data-cover-aspect-ratio={coverAspectRatio}
+        data-cover-height-cap-vh={COVER_HEIGHT_CAP_VH}
         className="relative mx-auto overflow-hidden rounded-xl bg-white/5"
         style={{ ...coverStyle, ...coverFrameBorder }}
       >
