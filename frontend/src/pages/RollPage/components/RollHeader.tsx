@@ -91,11 +91,11 @@ export function RollHeader({
         )}
       </div>
       <div
-        className={`flex min-w-0 flex-1 flex-wrap items-center justify-end gap-x-2 gap-y-2 w-full lg:w-auto ${isRatingView ? 'hidden' : 'flex'}`}
+        className={`flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-2 w-full lg:w-auto ${isRatingView ? 'hidden' : 'flex'}`}
       >
         <div id="die-selector" data-roll-die-selector="primary" className="flex min-w-0 flex-wrap items-center gap-2">
           <div
-            className="hidden items-center gap-0 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-0.5 md:flex"
+            className="hidden min-w-0 flex-wrap items-center gap-x-0 gap-y-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-0.5 md:flex"
             role="group"
             aria-label="Dice ladder"
           >

@@ -218,6 +218,7 @@ test.describe('Fixed chrome overlap (#1645)', () => {
     const pickManually = header.getByRole('button', { name: 'Pick manually' })
     await expect(ladder).toBeVisible()
     await expect(pickManually).toBeVisible()
+    await expect(header.locator('#die-selector')).toBeVisible()
 
     const geometry = await page.evaluate(() => {
       const headerElement = document.querySelector<HTMLElement>(
@@ -226,29 +227,53 @@ test.describe('Fixed chrome overlap (#1645)', () => {
       const mainElement = document.querySelector<HTMLElement>(
         '[data-authenticated-shell] > main',
       )
-      const ladderElement = headerElement?.querySelector<HTMLElement>('span.cursor-help')
-      const pickElement = headerElement?.querySelector<HTMLElement>(
-        '[data-roll-primary-action="pick-manually"]',
-      )
-      if (!headerElement || !mainElement || !ladderElement || !pickElement) {
-        return null
-      }
+      if (!headerElement || !mainElement) return null
       const rect = (element: HTMLElement) => {
         const box = element.getBoundingClientRect()
         return { left: box.left, right: box.right, top: box.top, bottom: box.bottom }
+      }
+      const ladderElement = headerElement.querySelector<HTMLElement>(
+        '#die-selector span.cursor-help',
+      )
+      const pickElement = headerElement.querySelector<HTMLElement>(
+        '[data-roll-primary-action="pick-manually"]',
+      )
+      const modeElement = headerElement.querySelector<HTMLElement>(
+        '[data-testid="reading-mode-control"]',
+      )
+      const dieSelector = headerElement.querySelector<HTMLElement>('#die-selector')
+      const dieButtons = dieSelector
+        ? Array.from(dieSelector.querySelectorAll<HTMLElement>('button'))
+            .filter((button) => {
+              const box = button.getBoundingClientRect()
+              return box.width > 0 && box.height > 0
+            })
+            .map(rect)
+        : []
+      if (!ladderElement || !pickElement || dieButtons.length === 0) {
+        return null
       }
       return {
         main: rect(mainElement),
         header: rect(headerElement),
         ladder: rect(ladderElement),
         pickManually: rect(pickElement),
+        readingMode: modeElement ? rect(modeElement) : null,
+        dieButtons,
         documentScrollWidth: document.documentElement.scrollWidth,
       }
     })
 
     expect(geometry).not.toBeNull()
     expect(geometry!.documentScrollWidth).toBeLessThanOrEqual(820)
-    for (const action of [geometry!.ladder, geometry!.pickManually]) {
+    const actions = [
+      geometry!.ladder,
+      geometry!.pickManually,
+      ...geometry!.dieButtons,
+      ...(geometry!.readingMode ? [geometry!.readingMode] : []),
+    ]
+    expect(actions.length).toBeGreaterThanOrEqual(12)
+    for (const action of actions) {
       expect(action.left).toBeGreaterThanOrEqual(geometry!.main.left)
       expect(action.right).toBeLessThanOrEqual(geometry!.main.right)
       expect(action.top).toBeGreaterThanOrEqual(geometry!.header.top)
