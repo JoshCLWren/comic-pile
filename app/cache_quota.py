@@ -20,6 +20,10 @@ decisions. It never touches the network, cache keys, or user data, so it is
 safe to consult on every request. Operators can surface the live snapshot
 through :func:`observe_cache_quota` and the bounded ``/api/v1/health/cache-quota``
 operational endpoint.
+
+The health endpoint uses :func:`observe_cache_quota` which prefers the durable
+Neon-backed month-to-date total from :mod:`app.cache_accounting` when available,
+falling back to process-local metrics when durable accounting is degraded.
 """
 
 from __future__ import annotations
@@ -49,6 +53,7 @@ class QuotaState:
     throttling: bool
     remaining: int
     status: str
+    degraded: bool = False
 
     @property
     def over_budget(self) -> bool:
@@ -234,13 +239,34 @@ def evaluate_cache_quota(used: int | None = None, *, fire_alert: bool = True) ->
 def observe_cache_quota(used: int | None = None) -> QuotaState:
     """Read-only quota assessment for monitoring; never fires the alert sink.
 
+    When durable Neon-backed accounting is available and healthy, the
+    assessment uses the durable month-to-date total.  Otherwise it falls
+    back to the process-local :data:`~app.cache_metrics.cache_command_metrics`
+    total and marks the state as ``degraded`` so the health endpoint never
+    presents a falsely authoritative low count.
+
     Args:
         used: Observed monthly command count; defaults to live metrics.
 
     Returns:
         The current :class:`QuotaState` without alert side effects.
     """
-    return evaluate_cache_quota(used, fire_alert=False)
+    degraded = False
+    if used is None:
+        from app.cache_accounting import cache_accounting
+
+        if cache_accounting.initialized and not cache_accounting.degraded:
+            used = cache_accounting.durable_total()
+        else:
+            from app.cache_metrics import cache_command_metrics
+
+            used = cache_command_metrics.total()
+            if not cache_accounting.initialized or cache_accounting.degraded:
+                degraded = True
+
+    state = evaluate_cache_quota(used, fire_alert=False)
+    state.degraded = degraded
+    return state
 
 
 def should_throttle_cache_write(
