@@ -4,6 +4,7 @@ import { beforeEach, expect, test, vi } from 'vitest'
 import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 
 vi.mock('../contexts/useToast', () => ({
   useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
@@ -46,7 +47,9 @@ test('renders recognizable icon primitives in the mobile footer', async () => {
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
         <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
+          <NavCollapseProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </NavCollapseProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>,

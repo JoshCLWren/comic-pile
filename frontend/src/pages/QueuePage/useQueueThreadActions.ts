@@ -10,10 +10,13 @@ import {
 } from '../../hooks/useQueue'
 import { useDeleteThread } from '../../hooks/useThread'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
-import { invalidateAfterQueueMutation } from '../../query/cacheEffects'
+import { useToast } from '../../contexts/useToast'
+import {
+  invalidateAfterQueueMutation,
+  resetRollBootstrapAfterManualSelection,
+} from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
 import { getApiErrorDetail } from '../../utils/apiError'
-import { useToast } from '../../contexts/useToast'
 
 interface UseQueueThreadActionsParams {
   navigateToRoll: (thread: Thread, response: unknown) => void
@@ -29,10 +32,12 @@ interface QueueThreadActionResult {
   handleDragOver: (threadId: number) => (event: DragEvent<HTMLElement>) => void
   handleDrop: (threadId: number, activeThreads: Thread[]) => (event: DragEvent<HTMLElement>) => void
   handleDragEnd: () => void
-  handleDelete: (threadId: number) => void
-  pendingDeleteThreadId: number | null
+  pendingDeleteThread: Thread | null
+  deleteError: string | null
+  isDeletePending: boolean
+  requestDelete: (thread: Thread) => void
+  confirmDelete: () => Promise<void> | void
   cancelDelete: () => void
-  confirmDelete: () => Promise<void>
   handleMoveToFront: (threadId: number) => Promise<void> | void
   handleMoveToBack: (threadId: number) => Promise<void> | void
   handleReposition: (threadId: number, targetPosition: number, total: number) => Promise<void> | void
@@ -63,7 +68,8 @@ export function useQueueThreadActions(
   const [draggedThreadId, setDraggedThreadId] = useState<number | null>(null)
   const [dragOverThreadId, setDragOverThreadId] = useState<number | null>(null)
   const [reorderError, setReorderError] = useState<string | null>(null)
-  const [pendingDeleteThreadId, setPendingDeleteThreadId] = useState<number | null>(null)
+  const [pendingDeleteThread, setPendingDeleteThread] = useState<Thread | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const handleDragStart = useCallback(
     (threadId: number) => (event: DragEvent<HTMLElement>) => {
@@ -116,32 +122,31 @@ export function useQueueThreadActions(
     setDragOverThreadId(null)
   }, [])
 
-  // Native window.confirm/window.alert are not a reliable confirmation or
-  // feedback surface: they are invisible to DOM/accessibility inspection and
-  // are silently auto-dismissed by browser automation that has not
-  // registered a `dialog` handler, which makes destructive delete look like
-  // a silent no-op (#2204). Requesting delete only opens an in-app,
-  // DOM-rendered confirm dialog; the mutation itself only runs from
-  // `confirmDelete` once the user explicitly confirms.
-  const handleDelete = useCallback((threadId: number) => {
-    setPendingDeleteThreadId(threadId)
+  const requestDelete = useCallback((thread: Thread) => {
+    setDeleteError(null)
+    setPendingDeleteThread(thread)
   }, [])
 
   const cancelDelete = useCallback(() => {
-    setPendingDeleteThreadId(null)
+    setDeleteError(null)
+    setPendingDeleteThread(null)
   }, [])
 
   const confirmDelete = useCallback(async () => {
-    const threadId = pendingDeleteThreadId
-    if (threadId === null) return
-    setPendingDeleteThreadId(null)
+    if (!pendingDeleteThread) return
+    const threadId = pendingDeleteThread.id
+    const threadTitle = pendingDeleteThread.title
+    setDeleteError(null)
     try {
       await deleteMutation.mutate(threadId)
-      showToast('Thread deleted.', 'success')
+      setPendingDeleteThread(null)
+      showToast(`Deleted "${threadTitle}"`, 'success')
     } catch (err: unknown) {
-      showToast(`Failed to delete thread: ${getApiErrorDetail(err)}`, 'error')
+      const detail = getApiErrorDetail(err)
+      setDeleteError(detail)
+      showToast(`Failed to delete thread: ${detail}`, 'error')
     }
-  }, [pendingDeleteThreadId, deleteMutation, showToast])
+  }, [pendingDeleteThread, deleteMutation, showToast])
 
   const handleMoveToFront = useCallback(
     (threadId: number) => {
@@ -193,6 +198,9 @@ export function useQueueThreadActions(
       }
       try {
         const response = await threadsApi.setPending(thread.id)
+        // Roll hydrates the rating view from the bootstrap query, so the
+        // cached snapshot must not outlive the selection we just persisted.
+        await resetRollBootstrapAfterManualSelection(queryClient)
         navigateToRoll(thread, response)
       } catch (error: unknown) {
         console.error('Action failed:', error)
@@ -231,10 +239,12 @@ export function useQueueThreadActions(
     handleDragOver,
     handleDrop,
     handleDragEnd,
-    handleDelete,
-    pendingDeleteThreadId,
-    cancelDelete,
+    pendingDeleteThread,
+    deleteError,
+    isDeletePending: deleteMutation.isPending,
+    requestDelete,
     confirmDelete,
+    cancelDelete,
     handleMoveToFront,
     handleMoveToBack,
     handleReposition,

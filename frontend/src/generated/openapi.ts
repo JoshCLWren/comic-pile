@@ -2831,6 +2831,8 @@ export interface components {
             connection_type: string;
             /** Dependency Id */
             dependency_id: number;
+            /** Issue Number */
+            issue_number?: string | null;
             /** Thread Id */
             thread_id: number;
             /** Title */

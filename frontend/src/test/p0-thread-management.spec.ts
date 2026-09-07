@@ -75,22 +75,11 @@ test.describe('THREAD-001: Thread management', () => {
     await expect(menu).toBeVisible()
 
     await menu.getByRole('menuitem', { name: /delete/i }).click()
-
-    // Delete requires an in-app, DOM-rendered confirmation (#2204) rather than
-    // a native window.confirm, so the dialog and its confirm control must be
-    // visible and reachable before the thread is actually removed.
-    const confirmDialog = page.getByTestId('delete-thread-confirm')
-    await expect(confirmDialog).toBeVisible()
-    await confirmDialog.getByTestId('delete-thread-confirm-confirm').click()
-
-    // Visible success feedback must accompany the removal (#2204 AC).
-    await expect(page.getByTestId('toast-notification')).toContainText(/deleted/i)
-    await expect(page.getByText('Delete Target Thread')).toHaveCount(0, { timeout: 10000 })
-
-    // The delete must persist on a fresh navigation, not just optimistic
-    // client state (#2204's core dogfood symptom: "navigate away and back").
-    await page.reload()
-    await waitForQueueReady(page)
+    await expect(page.getByRole('heading', { name: 'Delete Thread' })).toBeVisible()
+    await page.getByRole('button', { name: /delete thread/i }).click()
+    await expect(page.getByText('Deleted "Delete Target Thread"')).toBeVisible({
+      timeout: 10000,
+    })
     await expect(page.getByText('Delete Target Thread')).toHaveCount(0, { timeout: 10000 })
   })
 

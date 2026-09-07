@@ -26,6 +26,7 @@ from app.api import (
     bug_report,
     catalog,
     comicvine_resolution,
+    creators,
     debug,
     dependency,
     health,
@@ -258,6 +259,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         app.include_router(debug.router, prefix="/api/v1", tags=["debug"])
     app.include_router(issue.router, tags=["issues"])
     app.include_router(comicvine_resolution.router, tags=["comicvine-resolution"])
+    app.include_router(creators.router, tags=["creators"])
     app.include_router(taste.router, prefix="/api/v1", tags=["taste"])
     app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
     app.include_router(rate.router, prefix="/api/v1/rate", tags=["rate"])

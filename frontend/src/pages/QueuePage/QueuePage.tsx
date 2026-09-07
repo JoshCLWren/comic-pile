@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import ConfirmDialog from '../../components/ConfirmDialog'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
@@ -17,6 +16,7 @@ import CompletedThreadsSection from './CompletedThreadsSection'
 import { QueueControls } from './QueueControls'
 import { QueueList } from './QueueList'
 import { QueueModals } from './QueueModals'
+import DeleteThreadDialog from './DeleteThreadDialog'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
@@ -153,13 +153,13 @@ export default function QueuePage() {
           onRead={() => void actions.handleThreadRead(thread)}
           onOpenThread={() => navigate(`/thread/${thread.id}`)}
           onSnooze={() => void actions.handleSnoozeToggle(thread, isSnoozed)}
-          onActionDelete={() => actions.handleDelete(thread.id)}
+          onActionDelete={() => actions.requestDelete(thread)}
           onMoveToFront={() => actions.handleMoveToFront(thread.id)}
           onMoveToBack={() => actions.handleMoveToBack(thread.id)}
           onReposition={() => modals.openRepositionModal(thread)}
           onEdit={() => modals.showEditModal(thread)}
           onDependencies={() => modals.openDependenciesModal(thread)}
-          onDelete={() => actions.handleDelete(thread.id)}
+          onDelete={() => actions.requestDelete(thread)}
         />
       )
     },
@@ -294,14 +294,12 @@ export default function QueuePage() {
           isPendingReactivate={reactivateMutation.isPending}
         />
 
-        <ConfirmDialog
-          isOpen={actions.pendingDeleteThreadId !== null}
-          title="Delete Thread"
-          message="Are you sure you want to delete this thread? This cannot be undone."
-          confirmLabel="Delete"
+        <DeleteThreadDialog
+          thread={actions.pendingDeleteThread}
+          isPending={actions.isDeletePending}
+          error={actions.deleteError}
           onConfirm={() => void actions.confirmDelete()}
           onCancel={actions.cancelDelete}
-          data-testid="delete-thread-confirm"
         />
       </div>
     </PositionMenuProvider>

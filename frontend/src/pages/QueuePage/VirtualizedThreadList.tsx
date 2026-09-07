@@ -171,7 +171,7 @@ export default function VirtualizedThreadList<T>({
           id="queue-container"
           role="list"
           aria-label="Thread queue"
-          className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
+          className="@container rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
           style={{
             height: '100%',
             overflowY: 'auto',
@@ -200,7 +200,7 @@ export default function VirtualizedThreadList<T>({
         id="queue-container"
         role="list"
         aria-label="Thread queue"
-        className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
+        className="@container rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
         onDragOver={handleContainerDragOver}
         onDrop={(event) => event.preventDefault()}
         style={{

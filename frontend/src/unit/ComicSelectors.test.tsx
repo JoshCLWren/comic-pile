@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -221,5 +221,74 @@ describe('continuity comic selectors', () => {
     expect(options[0]).toHaveTextContent('61 remaining')
     expect(options[1]).toHaveTextContent('3 remaining')
     expect(options[0]).toHaveTextContent('80 total')
+  })
+
+  it('keeps the full selected series title readable instead of a clipped single-line value', () => {
+    const longTitle =
+      'B.P.R.D.: PLAGUE OF FROGS (COMPLETE OMNIBUS COLLECTION, NEW PRINTING 2025)'
+    const longThread = {
+      id: 3,
+      title: longTitle,
+      format: 'omnibus',
+      issues_remaining: 2,
+      total_issues: 2,
+      queue_position: 1,
+      status: 'active',
+      is_blocked: false,
+      blocking_reasons: [],
+      created_at: '2026-01-01T00:00:00Z',
+    } as Thread
+    const onChange = vi.fn()
+    const { rerender } = render(
+      <ContinuityThreadSelector threads={[longThread]} value={longThread} onChange={onChange} />,
+    )
+
+    const search = screen.getByRole('searchbox')
+    expect(search).toHaveValue(longTitle)
+
+    // The full string (including the distinguishing suffix) is rendered as
+    // wrapping text, never an ellipsis-only value in the search input.
+    const selectedValue = screen.getByTestId('selected-thread-value')
+    expect(selectedValue).toHaveTextContent(longTitle)
+    expect(selectedValue).toHaveTextContent('omnibus')
+
+    const titleLine = within(selectedValue).getByTestId('selected-thread-title')
+    expect(titleLine).toHaveTextContent(longTitle)
+    expect(titleLine.textContent).toContain(longTitle.slice(-12))
+    expect(titleLine.className).not.toContain('truncate')
+    expect(titleLine.className).not.toContain('nowrap')
+
+    // Editing the search still clears the selection as before.
+    fireEvent.change(search, { target: { value: 'B.P.R.D.' } })
+    expect(onChange).toHaveBeenLastCalledWith(null)
+
+    // Clearing the selection removes the full-title readout.
+    rerender(<ContinuityThreadSelector threads={[longThread]} value={null} onChange={onChange} />)
+    expect(screen.queryByTestId('selected-thread-value')).not.toBeInTheDocument()
+  })
+
+  it('shows the selected title while the suggestion list stays open after selection', () => {
+    const longThread = {
+      id: 4,
+      title: 'Starman (Vol. 2) (1994 - 2001)',
+      format: 'ongoing',
+      issues_remaining: 3,
+      total_issues: 12,
+      queue_position: 2,
+      status: 'active',
+      is_blocked: false,
+      blocking_reasons: [],
+      created_at: '2026-01-01T00:00:00Z',
+    } as Thread
+    const onChange = vi.fn()
+    render(
+      <ContinuityThreadSelector threads={[longThread]} value={longThread} onChange={onChange} />,
+    )
+
+    expect(screen.getByTestId('selected-thread-title')).toHaveTextContent(
+      'Starman (Vol. 2) (1994 - 2001)',
+    )
+    expect(screen.getByRole('option', { name: /Starman \(Vol\. 2\) \(1994 - 2001\)/i }))
+      .toBeInTheDocument()
   })
 })
