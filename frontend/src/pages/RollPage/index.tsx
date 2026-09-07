@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
@@ -17,7 +17,8 @@ import { useTasteDiscoveries } from '../../hooks/useTasteDiscoveries'
 import { useRate } from '../../hooks'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
-import { threadsApi } from '../../services/api'
+import { threadsApi, sessionApi } from '../../services/api'
+import type { SessionModeUpdateRequest } from '../../types'
 import { useReaderContext } from '../../hooks/useReaderContext'
 import type { ThreadMetadata } from './types'
 import { useRollPageState } from './useRollPageState'
@@ -35,6 +36,7 @@ import { RollHeader } from './components/RollHeader'
 import { RollModals } from './components/RollModals'
 import { TasteDiscoveryCard } from './components/TasteDiscoveryCard'
 import ReadingModeLauncher from '../../components/ReadingModeLauncher'
+import ModeSelectorSheet from '../../components/ModeSelectorSheet'
 
 /**
  * Route entry for the Roll page. The component composes the focused retained
@@ -60,6 +62,16 @@ export default function RollPage() {
     isError: isBootstrapError,
     error: bootstrapError,
   } = useRollBootstrap()
+
+  const [isModeSelectorOpen, setIsModeSelectorOpen] = useState(false)
+
+  const handleModeSelectorSubmit = useCallback(
+    async (patch: SessionModeUpdateRequest) => {
+      await sessionApi.updateMode(patch)
+      await refetchBootstrap()
+    },
+    [refetchBootstrap],
+  )
 
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
@@ -274,6 +286,7 @@ export default function RollPage() {
         onClearManualDie={actions.handleClearManualDie}
         onOpenOverride={modals.openOverrideModal}
         onOpenDieModal={() => state.setIsDieModalOpen(true)}
+        onOpenModeSelector={() => setIsModeSelectorOpen(true)}
       />
 
       <ReadingModeLauncher />
@@ -410,6 +423,16 @@ export default function RollPage() {
           isSetCurrentIssueOpen={state.isSetCurrentIssueOpen}
           onCloseSetCurrentIssue={() => state.setIsSetCurrentIssueOpen(false)}
           onSetCurrentIssue={handleSetCurrentIssue}
+        />
+
+        <ModeSelectorSheet
+          isOpen={isModeSelectorOpen}
+          currentMode={bootstrap.session_mode ? {
+            bandwidth: bootstrap.session_mode.active_bandwidth,
+            intent: bootstrap.session_mode.active_intent,
+          } : null}
+          onClose={() => setIsModeSelectorOpen(false)}
+          onSubmit={handleModeSelectorSubmit}
         />
       </div>
     </div>

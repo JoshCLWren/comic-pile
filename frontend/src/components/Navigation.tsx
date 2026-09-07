@@ -32,6 +32,7 @@ type NavIconName =
   | 'planner'
   | 'new'
   | 'glossary'
+  | 'identity-inbox'
   | 'more'
 
 interface NavItem {
@@ -52,6 +53,7 @@ const SECONDARY_NAV_ITEMS: NavItem[] = [
   { path: '/continuity-plans', label: 'Planner', icon: 'planner', ariaLabel: 'Continuity Planner page' },
   { path: '/whats-new', label: 'New', icon: 'new', ariaLabel: "What's New page" },
   { path: '/glossary', label: 'Glossary', icon: 'glossary', ariaLabel: 'Glossary page' },
+  { path: '/identity-inbox', label: 'Identity', icon: 'identity-inbox', ariaLabel: 'Identity Inbox page' },
 ]
 
 const APPEARANCE_OPTIONS: Array<{ id: ThemeId; label: string; ariaLabel: string; mobileClassName: string }> = [
@@ -115,6 +117,15 @@ function NavIcon({ name }: { name: NavIconName }) {
         <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H11a3 3 0 0 1 3 3v17a3 3 0 0 0-3-3H6.5A2.5 2.5 0 0 0 4 21.5v-17Z"></path>
         <path d="M20 4.5A2.5 2.5 0 0 0 17.5 2H14"></path>
         <path d="M20 4.5v17A2.5 2.5 0 0 0 17.5 19H14"></path>
+      </>
+    ),
+    'identity-inbox': (
+      <>
+        <path d="M4 9h16"></path>
+        <path d="M4 15h16"></path>
+        <path d="M2 5h20a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"></path>
+        <circle cx="17" cy="6" r="2" fill="currentColor" stroke="none"></circle>
+        <path d="M16 9l-1.5 1.5L16 12"></path>
       </>
     ),
     more: (
@@ -462,7 +473,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-panel)]"
             >
               <NavIcon name={item.icon} />
-              <span>{item.label === 'New' ? "What's New" : item.label === 'Planner' ? 'Continuity Planner' : item.label}</span>
+              <span>{item.label === 'New' ? "What's New" : item.label === 'Planner' ? 'Continuity Planner' : item.label === 'Identity' ? 'Identity Inbox' : item.label}</span>
             </Link>
           ))}
           <div className="space-y-1 border-t border-[var(--theme-border)] pt-2 md:hidden">

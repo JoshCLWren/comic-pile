@@ -61,7 +61,7 @@ class CompletionAwareOrderingTests(unittest.TestCase):
             Candidate("pr", 4, 3, 0, "", stage="factory:review", conflicted=True),
         ]
         self.assertEqual(
-            [item.number for item in order_candidates_for_worker(candidates, "10")],
+            [item.number for item in order_candidates_for_worker(candidates, "6")],
             [1, 4, 3, 2],
         )
 
@@ -121,7 +121,7 @@ class CompletionAwareOrderingTests(unittest.TestCase):
                 producer_worker="43",
             ),
         ]
-        self.assertEqual(order_candidates_for_worker(candidates, "10")[0].number, 2)
+        self.assertEqual(order_candidates_for_worker(candidates, "6")[0].number, 2)
 
     def test_review_first_worker_orders_review_then_ci_then_changes(self) -> None:
         candidates = [
@@ -130,7 +130,7 @@ class CompletionAwareOrderingTests(unittest.TestCase):
             Candidate("pr", 3, 3, 0, "", stage="factory:ci"),
         ]
         self.assertEqual(
-            [item.number for item in order_candidates_for_worker(candidates, "10")],
+            [item.number for item in order_candidates_for_worker(candidates, "6")],
             [1, 3, 2],
         )
 
@@ -290,6 +290,58 @@ class WipCapTests(unittest.TestCase):
             [factory_pr(1, branch="chatgpt/human-authored-fix")],
         )
         self.assertFalse(candidates)
+
+    def test_labeled_cursor_delivery_pr_is_factory_candidate(self) -> None:
+        target = factory_pr(
+            1,
+            branch="cursor/issue-2184-queue-nested-scroll",
+            owner="factory:unowned",
+            stage="factory:review",
+        )
+        target["title"] = "Fix #2184: Queue nested scroll"
+        candidates = build_candidates([], [target])
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0].linked_issue, 2184)
+        self.assertTrue(candidates[0].kind == "pr")
+
+
+class ReviewBacklogPressureTests(unittest.TestCase):
+    def test_owned_review_prs_count_toward_backlog_saturation(self) -> None:
+        from factory_work_policy import (
+            FACTORY_REVIEW_BACKLOG_LIMIT,
+            factory_review_backlog_count,
+        )
+
+        owned = [
+            factory_pr(
+                300 + offset,
+                stage="factory:review",
+                worker=20 + offset,
+                owner=f"factory:{20 + offset}",
+            )
+            for offset in range(FACTORY_REVIEW_BACKLOG_LIMIT)
+        ]
+        self.assertEqual(factory_review_backlog_count(owned), FACTORY_REVIEW_BACKLOG_LIMIT)
+        candidates = build_candidates([issue(1)], owned)
+        self.assertFalse(any(item.kind == "issue" and item.number == 1 for item in candidates))
+
+    def test_main_breakage_still_bypasses_saturated_review_backlog(self) -> None:
+        from factory_work_policy import FACTORY_REVIEW_BACKLOG_LIMIT
+
+        owned = [
+            factory_pr(
+                400 + offset,
+                stage="factory:review",
+                worker=30 + offset,
+                owner=f"factory:{30 + offset}",
+            )
+            for offset in range(FACTORY_REVIEW_BACKLOG_LIMIT)
+        ]
+        candidates = build_candidates(
+            [issue(1, "main-breakage", "bug", "user-reported")],
+            owned,
+        )
+        self.assertTrue(any(item.kind == "issue" and item.number == 1 for item in candidates))
 
 
 if __name__ == "__main__":

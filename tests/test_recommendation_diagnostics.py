@@ -234,6 +234,157 @@ async def test_diagnostics_full_representative_session(
 
 
 @pytest.mark.asyncio
+async def test_diagnostics_groups_preserve_class_when_context_records_control_mode(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Recorded control_mode must not collapse the control/intent class labels.
+
+    Phase 9 (issue #1767) snapshots ``algorithm_version`` and ``control_mode``
+    into every roll/override event payload. Those recorded keys enrich the
+    per-decision version grouping but must NOT replace the derived control/intent
+    class (``contextual_auto``, ``explicit_correction``) used as the group label;
+    otherwise all live draws collapse into a single ``contextual`` group.
+    """
+    now = datetime.now(UTC)
+    await _seed_session(
+        async_db,
+        user_id=1,
+        started_at=now - timedelta(hours=2),
+        events=[
+            {
+                "type": "roll",
+                "die": 6,
+                "result": 2,
+                "selected_thread_id": 10,
+                "selection_method": "random",
+                "thread_id": 10,
+                "recommendation_context": {
+                    "algorithm_version": "v1-contextual",
+                    "control_mode": "contextual",
+                },
+            },
+            {
+                "type": "rate",
+                "rating": 4.0,
+                "thread_id": 10,
+                "selection_method": "random",
+            },
+        ],
+    )
+    await _seed_session(
+        async_db,
+        user_id=1,
+        started_at=now - timedelta(hours=1),
+        events=[
+            {
+                "type": "roll",
+                "die": 8,
+                "result": 5,
+                "selected_thread_id": 12,
+                "selection_method": "override",
+                "thread_id": 12,
+                "recommendation_context": {
+                    "algorithm_version": "v1-contextual",
+                    "control_mode": "contextual",
+                },
+            },
+            {
+                "type": "rate",
+                "rating": 5.0,
+                "thread_id": 12,
+                "selection_method": "override",
+            },
+        ],
+    )
+
+    response = await auth_client.get("/api/v1/recommendations/diagnostics")
+
+    assert response.status_code == 200
+    body = response.json()
+    control_modes = {
+        group["control_mode"]: group for group in body["groups_by_control_mode"]
+    }
+    assert "contextual_auto" in control_modes
+    assert "explicit_correction" in control_modes
+    assert control_modes["contextual_auto"]["algorithm_version"] == "v1-contextual"
+    assert control_modes["explicit_correction"]["algorithm_version"] == "v1-contextual"
+    assert control_modes["contextual_auto"]["rolls"] == 1
+    assert control_modes["explicit_correction"]["rolls"] == 1
+    assert "contextual" not in control_modes
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_forced_legacy_group_distinct_from_pre_instrumentation(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Forced-legacy draws keep a distinguishable group from old legacy rows.
+
+    A Phase-9 forced-legacy roll records selection_method ``legacy`` plus a
+    per-decision ``algorithm_version=legacy``, so it must group as
+    ``(legacy, legacy)`` rather than merging into the ``legacy-unknown`` group
+    used for pre-instrumentation rows that carry no version at all.
+    """
+    now = datetime.now(UTC)
+    await _seed_session(
+        async_db,
+        user_id=1,
+        started_at=now - timedelta(hours=2),
+        events=[
+            {
+                "type": "roll",
+                "die": 6,
+                "result": 3,
+                "selected_thread_id": 10,
+                "selection_method": None,
+                "thread_id": 10,
+            },
+            {
+                "type": "rate",
+                "rating": 4.0,
+                "thread_id": 10,
+                "selection_method": None,
+            },
+        ],
+    )
+    await _seed_session(
+        async_db,
+        user_id=1,
+        started_at=now - timedelta(hours=1),
+        events=[
+            {
+                "type": "roll",
+                "die": 8,
+                "result": 2,
+                "selected_thread_id": 12,
+                "selection_method": "legacy",
+                "thread_id": 12,
+                "recommendation_context": {
+                    "algorithm_version": "legacy",
+                    "control_mode": "legacy",
+                },
+            },
+            {
+                "type": "rate",
+                "rating": 5.0,
+                "thread_id": 12,
+                "selection_method": "legacy",
+            },
+        ],
+    )
+
+    response = await auth_client.get("/api/v1/recommendations/diagnostics")
+
+    assert response.status_code == 200
+    body = response.json()
+    version_by_mode = {
+        (group["control_mode"], group["algorithm_version"]): group["rolls"]
+        for group in body["groups_by_control_mode"]
+    }
+    assert version_by_mode[("legacy", "legacy-unknown")] == 1
+    assert version_by_mode[("legacy", "legacy")] == 1
+
+
+@pytest.mark.asyncio
 async def test_diagnostics_user_scoped(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:

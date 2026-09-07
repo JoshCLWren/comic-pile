@@ -20,7 +20,7 @@ describe('HelpPage', () => {
   it('renders the complete glossary', () => {
     renderRoute(<HelpPage />)
     expect(screen.getByRole('heading', { name: 'Glossary' })).toBeInTheDocument()
-    expect(screen.getAllByTestId('glossary-term')).toHaveLength(15)
+    expect(screen.getAllByTestId('glossary-term')).toHaveLength(16)
     expect(
       screen.getByText(/read X before Y/),
     ).toBeInTheDocument()
@@ -61,6 +61,7 @@ describe('HelpPage', () => {
       'reading-order',
       'projection',
       'dependency-builder',
+      'ordering-mode',
     ]) {
       expect(document.getElementById(id)).not.toBeNull()
     }

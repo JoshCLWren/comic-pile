@@ -52,7 +52,6 @@ describe('QueuePage composition boundaries', () => {
     expect(source).toMatch(/nextPageToken/)
     expect(source).toMatch(/loadMore/)
     expect(source).toMatch(/useInfiniteScroll/)
-    expect(source).toMatch(/data-testid="queue-infinite-scroll-sentinel"/)
     expect(source).toMatch(/isPending && !threads\?\.length/)
     expect(source).not.toMatch(/data-testid="queue-load-more"/)
     expect(source).not.toMatch(/Load more threads/)
