@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import VirtualizedThreadList from '../pages/QueuePage/VirtualizedThreadList'
+import { QueueList } from '../pages/QueuePage/QueueList'
 
 interface MockThread {
   id: number
@@ -85,4 +86,90 @@ it('keeps paginated queue items as full-width rows on a wide viewport', async ()
     'border',
     'bg-[var(--theme-bg-panel)]',
   )
+})
+
+/**
+ * Acceptance criterion #6 for issue #2184: begin with ≤50 items, append enough
+ * to cross the threshold, and verify the same user-facing scroll surface
+ * (the window) owns Queue before and after — no nested vertical scroll channel
+ * or fixed-height box is introduced.
+ */
+it('keeps a single scroll surface when the queue crosses the virtualization threshold', async () => {
+  const initialThreads: MockThread[] = Array.from({ length: 50 }, (_, i) => ({
+    id: i + 1,
+    title: `Thread ${i + 1}`,
+  }))
+  const grownThreads: MockThread[] = Array.from({ length: 60 }, (_, i) => ({
+    id: i + 1,
+    title: `Thread ${i + 1}`,
+  }))
+
+  const sentinelRef = { current: null }
+  const scrollRootRef = { current: null }
+  const renderItem = (thread: MockThread, index: number) => (
+    <div data-testid="queue-thread-item" key={thread.id}>
+      {thread.title} #{index + 1}
+    </div>
+  )
+
+  const { container, rerender } = render(
+    <QueueList
+      activeThreads={initialThreads}
+      filteredThreads={initialThreads}
+      reorderError={null}
+      renderItem={renderItem}
+      isSearching={false}
+      sentinelRef={sentinelRef as React.RefObject<HTMLDivElement | null>}
+      scrollRootRef={scrollRootRef as React.RefObject<HTMLDivElement | null>}
+      hasNextPage
+    />,
+  )
+
+  act(() => {
+    resizeCallback?.([{ contentRect: { height: 600, width: 1400 } }])
+  })
+
+  await waitFor(() => {
+    expect(screen.getAllByTestId('queue-thread-item')).toHaveLength(50)
+  })
+  expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
+
+  const scrollChannelOf = (el: Element) => {
+    const style = getComputedStyle(el)
+    return {
+      overflowY: style.overflowY as string,
+      inlineHeight: (el as HTMLElement).style.height,
+    }
+  }
+
+  const plainSurface = scrollChannelOf(container.querySelector('#queue-container')!)
+  expect(['auto', 'scroll']).not.toContain(plainSurface.overflowY)
+  expect(plainSurface.inlineHeight).toBe('')
+
+  // Cross the threshold: VirtualizedThreadList replaces the plain list.
+  rerender(
+    <QueueList
+      activeThreads={grownThreads}
+      filteredThreads={grownThreads}
+      reorderError={null}
+      renderItem={renderItem}
+      isSearching={false}
+      sentinelRef={sentinelRef as React.RefObject<HTMLDivElement | null>}
+      scrollRootRef={scrollRootRef as React.RefObject<HTMLDivElement | null>}
+      hasNextPage
+    />,
+  )
+
+  await waitFor(() => {
+    expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
+  })
+
+  const virtualizedSurface = scrollChannelOf(container.querySelector('#queue-container')!)
+  expect(['auto', 'scroll']).not.toContain(virtualizedSurface.overflowY)
+  expect(virtualizedSurface.inlineHeight).toBe('')
+
+  // Presentation stays single-column (no multi-column grid is introduced).
+  expect(container.querySelector('[style*="grid-template-columns"]')).not.toBeInTheDocument()
+  // Infinite-scroll sentinel survives the threshold crossing.
+  expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
 })
