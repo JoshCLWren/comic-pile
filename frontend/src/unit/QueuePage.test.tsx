@@ -20,6 +20,7 @@ import {
 import { useSession } from '../hooks/useSession'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { useToast } from '../contexts/useToast'
 import { threadsApi, dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { Thread } from '../types'
@@ -406,7 +407,7 @@ describe('Keyboard Accessibility', () => {
     })
     render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
     expect(screen.getByText('Done')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'A-Z' }))
+    await user.click(screen.getByRole('button', { name: 'Title' }))
     const cards = screen.getAllByTestId('queue-thread-item')
     expect(cards[0]).toHaveTextContent('Alpha')
     await user.type(screen.getByPlaceholderText('Search...'), 'missing')
@@ -492,7 +493,8 @@ describe('Keyboard Accessibility', () => {
   mockedUseDeleteThread.mockReturnValue(deleteMutation)
   mockedUseQueueThreads.mockReturnValue({ data: [{ id: 1, title: 'Blocked', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, is_blocked: true, total_issues: null, blocking_reasons: ['Blocked by: Prequel'] }], isPending: false, refetch: vi.fn() })
   mockedUseQueueBlockingInfo.mockReturnValue({ 1: [{ label: 'Blocked by: Prequel' }] })
-  vi.stubGlobal('confirm', vi.fn(() => true))
+  const showToast = vi.fn()
+  vi.mocked(useToast).mockReturnValue({ showToast, removeToast: vi.fn(), toasts: [] })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   const readButton = screen.getByLabelText('Read')
   expect(readButton).toBeDisabled()
@@ -500,7 +502,28 @@ describe('Keyboard Accessibility', () => {
   expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()
   expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
   await user.click(screen.getByLabelText('Delete'))
-  await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('delete failed')))
+  expect(screen.getByRole('heading', { name: /delete thread/i })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /delete thread/i }))
+  await waitFor(() => expect(deleteMutation.mutate).toHaveBeenCalledWith(1))
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('delete failed'))
+  expect(showToast).toHaveBeenCalledWith(expect.stringContaining('delete failed'), 'error')
+})
+
+it('keeps the thread when delete confirmation is cancelled', async () => {
+  const user = userEvent.setup()
+  const remove = vi.fn().mockResolvedValue(undefined)
+  mockedUseDeleteThread.mockReturnValue({ mutate: remove, isPending: false })
+  mockedUseQueueThreads.mockReturnValue({
+    data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 4 }],
+    isPending: false,
+    refetch: vi.fn(),
+  })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  await user.click(screen.getByLabelText('Delete'))
+  expect(screen.getByRole('heading', { name: /delete thread/i })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /cancel/i }))
+  expect(screen.queryByRole('heading', { name: /delete thread/i })).not.toBeInTheDocument()
+  expect(remove).not.toHaveBeenCalled()
 })
 
   it('supports created-date sorting and drag reorder failure feedback', async () => {
@@ -512,7 +535,7 @@ describe('Keyboard Accessibility', () => {
     { id: 2, title: 'New', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, created_at: '2025-01-01' },
   ], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getByRole('button', { name: 'New' }))
+  await user.click(screen.getByRole('button', { name: 'Recently added' }))
   const cards = screen.getAllByTestId('queue-thread-item')
   expect(cards[0]).toHaveTextContent('New')
   const dragButtons = screen.getAllByRole('button', { name: 'Drag to reorder' })
@@ -537,7 +560,6 @@ describe('Keyboard Accessibility', () => {
     isPending: false,
     refetch,
   })
-  vi.stubGlobal('confirm', vi.fn(() => true))
 
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   const openMenu = async () => user.click(screen.getByRole('button', { name: /thread actions/i }))
@@ -548,10 +570,12 @@ describe('Keyboard Accessibility', () => {
   await user.click(screen.getByRole('menuitem', { name: /move to back/i }))
   await openMenu()
   await user.click(screen.getByRole('menuitem', { name: /delete/i }))
+  expect(screen.getByRole('heading', { name: /delete thread/i })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /delete thread/i }))
 
   expect(front).toHaveBeenCalledWith(1)
   expect(back).toHaveBeenCalledWith(1)
-  expect(remove).toHaveBeenCalledWith(1)
+  await waitFor(() => expect(remove).toHaveBeenCalledWith(1))
 
   await openMenu()
   await user.click(screen.getByRole('menuitem', { name: /reposition/i }))

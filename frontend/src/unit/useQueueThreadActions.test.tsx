@@ -2,22 +2,26 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useDeleteThread } from '../hooks/useThread'
 import {
-  useDeleteThread,
   useMoveToBack,
   useMoveToFront,
   useMoveToPosition,
   useShuffleQueue,
 } from '../hooks/useQueue'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { useToast } from '../contexts/useToast'
 import { threadsApi } from '../services/api'
 import { queryClient as sharedQueryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
 import type { Thread } from '../types'
 
-vi.mock('../hooks/useQueue', () => ({
+vi.mock('../hooks/useThread', () => ({
   useDeleteThread: vi.fn(),
+}))
+
+vi.mock('../hooks/useQueue', () => ({
   useMoveToBack: vi.fn(),
   useMoveToFront: vi.fn(),
   useMoveToPosition: vi.fn(),
@@ -27,6 +31,10 @@ vi.mock('../hooks/useQueue', () => ({
 vi.mock('../hooks/useSnooze', () => ({
   useSnooze: vi.fn(),
   useUnsnooze: vi.fn(),
+}))
+
+vi.mock('../contexts/useToast', () => ({
+  useToast: vi.fn(),
 }))
 
 vi.mock('../services/api', () => ({
@@ -42,7 +50,9 @@ const mockedMoveToPosition = vi.mocked(useMoveToPosition)
 const mockedShuffle = vi.mocked(useShuffleQueue)
 const mockedSnooze = vi.mocked(useSnooze)
 const mockedUnsnooze = vi.mocked(useUnsnooze)
+const mockedToast = vi.mocked(useToast)
 const mockedSetPending = vi.mocked(threadsApi.setPending)
+const toastSpy = vi.fn()
 
 function mutationStubs() {
   return {
@@ -83,6 +93,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   sharedQueryClient.clear()
   vi.stubGlobal('alert', vi.fn())
+  mockedToast.mockReturnValue({ showToast: toastSpy, removeToast: vi.fn(), toasts: [] })
   mockedDelete.mockReturnValue(mutationStubs())
   mockedMoveToFront.mockReturnValue(mutationStubs())
   mockedMoveToBack.mockReturnValue(mutationStubs())
@@ -297,5 +308,75 @@ describe('useQueueThreadActions', () => {
     await result.current.handleReposition(1, 3, 2)
     expect(movePosition.mutate).not.toHaveBeenCalled()
     expect(window.alert).toHaveBeenCalled()
+  })
+
+  it('opens and cancels the delete confirmation without mutating', async () => {
+    const remove = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
+    mockedDelete.mockReturnValue(remove)
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions({
+          navigateToRoll: vi.fn(),
+          refetchSession: vi.fn(),
+        }),
+      { wrapper },
+    )
+
+    act(() => result.current.requestDelete(makeThread({ id: 3, title: 'Doomed' })))
+    expect(result.current.pendingDeleteThread?.title).toBe('Doomed')
+    expect(remove.mutate).not.toHaveBeenCalled()
+
+    act(() => result.current.cancelDelete())
+    expect(result.current.pendingDeleteThread).toBeNull()
+    expect(remove.mutate).not.toHaveBeenCalled()
+  })
+
+  it('confirms delete, closes the dialog, and shows a success toast', async () => {
+    const remove = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
+    mockedDelete.mockReturnValue(remove)
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions({
+          navigateToRoll: vi.fn(),
+          refetchSession: vi.fn(),
+        }),
+      { wrapper },
+    )
+
+    act(() => result.current.requestDelete(makeThread({ id: 4, title: 'Doomed' })))
+    await act(() => result.current.confirmDelete())
+
+    expect(remove.mutate).toHaveBeenCalledWith(4)
+    expect(result.current.pendingDeleteThread).toBeNull()
+    expect(result.current.deleteError).toBeNull()
+    expect(toastSpy).toHaveBeenCalledWith('Deleted "Doomed"', 'success')
+  })
+
+  it('shows an actionable error toast and keeps the dialog open on delete failure', async () => {
+    const remove = {
+      mutate: vi.fn().mockRejectedValue(new Error('Cannot delete thread: has dependencies')),
+      isPending: false,
+      isError: false,
+    }
+    mockedDelete.mockReturnValue(remove)
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions({
+          navigateToRoll: vi.fn(),
+          refetchSession: vi.fn(),
+        }),
+      { wrapper },
+    )
+
+    act(() => result.current.requestDelete(makeThread({ id: 5, title: 'Doomed' })))
+    await act(() => result.current.confirmDelete())
+
+    expect(remove.mutate).toHaveBeenCalledWith(5)
+    expect(result.current.pendingDeleteThread?.id).toBe(5)
+    expect(result.current.deleteError).toBe('Cannot delete thread: has dependencies')
+    expect(toastSpy).toHaveBeenCalledWith(
+      'Failed to delete thread: Cannot delete thread: has dependencies',
+      'error',
+    )
   })
 })

@@ -68,7 +68,7 @@ test.describe('Bounded incremental Queue loading (#932)', () => {
     await page.goto('/queue', { waitUntil: 'domcontentloaded' });
     await waitForQueueReady(page);
 
-    await page.getByRole('button', { name: 'A-Z' }).click();
+    await page.getByRole('button', { name: 'Title' }).click();
 
     // The sort change is a distinct query key, so the loader resets to the
     // first compatible page and keeps the queue intact.

@@ -130,11 +130,14 @@ function normalizePositions(nodeList: PlannerNode[]): PlannerNode[] {
   return out
 }
 
-function buildPayload(name: string, lanes: PlannerLane[], nodeList: PlannerNode[]) {
+function buildPayload(
+  name: string,
+  lanes: PlannerLane[],
+  nodeList: PlannerNode[],
+  orderingMode: ContinuityPlanOrderingMode,
+) {
   const normalized = normalizePositions(nodeList)
   const orderedLanes = [...lanes].sort((a, b) => a.order - b.order)
-  const orderingMode: ContinuityPlanOrderingMode =
-    orderedLanes.length === 1 ? 'strict_sequential' : 'informational'
   return {
     name: name.trim(),
     ordering_mode: orderingMode,
@@ -164,12 +167,14 @@ export default function ContinuityPlannerPage() {
   const isInvalidRoute = id !== undefined && parsedId !== null && (!Number.isInteger(parsedId) || parsedId <= 0)
 
   const [name, setName] = useState(DEFAULT_PLAN_NAME)
+  const [orderingMode, setOrderingMode] = useState<ContinuityPlanOrderingMode>('informational')
   const [lanes, setLanes] = useState<PlannerLane[]>([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
   const [nodes, setNodes] = useState<PlannerNode[]>([])
   const [activeLaneId, setActiveLaneId] = useState(DEFAULT_LANE_ID)
   const [savedName, setSavedName] = useState('')
   const [savedLanes, setSavedLanes] = useState<PlannerLane[]>([])
   const [savedNodes, setSavedNodes] = useState<PlannerNode[]>([])
+  const [savedOrderingMode, setSavedOrderingMode] = useState<ContinuityPlanOrderingMode>('informational')
   const [threads, setThreads] = useState<Thread[]>([])
   const [groups, setGroups] = useState<DependencyGroup[]>([])
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
@@ -190,6 +195,7 @@ export default function ContinuityPlannerPage() {
 
   const isDirty =
     name !== savedName ||
+    orderingMode !== savedOrderingMode ||
     JSON.stringify(lanes) !== JSON.stringify(savedLanes) ||
     JSON.stringify(nodes) !== JSON.stringify(savedNodes)
 
@@ -233,6 +239,8 @@ export default function ContinuityPlannerPage() {
           setSavedName(DEFAULT_PLAN_NAME)
           setSavedLanes([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
           setSavedNodes([])
+          setOrderingMode('informational')
+          setSavedOrderingMode('informational')
           setActiveLaneId(DEFAULT_LANE_ID)
           return
         }
@@ -266,9 +274,11 @@ export default function ContinuityPlannerPage() {
         setName(plan.name)
         setLanes(loadedLanes)
         setNodes(normalizePositions(hydrated))
+        setOrderingMode(plan.ordering_mode)
         setSavedName(plan.name)
         setSavedLanes(loadedLanes)
         setSavedNodes(normalizePositions(hydrated))
+        setSavedOrderingMode(plan.ordering_mode)
         setActiveLaneId(loadedLanes[0]?.id ?? DEFAULT_LANE_ID)
         window.localStorage.setItem(LAST_PLAN_KEY, String(plan.id))
       })
@@ -398,6 +408,9 @@ export default function ContinuityPlannerPage() {
   }
 
   const addLane = () => {
+    if (lanes.length >= 1 && orderingMode === 'strict_sequential') {
+      setOrderingMode('informational')
+    }
     const id = `lane-${laneSeq + 1}`
     setLaneSeq((currentSeq) => currentSeq + 1)
     setLanes((current) => [
@@ -442,7 +455,7 @@ export default function ContinuityPlannerPage() {
     setIsSaving(true)
     setSaveError(null)
     try {
-      const payload = buildPayload(name, lanes, nodes)
+      const payload = buildPayload(name, lanes, nodes, orderingMode)
       const saved = planId
         ? await continuityPlansApi.update(planId, payload)
         : await continuityPlansApi.create(payload)
@@ -455,9 +468,11 @@ export default function ContinuityPlannerPage() {
       setName(saved.name)
       setLanes(savedLanes)
       setNodes(normalized)
+      setOrderingMode(saved.ordering_mode)
       setSavedName(saved.name)
       setSavedLanes(savedLanes)
       setSavedNodes(normalized)
+      setSavedOrderingMode(saved.ordering_mode)
       window.localStorage.setItem(LAST_PLAN_KEY, String(saved.id))
       if (!planId) navigate(`/continuity-plans/${saved.id}`, { replace: true })
     } catch (error) {
@@ -471,6 +486,7 @@ export default function ContinuityPlannerPage() {
     setName(savedName || DEFAULT_PLAN_NAME)
     setLanes(savedLanes.length > 0 ? savedLanes : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
     setNodes(savedNodes)
+    setOrderingMode(savedOrderingMode || 'informational')
     setActiveLaneId(savedLanes[0]?.id ?? DEFAULT_LANE_ID)
     setSaveError(null)
   }
@@ -515,6 +531,57 @@ export default function ContinuityPlannerPage() {
         Plan name
         <input value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className="mt-1 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-3 text-[var(--theme-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--theme-focus-ring)]" />
       </label>
+
+      <fieldset className="block" aria-describedby="ordering-mode-help">
+        <legend className="text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">Ordering mode</legend>
+        <p id="ordering-mode-help" className="mt-1 text-sm text-[var(--theme-text-muted)]">
+          Plan ordering is separate from issue-level <GlossaryLink id="dependency-builder">Dependency Builder</GlossaryLink> blocking.
+          Informational plans create no blocking rules — they are a reading reference only. Strict sequential plans compile one
+          blocking rule per step, exactly like a Dependency rule. <GlossaryLink id="ordering-mode">What is an ordering mode?</GlossaryLink>
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <label
+            className={`flex cursor-pointer items-start gap-3 rounded-xl border bg-[var(--theme-bg-panel)] p-3 ${
+              orderingMode === 'informational' ? 'border-[var(--theme-continuity-accent)]' : 'border-[var(--theme-border)]'
+            }`}
+          >
+            <input
+              type="radio"
+              name="ordering-mode"
+              value="informational"
+              checked={orderingMode === 'informational'}
+              onChange={() => setOrderingMode('informational')}
+              className="mt-0.5 accent-[var(--theme-continuity-accent)]"
+            />
+            <span className="text-sm">
+              <span className="font-bold text-[var(--theme-text-primary)]">Informational</span>
+              <span className="ml-1.5 text-xs text-[var(--theme-text-dim)]">Suggested order — never blocks reading.</span>
+            </span>
+          </label>
+          <label
+            className={`flex cursor-pointer items-start gap-3 rounded-xl border bg-[var(--theme-bg-panel)] p-3 ${
+              orderingMode === 'strict_sequential' ? 'border-[var(--theme-continuity-accent)]' : 'border-[var(--theme-border)]'
+            } ${lanes.length > 1 ? 'pointer-events-none opacity-50' : ''}`}
+          >
+            <input
+              type="radio"
+              name="ordering-mode"
+              value="strict_sequential"
+              checked={orderingMode === 'strict_sequential'}
+              onChange={() => setOrderingMode('strict_sequential')}
+              disabled={lanes.length > 1}
+              className="mt-0.5 accent-[var(--theme-continuity-accent)]"
+            />
+            <span className="text-sm">
+              <span className="font-bold text-[var(--theme-text-primary)]">Strict sequential</span>
+              <span className="ml-1.5 text-xs text-[var(--theme-text-dim)]">Each step blocks the next.</span>
+            </span>
+          </label>
+        </div>
+        {lanes.length > 1 && (
+          <p className="mt-1 text-xs text-[var(--theme-text-muted)]">Strict sequential requires exactly one lane.</p>
+        )}
+      </fieldset>
 
       <section aria-labelledby="add-steps-heading" className="border-t border-[var(--theme-border)] pt-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">

@@ -13,6 +13,10 @@ interface CorrectionSheetProps {
   isOpen: boolean
   onClose: () => void
   onSubmit: (choice: CorrectionChoiceId, patch: SessionModeUpdateRequest) => Promise<void>
+  /** Opens the two-question reading-mode quiz; closes the sheet first. */
+  onOpenQuiz?: () => void
+  /** Whether the reading-mode quiz is surfaced in this build (issue #1945 gate). */
+  quizEnabled?: boolean
 }
 
 interface CorrectionChoice {
@@ -36,8 +40,19 @@ const CHOICES: CorrectionChoice[] = [
  * contradictory snoozes). Each choice maps to a predictable bandwidth/intent
  * patch submitted through the canonical session-mode API. Dismissing the sheet
  * leaves the current backend mode intact — no API call fires on dismiss.
+ *
+ * Because this surface only appears when a one-tap correction may be
+ * insufficient, it also offers the two-question quiz as a non-forced
+ * alternative (issue #1739): choosing it closes the sheet and opens the quiz,
+ * and dismissing the sheet never blocks later manual access.
  */
-export default function CorrectionSheet({ isOpen, onClose, onSubmit }: CorrectionSheetProps) {
+export default function CorrectionSheet({
+  isOpen,
+  onClose,
+  onSubmit,
+  onOpenQuiz,
+  quizEnabled = false,
+}: CorrectionSheetProps) {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
@@ -56,6 +71,12 @@ export default function CorrectionSheet({ isOpen, onClose, onSubmit }: Correctio
     },
     [onSubmit, onClose],
   )
+
+  const handleOpenQuiz = useCallback(() => {
+    if (!onOpenQuiz) return
+    onClose()
+    onOpenQuiz()
+  }, [onClose, onOpenQuiz])
 
   if (!isOpen) return null
 
@@ -93,6 +114,17 @@ export default function CorrectionSheet({ isOpen, onClose, onSubmit }: Correctio
         >
           Dismiss
         </button>
+        {quizEnabled && (
+          <button
+            type="button"
+            data-testid="correction-sheet-open-quiz"
+            disabled={submitting}
+            onClick={handleOpenQuiz}
+            className="w-full py-2 text-left text-sm font-bold uppercase tracking-wider text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-comic-accent)] disabled:opacity-50"
+          >
+            Not sure? Take the two-question quiz
+          </button>
+        )}
       </div>
     </Modal>
   )

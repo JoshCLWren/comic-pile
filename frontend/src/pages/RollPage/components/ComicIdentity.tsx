@@ -202,7 +202,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                         )}
                       </p>
                       <p className="text-[9px] text-stone-500">Related by story-arc membership, not reading order.</p>
-                      <div className="space-y-1.5 max-h-48 overflow-y-auto overscroll-contain">
+                      <div className="space-y-1.5" data-testid="story-arc-issue-list">
                         {displayedIssues.map((issue) => {
                           const identity = extractComicIdentity(issue)
                           const state = getMemberState(issue)

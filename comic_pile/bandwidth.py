@@ -12,15 +12,17 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import Bandwidth, BandwidthSource
-from app.models import Session
+from app.models import Event, Session
 from app.services.bandwidth_inference import (
     BandwidthPrediction,
     HistoricalObservation,
     infer_bandwidth,
 )
+from app.services.reading_effort import compute_effort_estimate
 
 logger = logging.getLogger(__name__)
 
@@ -276,13 +278,83 @@ async def _historical_observations(
         user_id: Reader whose accepted reading history should be collected.
 
     Returns:
-        Observations capturing accepted effort and snooze behavior. The
-        Phase 1 effort model (#1700-#1705) will supply real roll-to-rating
-        effort observations once merged; until then no comparable
-        observations exist, so inference safely yields its neutral balanced
-        prediction instead of guessing from weaker signals.
+        Observations capturing accepted effort and snooze behavior.
     """
-    return []
+    from app.models import Thread as ThreadModel
+
+    rate_events_result = await db.execute(
+        select(Event)
+        .join(ThreadModel, Event.thread_id == ThreadModel.id)
+        .where(ThreadModel.user_id == user_id)
+        .where(Event.session_id.is_not(None))
+        .where(Event.type == "rate")
+        .where(Event.thread_id.is_not(None))
+        .order_by(Event.timestamp.desc())
+    )
+    rate_events = rate_events_result.scalars().all()
+
+    observations: list[HistoricalObservation] = []
+
+    for rate_event in rate_events:
+        if rate_event.source_roll_event_id is None or rate_event.thread_id is None:
+            continue
+
+        roll_event_result = await db.execute(
+            select(Event).where(Event.id == rate_event.source_roll_event_id)
+        )
+        roll_event = roll_event_result.scalar_one_or_none()
+
+        if roll_event is None or roll_event.selected_thread_id is None:
+            continue
+
+        if roll_event.selected_thread_id != rate_event.thread_id:
+            continue
+
+        effort_estimate = await compute_effort_estimate(
+            db,
+            user_id=user_id,
+            thread_id=rate_event.thread_id,
+            issue_id=rate_event.issue_id,
+        )
+
+        if effort_estimate.minutes is None:
+            continue
+
+        was_snoozed = False
+        if roll_event.timestamp is not None and rate_event.timestamp is not None:
+            snooze_check_result = await db.execute(
+                select(Event)
+                .where(Event.session_id == rate_event.session_id)
+                .where(Event.type == "snooze")
+                .where(Event.thread_id == rate_event.thread_id)
+                .where(Event.timestamp > roll_event.timestamp)
+                .where(Event.timestamp < rate_event.timestamp)
+                .order_by(Event.timestamp.asc())
+                .limit(1)
+            )
+            snooze_event = snooze_check_result.scalar_one_or_none()
+            was_snoozed = snooze_event is not None
+
+        session_hour = None
+        if rate_event.session_id is not None:
+            session_result = await db.execute(
+                select(Session.started_at).where(Session.id == rate_event.session_id)
+            )
+            session_started_at = session_result.scalar_one_or_none()
+            if session_started_at is not None:
+                session_hour = session_started_at.hour
+
+        rating = rate_event.rating
+
+        observation = HistoricalObservation(
+            effort_minutes=effort_estimate.minutes,
+            was_snoozed=was_snoozed,
+            session_hour=session_hour,
+            rating=rating,
+        )
+        observations.append(observation)
+
+    return observations
 
 
 async def initialize_session_bandwidth(db: AsyncSession, session: Session) -> Session:

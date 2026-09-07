@@ -91,7 +91,7 @@ function QueueControlsInner({
                   : 'bg-white/5 text-stone-400 border border-white/10 hover:bg-white/10'
               }`}
             >
-              {sort === 'position' ? 'Pos' : sort === 'alphabetical' ? 'A-Z' : 'New'}
+              {sort === 'position' ? 'Position' : sort === 'alphabetical' ? 'Title' : 'Recently added'}
             </button>
           ))}
         </div>

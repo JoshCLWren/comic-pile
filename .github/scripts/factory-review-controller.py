@@ -33,8 +33,21 @@ SENSITIVE_ASSIGNMENT_RE = re.compile(
 BEARER_RE = re.compile(r"(?i)(authorization\s*:\s*bearer\s+)\S+")
 GITHUB_TOKEN_RE = re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b")
 API_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")
+# Accept authoritative PR-diff commands, common review inspection paths, and
+# unified-diff hunks. Workers append `gh pr diff` evidence before invoking this
+# controller; the excerpt is a 7000-char tail, so matching `diff --git` keeps
+# honest approvals from soft-failing when only the dumped hunks remain in-window.
 DIFF_INSPECTION_RE = re.compile(
-    r"(?i)gh (?:pr|api)[^\n]{0,60}\bdiff\b|git (?:diff|show|log -p)"
+    r"(?i)"
+    r"(?:"
+    r"gh (?:pr|api)[^\n]{0,80}\bdiff\b"
+    r"|git (?:diff|show|log -p)"
+    r"|gh pr view\b"
+    r"|gh api[^\n]{0,100}/pulls/\d+/(?:files|commits)\b"
+    r"|comic-pile-factory-authoritative-diff-evidence"
+    r"|diff --git "
+    r"|\+\+\+ b/"
+    r")"
 )
 STAGE_LABELS = {
     "factory:building",
@@ -260,7 +273,13 @@ def flatten_pages(value: object | None) -> list[dict[str, Any]]:
 
 
 def review_comment_bodies(pr_number: int) -> list[str]:
-    """Return action-authored comments that may contain review attestations."""
+    """Return trusted comments that may contain review attestations.
+
+    Factory workers post through ``GITHUB_TOKEN`` as ``github-actions[bot]``.
+    The repository owner may also run the review controller during incidents;
+    those OWNER-authored exact-head markers must remain visible to authorize /
+    drain or ready PRs get falsely demoted (incident #2309 observation).
+    """
     pages = gh_json(
         [
             "api",
@@ -272,7 +291,15 @@ def review_comment_bodies(pr_number: int) -> list[str]:
     bodies: list[str] = []
     for comment in flatten_pages(pages):
         user = comment.get("user") or {}
-        if not isinstance(user, dict) or user.get("login") != "github-actions[bot]":
+        if not isinstance(user, dict):
+            continue
+        login = str(user.get("login") or "")
+        association = str(comment.get("author_association") or "")
+        if login != "github-actions[bot]" and association not in {
+            "OWNER",
+            "MEMBER",
+            "COLLABORATOR",
+        }:
             continue
         bodies.append(str(comment.get("body") or ""))
     return bodies
@@ -939,7 +966,8 @@ def handle_review(
             producer=producer,
         )
 
-    # NEW: For approval, require evidence of diff inspection
+    # For approval, require evidence of diff / PR inspection. Failed attempts must
+    # not render as APPROVE: that false signal stalls promotion while looking done.
     if verdict == "approve":
         if not DIFF_INSPECTION_RE.search(excerpt):
             return return_to_review(
@@ -947,13 +975,14 @@ def handle_review(
                 branch=branch,
                 worker=worker,
                 reviewer=worker,
-                verdict=verdict,
+                verdict="not-ready",
                 excerpt=excerpt,
                 note=(
-                    "Approval requires evidence of diff inspection (e.g., running `git diff` or `gh pr diff`). "
-                    "The reviewed head must be inspected to ensure the changes are understood."
+                    "Approval rejected: no evidence of diff inspection "
+                    "(e.g., `gh pr diff`, `git diff`/`git show`, or `gh pr view`). "
+                    "The reviewed head must be inspected before a durable approve marker is written."
                 ),
-                status="review",
+                status="diff-inspection-required",
                 head=reviewed_head,
                 producer=producer,
             )

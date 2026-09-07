@@ -74,8 +74,12 @@ test.describe('THREAD-001: Thread management', () => {
     const menu = page.getByRole('menu')
     await expect(menu).toBeVisible()
 
-    page.on('dialog', (dialog) => dialog.accept())
     await menu.getByRole('menuitem', { name: /delete/i }).click()
+    await expect(page.getByRole('heading', { name: 'Delete Thread' })).toBeVisible()
+    await page.getByRole('button', { name: /delete thread/i }).click()
+    await expect(page.getByText('Deleted "Delete Target Thread"')).toBeVisible({
+      timeout: 10000,
+    })
     await expect(page.getByText('Delete Target Thread')).toHaveCount(0, { timeout: 10000 })
   })
 

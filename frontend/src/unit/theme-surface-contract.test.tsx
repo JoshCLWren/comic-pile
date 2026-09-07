@@ -9,6 +9,7 @@ import type { AuthContextValue } from '../App'
 import { AuthProvider, useAuth } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { ToastProvider } from '../contexts/ToastProvider'
 
 const mocks = vi.hoisted(() => ({
@@ -186,8 +187,10 @@ describe('themed surfaces resolve through semantic tokens (#1646)', () => {
         <AuthProvider>
           <BugReportRestoreProvider>
             <ToastProvider>
-              <Navigation onBugReportSubmit={vi.fn()} />
-              <AuthConsumer />
+              <NavCollapseProvider>
+                <Navigation onBugReportSubmit={vi.fn()} />
+                <AuthConsumer />
+              </NavCollapseProvider>
             </ToastProvider>
           </BugReportRestoreProvider>
         </AuthProvider>

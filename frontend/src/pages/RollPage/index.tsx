@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
@@ -17,7 +17,9 @@ import { useTasteDiscoveries } from '../../hooks/useTasteDiscoveries'
 import { useRate } from '../../hooks'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
-import { threadsApi } from '../../services/api'
+import { threadsApi, sessionApi } from '../../services/api'
+import type { ReadingModeState, SessionModeUpdateRequest, SnoozeCorrectionInfo } from '../../types'
+import { FEATURES } from '../../config/features'
 import { useReaderContext } from '../../hooks/useReaderContext'
 import type { ThreadMetadata } from './types'
 import { useRollPageState } from './useRollPageState'
@@ -28,25 +30,33 @@ import { useRollSnooze } from './useRollSnooze'
 import { useRollDependencies } from './useRollDependencies'
 import { useRollActions } from './useRollActions'
 import { useRollModals } from './useRollModals'
+import { useRollViewport } from './useRollViewport'
 import { RatingView } from './components/RatingView'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
 import { RollModals } from './components/RollModals'
 import { TasteDiscoveryCard } from './components/TasteDiscoveryCard'
 import ReadingModeLauncher from '../../components/ReadingModeLauncher'
+import ReadingModeQuiz from '../../components/ReadingModeQuiz'
+import ModeSelectorSheet from '../../components/ModeSelectorSheet'
+import CorrectionSheet, { type CorrectionChoiceId } from '../../components/CorrectionSheet'
 
 /**
  * Route entry for the Roll page. The component composes the focused retained
  * feature modules (`useRollBootstrapSync`, `useRollPendingSession`,
  * `useRollRating`, `useRollSnooze`, `useRollDependencies`, `useRollActions`,
- * `useRollModals`) plus the page-level navigation and error boundary concerns.
+ * `useRollModals`, `useRollViewport`) plus the page-level navigation and
+ * error boundary concerns.
  * Data and mutation ownership stays in the page so a second cache layer is
  * never introduced.
  */
 export default function RollPage() {
   const state = useRollPageState()
   const navigate = useNavigate()
-  const mainDieRef = useRef<HTMLDivElement>(null)
+
+  const { mainDieRef, ratingViewTopRef } = useRollViewport({
+    isRatingView: state.isRatingView,
+  })
 
   const {
     data: bootstrap,
@@ -56,19 +66,49 @@ export default function RollPage() {
     error: bootstrapError,
   } = useRollBootstrap()
 
-  const scrollToDice = useCallback(() => {
-    mainDieRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const [isModeSelectorOpen, setIsModeSelectorOpen] = useState(false)
+  const [isQuizOpen, setIsQuizOpen] = useState(false)
+  const [isCorrectionOpen, setIsCorrectionOpen] = useState(false)
+
+  const handleModeSelectorSubmit = useCallback(
+    async (patch: SessionModeUpdateRequest) => {
+      await sessionApi.updateMode(patch)
+      await refetchBootstrap()
+    },
+    [refetchBootstrap],
+  )
+
+  const handleOpenQuiz = useCallback(() => {
+    setIsModeSelectorOpen(false)
+    setIsCorrectionOpen(false)
+    setIsQuizOpen(true)
   }, [])
 
-  const prevIsRatingViewRef = useRef(state.isRatingView)
-  useEffect(() => {
-    const wasRatingView = prevIsRatingViewRef.current
-    const isRatingView = state.isRatingView
-    prevIsRatingViewRef.current = isRatingView
-    if (wasRatingView && !isRatingView) {
-      scrollToDice()
-    }
-  }, [state.isRatingView, scrollToDice])
+  const handleCloseQuiz = useCallback(() => {
+    setIsQuizOpen(false)
+  }, [])
+
+  const handleQuizComplete = useCallback(
+    async (_state: ReadingModeState) => {
+      setIsQuizOpen(false)
+      await refetchBootstrap()
+    },
+    [refetchBootstrap],
+  )
+
+  const handleCorrectionSuggested = useCallback((_correction: SnoozeCorrectionInfo) => {
+    // A one-tap correction may be insufficient after repeated/contradictory
+    // mismatches (issue #1739): surface the sheet, which itself offers the quiz.
+    setIsCorrectionOpen(true)
+  }, [])
+
+  const handleCorrectionSubmit = useCallback(
+    async (_choiceId: CorrectionChoiceId, patch: SessionModeUpdateRequest) => {
+      await sessionApi.updateMode(patch)
+      await refetchBootstrap()
+    },
+    [refetchBootstrap],
+  )
 
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
@@ -114,6 +154,7 @@ export default function RollPage() {
     snoozeMutation,
     unsnoozeMutation,
     refetchBootstrap,
+    onClarificationSuggested: handleCorrectionSuggested,
   })
 
   const skip = {
@@ -283,6 +324,7 @@ export default function RollPage() {
         onClearManualDie={actions.handleClearManualDie}
         onOpenOverride={modals.openOverrideModal}
         onOpenDieModal={() => state.setIsDieModalOpen(true)}
+        onOpenModeSelector={() => setIsModeSelectorOpen(true)}
       />
 
       <ReadingModeLauncher />
@@ -318,6 +360,7 @@ export default function RollPage() {
             ) : (
               <RatingView
                 activeRatingThread={state.activeRatingThread}
+                ratingViewTopRef={ratingViewTopRef}
                 currentDie={state.currentDie}
                 rolledResult={state.rolledResult}
                 rating={state.rating}
@@ -418,6 +461,34 @@ export default function RollPage() {
           isSetCurrentIssueOpen={state.isSetCurrentIssueOpen}
           onCloseSetCurrentIssue={() => state.setIsSetCurrentIssueOpen(false)}
           onSetCurrentIssue={handleSetCurrentIssue}
+        />
+
+        <ModeSelectorSheet
+          isOpen={isModeSelectorOpen}
+          currentMode={bootstrap.session_mode ? {
+            bandwidth: bootstrap.session_mode.active_bandwidth,
+            intent: bootstrap.session_mode.active_intent,
+          } : null}
+          onClose={() => setIsModeSelectorOpen(false)}
+          onSubmit={handleModeSelectorSubmit}
+          onOpenQuiz={handleOpenQuiz}
+          quizEnabled={FEATURES.readingModeQuiz}
+        />
+
+        {FEATURES.readingModeQuiz && (
+          <ReadingModeQuiz
+            isOpen={isQuizOpen}
+            onClose={handleCloseQuiz}
+            onComplete={handleQuizComplete}
+          />
+        )}
+
+        <CorrectionSheet
+          isOpen={isCorrectionOpen}
+          onClose={() => setIsCorrectionOpen(false)}
+          onSubmit={handleCorrectionSubmit}
+          onOpenQuiz={handleOpenQuiz}
+          quizEnabled={FEATURES.readingModeQuiz}
         />
       </div>
     </div>
