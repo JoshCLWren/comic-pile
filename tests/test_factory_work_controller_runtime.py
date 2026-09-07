@@ -283,12 +283,21 @@ def test_actionable_pr_stage_is_live_executable(
 
 
 @pytest.mark.parametrize("stage", ["factory:review", "factory:changes-requested"])
-def test_assign_returns_actionable_pr_despite_historical_no_diff_markers(
+@pytest.mark.parametrize(
+    ("attempts", "expect_assigned"),
+    [
+        (2, True),
+        (3, False),
+    ],
+)
+def test_assign_respects_pr_no_diff_retry_budget(
     controller: types.ModuleType,
     monkeypatch: pytest.MonkeyPatch,
     stage: str,
+    attempts: int,
+    expect_assigned: bool,
 ) -> None:
-    """The full assignment path honors current PR lifecycle state over old comments."""
+    """PR retry exhaustion suppresses assignment without rewriting truthful stages."""
     monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
     pr = {
         "number": 2122,
@@ -317,7 +326,7 @@ def test_assign_returns_actionable_pr_despite_historical_no_diff_markers(
     monkeypatch.setattr(
         controller,
         "load_no_diff_attempts",
-        lambda: {2122: 3},
+        lambda: {2122: attempts},
     )
     monkeypatch.setattr(
         controller,
@@ -328,8 +337,16 @@ def test_assign_returns_actionable_pr_despite_historical_no_diff_markers(
 
     assignment = controller.assign("13")
 
-    assert assignment is not None
-    assert (assignment.kind, assignment.number, assignment.stage) == ("pr", 2122, stage)
+    if expect_assigned:
+        assert assignment is not None
+        assert (assignment.kind, assignment.number, assignment.stage) == ("pr", 2122, stage)
+    else:
+        assert assignment is None
+    assert {label["name"] for label in pr["labels"]} == {
+        "factory",
+        "factory:unowned",
+        stage,
+    }
 
 
 def test_ci_pr_with_failed_required_checks_is_live_executable(
