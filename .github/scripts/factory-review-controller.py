@@ -270,7 +270,13 @@ def flatten_pages(value: object | None) -> list[dict[str, Any]]:
 
 
 def review_comment_bodies(pr_number: int) -> list[str]:
-    """Return action-authored comments that may contain review attestations."""
+    """Return trusted comments that may contain review attestations.
+
+    Factory workers post through ``GITHUB_TOKEN`` as ``github-actions[bot]``.
+    The repository owner may also run the review controller during incidents;
+    those OWNER-authored exact-head markers must remain visible to authorize /
+    drain or ready PRs get falsely demoted (incident #2309 observation).
+    """
     pages = gh_json(
         [
             "api",
@@ -282,7 +288,15 @@ def review_comment_bodies(pr_number: int) -> list[str]:
     bodies: list[str] = []
     for comment in flatten_pages(pages):
         user = comment.get("user") or {}
-        if not isinstance(user, dict) or user.get("login") != "github-actions[bot]":
+        if not isinstance(user, dict):
+            continue
+        login = str(user.get("login") or "")
+        association = str(comment.get("author_association") or "")
+        if login != "github-actions[bot]" and association not in {
+            "OWNER",
+            "MEMBER",
+            "COLLABORATOR",
+        }:
             continue
         bodies.append(str(comment.get("body") or ""))
     return bodies
