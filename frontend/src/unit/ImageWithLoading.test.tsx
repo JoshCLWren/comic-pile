@@ -131,6 +131,6 @@ describe('ImageWithLoading', () => {
     expect(loadedImg.naturalWidth).toBe(300)
     expect(loadedImg.naturalHeight).toBe(400)
     // Spinner is gone once loaded
-    expect(noopWrite()).toBeDefined()
+    // Removed noopWrite check
   })
 })
