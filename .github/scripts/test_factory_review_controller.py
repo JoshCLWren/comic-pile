@@ -636,6 +636,43 @@ def test_diff_inspection_failure_does_not_look_like_approve(monkeypatch):
     assert transitions[0]["pr_stage"] == "factory:review"
 
 
+def test_review_comment_bodies_accept_owner_markers(monkeypatch):
+    """Owner-authored exact-head markers must authorize during incident response."""
+    controller = load_controller()
+    marker = controller.review_marker(
+        pr=2269,
+        head=HEAD,
+        reviewer="66",
+        producer="48",
+        verdict="approve",
+    )
+    monkeypatch.setattr(
+        controller,
+        "gh_json",
+        lambda _args: [
+            [
+                {
+                    "user": {"login": "JoshCLWren"},
+                    "author_association": "OWNER",
+                    "body": marker + "\n\nnote",
+                },
+                {
+                    "user": {"login": "random-user"},
+                    "author_association": "NONE",
+                    "body": marker + "\n\nspoof",
+                },
+                {
+                    "user": {"login": "github-actions[bot]"},
+                    "author_association": "NONE",
+                    "body": "bot body",
+                },
+            ]
+        ],
+    )
+    bodies = controller.review_comment_bodies(2269)
+    assert bodies == [marker + "\n\nnote", "bot body"]
+
+
 def test_gh_pr_view_counts_as_diff_inspection_evidence(monkeypatch):
     """Honest reviews that use gh pr view can still promote past the gate."""
     controller = load_controller()
