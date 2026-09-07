@@ -15,9 +15,11 @@ interface QueueListProps {
 
 /**
  * Renders the active queue presentation, picking between the virtualized
- * multi-column list and the plain grid based on the bounded page count. The
- * empty, search-empty, and reorder-error states are owned here so the page
- * only sees a single composed list region.
+ * window-scrolled list and the plain list based on the bounded page count.
+ * The window owns scrolling before and after the virtualization threshold so
+ * the queue never introduces a nested scroll container. The empty,
+ * search-empty, and reorder-error states are owned here so the page only sees
+ * a single composed list region.
  */
 export function QueueList({
   activeThreads,

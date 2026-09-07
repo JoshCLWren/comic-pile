@@ -42,6 +42,7 @@ interface QueueModalsProps {
   onCloseMigration: () => void
   onOpenMigrationDialog: (thread: Thread) => void
   onOpenDependencies?: () => void
+  onIssueChanged?: () => void
   isPendingCreate: boolean
   isPendingEdit: boolean
   isPendingReactivate: boolean
@@ -87,6 +88,7 @@ export function QueueModals({
   onCloseMigration,
   onOpenMigrationDialog,
   onOpenDependencies,
+  onIssueChanged,
   isPendingCreate,
   isPendingEdit,
   isPendingReactivate,
@@ -308,7 +310,7 @@ export function QueueModals({
           </form>
 
           {editingThread && editingThread.total_issues !== null && (
-            <IssueToggleList threadId={editingThread.id} onOpenDependencies={onOpenDependencies} />
+            <IssueToggleList threadId={editingThread.id} onOpenDependencies={onOpenDependencies} onIssueChanged={onIssueChanged} />
           )}
 
           <button

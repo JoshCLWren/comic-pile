@@ -29,17 +29,16 @@ test.describe('Bounded incremental Queue loading (#932)', () => {
     await page.goto('/queue', { waitUntil: 'domcontentloaded' });
     await waitForQueueReady(page);
 
-    // Scroll to the near-end sentinel to trigger the incremental load.
+    // Scroll the window to the bottom so the sentinel triggers the next page.
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    const container = page.locator('#queue-container');
-    await container.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
 
     // The second page (threads 51-60) is appended; the final thread becomes
-    // visible without discarding the first page.
+    // visible without discarding the first page. After #2184 the window owns
+    // scrolling before and after the virtualization threshold.
     await expect(page.getByText('Test Thread 60')).toBeVisible({ timeout: 10000 });
 
     // Returning to the top keeps the first page intact (no scroll loss).
-    await container.evaluate((element) => element.scrollTo({ top: 0 }));
+    await page.evaluate(() => window.scrollTo(0, 0));
     await expect(page.getByText('Test Thread 1')).toBeVisible();
 
     // After the final page there is no further cursor, so the sentinel is gone.

@@ -1,5 +1,5 @@
 .issue-list {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--theme-border);
   border-radius: 8px;
   padding: 1rem;
 }
@@ -18,7 +18,7 @@
 
 .issue-list-header select {
   padding: 0.25rem 0.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--theme-border);
   border-radius: 4px;
 }
 
@@ -39,12 +39,12 @@
 }
 
 .issue-item:hover {
-  background-color: rgba(255, 255, 255, 0.06);
+  background-color: var(--theme-bg-panel);
 }
 
 .issue-item.next-unread {
-  background-color: rgba(212, 137, 14, 0.15);
-  border: 1px solid #d4890e;
+  background-color: color-mix(in srgb, var(--theme-comic-accent) 15%, transparent);
+  border: 1px solid var(--theme-comic-accent);
 }
 
 .issue-icon {
@@ -69,7 +69,7 @@
 
 .next-badge {
   margin-left: auto;
-  background-color: #d4890e;
+  background-color: var(--theme-comic-accent);
   color: white;
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
@@ -80,7 +80,7 @@
 .read-date {
   margin-left: auto;
   font-size: 0.75rem;
-  color: #a0937e;
+  color: var(--theme-text-muted);
 }
 
 .issue-list-footer {
@@ -89,21 +89,21 @@
 
 .progress-bar {
   height: 0.5rem;
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: var(--theme-border);
   border-radius: 9999px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background-color: #d4890e;
+  background-color: var(--theme-comic-accent);
   transition: width 0.3s;
 }
 
 .progress-text {
   margin-top: 0.25rem;
   font-size: 0.875rem;
-  color: #a0937e;
+  color: var(--theme-text-muted);
   text-align: center;
 }
 
@@ -111,5 +111,5 @@
 .issue-list.empty {
   padding: 2rem;
   text-align: center;
-  color: #a0937e;
+  color: var(--theme-text-muted);
 }

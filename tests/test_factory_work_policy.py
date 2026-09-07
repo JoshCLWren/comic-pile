@@ -58,6 +58,9 @@ def pr_fixture(
     labels: list[str],
     state: str = "OPEN",
     draft: bool = False,
+    head: str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    mergeable: str = "MERGEABLE",
+    merge_state: str = "CLEAN",
 ) -> dict[str, object]:
     """Build a canonical fixed-model PR linked to one issue."""
     return {
@@ -66,11 +69,25 @@ def pr_fixture(
         "isDraft": draft,
         "labels": [{"name": label} for label in labels],
         "headRefName": f"factory/18-{issue}-nvidia",
+        "headRefOid": head,
         "body": "Worker: opencode-free-model-factory-18",
         "createdAt": "2026-08-16T01:00:00Z",
-        "mergeable": "MERGEABLE",
-        "mergeStateStatus": "CLEAN",
+        "mergeable": mergeable,
+        "mergeStateStatus": merge_state,
     }
+
+
+def label_names(item: dict[str, object]) -> set[str]:
+    """Return label names from a GitHub issue/PR fixture."""
+    raw = item["labels"]
+    assert isinstance(raw, list)
+    names: set[str] = set()
+    for label in raw:
+        assert isinstance(label, dict)
+        name = label["name"]
+        assert isinstance(name, str)
+        names.add(name)
+    return names
 
 
 def test_producing_worker_cannot_receive_own_semantic_review():
@@ -580,3 +597,244 @@ def test_cbl_chain_2126_to_2129_closing_a_and_b_unblocks_c():
     assert 2128 in candidate_numbers
     # 2129 still blocked by open 2128
     assert 2129 not in candidate_numbers
+
+
+def test_pr_below_no_diff_retry_limit_remains_selectable():
+    """A truthful changes-requested PR is still executable before retry exhaustion."""
+    target = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:changes-requested"],
+    )
+    candidates = policy.build_candidates(
+        [],
+        [target],
+        no_diff_attempts_by_issue={2264: policy.FACTORY_NO_DIFF_RETRY_LIMIT - 1},
+    )
+    assert any(item.kind == "pr" and item.number == 2264 for item in candidates)
+
+
+def test_pr_at_no_diff_retry_limit_is_excluded_without_blocked_label():
+    """Retry exhaustion suppresses PR candidacy without falsifying workflow labels."""
+    target = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:changes-requested"],
+    )
+    candidates = policy.build_candidates(
+        [],
+        [target],
+        no_diff_attempts_by_issue={2264: policy.FACTORY_NO_DIFF_RETRY_LIMIT},
+    )
+    assert candidates == []
+    assert label_names(target) == {
+        "factory",
+        "factory:unowned",
+        "factory:changes-requested",
+    }
+
+
+def test_review_pr_at_no_diff_retry_limit_is_excluded_without_blocked_label():
+    """A review PR at the retry limit stays factory:review while becoming ineligible."""
+    target = pr_fixture(
+        number=2271,
+        issue=2201,
+        labels=["factory", "factory:unowned", "factory:review"],
+    )
+    candidates = policy.build_candidates(
+        [],
+        [target],
+        no_diff_attempts_by_issue={2271: policy.FACTORY_NO_DIFF_RETRY_LIMIT},
+    )
+    assert candidates == []
+    names = label_names(target)
+    assert "factory:review" in names
+    assert "factory:blocked" not in names
+
+
+def test_pr_no_diff_retry_suppression_expires_with_reset_window():
+    """Aged no-diff markers fall out of the rolling window and the PR is selectable."""
+    now = 2_000_000_000
+    expired = now - policy.FACTORY_NO_DIFF_RETRY_RESET_SECONDS - 1
+    comments = [
+        {
+            "author_association": "OWNER",
+            "body": (
+                "<!-- comic-pile-factory-claim-released-v3:pr-2264:worker:"
+                f"{expired}:repair-no-persisted-change-handoff -->"
+            ),
+        }
+        for _ in range(policy.FACTORY_NO_DIFF_RETRY_LIMIT)
+    ]
+    counts = policy.no_diff_attempts_from_comments(comments, now_epoch=now)
+    assert counts == {}
+    target = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:changes-requested"],
+    )
+    candidates = policy.build_candidates([], [target], no_diff_attempts_by_issue=counts)
+    assert any(item.kind == "pr" and item.number == 2264 for item in candidates)
+
+
+def test_recent_pr_no_diff_markers_exclude_candidate():
+    """Trusted in-window PR no-diff markers consume the retry budget."""
+    now = 2_000_000_000
+    head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    comments = [
+        {
+            "author_association": "OWNER",
+            "body": (
+                "<!-- comic-pile-factory-claim-released-v3:pr-2264:worker:"
+                f"{now - offset}:repair-no-persisted-change-handoff"
+                f":sha={head}:stage=factory:changes-requested:conflicted=0 -->"
+            ),
+        }
+        for offset in range(policy.FACTORY_NO_DIFF_RETRY_LIMIT)
+    ]
+    attempts = policy.parse_no_diff_attempts_from_comments(comments, now_epoch=now)
+    assert len(attempts) >= policy.FACTORY_NO_DIFF_RETRY_LIMIT
+    target = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:changes-requested"],
+        head=head,
+    )
+    candidates = policy.build_candidates([], [target], no_diff_attempt_records=attempts)
+    assert candidates == []
+
+
+def test_issue_no_diff_retry_suppression_remains_intact():
+    """Issue candidacy still uses the same bounded no-diff retry counter."""
+    target = issue_fixture(31)
+    below = policy.build_candidates(
+        [target],
+        [],
+        no_diff_attempts_by_issue={31: policy.FACTORY_NO_DIFF_RETRY_LIMIT - 1},
+    )
+    exhausted = policy.build_candidates(
+        [target],
+        [],
+        no_diff_attempts_by_issue={31: policy.FACTORY_NO_DIFF_RETRY_LIMIT},
+    )
+    assert any(item.kind == "issue" and item.number == 31 for item in below)
+    assert not any(item.kind == "issue" and item.number == 31 for item in exhausted)
+
+
+def _generation_attempts(
+    *,
+    number: int = 2264,
+    sha: str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    stage: str = "factory:changes-requested",
+    conflicted: bool = False,
+    now: int = 2_000_000_000,
+):
+    comments = [
+        {
+            "author_association": "OWNER",
+            "body": (
+                "<!-- comic-pile-factory-claim-released-v3:"
+                f"pr-{number}:worker:{now - offset}:repair-no-persisted-change-handoff"
+                f":sha={sha}:stage={stage}:conflicted={int(conflicted)} -->"
+            ),
+        }
+        for offset in range(policy.FACTORY_NO_DIFF_RETRY_LIMIT)
+    ]
+    return policy.parse_no_diff_attempts_from_comments(comments, now_epoch=now)
+
+
+def test_exhausted_pr_becomes_selectable_after_new_head():
+    """A new commit starts a fresh retry budget immediately."""
+    old_head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    new_head = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    attempts = _generation_attempts(sha=old_head)
+    unchanged = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:changes-requested"],
+        head=old_head,
+    )
+    pushed = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:changes-requested"],
+        head=new_head,
+    )
+    assert policy.build_candidates([], [unchanged], no_diff_attempt_records=attempts) == []
+    candidates = policy.build_candidates([], [pushed], no_diff_attempt_records=attempts)
+    assert any(item.kind == "pr" and item.number == 2264 for item in candidates)
+
+
+def test_exhausted_pr_becomes_selectable_after_new_actionable_review_state():
+    """New review findings on the same head immediately wake the PR."""
+    head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    attempts = _generation_attempts(sha=head, stage="factory:review")
+    still_review = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:review"],
+        head=head,
+    )
+    newly_actionable = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:changes-requested"],
+        head=head,
+    )
+    assert policy.build_candidates([], [still_review], no_diff_attempt_records=attempts) == []
+    candidates = policy.build_candidates(
+        [],
+        [newly_actionable],
+        no_diff_attempt_records=attempts,
+    )
+    assert any(item.kind == "pr" and item.number == 2264 for item in candidates)
+
+
+def test_exhausted_pr_becomes_selectable_after_new_merge_conflict():
+    """A newly developed merge conflict is new work and must be selectable."""
+    head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    attempts = _generation_attempts(sha=head, conflicted=False)
+    still_clean = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:changes-requested"],
+        head=head,
+    )
+    newly_conflicted = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:changes-requested"],
+        head=head,
+        mergeable="CONFLICTING",
+        merge_state="DIRTY",
+    )
+    assert policy.build_candidates([], [still_clean], no_diff_attempt_records=attempts) == []
+    candidates = policy.build_candidates(
+        [],
+        [newly_conflicted],
+        no_diff_attempt_records=attempts,
+    )
+    assert any(item.kind == "pr" and item.number == 2264 for item in candidates)
+
+
+def test_legacy_unscoped_pr_markers_do_not_suppress_known_head():
+    """Number-only historical markers must not recreate the scheduler oubliette."""
+    now = 2_000_000_000
+    comments = [
+        {
+            "author_association": "OWNER",
+            "body": (
+                "<!-- comic-pile-factory-claim-released-v3:pr-2264:worker:"
+                f"{now - offset}:repair-no-persisted-change-handoff -->"
+            ),
+        }
+        for offset in range(policy.FACTORY_NO_DIFF_RETRY_LIMIT)
+    ]
+    attempts = policy.parse_no_diff_attempts_from_comments(comments, now_epoch=now)
+    target = pr_fixture(
+        number=2264,
+        issue=2200,
+        labels=["factory", "factory:unowned", "factory:changes-requested"],
+    )
+    candidates = policy.build_candidates([], [target], no_diff_attempt_records=attempts)
+    assert any(item.kind == "pr" and item.number == 2264 for item in candidates)

@@ -25,7 +25,15 @@ BLOCKED_LABELS = {'factory:blocked', 'ralph-status:blocked', 'wontfix', 'invalid
 TRUSTED_ASSOCIATIONS = {'OWNER', 'MEMBER', 'COLLABORATOR'}
 TRUSTED_FACTORY_APP_SLUGS = {'github-actions'}
 REQUIRED_CHECK_FAILURE_STATES = frozenset({'CANCELLED', 'ERROR', 'FAILURE', 'STALE', 'STARTUP_FAILURE', 'TIMED_OUT'})
-NO_DIFF_ATTEMPT_RE = re.compile(r'<!--\s*comic-pile-factory-claim-released-v3:(?P<kind>issue|pr)-(?P<number>\d+):(?P<worker>[^:>\s]+):(?P<epoch>\d{10}):(?:repair-)?no-persisted-change-handoff\s*-->')
+NO_DIFF_ATTEMPT_RE = re.compile(
+    r'<!--\s*comic-pile-factory-claim-released-v3:'
+    r'(?P<kind>issue|pr)-(?P<number>\d+):(?P<worker>[^:>\s]+):(?P<epoch>\d{10}):'
+    r'(?:repair-)?no-persisted-change-handoff'
+    r'(?::sha=(?P<sha>[0-9a-fA-F]{7,40}))?'
+    r'(?::stage=(?P<stage>factory:[a-z-]+))?'
+    r'(?::conflicted=(?P<conflicted>[01]))?'
+    r'\s*-->'
+)
 DEP_ON_RE = re.compile(r"(?:[Dd]epends?\s+on)\s+([^\n]+)")
 NUMBER_REF_RE = re.compile(r"#(\d+)")
 DEPENDENCY_SEPARATORS = frozenset({'and', '&', '+', ','})
@@ -63,6 +71,18 @@ FACTORY_PR_WIP_LIMIT = env_positive_int('FACTORY_PR_WIP_LIMIT', 5)
 FACTORY_REVIEW_BACKLOG_LIMIT = env_positive_int('FACTORY_REVIEW_BACKLOG_LIMIT', 8)
 FACTORY_NO_DIFF_RETRY_LIMIT = env_positive_int('FACTORY_NO_DIFF_RETRY_LIMIT', 3)
 FACTORY_NO_DIFF_RETRY_RESET_SECONDS = env_positive_int('FACTORY_NO_DIFF_RETRY_RESET_SECONDS', 86400)
+
+
+@dataclass(frozen=True)
+class NoDiffAttempt:
+    """One trusted no-diff release still inside the rolling retry window."""
+
+    kind: str
+    number: int
+    epoch: int
+    sha: str | None = None
+    stage: str | None = None
+    conflicted: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -296,6 +316,53 @@ def pr_is_conflicted(pr: dict[str, Any]) -> bool:
     return mergeable == 'CONFLICTING' or merge_state == 'DIRTY'
 
 
+def pr_head_sha(pr: Mapping[str, Any]) -> str:
+    """Return the lowercase head SHA for a pull-request payload when present."""
+    for key in ('headRefOid', 'headOid', 'oid'):
+        value = pr.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip().lower()
+    head = pr.get('head')
+    if isinstance(head, Mapping):
+        for key in ('oid', 'sha'):
+            value = head.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip().lower()
+    return ''
+
+
+def matching_pr_no_diff_attempts(
+    attempts: Iterable[NoDiffAttempt],
+    *,
+    pr_number: int,
+    head_sha: str,
+    stage: str | None,
+    conflicted: bool,
+) -> int:
+    """Count no-diff retries that still apply to this exact PR generation.
+
+    Only markers that pin the current head SHA, workflow stage, and conflict
+    state consume the retry budget. A new push, newly actionable review stage,
+    or newly developed merge conflict starts a fresh budget immediately.
+    Unscoped legacy PR markers do not suppress a known current generation.
+    """
+    current_sha = head_sha.strip().lower()
+    if not current_sha:
+        return 0
+    count = 0
+    for attempt in attempts:
+        if attempt.kind != 'pr' or attempt.number != pr_number:
+            continue
+        if not attempt.sha or attempt.sha != current_sha:
+            continue
+        if attempt.stage is None or attempt.stage != stage:
+            continue
+        if attempt.conflicted is None or attempt.conflicted != conflicted:
+            continue
+        count += 1
+    return count
+
+
 def issue_is_static_candidate(
     issue: dict[str, Any],
     suppressing_pr_issues: set[int],
@@ -318,7 +385,12 @@ def issue_is_static_candidate(
     return item_is_unowned(labels)
 
 
-def pr_is_static_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, Any]]) -> bool:
+def pr_is_static_candidate(
+    pr: dict[str, Any],
+    issue_map: dict[int, dict[str, Any]],
+    *,
+    no_diff_attempts: int = 0,
+) -> bool:
     """Return whether an open autonomous-factory PR is structurally eligible."""
     if str(pr.get('state') or 'OPEN').upper() != 'OPEN' or pr.get('isDraft'):
         return False
@@ -329,6 +401,8 @@ def pr_is_static_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, An
     if not is_factory_managed_pr(pr):
         return False
     if labels & BLOCKED_LABELS or 'factory:ready' in labels:
+        return False
+    if no_diff_attempts >= FACTORY_NO_DIFF_RETRY_LIMIT:
         return False
     if not item_is_unowned(labels):
         return False
@@ -403,10 +477,12 @@ def build_candidates(
     prs: list[dict[str, Any]],
     *,
     no_diff_attempts_by_issue: Mapping[int, int] | None = None,
+    no_diff_attempt_records: Iterable[NoDiffAttempt] | None = None,
 ) -> list[Candidate]:
     """Build and rank executable issue and pull-request candidates."""
     issue_map = {int(issue['number']): issue for issue in issues}
     retry_counts = no_diff_attempts_by_issue or {}
+    attempt_records = None if no_diff_attempt_records is None else list(no_diff_attempt_records)
     suppressing_pr_issues = {
         linked
         for pr in prs
@@ -455,16 +531,29 @@ def build_candidates(
             )
         )
     for pr in prs:
-        if not pr_is_static_candidate(pr, issue_map):
-            continue
-        # PR retry exhaustion is represented by the explicit factory:blocked
-        # lifecycle stage written by the worker that records the final bounded
-        # no-diff attempt. Historical comments are evidence for deciding when
-        # to quarantine, but they are not an independent hidden queue state.
-        # If an operator truthfully restores the PR to review or repair, its
-        # current lifecycle labels must make it executable again.
-        linked = linked_issue_from_pr(pr)
+        pr_number = int(pr['number'])
         pr_labels = labels_of(pr)
+        if attempt_records is not None:
+            pr_attempts = matching_pr_no_diff_attempts(
+                attempt_records,
+                pr_number=pr_number,
+                head_sha=pr_head_sha(pr),
+                stage=stage_of(pr_labels),
+                conflicted=pr_is_conflicted(pr),
+            )
+        else:
+            pr_attempts = max(0, int(retry_counts.get(pr_number, 0)))
+        if not pr_is_static_candidate(
+            pr,
+            issue_map,
+            no_diff_attempts=pr_attempts,
+        ):
+            continue
+        # Recent no-diff retries suppress only the unchanged execution
+        # generation. A new head, newly actionable review stage, or newly
+        # developed merge conflict starts a fresh budget without rewriting
+        # truthful labels to factory:blocked.
+        linked = linked_issue_from_pr(pr)
         labels = set(pr_labels)
         if linked is not None and linked in issue_map:
             labels |= labels_of(issue_map[linked])
@@ -474,7 +563,7 @@ def build_candidates(
         candidates.append(
             Candidate(
                 kind='pr',
-                number=int(pr['number']),
+                number=pr_number,
                 lane=lane,
                 priority=priority_rank(labels),
                 created_at=str(pr.get('createdAt') or ''),
@@ -567,10 +656,15 @@ def plan_distinct_assignments(candidates: list[Candidate], workers: list[str]) -
     return assignments
 
 
-def no_diff_attempts_from_comments(comments: Iterable[dict[str, Any]], *, now_epoch: int, reset_seconds: int=FACTORY_NO_DIFF_RETRY_RESET_SECONDS) -> dict[int, int]:
-    """Count trusted no-diff attempts still inside the rolling retry window."""
+def parse_no_diff_attempts_from_comments(
+    comments: Iterable[dict[str, Any]],
+    *,
+    now_epoch: int,
+    reset_seconds: int = FACTORY_NO_DIFF_RETRY_RESET_SECONDS,
+) -> list[NoDiffAttempt]:
+    """Return trusted no-diff attempts still inside the rolling retry window."""
     cutoff = now_epoch - reset_seconds
-    counts: dict[int, int] = {}
+    attempts: list[NoDiffAttempt] = []
     for comment in comments:
         if not comment_is_trusted(comment):
             continue
@@ -579,8 +673,35 @@ def no_diff_attempts_from_comments(comments: Iterable[dict[str, Any]], *, now_ep
             epoch = int(match.group('epoch'))
             if epoch <= cutoff or epoch > now_epoch:
                 continue
-            number = int(match.group('number'))
-            counts[number] = counts.get(number, 0) + 1
+            sha = match.group('sha')
+            conflicted_raw = match.group('conflicted')
+            attempts.append(
+                NoDiffAttempt(
+                    kind=str(match.group('kind')),
+                    number=int(match.group('number')),
+                    epoch=epoch,
+                    sha=None if sha is None else sha.lower(),
+                    stage=match.group('stage'),
+                    conflicted=None if conflicted_raw is None else conflicted_raw == '1',
+                )
+            )
+    return attempts
+
+
+def no_diff_attempts_from_comments(
+    comments: Iterable[dict[str, Any]],
+    *,
+    now_epoch: int,
+    reset_seconds: int = FACTORY_NO_DIFF_RETRY_RESET_SECONDS,
+) -> dict[int, int]:
+    """Count trusted no-diff attempts still inside the rolling retry window."""
+    counts: dict[int, int] = {}
+    for attempt in parse_no_diff_attempts_from_comments(
+        comments,
+        now_epoch=now_epoch,
+        reset_seconds=reset_seconds,
+    ):
+        counts[attempt.number] = counts.get(attempt.number, 0) + 1
     return counts
 
 

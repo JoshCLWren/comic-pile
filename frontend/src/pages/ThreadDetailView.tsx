@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { CrossoverTags } from '../components/CrossoverTags'
@@ -20,8 +20,10 @@ import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
 export default function ThreadDetailView() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const updateMutation = useUpdateThread()
   const activeThreadIdRef = useRef<number | null>(null)
+  const editAutoOpenRef = useRef(false)
 
   const [thread, setThread] = useState<Thread | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -111,6 +113,20 @@ export default function ThreadDetailView() {
 
     fetchThread()
   }, [id])
+
+  useEffect(() => {
+    if (location.state?.openEditModal !== true || editAutoOpenRef.current || !thread) return
+    editAutoOpenRef.current = true
+    setEditForm({
+      title: thread.title,
+      format: thread.format,
+      issuesRemaining: thread.issues_remaining,
+      notes: thread.notes || '',
+      issues: '',
+      lastIssueRead: 0,
+    })
+    setIsEditOpen(true)
+  }, [location.state, thread])
 
   async function loadIssuesPage(threadId: number, pageToken: string | null) {
     setIssuesLoading(true)

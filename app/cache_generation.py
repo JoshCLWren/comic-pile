@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import ParamSpec, Protocol, TypeVar, cast
 
 from app.cache import TTL, cache, generate_cache_key, ttl_seconds
+from app.cache_accounting import cache_accounting
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,7 @@ class CacheCommandBudget:
         if count < 0:
             raise ValueError("Cache command count cannot be negative")
         self.counts[command] += count
+        cache_accounting.record(count)
         logger.debug("cache_command command=%s count=%d", command, count)
 
     @property
