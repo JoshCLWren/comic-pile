@@ -144,7 +144,7 @@ describe('RatingActionPanel', () => {
 
   it('resets Copy title to idle when threadTitle changes', async () => {
     const user = userEvent.setup()
-    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
+    vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
 
     const { rerender } = render(
       <RatingActionPanel
