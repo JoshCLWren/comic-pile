@@ -58,7 +58,9 @@ def env_positive_int(name: str, default: int) -> int:
 LOCAL_LEASE_TTL_SECONDS = env_positive_int('FACTORY_LOCAL_LEASE_TTL_SECONDS', 3600)
 FIXED_LEASE_TTL_SECONDS = env_positive_int('FACTORY_FIXED_LEASE_TTL_SECONDS', 900)
 FACTORY_PR_WIP_LIMIT = env_positive_int('FACTORY_PR_WIP_LIMIT', 5)
-FACTORY_REVIEW_BACKLOG_LIMIT = env_positive_int('FACTORY_REVIEW_BACKLOG_LIMIT', 15)
+# Incident #2309: engage completion-stage backpressure earlier so review/repair
+# drain wins before open PRs pile into conflicts.
+FACTORY_REVIEW_BACKLOG_LIMIT = env_positive_int('FACTORY_REVIEW_BACKLOG_LIMIT', 8)
 FACTORY_NO_DIFF_RETRY_LIMIT = env_positive_int('FACTORY_NO_DIFF_RETRY_LIMIT', 3)
 FACTORY_NO_DIFF_RETRY_RESET_SECONDS = env_positive_int('FACTORY_NO_DIFF_RETRY_RESET_SECONDS', 86400)
 
@@ -187,12 +189,12 @@ def issue_bypasses_wip_limit(
 
 
 def factory_review_backlog_count(prs: Iterable[dict[str, Any]]) -> int:
-    """Count unowned factory PRs waiting at the review or ci stage.
+    """Count factory PRs waiting in completion stages.
 
-    These targets consume no worker lease while they wait, so the WIP limit
-    cannot see them. The backlog counter exists to apply end-to-end
-    backpressure: when too much work is waiting for completion stages, fresh
-    issue intake must stop so the fleet drains what already exists.
+    Owned and unowned review/ci/changes-requested PRs both consume fleet time
+    before merge. Counting only unowned PRs under-reported pressure when
+    reviewers held leases, so intake kept opening work while promotion stalled
+    (incident #2309). Ready PRs remain excluded: the merge drain owns them.
     """
     count = 0
     for pr in prs:
@@ -203,7 +205,7 @@ def factory_review_backlog_count(prs: Iterable[dict[str, Any]]) -> int:
             continue
         if labels & BLOCKED_LABELS or 'factory:ready' in labels:
             continue
-        if stage_of(labels) in ('factory:review', 'factory:ci', 'factory:changes-requested') and item_is_unowned(labels):
+        if stage_of(labels) in ('factory:review', 'factory:ci', 'factory:changes-requested'):
             count += 1
     return count
 
@@ -406,7 +408,7 @@ def build_candidates(
             # End-to-end backpressure: while the completion stages are
             # saturated, the fleet drains existing PRs instead of
             # manufacturing new ones. Only main-breakage bypasses this gate
-            # when the review backlog is saturated (>=15).
+            # when the review backlog is saturated (>= FACTORY_REVIEW_BACKLOG_LIMIT).
             continue
         labels = labels_of(issue)
         candidates.append(
@@ -452,21 +454,25 @@ def build_candidates(
     return sorted(candidates, key=Candidate.sort_key)
 
 
-def review_capacity_worker(worker: str, *, review_backlog: int = 0) -> bool:
-    """Return whether this worker slot prioritizes review, scaled to demand.
+def review_share_for_backlog(review_backlog: int) -> float:
+    """Return the review-first worker share for the current completion pressure.
 
-    Fixed 1-in-4 was arbitrary. When the review backlog is the dominant
-    queue, most workers should work the drain. Scale the share with backlog:
-    >=50 -> 90%, >=20 -> 75%, >=15 -> 50%, else 25%.
+    Uses a continuous ratio instead of hard-coded absolute tiers: 25% at idle,
+    rising to 90% as completion-stage backlog approaches a reference depth of 20.
     """
-    w = int(worker)
-    if review_backlog >= 50:
-        return w % 10 < 9
-    if review_backlog >= 20:
-        return w % 4 < 3
-    if review_backlog >= 15:
-        return w % 2 == 0
-    return w % 4 == 2
+    depth = max(0, int(review_backlog))
+    return min(0.90, 0.25 + (0.65 * min(depth, 20) / 20.0))
+
+
+def review_capacity_worker(worker: str, *, review_backlog: int = 0) -> bool:
+    """Return whether this worker slot prioritizes review under current pressure.
+
+    Membership in the review-first cohort is deterministic from the worker id and
+    the ratio from :func:`review_share_for_backlog`.
+    """
+    share = review_share_for_backlog(review_backlog)
+    # Multiply by a fixed odd constant so nearby worker ids do not clump.
+    return (int(worker) * 37) % 100 < int(round(share * 100))
 
 
 def candidate_is_independent_for_worker(candidate: Candidate, worker: str) -> bool:
