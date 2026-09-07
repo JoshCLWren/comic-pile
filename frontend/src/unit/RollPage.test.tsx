@@ -134,7 +134,7 @@ it('renders the bounded bootstrap pool without Collections state', () => {
   renderRollPage()
 
   expect(screen.getByText('Roll')).toBeInTheDocument()
-  expect(screen.getByLabelText(/Eligible now, 2 mapped results/i)).toBeInTheDocument()
+  expect(screen.getByLabelText(/2 ready to read, 2 mapped results/i)).toBeInTheDocument()
   expect(screen.getByText('Saga')).toBeInTheDocument()
   expect(screen.getByText('X-Men')).toBeInTheDocument()
   expect(screen.queryByText(/collection/i)).not.toBeInTheDocument()
@@ -150,7 +150,7 @@ it('opens the retained thread action sheet from a bootstrap pool item', async ()
   expect(screen.getByText('Move to Front')).toBeInTheDocument()
   expect(screen.getByText('Move to Back')).toBeInTheDocument()
   expect(screen.getByText('Snooze')).toBeInTheDocument()
-  expect(screen.getByText('Edit Thread')).toBeInTheDocument()
+  expect(screen.getByText('Edit Series')).toBeInTheDocument()
 })
 
 it('loads every active override page only after the modal opens', async () => {

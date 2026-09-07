@@ -38,7 +38,7 @@ function EdgeEndpoint({
       className="inline-flex min-h-6 items-center break-words text-left font-mono underline decoration-dotted underline-offset-2 text-[var(--theme-text-primary)]"
       style={endpointStyle}
       onClick={() => onOpen(threadId)}
-      aria-label={`Open thread for ${label ?? 'a missing issue'}`}
+      aria-label={`Open series for ${label ?? 'a missing issue'}`}
     >
       {label ?? 'a missing issue'}
     </button>

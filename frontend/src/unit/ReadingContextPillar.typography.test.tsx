@@ -173,7 +173,7 @@ describe('ReadingContextPillar rendered typography (#1873)', () => {
       'metaLabel',
     )
 
-    const edgeEndpoint = screen.getByRole('button', { name: 'Open thread for Saga #3' })
+    const edgeEndpoint = screen.getByRole('button', { name: 'Open series for Saga #3' })
     expectComputedFontSize(edgeEndpoint, 'primaryValue')
 
     expectComputedFontSize(

@@ -13,28 +13,33 @@ type Term = {
 const DEFINITIONS: Term[] = [
   {
     id: 'thread',
-    term: 'Thread',
-    def: 'A comic series you are tracking, read issue by issue.',
+    term: 'Series',
+    def: 'One comic series you are tracking, read issue by issue.',
+  },
+  {
+    id: 'ready-to-read',
+    term: 'Ready to read',
+    def: 'Series that can be picked for your next roll right now, because nothing earlier in their reading order is waiting. The Roll page counts these as "N ready to read".',
   },
   {
     id: 'roll-pool',
     term: 'Roll pool',
-    def: 'The threads eligible to be randomly selected for a roll right now.',
+    def: 'The ready-to-read series a roll picks from.',
   },
   {
     id: 'ladder-mode',
-    term: 'Ladder mode',
-    def: 'Automatically adjusts the die size to match your eligible pool size.',
+    term: 'Auto-adjust',
+    def: 'Lets the die pick its own size to match how many series are ready to read. The "Auto" control on Roll turns it back on after you choose a die size by hand.',
   },
   {
     id: 'die-ladder',
-    term: 'Die ladder (d6 → d8)',
-    def: 'Die sizes run d4 → d6 → d8 → d10 → d12 → d20 → d30 → d50 → d100, and a larger die means a larger roll pool. High ratings step the die down (smaller pool); low ratings step it up. A readout like "d6 → d8" shows the step your rating will trigger.',
+    term: 'Die size',
+    def: 'Sets how many series the roll can pick from. Sizes run d4 → d6 → d8 → d10 → d12 → d20 → d30 → d50 → d100, and a larger die includes more of your ready-to-read series. A readout like "d6 → d8" shows the step your die moves after a rating.',
   },
   {
     id: 'autoladder',
-    term: 'AutoLadder',
-    def: 'Automatic dice ladder mode: the die size adjusts itself from your pool and ratings. The "Auto" control returns you here after choosing a die manually.',
+    term: 'Auto',
+    def: 'Keeps the die size matched to your ready-to-read series. The "Auto" control on Roll turns this back on after you choose a die size by hand.',
   },
   {
     id: 'offset',
@@ -47,9 +52,24 @@ const DEFINITIONS: Term[] = [
     def: 'Temporarily excluded from rolling — won’t appear in the roll pool.',
   },
   {
+    id: 'position',
+    term: 'Pos',
+    def: 'Queue-order shortcut. "Pos" sorts your series from first to last in the reading queue.',
+  },
+  {
+    id: 'reading-mode',
+    term: 'Reading mode',
+    def: 'How Comic Pile shapes the roll for your mood. Bandwidth sets how demanding comics feel right now (Light, Balanced, Deep); intent sets what kind of pick sounds good (Balanced, Momentum, Familiar, Explore, Random).',
+  },
+  {
+    id: 'finished-series',
+    term: 'Finished series',
+    def: 'A series you have read to the end. Finished series stay out of the queue until you add new issues — use the "Add back to queue" action to bring one back.',
+  },
+  {
     id: 'dependency',
     term: 'Dependency rule',
-    def: 'A reading order rule: "read X before Y". Create or manage them via the Dependency Builder (open from a thread\'s Queue card or from the dependency dialog inside an issue list). Deleting a single rule does not require editing an entire plan.',
+    def: 'A reading order rule: "read X before Y". Create or manage them via the Dependency Builder (open from a series\'s Queue card or from the dependency dialog inside an issue list). Deleting a single rule does not require editing an entire plan.',
   },
   {
     id: 'readiness',
@@ -89,7 +109,7 @@ const DEFINITIONS: Term[] = [
   {
     id: 'dependency-builder',
     term: 'Dependency Builder',
-    def: 'The editable surface for creating, viewing, and removing issue-level dependency rules. Access it from any Queue card (Dependencies in the thread actions menu) or from the dependency dialog inside an issue list.',
+    def: 'The editable surface for creating, viewing, and removing issue-level dependency rules. Access it from any Queue card (Dependencies in the series actions menu) or from the dependency dialog inside an issue list.',
   },
 ]
 

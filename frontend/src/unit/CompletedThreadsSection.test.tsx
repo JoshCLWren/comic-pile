@@ -29,17 +29,17 @@ describe('CompletedThreadsSection', () => {
       />,
     )
 
-    expect(screen.getByRole('heading', { name: 'Completed Threads' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Show Completed (2)' })).toHaveAttribute(
+    expect(screen.getByRole('heading', { name: 'Finished Series' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show Finished (2)' })).toHaveAttribute(
       'aria-expanded',
       'false',
     )
     expect(screen.getByText('Descender')).not.toBeVisible()
     expect(screen.getByText('Paper Girls')).not.toBeVisible()
 
-    await user.click(screen.getByRole('button', { name: 'Show Completed (2)' }))
+    await user.click(screen.getByRole('button', { name: 'Show Finished (2)' }))
 
-    expect(screen.getByRole('button', { name: 'Hide Completed' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Hide Finished' })).toHaveAttribute(
       'aria-expanded',
       'true',
     )
@@ -58,24 +58,26 @@ describe('CompletedThreadsSection', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: 'Reactivate' }))
+    await user.click(screen.getByRole('button', { name: 'Add back to queue' }))
 
     expect(onReactivate).toHaveBeenNthCalledWith(1, null)
-    expect(screen.getByRole('button', { name: 'Show Completed (2)' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Show Finished (2)' })).toHaveAttribute(
       'aria-expanded',
       'false',
     )
     expect(screen.getByText('Descender')).not.toBeVisible()
 
-    await user.click(screen.getByRole('button', { name: 'Show Completed (2)' }))
-    await user.click(screen.getByRole('button', { name: 'Reactivate Descender' }))
+    await user.click(screen.getByRole('button', { name: 'Show Finished (2)' }))
+    await user.click(screen.getByRole('button', { name: 'Add Descender back to queue' }))
 
     expect(onReactivate).toHaveBeenNthCalledWith(2, completedThreads[0])
-    expect(screen.getByRole('button', { name: 'Show Completed (2)' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Show Finished (2)' })).toHaveAttribute(
       'aria-expanded',
       'false',
     )
-    expect(screen.queryByRole('button', { name: 'Reactivate Paper Girls' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Add Paper Girls back to queue' }),
+    ).not.toBeInTheDocument()
   })
 
   it('renders nothing when there are no completed threads', () => {

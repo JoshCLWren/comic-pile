@@ -25,9 +25,7 @@ export function TasteDiscoveryCard({ discovery, onRespond, onDismiss }: TasteDis
   if (!discovery) return null
 
   const isBusy = pendingAction !== null
-  const evidenceLabel = `From ${discovery.evidence_count} reads across ${discovery.distinct_thread_count} ${
-    discovery.distinct_thread_count === 1 ? 'thread' : 'threads'
-  }.`
+  const evidenceLabel = `From ${discovery.evidence_count} reads across ${discovery.distinct_thread_count} series.`
 
   const handleRespond = async (verdict: TasteVerdict) => {
     setPendingAction(verdict)

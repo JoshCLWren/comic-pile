@@ -258,7 +258,7 @@ it('renders named blocked-by dependencies and an empty blocking list as links', 
   await waitFor(() =>
     expect(screen.getByRole('link', { name: 'Open Prequel' })).toHaveAttribute('href', '/thread/9'),
   )
-  expect(screen.getByText('This thread blocks nothing')).toBeInTheDocument()
+  expect(screen.getByText('This series blocks nothing')).toBeInTheDocument()
 })
 
 it('renders blocker issue number on thread detail when known', async () => {
@@ -309,7 +309,7 @@ it('renders named blocking dependencies when nothing blocks this thread', async 
   })
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
-  await waitFor(() => expect(screen.getByText('Nothing blocks this thread')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText('Nothing blocks this series')).toBeInTheDocument())
   expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
 })
 

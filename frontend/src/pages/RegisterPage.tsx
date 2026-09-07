@@ -83,17 +83,17 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-[var(--theme-bg-page)]">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-black tracking-tighter text-glow uppercase">Create Account</h1>
-          <p className="text-sm text-stone-400">Start your dice rolling journey</p>
+          <p className="text-sm text-[var(--theme-text-muted)]">Start your dice rolling journey</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-6">
           <div className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="username" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+              <label htmlFor="username" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
                 Username
               </label>
               <input
@@ -104,13 +104,13 @@ export default function RegisterPage() {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full h-12 px-4 bg-white/5 border border-solid border-white/20 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                className="w-full h-12 px-4 rounded-xl text-sm form-control"
                 placeholder="Choose a username"
               />
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="email" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+              <label htmlFor="email" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
                 Email
               </label>
               <input
@@ -121,13 +121,13 @@ export default function RegisterPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full h-12 px-4 bg-white/5 border border-solid border-white/20 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                className="w-full h-12 px-4 rounded-xl text-sm form-control"
                 placeholder="you@example.com"
               />
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="password" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+              <label htmlFor="password" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
                 Password
               </label>
               <input
@@ -138,13 +138,13 @@ export default function RegisterPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full h-12 px-4 bg-white/5 border border-solid border-white/20 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                className="w-full h-12 px-4 rounded-xl text-sm form-control"
                 placeholder="Min 6 characters"
               />
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="confirmPassword" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+              <label htmlFor="confirmPassword" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
                 Confirm Password
               </label>
               <input
@@ -155,31 +155,31 @@ export default function RegisterPage() {
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full h-12 px-4 bg-white/5 border border-solid border-white/20 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                className="w-full h-12 px-4 rounded-xl text-sm form-control"
                 placeholder="Re-enter password"
               />
             </div>
           </div>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-              <p className="text-sm text-red-400 font-medium">{error}</p>
+            <div className="bg-[var(--theme-danger)]/10 border border-[var(--theme-danger)]/20 rounded-xl px-4 py-3">
+              <p className="text-sm text-[var(--theme-danger)] font-medium">{error}</p>
             </div>
           )}
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full h-12 bg-amber-600 hover:bg-amber-500 disabled:bg-amber-600/50 disabled:cursor-not-allowed rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-[#1a1410]"
+            className="w-full h-12 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
           >
             {isLoading ? 'Creating account...' : 'Create Account'}
           </button>
         </form>
 
         <div className="text-center">
-          <p className="text-sm text-stone-400">
+          <p className="text-sm text-[var(--theme-text-muted)]">
             Already have an account?{' '}
-            <Link to="/login" className="text-amber-500 hover:text-amber-400 font-bold transition-colors">
+            <Link to="/login" className="text-[var(--theme-primary-action)] hover:opacity-80 font-bold transition-opacity">
               Sign in
             </Link>
           </p>

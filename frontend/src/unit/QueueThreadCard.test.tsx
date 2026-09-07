@@ -220,7 +220,7 @@ describe('QueueThreadCard', () => {
     expect(unblocked.className).not.toMatch(/bg-red-500/)
     expect(unblocked.className).not.toMatch(/theme-danger/)
     expect(unblocked.className).not.toMatch(/theme-continuity-accent/)
-    expect(screen.queryByLabelText('Blocked thread')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Blocked series')).not.toBeInTheDocument()
     expect(screen.queryByTestId('queue-thread-blocked-detail')).not.toBeInTheDocument()
     unmount()
 
@@ -231,7 +231,7 @@ describe('QueueThreadCard', () => {
     const blocked = screen.getByTestId('queue-thread-item')
     expect(blocked.className).not.toMatch(/bg-red-500/)
     expect(blocked.className).not.toMatch(/theme-danger/)
-    expect(screen.getByLabelText('Blocked thread')).toHaveClass('text-[var(--theme-continuity-accent)]')
+    expect(screen.getByLabelText('Blocked series')).toHaveClass('text-[var(--theme-continuity-accent)]')
 
     const detail = screen.getByTestId('queue-thread-blocked-detail')
     expect(detail.className).toMatch(/theme-continuity-accent/)
@@ -358,7 +358,7 @@ describe('QueueThreadCard', () => {
     })
 
     expect(screen.getByTestId('queue-thread-drag-over')).toHaveClass('bg-amber-500/10')
-    expect(screen.getByLabelText('Blocked thread')).toHaveClass('text-[var(--theme-continuity-accent)]')
+    expect(screen.getByLabelText('Blocked series')).toHaveClass('text-[var(--theme-continuity-accent)]')
     expect(screen.getByTestId('queue-thread-blocked-detail').className).toMatch(/theme-continuity-accent/)
   })
 

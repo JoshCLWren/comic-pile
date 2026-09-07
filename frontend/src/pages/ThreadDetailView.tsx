@@ -313,7 +313,7 @@ export default function ThreadDetailView() {
             <p className="text-xs text-stone-500">Loading dependencies...</p>
           )}
           {connectedThreads !== null && connectedThreads.length === 0 && (
-            <p className="text-xs text-stone-500">No thread dependencies</p>
+            <p className="text-xs text-stone-500">No series dependencies</p>
           )}
           {connectedThreads !== null && connectedThreads.length > 0 && (
             <div className="space-y-3">
@@ -324,7 +324,7 @@ export default function ThreadDetailView() {
                   <>
                     <div className="space-y-1">
                       <h3 className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Blocked by</h3>
-                      {blockedBy.length === 0 && <p className="text-xs text-stone-500">Nothing blocks this thread</p>}
+                      {blockedBy.length === 0 && <p className="text-xs text-stone-500">Nothing blocks this series</p>}
                       {blockedBy.map((t) => (
                         <Link
                           key={`${t.dependency_id}-blocked-by`}
@@ -341,7 +341,7 @@ export default function ThreadDetailView() {
                     </div>
                     <div className="space-y-1">
                       <h3 className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Blocking</h3>
-                      {blocking.length === 0 && <p className="text-xs text-stone-500">This thread blocks nothing</p>}
+                      {blocking.length === 0 && <p className="text-xs text-stone-500">This series blocks nothing</p>}
                       {blocking.map((t) => (
                         <Link
                           key={`${t.dependency_id}-blocking`}
@@ -508,7 +508,7 @@ export default function ThreadDetailView() {
 
       <Modal
         isOpen={isEditOpen}
-        title="Edit Thread"
+        title="Edit Series"
         onClose={() => {
           setIsEditOpen(false)
         }}
@@ -523,7 +523,7 @@ export default function ThreadDetailView() {
               <input
                 value={editForm.title}
                 onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
-                className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                className="w-full rounded-xl px-3 py-2 text-sm form-control"
                 required
               />
             </div>
@@ -554,7 +554,7 @@ export default function ThreadDetailView() {
                       issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
                     })
                   }
-                  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                  className="w-full rounded-xl px-3 py-2 text-sm form-control"
                 />
               </div>
             )}
@@ -566,7 +566,7 @@ export default function ThreadDetailView() {
               <textarea
                 value={editForm.notes}
                 onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
-                className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors min-h-[80px]"
+                className="w-full rounded-xl px-3 py-2 text-sm form-control min-h-[80px]"
               />
             </div>
           </form>

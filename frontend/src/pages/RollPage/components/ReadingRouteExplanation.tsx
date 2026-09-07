@@ -56,7 +56,7 @@ export function ReadingRouteExplanation({
       {upstreamThreads.length > 0 ? (
         <section className="mt-4 rounded-2xl border border-blue-900/30 bg-blue-950/15 p-3" aria-labelledby="upstream-heading">
           <h3 id="upstream-heading" className="text-xs font-black text-blue-300">Recorded prerequisites</h3>
-          <ul className="mt-2 flex flex-wrap gap-2" aria-label="Recorded prerequisite threads">
+          <ul className="mt-2 flex flex-wrap gap-2" aria-label="Recorded prerequisite series">
             {upstreamThreads.map((thread) => (
               <li key={`${thread.thread_id}-${thread.dependency_id}`} className="rounded-full border border-blue-700/40 px-3 py-1 text-[11px] font-bold text-blue-200">
                 {thread.title}
@@ -68,8 +68,8 @@ export function ReadingRouteExplanation({
 
       {downstreamThreads.length > 0 ? (
         <section className="mt-4 rounded-2xl border border-emerald-800/30 bg-emerald-950/15 p-3" aria-labelledby="downstream-heading">
-          <h3 id="downstream-heading" className="text-xs font-black text-emerald-300">Related later threads</h3>
-          <ul className="mt-2 flex flex-wrap gap-2" aria-label="Related later threads">
+          <h3 id="downstream-heading" className="text-xs font-black text-emerald-300">Related later series</h3>
+          <ul className="mt-2 flex flex-wrap gap-2" aria-label="Related later series">
             {downstreamThreads.map((thread) => (
               <li key={`${thread.thread_id}-${thread.dependency_id}`} className="rounded-full border border-emerald-700/40 px-3 py-1 text-[11px] font-bold text-emerald-200">
                 {thread.title}

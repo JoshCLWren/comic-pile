@@ -145,54 +145,71 @@ export default function DependencyCrossoverControls({
 
   return (
     <section
-      className="rounded-lg border border-gray-700 bg-gray-900/60 p-3"
+      className="rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3"
       aria-label="Crossover membership"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-semibold text-gray-200">Crossover</span>
-        <button
-          type="button"
-          className={`rounded px-2 py-1 text-xs ${mode === 'none' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300'}`}
-          onClick={() => setMode('none')}
-          disabled={controlsDisabled}
-        >
-          No membership
-        </button>
-        <button
-          type="button"
-          className={`rounded px-2 py-1 text-xs ${mode === 'existing' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300'}`}
-          onClick={() => setMode('existing')}
-          disabled={controlsDisabled}
-        >
-          Add to existing
-        </button>
-        <button
-          type="button"
-          className={`rounded px-2 py-1 text-xs ${mode === 'new' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300'}`}
-          onClick={() => setMode('new')}
-          disabled={controlsDisabled}
-        >
-          Create crossover
-        </button>
+        <span className="text-sm font-semibold text-[var(--theme-text-primary)]">Crossover</span>
+        <div aria-label="Crossover mode" className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            aria-pressed={mode === 'none'}
+            className={`rounded px-2 py-1 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${
+              mode === 'none'
+                ? 'bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]'
+                : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+            }`}
+            onClick={() => setMode('none')}
+            disabled={controlsDisabled}
+          >
+            No membership
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === 'existing'}
+            className={`rounded px-2 py-1 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${
+              mode === 'existing'
+                ? 'bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]'
+                : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+            }`}
+            onClick={() => setMode('existing')}
+            disabled={controlsDisabled}
+          >
+            Add to existing
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === 'new'}
+            className={`rounded px-2 py-1 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${
+              mode === 'new'
+                ? 'bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]'
+                : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+            }`}
+            onClick={() => setMode('new')}
+            disabled={controlsDisabled}
+          >
+            Create crossover
+          </button>
+        </div>
       </div>
 
       {mode !== 'none' && (
         <div className="mt-3 space-y-3">
           {mode === 'existing' ? (
             <>
-              <label className="block text-xs text-gray-300">
+              <label className="block text-xs text-[var(--theme-text-muted)]">
                 Search crossovers
                 <input
-                  className="mt-1 w-full rounded border border-gray-700 bg-gray-950 px-2 py-1 text-sm text-white"
+                  className="mt-1 w-full rounded border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1 text-sm text-[var(--theme-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   disabled={controlsDisabled}
                 />
               </label>
-              <label className="block text-xs text-gray-300">
+              <label className="block text-xs text-[var(--theme-text-muted)]">
                 Existing crossover
                 <select
-                  className="mt-1 w-full rounded border border-gray-700 bg-gray-950 px-2 py-1 text-sm text-white"
+                  className="mt-1 w-full rounded border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1 text-sm text-[var(--theme-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                   value={selectedGroupId ?? ''}
                   onChange={(event) => setSelectedGroupId(Number(event.target.value) || null)}
                   disabled={controlsDisabled || isLoading}
@@ -207,10 +224,10 @@ export default function DependencyCrossoverControls({
               </label>
             </>
           ) : (
-            <label className="block text-xs text-gray-300">
+            <label className="block text-xs text-[var(--theme-text-muted)]">
               Crossover name
               <input
-                className="mt-1 w-full rounded border border-gray-700 bg-gray-950 px-2 py-1 text-sm text-white"
+                className="mt-1 w-full rounded border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1 text-sm text-[var(--theme-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                 value={newName}
                 onChange={(event) => setNewName(event.target.value)}
                 disabled={controlsDisabled}
@@ -219,13 +236,14 @@ export default function DependencyCrossoverControls({
             </label>
           )}
 
-          <div className="flex flex-wrap gap-4 text-sm text-gray-200">
+          <div className="flex flex-wrap gap-4 text-sm text-[var(--theme-text-primary)]">
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={includeSource}
                 onChange={(event) => setIncludeSource(event.target.checked)}
                 disabled={controlsDisabled || sourceIssueId == null}
+                className="accent-[var(--theme-continuity-accent)]"
               />
               Prerequisite issue
             </label>
@@ -235,6 +253,7 @@ export default function DependencyCrossoverControls({
                 checked={includeTarget}
                 onChange={(event) => setIncludeTarget(event.target.checked)}
                 disabled={controlsDisabled || targetIssueId == null}
+                className="accent-[var(--theme-continuity-accent)]"
               />
               Blocked issue
             </label>
@@ -242,7 +261,7 @@ export default function DependencyCrossoverControls({
 
           <button
             type="button"
-            className="rounded bg-purple-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="min-h-11 rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-medium text-stone-950 hover:bg-[var(--theme-primary-action-hover)] transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
             onClick={handleSaveMemberships}
             disabled={controlsDisabled || !hasSelectedMembership}
           >
@@ -252,12 +271,12 @@ export default function DependencyCrossoverControls({
       )}
 
       {error && (
-        <p className="mt-2 text-sm text-red-300" role="alert">
+        <p className="mt-2 text-sm text-[var(--theme-danger)]" role="alert">
           {error}
         </p>
       )}
       {result && (
-        <p className="mt-2 text-sm text-green-300" role="status">
+        <p className="mt-2 text-sm text-emerald-300" role="status">
           {result}
         </p>
       )}
