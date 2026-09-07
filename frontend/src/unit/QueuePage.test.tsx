@@ -412,7 +412,7 @@ describe('Keyboard Accessibility', () => {
     expect(cards[0]).toHaveTextContent('Alpha')
     await user.type(screen.getByPlaceholderText('Search...'), 'missing')
     // Search is debounced (300ms) so the parent query only commits after the delay.
-    await waitFor(() => expect(screen.getByText('No active threads match your search')).toBeInTheDocument(), { timeout: 2000 })
+    await waitFor(() => expect(screen.getByText('No active series match your search')).toBeInTheDocument(), { timeout: 2000 })
   })
 
   it('shows correct empty state when search matches only completed threads', async () => {
@@ -435,7 +435,7 @@ describe('Keyboard Accessibility', () => {
     })
     render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
     await user.type(screen.getByPlaceholderText('Search...'), 'done')
-    await waitFor(() => expect(screen.getByText('No active threads match your search')).toBeInTheDocument(), { timeout: 2000 })
+    await waitFor(() => expect(screen.getByText('No active series match your search')).toBeInTheDocument(), { timeout: 2000 })
   })
 
   it('creates a simple issue range and marks the requested issues read', async () => {
@@ -484,7 +484,7 @@ describe('Keyboard Accessibility', () => {
   expect(screen.getByRole('status')).toBeInTheDocument()
   mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   rerender(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  expect(screen.getByText('No active threads in queue')).toBeInTheDocument()
+  expect(screen.getByText('No active series in queue')).toBeInTheDocument()
 })
 
   it('prevents reading blocked threads and reports delete failures', async () => {
@@ -749,7 +749,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   mockedUseQueueThreads.mockReturnValue({ data: manyThreads, isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await waitFor(() => expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument())
-  expect(screen.getByRole('list', { name: 'Thread queue' })).toBeInTheDocument()
+  expect(screen.getByRole('list', { name: 'Series queue' })).toBeInTheDocument()
   expect(mockedDependenciesApi.listBlockedThreadIds).not.toHaveBeenCalled()
   expect(mockedDependenciesApi.getBlockingInfo).not.toHaveBeenCalled()
   vi.unstubAllGlobals()

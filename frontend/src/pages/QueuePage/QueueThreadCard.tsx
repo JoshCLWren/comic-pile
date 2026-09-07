@@ -152,7 +152,7 @@ export default function QueueThreadCard({
             </button>
             {isBlocked && (
               <Tooltip content={blockerLabels.length > 0 ? blockerLabels.join('\n') : 'Blocked by dependency'}>
-                <span className="text-[var(--theme-continuity-accent)] text-sm" aria-label="Blocked thread">🔒</span>
+                <span className="text-[var(--theme-continuity-accent)] text-sm" aria-label="Blocked series">🔒</span>
               </Tooltip>
             )}
           </div>

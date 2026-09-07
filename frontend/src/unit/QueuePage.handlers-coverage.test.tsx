@@ -186,7 +186,7 @@ describe('QueuePage callback coverage', () => {
 
   it('opens a modal requested through router location state', async () => {
     render(<MemoryRouter initialEntries={[{ pathname: '/queue', state: { openCreate: true } }]}><QueuePage /></MemoryRouter>)
-    await waitFor(() => expect(screen.getByRole('heading', { name: /create series/i })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: /add series/i })).toBeInTheDocument())
   })
 
   it('uses the virtualized queue renderer for large queues', () => {
@@ -223,7 +223,7 @@ describe('QueuePage callback coverage', () => {
     await user.type(screen.getByLabelText('Issues'), '8-2')
     await user.click(screen.getByRole('button', { name: /create series/i }))
     await waitFor(() =>
-      expect(alert).toHaveBeenCalledWith(expect.stringContaining('Failed to create thread')),
+      expect(alert).toHaveBeenCalledWith(expect.stringContaining('Failed to create series')),
     )
     expect(mocks.mutate).not.toHaveBeenCalled()
   })
@@ -260,7 +260,7 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getByRole('button', { name: 'Recently added' }))
     await user.type(screen.getByPlaceholderText('Search...'), 'missing')
     // Search is debounced (300ms) so the parent query only commits after the delay.
-    await waitFor(() => expect(screen.getByText('No active threads match your search')).toBeInTheDocument(), { timeout: 2000 })
+    await waitFor(() => expect(screen.getByText('No active series match your search')).toBeInTheDocument(), { timeout: 2000 })
     await user.clear(screen.getByPlaceholderText('Search...'))
     await waitFor(() => expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument(), { timeout: 2000 })
 
@@ -316,7 +316,7 @@ describe('QueuePage callback coverage', () => {
     vi.mocked(useQueueThreads).mockReturnValue({ data: [completed] as never, isPending: false, refetch: mocks.refetch } as never)
     const user = userEvent.setup()
     renderPage()
-    expect(screen.getByText('No active threads in queue')).toBeInTheDocument()
+    expect(screen.getByText('No active series in queue')).toBeInTheDocument()
     await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0]!)
     mocks.mutate.mockRejectedValue(new Error('reactivate failed'))
     await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')

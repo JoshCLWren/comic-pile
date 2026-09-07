@@ -146,7 +146,7 @@ describe('RatingView action panel (issue #1406)', () => {
         issue_id: 100, next_issue_id: null,
       },
     }))
-    expect(screen.getByText(/This is the last issue in the thread/)).toBeInTheDocument()
+    expect(screen.getByText(/This is the last issue in the series/)).toBeInTheDocument()
   })
 
   it('rating actions container has sticky class for mobile', () => {

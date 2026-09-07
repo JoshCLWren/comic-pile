@@ -375,7 +375,7 @@ describe('useQueueThreadActions', () => {
     expect(result.current.pendingDeleteThread?.id).toBe(5)
     expect(result.current.deleteError).toBe('Cannot delete thread: has dependencies')
     expect(toastSpy).toHaveBeenCalledWith(
-      'Failed to delete thread: Cannot delete thread: has dependencies',
+      'Failed to delete series: Cannot delete thread: has dependencies',
       'error',
     )
   })

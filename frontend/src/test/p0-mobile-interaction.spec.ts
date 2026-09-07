@@ -116,12 +116,12 @@ test.describe('MOBILE-001: Primary mobile interaction path', () => {
     await mobileNav.getByRole('link', { name: /queue/i }).click()
     await waitForQueueReady(page)
 
-    const addBtn = page.getByRole('button', { name: /add thread/i }).first()
+    const addBtn = page.getByRole('button', { name: /add series/i }).first()
     await addBtn.click()
 
     await page.locator('#create-thread-title').fill('Mobile Created Thread')
     await page.locator('#create-thread-issues').fill('1-3')
-    await page.getByRole('button', { name: /create thread/i }).click()
+    await page.getByRole('button', { name: /create series/i }).click()
 
     await expect(page.getByText('Mobile Created Thread')).toBeVisible({ timeout: 10000 })
   })

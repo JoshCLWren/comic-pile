@@ -415,7 +415,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
     const targetHasIssueTracking = thread.total_issues !== null && thread.total_issues !== undefined
     if (!targetHasIssueTracking) {
-      setError('Target thread must be migrated to issue tracking before adding issue dependencies.')
+      setError('Target series must be migrated to issue tracking before adding issue dependencies.')
       return
     }
 
@@ -700,7 +700,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
         <div className="space-y-2">
           <label htmlFor="search-prereq-thread" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-            Search prerequisite thread
+            Search prerequisite series
           </label>
           <input
             id="search-prereq-thread"
@@ -712,7 +712,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
           />
           {isSearching && <p className="text-xs text-stone-500">Searching…</p>}
           {!isSearching && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
-            <p className="text-xs text-stone-500">No matching threads found.</p>
+            <p className="text-xs text-stone-500">No matching series found.</p>
           )}
           {searchResults.length > 0 && (
             <div className="max-h-40 overflow-auto border border-white/10 rounded-xl bg-white/5">
@@ -874,7 +874,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
          </div>
 
         <div className="space-y-2">
-          <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This thread is blocked by</h3>
+          <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This series is blocked by</h3>
           {isLoadingDeps ? (
             <p className="text-xs text-stone-500">Loading dependencies…</p>
           ) : dependencies.blocked_by.length === 0 ? (
@@ -886,13 +886,13 @@ const [isSavingNote, setIsSavingNote] = useState(false)
               {deps.map((dep) => {
                 const title = dep.is_issue_level && dep.source_label && dep.target_label
                   ? `${dep.source_label} → ${dep.target_label}`
-                  : dep.source_label ?? (dep.source_issue_id ? `Issue #${dep.source_issue_id}` : `Thread #${dep.source_thread_id}`)
+                  : dep.source_label ?? (dep.source_issue_id ? `Issue #${dep.source_issue_id}` : `Series #${dep.source_thread_id}`)
                 return (
                   <DependencyRow
                     key={dep.id}
                     dependency={dep}
                     title={title}
-                    subtitle={dep.source_issue_id ? 'Issue-level block' : 'Thread-level block'}
+                    subtitle={dep.source_issue_id ? 'Issue-level block' : 'Series-level block'}
                     onDelete={handleDeleteDependency}
                     onEditNote={handleStartEditNote}
                     editingNoteId={editingNoteId}
@@ -910,11 +910,11 @@ const [isSavingNote, setIsSavingNote] = useState(false)
         </div>
 
         <div className="space-y-2">
-          <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This thread blocks</h3>
+          <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This series blocks</h3>
           {isLoadingDeps ? (
             <p className="text-xs text-stone-500">Loading dependencies…</p>
           ) : dependencies.blocking.length === 0 ? (
-            <p className="text-xs text-stone-500">No dependent threads yet.</p>
+            <p className="text-xs text-stone-500">No dependent series yet.</p>
           ) : (
             Array.from(groupByThread(dependencies.blocking, 'target_label')).map(([threadName, deps]) => (
               <div key={threadName} className="space-y-1">
@@ -922,13 +922,13 @@ const [isSavingNote, setIsSavingNote] = useState(false)
               {deps.map((dep) => {
                 const title = dep.is_issue_level && dep.source_label && dep.target_label
                   ? `${dep.source_label} → ${dep.target_label}`
-                  : dep.target_label ?? (dep.target_issue_id ? `Issue #${dep.target_issue_id}` : `Thread #${dep.target_thread_id}`)
+                  : dep.target_label ?? (dep.target_issue_id ? `Issue #${dep.target_issue_id}` : `Series #${dep.target_thread_id}`)
                 return (
                   <DependencyRow
                     key={dep.id}
                     dependency={dep}
                     title={title}
-                    subtitle={dep.target_issue_id ? 'Issue-level block' : 'Thread-level block'}
+                    subtitle={dep.target_issue_id ? 'Issue-level block' : 'Series-level block'}
                     onDelete={handleDeleteDependency}
                     onEditNote={handleStartEditNote}
                     editingNoteId={editingNoteId}

@@ -310,7 +310,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         await onCreated()
       } catch (error: unknown) {
         console.error('Failed to create thread:', error)
-        window.alert(`Failed to create thread: ${getApiErrorDetail(error)}`)
+        window.alert(`Failed to create series: ${getApiErrorDetail(error)}`)
       }
     },
     [createForm, closeCreateModal, onCreated, submitCreate],

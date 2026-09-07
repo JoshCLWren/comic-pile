@@ -85,7 +85,7 @@ async function enterDeterministicRatingState(page: Page): Promise<void> {
   const threadSelect = dialog.locator('select')
   await expect.poll(async () => threadSelect.locator('option').count()).toBeGreaterThan(1)
   await threadSelect.selectOption({ index: 1 })
-  await dialog.getByRole('button', { name: 'Pick this thread' }).click()
+  await dialog.getByRole('button', { name: 'Pick this series' }).click()
   await expect(page.getByTestId('rating-pillars-grid')).toBeVisible()
   await expect(page.getByTestId('rating-actions')).toBeVisible()
   await page.locator('#rating-input').fill('4')

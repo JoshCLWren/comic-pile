@@ -133,7 +133,7 @@ beforeEach(() => {
 it('renders the bounded bootstrap pool without Collections state', () => {
   renderRollPage()
 
-expect(screen.getByText('Roll')).toBeInTheDocument()
+  expect(screen.getByText('Roll')).toBeInTheDocument()
   expect(screen.getByLabelText(/2 ready to read, 2 mapped results/i)).toBeInTheDocument()
   expect(screen.getByText('Saga')).toBeInTheDocument()
   expect(screen.getByText('X-Men')).toBeInTheDocument()
