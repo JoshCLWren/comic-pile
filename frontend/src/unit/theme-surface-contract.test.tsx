@@ -103,6 +103,15 @@ function loadComponentStylesheet(relativePath: string): string {
   return readFileSync(resolve(process.cwd(), relativePath), 'utf8')
 }
 
+function loadIndexStylesheet(): string {
+  const specifier = new URL('../index.css', import.meta.url)
+  const stylesheet =
+    specifier.protocol === 'file:'
+      ? fileURLToPath(specifier)
+      : resolve(process.cwd(), 'src', 'index.css')
+  return readFileSync(stylesheet, 'utf8')
+}
+
 function extractThemeBlock(css: string, theme: ThemeId): string {
   const start = css.indexOf(`[data-theme="${theme}"]`)
   expect(start, `missing [data-theme="${theme}"] block`).toBeGreaterThanOrEqual(0)
@@ -183,6 +192,39 @@ describe('semantic theme stylesheet contract (#1646)', () => {
       const css = loadComponentStylesheet(sheet)
       expect(css, `${sheet} must reference --theme-* tokens`).toMatch(/var\(--theme-/)
       expect(css, `${sheet} must not contain product hex literals`).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
+    }
+  })
+
+  it('holds canonical roles only under styles.css data-theme sets (#2229)', () => {
+    const indexCss = loadIndexStylesheet()
+    const banned = [
+      '--theme-primary:',
+      '--theme-primary-light:',
+      '--theme-bg-dark:',
+      '--theme-bg-card:',
+    ]
+    for (const token of banned) {
+      expect(indexCss, `index.css must not define parallel role ${token}`).not.toContain(token)
+    }
+  })
+
+  it('never reuses a danger literal as a primary/focus/comic/personal literal (#2229)', () => {
+    const css = loadStylesheet()
+    const dangerLiterals = new Set(tokenValuesPerTheme(css, '--theme-danger-hover'))
+    for (const token of [
+      '--theme-primary-action',
+      '--theme-primary-action-hover',
+      '--theme-comic-accent',
+      '--theme-focus-ring',
+      '--theme-personal-accent',
+    ]) {
+      const otherLiterals = tokenValuesPerTheme(css, token)
+      for (const literal of otherLiterals) {
+        expect(
+          dangerLiterals.has(literal),
+          `${token} literal ${literal} must not equal a danger-hover literal`,
+        ).toBe(false)
+      }
     }
   })
 })
