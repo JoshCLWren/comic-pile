@@ -196,7 +196,7 @@ export default function QueuePage() {
 
   return (
     <PositionMenuProvider>
-      <div className="space-y-6 md:space-y-10 pb-10">
+      <div className="space-y-6 md:space-y-10 pb-[calc(10rem_+_env(safe-area-inset-bottom))] md:pb-10">
         <QueueControls
           activeCount={activeThreads.length}
           shuffleDisabled={shuffleDisabled}
@@ -213,7 +213,7 @@ export default function QueuePage() {
           <button
             type="button"
             onClick={modals.showCreateModal}
-            className="md:hidden fixed bottom-24 right-4 h-14 w-14 rounded-full bg-amber-600 text-white font-black text-3xl shadow-[0_4px_20px_rgba(212,137,14,0.4)] z-50 flex items-center justify-center hover:bg-amber-500 transition-colors"
+            className="md:hidden fixed bottom-[calc(6rem_+_env(safe-area-inset-bottom))] right-4 h-14 w-14 rounded-full bg-[var(--theme-primary-action)] text-stone-950 font-black text-3xl shadow-[0_4px_20px_color-mix(in_srgb,var(--theme-primary-action)_40%,transparent)] z-50 flex items-center justify-center hover:bg-[var(--theme-primary-action-hover)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--theme-bg-page)]"
             aria-label="Add Series"
           >
             +
