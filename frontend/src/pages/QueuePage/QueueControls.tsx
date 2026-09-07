@@ -117,7 +117,7 @@ function QueueControlsInner({
             }
           }}
           placeholder="Search..."
-          className="h-9 px-3 bg-white/5 border border-white/10 rounded-lg text-xs text-stone-300 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors w-full md:w-auto"
+          className="h-9 px-3 rounded-lg text-xs form-control w-full md:w-auto"
         />
       </div>
       <span className="sr-only" data-testid="queue-active-count">{activeCount}</span>

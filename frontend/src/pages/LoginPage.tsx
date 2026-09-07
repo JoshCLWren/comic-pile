@@ -87,7 +87,7 @@ export default function LoginPage() {
                  required
                  value={username}
                  onChange={(e) => setUsername(e.target.value)}
-                 className="w-full h-12 px-4 bg-white/5 border border-solid border-white/20 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                 className="w-full h-12 px-4 rounded-xl text-sm form-control"
                  placeholder="Enter your username"
                />
              </div>
@@ -104,7 +104,7 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full h-12 px-4 bg-white/5 border border-solid border-white/20 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                className="w-full h-12 px-4 rounded-xl text-sm form-control"
                 placeholder="••••••••"
               />
             </div>

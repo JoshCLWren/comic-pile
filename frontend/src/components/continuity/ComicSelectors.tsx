@@ -90,7 +90,7 @@ export function ContinuityThreadSelector({
           placeholder={placeholder}
           disabled={disabled}
           aria-expanded={!disabled && results.length > 0}
-          className="mt-1 w-full rounded-xl border border-solid border-white/20 bg-white/5 px-3 py-2 text-sm text-stone-300 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-50"
+          className="mt-1 w-full rounded-xl px-3 py-2 text-sm form-control disabled:opacity-50"
         />
       </label>
 
@@ -181,7 +181,7 @@ export function ContinuityIssueSelector({
             onChange(next)
           }}
           disabled={disabled || isLoading || issues.length === 0}
-          className="mt-1 w-full rounded-xl border border-solid border-white/20 bg-white/5 px-3 py-2 text-sm text-stone-300 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-50"
+          className="mt-1 w-full rounded-xl px-3 py-2 text-sm form-control disabled:opacity-50"
         >
           <option value="">{isLoading ? 'Loading issues…' : issues.length === 0 ? emptyMessage : 'Select an issue'}</option>
           {issues.map((issue) => (

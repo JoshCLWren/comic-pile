@@ -106,7 +106,7 @@ export function QueueModals({
               id="create-thread-title"
               value={createForm.title}
               onChange={(event) => setCreateForm({ ...createForm, title: event.target.value })}
-              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+              className="w-full rounded-xl px-3 py-2 text-sm form-control"
               required
             />
           </div>
@@ -137,7 +137,7 @@ export function QueueModals({
               type="text"
               value={createForm.issues}
               onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
-              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+              className="w-full rounded-xl px-3 py-2 text-sm form-control"
               placeholder="0-25 or 0, ½, Annual 1, 5-7"
               required
             />
@@ -173,7 +173,7 @@ export function QueueModals({
                   lastIssueRead: clampedValue,
                 })
               }}
-              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+              className="w-full rounded-xl px-3 py-2 text-sm form-control"
             />
             <p className="text-xs text-stone-400">
               Enter a count from the issue list above, not an issue number.
@@ -197,7 +197,7 @@ export function QueueModals({
               id="create-thread-notes"
               value={createForm.notes}
               onChange={(event) => setCreateForm({ ...createForm, notes: event.target.value })}
-              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors min-h-[80px]"
+              className="w-full rounded-xl px-3 py-2 text-sm form-control min-h-[80px]"
             />
           </div>
           <button
@@ -229,7 +229,7 @@ export function QueueModals({
                 id="edit-thread-title"
                 value={editForm.title}
                 onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
-                className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                className="w-full rounded-xl px-3 py-2 text-sm form-control"
                 required
               />
             </div>
@@ -268,7 +268,7 @@ export function QueueModals({
                       issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
                     })
                   }
-                  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                  className="w-full rounded-xl px-3 py-2 text-sm form-control"
                 />
               </div>
             )}
@@ -284,7 +284,7 @@ export function QueueModals({
                 id="edit-thread-notes"
                 value={editForm.notes}
                 onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
-                className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors min-h-[80px]"
+                className="w-full rounded-xl px-3 py-2 text-sm form-control min-h-[80px]"
               />
             </div>
 
@@ -335,7 +335,7 @@ export function QueueModals({
             <select
               value={reactivateThreadId}
               onChange={(event) => setReactivateThreadId(event.target.value)}
-              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+              className="w-full rounded-xl px-3 py-2 text-sm form-control"
               required
             >
               <option value="">Select a thread...</option>
@@ -355,7 +355,7 @@ export function QueueModals({
               min="1"
               value={issuesToAdd}
               onChange={(event) => setIssuesToAdd(Number.parseInt(event.target.value, 10) || 1)}
-              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+              className="w-full rounded-xl px-3 py-2 text-sm form-control"
               required
             />
           </div>
