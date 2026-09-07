@@ -1,142 +1,133 @@
-# Canonical Reader Execution Model — Decision Record
+# Canonical Reader Execution Model - Decision Record
 
 **Issue:** #1619 (child of #1612)  
-**Date:** 2026-08-22  
-**Status:** Accepted  
-**Deciders:** Factory 47
+**Original decision:** 2026-08-22  
+**Reconciled:** 2026-09-07 under #2363 and #2366  
+**Status:** Accepted, corrected  
+**Decision owner:** JoshCLWren
 
 ## Context
 
 `main` maintained two overlapping ordering concepts:
 
-* **`continuity_plans`** (`ContinuityPlan` in `app/models/continuity_plan.py`): rich
-  JSON document with `nodes` (`issue` | `crossover` | `thread`), `lanes`
-  (ordered parallel sections), and `ordering_mode` (`informational` |
-  `strict_sequential`). Nodes are persisted verbatim in `nodes_json` /
-  `lanes_json` and evaluated for liveness via `app/continuity_plan_readiness.py`.
-* **`reading_orders`** (`ReadingOrder` + `ReadingOrderItem` in
-  `app/models/reading_order.py`): a flat, thread-level ordered list
-  (`position` 1-based). Projection `continuity_plan → reading_order` existed
-  in `app/services/reading_order_projection.py` and had to reject or flatten
-  non-thread nodes.
+* **`continuity_plans`** (`ContinuityPlan` in `app/models/continuity_plan.py`): rich JSON document with `nodes` (`issue` | `crossover` | `thread`), `lanes` (ordered parallel sections), and `ordering_mode` (`informational` | `strict_sequential`).
+* **`reading_orders`** (`ReadingOrder` + `ReadingOrderItem` in `app/models/reading_order.py`): a flat, thread-level ordered list.
 
-Keeping both as peers recreates the competing-source-of-truth problem from
-#257: one system (positions, lanes) controls visible order while another
-(DAG dependency edges / `ContinuityRule`) controls blocking, with no single
-owner for "what the reader intends next."
+Keeping both as peers recreates the competing-source-of-truth problem from #257: one system controls visible order while another controls blocking, with no single owner for what the reader intends next.
 
-#1612 requires one reader-owned **reading plan** that can express ordered
-issues, series/runs, crossovers, sequential and parallel sections,
-informational ordering independent from blocking, explicit hard dependencies
-only when chosen, checkpoints/convergence, roles/provenance (future), and
-progress/readiness — without raw graph editing.
+#1612 requires one reader-owned **Reading Plan** that can express ordered issues, series/runs, crossovers, sequential and parallel sections, informational ordering independent from blocking, explicit hard dependencies only when chosen, checkpoints/convergence, roles/provenance, and progress without raw graph editing.
+
+The later CBL work in #1615 introduced another ambiguity by treating `DependencyGroupMembership.sequence_order` as an adopted source-backed order that Roll could consume directly. That would make ordered dependency-group membership a peer execution model beside the canonical Reading Plan. This 2026-09-07 reconciliation resolves that conflict.
 
 ## Decision
 
-**Evolve `continuity_plans` into the canonical reader-owned reading plan.**
-Treat legacy `reading_orders` as **compatible views / import sources**.
+**`continuity_plans` remain the canonical reader-owned Reading Plan.**
 
-Option 1 from #1619 is adopted; option 2 (evolving reading_orders to plan
-semantics) and a third peer ordering resource are both rejected.
+Legacy `reading_orders`, CBL source lists, dependency-group membership order, and external template order are compatibility/source representations. They may feed or preserve evidence for a Reading Plan, but they do not independently own the reader's intent.
 
-* The canonical type is `ContinuityPlan` / `ContinuityPlanWrite` /
-  `ContinuityPlanResponse` (`app/schemas/continuity_plan.py`).
-* `reading_orders` remain readable via `GET /api/v1/reading-orders/` and
-  `GET /api/v1/threads/{id}/reading-orders` and writable only through
-  explicit compatibility paths.
-* A third ordering resource is forbidden. New ordering features extend the
-  canonical plan schema; they do not create a parallel table.
+* The canonical reader-owned type is `ContinuityPlan` / `ContinuityPlanWrite` / `ContinuityPlanResponse`.
+* Legacy `reading_orders` remain readable/importable compatibility data.
+* A third peer ordering resource is forbidden.
+* `DependencyGroupMembership.sequence_order` may preserve source/crossover ordering evidence and source position, but it is not an independent answer to what the reader intends to read next.
+* New reader-facing ordering features extend or feed the canonical Reading Plan. They do not create a parallel execution model.
+
+## Responsibilities
+
+### Reading Plan
+
+The Reading Plan owns reader intent:
+
+* which material the reader chose to include or exclude;
+* the reader's chosen order and parallel structure;
+* roles/optionality and reader overrides;
+* source/provenance snapshots needed to explain imported choices;
+* explicit hard boundaries, checkpoints, convergence, or other constraints chosen by the reader.
+
+The user-facing product should open and edit this concept when the reader asks what they are reading or wants to extend an existing project.
+
+### CBL and other external sources
+
+A CBL is source evidence and an import/adoption input.
+
+* The CBL controls its own source order.
+* The reader controls membership and whether/how that source is adopted into their Reading Plan.
+* CBL source positions and provenance may remain stored in normalized source data and/or `DependencyGroupMembership.sequence_order` for traceability.
+* After adoption, the reader-owned Reading Plan is the authority for the reader's chosen material and order.
+* A source refresh produces a reviewable diff. It must not silently overwrite the adopted Reading Plan.
+
+`sequence_order` therefore does **not** become a second Reading Plan and Roll must not treat it as an independent reader-intent source.
+
+### Ordering versus blocking
+
+Ordering is not automatically blocking.
+
+A CBL can provide a source sequence without every adjacent source entry becoming a hard prerequisite. Adoption preserves the chosen order in the Reading Plan. Only explicit hard plan semantics compile into eligibility constraints.
+
+This preserves #1613 and #257:
+
+* informational order creates zero hard rules;
+* strict sequential order may compile adjacent hard constraints;
+* checkpoints/convergence compile only the constraints required by those explicit plan semantics;
+* source adjacency, lane count, issue number, publication date, `Issue.position`, and `sequence_order` alone do not manufacture hard dependencies.
+
+### Continuity rules and dependencies
+
+Continuity rules are execution constraints, not a user-facing competing plan.
+
+* Plan-owned hard semantics compile into rules with ownership/provenance so they can be replaced safely when the plan changes.
+* Genuine standalone prerequisites may exist independently of a Reading Plan.
+* Legacy dependencies must be classified during migration rather than blindly converted into plan order or preserved as permanent execution truth.
+* Legacy CBL pairwise dependency expansion is not a valid representation of source order.
+
+### Roll
+
+Roll is the runtime selection authority.
+
+Roll must ask one eligibility path what may be selected. That path evaluates the applicable hard constraints derived from the reader's Reading Plans plus legitimate standalone prerequisites. Roll must not independently reconcile Reading Plans, legacy Reading Orders, CBL `sequence_order`, dependency-group order, and legacy dependencies as separate sources of reader intent.
+
+Once Roll selects an item, a second user-facing readiness gate must not re-litigate the same decision. This preserves the intended direction of #2104 without removing eligibility enforcement prematurely.
 
 ## Canonical contract
 
 Source: `app/schemas/continuity_plan.py:ContinuityPlanWrite`
 
-* **Issue-level entries without losing run context.** Nodes of type `issue`
-  reference `Issue.id`; `label` resolution in `continuity_plan_readiness.py`
-  joins `threads` to surface `"Series #N"` without duplicating series data
-  into the plan. Thread and crossover nodes remain supported but are not
-  required to represent an issue-level multi-series plan.
-* **Sequential order:** per-lane `position` with uniqueness enforced per
-  lane. `strict_sequential` additionally requires one lane with contiguous
-  `0..len-1` positions.
-* **Parallel lanes/sections:** `lanes` ordered by `order`; evaluation order
-  is `(lane.order, node.position, node.id)` (`continuity_plan_readiness.py`).
-* **Optionality/roles, checkpoints/convergence:** `ordering_mode` is the
-  only blocking signal today; informational plans create **zero**
-  `ContinuityRule` rows (`app/api/continuity_plan.py:_replace_compiled_rules`).
-  Roles, optionality, and convergence are reserved schema extensions (see
-  #1613, #1616, #1614) and must not be inferred from lane count or adjacency.
-* **Progress/readiness:** `GET /api/v1/continuity-plans/{id}/readiness`
-  returns per-node `is_readable`/`is_complete`, `blockers`, `diagnostics`,
-  and bounded chains, sharing the same rule evaluation as
-  `app/continuity_readiness.py`.
-* **Ordering is not blocking (#257 boundary).** Within-series issue
-  progression is ordinary `position` ordering inside `Issue`; it is never
-  encoded as `ContinuityRule` or `Dependency` edges unless the reader
-  chooses `strict_sequential`. See guardrail below.
+* **Issue-level entries without losing run context.** Nodes of type `issue` reference `Issue.id`; thread and crossover nodes remain supported.
+* **Sequential order:** per-lane `position` with uniqueness enforced per lane. `strict_sequential` may require one ordered lane where appropriate.
+* **Parallel lanes/sections:** lanes retain explicit order and node positions.
+* **Optionality/roles, checkpoints/convergence:** these belong to the reader-owned plan and must not be inferred from source adjacency.
+* **Ordering is not blocking.** Informational plans create zero hard rules.
+* **Hard semantics compile to constraints.** The persisted/derived runtime representation used by Roll must be defined and audited under #2366 before further implementation resumes.
 
 ## Migration / compatibility strategy
 
-1. **No silent semantic change.** Persisted `continuity_plans.rows`
-   (`nodes_json`, `lanes_json`) and `reading_orders` items load unchanged.
-   Validation (`ContinuityPlanWrite.validate_structure`) rejects malformed
-   payloads before persistence; existing rows are not rewritten.
+1. **No silent semantic change.** Existing Reading Plans, Reading Orders, CBL evidence, memberships, read history, and continuity rules are not rewritten merely because this decision is clarified.
 
-2. **Reading orders remain readable.** List and thread-scoped endpoints
-   continue to serve legacy data verbatim. Frontend surfaces that previously
-   consumed reading orders must not need a second fetch to determine the
-   reader's intended next position once they adopt the canonical plan.
+2. **Reading Orders remain readable.** They are compatibility/import data, not a second active source of reader intent.
 
-3. **Adoption (reading_order → plan) is explicit and lossless.**
-   `POST /api/v1/continuity-plans/from-reading-order` imports one owned
-   `ReadingOrder` into a new plan with one lane, mapping items ordered by
-   `ReadingOrderItem.position` to `thread` nodes with `position` 0-based.
-   The source reading order is not mutated. Duplicate thread_ids in the
-   source are rejected as 409 with structured `duplicate_thread` detail so
-   the caller deduplicates before adoption. The adopted plan is the new
-   owner of the order intent; the reading order remains only as the legacy
-   backup.
+3. **Reading Order adoption is explicit.** Adopting a legacy Reading Order creates/updates a Reading Plan without mutating the source order.
 
-4. **Projection (plan → reading_order) is export-only.**
-   `POST /api/v1/continuity-plans/{plan_id}/reading-orders/project-preview`
-   and `.../project` remain as deterministic export/migration tooling
-   (`app/services/reading_order_projection.py`). They reject `non_thread_node`
-   and `duplicate_thread` as conflicts before mutation and never feed back
-   into the plan (no two-way sync). New features must not treat projection
-   as the bridge between two sources of reader intent.
+4. **Plan to Reading Order projection is export/compatibility only.** It must never become two-way synchronization between competing intent stores.
 
-5. **Queue / Roll consume one contract.**
-   Queue ordering is `Thread.queue_position`; roll eligibility is
-   `Thread.is_blocked` derived from `ContinuityRule` rows. Informational
-   plans write zero rules, so they never block; `strict_sequential` writes
-   exactly one rule per adjacent pair, each tagged with
-   `continuity-plan:{plan_id}` for owned-compilation accounting. Reading
-   orders are never consulted by `app/api/queue.py` or `app/api/roll.py`.
+5. **CBL adoption feeds the Reading Plan.** Preview/reconciliation remains read-only. Commit applies only reader-approved material and records enough source position/provenance to explain the adoption. The final reader-owned intent is represented by the Reading Plan.
 
-6. **Within-series progression stays out of the blocking graph.**
-   `Issue.position` inside a thread is informational ordering. No
-   `ContinuityRule` or `Dependency` is inferred from adjacent issue
-   positions unless the user explicitly created a strict sequential plan.
-   This preserves the #257 boundary: canonical order is the plan's lanes,
-   cross-content blocking is only explicit rule edges.
+6. **`sequence_order` is source/crossover ordering evidence.** It may be kept for source provenance, crossover rendering, migration, and audit. It is not independently consulted as the reader's plan once canonical adoption exists.
 
-## Consequences
+7. **Roll consumes one eligibility result.** The implementation details are subject to the #2366 current-state audit because current production still contains legacy-backed constraints and partially implemented CBL behavior.
 
-* New reader-facing ordering UI targets the canonical plan exclusively.
-* Reading-order projection stays available but is documented as deprecated
-  export tooling.
-* Future extensions (roles, optionality, provenance, checkpoints) extend
-  the plan node/edge schema, not reading_order items.
-* Tests must assert: duplicate/conflicting entries are rejected, issue-level
-  multi-series plans round-trip and remain executable via readiness,
-  cross-series boundaries do not spuriously block, and legacy orders
-  round-trip + adopt without data loss.
+8. **Migration is incremental.** Production legacy dependencies are not deleted until equivalent intended behavior is represented canonically, verified through Roll, and covered by a rollback-safe migration.
+
+## Consequences for open recovery work
+
+* #1615 must be corrected so CBL adoption creates/updates canonical Reading Plan intent rather than establishing `sequence_order` as a peer execution model.
+* #2127 must not be implemented from its current assumption that ordered dependency-group membership is sufficient as the final active reader order.
+* #2128 must open the resulting Reading Plan after adoption rather than a separate source-backed reading-order product surface.
+* #2129 must not migrate production onto `sequence_order` as a replacement execution authority before the canonical adoption/runtime path is proven.
+* #2104 remains blocked until Roll's one eligibility path is verified.
+* B.P.R.D. is the first end-to-end acceptance case under #2366.
 
 ## Alternatives rejected
 
-* **Evolve `reading_orders` to rich plan semantics.** Would require widening a
-  flat thread table to issue/crossover/lane semantics and migrating JSON
-  semantics into relational items; continuity plans already carry the richer
-  shape.
-* **Introduce a third `reading_plans` resource.** Explicitly forbidden by
-  #1619; would recreate the two-sources problem with a third.
+* **Evolve `reading_orders` to rich plan semantics.** This preserves two overlapping concepts and loses richer plan semantics.
+* **Make ordered dependency-group membership the active reader plan.** This recreates the competing-source problem and conflicts with #1619.
+* **Introduce a third `reading_plans` resource.** Explicitly forbidden by #1619.
+* **Encode every source adjacency as a hard dependency.** This violates the ordering-versus-blocking boundary and recreates the legacy CBL dependency explosion.
