@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from hashlib import sha256
 
 import pytest
 from httpx import AsyncClient
@@ -21,12 +22,13 @@ async def _seed_list(
     active: bool = True,
     count: int | None = 5,
 ) -> CBLSourceList:
+    """Persist one source list with a schema-valid deterministic content hash."""
     row = CBLSourceList(
         source_id=source.id,
         source_path=path,
         name=name,
         declared_issue_count=count,
-        content_hash=f"hash-{name}-{path}",
+        content_hash=sha256(f"{name}|{path}".encode()).hexdigest(),
         revision_sha=source.revision_sha,
         active=active,
     )
@@ -40,6 +42,7 @@ async def test_discovery_filters_searches_orders_and_limits(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
+    """Discovery searches active list metadata in stable bounded order."""
     source = CBLSource(
         repository="example/cbl",
         revision_sha="abc123",
@@ -102,6 +105,7 @@ async def test_discovery_is_read_only(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
+    """Discovery leaves persisted source and source-list row counts unchanged."""
     source = CBLSource(
         repository="example/read-only",
         revision_sha="def456",
