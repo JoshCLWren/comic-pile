@@ -191,6 +191,27 @@ describe('useQueueThreads (bounded incremental loader)', () => {
     expect(result.current.nextPageToken).toBe('tok-2')
   })
 
+  it('keeps the previous rows visible while a search-key transition fetches', async () => {
+    mockedThreadsApi.list
+      .mockResolvedValueOnce({ threads: [{ id: 1, title: 'Saga' } as never], next_page_token: null })
+      .mockImplementationOnce(() => new Promise(() => {})) // never resolves: search still in flight
+
+    const wrapper = createWrapper()
+    const { result, rerender } = renderHook(({ search }: { search: string }) => useQueueThreads(search), {
+      wrapper,
+      initialProps: { search: '' },
+    })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    expect(result.current.data).toHaveLength(1)
+
+    rerender({ search: 'bat' })
+
+    // While the new first page is still fetching, the previously rendered row
+    // must NOT be cleared/blanked (keepPreviousData placeholder behavior).
+    expect(result.current.data).toEqual([{ id: 1, title: 'Saga' }])
+  })
+
   it('resets to the first compatible page when search changes', async () => {
     const wrapper = createWrapper()
     const { result, rerender } = renderHook(({ search }: { search: string }) => useQueueThreads(search), {

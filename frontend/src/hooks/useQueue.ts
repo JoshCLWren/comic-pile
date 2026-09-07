@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useInfiniteQuery, useMutation } from '@tanstack/react-query'
+import { keepPreviousData, useInfiniteQuery, useMutation } from '@tanstack/react-query'
 import { invalidateAfterQueueMovement } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
@@ -49,6 +49,15 @@ export function queueThreadsQueryOptions(searchTerm?: string, sort: QueueSortBy 
       ),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: ThreadListResponse) => lastPage.next_page_token ?? undefined,
+    /**
+     * Keep previously rendered queue rows on screen while a search/sort key
+     * transition fetches its first page. Without this the changing key resets
+     * the infinite query to an empty pending state, so the Queue page tears
+     * down the list and flashes the full-screen loader on every search commit.
+     * `keepPreviousData` exposes the old rows as placeholder data until the new
+     * first page arrives.
+     */
+    placeholderData: keepPreviousData,
   }
 }
 
