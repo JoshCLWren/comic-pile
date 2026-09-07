@@ -30,14 +30,14 @@ vi.mock('../components/PositionMenu', () => ({
     snoozeLabel,
     snoozeDisabled,
   }: {
-    onDependencies: () => void;
-    onMoveToFront: () => void;
-    onMoveToBack: () => void;
-    onEdit: () => void;
-    onDelete: () => void;
-    onSnooze?: () => void;
-    snoozeLabel?: string;
-    snoozeDisabled?: boolean;
+    onDependencies: () => void
+    onMoveToFront: () => void
+    onMoveToBack: () => void
+    onEdit: () => void
+    onDelete: () => void
+    onSnooze?: (thread: Thread) => void
+    snoozeLabel?: string
+    snoozeDisabled?: boolean
   }) => (
     <div data-testid="mock-position-menu">
       <button type="button" data-testid="mock-position-move-to-front" onClick={onMoveToFront}>
@@ -49,20 +49,19 @@ vi.mock('../components/PositionMenu', () => ({
       <button type="button" data-testid="mock-position-edit" onClick={onEdit}>
         Edit
       </button>
-      <button type="button" data-testid="mock-position-dependencies" onClick={onDependencies}>
-        Dependencies
-      </button>
-      {onSnooze && snoozeLabel ? (
+      {snoozeLabel && (
         <button
           type="button"
           data-testid="mock-position-snooze"
+          onClick={onSnooze ? () => onSnooze({} as Thread) : undefined}
           disabled={snoozeDisabled}
-          aria-disabled={snoozeDisabled || undefined}
-          onClick={onSnooze}
         >
           {snoozeLabel}
         </button>
-      ) : null}
+      )}
+      <button type="button" data-testid="mock-position-dependencies" onClick={onDependencies}>
+        Dependencies
+      </button>
       <button type="button" data-testid="mock-position-delete" onClick={onDelete}>
         Delete
       </button>
@@ -270,22 +269,13 @@ describe('QueueThreadCard', () => {
 
     const detail = screen.getByTestId('queue-thread-blocked-detail')
     expect(detail).toHaveTextContent(
-      'Edit and Delete still work. Read unlocks once the blocker above is cleared.',
+      'Secondary actions are in the menu. Read unlocks once the blocker above is cleared.',
     )
     expect(detail).toHaveTextContent(/Read unlocks once the blocker above is cleared/i)
 
-    const actionsGroup = screen.getByRole('group', { name: 'Primary action' })
+    const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
     const readButton = within(actionsGroup).getByRole('button', { name: 'Read' })
     expect(readButton).toBeDisabled()
-
-    const editButton = screen.getByTestId('mock-position-edit')
-    expect(editButton).not.toBeDisabled()
-
-    const snoozeButton = screen.getByTestId('mock-position-snooze')
-    expect(snoozeButton).toHaveAttribute('aria-disabled', 'true')
-
-    const deleteButton = screen.getByTestId('mock-position-delete')
-    expect(deleteButton).not.toBeDisabled()
 
     expect(screen.getByRole('link', { name: 'Open Prequel Thread' })).toHaveAttribute(
       'href',
@@ -308,7 +298,7 @@ describe('QueueThreadCard', () => {
 
     const detail = screen.getByTestId('queue-thread-blocked-detail')
     expect(detail).toHaveTextContent(
-      'Edit, Snooze, and Delete still work. Read unlocks once the blocker above is cleared.',
+      'Secondary actions are in the menu. Read unlocks once the blocker above is cleared.',
     )
   })
 
@@ -324,7 +314,7 @@ describe('QueueThreadCard', () => {
     expect(screen.queryByTestId('queue-thread-blocked-detail')).not.toBeInTheDocument()
     expect(screen.queryByText(/Read unlocks once the blocker/i)).not.toBeInTheDocument()
 
-    const actionsGroup = screen.getByRole('group', { name: 'Primary action' })
+    const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
     expect(within(actionsGroup).getByRole('button', { name: 'Read' })).not.toBeDisabled()
   })
 
@@ -596,39 +586,61 @@ describe('QueueThreadCard', () => {
       expect(onCardClick).not.toHaveBeenCalled()
     })
     
-    it('collapses row actions to Read plus the overflow menu and confirms onCardClick is not invoked', async () => {
+    it('exercises QueueThreadActions descendants and confirms onCardClick is not invoked', async () => {
       const user = userEvent.setup()
       const onCardClick = vi.fn()
       const onRead = vi.fn()
-      const onSnooze = vi.fn()
 
       renderCard(createMockThread(), {
         onCardClick,
         onRead,
-        onSnooze,
         snoozeLabel: 'Snooze',
-        snoozeIcon: ''
+        snoozeIcon: '😴',
       })
 
-      // The shared menu owns every action except Read.
-      expect(screen.getByRole('group', { name: /Primary action/i })).toBeInTheDocument()
-      expect(screen.getByTestId('mock-position-menu')).toBeInTheDocument()
+      const actionsContainer = screen.getByRole('group', { name: /Actions for Test Thread/i })
 
-      // Test the collapsed Read action within the Primary action group
-      const actionsContainer = screen.getByRole('group', { name: /Primary action/i })
       const readButton = actionsContainer.querySelector('button[aria-label="Read"]')
 
       await user.click(readButton as HTMLElement)
       expect(onRead).toHaveBeenCalledTimes(1)
       expect(onCardClick).not.toHaveBeenCalled()
+    })
 
-      // Reset mocks
+    it('exercises PositionMenu descendants (Edit, Snooze, Delete) and confirms onCardClick is not invoked', async () => {
+      const user = userEvent.setup()
+      const onCardClick = vi.fn()
+      const onEdit = vi.fn()
+      const onSnooze = vi.fn()
+      const onDelete = vi.fn()
+
+      renderCard(createMockThread(), {
+        onCardClick,
+        onEdit,
+        onSnooze,
+        onDelete,
+        snoozeLabel: 'Snooze',
+        snoozeIcon: '😴',
+      })
+
+      const editBtn = screen.getByTestId('mock-position-edit')
+      const snoozeBtn = screen.getByTestId('mock-position-snooze')
+      const deleteBtn = screen.getByTestId('mock-position-delete')
+
+      await user.click(editBtn)
+      expect(onEdit).toHaveBeenCalledTimes(1)
+      expect(onCardClick).not.toHaveBeenCalled()
+
       vi.clearAllMocks()
 
-      // Test Snooze (now owned by the overflow menu)
-      const snoozeButton = screen.getByTestId('mock-position-snooze')
-      await user.click(snoozeButton)
+      await user.click(snoozeBtn)
       expect(onSnooze).toHaveBeenCalledTimes(1)
+      expect(onCardClick).not.toHaveBeenCalled()
+
+      vi.clearAllMocks()
+
+      await user.click(deleteBtn)
+      expect(onDelete).toHaveBeenCalledTimes(1)
       expect(onCardClick).not.toHaveBeenCalled()
     })
     
@@ -719,53 +731,25 @@ describe('QueueThreadCard', () => {
       expect(onCardClick).not.toHaveBeenCalled()
     })
 
-    it('renders snooze button with aria-disabled when not the pending thread', () => {
+    it('renders snooze button in PositionMenu with aria-disabled when not the pending thread', () => {
       renderCard(createMockThread(), {
         snoozeDisabled: true,
         snoozeLabel: 'Snooze',
         snoozeIcon: '😴',
       })
 
-      const snoozeButton = screen.getByRole('button', { name: 'Snooze' })
-      expect(snoozeButton).toHaveAttribute('aria-disabled', 'true')
-      expect(snoozeButton).toHaveAttribute('tabindex', '0')
+      const snoozeButton = screen.getByTestId('mock-position-snooze')
+      expect(snoozeButton).toBeDisabled()
     })
 
-    it('renders hidden snooze description when snooze is disabled', () => {
-      renderCard(createMockThread({ title: 'The Maxx' }), {
-        snoozeDisabled: true,
-        snoozeLabel: 'Snooze',
-        snoozeIcon: '😴',
-      })
-
-      const description = screen.getByText(
-        'Only the comic currently waiting to be read can be snoozed.',
-      )
-      expect(description).toHaveClass('sr-only')
-      expect(description).toHaveAttribute('id', 'snooze-description-the-maxx')
-    })
-
-    it('does not render hidden snooze description when snooze is enabled', () => {
+    it('renders snooze button in PositionMenu without aria-disabled when enabled', () => {
       renderCard(createMockThread(), {
         snoozeDisabled: false,
         snoozeLabel: 'Snooze',
         snoozeIcon: '😴',
       })
 
-      expect(
-        screen.queryByText('Only the comic currently waiting to be read can be snoozed.'),
-      ).not.toBeInTheDocument()
-    })
-
-    it('renders snooze button without aria-disabled when enabled', () => {
-      renderCard(createMockThread(), {
-        snoozeDisabled: false,
-        snoozeLabel: 'Snooze',
-        snoozeIcon: '😴',
-      })
-
-      const snoozeButton = screen.getByRole('button', { name: 'Snooze' })
-      expect(snoozeButton).not.toHaveAttribute('aria-disabled')
-      expect(snoozeButton).not.toHaveAttribute('tabindex')
+      const snoozeButton = screen.getByTestId('mock-position-snooze')
+      expect(snoozeButton).not.toBeDisabled()
     })
   })

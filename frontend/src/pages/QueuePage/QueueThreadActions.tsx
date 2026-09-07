@@ -1,12 +1,14 @@
 import Tooltip from '../../components/Tooltip'
 
 interface QueueThreadActionsProps {
+  title: string
   readDisabled?: boolean
   readDisabledReason?: string
   onRead: () => void
 }
 
 export default function QueueThreadActions({
+  title,
   readDisabled = false,
   readDisabledReason,
   onRead,
@@ -20,7 +22,7 @@ export default function QueueThreadActions({
     <div
       className="flex flex-wrap items-center gap-2"
       role="group"
-      aria-label="Primary action"
+      aria-label={`Actions for ${title}`}
     >
       {readDisabled ? (
         <Tooltip content={readDisabledReason ?? 'Blocked by dependency'}>
