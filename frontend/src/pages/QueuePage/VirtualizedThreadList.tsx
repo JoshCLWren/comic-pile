@@ -28,10 +28,9 @@ interface VirtualizedThreadListProps<T> {
    * virtualized and non-virtualized presentations are both one full-width row.
    */
   explicitColumnCount?: number
-  /**
-   * Optional external scroll ref to use as the scroll container.
-   */
-  scrollRef?: React.RefObject<HTMLDivElement>
+  sentinelRef?: React.RefObject<HTMLDivElement | null>
+  scrollRootRef?: React.RefObject<HTMLDivElement | null>
+  hasNextPage?: boolean
 }
 
 /**
@@ -59,13 +58,14 @@ interface VirtualizedThreadListProps<T> {
  * for E2E compatibility, including in the empty state.
  */
 export default function VirtualizedThreadList<T>({
-   threads,
-   renderItem,
-   explicitColumnCount,
-   scrollRef: externalScrollRef,
- }: VirtualizedThreadListProps<T>) {
-   const scrollRef = useRef<HTMLDivElement>(null)
-
+  threads,
+  renderItem,
+  explicitColumnCount,
+  sentinelRef,
+  scrollRootRef,
+  hasNextPage,
+}: VirtualizedThreadListProps<T>) {
+  const scrollRef = useRef<HTMLDivElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [containerHeight, setContainerHeight] = useState(0)
   const [columnCount, setColumnCount] = useState(() =>
@@ -114,7 +114,7 @@ export default function VirtualizedThreadList<T>({
   const virtualizerOptions = useMemo(
     () => ({
       count: rowCount,
-      getScrollElement: () => externalScrollRef?.current || scrollRef.current,
+      getScrollElement: () => scrollRef.current,
       estimateSize: () => ROW_HEIGHT_WITH_GAP,
       overscan: Math.ceil(OVERSCAN_PX / ROW_HEIGHT_WITH_GAP),
     }),
@@ -136,7 +136,7 @@ export default function VirtualizedThreadList<T>({
 
   const handleContainerDragOver = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
-      const container = (externalScrollRef?.current || scrollRef.current)!
+      const container = scrollRef.current!
 
       const now = performance.now()
       // Throttle to avoid flooding scrollToIndex with 60+ calls per second.
@@ -172,12 +172,12 @@ export default function VirtualizedThreadList<T>({
     return (
       <div ref={wrapperRef} style={{ height: 'calc(100dvh - 14rem)' }}>
         <div
-          ref={externalScrollRef ? null : scrollRef}
+          ref={scrollRef}
           data-testid="queue-thread-list"
           id="queue-container"
           role="list"
           aria-label="Thread queue"
-          className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
+          className="@container rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
           style={{
             height: '100%',
             overflowY: 'auto',
@@ -201,12 +201,17 @@ export default function VirtualizedThreadList<T>({
       style={{ height: containerHeight || 'calc(100dvh - 14rem)' }}
     >
       <div
-        ref={externalScrollRef ? null : scrollRef}
+        ref={(node) => {
+          scrollRef.current = node
+          if (scrollRootRef) {
+            ;(scrollRootRef as React.MutableRefObject<HTMLDivElement | null>).current = node
+          }
+        }}
         data-testid="queue-thread-list"
         id="queue-container"
         role="list"
         aria-label="Thread queue"
-        className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
+        className="@container rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)]"
         onDragOver={handleContainerDragOver}
         onDrop={(event) => event.preventDefault()}
         style={{
@@ -217,7 +222,7 @@ export default function VirtualizedThreadList<T>({
       >
         <div
           style={{
-            height: `${virtualizer.getTotalSize()}px`,
+            height: `${virtualizer.getTotalSize() + (hasNextPage ? 16 : 0)}px`,
             position: 'relative',
             width: '100%',
           }}
@@ -268,6 +273,20 @@ export default function VirtualizedThreadList<T>({
               </div>
             )
           })}
+          {hasNextPage && (
+            <div
+              ref={sentinelRef}
+              style={{
+                position: 'absolute',
+                top: virtualizer.getTotalSize(),
+                left: 0,
+                width: '100%',
+                height: '16px',
+              }}
+              data-testid="queue-infinite-scroll-sentinel"
+              aria-hidden="true"
+            />
+          )}
         </div>
       </div>
     </div>

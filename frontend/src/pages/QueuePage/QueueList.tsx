@@ -8,7 +8,9 @@ interface QueueListProps {
   reorderError: string | null
   renderItem: (thread: Thread, index: number) => ReactNode
   isSearching: boolean
-  containerRef?: React.RefObject<HTMLDivElement>
+  sentinelRef: React.RefObject<HTMLDivElement | null>
+  scrollRootRef: React.RefObject<HTMLDivElement | null>
+  hasNextPage: boolean
 }
 
 /**
@@ -18,14 +20,15 @@ interface QueueListProps {
  * only sees a single composed list region.
  */
 export function QueueList({
-   activeThreads,
-   filteredThreads,
-   reorderError,
-   renderItem,
-   isSearching,
-   containerRef,
- }: QueueListProps) {
-
+  activeThreads,
+  filteredThreads,
+  reorderError,
+  renderItem,
+  isSearching,
+  sentinelRef,
+  scrollRootRef,
+  hasNextPage,
+}: QueueListProps) {
   if (isSearching && filteredThreads.length === 0) {
     return (
       <div className="text-center text-stone-500" data-testid="queue-search-empty">
@@ -53,21 +56,25 @@ export function QueueList({
         </div>
       )}
       {filteredThreads.length > VIRTUALIZATION_THRESHOLD ? (
-        <VirtualizedThreadList
-          threads={filteredThreads}
-          renderItem={renderItem}
-          scrollRef={containerRef}
+        <VirtualizedThreadList 
+          threads={filteredThreads} 
+          renderItem={renderItem} 
+          sentinelRef={sentinelRef}
+          scrollRootRef={scrollRootRef}
+          hasNextPage={hasNextPage}
         />
       ) : (
         <div
-          ref={containerRef}
           data-testid="queue-thread-list"
           id="queue-container"
           role="list"
           aria-label="Thread queue"
-          className="overflow-hidden rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] divide-y divide-[var(--theme-border)]"
+          className="@container overflow-hidden rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] divide-y divide-[var(--theme-border)]"
         >
           {filteredThreads.map((thread, index) => renderItem(thread, index))}
+          {hasNextPage && (
+            <div ref={sentinelRef} className="h-4" data-testid="queue-infinite-scroll-sentinel" aria-hidden="true" />
+          )}
         </div>
       )}
     </>
