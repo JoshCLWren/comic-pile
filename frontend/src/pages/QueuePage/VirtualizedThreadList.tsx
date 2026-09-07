@@ -77,8 +77,6 @@ export default function VirtualizedThreadList<T>({
 
   // React to offset changes (e.g. window resize or layout shifts above the list).
   useEffect(() => {
-    const wrapper = wrapperRef.current!
-
     let rafId: number | null = null
 
     const observer = new ResizeObserver(() => {
