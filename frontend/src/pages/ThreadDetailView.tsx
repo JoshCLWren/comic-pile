@@ -523,7 +523,7 @@ export default function ThreadDetailView() {
               <input
                 value={editForm.title}
                 onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
-                className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                className="w-full rounded-xl px-3 py-2 text-sm form-control"
                 required
               />
             </div>
@@ -554,7 +554,7 @@ export default function ThreadDetailView() {
                       issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
                     })
                   }
-                  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
+                  className="w-full rounded-xl px-3 py-2 text-sm form-control"
                 />
               </div>
             )}
@@ -566,7 +566,7 @@ export default function ThreadDetailView() {
               <textarea
                 value={editForm.notes}
                 onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
-                className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors min-h-[80px]"
+                className="w-full rounded-xl px-3 py-2 text-sm form-control min-h-[80px]"
               />
             </div>
           </form>

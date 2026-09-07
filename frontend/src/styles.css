@@ -378,6 +378,23 @@ body {
     0 10px 10px -5px rgba(0, 0, 0, 0.2);
 }
 
+.form-control {
+  background: var(--theme-bg-panel);
+  border: 1px solid var(--theme-border);
+  color: var(--theme-text-primary);
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.form-control::placeholder {
+  color: var(--theme-text-muted);
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--theme-focus-ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-focus-ring) 30%, transparent);
+}
+
 .dice-state-idle {
   opacity: 0.7;
   filter: brightness(0.8);
