@@ -142,6 +142,138 @@ describe('RatingActionPanel', () => {
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
+  it('resets Copy title to idle when threadTitle changes', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
+
+    const { rerender } = render(
+      <RatingActionPanel
+        errorMessage=""
+        rateIsPending={false}
+        snoozeIsPending={false}
+        dismissIsPending={false}
+        skipIsPending={false}
+        issuesRemaining={2}
+        onSubmitRating={() => {}}
+        onSnooze={() => {}}
+        onCancel={() => {}}
+        threadTitle="Cable"
+        issueNumber="#62"
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /copy cable #62/i }))
+    expect(screen.getByRole('button', { name: /copy cable #62/i })).toHaveTextContent('Copied')
+
+    rerender(
+      <RatingActionPanel
+        errorMessage=""
+        rateIsPending={false}
+        snoozeIsPending={false}
+        dismissIsPending={false}
+        skipIsPending={false}
+        issuesRemaining={2}
+        onSubmitRating={() => {}}
+        onSnooze={() => {}}
+        onCancel={() => {}}
+        threadTitle="Gotham Central"
+        issueNumber="#37"
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /copy gotham central #37/i })).toHaveTextContent(
+      'Copy title',
+    )
+  })
+
+  it('resets Copy title to idle when issueNumber changes', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
+
+    const { rerender } = render(
+      <RatingActionPanel
+        errorMessage=""
+        rateIsPending={false}
+        snoozeIsPending={false}
+        dismissIsPending={false}
+        skipIsPending={false}
+        issuesRemaining={2}
+        onSubmitRating={() => {}}
+        onSnooze={() => {}}
+        onCancel={() => {}}
+        threadTitle="Cable"
+        issueNumber="#62"
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /copy cable #62/i }))
+    expect(screen.getByRole('button', { name: /copy cable #62/i })).toHaveTextContent('Copied')
+
+    rerender(
+      <RatingActionPanel
+        errorMessage=""
+        rateIsPending={false}
+        snoozeIsPending={false}
+        dismissIsPending={false}
+        skipIsPending={false}
+        issuesRemaining={1}
+        onSubmitRating={() => {}}
+        onSnooze={() => {}}
+        onCancel={() => {}}
+        threadTitle="Cable"
+        issueNumber="#63"
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /copy cable #63/i })).toHaveTextContent('Copy title')
+  })
+
+  it('copies the new comic title after reset and shows success feedback', async () => {
+    const user = userEvent.setup()
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
+
+    const { rerender } = render(
+      <RatingActionPanel
+        errorMessage=""
+        rateIsPending={false}
+        snoozeIsPending={false}
+        dismissIsPending={false}
+        skipIsPending={false}
+        issuesRemaining={2}
+        onSubmitRating={() => {}}
+        onSnooze={() => {}}
+        onCancel={() => {}}
+        threadTitle="Cable"
+        issueNumber="#62"
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /copy cable #62/i }))
+    expect(writeText).toHaveBeenCalledWith('Cable #62')
+
+    rerender(
+      <RatingActionPanel
+        errorMessage=""
+        rateIsPending={false}
+        snoozeIsPending={false}
+        dismissIsPending={false}
+        skipIsPending={false}
+        issuesRemaining={1}
+        onSubmitRating={() => {}}
+        onSnooze={() => {}}
+        onCancel={() => {}}
+        threadTitle="Gotham Central"
+        issueNumber="#37"
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /copy gotham central #37/i }))
+    expect(writeText).toHaveBeenCalledWith('Gotham Central #37')
+    expect(screen.getByRole('button', { name: /copy gotham central #37/i })).toHaveTextContent(
+      'Copied',
+    )
+  })
+
   it('keeps the destructive confirm labeled with the pending skip state', async () => {
     const user = userEvent.setup()
     const onSkip = vi.fn()
