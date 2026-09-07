@@ -9,7 +9,7 @@ import secrets
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -269,7 +269,11 @@ class RecommendationSettings(BaseSettings):
     control.
     """
 
-    model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=[".env.test", ".env", ".envrc"],
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     algorithm_version: str = Field(
         default="v1-contextual",
@@ -278,7 +282,10 @@ class RecommendationSettings(BaseSettings):
             "of truth in comic_pile/recommendation_version.py) used in diagnostics "
             "and decision snapshots"
         ),
-        json_schema_extra={"env": "RECOMMENDATION_ALGORITHM_VERSION"},
+        validation_alias=AliasChoices(
+            "RECOMMENDATION_ALGORITHM_VERSION",
+            "algorithm_version",
+        ),
     )
     control_mode: Literal["contextual", "legacy"] = Field(
         default="contextual",
@@ -287,7 +294,7 @@ class RecommendationSettings(BaseSettings):
             "comic_pile/recommendation_version.py). 'legacy' forces unweighted "
             "selection while leaving instrumentation active."
         ),
-        json_schema_extra={"env": "RECOMMENDATION_CONTROL_MODE"},
+        validation_alias=AliasChoices("RECOMMENDATION_CONTROL_MODE", "control_mode"),
     )
 
 
