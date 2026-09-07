@@ -220,8 +220,7 @@ class DurableCacheAccounting:
 
         now = datetime.now(UTC)
         new_month = now.strftime("%Y-%m")
-        if new_month != self._month_key:
-            self._month_key = new_month
+        sql_month = self._month_key
 
         async with engine.begin() as conn:
             result = await conn.execute(
@@ -232,7 +231,7 @@ class DurableCacheAccounting:
                     "DO UPDATE SET commands = cache_usage.commands + EXCLUDED.commands "
                     "RETURNING commands"
                 ),
-                {"month": self._month_key, "count": self._block_size},
+                {"month": sql_month, "count": self._block_size},
             )
             row = result.fetchone()
 
@@ -247,6 +246,7 @@ class DurableCacheAccounting:
         self._remaining += self._block_size
         self._reserved_total += self._block_size
         self._month_key = new_month
+        self._degraded = False
 
         logger.info(
             "Cache usage block reserved month=%s block=%d neon_total=%d remaining=%d",

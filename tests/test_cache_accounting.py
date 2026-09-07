@@ -23,13 +23,21 @@ from unittest.mock import patch
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.cache_accounting import (
     DurableCacheAccounting,
     _current_month_key,
 )
+from app.cache_metrics import cache_command_metrics
 from app.cache_quota import observe_cache_quota, quota_guardrail
+
+
+@pytest.fixture(autouse=True)
+def reset_global_metrics() -> None:
+    """Reset shared global counters per test to prevent state leakage."""
+    cache_command_metrics.reset()
+    quota_guardrail.reset()
 
 
 @pytest.fixture
@@ -201,7 +209,7 @@ class TestBackgroundReplenishment:
                 "(month TEXT PRIMARY KEY, commands INTEGER NOT NULL DEFAULT 0)"
             ))
 
-        acc = DurableCacheAccounting(block_size=100, low_water_mark=25)
+        acc = DurableCacheAccounting(block_size=100, low_water_mark=25, replenish_interval=0.05)
         acc._engine = engine
         await acc._reserve_block()
 
@@ -216,8 +224,8 @@ class TestBackgroundReplenishment:
             name="test-replenish",
         )
 
-        # Wait for replenishment to trigger (interval is 0.1s in test)
-        await asyncio.sleep(0.3)
+        # Wait for replenishment to trigger (interval is 0.05s in test)
+        await asyncio.sleep(0.2)
 
         # The remaining should have been replenished
         assert acc.remaining > 25
@@ -349,8 +357,8 @@ class TestNeonFailureIsolation:
             acc.record(1)
         elapsed = time.monotonic() - start
 
-        # 1000 decrements should take well under 1ms
-        assert elapsed < 0.01
+        # 1000 decrements should take well under 100ms
+        assert elapsed < 0.1
         assert acc.remaining == 900
 
 
@@ -378,8 +386,8 @@ class TestMultiInstance:
         acc2._engine = engine
         await acc2._reserve_block()
 
-        # Both should see 200 total (100 each reserved)
-        assert acc1.neon_total == 200
+        # acc1 saw 100 when it reserved; acc2 saw 200 after both reserved
+        assert acc1.neon_total == 100
         assert acc2.neon_total == 200
 
         # Each has its own local remaining

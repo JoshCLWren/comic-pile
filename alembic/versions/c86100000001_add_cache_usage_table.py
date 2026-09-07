@@ -1,7 +1,7 @@
 """Add cache_usage table for durable month-to-date command accounting.
 
 Revision ID: c86100000001
-Revises: c86000000001
+Revises: 37a821bf4182
 Create Date: 2026-09-07
 """
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "c86100000001"
-down_revision = "c86000000001"
+down_revision = "37a821bf4182"
 branch_labels: str | None = None
 depends_on: str | None = None
 
