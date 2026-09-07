@@ -77,6 +77,19 @@ def pr_fixture(
     }
 
 
+def label_names(item: dict[str, object]) -> set[str]:
+    """Return label names from a GitHub issue/PR fixture."""
+    raw = item["labels"]
+    assert isinstance(raw, list)
+    names: set[str] = set()
+    for label in raw:
+        assert isinstance(label, dict)
+        name = label["name"]
+        assert isinstance(name, str)
+        names.add(name)
+    return names
+
+
 def test_producing_worker_cannot_receive_own_semantic_review():
     """Review assignment itself enforces producer/reviewer independence."""
     own_review = candidate(
@@ -614,7 +627,7 @@ def test_pr_at_no_diff_retry_limit_is_excluded_without_blocked_label():
         no_diff_attempts_by_issue={2264: policy.FACTORY_NO_DIFF_RETRY_LIMIT},
     )
     assert candidates == []
-    assert {label["name"] for label in target["labels"]} == {
+    assert label_names(target) == {
         "factory",
         "factory:unowned",
         "factory:changes-requested",
@@ -634,8 +647,9 @@ def test_review_pr_at_no_diff_retry_limit_is_excluded_without_blocked_label():
         no_diff_attempts_by_issue={2271: policy.FACTORY_NO_DIFF_RETRY_LIMIT},
     )
     assert candidates == []
-    assert "factory:review" in {label["name"] for label in target["labels"]}
-    assert "factory:blocked" not in {label["name"] for label in target["labels"]}
+    names = label_names(target)
+    assert "factory:review" in names
+    assert "factory:blocked" not in names
 
 
 def test_pr_no_diff_retry_suppression_expires_with_reset_window():
@@ -714,7 +728,7 @@ def _generation_attempts(
     stage: str = "factory:changes-requested",
     conflicted: bool = False,
     now: int = 2_000_000_000,
-) -> list[object]:
+):
     comments = [
         {
             "author_association": "OWNER",

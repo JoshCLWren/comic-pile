@@ -354,7 +354,7 @@ def test_assign_respects_pr_no_diff_retry_budget(
         assert (assignment.kind, assignment.number, assignment.stage) == ("pr", 2122, stage)
     else:
         assert assignment is None
-    assert {label["name"] for label in pr["labels"]} == {
+    assert {str(label["name"]) for label in pr["labels"]} == {
         "factory",
         "factory:unowned",
         stage,
