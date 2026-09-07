@@ -1,4 +1,4 @@
-import type { RatePayload, RollResponse, Thread } from '../types'
+import type { RatePayload, RollResponse, SnoozeSessionResponse, Thread } from '../types'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import api from './api'
 
@@ -7,8 +7,8 @@ const RECOVERY_CONFIG = { skipAuthRedirect: true }
 export const protectedRollMutationApi = {
   rate: (data: RatePayload): Promise<Thread> =>
     api.post<Thread, RatePayload>('/v1/rate/', data, RECOVERY_CONFIG),
-  snooze: (): Promise<void> =>
-    api.post<void>('/v1/snooze/', undefined, RECOVERY_CONFIG),
+  snooze: (): Promise<SnoozeSessionResponse> =>
+    api.post<SnoozeSessionResponse>('/v1/snooze/', undefined, RECOVERY_CONFIG),
   skip: (): Promise<RollResponse> =>
     api.post<RollResponse>('/v1/roll/skip', undefined, RECOVERY_CONFIG),
   bootstrap: (): Promise<RollBootstrapResponse> =>

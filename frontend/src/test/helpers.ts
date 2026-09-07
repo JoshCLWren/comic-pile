@@ -18,8 +18,8 @@ type TestUser = {
 };
 
 export async function waitForQueueReady(page: Page): Promise<void> {
-  await expect(page.getByRole('heading', { name: 'Read Queue' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Add Thread' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Queue' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Add Series' })).toBeVisible()
 }
 
 export async function gotoQueue(page: Page): Promise<void> {
@@ -46,7 +46,7 @@ export async function waitForThreadInQueue(page: Page, title: string): Promise<v
 }
 
 export async function waitForEditThreadModal(page: Page): Promise<void> {
-  await expect(page.getByRole('heading', { name: 'Edit Thread' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Edit Series' })).toBeVisible()
 }
 
 /**
@@ -57,7 +57,7 @@ export async function waitForEditThreadModal(page: Page): Promise<void> {
  * the thread card.
  */
 export async function openThreadActions(threadItem: Locator): Promise<Locator> {
-  await threadItem.locator('button[aria-label="Thread actions"]').click()
+  await threadItem.locator('button[aria-label="Series actions"]').click()
   const menu = threadItem.page().getByRole('menu')
   await expect(menu).toBeVisible()
   return menu
@@ -367,7 +367,7 @@ export const SELECTORS = {
 	threadList: {
 		container: '#queue-container',
 		threadItem: '[data-testid="queue-thread-item"]',
-		newThreadButton: 'button:has-text("Add Thread")',
+		newThreadButton: 'button:has-text("Add Series")',
 		titleInput: 'label:has-text("Title") + input',
 		formatSelect: 'label:has-text("Format") + select',
 		issuesRemainingInput: 'label:has-text("Issues Remaining") + input, label:has-text("Issues") + input',

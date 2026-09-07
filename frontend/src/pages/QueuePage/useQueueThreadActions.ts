@@ -10,6 +10,7 @@ import {
 } from '../../hooks/useQueue'
 import { useDeleteThread } from '../../hooks/useThread'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
+import { useToast } from '../../contexts/useToast'
 import {
   invalidateAfterQueueMutation,
   resetRollBootstrapAfterManualSelection,
@@ -31,7 +32,12 @@ interface QueueThreadActionResult {
   handleDragOver: (threadId: number) => (event: DragEvent<HTMLElement>) => void
   handleDrop: (threadId: number, activeThreads: Thread[]) => (event: DragEvent<HTMLElement>) => void
   handleDragEnd: () => void
-  handleDelete: (threadId: number) => Promise<void> | void
+  pendingDeleteThread: Thread | null
+  deleteError: string | null
+  isDeletePending: boolean
+  requestDelete: (thread: Thread) => void
+  confirmDelete: () => Promise<void> | void
+  cancelDelete: () => void
   handleMoveToFront: (threadId: number) => Promise<void> | void
   handleMoveToBack: (threadId: number) => Promise<void> | void
   handleReposition: (threadId: number, targetPosition: number, total: number) => Promise<void> | void
@@ -50,6 +56,7 @@ export function useQueueThreadActions(
   params: UseQueueThreadActionsParams,
 ): QueueThreadActionResult {
   const { navigateToRoll, refetchSession } = params
+  const { showToast } = useToast()
   const deleteMutation = useDeleteThread()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
@@ -61,6 +68,8 @@ export function useQueueThreadActions(
   const [draggedThreadId, setDraggedThreadId] = useState<number | null>(null)
   const [dragOverThreadId, setDragOverThreadId] = useState<number | null>(null)
   const [reorderError, setReorderError] = useState<string | null>(null)
+  const [pendingDeleteThread, setPendingDeleteThread] = useState<Thread | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const handleDragStart = useCallback(
     (threadId: number) => (event: DragEvent<HTMLElement>) => {
@@ -113,24 +122,37 @@ export function useQueueThreadActions(
     setDragOverThreadId(null)
   }, [])
 
-  const handleDelete = useCallback(
-    (threadId: number) => {
-      if (!window.confirm('Are you sure you want to delete this thread?')) {
-        return
-      }
-      deleteMutation.mutate(threadId)
-        .catch((err: unknown) => {
-          window.alert(`Failed to delete thread: ${getApiErrorDetail(err)}`)
-        })
-    },
-    [deleteMutation],
-  )
+  const requestDelete = useCallback((thread: Thread) => {
+    setDeleteError(null)
+    setPendingDeleteThread(thread)
+  }, [])
+
+  const cancelDelete = useCallback(() => {
+    setDeleteError(null)
+    setPendingDeleteThread(null)
+  }, [])
+
+  const confirmDelete = useCallback(async () => {
+    if (!pendingDeleteThread) return
+    const threadId = pendingDeleteThread.id
+    const threadTitle = pendingDeleteThread.title
+    setDeleteError(null)
+    try {
+      await deleteMutation.mutate(threadId)
+      setPendingDeleteThread(null)
+      showToast(`Deleted "${threadTitle}"`, 'success')
+    } catch (err: unknown) {
+      const detail = getApiErrorDetail(err)
+      setDeleteError(detail)
+      showToast(`Failed to delete series: ${detail}`, 'error')
+    }
+  }, [pendingDeleteThread, deleteMutation, showToast])
 
   const handleMoveToFront = useCallback(
     (threadId: number) => {
       moveToFrontMutation.mutate(threadId)
         .catch(() => {
-          window.alert('Failed to move thread to front. Please try again.')
+          window.alert('Failed to move series to front. Please try again.')
         })
     },
     [moveToFrontMutation],
@@ -140,7 +162,7 @@ export function useQueueThreadActions(
     (threadId: number) => {
       moveToBackMutation.mutate(threadId)
         .catch(() => {
-          window.alert('Failed to move thread to back. Please try again.')
+          window.alert('Failed to move series to back. Please try again.')
         })
     },
     [moveToBackMutation],
@@ -217,7 +239,12 @@ export function useQueueThreadActions(
     handleDragOver,
     handleDrop,
     handleDragEnd,
-    handleDelete,
+    pendingDeleteThread,
+    deleteError,
+    isDeletePending: deleteMutation.isPending,
+    requestDelete,
+    confirmDelete,
+    cancelDelete,
     handleMoveToFront,
     handleMoveToBack,
     handleReposition,

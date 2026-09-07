@@ -151,7 +151,7 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
     await gotoRollPage(page)
     await waitForRollPageReady(page)
 
-    await expect(page.getByText(/hidden \(blocked by dependencies\)/i)).toBeVisible({
+    await expect(page.getByText(/series waiting for earlier issues/i)).toBeVisible({
       timeout: 15000,
     })
   })

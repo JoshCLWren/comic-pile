@@ -46,7 +46,7 @@ describe('PositionMenu', () => {
         onDelete={vi.fn()}
       />
     )
-    expect(screen.getByRole('button', { name: /thread actions/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /series actions/i })).toBeInTheDocument()
   })
 
   it('opens the dropdown menu when the trigger button is clicked', async () => {
@@ -63,7 +63,7 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     await user.click(trigger)
 
     expect(screen.getByRole('menu')).toBeInTheDocument()
@@ -84,7 +84,7 @@ describe('PositionMenu', () => {
       />
     )
 
-    await user.click(screen.getByRole('button', { name: /thread actions/i }))
+    await user.click(screen.getByRole('button', { name: /series actions/i }))
 
     const overlayRoot = document.querySelector('[data-overlay-root="true"]')
     expect(overlayRoot).not.toBeNull()
@@ -106,7 +106,7 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
       bottom: 100,
       right: 200,
@@ -142,7 +142,7 @@ describe('PositionMenu', () => {
         onDelete={vi.fn()}
       />
     )
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
       top: 700,
       bottom: 740,
@@ -168,7 +168,7 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     await user.click(trigger)
 
     expect(screen.getByText('Move to Front')).toBeInTheDocument()
@@ -191,7 +191,7 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     await user.click(trigger)
     await user.click(screen.getByText('Move to Front'))
 
@@ -213,7 +213,7 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     await user.click(trigger)
     await user.click(screen.getByText('Move to Back'))
 
@@ -235,14 +235,14 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     await user.click(trigger)
     await user.click(screen.getByText('Reposition\u2026'))
 
     expect(onReposition).toHaveBeenCalledWith(mockThread)
   })
 
-  it('calls onEdit when Edit Thread is clicked', async () => {
+  it('calls onEdit when Edit Series is clicked', async () => {
     const user = userEvent.setup()
     const onEdit = vi.fn()
     render(
@@ -257,9 +257,9 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     await user.click(trigger)
-    await user.click(screen.getByText('Edit Thread'))
+    await user.click(screen.getByText('Edit Series'))
 
     expect(onEdit).toHaveBeenCalledWith(mockThread)
   })
@@ -279,14 +279,14 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     await user.click(trigger)
     await user.click(screen.getByText('Dependencies'))
 
     expect(onDependencies).toHaveBeenCalledWith(mockThread)
   })
 
-  it('calls onDelete when Delete Thread is clicked', async () => {
+  it('calls onDelete when Delete Series is clicked', async () => {
     const user = userEvent.setup()
     const onDelete = vi.fn()
     render(
@@ -301,9 +301,9 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     await user.click(trigger)
-    await user.click(screen.getByText('Delete Thread'))
+    await user.click(screen.getByText('Delete Series'))
 
     expect(onDelete).toHaveBeenCalledWith(1)
   })
@@ -323,7 +323,7 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     await user.click(trigger)
     expect(screen.getByRole('menu')).toBeInTheDocument()
 
@@ -345,7 +345,7 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     await user.click(trigger)
     expect(screen.getByRole('menu')).toBeInTheDocument()
 
@@ -367,7 +367,7 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     await user.click(trigger)
     expect(screen.getByRole('menu')).toBeInTheDocument()
 
@@ -389,7 +389,7 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
 
     await user.click(trigger)
@@ -410,7 +410,7 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     trigger.focus()
     await user.keyboard('{Enter}')
 
@@ -431,7 +431,7 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     trigger.focus()
     await user.keyboard(' ')
 
@@ -451,7 +451,7 @@ describe('PositionMenu', () => {
         onDelete={vi.fn()}
       />
     )
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     trigger.focus()
     await user.keyboard('{Enter}')
     // Dispatch the keyboard-generated click synchronously so the component's
@@ -476,7 +476,7 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     trigger.focus()
     await user.keyboard('{Enter}')
 
@@ -516,7 +516,7 @@ describe('PositionMenu', () => {
       />
     )
 
-    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    const trigger = screen.getByRole('button', { name: /series actions/i })
     await user.click(trigger)
     const menuItems = screen.getAllByRole('menuitem')
     menuItems[1].focus()
@@ -563,7 +563,7 @@ describe('PositionMenu', () => {
       </>
     )
 
-    const triggers = screen.getAllByRole('button', { name: /thread actions/i })
+    const triggers = screen.getAllByRole('button', { name: /series actions/i })
 
     await user.click(triggers[0])
     expect(screen.getAllByRole('menu')).toHaveLength(1)

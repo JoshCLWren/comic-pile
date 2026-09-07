@@ -594,11 +594,17 @@ async def list_sessions(
             continue
         current_die[sid] = projection.latest_die_by_session.get(sid, session.start_die)
 
-    thread_ids = {
+    roll_thread_ids = {
         event.selected_thread_id
         for event in projection.latest_roll_by_session.values()
         if event.selected_thread_id is not None
     }
+    pending_by_session: dict[int, int] = {
+        s.id: s.pending_thread_id
+        for s in sessions_to_return
+        if s.pending_thread_id is not None
+    }
+    thread_ids = roll_thread_ids | set(pending_by_session.values())
 
     active_threads_dict: dict[int, ActiveThreadInfo | None] = {}
     if thread_ids:
@@ -647,8 +653,49 @@ async def list_sessions(
                     )
                 else:
                     active_threads_dict[sid] = None
+            elif sid in pending_by_session:
+                pending_id = pending_by_session[sid]
+                thread = threads_by_id.get(pending_id)
+                if thread:
+                    if thread.uses_issue_tracking():
+                        issues_remaining = unread_counts.get(thread.id, 0)
+                    else:
+                        issues_remaining = thread.issues_remaining
+                    issue_id_pending: int | None = None
+                    issue_number_pending: str | None = None
+                    if thread.uses_issue_tracking() and thread.next_unread_issue_id is not None:
+                        resolved_number = issue_numbers.get(thread.next_unread_issue_id)
+                        if resolved_number is not None:
+                            issue_id_pending = thread.next_unread_issue_id
+                            issue_number_pending = resolved_number
+                    agg = rate_agg.get(sid, {})
+                    issues_read = agg.get("issues_read") or None
+                    last_rating = agg.get("last_rating")
+                    raw_result = roll_event.result if roll_event else None
+                    safe_result = raw_result if raw_result and raw_result > 0 else None
+                    active_threads_dict[sid] = ActiveThreadInfo(
+                        id=thread.id,
+                        title=thread.title,
+                        format=normalize_format_value(thread.format),
+                        issues_remaining=issues_remaining,
+                        queue_position=thread.queue_position,
+                        last_rolled_result=safe_result,
+                        total_issues=thread.total_issues,
+                        reading_progress=thread.reading_progress,
+                        issues_read=issues_read,
+                        last_rating=last_rating,
+                        issue_id=issue_id_pending,
+                        issue_number=issue_number_pending,
+                        next_issue_id=issue_id_pending,
+                        next_issue_number=issue_number_pending,
+                    )
+                else:
+                    active_threads_dict[sid] = None
             else:
                 active_threads_dict[sid] = None
+    else:
+        for sid in session_ids:
+            active_threads_dict[sid] = None
 
     responses: list[SessionListItem] = []
     for session in sessions_to_return:

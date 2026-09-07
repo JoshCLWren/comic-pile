@@ -90,9 +90,27 @@ export function ContinuityThreadSelector({
           placeholder={placeholder}
           disabled={disabled}
           aria-expanded={!disabled && results.length > 0}
-          className="mt-1 w-full rounded-xl border border-solid border-white/20 bg-white/5 px-3 py-2 text-sm text-stone-300 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-50"
+          className="mt-1 w-full rounded-xl px-3 py-2 text-sm form-control disabled:opacity-50"
         />
       </label>
+
+      {value && (
+        <div
+          data-testid="selected-thread-value"
+          className="rounded-xl border border-solid border-white/10 bg-white/5 px-3 py-2"
+        >
+          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+            Selected series
+          </p>
+          <p
+            data-testid="selected-thread-title"
+            className="mt-1 break-words text-sm font-semibold leading-snug text-stone-200"
+          >
+            {value.title}
+          </p>
+          {value.format ? <p className="mt-1 text-xs text-stone-500">{value.format}</p> : null}
+        </div>
+      )}
 
       {isLoading && <p className="text-xs text-stone-500">Loading comics…</p>}
       {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
@@ -163,7 +181,7 @@ export function ContinuityIssueSelector({
             onChange(next)
           }}
           disabled={disabled || isLoading || issues.length === 0}
-          className="mt-1 w-full rounded-xl border border-solid border-white/20 bg-white/5 px-3 py-2 text-sm text-stone-300 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-50"
+          className="mt-1 w-full rounded-xl px-3 py-2 text-sm form-control disabled:opacity-50"
         >
           <option value="">{isLoading ? 'Loading issues…' : issues.length === 0 ? emptyMessage : 'Select an issue'}</option>
           {issues.map((issue) => (

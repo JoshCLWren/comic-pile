@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useRef } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -16,6 +16,7 @@ import CompletedThreadsSection from './CompletedThreadsSection'
 import { QueueControls } from './QueueControls'
 import { QueueList } from './QueueList'
 import { QueueModals } from './QueueModals'
+import DeleteThreadDialog from './DeleteThreadDialog'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
@@ -158,13 +159,13 @@ export default function QueuePage() {
           onRead={() => void actions.handleThreadRead(thread)}
           onOpenThread={() => navigate(`/thread/${thread.id}`)}
           onSnooze={() => void actions.handleSnoozeToggle(thread, isSnoozed)}
-          onActionDelete={() => actions.handleDelete(thread.id)}
+          onActionDelete={() => actions.requestDelete(thread)}
           onMoveToFront={() => actions.handleMoveToFront(thread.id)}
           onMoveToBack={() => actions.handleMoveToBack(thread.id)}
           onReposition={() => modals.openRepositionModal(thread)}
           onEdit={() => modals.showEditModal(thread)}
           onDependencies={() => modals.openDependenciesModal(thread)}
-          onDelete={() => actions.handleDelete(thread.id)}
+          onDelete={() => actions.requestDelete(thread)}
         />
       )
     },
@@ -175,10 +176,13 @@ export default function QueuePage() {
     void loadMore().catch(() => undefined)
   }, [loadMore])
 
+  const scrollRootRef = useRef<HTMLDivElement>(null)
+
   const { sentinelRef } = useInfiniteScroll({
     onLoadMore: handleLoadMore,
     hasMore: !!nextPageToken,
     isLoading: isPending,
+    rootRef: scrollRootRef,
   })
 
   const mobileAddEnabled = !modals.isAnyModalOpen
@@ -210,7 +214,7 @@ export default function QueuePage() {
             type="button"
             onClick={modals.showCreateModal}
             className="md:hidden fixed bottom-24 right-4 h-14 w-14 rounded-full bg-amber-600 text-white font-black text-3xl shadow-[0_4px_20px_rgba(212,137,14,0.4)] z-50 flex items-center justify-center hover:bg-amber-500 transition-colors"
-            aria-label="Add Thread"
+            aria-label="Add Series"
           >
             +
           </button>
@@ -222,6 +226,9 @@ export default function QueuePage() {
           reorderError={actions.reorderError}
           renderItem={renderThreadCard}
           isSearching={isSearching}
+          sentinelRef={sentinelRef}
+          scrollRootRef={scrollRootRef}
+          hasNextPage={!!nextPageToken}
         />
 
         <CompletedThreadsSection
@@ -231,7 +238,7 @@ export default function QueuePage() {
 
         {isError && threads !== null && (
           <div role="alert" className="text-sm text-red-400 text-center px-2 space-y-2">
-            <p>Couldn&apos;t load the next batch of threads.</p>
+            <p>Couldn&apos;t load the next batch of series.</p>
             {nextPageToken && (
               <button
                 type="button"
@@ -243,15 +250,6 @@ export default function QueuePage() {
               </button>
             )}
           </div>
-        )}
-
-        {nextPageToken && (
-          <div
-            ref={sentinelRef}
-            className="h-4"
-            data-testid="queue-infinite-scroll-sentinel"
-            aria-hidden="true"
-          />
         )}
 
         {isPending && threads !== null && threads.length > 0 && (
@@ -298,6 +296,14 @@ export default function QueuePage() {
           isPendingCreate={modals.isPendingCreate}
           isPendingEdit={modals.isPendingEdit}
           isPendingReactivate={reactivateMutation.isPending}
+        />
+
+        <DeleteThreadDialog
+          thread={actions.pendingDeleteThread}
+          isPending={actions.isDeletePending}
+          error={actions.deleteError}
+          onConfirm={() => void actions.confirmDelete()}
+          onCancel={actions.cancelDelete}
         />
       </div>
     </PositionMenuProvider>

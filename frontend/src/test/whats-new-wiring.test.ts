@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const frontendRoot = path.resolve(import.meta.dirname, '../..')
 
-describe('What’s New wiring', () => {
+describe('What’s new wiring', () => {
   it('keeps the authenticated route and More-menu link wired to the page', () => {
     const appSource = readFileSync(path.join(frontendRoot, 'src/App.tsx'), 'utf-8')
     const navigationSource = readFileSync(
@@ -15,7 +15,7 @@ describe('What’s New wiring', () => {
     expect(appSource).toContain('path="/whats-new"')
     expect(appSource).toContain('<WhatsNewPage />')
     expect(navigationSource).toContain('to="/whats-new"')
-    expect(navigationSource).toContain('What’s New')
+    expect(navigationSource).toContain('What\'s new')
   })
 
   it('reads the database-backed release API without a static changelog build dependency', () => {

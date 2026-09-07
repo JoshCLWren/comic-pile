@@ -36,12 +36,12 @@ describe('ThreadPool', () => {
     const empty = callbacks()
     const { rerender } = render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={null} staleThreadCount={0} snoozedThreads={[]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...empty} /></MemoryRouter>)
     expect(screen.getByText('Nothing to roll yet')).toBeInTheDocument()
-    await userEvent.setup().click(screen.getByRole('button', { name: /add a thread/i }))
+    await userEvent.setup().click(screen.getByRole('button', { name: /add a series/i }))
     expect(empty.onShuffle).not.toHaveBeenCalled()
 
     const actions = callbacks()
     rerender(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Read Saga first' }] }} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={{ ...thread, days: 4 } as never} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
-    expect(screen.getByText(/All threads are blocked/)).toBeInTheDocument()
+    expect(screen.getByText(/Every series is blocked or snoozed/)).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: /go to queue/i }))
     expect(actions.onToggleBlocked).not.toHaveBeenCalled()
 
@@ -57,11 +57,11 @@ describe('ThreadPool', () => {
     const actions = callbacks()
     const stale = { ...thread, title: 'Stale Saga', days: 9 } as never
     render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Prerequisite' }] }} isRatingView={false} isRolling={false} rolledResult={null} selectedThreadId={null} staleThread={stale} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={true} skippedThreads={[]} skippedExpanded={false} blockedExpanded={true} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
-    await userEvent.setup().click(screen.getByRole('button', { name: /hidden \(blocked/i }))
+    await userEvent.setup().click(screen.getByRole('button', { name: /series waiting for earlier issues/i }))
     expect(screen.getByText('Prerequisite')).toBeInTheDocument()
     const hiddenBlockerLink = screen.getByRole('link', { name: 'Open Saga' })
     expect(hiddenBlockerLink).toHaveAttribute('href', '/thread/9')
-    fireEvent.keyDown(screen.getByRole('button', { name: /hidden \(blocked/i }), { key: 'ArrowDown' })
+    fireEvent.keyDown(screen.getByRole('button', { name: /series waiting for earlier issues/i }), { key: 'ArrowDown' })
     await userEvent.setup().click(screen.getByRole('button', { name: /Snoozed \(1\)/i }))
     await userEvent.setup().click(screen.getByRole('button', { name: 'Unsnooze this comic' }))
     expect(actions.onUnsnooze).toHaveBeenCalledWith(3)
@@ -122,7 +122,7 @@ describe('ThreadPool', () => {
       shuffleIsPending={false}
       {...actions}
     /></MemoryRouter>)
-    expect(screen.getByText(/2 threads hidden/)).toBeInTheDocument()
+    expect(screen.getByText(/2 series waiting for earlier issues/)).toBeInTheDocument()
     const staleButton = screen.getByText('Tap to read now').closest('[role="button"]') as HTMLElement
     expect(staleButton).not.toBeNull()
     fireEvent.keyDown(staleButton!, { key: ' ' })

@@ -177,7 +177,7 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
     {
       label: 'Reposition\u2026',
       icon: '\u2261',
-      ariaLabel: 'Reposition thread',
+      ariaLabel: 'Reposition series',
       action: () => {
         onReposition(thread)
         closeMenu()
@@ -193,9 +193,9 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
       },
     },
     {
-      label: 'Edit Thread',
+      label: 'Edit Series',
       icon: '\u270F\uFE0F',
-      ariaLabel: 'Edit thread',
+      ariaLabel: 'Edit series',
       action: () => {
         onEdit(thread)
         closeMenu()
@@ -211,9 +211,9 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
       },
     },
     {
-      label: 'Delete Thread',
+      label: 'Delete Series',
       icon: '\u{1F5D1}',
-      ariaLabel: 'Delete thread',
+      ariaLabel: 'Delete series',
       destructive: true,
       action: () => {
         onDelete(thread.id)
@@ -230,7 +230,7 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
         onClick={handleTriggerClick}
         onKeyDown={handleTriggerKeyDown}
         className="flex items-center justify-center w-11 h-11 text-stone-500 hover:text-white transition-colors text-lg rounded-lg hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-        aria-label="Thread actions"
+        aria-label="Series actions"
         aria-haspopup="menu"
         aria-expanded={isOpen}
       >
@@ -243,7 +243,7 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
             className="fixed w-52 bg-[#1a1410]/95 border border-white/10 rounded-xl shadow-2xl z-[1000] py-1 overflow-hidden"
             style={menuPosition}
             role="menu"
-            aria-label="Thread actions"
+            aria-label="Series actions"
           >
             {menuItems.map((item, index) => (
               <button

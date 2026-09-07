@@ -10,9 +10,15 @@ import { issuesApi } from '../services/api-issues'
 
 const navigateSpy = vi.fn()
 const routeParams = { id: '1' }
+const locationState: { state?: { openEditModal?: boolean } } = { state: undefined }
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
-  return { ...actual, useNavigate: () => navigateSpy, useParams: () => routeParams }
+  return {
+    ...actual,
+    useNavigate: () => navigateSpy,
+    useParams: () => routeParams,
+    useLocation: () => locationState,
+  }
 })
 vi.mock('../hooks/useThread', () => ({ useUpdateThread: vi.fn() }))
 vi.mock('../services/api', () => ({
@@ -31,6 +37,7 @@ const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
 
 beforeEach(() => {
   routeParams.id = '1'
+  locationState.state = undefined
   navigateSpy.mockReset()
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   mockedThreadsApiGet.mockResolvedValue({
@@ -38,6 +45,8 @@ beforeEach(() => {
     status: 'active', total_issues: null, notes: null,
   } as never)
   mockedIssuesApiList.mockResolvedValue({ issues: [], next_page_token: null, total_count: 0, page_size: 100 })
+  mockedConnectedThreads.mockReset()
+  mockedConnectedThreads.mockResolvedValue({ thread_id: 1, connected_threads: [] })
 })
 
 function renderPage() {
@@ -54,6 +63,13 @@ it('renders a thread without legacy rating content', async () => {
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   expect(screen.queryByText(/Reviews/)).not.toBeInTheDocument()
+})
+
+it('auto-opens the edit modal when arriving with openEditModal state', async () => {
+  locationState.state = { openEditModal: true }
+  renderPage()
+  await waitFor(() => expect(screen.getByRole('heading', { name: /edit series/i })).toBeInTheDocument())
+  expect(screen.getByDisplayValue('Saga')).toBeInTheDocument()
 })
 
 it('does not fetch issues before the Issues section expands', async () => {
@@ -244,7 +260,7 @@ it('edits migrated threads and displays the all-read boundary', async () => {
 })
 
 it('renders named blocked-by dependencies and an empty blocking list as links', async () => {
-  mockedConnectedThreads.mockResolvedValueOnce({
+  mockedConnectedThreads.mockResolvedValue({
     thread_id: 1,
     connected_threads: [
       { thread_id: 9, title: 'Prequel', connection_type: 'blocked_by', dependency_id: 11 },
@@ -256,11 +272,11 @@ it('renders named blocked-by dependencies and an empty blocking list as links', 
   await waitFor(() =>
     expect(screen.getByRole('link', { name: 'Open Prequel' })).toHaveAttribute('href', '/thread/9'),
   )
-  expect(screen.getByText('This thread blocks nothing')).toBeInTheDocument()
+  expect(screen.getByText('This series blocks nothing')).toBeInTheDocument()
 })
 
 it('renders blocker issue number on thread detail when known', async () => {
-  mockedConnectedThreads.mockResolvedValueOnce({
+  mockedConnectedThreads.mockResolvedValue({
     thread_id: 1,
     connected_threads: [
       { thread_id: 9, title: 'Starman', connection_type: 'blocked_by', dependency_id: 11, issue_number: '42' },
@@ -268,12 +284,12 @@ it('renders blocker issue number on thread detail when known', async () => {
   })
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
-  expect(screen.getByText('Starman: #42')).toBeInTheDocument()
+  await waitFor(() => expect(screen.getByText('Starman: #42')).toBeInTheDocument())
   expect(screen.getByRole('link', { name: 'Open Starman' })).toHaveAttribute('href', '/thread/9')
 })
 
 it('omits issue number suffix when issue_number is absent', async () => {
-  mockedConnectedThreads.mockResolvedValueOnce({
+  mockedConnectedThreads.mockResolvedValue({
     thread_id: 1,
     connected_threads: [
       { thread_id: 9, title: 'Prequel', connection_type: 'blocked_by', dependency_id: 11 },
@@ -281,12 +297,12 @@ it('omits issue number suffix when issue_number is absent', async () => {
   })
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
-  expect(screen.getByText('Prequel')).toBeInTheDocument()
+  await waitFor(() => expect(screen.getByText('Prequel')).toBeInTheDocument())
   expect(screen.queryByText(/Prequel: #/)).not.toBeInTheDocument()
 })
 
 it('renders blocking dependency issue number on thread detail when known', async () => {
-  mockedConnectedThreads.mockResolvedValueOnce({
+  mockedConnectedThreads.mockResolvedValue({
     thread_id: 1,
     connected_threads: [
       { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12, issue_number: '7' },
@@ -294,12 +310,12 @@ it('renders blocking dependency issue number on thread detail when known', async
   })
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
-  expect(screen.getByText('Sequel: #7')).toBeInTheDocument()
+  await waitFor(() => expect(screen.getByText('Sequel: #7')).toBeInTheDocument())
   expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
 })
 
 it('renders named blocking dependencies when nothing blocks this thread', async () => {
-  mockedConnectedThreads.mockResolvedValueOnce({
+  mockedConnectedThreads.mockResolvedValue({
     thread_id: 1,
     connected_threads: [
       { thread_id: 4, title: 'Sequel', connection_type: 'blocks', dependency_id: 12 },
@@ -307,12 +323,12 @@ it('renders named blocking dependencies when nothing blocks this thread', async 
   })
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
-  await waitFor(() => expect(screen.getByText('Nothing blocks this thread')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText('Nothing blocks this series')).toBeInTheDocument())
   expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
 })
 
 it('reports dependency load failures without hiding the section', async () => {
-  mockedConnectedThreads.mockRejectedValueOnce(new Error('dependencies unavailable'))
+  mockedConnectedThreads.mockRejectedValue(new Error('dependencies unavailable'))
   renderPage()
   await waitFor(() =>
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to load dependencies.'),

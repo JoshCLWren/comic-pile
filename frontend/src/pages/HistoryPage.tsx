@@ -67,6 +67,20 @@ export default function HistoryPage() {
     return dice.map(d => `d${d}`).join(' → ')
   }
 
+  const buildActivityLine = (
+    issuesRead: number | null | undefined,
+    lastRating: number | null | undefined,
+  ): string | null => {
+    const parts: string[] = []
+    if (issuesRead != null && issuesRead > 0) {
+      parts.push(`${issuesRead} ${issuesRead === 1 ? 'issue' : 'issues'} read`)
+    }
+    if (lastRating != null) {
+      parts.push(`rated ${lastRating.toFixed(1)}`)
+    }
+    return parts.length > 0 ? parts.join(' · ') : null
+  }
+
   return (
     <div className="space-y-6 md:space-y-8 pb-20">
       <header className="flex flex-wrap items-end justify-between gap-3 px-2">
@@ -86,6 +100,14 @@ export default function HistoryPage() {
       <div id="sessions-list" className="border-y border-[var(--theme-border)] divide-y divide-[var(--theme-border)]" role="list" aria-label="Session history">
         {sessions.map((session) => {
           const duration = formatDuration(session.started_at, session.ended_at)
+          const isAbandonedRoll = (
+            !session.active_thread
+            && session.last_rolled_result == null
+            && (session.snapshot_count ?? 0) <= 1
+          )
+          const activityLine = session.active_thread
+            ? buildActivityLine(session.active_thread.issues_read, session.active_thread.last_rating)
+            : null
           return (
             <div key={session.id} role="listitem" className="flex gap-3 md:gap-4 py-4 px-2 md:px-3">
               <div className="w-16 md:w-20 shrink-0">
@@ -97,78 +119,59 @@ export default function HistoryPage() {
                 </div>
               </div>
 
-              <div className="min-w-0 flex-1 space-y-2">
-                {session.active_thread && (
-                  <div className="space-y-1">
-                    <p className="font-bold text-sm leading-tight text-stone-200 truncate">{session.active_thread.title}</p>
-                    <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
-                      {session.active_thread.format}
+              <div className="min-w-0 flex-1 space-y-1.5">
+                {isAbandonedRoll ? (
+                  <p className="text-sm font-bold text-[var(--theme-text-primary)]">
+                    No issue selected
+                  </p>
+                ) : session.active_thread ? (
+                  <>
+                    <p className="font-bold text-sm leading-tight text-stone-200 truncate">
+                      {session.active_thread.title}
                       {session.active_thread.next_issue_number ? (
-                        <span> · #{session.active_thread.next_issue_number}</span>
+                        <span className="text-stone-400"> · #{session.active_thread.next_issue_number}</span>
                       ) : null}
                     </p>
-                    {(session.active_thread.issues_read != null && session.active_thread.issues_read > 0) || (
-                      session.active_thread.last_rating != null
-                    ) ? (
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold uppercase tracking-widest text-stone-400">
-                        {session.active_thread.issues_read != null && session.active_thread.issues_read > 0 && (
-                          <span>{session.active_thread.issues_read} read</span>
-                        )}
-                        {session.active_thread.last_rating != null && (
-                          <span className="text-amber-400">Rated {session.active_thread.last_rating.toFixed(1)}</span>
-                        )}
-                      </div>
+                    {activityLine ? (
+                      <p className="text-xs text-stone-400">
+                        {activityLine}
+                      </p>
                     ) : (
                       <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
                         {session.active_thread.issues_remaining != null
                           ? `${session.active_thread.issues_remaining} left in queue`
-                          : null}
+                          : 'In progress'}
                       </p>
                     )}
-                  </div>
-                )}
+                  </>
+                ) : null}
 
                 {session.ladder_path && (
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold uppercase tracking-widest text-stone-500">
-                      <span>Die size</span>
-                      <span className="text-stone-300">
-                        {formatDiceProgression(session.ladder_path)}
-                      </span>
-                    </div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                    Die size {formatDiceProgression(session.ladder_path)}
                     {session.last_rolled_result != null && session.last_rolled_result > 0 && (
-                      <p className="text-[10px] font-bold text-amber-400/70 uppercase tracking-widest">
-                        Rolled {session.last_rolled_result}
-                      </p>
+                      <span className="text-amber-400/70"> · Rolled {session.last_rolled_result}</span>
                     )}
-                  </div>
+                  </p>
                 )}
 
-                {session.ended_at && (
-                  <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold text-stone-500 uppercase tracking-widest">
-                    {duration && (
-                      <span>Duration: {duration}</span>
-                    )}
-                    {duration && (session.snapshot_count ?? 0) > 0 && (
-                      <span aria-hidden>·</span>
-                    )}
-                    {(session.snapshot_count ?? 0) > 0 && (
-                      <Link
-                        to={`/sessions/${session.id}`}
-                        className="underline decoration-dotted underline-offset-2 hover:text-stone-300"
-                      >
-                        Snapshots ({session.snapshot_count})
-                      </Link>
-                    )}
-                  </div>
-                )}
-
-                <Link
-                  to={`/sessions/${session.id}`}
-                  className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-stone-400 hover:text-stone-200 underline decoration-dotted underline-offset-4"
-                >
-                  View full session <span aria-hidden>→</span>
-                </Link>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+                  {duration && <span>Duration: {duration}</span>}
+                  {(session.snapshot_count ?? 0) > 0 && (
+                    <Link
+                      to={`/sessions/${session.id}`}
+                      className="underline decoration-dotted underline-offset-2 hover:text-stone-300"
+                    >
+                      Snapshots ({session.snapshot_count})
+                    </Link>
+                  )}
+                  <Link
+                    to={`/sessions/${session.id}`}
+                    className="inline-flex items-center gap-1 text-stone-400 hover:text-stone-200 underline decoration-dotted underline-offset-4"
+                  >
+                    View full session <span aria-hidden>→</span>
+                  </Link>
+                </div>
               </div>
             </div>
           )

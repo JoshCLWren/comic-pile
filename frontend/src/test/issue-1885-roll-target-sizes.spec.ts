@@ -206,7 +206,7 @@ test.describe('Roll pointer target sizes (#1885)', () => {
 
     // Edge endpoint buttons previously rendered as bare ~12px text strips.
     expectMinimumTargets(
-      await measureVisibleBoxes(page, 'button[aria-label^="Open thread for"]'),
+      await measureVisibleBoxes(page, 'button[aria-label^="Open series for"]'),
       WCAG_MIN_TARGET,
     )
 

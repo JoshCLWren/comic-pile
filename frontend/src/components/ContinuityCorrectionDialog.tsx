@@ -226,7 +226,7 @@ export default function ContinuityCorrectionDialog({
             <select
               value={selectedGroupId ?? ''}
               onChange={(event) => setSelectedGroupId(event.target.value ? Number(event.target.value) : null)}
-              className="mt-1 w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-stone-300 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-50"
+              className="mt-1 w-full rounded-xl px-3 py-2 text-sm form-control disabled:opacity-50"
               disabled={isLoadingGroups || isSaving}
             >
               <option value="">{isLoadingGroups ? 'Loading crossovers…' : 'Select a crossover'}</option>
@@ -248,7 +248,7 @@ export default function ContinuityCorrectionDialog({
               onChange={(event) => setNewName(event.target.value)}
               maxLength={200}
               placeholder="e.g. Ultimate Universe"
-              className="mt-1 w-full rounded-xl border border-white/20 bg-white/5 px-3 py-2 text-sm text-stone-300 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-50"
+              className="mt-1 w-full rounded-xl px-3 py-2 text-sm form-control disabled:opacity-50"
               disabled={isSaving}
             />
           </label>

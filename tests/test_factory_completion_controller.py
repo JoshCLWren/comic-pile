@@ -23,10 +23,10 @@ def test_completion_claims_stop_at_omniroute_free_entry_cap():
 
 
 def test_completion_batch_size_scales_with_backlog():
-    assert controller.completion_batch_size(14) == 0
-    assert controller.completion_batch_size(15) == 8
-    assert controller.completion_batch_size(49) == 8
-    assert controller.completion_batch_size(50) == 12
+    assert controller.completion_batch_size(7) == 0
+    assert controller.completion_batch_size(8) == 8
+    assert controller.completion_batch_size(19) == 8
+    assert controller.completion_batch_size(20) == 12
     assert controller.completion_batch_size(80) == 12
 
 

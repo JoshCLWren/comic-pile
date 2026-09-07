@@ -4,6 +4,7 @@ import axios from 'axios'
 import BugReportButton from './BugReportButton'
 import type { ReportType } from './BugReportModal'
 import { useAuth } from '../App'
+import { useNavCollapse } from '../contexts/NavCollapseContext'
 import api from '../services/api'
 import { useToast } from '../contexts/useToast'
 import { DEFAULT_THEME, getAppliedTheme, isSupportedTheme, readStoredThemePreference, selectTheme } from '../services/theme'
@@ -31,6 +32,7 @@ type NavIconName =
   | 'planner'
   | 'new'
   | 'glossary'
+  | 'identity-inbox'
   | 'more'
 
 interface NavItem {
@@ -48,15 +50,16 @@ const MAIN_NAV_ITEMS: NavItem[] = [
 ]
 
 const SECONDARY_NAV_ITEMS: NavItem[] = [
-  { path: '/continuity-plans', label: 'Planner', icon: 'planner', ariaLabel: 'Continuity Planner page' },
-  { path: '/whats-new', label: 'New', icon: 'new', ariaLabel: "What's New page" },
+  { path: '/continuity-plans', label: 'Reading plans', icon: 'planner', ariaLabel: 'Reading plans page' },
+  { path: '/whats-new', label: "What's new", icon: 'new', ariaLabel: "What's new page" },
   { path: '/glossary', label: 'Glossary', icon: 'glossary', ariaLabel: 'Glossary page' },
+  { path: '/identity-inbox', label: 'Identity Inbox', icon: 'identity-inbox', ariaLabel: 'Identity Inbox page' },
 ]
 
 const APPEARANCE_OPTIONS: Array<{ id: ThemeId; label: string; ariaLabel: string; mobileClassName: string }> = [
-  { id: 'classic', label: 'Classic', ariaLabel: 'Classic theme', mobileClassName: 'classic:text-stone-100 ink-gold:text-stone-900 command-center:text-stone-100' },
-  { id: 'ink-gold', label: 'Ink Gold', ariaLabel: 'Ink-gold theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-100 command-center:text-stone-400' },
-  { id: 'command-center', label: 'Command Center', ariaLabel: 'Command center theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-400 command-center:text-stone-100' },
+  { id: 'classic', label: 'Classic theme', ariaLabel: 'Classic theme', mobileClassName: 'classic:text-stone-100 ink-gold:text-stone-900 command-center:text-stone-100' },
+  { id: 'ink-gold', label: 'Ink Gold theme', ariaLabel: 'Ink-gold theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-100 command-center:text-stone-400' },
+  { id: 'command-center', label: 'Command Center theme', ariaLabel: 'Command center theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-400 command-center:text-stone-100' },
 ]
 
 function NavIcon({ name }: { name: NavIconName }) {
@@ -116,6 +119,15 @@ function NavIcon({ name }: { name: NavIconName }) {
         <path d="M20 4.5v17A2.5 2.5 0 0 0 17.5 19H14"></path>
       </>
     ),
+    'identity-inbox': (
+      <>
+        <path d="M4 9h16"></path>
+        <path d="M4 15h16"></path>
+        <path d="M2 5h20a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"></path>
+        <circle cx="17" cy="6" r="2" fill="currentColor" stroke="none"></circle>
+        <path d="M16 9l-1.5 1.5L16 12"></path>
+      </>
+    ),
     more: (
       <>
         <circle cx="12" cy="12" r="9"></circle>
@@ -146,6 +158,7 @@ function NavIcon({ name }: { name: NavIconName }) {
 export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const location = useLocation()
   const { isAuthenticated, logout } = useAuth()
+  const { collapsed, toggleCollapsed } = useNavCollapse()
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -259,9 +272,9 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     }`
 
   const desktopNavItemClass = (active: boolean) =>
-    `desktop-nav-item flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-all duration-200 ${
+    `desktop-nav-item flex w-full items-center rounded-lg transition-all duration-200 ${
       active ? 'bg-white/10 text-amber-400' : 'text-stone-400 hover:bg-white/5'
-    }`
+    } ${collapsed ? 'justify-center px-0 py-2' : 'gap-3 px-3 py-2'}`
 
   const renderNavItem = (item: NavItem, active: boolean, isDesktop = false) => {
     if (isDesktop) {
@@ -271,9 +284,11 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           to={item.path}
           className={desktopNavItemClass(active)}
           aria-label={item.ariaLabel}
+          aria-current={active ? 'page' : undefined}
+          title={collapsed ? item.label : undefined}
         >
           <NavIcon name={item.icon} />
-          <span className="text-sm font-medium">{item.label}</span>
+          {!collapsed && <span className="text-sm font-medium">{item.label}</span>}
         </Link>
       )
     }
@@ -293,49 +308,133 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   return (
     <>
       <nav
-        className="sticky top-0 z-40 hidden h-screen w-72 flex-col border-r border-[var(--glass-border)] bg-[var(--bg-darker)] md:flex"
+        className={`sticky top-0 z-40 hidden h-screen flex-col border-r border-[var(--glass-border)] bg-[var(--bg-darker)] transition-[width] duration-200 md:flex ${
+          collapsed ? 'w-16' : 'w-72'
+        }`}
         role="navigation"
         aria-label="Desktop navigation"
+        data-nav-collapsed={collapsed}
       >
-        <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
+        <div className={`flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto ${collapsed ? 'px-2 py-3' : 'px-3 py-4'}`}>
+          <div className={`mb-1 flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
+            {!collapsed && (
+              <span className="px-1 text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>
+                Comic Pile
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+              aria-expanded={!collapsed}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--theme-text-muted)] transition-colors hover:bg-white/5 hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              data-nav-toggle
+            >
+              <svg
+                className={`h-5 w-5 transition-transform duration-200 ${collapsed ? '-scale-x-100' : ''}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="m15 18-6-6 6-6"></path>
+              </svg>
+            </button>
+          </div>
           {MAIN_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path), true))}
           <div className="my-2 border-t border-[var(--glass-border)]" aria-hidden="true" />
           {SECONDARY_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path), true))}
         </div>
-        <div className="border-t border-[var(--glass-border)] px-3 py-3">
-          {isLoading ? (
-            <span className="text-xs font-medium text-[var(--theme-text-muted)]">Loading...</span>
-          ) : hasError ? (
-            <span className="text-xs font-medium text-amber-500" title="Failed to load user data">User</span>
-          ) : username ? (
-            <span className="block truncate text-xs font-medium text-[var(--theme-text-muted)]">{username}</span>
-          ) : null}
-          <div
-            className="mt-2 flex flex-wrap items-center justify-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
-            role="group"
-            aria-label="Appearance"
-          >
-            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>Theme</span>
-            {APPEARANCE_OPTIONS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                data-theme={option.id}
-                onClick={() => setTheme(option.id)}
-                aria-pressed={activeTheme === option.id}
-                className={`rounded-md px-2 py-1 text-xs font-bold transition-colors ${
-                  activeTheme === option.id
-                    ? 'bg-white/10 text-[var(--theme-text-primary)]'
-                    : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
-                }`}
+        <div className={`border-t border-[var(--glass-border)] ${collapsed ? 'px-2 py-3' : 'px-3 py-3'}`}>
+          {collapsed ? (
+            <div className="flex flex-col items-center gap-2">
+              {isLoading ? (
+                <span className="text-xs font-medium text-[var(--theme-text-muted)]">…</span>
+              ) : username ? (
+                <span
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-xs font-bold uppercase text-[var(--theme-text-primary)]"
+                  title={username}
+                >
+                  {username.charAt(0)}
+                </span>
+              ) : null}
+              <div
+                className="flex flex-col items-center gap-1"
+                role="group"
+                aria-label="Appearance"
               >
-                {option.label}
+                {APPEARANCE_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    data-theme={option.id}
+                    onClick={() => setTheme(option.id)}
+                    aria-pressed={activeTheme === option.id}
+                    aria-label={option.ariaLabel}
+                    title={option.label}
+                    className={`h-7 w-7 rounded-md text-[10px] font-bold transition-colors ${
+                      activeTheme === option.id
+                        ? 'bg-white/10 text-[var(--theme-text-primary)] ring-1 ring-[var(--theme-focus-ring)]'
+                        : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+                    }`}
+                  >
+                    {option.id === 'classic' ? 'C' : option.id === 'ink-gold' ? 'IG' : 'CC'}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                aria-label="Log out"
+                title="Log out"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-red-400 transition-colors hover:bg-white/5 hover:text-red-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M18 6l-6 6 6 6"></path>
+                  <path d="M6 12h12"></path>
+                </svg>
               </button>
-            ))}
-          </div>
-          <button onClick={handleLogout} className="mt-2 w-full px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors" aria-label="Log out">
-            Log Out
-          </button>
+            </div>
+          ) : (
+            <>
+              {isLoading ? (
+                <span className="text-xs font-medium text-[var(--theme-text-muted)]">Loading...</span>
+              ) : hasError ? (
+                <span className="text-xs font-medium text-amber-500" title="Failed to load user data">User</span>
+              ) : username ? (
+                <span className="block truncate text-xs font-medium text-[var(--theme-text-muted)]">{username}</span>
+              ) : null}
+              <div
+                className="mt-2 flex flex-wrap items-center justify-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
+                role="group"
+                aria-label="Appearance"
+              >
+                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>Theme</span>
+                {APPEARANCE_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    data-theme={option.id}
+                    onClick={() => setTheme(option.id)}
+                    aria-pressed={activeTheme === option.id}
+                    className={`rounded-md px-2 py-1 text-xs font-bold transition-colors ${
+                      activeTheme === option.id
+                        ? 'bg-white/10 text-[var(--theme-text-primary)]'
+                        : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <button onClick={handleLogout} className="mt-2 w-full px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors" aria-label="Log out">
+                Log Out
+              </button>
+            </>
+          )}
         </div>
       </nav>
 
@@ -374,7 +473,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               className="flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-panel)]"
             >
               <NavIcon name={item.icon} />
-              <span>{item.label === 'New' ? "What's New" : item.label === 'Planner' ? 'Continuity Planner' : item.label}</span>
+              <span>{item.label}</span>
             </Link>
           ))}
           <div className="space-y-1 border-t border-[var(--theme-border)] pt-2 md:hidden">

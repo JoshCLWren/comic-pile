@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -220,7 +220,7 @@ describe('QueueThreadCard', () => {
     expect(unblocked.className).not.toMatch(/bg-red-500/)
     expect(unblocked.className).not.toMatch(/theme-danger/)
     expect(unblocked.className).not.toMatch(/theme-continuity-accent/)
-    expect(screen.queryByLabelText('Blocked thread')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Blocked series')).not.toBeInTheDocument()
     expect(screen.queryByTestId('queue-thread-blocked-detail')).not.toBeInTheDocument()
     unmount()
 
@@ -231,13 +231,86 @@ describe('QueueThreadCard', () => {
     const blocked = screen.getByTestId('queue-thread-item')
     expect(blocked.className).not.toMatch(/bg-red-500/)
     expect(blocked.className).not.toMatch(/theme-danger/)
-    expect(screen.getByLabelText('Blocked thread')).toHaveClass('text-[var(--theme-continuity-accent)]')
+    expect(screen.getByLabelText('Blocked series')).toHaveClass('text-[var(--theme-continuity-accent)]')
 
     const detail = screen.getByTestId('queue-thread-blocked-detail')
     expect(detail.className).toMatch(/theme-continuity-accent/)
     expect(detail.className).not.toMatch(/bg-red-500/)
     expect(detail.className).not.toMatch(/text-red-/)
     expect(detail.className).not.toMatch(/theme-danger/)
+  })
+
+  it('communicates available vs disabled actions on blocked rows only', () => {
+    renderCard(createMockThread(), {
+      isBlocked: true,
+      readDisabled: true,
+      readDisabledReason: 'Blocked by dependency',
+      snoozeDisabled: true,
+      snoozeLabel: 'Snooze',
+      snoozeIcon: '😴',
+      blockingDependencies: [
+        { thread_id: 42, thread_title: 'Prequel Thread', issue_number: '3', label: 'Needs Prequel Thread: #3' },
+      ],
+    })
+
+    const detail = screen.getByTestId('queue-thread-blocked-detail')
+    expect(detail).toHaveTextContent(
+      'Edit and Delete still work. Read unlocks once the blocker above is cleared.',
+    )
+    expect(detail).toHaveTextContent(/Read unlocks once the blocker above is cleared/i)
+
+    const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
+    const readButton = within(actionsGroup).getByRole('button', { name: 'Read' })
+    expect(readButton).toBeDisabled()
+
+    const editButton = within(actionsGroup).getByRole('button', { name: 'Edit' })
+    expect(editButton).not.toBeDisabled()
+
+    const snoozeButton = within(actionsGroup).getByRole('button', { name: 'Snooze' })
+    expect(snoozeButton).toHaveAttribute('aria-disabled', 'true')
+
+    const deleteButton = within(actionsGroup).getByRole('button', { name: 'Delete' })
+    expect(deleteButton).not.toBeDisabled()
+
+    expect(screen.getByRole('link', { name: 'Open Prequel Thread' })).toHaveAttribute(
+      'href',
+      '/thread/42',
+    )
+  })
+
+  it('includes Snooze in blocked-row guidance when snooze is available', () => {
+    renderCard(createMockThread(), {
+      isBlocked: true,
+      readDisabled: true,
+      readDisabledReason: 'Blocked by dependency',
+      snoozeDisabled: false,
+      snoozeLabel: 'Snooze',
+      snoozeIcon: '😴',
+      blockingDependencies: [
+        { thread_id: 42, thread_title: 'Prequel Thread', issue_number: '3', label: 'Needs Prequel Thread: #3' },
+      ],
+    })
+
+    const detail = screen.getByTestId('queue-thread-blocked-detail')
+    expect(detail).toHaveTextContent(
+      'Edit, Snooze, and Delete still work. Read unlocks once the blocker above is cleared.',
+    )
+  })
+
+  it('does not show blocked-row action guidance on unblocked rows', () => {
+    renderCard(createMockThread(), {
+      isBlocked: false,
+      readDisabled: false,
+      snoozeDisabled: false,
+      snoozeLabel: 'Snooze',
+      snoozeIcon: '😴',
+    })
+
+    expect(screen.queryByTestId('queue-thread-blocked-detail')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Read unlocks once the blocker/i)).not.toBeInTheDocument()
+
+    const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
+    expect(within(actionsGroup).getByRole('button', { name: 'Read' })).not.toBeDisabled()
   })
 
   it('keeps crossover load errors out of dependency continuity styling', () => {
@@ -259,10 +332,58 @@ describe('QueueThreadCard', () => {
     expect(screen.getByRole('button', { name: 'Read' })).toBeDisabled()
   })
 
+  it('composes hover with the drag-over tint instead of overriding it on the shared row', () => {
+    renderCard(createMockThread(), { isDragOver: true })
+
+    const card = screen.getByTestId('queue-thread-item')
+    expect(card.className).toMatch(/hover:bg-white\/\[0\.04\]/)
+    expect(card.className).not.toMatch(/bg-amber-500\/10/)
+
+    const tint = screen.getByTestId('queue-thread-drag-over')
+    expect(tint).toHaveClass('bg-amber-500/10')
+    expect(tint).toHaveClass('pointer-events-none', 'absolute', 'inset-0')
+  })
+
+  it('does not render the drag-over tint when the row is not a drop target', () => {
+    renderCard(createMockThread(), { isDragOver: false })
+
+    expect(screen.queryByTestId('queue-thread-drag-over')).not.toBeInTheDocument()
+  })
+
+  it('keeps the drag-over tint while a blocked row still carries its continuity cues', () => {
+    renderCard(createMockThread(), {
+      isDragOver: true,
+      isBlocked: true,
+      blockingDependencies: [],
+    })
+
+    expect(screen.getByTestId('queue-thread-drag-over')).toHaveClass('bg-amber-500/10')
+    expect(screen.getByLabelText('Blocked series')).toHaveClass('text-[var(--theme-continuity-accent)]')
+    expect(screen.getByTestId('queue-thread-blocked-detail').className).toMatch(/theme-continuity-accent/)
+  })
+
   it('renders thread title', () => {
     const thread = createMockThread({ title: 'Amazing Spider-Man' })
     renderCard(thread)
     expect(screen.getByTestId('mock-marquee')).toHaveTextContent('Amazing Spider-Man')
+  })
+
+  it('keeps the title button from collapsing and switches layout on container width, not viewport md', () => {
+    const thread = createMockThread({ title: 'Very Long Thread Title That Would Previously Collapse' })
+    const { unmount } = renderCard(thread)
+
+    const titleButton = screen.getByRole('button', { name: `Open ${thread.title}` })
+    expect(titleButton).toHaveClass('min-w-24', 'flex-1')
+
+    // The row must decide stacked vs horizontal from the actual list container
+    // width (@2xl container query), not the raw viewport `md` breakpoint that
+    // ignores the width already consumed by the desktop sidebar (#2284).
+    const card = screen.getByTestId('queue-thread-item')
+    expect(card).toHaveClass('flex-col')
+    expect(card).not.toHaveClass('md:flex-row')
+    expect(card).toHaveClass('@2xl:flex-row')
+
+    unmount()
   })
 
   it('renders format label', () => {
