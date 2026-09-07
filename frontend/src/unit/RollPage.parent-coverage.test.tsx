@@ -157,7 +157,7 @@ describe('RollPage parent handlers', () => {
     if (!snoozeAction) throw new Error('Snooze action not found')
     await user.click(snoozeAction)
     await openActions()
-    await user.click(screen.getByRole('button', { name: /edit thread/i }))
+    await user.click(screen.getByRole('button', { name: /edit series/i }))
     expect(spies.navigate).toHaveBeenCalledWith('/queue', { state: { editThreadId: 1 } })
 
     await user.click(screen.getAllByRole('button', { name: 'd6' })[0]!)

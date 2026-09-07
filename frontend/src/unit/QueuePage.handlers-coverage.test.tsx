@@ -111,7 +111,7 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'New')
     await user.type(screen.getByLabelText('Issues'), '1-2')
-    await user.click(screen.getByRole('button', { name: /create thread/i }))
+    await user.click(screen.getByRole('button', { name: /create series/i }))
     await waitFor(() => expect(mocks.mutate).toHaveBeenCalled())
 
     await user.click(screen.getByText('edit modal callback'))
@@ -134,7 +134,7 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'Complex')
     await user.type(screen.getByLabelText('Issues'), 'Annual 1, 3-4')
-    await user.click(screen.getByRole('button', { name: /create thread/i }))
+    await user.click(screen.getByRole('button', { name: /create series/i }))
     await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('issue create failed')))
     mocks.mutate.mockRejectedValue(new Error('mutation failed'))
     await user.click(screen.getByText('snooze callback'))
@@ -186,7 +186,7 @@ describe('QueuePage callback coverage', () => {
 
   it('opens a modal requested through router location state', async () => {
     render(<MemoryRouter initialEntries={[{ pathname: '/queue', state: { openCreate: true } }]}><QueuePage /></MemoryRouter>)
-    await waitFor(() => expect(screen.getByRole('heading', { name: /create thread/i })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: /create series/i })).toBeInTheDocument())
   })
 
   it('uses the virtualized queue renderer for large queues', () => {
@@ -206,7 +206,7 @@ describe('QueuePage callback coverage', () => {
     await user.type(screen.getByLabelText('Issues'), 'Annual 1, 3-4')
     await user.type(screen.getByLabelText(/Issues already read/i), '1')
     expect(screen.getByText(/Will create/)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /create thread/i }))
+    await user.click(screen.getByRole('button', { name: /create series/i }))
     await waitFor(() => expect(issuesApi.markRead).toHaveBeenCalledWith(21))
 
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
@@ -221,7 +221,7 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'Broken Range')
     await user.type(screen.getByLabelText('Issues'), '8-2')
-    await user.click(screen.getByRole('button', { name: /create thread/i }))
+    await user.click(screen.getByRole('button', { name: /create series/i }))
     await waitFor(() =>
       expect(alert).toHaveBeenCalledWith(expect.stringContaining('Failed to create thread')),
     )
@@ -364,12 +364,12 @@ describe('QueuePage callback coverage', () => {
     vi.mocked(useReactivateThread).mockReturnValue({ mutate: mocks.mutate, isPending: true } as never)
     renderPage()
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0]!)
-    expect(screen.getByRole('button', { name: 'Creating...' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Adding...' })).toBeDisabled()
     await user.click(screen.getByRole('button', { name: 'close modal' }))
     await user.click(screen.getByText('edit modal callback'))
     expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled()
     await user.click(screen.getByRole('button', { name: 'close modal' }))
     await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0]!)
-    expect(screen.getByRole('button', { name: 'Reactivating...' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Adding to queue...' })).toBeDisabled()
   })
 })
