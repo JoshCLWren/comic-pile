@@ -10,9 +10,15 @@ import { issuesApi } from '../services/api-issues'
 
 const navigateSpy = vi.fn()
 const routeParams = { id: '1' }
+const locationState: { state?: { openEditModal?: boolean } } = { state: undefined }
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
-  return { ...actual, useNavigate: () => navigateSpy, useParams: () => routeParams }
+  return {
+    ...actual,
+    useNavigate: () => navigateSpy,
+    useParams: () => routeParams,
+    useLocation: () => locationState,
+  }
 })
 vi.mock('../hooks/useThread', () => ({ useUpdateThread: vi.fn() }))
 vi.mock('../services/api', () => ({
@@ -31,6 +37,7 @@ const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
 
 beforeEach(() => {
   routeParams.id = '1'
+  locationState.state = undefined
   navigateSpy.mockReset()
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   mockedThreadsApiGet.mockResolvedValue({
@@ -56,6 +63,13 @@ it('renders a thread without legacy rating content', async () => {
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   expect(screen.queryByText(/Reviews/)).not.toBeInTheDocument()
+})
+
+it('auto-opens the edit modal when arriving with openEditModal state', async () => {
+  locationState.state = { openEditModal: true }
+  renderPage()
+  await waitFor(() => expect(screen.getByRole('heading', { name: /edit series/i })).toBeInTheDocument())
+  expect(screen.getByDisplayValue('Saga')).toBeInTheDocument()
 })
 
 it('does not fetch issues before the Issues section expands', async () => {

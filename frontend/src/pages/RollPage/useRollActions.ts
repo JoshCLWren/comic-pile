@@ -188,7 +188,7 @@ export function useRollActions({
           await refetchBootstrap()
           break
         case 'edit':
-          navigate('/queue', { state: { editThreadId: selectedThread!.id } })
+          navigate(`/thread/${selectedThread!.id}`, { state: { openEditModal: true } })
           break
       }
     } catch (error) {
