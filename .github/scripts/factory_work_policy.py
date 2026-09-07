@@ -134,6 +134,41 @@ def linked_issue_from_branch(branch: str | None) -> int | None:
     return int(match.group(1)) if match else None
 
 
+TITLE_ISSUE_RE = re.compile(r'(?i)(?:fix\s+|issue\s+)?#(\d+)')
+
+
+def linked_issue_from_pr(pr: dict[str, Any]) -> int | None:
+    """Resolve the canonical linked issue for factory assignment/suppression.
+
+    Prefers the durable ``factory/<worker>-<issue>-...`` branch shape, then falls
+    back to a leading ``Fix #N`` / ``#N`` reference in the PR title so local
+    Cursor/fix delivery PRs admitted by label still suppress duplicate issue
+    intake.
+    """
+    linked = linked_issue_from_branch(str(pr.get('headRefName') or ''))
+    if linked is not None:
+        return linked
+    title = str(pr.get('title') or '')
+    match = TITLE_ISSUE_RE.search(title)
+    return int(match.group(1)) if match else None
+
+
+def is_factory_managed_pr(pr: dict[str, Any]) -> bool:
+    """Return whether this PR is inside the autonomous factory work queue.
+
+    Canonical factory branches always qualify. Local Cursor/fix delivery PRs
+    also qualify once they carry the ``factory`` label so Josh-authored work can
+    enter review/repair/drain without rewriting the branch name. Stale
+    ``agent/`` and ``chatgpt/`` branches remain excluded even if mislabeled.
+    """
+    head = str(pr.get('headRefName') or '')
+    if head.startswith('factory/'):
+        return True
+    if head.startswith(('agent/', 'chatgpt/')):
+        return False
+    return 'factory' in labels_of(pr)
+
+
 def producer_worker_from_pr(pr: dict[str, Any]) -> str | None:
     """Recover producer identity using the shared review provenance policy."""
     return producer_worker_from_values(branch=str(pr.get('headRefName') or ''), body=str(pr.get('body') or ''))
@@ -201,7 +236,7 @@ def factory_review_backlog_count(prs: Iterable[dict[str, Any]]) -> int:
         if str(pr.get('state') or 'OPEN').upper() != 'OPEN' or pr.get('isDraft'):
             continue
         labels = labels_of(pr)
-        if not str(pr.get('headRefName') or '').startswith('factory/'):
+        if not is_factory_managed_pr(pr):
             continue
         if labels & BLOCKED_LABELS or 'factory:ready' in labels:
             continue
@@ -223,7 +258,7 @@ def factory_ready_count(prs: Iterable[dict[str, Any]]) -> int:
         if str(pr.get('state') or 'OPEN').upper() != 'OPEN' or pr.get('isDraft'):
             continue
         labels = labels_of(pr)
-        if not str(pr.get('headRefName') or '').startswith('factory/'):
+        if not is_factory_managed_pr(pr):
             continue
         if labels & BLOCKED_LABELS:
             continue
@@ -244,8 +279,7 @@ def factory_pr_wip_count(prs: Iterable[dict[str, Any]]) -> int:
         if str(pr.get('state') or 'OPEN').upper() != 'OPEN' or pr.get('isDraft'):
             continue
         labels = labels_of(pr)
-        head = str(pr.get('headRefName') or '')
-        if not head.startswith('factory/'):
+        if not is_factory_managed_pr(pr):
             continue
         if 'factory:ready' in labels or labels & BLOCKED_LABELS:
             continue
@@ -289,16 +323,16 @@ def pr_is_static_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, An
     if str(pr.get('state') or 'OPEN').upper() != 'OPEN' or pr.get('isDraft'):
         return False
     labels = labels_of(pr)
-    head = str(pr.get('headRefName') or '')
     # Human-authored agent/* and chatgpt/* PRs are not autonomous factory work,
-    # even if a stale/mistaken factory label was applied to them.
-    if not head.startswith('factory/'):
+    # even if a stale/mistaken factory label was applied to them. Labeled local
+    # Cursor/fix delivery PRs are admitted so they can finish through review.
+    if not is_factory_managed_pr(pr):
         return False
     if labels & BLOCKED_LABELS or 'factory:ready' in labels:
         return False
     if not item_is_unowned(labels):
         return False
-    linked = linked_issue_from_branch(head)
+    linked = linked_issue_from_pr(pr)
     if linked is not None and linked in issue_map:
         issue_labels = labels_of(issue_map[linked])
         # An existing canonical PR remains executable even when its linked
@@ -320,11 +354,10 @@ def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[
     implementation. Urgency changes ranking, never canonical PR identity.
     """
     del issue_map  # Kept in the signature for compatibility with existing callers.
-    head = str(pr.get('headRefName') or '')
     return (
         str(pr.get('state') or 'OPEN').upper() == 'OPEN'
-        and head.startswith('factory/')
-        and linked_issue_from_branch(head) is not None
+        and is_factory_managed_pr(pr)
+        and linked_issue_from_pr(pr) is not None
     )
 
 
@@ -377,7 +410,7 @@ def build_candidates(
     suppressing_pr_issues = {
         linked
         for pr in prs
-        if (linked := linked_issue_from_branch(pr.get('headRefName'))) is not None
+        if (linked := linked_issue_from_pr(pr)) is not None
         and pr_suppresses_issue_candidate(pr, issue_map)
     }
     pr_wip_full = factory_pr_wip_count(prs) >= FACTORY_PR_WIP_LIMIT
@@ -430,7 +463,7 @@ def build_candidates(
         # to quarantine, but they are not an independent hidden queue state.
         # If an operator truthfully restores the PR to review or repair, its
         # current lifecycle labels must make it executable again.
-        linked = linked_issue_from_branch(pr.get('headRefName'))
+        linked = linked_issue_from_pr(pr)
         pr_labels = labels_of(pr)
         labels = set(pr_labels)
         if linked is not None and linked in issue_map:
