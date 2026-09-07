@@ -242,13 +242,17 @@ describe('useQueueThreads (bounded incremental loader)', () => {
 
     rerender({ search: 'bat' })
 
-    await waitFor(() => expect(result.current.isPending).toBe(true))
+    // With keepPreviousData, placeholder data keeps the query in a "has data"
+    // state, so isPending stays false. The critical fix is that data is NOT
+    // null during the fetch, which prevents the full-screen loader from
+    // unmounting the search input and dropping focus.
+    await waitFor(() => {
+      expect(mockedThreadsApi.list).toHaveBeenCalled()
+      expect(result.current.data).not.toBeNull()
+      expect(result.current.data).toContainEqual(expect.objectContaining({ id: 1, title: 'Batman' }))
+    })
 
-    expect(result.current.data).not.toBeNull()
-    expect(result.current.data).toContainEqual(expect.objectContaining({ id: 1, title: 'Batman' }))
-
-    await waitFor(() => expect(result.current.isPending).toBe(false))
-    expect(result.current.data).toContainEqual(expect.objectContaining({ id: 2, title: 'Batgirl' }))
+    await waitFor(() => expect(result.current.data).toContainEqual(expect.objectContaining({ id: 2, title: 'Batgirl' })))
   })
 
   it('resets and re-requests the first page when sort changes', async () => {
