@@ -358,7 +358,7 @@ describe('QueueThreadCard', () => {
     })
 
     expect(screen.getByTestId('queue-thread-drag-over')).toHaveClass('bg-amber-500/10')
-    expect(screen.getByLabelText('Blocked thread')).toHaveClass('text-[var(--theme-continuity-accent)]')
+    expect(screen.getByLabelText('Blocked series')).toHaveClass('text-[var(--theme-continuity-accent)]')
     expect(screen.getByTestId('queue-thread-blocked-detail').className).toMatch(/theme-continuity-accent/)
   })
 
