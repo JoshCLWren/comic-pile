@@ -28,9 +28,7 @@ interface QueueThreadCardProps {
   onDragOver: React.DragEventHandler<HTMLElement>
   onDrop: React.DragEventHandler<HTMLElement>
   onRead: () => void
-  onOpenThread: () => void
   onSnooze: () => void
-  onActionDelete: () => void
   onMoveToFront: () => void
   onMoveToBack: () => void
   onReposition: () => void
@@ -59,9 +57,7 @@ export default function QueueThreadCard({
   onDragOver,
   onDrop,
   onRead,
-  onOpenThread,
   onSnooze,
-  onActionDelete,
   onMoveToFront,
   onMoveToBack,
   onReposition,
@@ -212,19 +208,11 @@ export default function QueueThreadCard({
                   +{extraBlockerCount} more
                 </button>
               )}
-              {snoozeDisabled ? (
-                <p className="mt-1.5 text-[var(--theme-text-dim)]">
-                  Edit and Delete still work. Read unlocks once the
-                  blocker{extraBlockerCount > 0 ? 's' : ''} above{' '}
-                  {extraBlockerCount > 0 ? 'are' : 'is'} cleared.
-                </p>
-              ) : (
-                <p className="mt-1.5 text-[var(--theme-text-dim)]">
-                  Edit, Snooze, and Delete still work. Read unlocks once the
-                  blocker{extraBlockerCount > 0 ? 's' : ''} above{' '}
-                  {extraBlockerCount > 0 ? 'are' : 'is'} cleared.
-                </p>
-              )}
+              <p className="mt-1.5 text-[var(--theme-text-dim)]">
+                Secondary actions are in the menu. Read unlocks once the
+                blocker{extraBlockerCount > 0 ? 's' : ''} above{' '}
+                {extraBlockerCount > 0 ? 'are' : 'is'} cleared.
+              </p>
             </div>
           )}
         </div>
@@ -233,15 +221,9 @@ export default function QueueThreadCard({
       <div className="flex shrink-0 items-center gap-2 self-stretch pl-12 @2xl:pl-0 @2xl:self-center flex-wrap">
         <QueueThreadActions
           title={thread.title}
-          snoozeIcon={snoozeIcon}
-          snoozeLabel={snoozeLabel}
-          snoozeDisabled={snoozeDisabled}
           readDisabled={readDisabled}
           readDisabledReason={readDisabledReason}
           onRead={onRead}
-          onEdit={onOpenThread}
-          onSnooze={onSnooze}
-          onDelete={onActionDelete}
         />
         <PositionMenu
           thread={thread}
@@ -251,6 +233,10 @@ export default function QueueThreadCard({
           onEdit={() => onEdit()}
           onDependencies={() => onDependencies()}
           onDelete={() => onDelete()}
+          snoozeIcon={snoozeIcon}
+          snoozeLabel={snoozeLabel}
+          snoozeDisabled={snoozeDisabled}
+          onSnooze={onSnooze}
         />
       </div>
     </div>
