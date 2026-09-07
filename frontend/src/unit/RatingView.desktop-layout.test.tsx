@@ -280,19 +280,21 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     expect(yourContext).not.toBeNull()
     expect(comicRegion!.contains(cover)).toBe(true)
     expect(yourContext!.contains(actions)).toBe(true)
-    const coverStyle = cover!.getAttribute('style') ?? ''
-    const coverStyleAttr = coverStyle.toLowerCase()
     const aspectRatioAttr = cover!.getAttribute('data-cover-aspect-ratio')
     const heightCapAttr = cover!.getAttribute('data-cover-height-cap-vh')
-    const styleHasAspectRatio = coverStyleAttr.includes('aspect-ratio')
-    const styleHasViewportCap = coverStyleAttr.includes('45vh')
-    const styleHasMinContainer = coverStyleAttr.includes('min(100%')
-    const aspectRatioOk = styleHasAspectRatio || (aspectRatioAttr !== null && Number(aspectRatioAttr) > 0)
-    const viewportCapOk = styleHasViewportCap || heightCapAttr === '45'
-    const minContainerOk = styleHasMinContainer || cover!.className.includes('min-')
-    expect(aspectRatioOk).toBe(true)
-    expect(viewportCapOk).toBe(true)
-    expect(minContainerOk).toBe(true)
+    const widthCapAttr = cover!.getAttribute('data-cover-width-cap-vh')
+    // jsdom's CSSOM drops `aspect-ratio`/`min(100%, calc(...))` from inline
+    // styles, so the viewport budget contract is asserted through the data
+    // attributes that mirror the frame geometry.
+    const aspectRatio = Number(aspectRatioAttr)
+    const heightCap = Number(heightCapAttr)
+    const widthCap = Number(widthCapAttr)
+    expect(Number.isFinite(aspectRatio)).toBe(true)
+    expect(aspectRatio).toBeGreaterThan(0)
+    expect(heightCap).toBe(45)
+    expect(Number.isFinite(widthCap)).toBe(true)
+    expect(widthCap).toBeGreaterThan(0)
+    expect(widthCap).toBeCloseTo(heightCap * aspectRatio)
     expect(cover!.className).not.toContain('max-h-')
   })
 })

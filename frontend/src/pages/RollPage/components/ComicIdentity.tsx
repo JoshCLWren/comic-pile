@@ -52,9 +52,10 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   }, [metadata])
 
   const coverAspectRatio = coverRatio ?? COVER_RATIO_FALLBACK
+  const coverWidthCapVh = COVER_HEIGHT_CAP_VH * coverAspectRatio
   const coverStyle: CSSProperties = {
     aspectRatio: `${coverAspectRatio}`,
-    width: `min(100%, calc(${COVER_HEIGHT_CAP_VH}vh * ${coverAspectRatio}))`,
+    width: `min(100%, calc(${coverWidthCapVh}vh))`,
   }
   const coverFrameBorder = { border: '1px solid var(--theme-border)' }
 
@@ -99,6 +100,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
         data-testid="comic-cover"
         data-cover-aspect-ratio={coverAspectRatio}
         data-cover-height-cap-vh={COVER_HEIGHT_CAP_VH}
+        data-cover-width-cap-vh={coverWidthCapVh}
         aria-label="Loading comic details"
         className="relative mx-auto overflow-hidden rounded-xl bg-white/5 animate-pulse"
         style={{ ...coverStyle, ...coverFrameBorder }}
@@ -122,6 +124,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
         data-testid="comic-cover"
         data-cover-aspect-ratio={coverAspectRatio}
         data-cover-height-cap-vh={COVER_HEIGHT_CAP_VH}
+        data-cover-width-cap-vh={coverWidthCapVh}
         className="relative mx-auto overflow-hidden rounded-xl bg-white/5"
         style={{ ...coverStyle, ...coverFrameBorder }}
       >
