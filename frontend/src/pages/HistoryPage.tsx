@@ -86,6 +86,11 @@ export default function HistoryPage() {
       <div id="sessions-list" className="border-y border-[var(--theme-border)] divide-y divide-[var(--theme-border)]" role="list" aria-label="Session history">
         {sessions.map((session) => {
           const duration = formatDuration(session.started_at, session.ended_at)
+          const isAbandonedRoll = (
+            !session.active_thread
+            && session.last_rolled_result == null
+            && (session.snapshot_count ?? 0) <= 1
+          )
           return (
             <div key={session.id} role="listitem" className="flex gap-3 md:gap-4 py-4 px-2 md:px-3">
               <div className="w-16 md:w-20 shrink-0">
@@ -98,6 +103,16 @@ export default function HistoryPage() {
               </div>
 
               <div className="min-w-0 flex-1 space-y-2">
+                {isAbandonedRoll && (
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-[var(--theme-text-primary)]">
+                      Abandoned roll
+                    </p>
+                    <p className="text-xs text-[var(--theme-text-muted)]">
+                      No reading activity was recorded.
+                    </p>
+                  </div>
+                )}
                 {session.active_thread ? (
                   <div className="space-y-1">
                     <p className="font-bold text-sm leading-tight text-stone-200 truncate">{session.active_thread.title}</p>
@@ -126,11 +141,11 @@ export default function HistoryPage() {
                       </p>
                     )}
                   </div>
-                ) : (
+                ) : !isAbandonedRoll ? (
                   <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
                     No comic selected — empty / abandoned session
                   </p>
-                )}
+                ) : null}
 
                 {session.ladder_path && (
                   <div className="space-y-1">

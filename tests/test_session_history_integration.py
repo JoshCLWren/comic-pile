@@ -589,3 +589,97 @@ async def test_current_session_response_includes_ladder_path(
     data = response.json()
     assert "ladder_path" in data
     assert "6 → 8" in data["ladder_path"]
+
+
+@pytest.mark.asyncio
+async def test_history_list_surfaces_pending_thread_title_without_roll(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Newest history row must show the pending thread title even before any roll.
+
+    Regression for #2195: a session with a pending_thread_id but no roll event
+    previously had an empty active_thread, so the newest History row showed only
+    date/die and omitted the comic/thread title.
+    """
+    thread = Thread(
+        title="Pending Comic",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    session = SessionModel(
+        start_die=6,
+        user_id=default_user.id,
+        started_at=datetime.now(UTC),
+        pending_thread_id=thread.id,
+    )
+    async_db.add(session)
+    await async_db.commit()
+
+    response = await auth_client.get("/api/v1/sessions/")
+    assert response.status_code == 200
+    sessions = response.json()["sessions"]
+
+    newest = next(s for s in sessions if s["id"] == session.id)
+    assert newest["active_thread"] is not None
+    assert newest["active_thread"]["title"] == "Pending Comic"
+
+
+@pytest.mark.asyncio
+async def test_history_list_pending_thread_omitted_from_active_thread_when_roll_exists(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """A rolled thread takes precedence over a stale pending thread in History.
+
+    When a session already has a roll event for a thread, that rolled thread is
+    the active_thread; the pending_thread_id must not override it. The pending
+    branch only fills the gap for sessions with no roll yet.
+    """
+    rolled_thread = Thread(
+        title="Rolled Comic",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+    )
+    pending_thread = Thread(
+        title="Stale Pending",
+        format="comic",
+        issues_remaining=5,
+        queue_position=2,
+        user_id=default_user.id,
+    )
+    async_db.add_all([rolled_thread, pending_thread])
+    await async_db.commit()
+
+    session = SessionModel(
+        start_die=6,
+        user_id=default_user.id,
+        started_at=datetime.now(UTC),
+        pending_thread_id=pending_thread.id,
+    )
+    async_db.add(session)
+    await async_db.commit()
+
+    roll_event = Event(
+        type="roll",
+        session_id=session.id,
+        selected_thread_id=rolled_thread.id,
+        die=6,
+        result=4,
+        selection_method="random",
+    )
+    async_db.add(roll_event)
+    await async_db.commit()
+
+    response = await auth_client.get("/api/v1/sessions/")
+    assert response.status_code == 200
+    sessions = response.json()["sessions"]
+
+    item = next(s for s in sessions if s["id"] == session.id)
+    assert item["active_thread"] is not None
+    assert item["active_thread"]["title"] == "Rolled Comic"

@@ -23,6 +23,60 @@ it('renders empty history state', () => {
   expect(screen.getByText('No sessions yet')).toBeInTheDocument()
 })
 
+it('labels an empty session as an abandoned roll', () => {
+  mockedUseSessions.mockReturnValue({
+    data: [{
+      id: 9,
+      started_at: '2024-01-01T10:00:00Z',
+      ended_at: null,
+      ladder_path: '6',
+      active_thread: null,
+      last_rolled_result: null,
+      current_die: 6,
+      snapshot_count: 1,
+    }],
+    isPending: false,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+    error: null,
+  })
+
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+
+  expect(screen.getByText('Abandoned roll')).toBeInTheDocument()
+  expect(screen.getByText('No reading activity was recorded.')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /view full session/i })).toHaveAttribute(
+    'href',
+    '/sessions/9',
+  )
+})
+
+it('does not label an active session with a rolled result as abandoned', () => {
+  mockedUseSessions.mockReturnValue({
+    data: [{
+      id: 10,
+      started_at: '2024-01-01T10:00:00Z',
+      ended_at: null,
+      ladder_path: '6 → 8',
+      active_thread: { title: 'Saga', format: 'Comic' },
+      last_rolled_result: 4,
+      current_die: 8,
+      snapshot_count: 3,
+    }],
+    isPending: false,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+    error: null,
+  })
+
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+
+  expect(screen.queryByText('Abandoned roll')).not.toBeInTheDocument()
+  expect(screen.getByText('Saga')).toBeInTheDocument()
+})
+
 it('renders session cards with optional metadata and duration formats', () => {
   mockedUseSessions.mockReturnValue({ data: [
     { id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T10:05:00Z', ladder_path: '6 → 8', active_thread: { title: 'Saga', format: 'Comic', next_issue_number: '13', issues_read: 3, last_rating: 4.5 }, last_rolled_result: 4, current_die: 6, snapshot_count: 2 },
@@ -50,8 +104,9 @@ it('renders session cards with optional metadata and duration formats', () => {
   const snapshotsLink = screen.getByText('Snapshots (2)')
   expect(snapshotsLink).toBeInTheDocument()
   expect(snapshotsLink.closest('a')).toHaveAttribute('href', '/sessions/1')
-  // Sessions without active_thread now surface an explicit empty-state copy
-  expect(screen.getAllByText('No comic selected — empty / abandoned session')).toHaveLength(5)
+  // Sessions without active_thread now surface the abandoned-roll empty-state copy
+  expect(screen.getAllByText('Abandoned roll')).toHaveLength(5)
+  expect(screen.getAllByText('No reading activity was recorded.')).toHaveLength(5)
   // Titles remain the primary identity alongside die size
   expect(screen.getByText('Saga')).toBeInTheDocument()
   expect(screen.getByText('Other')).toBeInTheDocument()
@@ -69,10 +124,10 @@ it('newest History row shows recognizable title or empty-state and keeps die/tim
   render(<MemoryRouter><HistoryPage /></MemoryRouter>)
   // Newest row surfaces comic title, not only date/die
   expect(screen.getByText('Newest Saga')).toBeInTheDocument()
-  expect(screen.getByText('Die size')).toBeInTheDocument()
+  expect(screen.getAllByText('Die size')).toHaveLength(2)
   expect(screen.getByText('d6 → d8')).toBeInTheDocument()
-  // Empty newest-style row still has clear identity copy
-  expect(screen.getByText('No comic selected — empty / abandoned session')).toBeInTheDocument()
+  // Empty newest-style row still has clear abandoned-roll identity copy
+  expect(screen.getAllByText('Abandoned roll')).toHaveLength(1)
   // View full session remains available for both rows
   expect(screen.getAllByText(/View full session/)).toHaveLength(2)
   expect(screen.getAllByText(/View full session/)[0].closest('a')).toHaveAttribute('href', '/sessions/99')
