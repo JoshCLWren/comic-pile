@@ -112,7 +112,7 @@ export function RatingView({
             isLoading={isReaderContextLoading}
           />
 
-          <div className="min-w-0" data-testid="rating-actions-grid-cell">
+          <div className="min-w-0 xl:col-span-full" data-testid="rating-actions-grid-cell">
             <RatingActionPanel
               errorMessage={errorMessage}
               rateIsPending={rateIsPending}
