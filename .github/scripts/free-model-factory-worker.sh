@@ -456,6 +456,14 @@ fi
 review_log="/tmp/opencode-factory-${WORKER}.log"
 sanitized_review_log="/tmp/opencode-factory-${WORKER}.sanitized.log"
 factory_sanitize_review_log "$review_log" "$sanitized_review_log"
+# Append authoritative PR diff evidence after sanitize so the review controller
+# can attest inspection even when the model used file reads instead of `gh pr
+# diff`. Keep this at the end of the log: review_excerpt reads the tail.
+{
+  printf '\n# comic-pile-factory-authoritative-diff-evidence\n'
+  printf 'gh pr diff %s\n' "$NUMBER"
+  gh pr diff "$NUMBER" 2>/dev/null | head -n 4000 || true
+} >> "$sanitized_review_log"
 # Retain the terminal token for diagnostics; the merge controller remains the
 # only component authorized to decide whether a PR can merge.
 last_token="$(factory_terminal_marker "$review_log" || true)"

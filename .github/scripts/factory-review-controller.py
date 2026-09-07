@@ -33,8 +33,18 @@ SENSITIVE_ASSIGNMENT_RE = re.compile(
 BEARER_RE = re.compile(r"(?i)(authorization\s*:\s*bearer\s+)\S+")
 GITHUB_TOKEN_RE = re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b")
 API_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")
+# Accept authoritative PR-diff commands and common review inspection paths the
+# workers actually emit. The free-model worker also appends `gh pr diff` evidence
+# before invoking this controller so honest approvals are not soft-failed.
 DIFF_INSPECTION_RE = re.compile(
-    r"(?i)gh (?:pr|api)[^\n]{0,60}\bdiff\b|git (?:diff|show|log -p)"
+    r"(?i)"
+    r"(?:"
+    r"gh (?:pr|api)[^\n]{0,80}\bdiff\b"
+    r"|git (?:diff|show|log -p)"
+    r"|gh pr view\b"
+    r"|gh api[^\n]{0,100}/pulls/\d+/(?:files|commits)\b"
+    r"|comic-pile-factory-authoritative-diff-evidence"
+    r")"
 )
 STAGE_LABELS = {
     "factory:building",
@@ -939,7 +949,8 @@ def handle_review(
             producer=producer,
         )
 
-    # NEW: For approval, require evidence of diff inspection
+    # For approval, require evidence of diff / PR inspection. Failed attempts must
+    # not render as APPROVE: that false signal stalls promotion while looking done.
     if verdict == "approve":
         if not DIFF_INSPECTION_RE.search(excerpt):
             return return_to_review(
@@ -947,13 +958,14 @@ def handle_review(
                 branch=branch,
                 worker=worker,
                 reviewer=worker,
-                verdict=verdict,
+                verdict="not-ready",
                 excerpt=excerpt,
                 note=(
-                    "Approval requires evidence of diff inspection (e.g., running `git diff` or `gh pr diff`). "
-                    "The reviewed head must be inspected to ensure the changes are understood."
+                    "Approval rejected: no evidence of diff inspection "
+                    "(e.g., `gh pr diff`, `git diff`/`git show`, or `gh pr view`). "
+                    "The reviewed head must be inspected before a durable approve marker is written."
                 ),
-                status="review",
+                status="diff-inspection-required",
                 head=reviewed_head,
                 producer=producer,
             )
