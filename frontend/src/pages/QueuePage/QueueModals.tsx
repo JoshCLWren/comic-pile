@@ -93,7 +93,7 @@ export function QueueModals({
 }: QueueModalsProps) {
   return (
     <>
-      <Modal isOpen={openModal === 'create'} title="Create Thread" onClose={onCloseCreate}>
+      <Modal isOpen={openModal === 'create'} title="Add Series" onClose={onCloseCreate}>
         <form className="space-y-4" onSubmit={onCreateSubmit}>
           <div className="space-y-2">
             <label
@@ -205,14 +205,14 @@ export function QueueModals({
             disabled={isPendingCreate}
             className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
           >
-            {isPendingCreate ? 'Creating...' : 'Create Thread'}
+            {isPendingCreate ? 'Adding...' : 'Create Series'}
           </button>
         </form>
       </Modal>
 
       <Modal
         isOpen={openModal === 'edit'}
-        title="Edit Thread"
+        title="Edit Series"
         onClose={onCloseEdit}
         overlayClassName="edit-modal__overlay"
       >
@@ -324,13 +324,13 @@ export function QueueModals({
 
       <Modal
         isOpen={openModal === 'reactivate'}
-        title="Reactivate Thread"
+        title="Add Back to Queue"
         onClose={onCloseReactivate}
       >
         <form className="space-y-4" onSubmit={onReactivateSubmit}>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-              Completed Thread
+              Finished Series
             </label>
             <select
               value={reactivateThreadId}
@@ -338,7 +338,7 @@ export function QueueModals({
               className="w-full rounded-xl px-3 py-2 text-sm form-control"
               required
             >
-              <option value="">Select a thread...</option>
+              <option value="">Select a series...</option>
               {completedThreads.map((thread) => (
                 <option key={thread.id} value={String(thread.id)}>
                   {thread.title} ({thread.format})
@@ -364,7 +364,7 @@ export function QueueModals({
             disabled={isPendingReactivate}
             className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
           >
-            {isPendingReactivate ? 'Reactivating...' : 'Reactivate Thread'}
+            {isPendingReactivate ? 'Adding to queue...' : 'Add to Queue'}
           </button>
         </form>
       </Modal>

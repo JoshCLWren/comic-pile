@@ -59,7 +59,7 @@ export function YourContextPillar({
       <section aria-labelledby="rating-heading" className="space-y-3 rounded-2xl p-3" style={{ border: '1px solid rgba(168,85,247,0.2)', backgroundColor: 'var(--theme-bg-panel)' }}>
         <div className="flex items-end justify-between gap-3">
           <div>
-            <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the thread to the front and step the die down. Lower ratings move it past the next roll range and step the die up.`}>
+            <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the series to the front of the queue and step the die down. Lower ratings move it past the next roll range and step the die up.`}>
               <h3 id="rating-heading" className="cursor-help text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
                 Your rating
               </h3>
@@ -90,15 +90,15 @@ export function YourContextPillar({
         />
         <p id="queue-effect" className="text-[11px] font-bold leading-relaxed text-stone-400">
           {rating >= RATING_THRESHOLD
-            ? 'Moves this thread to the front of the queue.'
-            : 'Moves this thread beyond the next roll range.'}
+            ? 'Moves this series to the front of the queue.'
+            : 'Moves this series beyond the next roll range.'}
         </p>
       </section>
 
       {isLastIssue ? (
         <div className="rounded-xl border border-amber-600/20 bg-amber-600/10 p-3 text-center">
           <p className="text-[10px] font-black uppercase tracking-[0.15em] text-amber-500">
-            This is the last issue in the thread
+            This is the last issue in the series
           </p>
         </div>
       ) : null}

@@ -160,9 +160,9 @@ beforeEach(() => {
   expect(screen.getByText('Descender')).toBeInTheDocument()
   expect(screen.getByText('#1')).toBeInTheDocument()
 
-  const addButtons = screen.getAllByRole('button', { name: /add thread/i })
+  const addButtons = screen.getAllByRole('button', { name: /add series/i })
   await user.click(addButtons[0])
-  expect(screen.getByRole('heading', { name: /create thread/i })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /add series/i })).toBeInTheDocument()
 })
 
   it('registers a restore target while the create modal is open', async () => {
@@ -182,7 +182,7 @@ beforeEach(() => {
     </BrowserRouter>
   )
 
-  await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
 
   expect(restoreState.setRestoreAction).toHaveBeenCalled()
 
@@ -412,7 +412,7 @@ describe('Keyboard Accessibility', () => {
     expect(cards[0]).toHaveTextContent('Alpha')
     await user.type(screen.getByPlaceholderText('Search...'), 'missing')
     // Search is debounced (300ms) so the parent query only commits after the delay.
-    await waitFor(() => expect(screen.getByText('No active threads match your search')).toBeInTheDocument(), { timeout: 2000 })
+    await waitFor(() => expect(screen.getByText('No active series match your search')).toBeInTheDocument(), { timeout: 2000 })
   })
 
   it('shows correct empty state when search matches only completed threads', async () => {
@@ -435,7 +435,7 @@ describe('Keyboard Accessibility', () => {
     })
     render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
     await user.type(screen.getByPlaceholderText('Search...'), 'done')
-    await waitFor(() => expect(screen.getByText('No active threads match your search')).toBeInTheDocument(), { timeout: 2000 })
+    await waitFor(() => expect(screen.getByText('No active series match your search')).toBeInTheDocument(), { timeout: 2000 })
   })
 
   it('creates a simple issue range and marks the requested issues read', async () => {
@@ -445,12 +445,12 @@ describe('Keyboard Accessibility', () => {
   mockedThreadsApi.setPending.mockResolvedValue({})
   mockedUseQueueThreads.mockReturnValue({ data: [], isLoading: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'New Series')
   await user.clear(screen.getByLabelText('Issues'))
   await user.type(screen.getByLabelText('Issues'), '1-5')
   await user.type(screen.getByLabelText(/Issues already read/i), '2')
-  await user.click(screen.getByRole('button', { name: /create thread/i }))
+  await user.click(screen.getByRole('button', { name: /create series/i }))
   await waitFor(() => expect(create).toHaveBeenCalled())
 })
 
@@ -464,18 +464,18 @@ describe('Keyboard Accessibility', () => {
   const update = vi.fn().mockResolvedValue({})
   mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  const menu = screen.getAllByRole('button', { name: /thread actions/i })[0]
+  const menu = screen.getAllByRole('button', { name: /series actions/i })[0]
   await user.click(menu)
   await user.click(screen.getByRole('menuitem', { name: /edit/i }))
-  expect(screen.getByRole('heading', { name: /edit thread/i })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /edit series/i })).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /close modal/i }))
-  await user.click(screen.getAllByRole('button', { name: /thread actions/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /series actions/i })[0])
   await user.click(screen.getByRole('menuitem', { name: /reposition/i }))
   expect(screen.getByTestId('position-slider-modal')).toBeInTheDocument()
   await user.click(screen.getByTestId('position-slider-cancel'))
-  await user.click(screen.getAllByRole('button', { name: /^reactivate$/i })[0]!)
+  await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0]!)
   await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')
-  await user.click(screen.getByRole('button', { name: /reactivate thread/i }))
+  await user.click(screen.getByRole('button', { name: /add to queue/i }))
 })
 
   it('renders loading and empty queue states', () => {
@@ -484,7 +484,7 @@ describe('Keyboard Accessibility', () => {
   expect(screen.getByRole('status')).toBeInTheDocument()
   mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   rerender(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  expect(screen.getByText('No active threads in queue')).toBeInTheDocument()
+  expect(screen.getByText('No active series in queue')).toBeInTheDocument()
 })
 
   it('prevents reading blocked threads and reports delete failures', async () => {
@@ -502,8 +502,8 @@ describe('Keyboard Accessibility', () => {
   expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()
   expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
   await user.click(screen.getByLabelText('Delete'))
-  expect(screen.getByRole('heading', { name: /delete thread/i })).toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: /delete thread/i }))
+  expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /delete series/i }))
   await waitFor(() => expect(deleteMutation.mutate).toHaveBeenCalledWith(1))
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('delete failed'))
   expect(showToast).toHaveBeenCalledWith(expect.stringContaining('delete failed'), 'error')
@@ -520,9 +520,9 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getByLabelText('Delete'))
-  expect(screen.getByRole('heading', { name: /delete thread/i })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /cancel/i }))
-  expect(screen.queryByRole('heading', { name: /delete thread/i })).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: /delete series/i })).not.toBeInTheDocument()
   expect(remove).not.toHaveBeenCalled()
 })
 
@@ -562,7 +562,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   })
 
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  const openMenu = async () => user.click(screen.getByRole('button', { name: /thread actions/i }))
+  const openMenu = async () => user.click(screen.getByRole('button', { name: /series actions/i }))
 
   await openMenu()
   await user.click(screen.getByRole('menuitem', { name: /move to front/i }))
@@ -570,8 +570,8 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   await user.click(screen.getByRole('menuitem', { name: /move to back/i }))
   await openMenu()
   await user.click(screen.getByRole('menuitem', { name: /delete/i }))
-  expect(screen.getByRole('heading', { name: /delete thread/i })).toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: /delete thread/i }))
+  expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /delete series/i }))
 
   expect(front).toHaveBeenCalledWith(1)
   expect(back).toHaveBeenCalledWith(1)
@@ -594,10 +594,10 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getByRole('button', { name: /shuffle/i }))
   await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('shuffle')))
-  await user.click(screen.getAllByRole('button', { name: /thread actions/i })[0]!)
+  await user.click(screen.getAllByRole('button', { name: /series actions/i })[0]!)
   await user.click(screen.getByRole('menuitem', { name: /move to front/i }))
   await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('front')))
-  await user.click(screen.getAllByRole('button', { name: /thread actions/i })[0]!)
+  await user.click(screen.getAllByRole('button', { name: /series actions/i })[0]!)
   await user.click(screen.getByRole('menuitem', { name: /reposition/i }))
   const slider = screen.getByRole('slider')
   fireEvent.change(slider, { target: { value: '99' } })
@@ -610,19 +610,19 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
   mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Annuals')
   await user.clear(screen.getByLabelText('Issues'))
   await user.type(screen.getByLabelText('Issues'), 'Annual 1, 5-7')
   await user.type(screen.getByLabelText(/Issues already read/i), '1')
-  await user.click(screen.getByRole('button', { name: /create thread/i }))
+  await user.click(screen.getByRole('button', { name: /create series/i }))
   await waitFor(() => expect(create).toHaveBeenCalled())
 
   mockedUseCreateThread.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('create failed')), isPending: false })
-  await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Broken')
   await user.type(screen.getByLabelText('Issues'), '1')
-  await user.click(screen.getByRole('button', { name: /create thread/i }))
+  await user.click(screen.getByRole('button', { name: /create series/i }))
   await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('create failed')))
 })
 
@@ -634,11 +634,11 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   expect(mockedDependenciesApi.listBlockedThreadIds).not.toHaveBeenCalled()
   expect(mockedDependenciesApi.getBlockingInfo).not.toHaveBeenCalled()
-  await user.click(screen.getByRole('button', { name: /thread actions/i }))
+  await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /dependencies/i }))
   expect(screen.getByRole('heading', { name: /dependencies:/i })).toBeInTheDocument()
   await user.click(screen.getByLabelText('Close modal'))
-  await user.click(screen.getByRole('button', { name: /thread actions/i }))
+  await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /edit/i }))
   await user.click(screen.getByRole('button', { name: /save changes/i }))
   await waitFor(() => expect(update).toHaveBeenCalled())
@@ -658,7 +658,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   const drag = screen.getAllByRole('button', { name: 'Drag to reorder' })
   fireEvent.dragStart(drag[0]!, { dataTransfer: { effectAllowed: '', setData: vi.fn() } })
   fireEvent.drop(cards[0]!, { dataTransfer: { getData: () => '1' } })
-  await user.click(screen.getAllByRole('button', { name: /thread actions/i })[0]!)
+  await user.click(screen.getAllByRole('button', { name: /series actions/i })[0]!)
   await user.click(screen.getByRole('menuitem', { name: /reposition/i }))
   fireEvent.change(screen.getByRole('slider'), { target: { value: '1' } })
   await user.click(screen.getByTestId('position-slider-confirm'))
@@ -672,11 +672,11 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   mockedIssuesApi.create.mockResolvedValue({ issues: [{ id: 11 }, { id: 12 }] })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Complex')
   await user.type(screen.getByLabelText('Issues'), 'Annual 1, 5-7')
   await user.type(screen.getByLabelText(/Issues already read/i), '2')
-  await user.click(screen.getByRole('button', { name: /create thread/i }))
+  await user.click(screen.getByRole('button', { name: /create series/i }))
   await waitFor(() => expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(11))
   expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(12)
 })
@@ -690,7 +690,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   mockedIssuesApi.create.mockResolvedValue({ issues: [{ id: 71, issue_number: '71' }] })
 
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Marvel Graphic Novel')
   await user.type(screen.getByLabelText('Issues'), '71')
 
@@ -698,7 +698,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   expect(screen.getByText(/not an issue number/i)).toBeInTheDocument()
   expect(screen.getByLabelText('Issues already read (optional)')).toHaveValue(0)
 
-  await user.click(screen.getByRole('button', { name: /create thread/i }))
+  await user.click(screen.getByRole('button', { name: /create series/i }))
 
   await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({
     title: 'Marvel Graphic Novel',
@@ -714,17 +714,19 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   mockedUseReactivateThread.mockReturnValue({ mutate: reactivate, isPending: false })
   mockedUseQueueThreads.mockReturnValue({ data: [{ id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  await user.click(screen.getAllByRole('button', { name: /^reactivate$/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0])
   await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')
   fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '3' } })
-  await user.click(screen.getByRole('button', { name: /reactivate thread/i }))
+  await user.click(screen.getByRole('button', { name: /add to queue/i }))
   await waitFor(() => expect(reactivate).toHaveBeenCalledWith({ thread_id: 2, issues_to_add: 3 }))
 
   mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('reactivate failed')), isPending: false })
-  await user.click(screen.getAllByRole('button', { name: /^reactivate$/i })[0])
+  await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0])
   await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')
-  await user.click(screen.getByRole('button', { name: /reactivate thread/i }))
-  await waitFor(() => expect(screen.getByRole('heading', { name: /reactivate thread/i })).toBeInTheDocument())
+  await user.click(screen.getByRole('button', { name: /add to queue/i }))
+  await waitFor(() =>
+    expect(screen.getByRole('heading', { name: /add back to queue/i })).toBeInTheDocument(),
+  )
 })
 
   it('uses the virtualized queue without loading hidden blocked-thread reasons', async () => {
@@ -747,7 +749,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   mockedUseQueueThreads.mockReturnValue({ data: manyThreads, isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await waitFor(() => expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument())
-  expect(screen.getByRole('list', { name: 'Thread queue' })).toBeInTheDocument()
+  expect(screen.getByRole('list', { name: 'Series queue' })).toBeInTheDocument()
   expect(mockedDependenciesApi.listBlockedThreadIds).not.toHaveBeenCalled()
   expect(mockedDependenciesApi.getBlockingInfo).not.toHaveBeenCalled()
   vi.unstubAllGlobals()

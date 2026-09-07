@@ -76,7 +76,7 @@ it('reacts to resize measurements and auto-scrolls at both container edges', () 
   const threads = createMockThreads(60)
   render(<VirtualizedThreadList threads={threads} renderItem={(thread) => <div>{thread.title}</div>} />)
   act(() => resizeCallback?.([{ contentRect: { height: 500, width: 1000 } }]))
-  const container = screen.getByLabelText('Thread queue')
+  const container = screen.getByLabelText('Series queue')
   Object.defineProperty(container, 'getBoundingClientRect', { value: () => ({ top: 0, height: 100 }) })
   vi.spyOn(performance, 'now').mockReturnValueOnce(100).mockReturnValueOnce(200)
   fireEvent.dragOver(container, { clientY: 1 })
@@ -88,7 +88,7 @@ it('ignores throttled and empty virtualized drag-over states', () => {
   mockScrollToIndex.mockClear()
   mockGetVirtualItems.mockReturnValue([])
   render(<VirtualizedThreadList threads={createMockThreads(60)} renderItem={(thread) => <div>{thread.title}</div>} />)
-  const container = screen.getByLabelText('Thread queue')
+  const container = screen.getByLabelText('Series queue')
   Object.defineProperty(container, 'getBoundingClientRect', { value: () => ({ top: 0, height: 100 }) })
   vi.spyOn(performance, 'now').mockReturnValue(100)
   fireEvent.dragOver(container, { clientY: 1 })
@@ -106,12 +106,12 @@ it('coalesces resize observer callbacks into one animation frame', () => {
     resizeCallback?.([{ contentRect: { height: 400, width: 700 } }])
     resizeCallback?.([{ contentRect: { height: 500, width: 900 } }])
   })
-  expect(screen.getByLabelText('Thread queue')).toBeInTheDocument()
+  expect(screen.getByLabelText('Series queue')).toBeInTheDocument()
 })
 
 it('renders a standalone empty queue state', () => {
   render(<VirtualizedThreadList threads={[]} renderItem={() => <div />} />)
-  expect(screen.getByText('No threads in queue')).toBeInTheDocument()
+  expect(screen.getByText('No series in queue')).toBeInTheDocument()
 })
 
 beforeAll(() => {
@@ -166,8 +166,8 @@ it('preserves container selectors for E2E compatibility', () => {
   expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
   expect(container.querySelector('#queue-container')).toBeInTheDocument()
   expect(screen.getByRole('list')).toBeInTheDocument()
-  expect(screen.getByLabelText('Thread queue')).toBeInTheDocument()
-  fireEvent.drop(screen.getByLabelText('Thread queue'))
+  expect(screen.getByLabelText('Series queue')).toBeInTheDocument()
+  fireEvent.drop(screen.getByLabelText('Series queue'))
 })
 
 it('renders the total-size spacer div', () => {
@@ -328,7 +328,7 @@ it('sets aria-label and role on the scroll container', () => {
   )
 
   expect(screen.getByRole('list')).toBeInTheDocument()
-  expect(screen.getByLabelText('Thread queue')).toBeInTheDocument()
+  expect(screen.getByLabelText('Series queue')).toBeInTheDocument()
 })
 // ── Pure getColumnCount edge case tests (Finding #5/#10) ──
 
@@ -441,9 +441,9 @@ it('empty state preserves the same DOM tree structure', () => {
   expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
   expect(container.querySelector('#queue-container')).toBeInTheDocument()
   expect(screen.getByRole('list')).toBeInTheDocument()
-  expect(screen.getByLabelText('Thread queue')).toBeInTheDocument()
+  expect(screen.getByLabelText('Series queue')).toBeInTheDocument()
   // Should show the empty message
-  expect(screen.getByText('No threads in queue')).toBeInTheDocument()
+  expect(screen.getByText('No series in queue')).toBeInTheDocument()
 })
 
 // ── Drag-reorder edge auto-scroll tests (583-D) ──

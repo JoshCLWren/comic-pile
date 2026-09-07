@@ -144,7 +144,7 @@ export function useQueueThreadActions(
     } catch (err: unknown) {
       const detail = getApiErrorDetail(err)
       setDeleteError(detail)
-      showToast(`Failed to delete thread: ${detail}`, 'error')
+      showToast(`Failed to delete series: ${detail}`, 'error')
     }
   }, [pendingDeleteThread, deleteMutation, showToast])
 
@@ -152,7 +152,7 @@ export function useQueueThreadActions(
     (threadId: number) => {
       moveToFrontMutation.mutate(threadId)
         .catch(() => {
-          window.alert('Failed to move thread to front. Please try again.')
+          window.alert('Failed to move series to front. Please try again.')
         })
     },
     [moveToFrontMutation],
@@ -162,7 +162,7 @@ export function useQueueThreadActions(
     (threadId: number) => {
       moveToBackMutation.mutate(threadId)
         .catch(() => {
-          window.alert('Failed to move thread to back. Please try again.')
+          window.alert('Failed to move series to back. Please try again.')
         })
     },
     [moveToBackMutation],

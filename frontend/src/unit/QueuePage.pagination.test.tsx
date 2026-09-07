@@ -167,7 +167,7 @@ it('shows an incremental-load error without discarding the loaded queue', () => 
   renderQueue()
 
   expect(screen.getByText('Saga')).toBeInTheDocument()
-  expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load the next batch of threads.Try again")
+  expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load the next batch of series.Try again")
 })
 
 it('does not show an incremental error before the queue has produced a data snapshot', () => {
