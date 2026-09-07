@@ -106,16 +106,6 @@ def _event_algorithm_version(event: Event) -> str | None:
     return None
 
 
-def _event_control_mode(event: Event) -> str | None:
-    """Extract the per-decision operator control mode recorded on the event."""
-    payload = _context_json(event)
-    if payload:
-        raw = payload.get("control_mode")
-        if isinstance(raw, str) and raw:
-            return raw
-    return None
-
-
 def _effort_band(die: int | None) -> str:
     """Map a die size to a coarse effort band label."""
     if die is None:
@@ -254,9 +244,7 @@ async def compute_recommendation_diagnostics(
             algorithm_version = RECOMMENDATION_ALGORITHM_VERSION_LEGACY_UNKNOWN
         else:
             algorithm_version = recommendation_settings.algorithm_version
-        recorded_control_mode = _event_control_mode(event)
-        group_control_mode = recorded_control_mode or control_mode
-        mode_bucket = by_mode[(group_control_mode, algorithm_version)]
+        mode_bucket = by_mode[(control_mode, algorithm_version)]
         mode_bucket["rolls"] += 1
         mode_bucket["accepted"] += 1 if accepted else 0
         mode_bucket["snoozed"] += 1 if snoozed else 0
