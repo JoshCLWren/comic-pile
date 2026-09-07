@@ -94,12 +94,12 @@ export function RatingActionPanel({
       >
         {rateIsPending ? 'Saving…' : issuesRemaining === 1 ? 'Mark read & complete' : 'Mark read & save'}
       </button>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2" data-testid="rating-secondary-actions">
         <button
           type="button"
           onClick={onSnooze}
           disabled={snoozeIsPending}
-          className="min-h-11 flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+          className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
         >
           {snoozeIsPending ? 'Snoozing…' : 'Snooze'}
         </button>
@@ -110,7 +110,7 @@ export function RatingActionPanel({
             disabled={skipIsPending}
             data-testid="skip-roll"
             aria-label="Skip current roll"
-            className="min-h-11 flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+            className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
           >
             {skipIsPending ? 'Skipping…' : 'Skip'}
           </button>
@@ -119,7 +119,7 @@ export function RatingActionPanel({
           type="button"
           onClick={onCancel}
           disabled={dismissIsPending}
-          className="min-h-11 flex-1 rounded-xl border border-rose-600/30 bg-rose-600/10 py-3 text-xs font-black uppercase tracking-[0.15em] text-rose-400 transition hover:bg-rose-600/20 focus:ring-2 focus:ring-rose-500 disabled:opacity-50"
+          className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-rose-600/30 bg-rose-600/10 py-3 text-xs font-black uppercase tracking-[0.15em] text-rose-400 transition hover:bg-rose-600/20 focus:ring-2 focus:ring-rose-500 disabled:opacity-50"
         >
           Cancel roll
         </button>
