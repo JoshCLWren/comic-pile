@@ -74,7 +74,7 @@ function QueueControlsInner({
             className="hidden md:flex h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
             data-testid="queue-add-thread-desktop"
           >
-            Add Thread
+            Add Series
           </button>
         </div>
       </div>

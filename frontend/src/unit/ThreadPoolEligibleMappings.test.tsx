@@ -48,7 +48,7 @@ describe('ThreadPool eligible mappings', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('Eligible now · 1')).toBeVisible()
+    expect(screen.getByText('1 ready to read')).toBeVisible()
     expect(screen.getByText('#12')).toBeVisible()
     expect(screen.getByRole('button', {
       name: /Die face 1: Amazing Adventures, issue 12, connected to Secret War\. Open thread actions\./i,
@@ -83,7 +83,7 @@ describe('ThreadPool eligible mappings', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.queryByLabelText(/Eligible now/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/ready to read/i)).not.toBeInTheDocument()
     expect(screen.queryByText('Issue 12')).not.toBeInTheDocument()
   })
 
@@ -102,8 +102,8 @@ describe('ThreadPool eligible mappings', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('Eligible now · 3')).toBeVisible()
-    expect(screen.getByText(/Only 3 of d6 faces are mapped to eligible reads/i)).toBeVisible()
+    expect(screen.getByText('3 ready to read')).toBeVisible()
+    expect(screen.getByText(/Only 3 of d6 faces are mapped to a ready-to-read series/i)).toBeVisible()
 
     const faces = screen.getAllByRole('button', { name: /Die face \d+:/i })
     expect(faces).toHaveLength(3)

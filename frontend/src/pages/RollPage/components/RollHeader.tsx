@@ -104,7 +104,7 @@ export function RollHeader({
           <div
             className="hidden min-w-0 flex-wrap items-center gap-x-0 gap-y-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-0.5 md:flex"
             role="group"
-            aria-label="Dice ladder"
+            aria-label="Die sizes"
           >
             {DICE_LADDER.map((die) => {
               const activeDie = manualDie === null ? currentDie : manualDie
@@ -136,7 +136,7 @@ export function RollHeader({
               title={
                 manualDie
                   ? `Exit manual mode (currently d${manualDie})`
-                  : 'Automatic dice ladder mode is active'
+                  : 'Automatic die mode is active'
               }
               className={`min-h-11 min-w-11 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${manualDie === null
                 ? 'bg-[var(--theme-primary-action)]/15 text-[var(--theme-comic-accent)]'
@@ -172,10 +172,10 @@ export function RollHeader({
               </div>
             </div>
             <div className="text-right">
-              <Tooltip content="Dice ladder: d4→d6→d8→d10→d12→d20→d30→d50→d100. Promotes automatically based on ratings (5→up, 1-2→down)">
+              <Tooltip content="The die picks randomly from the series that are ready to read. Sizes run d4→d6→d8→d10→d12→d20→d30→d50→d100 — a larger die means more series in the roll.">
                 <GlossaryLink id="die-ladder">
                   <span className="cursor-help border-b border-dashed border-stone-600 text-[8px] font-black uppercase tracking-wider text-stone-500">
-                    Ladder
+                    Die
                   </span>
                 </GlossaryLink>
               </Tooltip>
@@ -186,7 +186,7 @@ export function RollHeader({
           </div>
         </div>
         <ReadingModeControl mode={sessionMode} onOpenSelector={onOpenModeSelector} />
-        <Tooltip content="Pick a specific eligible thread for the next result.">
+        <Tooltip content="Pick a specific series for the next result.">
           <button
             type="button"
             onClick={onOpenOverride}

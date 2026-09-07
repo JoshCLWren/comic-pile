@@ -508,7 +508,7 @@ export default function ThreadDetailView() {
 
       <Modal
         isOpen={isEditOpen}
-        title="Edit Thread"
+        title="Edit Series"
         onClose={() => {
           setIsEditOpen(false)
         }}

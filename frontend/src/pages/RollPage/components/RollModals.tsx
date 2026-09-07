@@ -180,11 +180,11 @@ export function RollModals({
       >
         <form className="space-y-4" onSubmit={onSubmitOverride}>
           <p className="text-xs text-stone-400">
-            Choose the eligible thread you want to read next.
+            Choose the series you want to read next.
           </p>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-              Thread
+              Series
             </label>
             <select
               value={overrideThreadId}
@@ -194,8 +194,8 @@ export function RollModals({
               className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
               required
             >
-              <option value="">Select a thread...</option>
-              <optgroup label="Active Threads">
+              <option value="">Select a series...</option>
+              <optgroup label="Active series">
                 {(overrideThreads ?? []).map((thread) => (
                   <option key={thread.id} value={thread.id}>
                     {thread.title} ({thread.format})
@@ -203,7 +203,7 @@ export function RollModals({
                 ))}
               </optgroup>
               {snoozedThreads.length > 0 && (
-                <optgroup label="Snoozed Threads">
+                <optgroup label="Snoozed series">
                   {snoozedThreads.map((thread) => (
                     <option key={thread.id} value={thread.id}>
                       {thread.title} ({thread.format})
@@ -219,7 +219,7 @@ export function RollModals({
             disabled={overridePending || !overrideThreadId}
             className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
           >
-            {overridePending ? 'Selecting...' : 'Pick this thread'}
+            {overridePending ? 'Selecting...' : 'Pick this series'}
           </button>
         </form>
       </Modal>
@@ -229,7 +229,7 @@ export function RollModals({
           {manualDie
             ? `Manual mode is active at d${manualDie}. Choose another die or return to automatic mode.`
             : `Automatic mode is active at d${currentDie}. Choosing a die switches to manual mode.`}
-          {' '}<GlossaryLink id="autoladder">What is AutoLadder?</GlossaryLink>
+          {' '}<GlossaryLink id="autoladder">What is Auto?</GlossaryLink>
         </p>
         <div className="grid grid-cols-3 gap-2">
           {DICE_LADDER.map((die) => (
@@ -321,7 +321,7 @@ export function RollModals({
             className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
             <span className="text-lg">✏️</span>
-            <span>Edit Thread</span>
+            <span>Edit Series</span>
           </button>
         </div>
       </Modal>

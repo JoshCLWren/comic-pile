@@ -104,7 +104,7 @@ describe('ThreadPool Component', () => {
   it('shows the eligibility section with a populated pool', () => {
     renderPool()
 
-    expect(screen.getByText(/Eligible now/i)).toBeInTheDocument()
+    expect(screen.getByText(/ready to read/i)).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /die face/i }).length).toBeGreaterThan(0)
   })
 
@@ -157,7 +157,7 @@ describe('ThreadPool Component', () => {
       </MemoryRouter>,
     )
 
-    const toggle = screen.getByText(/1 thread hidden \(blocked by dependencies\)/i)
+    const toggle = screen.getByText(/1 series waiting for earlier issues/i)
     expect(toggle).toBeInTheDocument()
     // Blocked thread titles stay hidden until the section is expanded.
     expect(screen.queryByText('Blocked Thread')).not.toBeInTheDocument()

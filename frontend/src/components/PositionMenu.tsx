@@ -177,7 +177,7 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
     {
       label: 'Reposition\u2026',
       icon: '\u2261',
-      ariaLabel: 'Reposition thread',
+      ariaLabel: 'Reposition series',
       action: () => {
         onReposition(thread)
         closeMenu()
@@ -193,9 +193,9 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
       },
     },
     {
-      label: 'Edit Thread',
+      label: 'Edit Series',
       icon: '\u270F\uFE0F',
-      ariaLabel: 'Edit thread',
+      ariaLabel: 'Edit series',
       action: () => {
         onEdit(thread)
         closeMenu()
@@ -211,9 +211,9 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
       },
     },
     {
-      label: 'Delete Thread',
+      label: 'Delete Series',
       icon: '\u{1F5D1}',
-      ariaLabel: 'Delete thread',
+      ariaLabel: 'Delete series',
       destructive: true,
       action: () => {
         onDelete(thread.id)

@@ -26,7 +26,7 @@ export default function DeleteThreadDialog({
   return (
     <Modal
       isOpen={thread !== null}
-      title="Delete Thread"
+      title="Delete Series"
       onClose={onCancel}
       data-testid="delete-thread-dialog"
     >

@@ -20,8 +20,8 @@ describe('GlossaryLink', () => {
       ['lane', 'Lane'],
       ['reading-order', 'Reading Order'],
       ['projection', 'Projection'],
-      ['die-ladder', 'Die ladder'],
-      ['autoladder', 'AutoLadder'],
+      ['die-ladder', 'Die'],
+      ['autoladder', 'Auto'],
       ['dependency', 'Dependency rule'],
       ['readiness', 'Readiness'],
     ]
