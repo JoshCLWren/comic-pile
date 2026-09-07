@@ -32,6 +32,11 @@ Version 2 (issue #1718):
 
 ``{"context_version": 2, "selected_candidate": {...}, "candidate_weights": [...], "selected_weight": ..., "bandwidth": ..., "bandwidth_source": ..., "bandwidth_confidence": ..., "random_bypass": ..., "balanced_neutrality": ...}``
 
+Phase 9 (issue #1767) adds the canonical ``algorithm_version`` and operator
+``control_mode`` keys to the version 2 payload so decision history records
+which algorithm produced the draw (``v1-contextual`` under the default control
+mode, ``legacy`` under the operator kill switch):
+
 ``candidate_weights`` is bounded to the die pool (max 100 entries) and holds
 ``{"candidate_id": int, "weight": float, "reasons": [str]}`` per bounded
 candidate in pool order. Compact bandwidth/effort reason codes (e.g.
@@ -39,8 +44,10 @@ candidate in pool order. Compact bandwidth/effort reason codes (e.g.
 ``effort_unknown_neutral``) are stored per candidate; the selected
 candidate's final weight and active bandwidth/source/confidence are also
 captured. Pure-random and balanced legacy paths set ``random_bypass`` and
-``balanced_neutrality`` explicitly. Readers must tolerate historical rows
-with a NULL/missing payload, missing v2 keys, or unknown versions.
+``balanced_neutrality`` explicitly, and every new write records
+``algorithm_version`` and ``control_mode``. Readers must tolerate historical
+rows with a NULL/missing payload, missing v2 keys (including pre-Phase-9
+``algorithm_version``/``control_mode``), or unknown versions.
 """
 
 from __future__ import annotations
@@ -62,6 +69,10 @@ from app.models import (
     IssueExternalIdentityMapping,
     Thread,
     ThreadExternalSeriesMapping,
+)
+from comic_pile.recommendation_version import (
+    CONTROL_MODE_CONTEXTUAL,
+    RECOMMENDATION_ALGORITHM_VERSION,
 )
 
 # --- Centralized, documented thresholds -----------------------------------
@@ -118,6 +129,10 @@ RECOMMENDATION_CONTEXT_BANDWIDTH_SOURCE_KEY: Final[str] = "bandwidth_source"
 RECOMMENDATION_CONTEXT_BANDWIDTH_CONFIDENCE_KEY: Final[str] = "bandwidth_confidence"
 RECOMMENDATION_CONTEXT_RANDOM_BYPASS_KEY: Final[str] = "random_bypass"
 RECOMMENDATION_CONTEXT_BALANCED_NEUTRALITY_KEY: Final[str] = "balanced_neutrality"
+# Phase 9 (issue #1767): decision history records the canonical algorithm
+# version and operator control mode that produced the draw.
+RECOMMENDATION_CONTEXT_ALGORITHM_VERSION_KEY: Final[str] = "algorithm_version"
+RECOMMENDATION_CONTEXT_CONTROL_MODE_KEY: Final[str] = "control_mode"
 
 
 class EstimateSource(StrEnum):
@@ -538,6 +553,8 @@ def build_recommendation_context(
     random_bypass: bool | None = None,
     balanced_neutrality: bool | None = None,
     selected_weight: float | None = None,
+    algorithm_version: str | None = None,
+    control_mode: str | None = None,
 ) -> dict[str, object]:
     """Build the versioned decision-time recommendation-context payload.
 
@@ -554,9 +571,14 @@ def build_recommendation_context(
       bandwidth state at decision time.
     - ``random_bypass``/``balanced_neutrality``: explicit flags for
       pure-random and legacy control paths.
+    - ``algorithm_version``/``control_mode`` (Phase 9, issue #1767): the
+      canonical algorithm version and operator control state that produced the
+      draw, so decision history can distinguish forced-legacy runs from
+      contextual and user-bypass runs.
 
     Older ``context_version: 1`` payloads remain readable: readers must treat
-    absent v2 keys as neutral/unknown.
+    absent v2 keys as neutral/unknown, and absent ``algorithm_version``/
+    ``control_mode`` keys (pre-Phase-9 rows) are likewise neutral/unknown.
 
     Args:
         estimate: The resolved effort estimate for the selected candidate.
@@ -571,6 +593,10 @@ def build_recommendation_context(
         random_bypass: Whether contextual weighting was bypassed.
         balanced_neutrality: Whether the draw was explicitly neutral.
         selected_weight: Final weight of the selected candidate.
+        algorithm_version: Canonical algorithm version at decision time; when
+            absent the active contextual version is recorded.
+        control_mode: Operator control mode at decision time; when absent the
+            contextual control mode is recorded.
 
     Returns:
         JSON-serializable context dict tagged with
@@ -614,4 +640,8 @@ def build_recommendation_context(
         payload[RECOMMENDATION_CONTEXT_BANDWIDTH_CONFIDENCE_KEY] = None
     payload[RECOMMENDATION_CONTEXT_RANDOM_BYPASS_KEY] = bool(random_bypass)
     payload[RECOMMENDATION_CONTEXT_BALANCED_NEUTRALITY_KEY] = bool(balanced_neutrality)
+    payload[RECOMMENDATION_CONTEXT_ALGORITHM_VERSION_KEY] = (
+        algorithm_version or RECOMMENDATION_ALGORITHM_VERSION
+    )
+    payload[RECOMMENDATION_CONTEXT_CONTROL_MODE_KEY] = control_mode or CONTROL_MODE_CONTEXTUAL
     return payload

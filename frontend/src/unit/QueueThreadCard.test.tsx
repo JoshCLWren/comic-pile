@@ -265,6 +265,24 @@ describe('QueueThreadCard', () => {
     expect(screen.getByTestId('mock-marquee')).toHaveTextContent('Amazing Spider-Man')
   })
 
+  it('keeps the title button from collapsing and switches layout on container width, not viewport md', () => {
+    const thread = createMockThread({ title: 'Very Long Thread Title That Would Previously Collapse' })
+    const { unmount } = renderCard(thread)
+
+    const titleButton = screen.getByRole('button', { name: `Open ${thread.title}` })
+    expect(titleButton).toHaveClass('min-w-24', 'flex-1')
+
+    // The row must decide stacked vs horizontal from the actual list container
+    // width (@2xl container query), not the raw viewport `md` breakpoint that
+    // ignores the width already consumed by the desktop sidebar (#2284).
+    const card = screen.getByTestId('queue-thread-item')
+    expect(card).toHaveClass('flex-col')
+    expect(card).not.toHaveClass('md:flex-row')
+    expect(card).toHaveClass('@2xl:flex-row')
+
+    unmount()
+  })
+
   it('renders format label', () => {
     const thread = createMockThread({ format: 'Trade Paperback' })
     renderCard(thread)

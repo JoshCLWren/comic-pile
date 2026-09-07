@@ -40,7 +40,7 @@ behaviors:
   # ---- Authentication & startup (P0) ----
   - id: AUTH-001
     area: auth
-    behavior: "User can sign in with email/password and obtain a session"
+    behavior: "User can sign in with username/password and obtain a session"
     priority: P0
     status: covered
 
