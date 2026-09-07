@@ -299,7 +299,9 @@ def configure_review_handoff(
         controller,
         "review_excerpt",
         lambda _path, worker: (
-            "Fix the broken authorization boundary" if verdict == "repair" else ""
+            "Fix the broken authorization boundary"
+            if verdict == "repair"
+            else "Inspected with `gh pr diff 123` before FACTORY_GATE_READY"
         ),
     )
     monkeypatch.setattr(controller, "review_comment_bodies", lambda _pr: [])
@@ -610,6 +612,154 @@ def test_workflows_delegate_mechanical_gates_to_controller():
                 )
         assert "reviewThreads(first:100)" not in text
         assert "--json state,isDraft,mergeable,headRefOid" not in text
+
+
+def test_diff_inspection_failure_does_not_look_like_approve(monkeypatch):
+    """Incident #2309: soft-failed approvals must not render as APPROVE."""
+    controller = load_controller()
+    arguments = configure_review_handoff(monkeypatch, controller)
+    monkeypatch.setattr(controller, "review_excerpt", lambda _path, worker: "Looks fine. FACTORY_GATE_READY")
+    comments = []
+    transitions = []
+    monkeypatch.setattr(controller, "post_review_comment", lambda **kwargs: comments.append(kwargs))
+    monkeypatch.setattr(
+        controller,
+        "transition_pr_and_linked_issue",
+        lambda **kwargs: transitions.append(kwargs),
+    )
+
+    result = controller.handle_review(**arguments)
+
+    assert result["status"] == "diff-inspection-required"
+    assert comments[0]["verdict"] == "not-ready"
+    assert comments[0]["marker"] is None
+    assert transitions[0]["pr_stage"] == "factory:review"
+
+
+def test_review_comment_bodies_accept_owner_markers(monkeypatch):
+    """Owner-authored exact-head markers must authorize during incident response."""
+    controller = load_controller()
+    marker = controller.review_marker(
+        pr=2269,
+        head=HEAD,
+        reviewer="66",
+        producer="48",
+        verdict="approve",
+    )
+    monkeypatch.setattr(
+        controller,
+        "gh_json",
+        lambda _args: [
+            [
+                {
+                    "user": {"login": "JoshCLWren"},
+                    "author_association": "OWNER",
+                    "body": marker + "\n\nnote",
+                },
+                {
+                    "user": {"login": "random-user"},
+                    "author_association": "NONE",
+                    "body": marker + "\n\nspoof",
+                },
+                {
+                    "user": {"login": "github-actions[bot]"},
+                    "author_association": "NONE",
+                    "body": "bot body",
+                },
+            ]
+        ],
+    )
+    bodies = controller.review_comment_bodies(2269)
+    assert bodies == [marker + "\n\nnote", "bot body"]
+
+
+def test_gh_pr_view_counts_as_diff_inspection_evidence(monkeypatch):
+    """Honest reviews that use gh pr view can still promote past the gate."""
+    controller = load_controller()
+    arguments = configure_review_handoff(monkeypatch, controller)
+    monkeypatch.setattr(
+        controller,
+        "review_excerpt",
+        lambda _path, worker: "Used `gh pr view 123 --json files` then FACTORY_GATE_READY",
+    )
+    monkeypatch.setattr(
+        controller,
+        "mechanical_merge_gate",
+        lambda _pr, _head: {"decision": "pass", "reason": "green"},
+    )
+    monkeypatch.setattr(controller, "approval_can_promote", lambda **_kwargs: True)
+    comments = []
+    transitions = []
+    monkeypatch.setattr(controller, "post_review_comment", lambda **kwargs: comments.append(kwargs))
+    monkeypatch.setattr(
+        controller,
+        "transition_pr_and_linked_issue",
+        lambda **kwargs: transitions.append(kwargs),
+    )
+
+    result = controller.handle_review(**arguments)
+
+    assert result["status"] == "ready"
+    assert comments[0]["verdict"] == "approve"
+    assert comments[0]["marker"] is not None
+    assert comments[0]["marker"].startswith("<!-- comic-pile-factory-semantic-review-v1:")
+    assert transitions[0]["pr_stage"] == "factory:ready"
+
+
+def test_unified_diff_hunk_counts_as_diff_inspection_evidence(monkeypatch):
+    """Excerpt tails that only retain dumped unified diffs must still promote.
+
+    The worker dumps `gh pr diff` after sanitize; when that dump exceeds the
+    7000-char excerpt window, only hunks like `diff --git` remain. Matching
+    those prevents false diff-inspection-required soft-fails (#2309 follow-up).
+    """
+    controller = load_controller()
+    arguments = configure_review_handoff(monkeypatch, controller)
+    monkeypatch.setattr(
+        controller,
+        "review_excerpt",
+        lambda _path, worker: (
+            "diff --git a/tests/test_example.py b/tests/test_example.py\n"
+            "+++ b/tests/test_example.py\n"
+            "+def test_ok() -> None:\n"
+            "+    assert True\n"
+            "FACTORY_GATE_READY"
+        ),
+    )
+    monkeypatch.setattr(
+        controller,
+        "mechanical_merge_gate",
+        lambda _pr, _head: {"decision": "pass", "reason": "green"},
+    )
+    monkeypatch.setattr(controller, "approval_can_promote", lambda **_kwargs: True)
+    comments = []
+    transitions = []
+    monkeypatch.setattr(controller, "post_review_comment", lambda **kwargs: comments.append(kwargs))
+    monkeypatch.setattr(
+        controller,
+        "transition_pr_and_linked_issue",
+        lambda **kwargs: transitions.append(kwargs),
+    )
+
+    result = controller.handle_review(**arguments)
+
+    assert result["status"] == "ready"
+    assert comments[0]["verdict"] == "approve"
+    assert transitions[0]["pr_stage"] == "factory:ready"
+
+
+def test_authoritative_diff_evidence_marker_survives_long_dump_tail():
+    """Worker must keep the evidence marker inside review_excerpt's last 7000 chars."""
+    worker = Path(__file__).with_name("free-model-factory-worker.sh").read_text(encoding="utf-8")
+    assert "review_excerpt keeps only the last 7000 chars" in worker
+    # The closing marker pair must appear after the `gh pr diff` dump.
+    append_block_start = worker.index("comic-pile-factory-authoritative-diff-evidence")
+    dump = worker.index('gh pr diff "$NUMBER"', append_block_start)
+    closing_marker = worker.index(
+        "comic-pile-factory-authoritative-diff-evidence",
+        dump,
+    )
+    assert closing_marker > dump
 
 
 def test_fixed_model_factory_schedules_are_active():

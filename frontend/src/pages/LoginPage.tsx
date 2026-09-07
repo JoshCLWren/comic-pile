@@ -19,6 +19,10 @@ export default function LoginPage() {
       setError('Username is required')
       return false
     }
+    if (username.includes('@')) {
+      setError('Sign in with your username, not your email.')
+      return false
+    }
     if (!password.trim()) {
       setError('Password is required')
       return false
@@ -74,6 +78,7 @@ export default function LoginPage() {
                <label htmlFor="username" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
                  Username
                </label>
+               <p className="text-xs text-stone-400">Use your username, not email.</p>
                <input
                  id="username"
                  type="text"

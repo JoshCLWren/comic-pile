@@ -128,8 +128,8 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
 
           return (
             <section key={arc.comicvine_arc_id}>
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <h3 className="text-xs font-black text-blue-300">{normalizeArcName(arc.name)}</h3>
+              <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
+                <h3 className="min-w-0 text-xs font-black text-blue-300">{normalizeArcName(arc.name)}</h3>
                 <span className="text-[9px] text-stone-500 shrink-0">
                   {arc.related_issues.filter((issue) => issue.comicpile_matches.length > 0).length} in ComicPile ·{' '}
                   {arc.related_issues.filter((issue) => issue.comicpile_matches.length === 0).length} missing
@@ -139,7 +139,7 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
                 </span>
               </div>
               <p className="text-[9px] text-stone-500 mb-2">Related by story-arc membership, not reading order.</p>
-              <div className="space-y-1.5 max-h-64 overflow-y-auto overscroll-contain">
+              <div className="space-y-1.5" data-testid="story-arc-issue-list">
                 {displayedIssues.map((issue) => {
                   const identity = extractComicIdentity(issue)
                   const state = getMemberState(issue)

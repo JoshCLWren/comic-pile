@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
+import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 
 vi.mock('../contexts/useToast', () => ({
   useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
@@ -50,7 +51,9 @@ const renderWithAuth = (initialEntry = '/') => {
     <MemoryRouter initialEntries={[initialEntry]}>
       <AuthProvider>
         <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
+          <NavCollapseProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </NavCollapseProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>
@@ -63,7 +66,9 @@ const renderWithoutAuth = () => {
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
         <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
+          <NavCollapseProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </NavCollapseProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>
@@ -145,7 +150,9 @@ test('shows loading and non-auth failure states and logs out gracefully', async 
     <MemoryRouter initialEntries={['/queue']}>
       <AuthProvider>
         <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
+          <NavCollapseProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </NavCollapseProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>,
@@ -166,7 +173,9 @@ test('clears authentication when the user lookup returns unauthorized', async ()
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
         <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
+          <NavCollapseProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </NavCollapseProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>,
@@ -181,7 +190,9 @@ test('falls back to an empty username when the user profile omits it', async () 
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
         <BugReportRestoreProvider>
-          <Navigation onBugReportSubmit={vi.fn()} />
+          <NavCollapseProvider>
+            <Navigation onBugReportSubmit={vi.fn()} />
+          </NavCollapseProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>,

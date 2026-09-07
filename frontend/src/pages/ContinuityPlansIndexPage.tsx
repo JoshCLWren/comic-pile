@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import GlossaryLink from '../components/GlossaryLink'
 import { continuityPlansApi, type ContinuityPlanListItem } from '../services/api-continuity-plans'
 
 function formatDate(iso: string): string {
@@ -66,6 +67,12 @@ export default function ContinuityPlansIndexPage() {
       {!plans || plans.length === 0 ? (
         <div className="text-center py-8">
           <p className="text-lg font-bold text-stone-100">No reading plans yet</p>
+          <p className="mx-auto mt-2 max-w-xl text-sm text-stone-500">
+            A reading plan is a saved arrangement of issues, series, and crossovers in one or more
+            reading lanes — so you can read a storyline in order, even when it hops across crossovers
+            and your Queue.{' '}
+            <GlossaryLink id="continuity-plan">What is a continuity plan?</GlossaryLink>
+          </p>
           <p className="mt-2 text-sm text-stone-500">Create your first plan from the sequential planner.</p>
           <button
             type="button"

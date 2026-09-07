@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 
 const issues = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), move: vi.fn(), markRead: vi.fn(), markUnread: vi.fn() }))
 vi.mock('../services/api-issues', () => ({ issuesApi: issues }))
-vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children }: { isOpen: boolean; title: string; children: ReactNode }) => isOpen ? <div role="dialog"><h2>{title}</h2>{children}</div> : null }))
+vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, onClose, children }: { isOpen: boolean; title: string; onClose: () => void; children: ReactNode }) => isOpen ? <div role="dialog"><h2>{title}</h2><button type="button" aria-label="Close modal" onClick={onClose}>×</button>{children}</div> : null }))
 import BugReportModal from '../components/BugReportModal'
 import IssueCorrectionDialog from '../components/IssueCorrectionDialog'
 
@@ -76,6 +76,7 @@ describe('bug report and issue correction dialogs', () => {
     const input = screen.getByRole('textbox', { name: /What issue/ })
     await user.clear(input); await user.type(input, '5'); fireEvent.keyDown(input, { key: 'Enter' })
     await waitFor(() => expect(issues.create).toHaveBeenCalled())
-    fireEvent.keyDown(document, { key: 'Escape' }); expect(onClose).toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Close modal' }))
+    expect(onClose).toHaveBeenCalled()
   })
 })

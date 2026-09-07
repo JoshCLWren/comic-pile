@@ -4,11 +4,15 @@
  * The desktop sidebar theme selector previously let the longest option
  * ("Command Center") render outside the rounded theme-control boundary at
  * supported desktop widths. This browser-level regression asserts the rendered
- * geometry at the actual narrow desktop breakpoint (the md breakpoint where the
- * `w-72` sidebar is at its narrowest): every theme option's bounding box must
- * be contained by the theme selector's bounding box. A DOM-exists assertion is
- * intentionally insufficient here because the failure mode is geometry, not
- * presence.
+ * geometry at the actual narrow desktop breakpoint: every theme option's
+ * bounding box must be contained by the theme selector's bounding box. A
+ * DOM-exists assertion is intentionally insufficient here because the failure
+ * mode is geometry, not presence.
+ *
+ * Since issue #2285 tablets now default to the collapsed navigation rail, the
+ * sidebar must first be explicitly expanded to exercise the full `w-72`
+ * presentation at the narrowest desktop breakpoint. That preserves the #1941
+ * containment regression while honoring the new space-conscious default.
  *
  * Acceptance criteria covered:
  * - every theme option stays inside the selector boundary;
@@ -21,9 +25,10 @@
 import { expect } from '@playwright/test'
 import { test } from './fixtures'
 
-// The desktop sidebar is fixed at `w-72` (288px) and only renders at the `md`
-// breakpoint (>= 768px). 768px is therefore the narrowest supported desktop
-// width where containment must still hold.
+// The desktop sidebar expands to `w-72` (288px) at the `md` breakpoint
+// (>= 768px). 768px is therefore the narrowest supported desktop width where
+// expanded containment must still hold. Tablets default to the collapsed rail
+// (issue #2285), so these tests deliberately expand before asserting.
 const NARROW_DESKTOP_VIEWPORT = { width: 768, height: 1024 }
 const MOBILE_VIEWPORT = { width: 390, height: 844 }
 
@@ -48,6 +53,11 @@ test.describe('Desktop sidebar theme selector containment (#1941)', () => {
 
     const desktopNav = page.getByRole('navigation', { name: 'Desktop navigation' })
     await expect(desktopNav).toBeVisible()
+
+    const toggle = desktopNav.getByRole('button', { name: 'Expand navigation' })
+    await expect(toggle).toBeVisible()
+    await toggle.click()
+    await expect(desktopNav.getByRole('button', { name: 'Collapse navigation' })).toBeVisible()
 
     const group = desktopNav.getByRole('group', { name: 'Appearance' })
     await expect(group).toBeVisible()
@@ -76,6 +86,12 @@ test.describe('Desktop sidebar theme selector containment (#1941)', () => {
 
     const desktopNav = page.getByRole('navigation', { name: 'Desktop navigation' })
     await expect(desktopNav).toBeVisible()
+
+    const toggle = desktopNav.getByRole('button', { name: 'Expand navigation' })
+    await expect(toggle).toBeVisible()
+    await toggle.click()
+    await expect(desktopNav.getByRole('button', { name: 'Collapse navigation' })).toBeVisible()
+
     const navBox = await desktopNav.boundingBox()
     expect(navBox, 'desktop navigation must have a rendered bounding box').not.toBeNull()
 

@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import ComicVineSearchDialog from '../../../components/ComicVineSearchDialog'
-import { comicVineApi, type IssueIdentityResponse } from '../../../services/api'
+import { comicVineApi, type ComicVineIssueCandidate, type IssueIdentityResponse } from '../../../services/api'
 import { getProgressPercentage } from '../utils'
 import type { RatingThread } from '../types'
 import { ComicIdentity } from './ComicIdentity'
+import { queryClient } from '../../../query/queryClient'
+import {
+  applyComicVineCorrectionOptimistically,
+  invalidateComicVineIssueIntelligence,
+} from '../../../query/cacheEffects'
 
 interface ComicPillarProps {
   activeRatingThread: RatingThread | null
@@ -17,7 +22,6 @@ export function ComicPillar({
 }: ComicPillarProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false)
-  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [identityState, setIdentityState] = useState<IssueIdentityResponse | null>(null)
   const [searchMode, setSearchMode] = useState<'confirm' | 'replace'>('confirm')
 
@@ -45,23 +49,18 @@ export function ComicPillar({
     fetchIdentity()
   }, [fetchIdentity])
 
-  const handleIdentityConfirmed = useCallback(() => {
-    fetchIdentity()
+  const handleIdentityConfirmed = useCallback(async (selected?: ComicVineIssueCandidate | null) => {
+    if (issueId) {
+      if (selected && selected.image_url !== undefined) {
+        applyComicVineCorrectionOptimistically(queryClient, issueId, selected.image_url)
+      }
+      await invalidateComicVineIssueIntelligence(queryClient, issueId)
+    }
+    await fetchIdentity()
     onRefreshThread()
-  }, [fetchIdentity, onRefreshThread])
+  }, [fetchIdentity, onRefreshThread, issueId])
 
   const needsIdentity = identityState && !identityState.has_confirmed_identity
-
-  async function handleCopyComicReference() {
-    if (!activeRatingThread?.title || issueNumber == null) return
-
-    try {
-      await navigator.clipboard.writeText(`${activeRatingThread.title} ${issueNumber}`)
-      setCopyStatus('copied')
-    } catch {
-      setCopyStatus('failed')
-    }
-  }
 
   return (
     <div className="w-full space-y-4">
@@ -70,31 +69,18 @@ export function ComicPillar({
       </div>
       <section id="thread-info" aria-labelledby="selected-issue-heading" className="space-y-3">
         <div className="rounded-2xl p-3 md:p-4" style={{ border: '1px solid rgba(212,137,14,0.2)', backgroundColor: 'var(--theme-bg-panel)' }}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
+          <div className="flex flex-wrap items-start justify-between gap-3" data-testid="comic-header-row">
+            <div className="min-w-[12rem] flex-1 basis-48 break-words" data-testid="comic-header-title">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
                 Selected issue
               </p>
-              <h2 id="selected-issue-heading" className="mt-1 text-xl font-black leading-tight text-stone-100">
+              <h2 id="selected-issue-heading" className="mt-1 text-xl font-black leading-tight text-stone-100 break-words">
                 {threadTitle}
                 {issueNumber != null ? <span style={{ color: 'var(--theme-comic-accent)' }}> #{issueNumber}</span> : null}
               </h2>
             </div>
             {issueNumber != null ? (
-              <div className="flex shrink-0 gap-1.5">
-                <button
-                  type="button"
-                  onClick={handleCopyComicReference}
-                  disabled={!activeRatingThread?.title}
-                  className="min-h-11 rounded-xl px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
-                  style={{
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    backgroundColor: 'rgba(255,255,255,0.05)',
-                  }}
-                  aria-label={`Copy ${threadTitle} ${issueNumber}`}
-                >
-                  {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry copy' : 'Copy title'}
-                </button>
+              <div className="flex shrink-0 flex-wrap gap-1.5" data-testid="comic-header-controls">
                 <button
                   type="button"
                   onClick={() => setIsCorrectionDialogOpen(true)}
@@ -111,12 +97,6 @@ export function ComicPillar({
               </div>
             ) : null}
           </div>
-
-          {copyStatus === 'failed' ? (
-            <p className="mt-2 text-[10px] font-bold text-rose-400" role="status">
-              Copy failed. Use Retry copy to try again.
-            </p>
-          ) : null}
 
           <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-stone-500">
             {totalIssues && issueNumber != null ? (
