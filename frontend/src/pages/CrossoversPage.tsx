@@ -305,9 +305,9 @@ export default function CrossoversPage() {
   return (
     <section className="space-y-6 pb-28" aria-labelledby="crossovers-heading">
       <header className="space-y-2">
-        <p className="text-xs font-bold uppercase tracking-[0.25em] text-amber-500">Continuity</p>
-        <h1 id="crossovers-heading" className="text-3xl font-black text-stone-100">Crossovers</h1>
-        <p className="max-w-2xl text-sm text-stone-400">
+        <p className="text-xs font-bold uppercase tracking-[0.25em] text-[var(--theme-continuity-accent)]">Continuity</p>
+        <h1 id="crossovers-heading" className="text-3xl font-black text-[var(--theme-text-primary)]">Crossovers</h1>
+        <p className="max-w-2xl text-sm text-[var(--theme-text-muted)]">
           Name connected comics so their continuity is easy to recognize across ComicPile.
           Membership labels the group — it does not create a reading block by itself.{' '}
           <GlossaryLink id="crossover">What is a crossover?</GlossaryLink>
@@ -315,16 +315,16 @@ export default function CrossoversPage() {
       </header>
 
       <form onSubmit={createGroup} className="max-w-xl space-y-2" aria-label="Create crossover">
-        <label htmlFor="crossover-name" className="block text-sm font-bold text-stone-200">New crossover</label>
+        <label htmlFor="crossover-name" className="block text-sm font-bold text-[var(--theme-text-primary)]">New crossover</label>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <input id="crossover-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className="min-w-0 flex-1 rounded-xl border border-stone-600 bg-stone-950 px-3 py-2.5 text-stone-100" placeholder="Age of Apocalypse" disabled={isCreating || isLoading} />
-          <button type="submit" disabled={isCreating || isLoading} className="rounded-xl bg-amber-500 px-4 py-2.5 font-bold text-stone-950 disabled:opacity-50">{isCreating ? 'Creating…' : 'Create crossover'}</button>
+          <input id="crossover-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className="min-w-0 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2.5 text-[var(--theme-text-primary)]" placeholder="Age of Apocalypse" disabled={isCreating || isLoading} />
+          <button type="submit" disabled={isCreating || isLoading} className="rounded-xl bg-[var(--theme-primary-action)] px-4 py-2.5 font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{isCreating ? 'Creating…' : 'Create crossover'}</button>
         </div>
-        {createError && <p role="alert" className="text-sm text-red-400">{createError}</p>}
+        {createError && <p role="alert" className="text-sm text-[var(--theme-danger)]">{createError}</p>}
       </form>
 
-      {mutationError && <p role="alert" className="rounded-xl border border-red-800 bg-red-950/40 p-3 text-sm text-red-300">{mutationError}</p>}
-      {isLoading ? <p role="status">Loading crossovers…</p> : loadError ? <div role="alert"><p>{loadError}</p><button type="button" onClick={() => void loadGroups()}>Try again</button></div> : groups.length === 0 ? <p className="max-w-xl text-sm text-stone-500">No crossovers yet. Create your first one above to get started.</p> : (
+      {mutationError && <p role="alert" className="rounded-xl border border-[var(--theme-danger)] bg-[var(--theme-danger)]/10 p-3 text-sm text-[var(--theme-danger)]">{mutationError}</p>}
+      {isLoading ? <p role="status">Loading crossovers…</p> : loadError ? <div role="alert"><p>{loadError}</p><button type="button" onClick={() => void loadGroups()}>Try again</button></div> : groups.length === 0 ? <p className="max-w-xl text-sm text-[var(--theme-text-dim)]">No crossovers yet. Create your first one above to get started.</p> : (
         <ul className="grid gap-3" aria-label="Your crossovers">
           {groups.map((group) => {
             const isEditing = editingId === group.id
@@ -332,21 +332,21 @@ export default function CrossoversPage() {
             const hasPendingMutation = busyId !== null
             const isExpanded = expandedId === group.id
             return (
-              <li key={group.id} className="rounded-2xl border border-stone-700 bg-stone-900/60 p-4">
+              <li key={group.id} className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4">
                 {isEditing ? (
                   <div className="flex gap-2">
-                    <input aria-label={`Rename ${group.name}`} value={editingName} onChange={(event) => setEditingName(event.target.value)} disabled={isBusy} className="min-w-0 flex-1 rounded-xl border border-stone-600 bg-stone-950 px-3 py-2" />
+                    <input aria-label={`Rename ${group.name}`} value={editingName} onChange={(event) => setEditingName(event.target.value)} disabled={isBusy} className="min-w-0 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2" />
                     <button type="button" onClick={() => void saveRename(group.id)} disabled={isBusy}>Save</button>
                     <button type="button" onClick={() => setEditingId(null)} disabled={isBusy}>Cancel</button>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between gap-3">
                     <button type="button" onClick={() => toggleExpanded(group.id)} disabled={hasPendingMutation} aria-expanded={isExpanded} className="min-w-0 text-left">
-                      <span className="block text-lg font-black text-stone-100">{group.name}</span>
-                      <span className="text-sm text-stone-500">{group.memberships.length} {group.memberships.length === 1 ? 'member' : 'members'}</span>
+                      <span className="block text-lg font-black text-[var(--theme-text-primary)]">{group.name}</span>
+                      <span className="text-sm text-[var(--theme-text-dim)]">{group.memberships.length} {group.memberships.length === 1 ? 'member' : 'members'}</span>
                     </button>
                     <div className="flex gap-2">
-                      <Link to={`/crossovers/${group.id}`} className="rounded-lg bg-amber-500 px-3 py-1 text-sm font-bold text-stone-950">View</Link>
+                      <Link to={`/crossovers/${group.id}`} className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1 text-sm font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)]">View</Link>
                       <button type="button" onClick={() => { setEditingId(group.id); setEditingName(group.name) }} disabled={hasPendingMutation}>Rename</button>
                       <button type="button" onClick={() => void deleteGroup(group)} disabled={hasPendingMutation}>Delete</button>
                     </div>
@@ -354,16 +354,16 @@ export default function CrossoversPage() {
                 )}
 
                 {isExpanded && !isEditing && (
-                  <div className="mt-4 space-y-4 border-t border-stone-800 pt-4 text-sm text-stone-400">
+                  <div className="mt-4 space-y-4 border-t border-[var(--theme-border)] pt-4 text-sm text-[var(--theme-text-muted)]">
                     {requestedGroupId === String(group.id) && startsAtParam && (
-                      <p role="status" className="text-xs font-bold text-amber-500">Starts at #{startsAtParam}</p>
+                      <p role="status" className="text-xs font-bold text-[var(--theme-continuity-accent)]">Starts at #{startsAtParam}</p>
                     )}
                     {group.memberships.length === 0 ? <p>This crossover has no comics yet.</p> : (
                       <ul className="grid gap-2" aria-label={`${group.name} members`}>
                         {group.memberships.map((member) => {
                           const label = memberLabel(member)
                           return (
-                            <li key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-stone-800 px-3 py-2">
+                            <li key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--theme-border)] px-3 py-2">
                               <span>{label}</span>
                               <button type="button" onClick={() => void removeMember(group.id, member.id)} disabled={hasPendingMutation} aria-label={`Remove ${label} from ${group.name}`}>Remove</button>
                             </li>
@@ -372,22 +372,22 @@ export default function CrossoversPage() {
                       </ul>
                     )}
 
-                    <form onSubmit={(event) => void addThreadMember(event, group.id)} aria-label={`Add thread to ${group.name}`} className="grid gap-2 rounded-xl border border-stone-800 bg-stone-950/50 p-3 sm:grid-cols-[1fr_auto]">
+                    <form onSubmit={(event) => void addThreadMember(event, group.id)} aria-label={`Add thread to ${group.name}`} className="grid gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3 sm:grid-cols-[1fr_auto]">
                       <div className="min-w-0">
                         <ContinuityThreadSelector threads={threads} value={memberThread} onChange={setMemberThread} label="Current thread of series" placeholder="Search comics by title" error={threadLoadError} disabled={hasPendingMutation} />
-                        <p className="mt-1 text-xs text-stone-500">Adds one thread membership for the series. Use the issue range form below to add specific issues.</p>
+                        <p className="mt-1 text-xs text-[var(--theme-text-dim)]">Adds one thread membership for the series. Use the issue range form below to add specific issues.</p>
                       </div>
-                      <button type="submit" disabled={hasPendingMutation || !memberThread} className="self-end rounded-lg bg-violet-500 px-3 py-2 font-bold text-stone-950 disabled:opacity-50">{isBusy ? 'Saving…' : 'Add thread'}</button>
+                      <button type="submit" disabled={hasPendingMutation || !memberThread} className="self-end rounded-lg bg-[var(--theme-primary-action)] px-3 py-2 font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{isBusy ? 'Saving…' : 'Add thread'}</button>
                     </form>
 
-                    <form onSubmit={(event) => void addRange(event, group.id)} aria-label={`Add issue range to ${group.name}`} className="grid gap-3 rounded-xl border border-stone-800 bg-stone-950/50 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
+                    <form onSubmit={(event) => void addRange(event, group.id)} aria-label={`Add issue range to ${group.name}`} className="grid gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
                       <ContinuityThreadSelector threads={threads} value={rangeThread} onChange={(thread) => void selectRangeThread(thread)} label="Comic series for issue range" placeholder="Search comics by title" error={threadLoadError} disabled={hasPendingMutation || isLoadingRangeIssues} />
                       <div className="min-w-0">
-                        {rangeThread ? <ContinuityIssueRangeSelector thread={rangeThread} issues={rangeIssues} value={rangeSelection} onChange={setRangeSelection} label={`Issues from ${rangeThread.title}`} isLoading={isLoadingRangeIssues} error={rangeLoadError} disabled={hasPendingMutation} /> : <p className="text-xs text-stone-500">Choose a comic series, then choose the first and last issue by comic issue number.</p>}
+                        {rangeThread ? <ContinuityIssueRangeSelector thread={rangeThread} issues={rangeIssues} value={rangeSelection} onChange={setRangeSelection} label={`Issues from ${rangeThread.title}`} isLoading={isLoadingRangeIssues} error={rangeLoadError} disabled={hasPendingMutation} /> : <p className="text-xs text-[var(--theme-text-dim)]">Choose a comic series, then choose the first and last issue by comic issue number.</p>}
                       </div>
-                      <button type="submit" disabled={hasPendingMutation || isLoadingRangeIssues || !rangeSelection} className="self-end rounded-lg bg-amber-500 px-3 py-2 font-bold text-stone-950 disabled:opacity-50">{isBusy ? 'Adding…' : 'Add range'}</button>
+                      <button type="submit" disabled={hasPendingMutation || isLoadingRangeIssues || !rangeSelection} className="self-end rounded-lg bg-[var(--theme-primary-action)] px-3 py-2 font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{isBusy ? 'Adding…' : 'Add range'}</button>
                     </form>
-                    {membershipMessage && <p role="status" className="text-emerald-400">{membershipMessage}</p>}
+                    {membershipMessage && <p role="status" className="text-[var(--theme-personal-accent)]">{membershipMessage}</p>}
                   </div>
                 )}
               </li>
