@@ -32,6 +32,7 @@ import { useRollActions } from './useRollActions'
 import { useRollModals } from './useRollModals'
 import { useRollViewport } from './useRollViewport'
 import { RatingView } from './components/RatingView'
+import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
 import { RollModals } from './components/RollModals'
@@ -383,6 +384,13 @@ export default function RollPage() {
                 readerContext={readerContext}
                 isReaderContextLoading={isReaderContextLoading}
                 readerContextError={readerContextError?.message ?? null}
+              />
+            )}
+
+            {!state.isRatingView && (
+              <PostRateCopyPrompt
+                reference={rating.lastRated}
+                onDismiss={rating.clearLastRated}
               />
             )}
 
