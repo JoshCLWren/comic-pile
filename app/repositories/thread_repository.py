@@ -260,10 +260,12 @@ async def fetch_threads_with_drifted_issue_tracking(
     user_id: int | None = None,
     limit: int | None = None,
 ) -> list[Thread]:
-    """Return threads whose issue-tracking counters disagree with their issue rows.
+    """Return tracked threads whose counters disagree with their issue rows.
 
-    Only threads that own at least one issue row are considered, so threads
-    still tracking a declared total without local rows are never reported.
+    Only threads already using issue tracking (``total_issues`` set) that own
+    at least one issue row are considered, so old counter-based threads and
+    threads still tracking a declared total without local rows are never
+    reported or migrated by the reconciliation pass.
 
     Args:
         db: Database session.
@@ -288,6 +290,7 @@ async def fetch_threads_with_drifted_issue_tracking(
         select(Thread)
         .join(issue_stats, issue_stats.c.thread_id == Thread.id)
         .outerjoin(pointer_issue, pointer_issue.id == Thread.next_unread_issue_id)
+        .where(Thread.total_issues.is_not(None))
         .where(
             or_(
                 Thread.total_issues.is_distinct_from(issue_stats.c.row_count),
