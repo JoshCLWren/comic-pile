@@ -671,5 +671,47 @@ describe('IssueToggleList', () => {
     await waitFor(() => expect(screen.getByTestId('issue-move-down-1')).toHaveFocus())
     Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: originalRaf })
   })
+
+  it('calls onIssueChanged after a successful delete', async () => {
+    const onIssueChanged = vi.fn()
+    render(<IssueToggleList threadId={99} onIssueChanged={onIssueChanged} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
+    })
+
+    vi.mocked(confirm).mockReturnValue(true)
+    fireEvent.click(screen.getByTestId('issue-delete-2'))
+
+    await waitFor(() => expect(mockedIssuesApi.delete).toHaveBeenCalledWith(2))
+    await waitFor(() => expect(onIssueChanged).toHaveBeenCalled())
+  })
+
+  it('calls onIssueChanged after a successful toggle', async () => {
+    const onIssueChanged = vi.fn()
+    render(<IssueToggleList threadId={99} onIssueChanged={onIssueChanged} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('issue-toggle-1'))
+
+    await waitFor(() => expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(onIssueChanged).toHaveBeenCalled())
+  })
+
+  it('does not call onIssueChanged when delete is cancelled', async () => {
+    const onIssueChanged = vi.fn()
+    render(<IssueToggleList threadId={99} onIssueChanged={onIssueChanged} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
+    })
+
+    vi.mocked(confirm).mockReturnValue(false)
+    fireEvent.click(screen.getByTestId('issue-delete-2'))
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(onIssueChanged).not.toHaveBeenCalled()
+    expect(mockedIssuesApi.delete).not.toHaveBeenCalled()
+  })
 })
 })

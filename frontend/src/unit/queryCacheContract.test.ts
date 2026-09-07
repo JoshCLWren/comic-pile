@@ -171,12 +171,12 @@ describe('targeted cache effects', () => {
     expect(resetQueries).not.toHaveBeenCalled()
   })
 
-  it('invalidates only the edited thread issue, detail, summary, and session keys', async () => {
+  it('invalidates the edited thread issue, detail, summary, session, and queue keys', async () => {
     const { client, invalidateQueries, resetQueries } = createSpiedClient()
 
     await invalidateAfterIssueEdit(client, thread.id)
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(4)
+    expect(invalidateQueries).toHaveBeenCalledTimes(5)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.thread.issuePages(thread.id),
     })
@@ -191,6 +191,9 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.queue.pages(),
     })
     expect(resetQueries).not.toHaveBeenCalled()
   })
