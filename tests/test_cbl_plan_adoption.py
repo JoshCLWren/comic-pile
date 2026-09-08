@@ -1,14 +1,11 @@
-"""Tests for the canonical CBL adoption commit endpoint."""
+"""Tests for the canonical CBL adoption commit endpoint and service."""
 
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.cbl_plan_adoption import router
-from app.schemas.cbl_adoption import CBLAdoptionCommitRequest, SeriesDecision
 from app.schemas.shared_types import SourceBackedDecision
 from app.services.cbl_plan_adoption import (
     adopt_cbl_material_into_reading_plan,
@@ -16,56 +13,97 @@ from app.services.cbl_plan_adoption import (
 )
 
 
-@pytest.fixture
-def mock_db_session():
-    """Create a mock database session."""
-    return AsyncMock(spec=AsyncSession)
+class _Result:
+    """Minimal SQLAlchemy result stub."""
+
+    def __init__(self, row):
+        self._row = row
+
+    def scalar_one_or_none(self):
+        return self._row
+
+
+class _FakeAdoptionPlan:
+    """Lightweight stand-in for CBLAdoptionPlan with an entries tuple."""
+
+    def __init__(self, entries):
+        self.entries = tuple(entries)
 
 
 @pytest.fixture
-def mock_preview_response():
-    """Create a mock preview response."""
-    return {
-        "total_positions": 5,
-        "resolved_count": 2,
-        "unresolved_count": 2,
-        "ambiguous_count": 1,
-        "duplicate_identity_groups": 0,
-        "entries": [],
-        "first_unread_position": None,
-        "first_unread_entry": None,
-        "source_list_id": 1,
-        "source_path": "/path/to/cbl.json",
-        "source_repository": "https://github.com/test/repo",
-        "content_hash": "abc123",
-        "revision_sha": "def456",
-    }
+def mock_cbl_list():
+    """Create a mock CBL source list row."""
+    from app.models.cbl_reference import CBLSourceList
+
+    return CBLSourceList(
+        id=1,
+        source_id=1,
+        source_path="/mirror/cbl/bprd.xml",
+        name="B.P.R.D.",
+        declared_issue_count=2,
+        content_hash="abc123",
+        revision_sha="def456",
+        active=True,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+    )
 
 
 @pytest.fixture
-def mock_adopted_plan():
-    """Create a mock adopted plan."""
+def mock_db_session(mock_cbl_list):
+    """Create a mock database session that returns the CBL list on query."""
+
+    async def _execute(_query):
+        return _Result(mock_cbl_list)
+
+    db = AsyncMock(spec=AsyncSession)
+    db.execute = AsyncMock(side_effect=_execute)
+    db.commit = AsyncMock()
+    db.flush = AsyncMock()
+    db.add = AsyncMock()
+    return db
+
+
+@pytest.fixture
+def mock_adoption_plan():
+    """An adoption plan whose one entry is explicitly approved and adoptable."""
+    return _FakeAdoptionPlan(
+        [
+            {
+                "cbl_position": 0,
+                "cbl_entry_id": 10,
+                "series_name": "B.P.R.D.: Plague of Frogs",
+                "issue_number": "1",
+                "resolution_status": "no_owned_issue_for_comicvine_id",
+                "adopted": True,
+            }
+        ]
+    )
+
+
+@pytest.fixture
+def mock_existing_plan():
+    """A ContinuityPlan that already carries CBL provenance for this source."""
     from app.models.continuity_plan import ContinuityPlan
 
     return ContinuityPlan(
-        id=1,
+        id=5,
         user_id=1,
-        name="Test Plan",
+        name="CBL adoption for /mirror/cbl/bprd.xml",
         ordering_mode="informational",
         lanes_json=[{"id": "default", "name": "Default", "order": 0}],
         nodes_json=[
             {
-                "id": "cbl-1",
+                "id": "cbl-10",
                 "node_type": "issue",
                 "ref_id": 100,
                 "lane_id": "default",
                 "position": 0,
                 "is_checkpoint": False,
                 "convergence_gate": [],
-                "source_cbl_placement": {
-                    "cbl_entry_id": 1,
-                    "position": 0,
-                },
+                "source_cbl_placements": [
+                    {"source_path": "/mirror/cbl/bprd.xml", "position": 0}
+                ],
             }
         ],
         created_at=datetime.now(),
@@ -74,155 +112,175 @@ def mock_adopted_plan():
 
 
 @pytest.mark.asyncio
-async def test_adopt_cbl_material_success(
-    mock_db_session,
-    mock_preview_response,
-    mock_adopted_plan,
-):
-    """Test successful adoption of CBL material into a Reading Plan."""
-    list_id = 1
-    user_id = 1
+async def test_stale_fingerprint_aborts(mock_db_session, mock_adoption_plan):
+    """When the client fingerprint is stale, the commit fails with no writes."""
+    from app.models.cbl_reference import CBLSourceList
 
-    request = CBLAdoptionCommitRequest(
-        entry_decisions={0: SourceBackedDecision.INCLUDE, 1: SourceBackedDecision.EXCLUDE},
-        series_decisions=[SeriesDecision(series_name="Test Series", decision=SourceBackedDecision.INCLUDE)],
-        series_overrides=[],
+    stale_list = CBLSourceList(
+        id=1,
+        source_id=1,
+        source_path="/mirror/cbl/bprd.xml",
+        name="B.P.R.D.",
+        content_hash="NEW_HASH",
+        revision_sha="NEW_SHA",
+        active=True,
     )
 
-    with patch("app.services.cbl_plan_adoption.preview_cbl_adoption") as mock_preview, \
-         patch("app.services.cbl_plan_adoption._verify_preview_fingerprint") as mock_verify, \
-         patch("app.services.cbl_plan_adoption._find_existing_adopted_plan") as mock_find_plan:
+    async def _execute(_query):
+        return _Result(stale_list)
 
-        mock_preview.return_value = (mock_preview_response, mock_adopted_plan)
-        mock_find_plan.return_value = None
+    mock_db_session.execute = AsyncMock(side_effect=_execute)
 
-        plan = await adopt_cbl_material_into_reading_plan(
-            mock_db_session,
-            user_id=user_id,
-            list_id=list_id,
-            entry_decisions=request.entry_decisions,
-            series_decisions={s.series_name: s.decision for s in request.series_decisions},
-            series_overrides={s.series_name: {p.cbl_position: p.decision for p in request.series_overrides} for s in request.series_decisions},
-        )
-
-        assert plan.id == 1
-        assert plan.name == "Test Plan"
-        assert len(plan.nodes_json) == 1
-        assert plan.nodes_json[0]["id"] == "cbl-1"
-
-        mock_preview.assert_called_once()
-        mock_verify.assert_called_once()
-        mock_find_plan.assert_called_once_with(mock_db_session, user_id, list_id)
-
-
-@pytest.mark.asyncio
-async def test_adopt_cbl_material_stale_preview(
-    mock_db_session,
-    mock_preview_response,
-):
-    """Test adoption with stale preview fingerprint."""
-    list_id = 1
-    user_id = 1
-
-    with patch("app.services.cbl_plan_adoption.preview_cbl_adoption") as mock_preview:
-        mock_preview.return_value = (mock_preview_response, {})
-
-        from app.services.cbl_plan_adoption import adopt_cbl_material_into_reading_plan
+    with patch(
+        "app.services.cbl_plan_adoption.preview_cbl_adoption"
+    ) as mock_preview:
+        mock_preview.return_value = ({"entries": ()}, mock_adoption_plan)
 
         with pytest.raises(StalePreviewError, match="Source fingerprint mismatch"):
             await adopt_cbl_material_into_reading_plan(
                 mock_db_session,
-                user_id=user_id,
-                list_id=list_id,
+                user_id=1,
+                list_id=1,
                 entry_decisions={},
                 series_decisions={},
                 series_overrides={},
+                client_content_hash="abc123",
+                client_revision_sha="def456",
             )
 
+        mock_db_session.commit.assert_not_called()
+
 
 @pytest.mark.asyncio
-async def test_adopt_cbl_material_existing_plan(
-    mock_db_session,
-    mock_preview_response,
-    mock_adopted_plan,
+async def test_adopt_into_existing_plan_reuses_nodes(
+    mock_db_session, mock_adoption_plan, mock_existing_plan
 ):
-    """Test adoption with an existing plan."""
-    list_id = 1
-    user_id = 1
+    """Committing into an existing plan reuses nodes and does not duplicate."""
+    from app.models.continuity_plan import ContinuityPlan
 
-    request = CBLAdoptionCommitRequest(
-        entry_decisions={0: SourceBackedDecision.INCLUDE},
-        series_decisions=[],
-        series_overrides=[],
-    )
+    with patch(
+        "app.services.cbl_plan_adoption.preview_cbl_adoption"
+    ) as mock_preview, patch(
+        "app.services.cbl_plan_adoption._find_existing_adopted_plan"
+    ) as mock_find, patch(
+        "app.services.cbl_plan_adoption._create_plan_nodes_for_adopted_issues"
+    ) as mock_create:
 
-    with patch("app.services.cbl_plan_adoption.preview_cbl_adoption") as mock_preview, \
-         patch("app.services.cbl_plan_adoption._verify_preview_fingerprint") as mock_verify, \
-         patch("app.services.cbl_plan_adoption._find_existing_adopted_plan") as mock_find_plan:
-
-        mock_preview.return_value = (mock_preview_response, mock_adopted_plan)
-        mock_find_plan.return_value = mock_adopted_plan
+        mock_preview.return_value = ({"entries": ()}, mock_adoption_plan)
+        mock_find.return_value = mock_existing_plan
+        mock_create.return_value = (mock_existing_plan, {10: 100})
 
         plan = await adopt_cbl_material_into_reading_plan(
             mock_db_session,
-            user_id=user_id,
-            list_id=list_id,
-            entry_decisions=request.entry_decisions,
+            user_id=1,
+            list_id=1,
+            entry_decisions={0: SourceBackedDecision.INCLUDE},
             series_decisions={},
             series_overrides={},
         )
 
-        assert plan.id == 1
-        mock_find_plan.assert_called_once_with(mock_db_session, user_id, list_id)
+        assert plan.id == 5
+        mock_find.assert_called_once_with(mock_db_session, 1, "/mirror/cbl/bprd.xml")
+        mock_db_session.commit.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_adopt_cbl_material_duplicate_nodes(
-    mock_db_session,
-    mock_preview_response,
-    mock_adopted_plan,
+async def test_adopt_creates_new_plan_when_none_exists(
+    mock_db_session, mock_adoption_plan
 ):
-    """Test adoption that would create duplicate plan nodes."""
-    list_id = 1
-    user_id = 1
+    """When no plan carries this source provenance, a new plan is created."""
+    from app.models.continuity_plan import ContinuityPlan
 
-    mock_adopted_plan.nodes_json = [
-        {
-            "id": "cbl-1",
-            "node_type": "issue",
-            "ref_id": 100,
-            "lane_id": "default",
-            "position": 0,
-            "is_checkpoint": False,
-            "convergence_gate": [],
-            "source_cbl_placement": {
-                "cbl_entry_id": 1,
-                "position": 0,
-            },
-        }
-    ]
+    with patch(
+        "app.services.cbl_plan_adoption.preview_cbl_adoption"
+    ) as mock_preview, patch(
+        "app.services.cbl_plan_adoption._find_existing_adopted_plan"
+    ) as mock_find, patch(
+        "app.services.cbl_plan_adoption._create_plan_nodes_for_adopted_issues"
+    ) as mock_create:
 
-    request = CBLAdoptionCommitRequest(
-        entry_decisions={0: SourceBackedDecision.INCLUDE},
-        series_decisions=[],
-        series_overrides=[],
-    )
+        created = ContinuityPlan(
+            id=9,
+            user_id=1,
+            name="CBL adoption for /mirror/cbl/bprd.xml",
+            ordering_mode="informational",
+            lanes_json=[{"id": "default", "name": "Default", "order": 0}],
+            nodes_json=[{"id": "cbl-10", "ref_id": 100}],
+        )
 
-    with patch("app.services.cbl_plan_adoption.preview_cbl_adoption") as mock_preview, \
-         patch("app.services.cbl_plan_adoption._verify_preview_fingerprint") as mock_verify, \
-         patch("app.services.cbl_plan_adoption._find_existing_adopted_plan") as mock_find_plan:
-
-        mock_preview.return_value = (mock_preview_response, mock_adopted_plan)
-        mock_find_plan.return_value = mock_adopted_plan
+        mock_preview.return_value = ({"entries": ()}, mock_adoption_plan)
+        mock_find.return_value = None
+        mock_create.return_value = (created, {10: 100})
 
         plan = await adopt_cbl_material_into_reading_plan(
             mock_db_session,
-            user_id=user_id,
-            list_id=list_id,
-            entry_decisions=request.entry_decisions,
+            user_id=1,
+            list_id=1,
+            entry_decisions={0: SourceBackedDecision.INCLUDE},
             series_decisions={},
             series_overrides={},
         )
 
-        assert plan.id == 1
+        assert plan.id == 9
         assert len(plan.nodes_json) == 1
+        mock_db_session.add.assert_called_once()
+        mock_db_session.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_unresolved_entries_are_not_materialized_into_nodes(
+    mock_db_session,
+):
+    """Unresolved entries never become new issues or plan nodes."""
+    plan_with_unresolved = _FakeAdoptionPlan(
+        [
+            {
+                "cbl_position": 2,
+                "cbl_entry_id": 12,
+                "series_name": "Unresolved Series",
+                "issue_number": "1",
+                "resolution_status": "ambiguous_unresolved",
+                "adopted": False,
+            }
+        ]
+    )
+
+    with patch(
+        "app.services.cbl_plan_adoption.preview_cbl_adoption"
+    ) as mock_preview, patch(
+        "app.services.cbl_plan_adoption._find_existing_adopted_plan"
+    ) as mock_find, patch(
+        "app.services.cbl_plan_adoption._create_plan_nodes_for_adopted_issues"
+    ) as mock_create:
+
+        from app.models.continuity_plan import ContinuityPlan
+
+        created = ContinuityPlan(
+            id=3,
+            user_id=1,
+            name="CBL adoption for /mirror/cbl/bprd.xml",
+            ordering_mode="informational",
+            lanes_json=[{"id": "default", "name": "Default", "order": 0}],
+            nodes_json=[],
+        )
+
+        mock_preview.return_value = (
+            {"entries": ()},
+            plan_with_unresolved,
+        )
+        mock_find.return_value = None
+        mock_create.return_value = (created, {})
+
+        plan = await adopt_cbl_material_into_reading_plan(
+            mock_db_session,
+            user_id=1,
+            list_id=1,
+            entry_decisions={2: SourceBackedDecision.INCLUDE},
+            series_decisions={},
+            series_overrides={},
+        )
+
+        # adoptable set contains no unresolved entry, so no node is created.
+        mock_create.assert_called_once()
+        assert 12 not in mock_create.call_args.kwargs["adoptable_entry_ids"]
+        assert plan.id == 3

@@ -39,7 +39,7 @@ unresolved source positions.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,7 +48,12 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.cbl_adoption import CBLAdoptionCommitRequest
-from app.schemas.continuity_plan import ContinuityPlanResponse
+from app.schemas.continuity_plan import (
+    ContinuityPlanLane,
+    ContinuityPlanNode,
+    ContinuityPlanResponse,
+    PlanNodeType,
+)
 from app.services.cbl_plan_adoption import adopt_cbl_material_into_reading_plan
 
 router = APIRouter(tags=["cbl-adoption-commit"])
@@ -107,16 +112,57 @@ async def api_cbl_adoption_commit(
         user_id=current_user.id,
         list_id=list_id,
         entry_decisions=request.entry_decisions,
-        series_decisions=request.series_decisions,
-        series_overrides=request.series_overrides,
+        series_decisions={
+            sd.series_name: sd.decision for sd in request.series_decisions
+        },
+        series_overrides=(
+            {
+                sd.series_name: {
+                    eo.cbl_position: eo.decision for eo in request.series_overrides
+                }
+                for sd in request.series_decisions
+            }
+            if request.series_overrides
+            else {}
+        ),
+        client_content_hash=request.content_hash,
+        client_revision_sha=request.revision_sha,
     )
+
+    def _to_continuity_plan_lane(lane: dict[str, object]) -> ContinuityPlanLane:
+        """Convert a stored lane JSON dict to the response schema."""
+        return ContinuityPlanLane(
+            id=str(lane["id"]),
+            name=str(lane["name"]),
+            order=int(lane["order"]),
+        )
+
+    def _to_continuity_plan_node(node: dict[str, object]) -> ContinuityPlanNode:
+        """Convert a stored node JSON dict to the response schema."""
+        placements_raw = node.get("source_cbl_placements")
+        source_paths = None
+        if isinstance(placements_raw, list) and placements_raw:
+            source_paths = tuple(
+                str(p["source_path"]) for p in placements_raw if "source_path" in p
+            )
+        return ContinuityPlanNode(
+            id=str(node["id"]),
+            node_type=cast(PlanNodeType, str(node["node_type"])),
+            ref_id=int(node["ref_id"]),
+            lane_id=str(node["lane_id"]),
+            position=int(node["position"]),
+            is_checkpoint=bool(node.get("is_checkpoint", False)),
+            convergence_gate=list(node.get("convergence_gate") or []),
+            source_paths=source_paths,
+        )
+
     return ContinuityPlanResponse(
         id=plan.id,
         user_id=plan.user_id,
         name=plan.name,
         ordering_mode=plan.ordering_mode,
-        lanes=plan.lanes_json,
-        nodes=plan.nodes_json,
+        lanes=[_to_continuity_plan_lane(l) for l in plan.lanes_json or []],
+        nodes=[_to_continuity_plan_node(n) for n in plan.nodes_json or []],
         created_at=plan.created_at,
         updated_at=plan.updated_at,
     )

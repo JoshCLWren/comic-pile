@@ -114,6 +114,16 @@ class CBLAdoptionCommitRequest(BaseModel):
         description="Individual entry overrides of series decisions",
     )
 
+    content_hash: str | None = Field(
+        None,
+        description="Content hash from the client's preview response for stale check",
+    )
+
+    revision_sha: str | None = Field(
+        None,
+        description="Revision SHA from the client's preview response for stale check",
+    )
+
 
 class CBLPlanCalculationRequest(BaseModel):
     """Reader decisions for selective CBL adoption."""
