@@ -41,6 +41,7 @@ unresolved source positions.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import cast
 
@@ -70,6 +71,27 @@ class StalePreviewError(AdoptionCommitError):
     """Raised when the reviewed preview fingerprint no longer matches the source."""
 
     code: str = "stale_preview"
+
+
+@dataclass
+class AdoptionMergeReport:
+    """Machine-readable source-position outcomes from one adoption merge pass."""
+
+    reused_positions: list[int] = field(default_factory=list)
+    created_positions: list[int] = field(default_factory=list)
+    excluded_positions: list[int] = field(default_factory=list)
+    unresolved_positions: list[int] = field(default_factory=list)
+
+
+@dataclass
+class AdoptionCommitResult:
+    """Committed Reading Plan plus machine-readable adoption source positions."""
+
+    plan: ContinuityPlan
+    reused_positions: list[int] = field(default_factory=list)
+    created_positions: list[int] = field(default_factory=list)
+    excluded_positions: list[int] = field(default_factory=list)
+    unresolved_positions: list[int] = field(default_factory=list)
 
 
 async def _verify_preview_fingerprint(
@@ -110,9 +132,11 @@ def _placement_list(placements: object) -> list[dict[str, object]]:
         A list of placement dicts; non-dict noise is discarded.
     """
     if isinstance(placements, dict):
-        return [placements]
+        return [cast(dict[str, object], placements)]
     if isinstance(placements, list):
-        return [p for p in placements if isinstance(p, dict)]
+        return [
+            cast(dict[str, object], p) for p in placements if isinstance(p, dict)
+        ]
     return []
 
 
@@ -400,7 +424,7 @@ async def _merge_adopted_nodes(
     entry_decisions: dict[int, SourceBackedDecision],
     series_overrides: dict[int, SourceBackedDecision],
     series_decisions: dict[str, SourceBackedDecision],
-) -> None:
+) -> AdoptionMergeReport:
     """Merge approved source entries into the plan node set in CBL order.
 
     Existing plan nodes for the same issue are reused (never duplicated) and
@@ -409,16 +433,9 @@ async def _merge_adopted_nodes(
     materialized only when explicitly approved; unresolved/ambiguous entries are
     never guessed.
 
-    Args:
-        db: Database session.
-        plan: The plan to update in place.
-        user_id: User ID for ownership.
-        entries: CBL source entries in source order.
-        facts_by_entry_id: Reconciliation facts keyed by CBL entry id.
-        source_path: CBL source path recorded as provenance.
-        entry_decisions: Per-CBL-position decisions.
-        series_overrides: Per-CBL-position overrides of series decisions.
-        series_decisions: Per-series-name decisions.
+    Returns:
+        The machine-readable reused/created/excluded/unresolved source positions
+        for this merge pass.
     """
     existing_nodes = list(plan.nodes_json or [])
     nodes_by_id = {str(node.get("id")): node for node in existing_nodes}
@@ -437,9 +454,15 @@ async def _merge_adopted_nodes(
     if positions:
         next_position = max(positions) + 1
 
+    reused_positions: list[int] = []
+    created_positions: list[int] = []
+    excluded_positions: list[int] = []
+    unresolved_positions: list[int] = []
+
     for entry in entries:
         fact = facts_by_entry_id.get(entry.id)
         if fact is None:
+            unresolved_positions.append(entry.position)
             continue
 
         resolution_status = str(fact.get("resolution_status") or "")
@@ -450,6 +473,7 @@ async def _merge_adopted_nodes(
         importable = resolution_status == "no_owned_issue_for_comicvine_id"
 
         if existing_issue_id is None and not importable:
+            unresolved_positions.append(entry.position)
             continue
 
         decision = _resolve_decision(
@@ -459,10 +483,13 @@ async def _merge_adopted_nodes(
             series_decisions,
         )
         if decision == SourceBackedDecision.EXCLUDE:
+            excluded_positions.append(entry.position)
             continue
         if importable and decision != SourceBackedDecision.INCLUDE:
+            excluded_positions.append(entry.position)
             continue
 
+        created_now = False
         if existing_issue_id is None:
             issue = await _ensure_missing_issue_created(
                 db,
@@ -472,6 +499,8 @@ async def _merge_adopted_nodes(
                 volume_year=entry.volume_year,
             )
             existing_issue_id = issue.id
+            created_positions.append(entry.position)
+            created_now = True
 
         node = issues_by_id.get(existing_issue_id)
         if node is None:
@@ -487,6 +516,8 @@ async def _merge_adopted_nodes(
                 placements.append(placement)
                 node["source_cbl_placements"] = placements
             issues_by_id.setdefault(existing_issue_id, node)
+            if not created_now:
+                reused_positions.append(entry.position)
             continue
 
         new_node: dict[str, object] = {
@@ -503,9 +534,17 @@ async def _merge_adopted_nodes(
         issues_by_id[existing_issue_id] = new_node
         nodes_by_id[str(new_node["id"])] = new_node
         next_position += 1
+        if not created_now:
+            reused_positions.append(entry.position)
 
     plan.lanes_json = plan.lanes_json or _default_lane()
     plan.nodes_json = existing_nodes
+    return AdoptionMergeReport(
+        reused_positions=reused_positions,
+        created_positions=created_positions,
+        excluded_positions=excluded_positions,
+        unresolved_positions=unresolved_positions,
+    )
 
 
 def _plan_ordering_mode(plan: ContinuityPlan) -> PlanOrderingMode:
@@ -542,7 +581,7 @@ async def adopt_cbl_material_into_reading_plan(
     series_overrides: dict[int, SourceBackedDecision] | None = None,
     client_content_hash: str | None = None,
     client_revision_sha: str | None = None,
-) -> ContinuityPlan:
+) -> AdoptionCommitResult:
     """Atomically commit reviewed CBL adoption material into a Reading Plan.
 
     Revalidates the source fingerprint and reconciliation facts, then merges the
@@ -560,7 +599,8 @@ async def adopt_cbl_material_into_reading_plan(
         client_revision_sha: Revision SHA from the client's preview request.
 
     Returns:
-        The updated ContinuityPlan.
+        The committed plan plus machine-readable reused/created/excluded/
+        unresolved source positions.
 
     Raises:
         StalePreviewError: If the preview fingerprint has changed.
@@ -614,7 +654,7 @@ async def adopt_cbl_material_into_reading_plan(
     else:
         plan = existing_plan
 
-    await _merge_adopted_nodes(
+    merge_report = await _merge_adopted_nodes(
         db,
         plan,
         user_id,
@@ -642,4 +682,10 @@ async def adopt_cbl_material_into_reading_plan(
         raise
 
     await db.refresh(plan)
-    return plan
+    return AdoptionCommitResult(
+        plan=plan,
+        reused_positions=merge_report.reused_positions,
+        created_positions=merge_report.created_positions,
+        excluded_positions=merge_report.excluded_positions,
+        unresolved_positions=merge_report.unresolved_positions,
+    )

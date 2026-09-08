@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from pydantic import BaseModel, Field
 
+from app.schemas.continuity_plan import ContinuityPlanResponse
 from app.schemas.shared_types import SourceBackedDecision, SourceBackedStatus
 
 
@@ -97,7 +98,12 @@ class EntryOverride(BaseModel):
 
 
 class CBLAdoptionCommitRequest(BaseModel):
-    """Reader decisions for committing CBL adoption to a Reading Plan."""
+    """Reader decisions for committing CBL adoption to a Reading Plan.
+
+    The source fingerprint from the preview response is required so the commit
+    can revalidate the source list before any write; a stale preview aborts the
+    transaction with a structured conflict and no partial writes.
+    """
 
     entry_decisions: dict[int, SourceBackedDecision] = Field(
         default_factory=dict,
@@ -114,14 +120,35 @@ class CBLAdoptionCommitRequest(BaseModel):
         description="Individual entry overrides of series decisions",
     )
 
-    content_hash: str | None = Field(
-        None,
+    content_hash: str = Field(
+        ...,
         description="Content hash from the client's preview response for stale check",
     )
 
-    revision_sha: str | None = Field(
-        None,
+    revision_sha: str = Field(
+        ...,
         description="Revision SHA from the client's preview response for stale check",
+    )
+
+
+class CBLAdoptionCommitResponse(ContinuityPlanResponse):
+    """Updated Reading Plan plus machine-readable adoption source positions."""
+
+    reused_positions: list[int] = Field(
+        default_factory=list,
+        description="CBL source positions whose issue/plan node was reused",
+    )
+    created_positions: list[int] = Field(
+        default_factory=list,
+        description="CBL source positions where a missing issue was materialized",
+    )
+    excluded_positions: list[int] = Field(
+        default_factory=list,
+        description="CBL source positions explicitly excluded or left unapproved",
+    )
+    unresolved_positions: list[int] = Field(
+        default_factory=list,
+        description="CBL source positions that could not be adopted",
     )
 
 

@@ -6,6 +6,7 @@ All tests use lightweight fakes to avoid requiring a live database.
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import cast
@@ -13,12 +14,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.models.continuity_plan import ContinuityPlan
 from app.schemas.shared_types import SourceBackedDecision
 from app.services.cbl_plan_adoption import (
     _resolve_decision,
     _verify_preview_fingerprint,
     adopt_cbl_material_into_reading_plan,
     AdoptionCommitError,
+    AdoptionCommitResult,
     StalePreviewError,
 )
 
@@ -119,6 +122,7 @@ class _FakeDB:
 def _make_fact(
     *,
     position: int,
+    cbl_entry_id: int | None = None,
     resolved_issue_id: int | None = None,
     resolution_status: str,
     series_name: str = "X",
@@ -133,7 +137,7 @@ def _make_fact(
         "issue_number": f"#{position + 1}",
         "comicvine_issue_id": comicvine_issue_id,
         "external_series_identity_id": external_series_identity_id,
-        "cbl_entry_id": position,
+        "cbl_entry_id": position if cbl_entry_id is None else cbl_entry_id,
         "resolved_issue_id": resolved_issue_id,
         "resolution_status": resolution_status,
         "volume_year": volume_year,
@@ -155,7 +159,8 @@ async def _adopt(
     client_revision_sha: str | None = None,
     cbl_list_content_hash: str = "hash",
     cbl_list_revision_sha: str = "rev",
-) -> _FakePlan:
+    patch_writer: bool = True,
+) -> AdoptionCommitResult:
     """Run adopt_cbl_material_into_reading_plan with mocked DB seams."""
     cbl_list = _FakeCBLList(
         id=list_id,
@@ -169,7 +174,7 @@ async def _adopt(
     report = MagicMock()
     report.entries = tuple(facts or [])
 
-    with (
+    patches = [
         patch(
             "app.services.cbl_plan_adoption.reconcile_cbl_source_list",
             new_callable=AsyncMock,
@@ -184,12 +189,18 @@ async def _adopt(
             "app.services.cbl_plan_adoption.validate_node_ownership",
             new_callable=AsyncMock,
         ),
-        patch(
-            "app.services.cbl_plan_adoption.replace_compiled_rules",
-            new_callable=AsyncMock,
-            return_value=True,
-        ),
-    ):
+    ]
+    if patch_writer:
+        patches.append(
+            patch(
+                "app.services.cbl_plan_adoption.replace_compiled_rules",
+                new_callable=AsyncMock,
+                return_value=True,
+            )
+        )
+    with ExitStack() as stack:
+        for item in patches:
+            stack.enter_context(item)
         result = await adopt_cbl_material_into_reading_plan(
             db,
             user_id=user_id,
@@ -362,16 +373,22 @@ async def test_new_plan_created_when_no_existing_plan() -> None:
         resolved_issue_id=100,
         resolution_status="existing",
         position=0,
+        cbl_entry_id=10,
     )
-    plan = await _adopt(
+    result = await _adopt(
         _FakeDB(),
         entries=[entry],
         facts=[fact],
         entry_decisions={0: SourceBackedDecision.INCLUDE},
     )
+    plan = result.plan
     assert plan.id is None
     assert len(plan.nodes_json) == 1
     assert plan.nodes_json[0]["ref_id"] == 100
+    assert result.reused_positions == [0]
+    assert result.created_positions == []
+    assert result.excluded_positions == []
+    assert result.unresolved_positions == []
 
 
 @pytest.mark.asyncio
@@ -393,19 +410,29 @@ async def test_existing_plan_reuses_nodes_with_provenance() -> None:
         lanes_json=[{"id": "default", "name": "Default", "order": 0}],
     )
     entry = _FakeEntry(id=10, position=0, series_name="X")
-    fact = _make_fact(resolved_issue_id=100, resolution_status="existing", position=0)
+    fact = _make_fact(
+        resolved_issue_id=100,
+        resolution_status="existing",
+        position=0,
+        cbl_entry_id=10,
+    )
 
-    plan = await _adopt(
+    result = await _adopt(
         _FakeDB(),
         existing_plan=existing,
         entries=[entry],
         facts=[fact],
         entry_decisions={0: SourceBackedDecision.INCLUDE},
     )
+    plan = result.plan
     assert plan.id == 5
     assert len(plan.nodes_json) == 1
-    placements = plan.nodes_json[0]["source_cbl_placements"]
+    placements = cast(
+        list[dict[str, object]],
+        plan.nodes_json[0]["source_cbl_placements"],
+    )
     assert any(p.get("source_path") == "/x.xml" for p in placements)
+    assert result.reused_positions == [0]
 
 
 @pytest.mark.asyncio
@@ -416,6 +443,7 @@ async def test_approved_missing_issue_materialized_and_node_added() -> None:
         resolved_issue_id=None,
         resolution_status="no_owned_issue_for_comicvine_id",
         position=0,
+        cbl_entry_id=20,
     )
     fake_issue = MagicMock()
     fake_issue.id = 200
@@ -425,17 +453,20 @@ async def test_approved_missing_issue_materialized_and_node_added() -> None:
         new_callable=AsyncMock,
         return_value=fake_issue,
     ):
-        plan = await _adopt(
+        result = await _adopt(
             _FakeDB(),
             entries=[entry],
             facts=[fact],
             entry_decisions={0: SourceBackedDecision.INCLUDE},
         )
 
+    plan = result.plan
     assert len(plan.nodes_json) == 1
     node = plan.nodes_json[0]
     assert node["ref_id"] == 200
     assert node["id"] == "cbl-20"
+    assert result.created_positions == [0]
+    assert result.reused_positions == []
 
 
 @pytest.mark.asyncio
@@ -446,19 +477,22 @@ async def test_unapproved_missing_issue_not_materialized() -> None:
         resolved_issue_id=None,
         resolution_status="no_owned_issue_for_comicvine_id",
         position=0,
+        cbl_entry_id=30,
     )
     with patch(
         "app.services.cbl_plan_adoption._ensure_missing_issue_created",
         new_callable=AsyncMock,
     ) as mock_create:
-        plan = await _adopt(
+        result = await _adopt(
             _FakeDB(),
             entries=[entry],
             facts=[fact],
             entry_decisions={},
         )
     mock_create.assert_not_called()
+    plan = result.plan
     assert len(plan.nodes_json) == 0
+    assert result.excluded_positions == [0]
 
 
 @pytest.mark.asyncio
@@ -469,49 +503,66 @@ async def test_unresolved_entry_skipped_and_reported() -> None:
         resolved_issue_id=None,
         resolution_status="ambiguous_unresolved",
         position=0,
+        cbl_entry_id=40,
     )
     with patch(
         "app.services.cbl_plan_adoption._ensure_missing_issue_created",
         new_callable=AsyncMock,
     ) as mock_create:
-        plan = await _adopt(
+        result = await _adopt(
             _FakeDB(),
             entries=[entry],
             facts=[fact],
             entry_decisions={0: SourceBackedDecision.INCLUDE},
         )
     mock_create.assert_not_called()
+    plan = result.plan
     assert len(plan.nodes_json) == 0
+    assert result.unresolved_positions == [0]
 
 
 @pytest.mark.asyncio
 async def test_excluded_existing_entry_creates_no_node() -> None:
     """An explicitly excluded existing entry should not appear in the plan."""
     entry = _FakeEntry(id=50, position=0, series_name="E")
-    fact = _make_fact(resolved_issue_id=500, resolution_status="existing", position=0)
-    plan = await _adopt(
+    fact = _make_fact(
+        resolved_issue_id=500,
+        resolution_status="existing",
+        position=0,
+        cbl_entry_id=50,
+    )
+    result = await _adopt(
         _FakeDB(),
         entries=[entry],
         facts=[fact],
         entry_decisions={0: SourceBackedDecision.EXCLUDE},
     )
+    plan = result.plan
     assert len(plan.nodes_json) == 0
+    assert result.excluded_positions == [0]
 
 
 @pytest.mark.asyncio
 async def test_override_includes_entry_despite_entry_exclude() -> None:
     """A series_override INCLUDE should force adoption even when entry is EXCLUDE."""
     entry = _FakeEntry(id=80, position=0, series_name="O")
-    fact = _make_fact(resolved_issue_id=800, resolution_status="existing", position=0)
-    plan = await _adopt(
+    fact = _make_fact(
+        resolved_issue_id=800,
+        resolution_status="existing",
+        position=0,
+        cbl_entry_id=80,
+    )
+    result = await _adopt(
         _FakeDB(),
         entries=[entry],
         facts=[fact],
         entry_decisions={0: SourceBackedDecision.EXCLUDE},
         series_overrides={0: SourceBackedDecision.INCLUDE},
     )
+    plan = result.plan
     assert len(plan.nodes_json) == 1
     assert plan.nodes_json[0]["ref_id"] == 800
+    assert result.reused_positions == [0]
 
 
 @pytest.mark.asyncio
@@ -535,19 +586,29 @@ async def test_replay_is_idempotent_no_duplicate_nodes() -> None:
         lanes_json=[{"id": "default", "name": "Default", "order": 0}],
     )
     entry = _FakeEntry(id=11, position=0, series_name="X")
-    fact = _make_fact(resolved_issue_id=111, resolution_status="existing", position=0)
-    plan = await _adopt(
+    fact = _make_fact(
+        resolved_issue_id=111,
+        resolution_status="existing",
+        position=0,
+        cbl_entry_id=11,
+    )
+    result = await _adopt(
         _FakeDB(),
         existing_plan=existing,
         entries=[entry],
         facts=[fact],
         entry_decisions={0: SourceBackedDecision.INCLUDE},
     )
+    plan = result.plan
     nodes = plan.nodes_json
     assert len(nodes) == 1
-    placements = nodes[0]["source_cbl_placements"]
+    placements = cast(
+        list[dict[str, object]],
+        nodes[0]["source_cbl_placements"],
+    )
     paths = [p.get("source_path") for p in placements]
     assert paths.count("/x.xml") == 1
+    assert result.reused_positions == [0]
 
 
 @pytest.mark.asyncio
@@ -560,19 +621,25 @@ async def test_informational_plan_keeps_informational_ordering_mode() -> None:
         lanes_json=[{"id": "default", "name": "Default", "order": 0}],
     )
     entry = _FakeEntry(id=60, position=0, series_name="I")
-    fact = _make_fact(resolved_issue_id=600, resolution_status="existing", position=0)
+    fact = _make_fact(
+        resolved_issue_id=600,
+        resolution_status="existing",
+        position=0,
+        cbl_entry_id=60,
+    )
     with patch(
         "app.services.cbl_plan_adoption.replace_compiled_rules",
         new_callable=AsyncMock,
     ) as mock_writer:
-        plan = await _adopt(
+        result = await _adopt(
             _FakeDB(), existing_plan=existing,
             entries=[entry], facts=[fact],
+            patch_writer=False,
         )
         mock_writer.assert_called_once()
         kw = mock_writer.call_args.kwargs
         assert kw["ordering_mode"] == "informational"
-    assert plan.ordering_mode == "informational"
+    assert result.plan.ordering_mode == "informational"
 
 
 @pytest.mark.asyncio
@@ -593,25 +660,50 @@ async def test_strict_plan_passes_strict_ordering_mode_to_writer() -> None:
         lanes_json=[{"id": "default", "name": "Default", "order": 0}],
     )
     entry = _FakeEntry(id=70, position=1, series_name="S")
-    fact = _make_fact(resolved_issue_id=700, resolution_status="existing", position=1)
+    fact = _make_fact(
+        resolved_issue_id=700,
+        resolution_status="existing",
+        position=1,
+        cbl_entry_id=70,
+    )
     with patch(
         "app.services.cbl_plan_adoption.replace_compiled_rules",
         new_callable=AsyncMock,
     ) as mock_writer:
-        plan = await _adopt(
+        result = await _adopt(
             _FakeDB(), existing_plan=existing,
             entries=[entry], facts=[fact],
+            patch_writer=False,
         )
         mock_writer.assert_called_once()
         kw = mock_writer.call_args.kwargs
         assert kw["ordering_mode"] == "strict_sequential"
-    assert plan.ordering_mode == "strict_sequential"
+    assert result.plan.ordering_mode == "strict_sequential"
 
 
 @pytest.mark.asyncio
 async def test_service_has_no_dependency_group_or_cbl_order_state() -> None:
-    """The service module must not reference DependencyGroup or cbl-order:source:*."""
+    """The service module must not depend on DependencyGroup or cbl-order:* state."""
     import app.services.cbl_plan_adoption as svc_mod
-    source_text = open(svc_mod.__file__).read()
-    assert "DependencyGroup" not in source_text
-    assert "cbl-order" not in source_text
+    import app.models.continuity_plan as plan_mod
+
+    assert not hasattr(svc_mod, "DependencyGroup")
+    assert not hasattr(svc_mod, "Dependency")
+    assert not hasattr(svc_mod, "DependencyGroupMembership")
+    assert not hasattr(plan_mod, "cbl_order")
+
+    db = _FakeDB()
+    result = await _adopt(
+        db,
+        entries=[_FakeEntry(id=10, position=0, series_name="X")],
+        facts=[_make_fact(
+            resolved_issue_id=100,
+            resolution_status="existing",
+            position=0,
+            cbl_entry_id=10,
+        )],
+        entry_decisions={0: SourceBackedDecision.INCLUDE},
+    )
+    assert result.plan is not None
+    for added in db.added:
+        assert not added.__class__.__name__.startswith("Dependency")
