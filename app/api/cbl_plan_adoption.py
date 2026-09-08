@@ -41,7 +41,7 @@ from __future__ import annotations
 
 from typing import Annotated, cast
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -56,7 +56,10 @@ from app.schemas.continuity_plan import (
     ContinuityPlanNode,
     PlanNodeType,
 )
-from app.services.cbl_plan_adoption import adopt_cbl_material_into_reading_plan
+from app.services.cbl_plan_adoption import (
+    StalePreviewError,
+    adopt_cbl_material_into_reading_plan,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["cbl-adoption-commit"])
 
@@ -109,20 +112,26 @@ async def api_cbl_adoption_commit(
     Returns the updated Reading Plan plus machine-readable reused/created/excluded/
     unresolved source positions.
     """
-    commit = await adopt_cbl_material_into_reading_plan(
-        db,
-        user_id=current_user.id,
-        list_id=list_id,
-        entry_decisions=request.entry_decisions,
-        series_decisions={
-            sd.series_name: sd.decision for sd in request.series_decisions
-        },
-        series_overrides={
-            eo.cbl_position: eo.decision for eo in request.series_overrides
-        },
-        client_content_hash=request.content_hash,
-        client_revision_sha=request.revision_sha,
-    )
+    try:
+        commit = await adopt_cbl_material_into_reading_plan(
+            db,
+            user_id=current_user.id,
+            list_id=list_id,
+            entry_decisions=request.entry_decisions,
+            series_decisions={
+                sd.series_name: sd.decision for sd in request.series_decisions
+            },
+            series_overrides={
+                eo.cbl_position: eo.decision for eo in request.series_overrides
+            },
+            client_content_hash=request.content_hash,
+            client_revision_sha=request.revision_sha,
+        )
+    except StalePreviewError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
     plan = commit.plan
 
     def _to_continuity_plan_lane(lane: dict[str, object]) -> ContinuityPlanLane:

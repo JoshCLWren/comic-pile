@@ -13,8 +13,10 @@ from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
-from app.models.continuity_plan import ContinuityPlan
+from app.api.cbl_plan_adoption import api_cbl_adoption_commit
+from app.schemas.cbl_adoption import CBLAdoptionCommitRequest
 from app.schemas.shared_types import SourceBackedDecision
 from app.services.cbl_plan_adoption import (
     _resolve_decision,
@@ -707,3 +709,33 @@ async def test_service_has_no_dependency_group_or_cbl_order_state() -> None:
     assert result.plan is not None
     for added in db.added:
         assert not added.__class__.__name__.startswith("Dependency")
+
+
+@pytest.mark.asyncio
+async def test_commit_endpoint_maps_stale_preview_to_conflict() -> None:
+    """Stale preview must surface as a structured 409 conflict, never a 500."""
+    cbl = _FakeCBLList(
+        id=1,
+        source_path="/x.xml",
+        name="X",
+        content_hash="current_hash",
+        revision_sha="current_rev",
+        active=True,
+    )
+    db = _FakeDB(execute_results=[_Rows([cbl])])
+    request = CBLAdoptionCommitRequest(
+        content_hash="stale_hash",
+        revision_sha="current_rev",
+    )
+    current_user = MagicMock()
+    current_user.id = 1
+    with pytest.raises(HTTPException) as exc_info:
+        await api_cbl_adoption_commit(
+            list_id=1,
+            request=request,
+            current_user=current_user,
+            db=db,
+        )
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail.get("code") == "stale_preview"
+    assert db.commit_count == 0
