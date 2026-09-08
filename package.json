@@ -5,7 +5,6 @@
   "description": "Dice-Driven Comic Reading Tracker - FastAPI + HTMX + Tailwind CSS",
   "devDependencies": {
     "@eslint/js": "^9.17.0",
-    "@playwright/test": "^1.61.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.6",
     "@typescript-eslint/eslint-plugin": "^8.57.2",
