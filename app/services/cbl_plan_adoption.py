@@ -39,9 +39,7 @@ unresolved source positions.
 
 from __future__ import annotations
 
-from typing import cast
-
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cbl_ingest import ensure_issue_materialization
