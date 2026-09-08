@@ -33,6 +33,7 @@
     "test:e2e:prod-profile": "playwright test --config=playwright.prod-profile.config.ts",
     "test:e2e:prod-all": "playwright test --config=playwright.prod-all.config.ts",
     "test:e2e:prod-all:headed": "playwright test --config=playwright.prod-all.config.ts --headed",
+    "test:e2e:p0": "pnpm run build && playwright test --config=playwright.p0.config.ts",
     "test:dice-playground": "playwright test --config=playwright.dice.config.ts",
     "test:dice-playground:update": "playwright test --config=playwright.dice.config.ts --update-snapshots"
   },
