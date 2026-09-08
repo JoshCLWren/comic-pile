@@ -79,7 +79,7 @@ test.describe('RATE-001: Rating a comic', () => {
     await page.getByText('Snooze Button Thread').first().click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
-    const snoozeBtn = page.getByRole('button', { name: /snooze/i })
+    const snoozeBtn = page.getByTestId('rating-secondary-actions').getByRole('button', { name: /snooze/i })
     await expect(snoozeBtn).toBeVisible()
   })
 
@@ -99,7 +99,7 @@ test.describe('RATE-001: Rating a comic', () => {
     await page.getByText('Cancel Roll Thread').first().click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
-    const cancelBtn = page.getByRole('button', { name: /cancel/i })
+    const cancelBtn = page.getByTestId('rating-secondary-actions').getByRole('button', { name: /cancel/i })
     if (await cancelBtn.isVisible()) {
       await cancelBtn.click()
       await expect(page.locator('#main-die-3d')).toBeVisible({ timeout: 10000 })
