@@ -12,8 +12,11 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
     ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx && \
     ln -s ../lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack
 
-# Install non-browser system dependencies. Playwright installs its own
-# distro-specific browser libraries in the frontend dependency stage.
+# Install non-browser system dependencies. Playwright browsers and their OS
+# deps are installed on-demand in the CI workflow (ui-audit job) and in the
+# local CI runner (scripts/run_ci_local.sh), not bundled into this shared
+# image consumed by non-browser jobs such as lint, typecheck, unit tests, and
+# migration checks.
 RUN apt-get update -qq && \
     apt-get install -y -qq --no-install-recommends \
         ca-certificates \
@@ -48,24 +51,19 @@ FROM python-env AS python-deps
 COPY pyproject.toml ./
 RUN uv sync --locked --all-extras --no-install-project
 
-# Stage 4: Playwright.
-FROM python-deps AS playwright-env
-ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
-
-# Stage 5: Frontend dependencies.
-FROM playwright-env AS frontend-deps
+# Stage 4: Frontend dependencies (no Playwright browsers — installed on-demand).
+FROM python-deps AS frontend-deps
 RUN npm install -g pnpm@10.15.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY frontend/package.json frontend/
-RUN pnpm install --frozen-lockfile && \
-    pnpm --filter frontend exec playwright install --with-deps chromium firefox webkit
+RUN pnpm install --frozen-lockfile
 
-# Stage 6: Frontend build.
+# Stage 5: Frontend build.
 FROM frontend-deps AS frontend-build
 COPY frontend/ frontend/
 RUN pnpm --filter frontend run build
 
-# Stage 7: Final image with everything.
+# Stage 6: Final image with everything.
 FROM frontend-build AS final
 RUN .venv/bin/python -c "import sys; assert sys.version_info[:2] == (3, 14), sys.version" && \
     mkdir -p /opt/ci-assets/static
