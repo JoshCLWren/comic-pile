@@ -51,9 +51,24 @@ const SEMANTIC_TOKENS = [
   '--theme-continuity-accent',
   '--theme-personal-accent',
   '--theme-primary-action',
+  '--theme-primary-action-hover',
   '--theme-danger',
+  '--theme-danger-hover',
   '--theme-focus-ring',
+  '--theme-warning',
+  '--theme-error',
 ] as const
+
+/**
+ * Component CSS sheets migrated onto --theme-* roles (issue #2230) must stay
+ * free of product-meaning hex color literals so they reskin with the active
+ * theme instead of freezing in classic colors.
+ */
+const THEME_ROLE_SHEETS = [
+  'src/components/MigrationDialog.css',
+  'src/components/DependencyFlowchart.css',
+  'src/components/IssueList.css',
+]
 
 /**
  * Every legacy palette alias must re-point at its semantic theme token inside
@@ -81,6 +96,19 @@ function loadStylesheet(): string {
     specifier.protocol === 'file:'
       ? fileURLToPath(specifier)
       : resolve(process.cwd(), 'src', 'styles.css')
+  return readFileSync(stylesheet, 'utf8')
+}
+
+function loadComponentStylesheet(relativePath: string): string {
+  return readFileSync(resolve(process.cwd(), relativePath), 'utf8')
+}
+
+function loadIndexStylesheet(): string {
+  const specifier = new URL('../index.css', import.meta.url)
+  const stylesheet =
+    specifier.protocol === 'file:'
+      ? fileURLToPath(specifier)
+      : resolve(process.cwd(), 'src', 'index.css')
   return readFileSync(stylesheet, 'utf8')
 }
 
@@ -209,6 +237,47 @@ describe('semantic theme stylesheet contract (#1646)', () => {
 
     expect(inkGold.get('--theme-continuity-accent')).not.toMatch(/^#6b4f1a|var\(--theme-(comic|text)/)
     expect(inkGold.get('--theme-personal-accent')).not.toBe(inkGold.get('--theme-text-primary'))
+  })
+
+  it('keeps the migrated feature sheets on --theme-* roles with no product hex (#2230)', () => {
+    for (const sheet of THEME_ROLE_SHEETS) {
+      const css = loadComponentStylesheet(sheet)
+      expect(css, `${sheet} must reference --theme-* tokens`).toMatch(/var\(--theme-/)
+      expect(css, `${sheet} must not contain product hex literals`).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
+    }
+  })
+
+  it('holds canonical roles only under styles.css data-theme sets (#2229)', () => {
+    const indexCss = loadIndexStylesheet()
+    const banned = [
+      '--theme-primary:',
+      '--theme-primary-light:',
+      '--theme-bg-dark:',
+      '--theme-bg-card:',
+    ]
+    for (const token of banned) {
+      expect(indexCss, `index.css must not define parallel role ${token}`).not.toContain(token)
+    }
+  })
+
+  it('never reuses a danger literal as a primary/focus/comic/personal literal (#2229)', () => {
+    const css = loadStylesheet()
+    const dangerLiterals = new Set(tokenValuesPerTheme(css, '--theme-danger-hover'))
+    for (const token of [
+      '--theme-primary-action',
+      '--theme-primary-action-hover',
+      '--theme-comic-accent',
+      '--theme-focus-ring',
+      '--theme-personal-accent',
+    ]) {
+      const otherLiterals = tokenValuesPerTheme(css, token)
+      for (const literal of otherLiterals) {
+        expect(
+          dangerLiterals.has(literal),
+          `${token} literal ${literal} must not equal a danger-hover literal`,
+        ).toBe(false)
+      }
+    }
   })
 })
 
