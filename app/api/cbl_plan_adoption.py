@@ -57,6 +57,7 @@ from app.schemas.continuity_plan import (
     PlanNodeType,
 )
 from app.services.cbl_plan_adoption import (
+    AdoptionCommitError,
     StalePreviewError,
     adopt_cbl_material_into_reading_plan,
 )
@@ -131,6 +132,11 @@ async def api_cbl_adoption_commit(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+    except AdoptionCommitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "adoption_error", "message": str(exc)},
         ) from exc
     plan = commit.plan
 

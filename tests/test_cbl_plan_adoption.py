@@ -740,3 +740,27 @@ async def test_commit_endpoint_maps_stale_preview_to_conflict() -> None:
     detail = cast(dict[str, object], exc_info.value.detail)
     assert detail.get("code") == "stale_preview"
     assert db.commit_count == 0
+
+
+@pytest.mark.asyncio
+async def test_commit_endpoint_maps_adoption_error_to_422() -> None:
+    """AdoptionCommitError must surface as structured 422, never a 500."""
+    db = _FakeDB(execute_results=[_Rows([])])
+    request = CBLAdoptionCommitRequest(
+        content_hash="hash",
+        revision_sha="rev",
+    )
+    current_user = MagicMock()
+    current_user.id = 1
+    with pytest.raises(HTTPException) as exc_info:
+        await api_cbl_adoption_commit(
+            list_id=99,
+            request=request,
+            current_user=current_user,
+            db=db,
+        )
+    assert exc_info.value.status_code == 422
+    detail = cast(dict[str, object], exc_info.value.detail)
+    assert detail.get("code") == "adoption_error"
+    assert "not found" in str(detail.get("message", ""))
+    assert db.commit_count == 0
