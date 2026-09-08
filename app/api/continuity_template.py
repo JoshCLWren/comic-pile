@@ -195,13 +195,12 @@ async def adopt_crossover_template(
             }
         )
 
-    from app.api.continuity_plan import (
-        _replace_compiled_rules,
-        _to_response,
-        _validate_node_ownership,
-        _refresh_blocked_state,
-    )
+    from app.api.continuity_plan import _refresh_blocked_state, _to_response
     from app.models.continuity_plan import ContinuityPlan
+    from app.services.continuity_plan_writer import (
+        replace_compiled_rules,
+        validate_node_ownership,
+    )
 
     payload = ContinuityPlanWrite(
         name=request.plan_name,
@@ -209,7 +208,7 @@ async def adopt_crossover_template(
         lanes=[lane],
         nodes=nodes,
     )
-    await _validate_node_ownership(db, user_id=current_user.id, nodes=payload.nodes)
+    await validate_node_ownership(db, user_id=current_user.id, nodes=payload.nodes)
     plan = ContinuityPlan(
         user_id=current_user.id,
         name=payload.name,
@@ -220,8 +219,12 @@ async def adopt_crossover_template(
     db.add(plan)
     await db.flush()
     try:
-        await _replace_compiled_rules(
-            db, user_id=current_user.id, plan=plan, payload=payload
+        await replace_compiled_rules(
+            db,
+            user_id=current_user.id,
+            plan=plan,
+            nodes=payload.nodes,
+            ordering_mode=payload.ordering_mode,
         )
         await db.commit()
     except Exception:
