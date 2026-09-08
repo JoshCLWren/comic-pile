@@ -35,6 +35,10 @@ vi.mock('../services/api', () => ({
   },
 }))
 
+vi.mock('../contexts/useToast', () => ({
+  useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
+}))
+
 const mockedDelete = vi.mocked(useDeleteThread)
 const mockedMoveToFront = vi.mocked(useMoveToFront)
 const mockedMoveToBack = vi.mocked(useMoveToBack)

@@ -168,9 +168,9 @@ describe('QueueControls', () => {
     await user.click(screen.getByTestId('queue-add-thread-desktop'))
     expect(baseProps.onCreateThread).toHaveBeenCalledTimes(1)
 
-    await user.click(screen.getByRole('button', { name: 'A-Z' }))
+    await user.click(screen.getByRole('button', { name: 'Title' }))
     expect(baseProps.onSortChange).toHaveBeenCalledWith('alphabetical')
-    await user.click(screen.getByRole('button', { name: 'New' }))
+    await user.click(screen.getByRole('button', { name: 'Recently added' }))
     expect(baseProps.onSortChange).toHaveBeenCalledWith('created')
   })
 })

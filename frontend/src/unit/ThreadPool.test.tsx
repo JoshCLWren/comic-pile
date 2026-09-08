@@ -104,7 +104,7 @@ describe('ThreadPool Component', () => {
   it('shows the eligibility section with a populated pool', () => {
     renderPool()
 
-    expect(screen.getByText(/Eligible now/i)).toBeInTheDocument()
+    expect(screen.getByText(/ready to read/i)).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /die face/i }).length).toBeGreaterThan(0)
   })
 

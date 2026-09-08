@@ -197,15 +197,15 @@ it('renders tooltip for ladder indicator', async () => {
     </ToastProvider>
   )
 
- // Check that the Ladder indicator is rendered with tooltip
- expect(screen.getByText('Ladder')).toBeInTheDocument()
+ // Check that the Die indicator is rendered with tooltip
+ expect(screen.getByText('Die')).toBeInTheDocument()
 
- // Check that the Ladder text has the cursor-help class (indicating tooltip)
- const ladderText = screen.getByText('Ladder')
- expect(ladderText).toHaveClass('cursor-help')
- expect(ladderText).toHaveClass('border-b')
- expect(ladderText).toHaveClass('border-dashed')
- expect(ladderText).toHaveClass('border-stone-600')
+ // Check that the Die text has the cursor-help class (indicating tooltip)
+ const dieText = screen.getByText('Die')
+ expect(dieText).toHaveClass('cursor-help')
+ expect(dieText).toHaveClass('border-b')
+ expect(dieText).toHaveClass('border-dashed')
+ expect(dieText).toHaveClass('border-stone-600')
 })
 
 it('does not render snoozed indicators when no snoozed threads', async () => {

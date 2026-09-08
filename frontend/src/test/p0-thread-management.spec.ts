@@ -18,7 +18,7 @@ test.describe('THREAD-001: Thread management', () => {
     await gotoQueue(page)
     await waitForQueueReady(page)
 
-    await page.getByRole('button', { name: /add thread/i }).first().click()
+    await page.getByRole('button', { name: /add series/i }).first().click()
     await page.locator('#create-thread-title').fill('My New Thread')
 
     const formatSelect = page.locator('#create-thread-format')
@@ -28,7 +28,7 @@ test.describe('THREAD-001: Thread management', () => {
 
     await page.locator('#create-thread-issues').fill('1-5')
 
-    await page.getByRole('button', { name: /create thread/i }).click()
+    await page.getByRole('button', { name: /create series/i }).click()
     await expect(page.getByText('My New Thread')).toBeVisible({ timeout: 10000 })
   })
 
@@ -37,19 +37,19 @@ test.describe('THREAD-001: Thread management', () => {
     await gotoQueue(page)
     await waitForQueueReady(page)
 
-    await page.getByRole('button', { name: /add thread/i }).first().click()
+    await page.getByRole('button', { name: /add series/i }).first().click()
     await page.locator('#create-thread-title').fill('Edit Target Thread')
     await page.locator('#create-thread-issues').fill('1-3')
-    await page.getByRole('button', { name: /create thread/i }).click()
+    await page.getByRole('button', { name: /create series/i }).click()
     await expect(page.getByText('Edit Target Thread')).toBeVisible({ timeout: 10000 })
 
     const threadItem = page.getByTestId('queue-thread-item').filter({ hasText: 'Edit Target Thread' })
-    await threadItem.locator('button[aria-label="Thread actions"]').click()
+    await threadItem.locator('button[aria-label="Series actions"]').click()
     const menu = page.getByRole('menu')
     await expect(menu).toBeVisible()
     await menu.getByRole('menuitem', { name: /edit/i }).click()
 
-    await expect(page.getByRole('heading', { name: 'Edit Thread' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Edit Series' })).toBeVisible()
     await page.locator('#edit-thread-title').fill('Edited Thread Title')
     await page.getByRole('button', { name: /save/i }).click()
 
@@ -63,19 +63,20 @@ test.describe('THREAD-001: Thread management', () => {
     await gotoQueue(page)
     await waitForQueueReady(page)
 
-    await page.getByRole('button', { name: /add thread/i }).first().click()
+    await page.getByRole('button', { name: /add series/i }).first().click()
     await page.locator('#create-thread-title').fill('Delete Target Thread')
     await page.locator('#create-thread-issues').fill('1-2')
-    await page.getByRole('button', { name: /create thread/i }).click()
+    await page.getByRole('button', { name: /create series/i }).click()
     await expect(page.getByText('Delete Target Thread')).toBeVisible({ timeout: 10000 })
 
     const threadItem = page.getByTestId('queue-thread-item').filter({ hasText: 'Delete Target Thread' })
-    await threadItem.locator('button[aria-label="Thread actions"]').click()
+    await threadItem.locator('button[aria-label="Series actions"]').click()
     const menu = page.getByRole('menu')
     await expect(menu).toBeVisible()
 
-    page.on('dialog', (dialog) => dialog.accept())
     await menu.getByRole('menuitem', { name: /delete/i }).click()
+    await expect(page.getByRole('heading', { name: 'Delete Series' })).toBeVisible()
+    await page.getByRole('button', { name: 'Delete Series' }).click()
     await expect(page.getByText('Delete Target Thread')).toHaveCount(0, { timeout: 10000 })
   })
 
@@ -86,16 +87,16 @@ test.describe('THREAD-001: Thread management', () => {
     await gotoQueue(page)
     await waitForQueueReady(page)
 
-    await page.getByRole('button', { name: /add thread/i }).first().click()
+    await page.getByRole('button', { name: /add series/i }).first().click()
     await page.locator('#create-thread-title').fill('First Thread')
     await page.locator('#create-thread-issues').fill('1-3')
-    await page.getByRole('button', { name: /create thread/i }).click()
+    await page.getByRole('button', { name: /create series/i }).click()
     await expect(page.getByText('First Thread')).toBeVisible({ timeout: 10000 })
 
-    await page.getByRole('button', { name: /add thread/i }).first().click()
+    await page.getByRole('button', { name: /add series/i }).first().click()
     await page.locator('#create-thread-title').fill('Second Thread')
     await page.locator('#create-thread-issues').fill('1-3')
-    await page.getByRole('button', { name: /create thread/i }).click()
+    await page.getByRole('button', { name: /create series/i }).click()
     await expect(page.getByText('Second Thread')).toBeVisible({ timeout: 10000 })
 
     const items = page.getByTestId('queue-thread-item')
@@ -109,10 +110,10 @@ test.describe('THREAD-001: Thread management', () => {
     await gotoQueue(page)
     await waitForQueueReady(page)
 
-    await page.getByRole('button', { name: /add thread/i }).first().click()
+    await page.getByRole('button', { name: /add series/i }).first().click()
     await page.locator('#create-thread-title').fill('Detail View Thread')
     await page.locator('#create-thread-issues').fill('1-5')
-    await page.getByRole('button', { name: /create thread/i }).click()
+    await page.getByRole('button', { name: /create series/i }).click()
     await expect(page.getByText('Detail View Thread')).toBeVisible({ timeout: 10000 })
 
     const threadItem = page.getByTestId('queue-thread-item').filter({ hasText: 'Detail View Thread' })

@@ -33,7 +33,7 @@ export default function CompletedThreadsSection<T extends CompletedThread>({
             id="completed-threads-heading"
             className="text-lg md:text-xl font-black uppercase text-stone-300"
           >
-            Completed Threads
+            Completed Series
           </h2>
           <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
             {threads.length} finished series hidden from the queue
@@ -45,7 +45,7 @@ export default function CompletedThreadsSection<T extends CompletedThread>({
             onClick={() => handleReactivate(null)}
             className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
           >
-            Reactivate
+            Add back to queue
           </button>
           <button
             type="button"
@@ -73,10 +73,10 @@ export default function CompletedThreadsSection<T extends CompletedThread>({
                 <button
                   type="button"
                   onClick={() => handleReactivate(thread)}
-                  aria-label={`Reactivate ${thread.title}`}
+                  aria-label={`Add ${thread.title} back to queue`}
                   className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
                 >
-                  Reactivate
+                  Add back to queue
                 </button>
               </div>
               {thread.notes && <p className="text-xs text-stone-500">{thread.notes}</p>}

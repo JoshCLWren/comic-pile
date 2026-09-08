@@ -17,9 +17,10 @@ import {
 } from './issueUtils'
 import type { IssueMutation, QueuedIssueMutation } from './types'
 
-export function IssueToggleList({ threadId, onOpenDependencies }: {
+export function IssueToggleList({ threadId, onOpenDependencies, onIssueChanged }: {
   threadId: number
   onOpenDependencies?: () => void
+  onIssueChanged?: () => void
 }) {
   const [issues, setIssues] = useState<Issue[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -158,6 +159,7 @@ export function IssueToggleList({ threadId, onOpenDependencies }: {
     isProcessingMutationsRef.current = true
 
     try {
+      const hadMutations = pendingMutationsRef.current.length > 0
       while (pendingMutationsRef.current.length > 0) {
         const currentMutation = pendingMutationsRef.current[0]
         try {
@@ -177,10 +179,13 @@ export function IssueToggleList({ threadId, onOpenDependencies }: {
           syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
         }
       }
+      if (hadMutations) {
+        onIssueChanged?.()
+      }
     } finally {
       isProcessingMutationsRef.current = false
     }
-  }, [fetchAllIssues, runIssueMutation, syncOptimisticIssues])
+  }, [fetchAllIssues, runIssueMutation, syncOptimisticIssues, onIssueChanged])
 
   const enqueueIssueMutation = useCallback((mutation: QueuedIssueMutation) => {
     const queuedMutation = {
@@ -279,6 +284,7 @@ export function IssueToggleList({ threadId, onOpenDependencies }: {
       await issuesApi.create(threadId, addRange.trim())
       setAddRange('')
       await loadIssues()
+      onIssueChanged?.()
     } catch (err: unknown) {
       console.error('[IssueToggleList] Error adding issues:', err)
       setAddError(getApiErrorDetail(err))

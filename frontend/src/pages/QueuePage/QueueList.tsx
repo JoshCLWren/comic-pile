@@ -35,6 +35,9 @@ export function QueueList({
     return (
       <div className="text-center text-stone-500" data-testid="queue-search-empty">
         No active series match your search
+        {hasNextPage && (
+          <div ref={sentinelRef} className="h-4" data-testid="queue-infinite-scroll-sentinel" aria-hidden="true" />
+        )}
       </div>
     )
   }
@@ -43,6 +46,9 @@ export function QueueList({
     return (
       <div className="text-center text-stone-500" data-testid="queue-empty">
         No active series in queue
+        {hasNextPage && (
+          <div ref={sentinelRef} className="h-4" data-testid="queue-infinite-scroll-sentinel" aria-hidden="true" />
+        )}
       </div>
     )
   }
