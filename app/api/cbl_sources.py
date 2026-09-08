@@ -61,6 +61,8 @@ class CBLReadingPlanCommitResponse(BaseModel):
     source_list_id: int
     reused_issue_ids: list[int]
     added_issue_ids: list[int]
+    created_issue_ids: list[int]
+    created_thread_ids: list[int]
     excluded_source_positions: list[int]
     unresolved_source_positions: list[int]
     awaiting_opt_in_source_positions: list[int]
@@ -145,6 +147,8 @@ async def commit_cbl_source_to_reading_plan(
         source_list_id=result.source_list_id,
         reused_issue_ids=list(result.reused_issue_ids),
         added_issue_ids=list(result.added_issue_ids),
+        created_issue_ids=list(result.created_issue_ids),
+        created_thread_ids=list(result.created_thread_ids),
         excluded_source_positions=list(result.excluded_source_positions),
         unresolved_source_positions=list(result.unresolved_source_positions),
         awaiting_opt_in_source_positions=list(result.awaiting_opt_in_source_positions),
