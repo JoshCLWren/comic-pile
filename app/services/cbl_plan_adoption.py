@@ -8,10 +8,12 @@ from dataclasses import dataclass
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache_invalidation import invalidate_user_view
 from app.models.continuity_plan import ContinuityPlan
 from app.schemas.continuity_plan import ContinuityPlanWrite
 from app.services.cbl_reconciliation import preview_cbl_adoption
 from app.services.continuity_plan_writer import apply_continuity_plan_write
+from comic_pile.dependencies import refresh_user_blocked_status
 
 CBL_PLAN_ADOPTION_LOCK_NAMESPACE = 2377001
 
@@ -247,9 +249,15 @@ async def commit_existing_cbl_entries_to_reading_plan(
             "nodes": nodes,
         }
     )
-    await apply_continuity_plan_write(db, user_id=user_id, plan=plan, payload=payload)
-    await db.flush()
-    await db.commit()
+    try:
+        await apply_continuity_plan_write(db, user_id=user_id, plan=plan, payload=payload)
+        if payload.ordering_mode == "strict_sequential":
+            await refresh_user_blocked_status(user_id, db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    await invalidate_user_view(user_id)
 
     return CBLPlanAdoptionResult(
         plan_id=plan.id,
