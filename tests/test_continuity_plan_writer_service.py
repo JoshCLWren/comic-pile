@@ -112,7 +112,7 @@ async def _user_rules(db: AsyncSession, *, user_id: int) -> list[ContinuityRule]
             .order_by(ContinuityRule.source_id, ContinuityRule.target_id)
         )
     ).scalars().all()
-    return rows
+    return list(rows)
 
 
 async def _write_plan_via_service(
