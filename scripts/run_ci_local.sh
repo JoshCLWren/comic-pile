@@ -223,7 +223,7 @@ if [[ "${RUN_PLAYWRIGHT}" -eq 1 ]]; then
           cat /tmp/backend.log || true; \
           exit 1; \
         fi; \
-        cd /workspace/frontend && REUSE_EXISTING_SERVER=true npx playwright test --project=chromium --shard=${shard}" &
+        pnpm --filter frontend exec playwright install --with-deps chromium && REUSE_EXISTING_SERVER=true pnpm --filter frontend exec playwright test --project=chromium --shard=${shard}" &
     shard_pids+=("$!")
     shard_names+=("${shard}")
   done
