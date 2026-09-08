@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cache_invalidation import invalidate_user_view
 from app.models.continuity_plan import ContinuityPlan
 from app.schemas.continuity_plan import ContinuityPlanWrite
+from app.services.cbl_issue_materializer import CBLMaterializationError, materialize_cbl_entries
 from app.services.cbl_reconciliation import preview_cbl_adoption
 from app.services.continuity_plan_writer import apply_continuity_plan_write
 from comic_pile.dependencies import refresh_user_blocked_status
@@ -50,6 +51,8 @@ class CBLPlanAdoptionResult:
     source_list_id: int
     reused_issue_ids: tuple[int, ...]
     added_issue_ids: tuple[int, ...]
+    created_issue_ids: tuple[int, ...]
+    created_thread_ids: tuple[int, ...]
     excluded_source_positions: tuple[int, ...]
     unresolved_source_positions: tuple[int, ...]
     awaiting_opt_in_source_positions: tuple[int, ...]
@@ -73,6 +76,52 @@ def _reviewed_entry_facts(entry: Mapping[str, object]) -> tuple[object, ...]:
         entry.get("canonical_issue_id"),
         entry.get("resolution_status"),
     )
+
+
+def _entry_matches_review(
+    reviewed: Mapping[str, object],
+    current: Mapping[str, object],
+    replay_issue_id: int | None,
+) -> bool:
+    """Accept exact reviewed facts or the exact missing→existing replay transition."""
+    if _reviewed_entry_facts(reviewed) == _reviewed_entry_facts(current):
+        return True
+    return bool(
+        reviewed.get("adoption_class") == "missing_importable"
+        and reviewed.get("adoption_decision") == "would_create_missing"
+        and reviewed.get("adopted") is True
+        and current.get("adoption_class") == "existing"
+        and current.get("adoption_decision") == "included_existing"
+        and current.get("adopted") is True
+        and reviewed.get("cbl_position") == current.get("cbl_position")
+        and reviewed.get("cbl_entry_id") == current.get("cbl_entry_id")
+        and reviewed.get("series_group_id") == current.get("series_group_id")
+        and reviewed.get("series_provider") == current.get("series_provider")
+        and reviewed.get("series_external_id") == current.get("series_external_id")
+        and reviewed.get("comicvine_issue_id") == current.get("comicvine_issue_id")
+        and current.get("resolved_issue_id") == replay_issue_id
+        and current.get("canonical_issue_id") == replay_issue_id
+    )
+
+
+def _replay_issue_ids_by_source_position(
+    plan: ContinuityPlan, *, source_path: str
+) -> dict[int, int]:
+    """Return source positions already represented by issue nodes in this plan."""
+    result: dict[int, int] = {}
+    for node in plan.nodes_json:
+        if node.get("node_type") != "issue" or not isinstance(node.get("ref_id"), int):
+            continue
+        placements = node.get("source_cbl_placements")
+        if not isinstance(placements, list):
+            continue
+        for placement in placements:
+            if not isinstance(placement, dict) or placement.get("source_path") != source_path:
+                continue
+            position = placement.get("position")
+            if isinstance(position, int):
+                result[position] = int(node["ref_id"])
+    return result
 
 
 def _merge_source_provenance(
@@ -108,7 +157,7 @@ async def commit_existing_cbl_entries_to_reading_plan(
     series_decisions: Mapping[str, bool],
     entry_decisions: Mapping[str, bool],
 ) -> CBLPlanAdoptionResult:
-    """Atomically append/reuse reviewed existing issues in one canonical Reading Plan."""
+    """Atomically materialize and adopt reviewed CBL entries into one Reading Plan."""
     await db.execute(
         text("SELECT pg_advisory_xact_lock(:namespace, :user_id)"),
         {"namespace": CBL_PLAN_ADOPTION_LOCK_NAMESPACE, "user_id": user_id},
@@ -152,8 +201,12 @@ async def commit_existing_cbl_entries_to_reading_plan(
         raise CBLPlanAdoptionStaleError(
             "entry_count_changed", "The CBL entry set changed after preview"
         )
+    replay_issue_ids = _replay_issue_ids_by_source_position(
+        plan, source_path=reviewed_source.source_path
+    )
     for reviewed, now in zip(reviewed_entries, current_entries, strict=True):
-        if _reviewed_entry_facts(reviewed) != _reviewed_entry_facts(now):
+        position = int(now.get("cbl_position") or 0)
+        if not _entry_matches_review(reviewed, now, replay_issue_ids.get(position)):
             raise CBLPlanAdoptionStaleError(
                 "entry_facts_changed",
                 f"CBL source position {now.get('cbl_position')} changed after preview",
@@ -164,11 +217,11 @@ async def commit_existing_cbl_entries_to_reading_plan(
         )
 
     selected = [entry for entry in current_entries if entry.get("adopted") is True]
-    if any(entry.get("adoption_class") == "missing_importable" for entry in selected):
-        raise CBLPlanAdoptionError(
-            "missing_materialization_not_extracted",
-            "Approved missing comics cannot be committed until the safe canonical materializer is extracted",
-        )
+    missing = [entry for entry in selected if entry.get("adoption_class") == "missing_importable"]
+    try:
+        materialized = await materialize_cbl_entries(db, user_id=user_id, entries=missing)
+    except CBLMaterializationError as exc:
+        raise CBLPlanAdoptionError("missing_materialization_failed", str(exc)) from exc
 
     unresolved = tuple(
         int(entry["cbl_position"])
@@ -200,17 +253,19 @@ async def commit_existing_cbl_entries_to_reading_plan(
         if str(node.get("lane_id")) == target_lane_id
     ]
     next_position = max(lane_positions, default=-1) + 1
-    reused_issue_ids: list[int] = []
+    reused_issue_ids: list[int] = list(materialized.reused_issue_ids)
     added_issue_ids: list[int] = []
 
     for entry in selected:
+        source_position = int(entry["cbl_position"])
         issue_id_value = entry.get("resolved_issue_id")
+        if not isinstance(issue_id_value, int):
+            issue_id_value = materialized.issue_ids_by_source_position.get(source_position)
         if not isinstance(issue_id_value, int):
             raise CBLPlanAdoptionError(
                 "selected_entry_has_no_canonical_issue",
-                f"Selected source position {entry.get('cbl_position')} has no canonical Issue",
+                f"Selected source position {source_position} has no canonical Issue",
             )
-        source_position = int(entry["cbl_position"])
         existing_index = issue_node_index.get(issue_id_value)
         if existing_index is not None:
             nodes[existing_index] = _merge_source_provenance(
@@ -218,7 +273,8 @@ async def commit_existing_cbl_entries_to_reading_plan(
                 source_path=reviewed_source.source_path,
                 source_position=source_position,
             )
-            reused_issue_ids.append(issue_id_value)
+            if issue_id_value not in reused_issue_ids:
+                reused_issue_ids.append(issue_id_value)
             continue
 
         node: dict[str, object] = {
@@ -240,7 +296,11 @@ async def commit_existing_cbl_entries_to_reading_plan(
         next_position += 1
         added_issue_ids.append(issue_id_value)
 
-    idempotent = nodes == original_nodes
+    idempotent = (
+        nodes == original_nodes
+        and not materialized.created_issue_ids
+        and not materialized.created_thread_ids
+    )
     payload = ContinuityPlanWrite.model_validate(
         {
             "name": plan.name,
@@ -264,6 +324,8 @@ async def commit_existing_cbl_entries_to_reading_plan(
         source_list_id=list_id,
         reused_issue_ids=tuple(reused_issue_ids),
         added_issue_ids=tuple(added_issue_ids),
+        created_issue_ids=materialized.created_issue_ids,
+        created_thread_ids=materialized.created_thread_ids,
         excluded_source_positions=excluded,
         unresolved_source_positions=unresolved,
         awaiting_opt_in_source_positions=awaiting,
