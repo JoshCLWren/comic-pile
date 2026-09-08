@@ -10,23 +10,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.continuity_plan import ContinuityPlan
+from app.models.continuity_rule import ContinuityRule
 from app.models.dependency_group import DependencyGroup
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.services.cbl_plan_adoption import (
-    CBLPlanAdoptionError,
     CBLReviewedSource,
     commit_existing_cbl_entries_to_reading_plan,
 )
 from app.services.cbl_reconciliation import preview_cbl_adoption
+from app.services.continuity_plan_writer import plan_marker
 from tests.conftest import get_or_create_user_async
 
 
-async def _seed_existing_source(async_db: AsyncSession, *, user_id: int) -> tuple[int, Issue]:
-    """Create one owned canonical issue and one CBL entry resolving to it."""
+async def _make_owned_issue(
+    async_db: AsyncSession, *, user_id: int, title: str, issue_number: str
+) -> Issue:
+    """Create one owned issue suitable for a Reading Plan fixture."""
     thread = Thread(
-        title="B.P.R.D.",
+        title=title,
         format="comic",
         issues_remaining=1,
         queue_position=1,
@@ -38,9 +41,17 @@ async def _seed_existing_source(async_db: AsyncSession, *, user_id: int) -> tupl
     )
     async_db.add(thread)
     await async_db.flush()
-    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
+    issue = Issue(thread_id=thread.id, issue_number=issue_number, position=1, status="unread")
     async_db.add(issue)
     await async_db.flush()
+    return issue
+
+
+async def _seed_existing_source(async_db: AsyncSession, *, user_id: int) -> tuple[int, Issue]:
+    """Create one owned canonical issue and one CBL entry resolving to it."""
+    issue = await _make_owned_issue(
+        async_db, user_id=user_id, title="B.P.R.D.", issue_number="1"
+    )
 
     identity = ExternalIdentity(
         provider="comicvine",
@@ -157,6 +168,14 @@ async def test_existing_cbl_commit_updates_same_plan_and_is_idempotent(
     ]
     assert plan.ordering_mode == "informational"
     assert await async_db.scalar(select(func.count()).select_from(DependencyGroup)) == before_groups
+    assert (
+        await async_db.scalar(
+            select(func.count())
+            .select_from(ContinuityRule)
+            .where(ContinuityRule.note == plan_marker(plan.id))
+        )
+        == 0
+    )
 
     second = await commit_existing_cbl_entries_to_reading_plan(
         async_db,
@@ -177,18 +196,32 @@ async def test_existing_cbl_commit_updates_same_plan_and_is_idempotent(
 
 
 @pytest.mark.asyncio
-async def test_strict_plan_fails_before_mutation(
+async def test_strict_plan_adoption_recompiles_combined_sequence(
     async_db: AsyncSession,
 ) -> None:
-    """This slice refuses to bypass the router-owned strict-plan compiler."""
+    """Strict adoption appends through the canonical writer and rebuilds adjacent rules."""
     user = await get_or_create_user_async(async_db)
-    list_id, _issue = await _seed_existing_source(async_db, user_id=user.id)
+    first_issue = await _make_owned_issue(
+        async_db, user_id=user.id, title="B.P.R.D.: The Black Flame", issue_number="6"
+    )
+    list_id, appended_issue = await _seed_existing_source(async_db, user_id=user.id)
     plan = ContinuityPlan(
         user_id=user.id,
         name="Strict B.P.R.D.",
         ordering_mode="strict_sequential",
         lanes_json=[{"id": "main", "name": "Reading order", "order": 0}],
-        nodes_json=[],
+        nodes_json=[
+            {
+                "id": f"issue-{first_issue.id}",
+                "node_type": "issue",
+                "ref_id": first_issue.id,
+                "lane_id": "main",
+                "position": 0,
+                "label": "B.P.R.D.: The Black Flame #6",
+                "is_checkpoint": False,
+                "convergence_gate": [],
+            }
+        ],
     )
     async_db.add(plan)
     await async_db.flush()
@@ -196,20 +229,26 @@ async def test_strict_plan_fails_before_mutation(
         async_db, user_id=user.id, list_id=list_id
     )
 
-    with pytest.raises(CBLPlanAdoptionError) as caught:
-        await commit_existing_cbl_entries_to_reading_plan(
-            async_db,
-            user_id=user.id,
-            plan_id=plan.id,
-            list_id=list_id,
-            reviewed_source=source,
-            reviewed_entries=reviewed_entries,
-            reviewed_final_positions=reviewed_order,
-            series_decisions={},
-            entry_decisions={},
-        )
+    result = await commit_existing_cbl_entries_to_reading_plan(
+        async_db,
+        user_id=user.id,
+        plan_id=plan.id,
+        list_id=list_id,
+        reviewed_source=source,
+        reviewed_entries=reviewed_entries,
+        reviewed_final_positions=reviewed_order,
+        series_decisions={},
+        entry_decisions={},
+    )
+    await async_db.refresh(plan)
 
-    assert caught.value.code == "strict_plan_writer_not_extracted"
-    fresh = await async_db.get(ContinuityPlan, plan.id)
-    assert fresh is not None
-    assert fresh.nodes_json == []
+    assert result.added_issue_ids == (appended_issue.id,)
+    assert plan.ordering_mode == "strict_sequential"
+    assert [node["ref_id"] for node in plan.nodes_json] == [first_issue.id, appended_issue.id]
+    rule = await async_db.scalar(
+        select(ContinuityRule).where(ContinuityRule.note == plan_marker(plan.id))
+    )
+    assert rule is not None
+    assert (rule.source_type, rule.source_id) == ("issue", first_issue.id)
+    assert (rule.target_type, rule.target_id) == ("issue", appended_issue.id)
+    assert rule.satisfaction_type == "item_read"
