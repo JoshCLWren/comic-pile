@@ -7,8 +7,8 @@ calling router-owned strict-rule compilation or inventing a second compiler.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Mapping, Sequence
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +23,7 @@ class CBLPlanAdoptionError(Exception):
     """Base error carrying a stable machine-readable code."""
 
     def __init__(self, code: str, message: str) -> None:
+        """Initialize the error with a stable code and human-readable message."""
         super().__init__(message)
         self.code = code
 
@@ -80,14 +81,14 @@ def _merge_source_provenance(
 ) -> dict[str, object]:
     """Merge CBL provenance while preserving every reader-owned node field."""
     updated = dict(node)
-    source_paths = [str(value) for value in (node.get("source_paths") or [])]
+    raw_paths = node.get("source_paths")
+    source_paths = [str(value) for value in raw_paths] if isinstance(raw_paths, list) else []
     if source_path not in source_paths:
         source_paths.append(source_path)
-    placements = [
-        dict(value)
-        for value in (node.get("source_cbl_placements") or [])
-        if isinstance(value, dict)
-    ]
+
+    raw_placements = node.get("source_cbl_placements")
+    placement_values = raw_placements if isinstance(raw_placements, list) else []
+    placements = [dict(value) for value in placement_values if isinstance(value, dict)]
     placement = {"source_path": source_path, "position": source_position}
     if placement not in placements:
         placements.append(placement)
