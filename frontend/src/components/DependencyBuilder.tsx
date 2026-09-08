@@ -590,7 +590,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
           <button
             type="button"
             onClick={handleToggleReadingOrder}
-            className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest"
+            className="w-full py-3 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
             data-testid="toggle-reading-order"
           >
             {showReadingOrder ? '▲ Hide Reading Order' : '▼ View Reading Order'}
@@ -861,7 +861,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
               disabled={
                 !selectedThread || selectedThreadNeedsMigration || !sourceIssueId || !targetIssueId || isSaving || isDuplicateDependency()
               }
-              className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-50 whitespace-normal break-words text-left"
+              className="w-full py-2 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 whitespace-normal break-words text-left"
             >
                {isSaving
                  ? 'Adding dependency…'

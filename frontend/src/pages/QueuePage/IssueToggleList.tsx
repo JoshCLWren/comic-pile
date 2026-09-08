@@ -584,7 +584,7 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
                     setSelectedDepsIssue(null)
                     onOpenDependencies()
                   }}
-                  className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest text-left"
+                  className="w-full py-2 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors text-left"
                   data-testid="open-dependency-builder"
                 >
                   Open Dependency Builder →

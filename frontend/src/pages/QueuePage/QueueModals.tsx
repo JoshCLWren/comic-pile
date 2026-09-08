@@ -205,7 +205,7 @@ export function QueueModals({
           <button
             type="submit"
             disabled={isPendingCreate}
-            className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
+            className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
           >
             {isPendingCreate ? 'Adding...' : 'Create Series'}
           </button>
@@ -317,7 +317,7 @@ export function QueueModals({
             type="submit"
             form="edit-thread-form"
             disabled={isPendingEdit}
-            className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
+            className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
           >
             {isPendingEdit ? 'Saving...' : 'Save Changes'}
           </button>
@@ -364,7 +364,7 @@ export function QueueModals({
           <button
             type="submit"
             disabled={isPendingReactivate}
-            className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
+            className="w-full py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
           >
             {isPendingReactivate ? 'Adding to queue...' : 'Add to Queue'}
           </button>

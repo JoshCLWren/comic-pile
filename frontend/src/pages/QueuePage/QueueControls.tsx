@@ -71,7 +71,7 @@ function QueueControlsInner({
           <button
             type="button"
             onClick={onCreateThread}
-            className="hidden md:flex h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+            className="hidden md:flex h-12 px-5 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 whitespace-nowrap hover:bg-[var(--theme-primary-action-hover)]"
             data-testid="queue-add-thread-desktop"
           >
             Add Series

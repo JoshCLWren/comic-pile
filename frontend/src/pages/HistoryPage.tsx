@@ -193,7 +193,7 @@ export default function HistoryPage() {
           </p>
           <button
             onClick={loadMore}
-            className="h-9 px-4 glass-button text-[10px] font-black uppercase tracking-widest shadow-xl"
+            className="h-9 px-4 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
           >
             Retry
           </button>
@@ -204,7 +204,7 @@ export default function HistoryPage() {
         <div className="flex justify-center pt-4 pb-8">
           <button
             onClick={loadMore}
-            className="h-10 md:h-12 px-6 md:px-8 glass-button text-[10px] md:text-xs font-black uppercase tracking-widest shadow-xl"
+            className="h-10 md:h-12 px-6 md:px-8 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
           >
             Load More Sessions
           </button>
