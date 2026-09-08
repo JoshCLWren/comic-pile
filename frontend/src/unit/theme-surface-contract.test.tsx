@@ -187,6 +187,58 @@ describe('semantic theme stylesheet contract (#1646)', () => {
     }
   })
 
+  it('keeps comic, continuity, and personal accents pairwise distinct in every theme (#2232)', () => {
+    const css = loadStylesheet()
+    const accents = [
+      '--theme-comic-accent',
+      '--theme-continuity-accent',
+      '--theme-personal-accent',
+    ] as const
+
+    for (const theme of THEMES) {
+      const tokens = extractTokenMap(extractThemeBlock(css, theme))
+      const values = accents.map((token) => tokens.get(token) as string)
+      expect(new Set(values).size, `${theme} accents must be pairwise distinct`).toBe(accents.length)
+
+      for (const value of values) {
+        expect(
+          value,
+          `${theme} accent must be a concrete color, not ${value}`,
+        ).not.toBe('var(--theme-text-primary)')
+      }
+    }
+  })
+
+  it('gives classic and ink-gold clearly different accent identities for a blind switch (#2232)', () => {
+    const css = loadStylesheet()
+    const classic = extractTokenMap(extractThemeBlock(css, 'classic'))
+    const inkGold = extractTokenMap(extractThemeBlock(css, 'ink-gold'))
+
+    for (const token of [
+      '--theme-bg-page',
+      '--theme-bg-panel',
+      '--theme-text-primary',
+      '--theme-comic-accent',
+      '--theme-continuity-accent',
+      '--theme-personal-accent',
+    ] as const) {
+      expect(classic.get(token), `classic ${token} missing`).toBeTruthy()
+      expect(inkGold.get(token), `ink-gold ${token} missing`).toBeTruthy()
+    }
+
+    expect(
+      [
+        ['--theme-comic-accent', classic.get('--theme-comic-accent'), inkGold.get('--theme-comic-accent')],
+        ['--theme-continuity-accent', classic.get('--theme-continuity-accent'), inkGold.get('--theme-continuity-accent')],
+        ['--theme-personal-accent', classic.get('--theme-personal-accent'), inkGold.get('--theme-personal-accent')],
+      ].every(([, a, b]) => a !== b),
+      'classic and ink-gold must differ in every accent so a reviewer can name the theme',
+    ).toBe(true)
+
+    expect(inkGold.get('--theme-continuity-accent')).not.toMatch(/^#6b4f1a|var\(--theme-(comic|text)/)
+    expect(inkGold.get('--theme-personal-accent')).not.toBe(inkGold.get('--theme-text-primary'))
+  })
+
   it('keeps the migrated feature sheets on --theme-* roles with no product hex (#2230)', () => {
     for (const sheet of THEME_ROLE_SHEETS) {
       const css = loadComponentStylesheet(sheet)
