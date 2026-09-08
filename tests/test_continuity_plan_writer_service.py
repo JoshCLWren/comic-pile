@@ -16,10 +16,11 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import continuity_plan as continuity_plan_api
+from app.continuity_plan_readiness import plan_rule_marker
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.issue import Issue
@@ -144,6 +145,24 @@ async def _write_plan_via_service(
     return plan
 
 
+async def _clear_plan_rules(db: AsyncSession, *, user_id: int, plan_id: int) -> None:
+    """Remove the compiled rules owned by one plan so a peer writer can reuse the edges.
+
+    Two plans may not both own the same hard edge — that is the preserved
+    ``plan_rule_conflict`` contract — so a comparison test that compiles the
+    same strict edges through two writers must clear the first writer's rules
+    before the second writer runs.
+    """
+    await db.execute(
+        delete(ContinuityRule).where(
+            ContinuityRule.user_id == user_id,
+            ContinuityRule.note == plan_rule_marker(plan_id),
+        ),
+        execution_options={"synchronize_session": "fetch"},
+    )
+    await db.commit()
+
+
 @pytest.mark.asyncio
 async def test_strict_sequential_adjacent_rules_compile_identically_to_router(
     async_db: AsyncSession,
@@ -167,11 +186,18 @@ async def test_strict_sequential_adjacent_rules_compile_identically_to_router(
         for rule in await _user_rules(async_db, user_id=user.id)
         if rule.note == f"continuity-plan:{service_plan.id}"
     ]
-    assert [(rule.source_id, rule.target_id, rule.satisfaction_type) for rule in service_rules] == [
+    service_rule_edges = [
+        (rule.source_id, rule.target_id, rule.satisfaction_type) for rule in service_rules
+    ]
+    assert service_rule_edges == [
         (issues[0].id, issues[1].id, "item_read"),
         (issues[1].id, issues[2].id, "item_read"),
     ]
     assert all(rule.note == f"continuity-plan:{service_plan.id}" for rule in service_rules)
+
+    # The service compile is proven above; clear its plan-owned rules so the
+    # router can compile the exact same edges without a plan_rule_conflict.
+    await _clear_plan_rules(async_db, user_id=user.id, plan_id=service_plan.id)
 
     created = await auth_client.post(
         "/api/v1/continuity-plans/",
@@ -185,10 +211,9 @@ async def test_strict_sequential_adjacent_rules_compile_identically_to_router(
         if rule.note == f"continuity-plan:{router_plan_id}"
     ]
 
-    assert len(router_rules) == len(service_rules)
-    assert [(r.source_id, r.target_id, r.satisfaction_type) for r in router_rules] == [
-        (r.source_id, r.target_id, r.satisfaction_type) for r in service_rules
-    ]
+    assert [
+        (r.source_id, r.target_id, r.satisfaction_type) for r in router_rules
+    ] == service_rule_edges
     assert all(r.note == f"continuity-plan:{router_plan_id}" for r in router_rules)
 
 
