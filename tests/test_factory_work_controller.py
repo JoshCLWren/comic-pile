@@ -268,3 +268,62 @@ def test_urgent_defects_bypass_wip_but_not_review_backlog_saturation(
     }
     assert 501 not in wip_produced, "ordinary issue intake must stop under worker WIP"
     assert 502 in wip_produced, "urgent user-reported defects still bypass worker WIP"
+
+
+def test_human_local_pr_closing_issue_suppresses_controller_intake(
+    controller: types.ModuleType,
+) -> None:
+    """The central controller suppresses intake when any open PR closes an issue."""
+    candidates = controller.build_candidates(
+        [
+            {
+                "number": 2127,
+                "title": "CBL chain",
+                "labels": [{"name": "factory:unowned"}],
+                "createdAt": "2026-09-04T12:00:00Z",
+            }
+        ],
+        [
+            {
+                "number": 2161,
+                "title": "Complete CBL implementation",
+                "labels": [],
+                "headRefName": "local/2127-cbl-commit",
+                "body": "Closes #2127.\n\nImplements the full chain.",
+                "createdAt": "2026-09-04T13:00:00Z",
+                "isDraft": False,
+            }
+        ],
+    )
+    assert candidates == []
+
+
+def test_controller_does_not_suppress_on_casual_hash_mention(
+    controller: types.ModuleType,
+) -> None:
+    """A PR that only references ``#N`` without closing it never blocks intake."""
+    candidates = controller.build_candidates(
+        [
+            {
+                "number": 2127,
+                "title": "CBL chain",
+                "labels": [{"name": "factory:unowned"}],
+                "createdAt": "2026-09-04T12:00:00Z",
+            }
+        ],
+        [
+            {
+                "number": 2170,
+                "title": "Stacked child work",
+                "labels": [],
+                "headRefName": "local/stacked-child",
+                "body": "Depends on #2127 for context.",
+                "createdAt": "2026-09-04T13:00:00Z",
+                "isDraft": False,
+            }
+        ],
+    )
+    assert any(
+        candidate.kind == "issue" and candidate.number == 2127
+        for candidate in candidates
+    )

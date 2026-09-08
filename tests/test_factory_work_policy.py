@@ -838,3 +838,173 @@ def test_legacy_unscoped_pr_markers_do_not_suppress_known_head():
     )
     candidates = policy.build_candidates([], [target], no_diff_attempt_records=attempts)
     assert any(item.kind == "pr" and item.number == 2264 for item in candidates)
+
+
+# ── Issue #2164: duplicate-intake suppression for open PRs closing an issue ──
+#
+# A human-authored PR that explicitly closes an issue owns that issue even when
+# it lives on a local/* branch without factory provenance. Suppression must not
+# depend on branch shape or provenance; only an explicit closing reference and
+# an open (not superseded) PR count.
+
+
+def human_pr_fixture(
+    *,
+    number: int,
+    body: str,
+    title: str = "",
+    branch: str = "local/2127-cbl-commit",
+    state: str = "OPEN",
+    draft: bool = False,
+) -> dict[str, object]:
+    """Build a non-factory PR payload for duplicate-intake suppression tests."""
+    return {
+        "number": number,
+        "state": state,
+        "isDraft": draft,
+        "labels": [],
+        "headRefName": branch,
+        "headRefOid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "body": body,
+        "title": title,
+        "createdAt": "2026-09-05T00:00:00Z",
+        "mergeable": "MERGEABLE",
+        "mergeStateStatus": "CLEAN",
+    }
+
+
+def test_human_author_open_pr_with_closes_keyword_suppresses_intake():
+    """A human ``local/*`` PR with ``Closes #N`` owns the issue (#2164)."""
+    issue = issue_fixture(2127)
+    human_pr = human_pr_fixture(
+        number=2161,
+        body="Closes #2127.\n\nImplements the complete CBL chain.",
+        branch="local/2127-cbl-commit",
+    )
+
+    candidates = policy.build_candidates([issue], [human_pr])
+
+    assert all(
+        candidate.number != 2127 or candidate.kind != "issue"
+        for candidate in candidates
+    )
+    assert candidates == []
+
+
+def test_non_factory_branch_closing_reference_is_recognized():
+    """``linked_issue_from_pr`` resolves explicit body closing references."""
+    pr = human_pr_fixture(
+        number=2161,
+        body="Fixes #2127",
+        branch="local/2127-cbl-commit",
+    )
+    assert policy.linked_issue_from_pr(pr) == 2127
+    assert policy.issue_explicitly_closed_by_pr(pr) == 2127
+
+
+def test_factory_canonical_pr_is_still_recognized():
+    """Factory branches retain canonical identity without body keywords."""
+    pr = pr_fixture(
+        number=1512,
+        issue=1487,
+        labels=["factory", "factory:18", "factory:review"],
+    )
+    assert policy.linked_issue_from_pr(pr) == 1487
+    assert policy.pr_suppresses_issue_candidate(pr, {})
+    candidates = policy.build_candidates([issue_fixture(1487)], [pr])
+    assert candidates == []
+
+
+def test_pr_mentioning_hash_without_closing_reference_does_not_suppress():
+    """Stacked/child PRs that only mention ``#N`` never block fresh intake."""
+    issue = issue_fixture(2127)
+    mention_pr = human_pr_fixture(
+        number=2163,
+        body="Stacked on #2127; details in the parent PR.",
+        title="Extended queue notes",
+    )
+    assert policy.linked_issue_from_pr(mention_pr) is None
+    assert policy.issue_explicitly_closed_by_pr(mention_pr) is None
+
+    candidates = policy.build_candidates([issue], [mention_pr])
+
+    assert [(candidate.kind, candidate.number) for candidate in candidates] == [
+        ("issue", 2127)
+    ]
+
+
+def test_pr_casual_title_hash_without_fix_keyword_does_not_suppress():
+    """A title that merely references ``#N`` is not a closing claim."""
+    issue = issue_fixture(2127)
+    pr = human_pr_fixture(
+        number=2164,
+        title="Backend work shared with #2127",
+        body="No closing reference here.",
+    )
+    assert policy.linked_issue_from_pr(pr) is None
+
+    candidates = policy.build_candidates([issue], [pr])
+
+    assert any(candidate.kind == "issue" and candidate.number == 2127 for candidate in candidates)
+
+
+def test_closed_human_pr_does_not_suppress_new_implementation():
+    """A closed or superseded PR releases its issue to the queue again."""
+    issue = issue_fixture(2127)
+    closed_pr = human_pr_fixture(
+        number=2162,
+        body="Closes #2127.",
+        state="CLOSED",
+    )
+    assert not policy.pr_suppresses_issue_candidate(closed_pr, {})
+
+    candidates = policy.build_candidates([issue], [closed_pr])
+
+    assert [(candidate.kind, candidate.number) for candidate in candidates] == [
+        ("issue", 2127)
+    ]
+
+
+def test_human_pr_suppresses_intake_without_becoming_factory_work():
+    """Suppression is intake-only; the human PR's own lifecycle is untouched."""
+    issue = issue_fixture(2127)
+    human_pr = human_pr_fixture(number=2161, body="Closes #2127.")
+
+    candidates = policy.build_candidates([issue], [human_pr])
+
+    assert candidates == []
+    assert not policy.pr_is_static_candidate(human_pr, {2127: issue})
+
+
+def test_concurrent_intake_cannot_assign_duplicate_implementation():
+    """A batch of workers never assigns fresh work for an already-owned issue."""
+    issue = issue_fixture(2127)
+    human_pr = human_pr_fixture(number=2161, body="Closes #2127.")
+    other = issue_fixture(2199)
+
+    candidates = policy.build_candidates([issue, other], [human_pr])
+    assignments = policy.plan_distinct_assignments(
+        candidates,
+        ["29", "30", "31"],
+    )
+
+    assigned = [candidate.number for candidate in assignments.values()]
+    assert 2127 not in assigned
+    assert 2199 in assigned
+
+
+def test_issue_explicitly_closed_by_pr_recognizes_all_closing_inflections():
+    """Every GitHub closing keyword form is recognized case-insensitively."""
+    for body in (
+        "Closes #2127",
+        "Fixes #2127",
+        "Resolves #2127",
+        "closed #2127",
+        "fixed #2127",
+        "Fixed #2127 and #2128",
+    ):
+        pr = human_pr_fixture(number=2161, body=body)
+        assert policy.issue_explicitly_closed_by_pr(pr) == 2127, body
+        assert policy.linked_issue_from_pr(pr) == 2127, body
+    casual = human_pr_fixture(number=2161, body="Related to #2127; see parent.")
+    assert policy.issue_explicitly_closed_by_pr(casual) is None
