@@ -1,9 +1,4 @@
-"""Atomic adoption of reviewed CBL entries into the canonical Reading Plan.
-
-This first mutating slice intentionally supports informational plans and existing
-canonical issues only. It proves the corrected persistence boundary without
-calling router-owned strict-rule compilation or inventing a second compiler.
-"""
+"""Atomic adoption of reviewed CBL entries into the canonical Reading Plan."""
 
 from __future__ import annotations
 
@@ -13,8 +8,12 @@ from dataclasses import dataclass
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache_invalidation import invalidate_user_view
 from app.models.continuity_plan import ContinuityPlan
+from app.schemas.continuity_plan import ContinuityPlanWrite
 from app.services.cbl_reconciliation import preview_cbl_adoption
+from app.services.continuity_plan_writer import apply_continuity_plan_write
+from comic_pile.dependencies import refresh_user_blocked_status
 
 CBL_PLAN_ADOPTION_LOCK_NAMESPACE = 2377001
 
@@ -109,7 +108,7 @@ async def commit_existing_cbl_entries_to_reading_plan(
     series_decisions: Mapping[str, bool],
     entry_decisions: Mapping[str, bool],
 ) -> CBLPlanAdoptionResult:
-    """Atomically append/reuse reviewed existing issues in one informational plan."""
+    """Atomically append/reuse reviewed existing issues in one canonical Reading Plan."""
     await db.execute(
         text("SELECT pg_advisory_xact_lock(:namespace, :user_id)"),
         {"namespace": CBL_PLAN_ADOPTION_LOCK_NAMESPACE, "user_id": user_id},
@@ -123,11 +122,6 @@ async def commit_existing_cbl_entries_to_reading_plan(
     ).scalar_one_or_none()
     if plan is None:
         raise CBLPlanAdoptionError("reading_plan_not_found", "Reading Plan not found")
-    if plan.ordering_mode != "informational":
-        raise CBLPlanAdoptionError(
-            "strict_plan_writer_not_extracted",
-            "CBL adoption into a strict Reading Plan is blocked until the shared plan compiler is extracted",
-        )
     if not plan.lanes_json:
         raise CBLPlanAdoptionError(
             "reading_plan_has_no_lane", "Reading Plan must have a lane before material can be added"
@@ -247,9 +241,23 @@ async def commit_existing_cbl_entries_to_reading_plan(
         added_issue_ids.append(issue_id_value)
 
     idempotent = nodes == original_nodes
-    plan.nodes_json = nodes
-    await db.flush()
-    await db.commit()
+    payload = ContinuityPlanWrite.model_validate(
+        {
+            "name": plan.name,
+            "ordering_mode": plan.ordering_mode,
+            "lanes": plan.lanes_json,
+            "nodes": nodes,
+        }
+    )
+    try:
+        await apply_continuity_plan_write(db, user_id=user_id, plan=plan, payload=payload)
+        if payload.ordering_mode == "strict_sequential":
+            await refresh_user_blocked_status(user_id, db)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    await invalidate_user_view(user_id)
 
     return CBLPlanAdoptionResult(
         plan_id=plan.id,
