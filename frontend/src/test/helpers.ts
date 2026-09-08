@@ -376,7 +376,6 @@ export const SELECTORS = {
 		dieSelector: '#die-selector',
 		mainDie: '#main-die-3d',
 		rollButton: 'button[aria-label="roll"]',
-		tapInstruction: '#tap-instruction',
 		headerDieLabel: '#header-die-label',
 	},
 	rate: {

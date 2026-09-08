@@ -28,14 +28,14 @@ interface RollHeaderProps {
  * and the manual-override entry point. Purely presentational; all mutation
  * and data ownership stays in the page feature modules.
  *
- * Visual hierarchy (issue #2087 deslop) with a single mode-state grammar
- * (issue #2304):
- *   1. die-size selection  - one segmented-control group; items have no border
- *   2. automatic / mode    - "Auto" lives inside the segmented group; the
+ * Visual hierarchy (issue #2087 deslop + #2197 action clarity + #2304 mode-state grammar):
+ *   1. roll now      - the Roll CTA under the die is the single dominant primary
+ *                      action for the default happy path (#2197)
+ *   2. die-size selection  - one segmented-control group; items have no border
+ *   3. automatic / mode    - "Auto" lives inside the segmented group; the
  *                            ladder readout collapses to plain text; the
  *                            ReadingModeControl remains a quiet status chip
- *   3. manual pick         - an outlined action that can never be mistaken for
- *                            the solid-fill selected state
+ *   4. manual pick   - demoted to a secondary control in the header row (#2197)
  *
  * Active-mode convention: the roll-mode control in effect gets a solid
  * `--theme-primary-action` fill; inactive/status controls stay neutral dark

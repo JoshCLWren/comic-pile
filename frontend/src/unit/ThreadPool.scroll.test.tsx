@@ -7,8 +7,6 @@ const baseProps = {
   pool: [],
   blockedThreads: [],
   blockingDependencyMap: {},
-  isRolling: false,
-  rolledResult: null,
   selectedThreadId: null,
   staleThread: null,
   staleThreadCount: 0,

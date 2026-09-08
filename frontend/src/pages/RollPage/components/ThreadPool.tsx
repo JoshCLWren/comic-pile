@@ -9,8 +9,6 @@ interface ThreadPoolProps {
   blockingDependencyMap: Record<number, BlockingDependency[]>
   dieSize?: number
   isRatingView: boolean
-  isRolling: boolean
-  rolledResult: number | null
   selectedThreadId: number | null
   staleThread: (RollBootstrapThread & { days: number }) | null
   staleThreadCount: number
@@ -38,8 +36,6 @@ export function ThreadPool({
   blockingDependencyMap,
   dieSize,
   isRatingView,
-  isRolling,
-  rolledResult,
   selectedThreadId,
   staleThread,
   staleThreadCount,
@@ -74,15 +70,6 @@ export function ThreadPool({
 
   return (
     <div className={`px-3 md:px-4 pb-20 md:pb-28 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-white/5 pt-4 md:pt-8'}`}>
-      {!isRolling && rolledResult === null && !isRatingView && pool.length > 0 && (
-        <p
-          id="tap-instruction"
-          className="text-stone-500 font-black uppercase tracking-[0.5em] text-[10px] animate-pulse shrink-0 text-center mb-4 md:mb-8"
-        >
-          Tap Die to Roll
-        </p>
-      )}
-
       {!isRatingView && <div className="flex items-center gap-2 shrink-0 mb-4">
         <div className="w-2 h-2 rounded-full bg-amber-600 shadow-[0_0_15px_var(--accent-red)]"></div>
         <div className="flex-1">
