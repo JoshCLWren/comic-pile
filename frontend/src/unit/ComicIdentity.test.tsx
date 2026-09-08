@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { comicVineApi } from '../services/api'
+import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api'
 import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
 
 vi.mock('../services/api', async () => {
@@ -773,5 +773,142 @@ describe('ComicIdentity', () => {
     // Click summary - verifies the interactive structure exists
     const summary = screen.getByText('Creators')
     fireEvent.click(summary)
+  })
+
+  describe('narrow phone viewport cover geometry', () => {
+    beforeEach(() => {
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        value: 390,
+      })
+      window.dispatchEvent(new Event('resize'))
+    })
+
+    afterEach(() => {
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        value: 1024,
+      })
+      window.dispatchEvent(new Event('resize'))
+    })
+
+    it('preserves portrait cover geometry data attributes on a narrow phone viewport', async () => {
+      getIntelligence.mockResolvedValue({
+        comicvine_issue_id: '9001',
+        comicvine_url: null,
+        series_name: 'Phone Test',
+        series_id: 1,
+        issue_number: '1',
+        name: 'Phone Cover',
+        description: null,
+        image_url: 'https://images.example/phone-cover.jpg',
+        cover_date: '2026-01-01',
+        store_date: null,
+        creators: [],
+        story_arcs: [],
+      })
+
+      render(<ComicIdentity issueId={99} />)
+      await waitForLoaded()
+
+      const cover = screen.getByTestId('comic-cover')
+      const aspectRatio = Number(cover.getAttribute('data-cover-aspect-ratio'))
+      const heightCap = Number(cover.getAttribute('data-cover-height-cap-vh'))
+      const widthCap = Number(cover.getAttribute('data-cover-width-cap-vh'))
+
+      expect(Number.isFinite(aspectRatio)).toBe(true)
+      expect(aspectRatio).toBeGreaterThan(0)
+      expect(heightCap).toBe(45)
+      expect(Number.isFinite(widthCap)).toBe(true)
+      expect(widthCap).toBeGreaterThan(0)
+      expect(widthCap).toBeCloseTo(heightCap * aspectRatio)
+      expect(cover.className).not.toContain('max-h-')
+    })
+
+    it('updates cover geometry to intrinsic aspect ratio after the image loads on a narrow phone viewport', async () => {
+      getIntelligence.mockResolvedValue({
+        comicvine_issue_id: '9002',
+        comicvine_url: null,
+        series_name: 'Phone Intrinsic',
+        series_id: 1,
+        issue_number: '2',
+        name: 'Phone Intrinsic Cover',
+        description: null,
+        image_url: 'https://images.example/phone-intrinsic.jpg',
+        cover_date: '2026-01-01',
+        store_date: null,
+        creators: [],
+        story_arcs: [],
+      })
+
+      render(<ComicIdentity issueId={100} />)
+      await waitForLoaded()
+
+      const cover = screen.getByTestId('comic-cover')
+      const img = cover.querySelector('img')
+      expect(img).not.toBeNull()
+
+      act(() => {
+        if (!img) {
+          throw new Error('Image element not found')
+        }
+        Object.defineProperty(img, 'naturalWidth', { value: 400 })
+        Object.defineProperty(img, 'naturalHeight', { value: 600 })
+        img.dispatchEvent(new Event('load'))
+      })
+
+      const updatedAspectRatio = Number(cover.getAttribute('data-cover-aspect-ratio'))
+      expect(updatedAspectRatio).toBeCloseTo(400 / 600)
+      const updatedWidthCap = Number(cover.getAttribute('data-cover-width-cap-vh'))
+      expect(updatedWidthCap).toBeCloseTo(45 * updatedAspectRatio)
+    })
+  })
+
+  describe('cover loading lifecycle transition', () => {
+    it('keeps one stable portrait footprint and no dark frame from metadata loading through image completion', async () => {
+      let resolveRequest: ((value: ComicVineIssueIntelligence | null) => void) | undefined
+      getIntelligence.mockImplementation(() => new Promise((resolve) => {
+        resolveRequest = resolve
+      }))
+
+      render(<ComicIdentity issueId={101} />)
+      await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(101))
+
+      const loadingCover = screen.getByTestId('comic-cover')
+      const loadingAspect = Number(loadingCover.getAttribute('data-cover-aspect-ratio'))
+      expect(loadingAspect).toBeCloseTo(2 / 3)
+      expect(loadingCover.getAttribute('data-cover-height-cap-vh')).toBe('45')
+      expect(loadingCover.className).toContain('animate-pulse')
+      expect(loadingCover.className).toContain('bg-white')
+      expect(loadingCover.className).not.toContain('bg-stone')
+
+      await act(async () => {
+        resolveRequest?.({
+          comicvine_issue_id: '9003',
+          comicvine_url: null,
+          series_name: 'Transition Test',
+          series_id: 1,
+          issue_number: '1',
+          name: 'Transition Cover',
+          description: null,
+          image_url: 'https://images.example/transition.jpg',
+          cover_date: '2026-01-01',
+          store_date: null,
+          creators: [],
+          story_arcs: [],
+        })
+      })
+
+      await waitForLoaded()
+
+      const loadedCover = screen.getByTestId('comic-cover')
+      const loadedAspect = Number(loadedCover.getAttribute('data-cover-aspect-ratio'))
+      expect(loadedAspect).toBeCloseTo(2 / 3)
+      expect(loadedCover.getAttribute('data-cover-height-cap-vh')).toBe('45')
+      expect(loadedCover.className).toContain('bg-white')
+      expect(loadedCover.className).not.toContain('bg-stone')
+      expect(loadedCover.className).not.toContain('max-h-')
+      expect(loadedCover.querySelector('img')).not.toBeNull()
+    })
   })
 })

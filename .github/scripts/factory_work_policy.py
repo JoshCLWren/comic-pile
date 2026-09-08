@@ -154,20 +154,47 @@ def linked_issue_from_branch(branch: str | None) -> int | None:
     return int(match.group(1)) if match else None
 
 
-TITLE_ISSUE_RE = re.compile(r'(?i)(?:fix\s+|issue\s+)?#(\d+)')
+TITLE_ISSUE_RE = re.compile(
+    r'(?i)\b(?:fix|fixes|fixed|fixing|resolve|resolves|resolved|resolving|'
+    r'close|closes|closed|closing)\s+#(\d+)'
+)
+# Mirrors factory_post_merge_closure.CLOSING_RE so the intake side recognizes
+# the same explicit closing references GitHub itself honors on merge.
+CLOSING_ISSUE_RE = re.compile(
+    r'\b(?:closes|closed|close|fixes|fixed|fix|resolves|resolved|resolve)\s+#(?P<issue>\d+)',
+    re.IGNORECASE,
+)
+
+
+def issue_explicitly_closed_by_pr(pr: dict[str, Any]) -> int | None:
+    """Return the issue a PR explicitly claims to close, if any.
+
+    Only explicit closing keywords (``Closes #N``, ``Fixes #N``,
+    ``Resolves #N`` and their inflected forms) in the PR body count. Casual
+    ``#N`` mentions used by stacked/child PRs for cross-reference never claim
+    closure, so they must not suppress fresh intake.
+    """
+    match = CLOSING_ISSUE_RE.search(str(pr.get('body') or ''))
+    return int(match.group('issue')) if match else None
 
 
 def linked_issue_from_pr(pr: dict[str, Any]) -> int | None:
     """Resolve the canonical linked issue for factory assignment/suppression.
 
-    Prefers the durable ``factory/<worker>-<issue>-...`` branch shape, then falls
-    back to a leading ``Fix #N`` / ``#N`` reference in the PR title so local
-    Cursor/fix delivery PRs admitted by label still suppress duplicate issue
-    intake.
+    Prefers the durable ``factory/<worker>-<issue>-...`` branch shape, then an
+    explicit closing keyword in the body (``Closes #N``/``Fixes #N``/
+    ``Resolves #N``), then a leading ``Fix #N`` reference in the PR title so
+    labeled local Cursor/fix delivery PRs still suppress duplicate issue
+    intake. Closing references are honored regardless of author or branch
+    naming: a manually opened ``local/*`` PR that explicitly owns an issue must
+    suppress fresh factory implementation (#2164).
     """
     linked = linked_issue_from_branch(str(pr.get('headRefName') or ''))
     if linked is not None:
         return linked
+    closed = issue_explicitly_closed_by_pr(pr)
+    if closed is not None:
+        return closed
     title = str(pr.get('title') or '')
     match = TITLE_ISSUE_RE.search(title)
     return int(match.group(1)) if match else None
@@ -420,17 +447,26 @@ def pr_is_static_candidate(
 
 
 def pr_suppresses_issue_candidate(pr: dict[str, Any], issue_map: dict[int, dict[str, Any]]) -> bool:
-    """Return whether this open factory PR is canonical work for its issue.
+    """Return whether an open PR is canonical work for its issue.
 
-    Once a canonical factory PR exists, the linked issue must not become fresh
-    implementation work again for any reason. If an old PR is no longer worth
-    repairing, it must be explicitly closed before the issue can re-enter fresh
-    implementation. Urgency changes ranking, never canonical PR identity.
+    Any open PR that claims an issue — a ``factory/<worker>-<issue>-...``
+    branch, an explicit ``Closes #N``/``Fixes #N``/``Resolves #N`` reference
+    in its body, or a ``Fix #N`` title — owns that issue regardless of author
+    or branch naming. Once canonical work exists, the issue must not become
+    fresh implementation work again for any reason. Closing or explicitly
+    superseding the PR releases the issue. Urgency changes ranking, never
+    canonical PR identity.
+
+    Factory provenance is intentionally NOT required here: a manually opened
+    ``local/*`` (or any other) PR that explicitly closes an issue is the same
+    canonical implementation candidate and must suppress duplicate factory
+    intake (#2164). Draft PRs still claim identity for the same fail-closed
+    reason; the issue re-enters fresh implementation only when the PR is
+    actually closed or superseded.
     """
     del issue_map  # Kept in the signature for compatibility with existing callers.
     return (
         str(pr.get('state') or 'OPEN').upper() == 'OPEN'
-        and is_factory_managed_pr(pr)
         and linked_issue_from_pr(pr) is not None
     )
 

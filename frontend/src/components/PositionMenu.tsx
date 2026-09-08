@@ -10,10 +10,27 @@ interface PositionMenuProps {
   onMoveToBack: (threadId: number) => void
   onEdit: (thread: Thread) => void
   onDependencies: (thread: Thread) => void
+  // called when the user selects the Delete action from the menu
   onDelete: (threadId: number) => void
+  snoozeIcon?: string
+  snoozeLabel?: string
+  snoozeDisabled?: boolean
+  onSnooze?: (thread: Thread) => void
 }
 
-export default function PositionMenu({ thread, onMoveToFront, onReposition, onMoveToBack, onEdit, onDependencies, onDelete }: PositionMenuProps) {
+export default function PositionMenu({
+  thread,
+  onMoveToFront,
+  onReposition,
+  onMoveToBack,
+  onEdit,
+  onDependencies,
+  onDelete,
+  snoozeIcon,
+  snoozeLabel,
+  snoozeDisabled,
+  onSnooze,
+}: PositionMenuProps) {
   const { openThreadId, closeMenu: closeContextMenu, openMenu, toggleMenu } = usePositionMenu()
   const isOpen = openThreadId === thread.id
 
@@ -48,7 +65,7 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
     setMenuPosition((currentPosition) => {
       if (
         currentPosition?.top === nextPosition.top &&
-        currentPosition.right === nextPosition.right
+        currentPosition?.right === nextPosition.right
       ) {
         return currentPosition
       }
@@ -163,6 +180,7 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
     icon: string
     ariaLabel: string
     destructive?: boolean
+    disabled?: boolean
     action: () => void
   }> = [
     {
@@ -201,6 +219,18 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
         closeMenu()
       },
     },
+    ...(onSnooze && snoozeLabel ? [{
+      label: snoozeLabel,
+      icon: snoozeIcon || '',
+      ariaLabel: snoozeLabel,
+      disabled: snoozeDisabled,
+      action: () => {
+        if (!snoozeDisabled && onSnooze) {
+          onSnooze(thread)
+          closeMenu()
+        }
+      },
+    }] : []),
     {
       label: 'Dependencies',
       icon: '\u26D3\uFE0E',
@@ -255,10 +285,13 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
                   item.action()
                 }}
                 aria-label={item.ariaLabel}
+                disabled={item.disabled}
                 className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-3 focus:outline-none focus-visible:bg-white/10 ${
-                  item.destructive
-                    ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300 focus-visible:bg-red-500/10 focus-visible:text-red-300'
-                    : 'text-stone-300 hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:text-white'
+                  item.disabled
+                    ? 'text-stone-600 cursor-not-allowed'
+                    : item.destructive
+                      ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300 focus-visible:bg-red-500/10 focus-visible:text-red-300'
+                      : 'text-stone-300 hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:text-white'
                 }`}
                 role="menuitem"
               >

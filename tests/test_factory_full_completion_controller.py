@@ -119,6 +119,9 @@ def test_current_demand_caps_idle_workers_to_remaining_omniroute_slots(monkeypat
         def linked_issue_from_branch(self, name):
             return None
 
+        def linked_issue_from_pr(self, pr):
+            return None
+
         def pr_suppresses_issue_candidate(self, pr, issue_map):
             return False
 
@@ -179,6 +182,9 @@ def test_current_demand_uses_multi_provider_budget_when_omniroute_dark(monkeypat
             return False
 
         def linked_issue_from_branch(self, name):
+            return None
+
+        def linked_issue_from_pr(self, pr):
             return None
 
         def pr_suppresses_issue_candidate(self, pr, issue_map):

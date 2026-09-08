@@ -385,6 +385,11 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
                   </button>
                 ))}
               </div>
+              {isAuthenticated && (
+                <div className="flex w-8">
+                  <BugReportButton onSubmit={onBugReportSubmit} variant="sidebar" collapsed />
+                </div>
+              )}
               <button
                 type="button"
                 onClick={handleLogout}
@@ -430,6 +435,11 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
                   </button>
                 ))}
               </div>
+              {isAuthenticated && (
+                <div className="mt-2 w-full">
+                  <BugReportButton onSubmit={onBugReportSubmit} variant="sidebar" />
+                </div>
+              )}
               <button onClick={handleLogout} className="mt-2 w-full px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors" aria-label="Log out">
                 Log Out
               </button>

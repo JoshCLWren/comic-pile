@@ -11,15 +11,23 @@ interface ImageWithLoadingProps {
   srcSet?: string
   sizes?: string
   onError?: () => void
+  placeholderClassName?: string
+  onLoad?: (img: HTMLImageElement) => void
 }
 
 /**
  * Image component with loading state handling.
  *
  * Reserves the final image footprint with a single wrapper element and
- * overlays an animated spinner on top of it while the image loads, so the
+ * overlays a loading treatment on top of it while the image loads, so the
  * loading indicator never adds extra layout space or shifts surrounding
  * content when the image arrives.
+ *
+ * ``placeholderClassName`` lets callers fill the reserved footprint with a
+ * themed loading surface (for example ``animate-pulse``) so the loading state
+ * occupies the same space as the final image instead of flashing a disjoint
+ * background. ``onLoad`` reports the loaded image element so callers can react
+ * to its intrinsic dimensions.
  */
 export default function ImageWithLoading({
   src,
@@ -31,6 +39,8 @@ export default function ImageWithLoading({
   srcSet,
   sizes,
   onError,
+  placeholderClassName,
+  onLoad,
 }: ImageWithLoadingProps) {
   const [isLoaded, setIsLoaded] = useState(false)
   const [hasError, setHasError] = useState(false)
@@ -44,7 +54,9 @@ export default function ImageWithLoading({
   return (
     <div className={`relative ${className}`}>
       {!isLoaded && !hasError && (
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div
+          className={`absolute inset-0 flex items-center justify-center ${placeholderClassName ?? ''}`}
+        >
           <LoadingSpinner size="sm" message="" />
         </div>
       )}
@@ -57,7 +69,10 @@ export default function ImageWithLoading({
         height={height}
         srcSet={srcSet}
         sizes={sizes}
-        onLoad={() => setIsLoaded(true)}
+        onLoad={(event) => {
+          setIsLoaded(true)
+          onLoad?.(event.currentTarget)
+        }}
         onError={() => {
           setHasError(true)
           setIsLoaded(true)

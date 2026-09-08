@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 import { type ComicVineRelatedIssue } from '../../../services/api'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
@@ -25,15 +25,22 @@ function formatDate(value: string | null): string | null {
 const CREATOR_LIMIT = 6
 const STORY_ARC_LIMIT = 3
 const RELATED_ISSUES_PER_ARC_LIMIT = 5
+const COVER_HEIGHT_CAP_VH = 45
+const COVER_RATIO_FALLBACK = 2 / 3
 
 export function ComicIdentity({ issueId }: ComicIdentityProps) {
   const { metadata, isLoading, refetch } = useComicVineIssueIntelligence(issueId)
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
+  const [coverRatio, setCoverRatio] = useState<number | null>(null)
   const [showAllCreators, setShowAllCreators] = useState(false)
   const [showAllStoryArcs, setShowAllStoryArcs] = useState(false)
   const [showAllRelatedIssues, setShowAllRelatedIssues] = useState<Record<number, boolean>>({})
   const creatorsDetailsRef = useRef<HTMLDetailsElement>(null)
   const storyArcsDetailsRef = useRef<HTMLDetailsElement>(null)
+
+  useEffect(() => {
+    setCoverRatio(null)
+  }, [metadata?.image_url, isLoading])
 
   useEffect(() => {
     if (creatorsDetailsRef.current) {
@@ -43,6 +50,14 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       storyArcsDetailsRef.current.open = true
     }
   }, [metadata])
+
+  const coverAspectRatio = coverRatio ?? COVER_RATIO_FALLBACK
+  const coverWidthCapVh = COVER_HEIGHT_CAP_VH * coverAspectRatio
+  const coverStyle: CSSProperties = {
+    aspectRatio: `${coverAspectRatio}`,
+    width: `min(100%, calc(${coverWidthCapVh}vh))`,
+  }
+  const coverFrameBorder = { border: '1px solid var(--theme-border)' }
 
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [addDialogData, setAddDialogData] = useState<{
@@ -81,7 +96,15 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   if (!issueId || (!isLoading && !metadata)) return null
   if (isLoading) {
     return (
-      <div className="w-full aspect-[2/3] max-h-[min(70vh,45vh)] rounded-xl bg-white/5 animate-pulse" aria-label="Loading comic details" />
+      <div
+        data-testid="comic-cover"
+        data-cover-aspect-ratio={coverAspectRatio}
+        data-cover-height-cap-vh={COVER_HEIGHT_CAP_VH}
+        data-cover-width-cap-vh={coverWidthCapVh}
+        aria-label="Loading comic details"
+        className="relative mx-auto overflow-hidden rounded-xl bg-white/5 animate-pulse"
+        style={{ ...coverStyle, ...coverFrameBorder }}
+      />
     )
   }
   if (!metadata) return null
@@ -99,17 +122,27 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     >
       <div
         data-testid="comic-cover"
-        className="relative mx-auto aspect-[2/3] w-full max-w-full max-h-[min(70vh,45vh)] rounded-xl overflow-hidden bg-stone-900"
-        style={{ border: '1px solid var(--theme-border)' }}
+        data-cover-aspect-ratio={coverAspectRatio}
+        data-cover-height-cap-vh={COVER_HEIGHT_CAP_VH}
+        data-cover-width-cap-vh={coverWidthCapVh}
+        className="relative mx-auto overflow-hidden rounded-xl bg-white/5"
+        style={{ ...coverStyle, ...coverFrameBorder }}
       >
         {metadata.image_url && metadata.image_url !== failedImageUrl ? (
           <ImageWithLoading
             src={optimizedImageUrl(metadata.image_url, 720) ?? metadata.image_url}
             srcSet={optimizedImageSrcSet(metadata.image_url, [240, 480, 720]) ?? undefined}
-            sizes="(min-width: 1024px) 480px, calc(100vw - 2rem)"
+            sizes="(min-width: 1024px) 30vh, calc((45vh * 2) / 3)"
             alt=""
             loading="eager"
             className="h-full w-full object-contain"
+            placeholderClassName="animate-pulse bg-white/10"
+            onLoad={(img) => {
+              const { naturalWidth, naturalHeight } = img
+              if (naturalWidth > 0 && naturalHeight > 0) {
+                setCoverRatio(naturalWidth / naturalHeight)
+              }
+            }}
             onError={() => setFailedImageUrl(metadata.image_url)}
           />
         ) : (
