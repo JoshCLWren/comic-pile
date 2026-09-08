@@ -10,6 +10,7 @@ import { dependencyGroupsApi, type DependencyGroup } from '../services/api-depen
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api'
 import PlanProjectionDialog from '../components/PlanProjectionDialog'
+import ReadingPlanAddMaterial from '../components/ReadingPlanAddMaterial'
 import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
 
@@ -211,7 +212,6 @@ export default function ContinuityPlannerPage() {
         if (stored) return { ...(node as PlannerNode), label: stored }
         return { ...(node as PlannerNode), label: '[deleted series]' }
       }
-      // issue nodes: prefer persisted denormalized title, no per-issue GETs that 404
       if (stored) return { ...(node as PlannerNode), label: stored }
       return { ...(node as PlannerNode), label: '[deleted series]' }
     })
@@ -254,7 +254,6 @@ export default function ContinuityPlannerPage() {
           [...plan.nodes].sort((a, b) => a.position - b.position),
           loadedGroups,
         )
-        // For legacy plans without denormalized titles, batch-hydrate via readiness (one request, no per-issue 404s).
         const needsBatch = hydrated.some(
           (node) => node.label === '[deleted series]' || node.label === '[deleted crossover]',
         )
@@ -582,6 +581,8 @@ export default function ContinuityPlannerPage() {
           <p className="mt-1 text-xs text-[var(--theme-text-muted)]">Strict sequential requires exactly one lane.</p>
         )}
       </fieldset>
+
+      {planId && <ReadingPlanAddMaterial planName={savedName || name} />}
 
       <section aria-labelledby="add-steps-heading" className="border-t border-[var(--theme-border)] pt-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
