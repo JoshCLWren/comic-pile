@@ -45,4 +45,5 @@ async def discover_cbl_source_lists(
         CBLSourceList.source_path.asc(),
         CBLSourceList.id.asc(),
     ).limit(limit)
-    return list((await db.execute(statement)).all())
+    rows = (await db.execute(statement)).all()
+    return [(row[0], row[1]) for row in rows]
