@@ -336,34 +336,36 @@ export default function RollPage() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 md:w-80 md:h-80 bg-amber-900/15 rounded-full blur-[100px] md:blur-[120px] pointer-events-none"></div>
           <div className="flex-1 flex flex-col">
             {!state.isRatingView ? (
-              <div
-                id="main-die-3d"
-                ref={mainDieRef}
-                onClick={actions.handleRoll}
-                onKeyDown={actions.handleKeyDown}
-                role="button"
-                tabIndex={0}
-                aria-label="Roll the dice"
-                className={`dice-state-${state.diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 md:mt-8 mx-auto active:scale-95`}
-                style={{ width: '200px', height: '200px' }}
-                data-testid="main-die-3d"
-              >
-                <div className="w-full h-full main-die-optical-center">
-                  <LazyDice3D
-                    sides={displayDie}
-                    value={state.rolledResult || 1}
-                    isRolling={state.isRolling}
-                    showValue={false}
-                    color={0xffffff}
-                    onRollComplete={() => state.setDiceState('rolled')}
-                  />
+              <>
+                <div
+                  id="main-die-3d"
+                  ref={mainDieRef}
+                  onClick={actions.handleRoll}
+                  onKeyDown={actions.handleKeyDown}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Roll the dice"
+                  className={`dice-state-${state.diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 md:mt-8 mx-auto active:scale-95`}
+                  style={{ width: '200px', height: '200px' }}
+                  data-testid="main-die-3d"
+                >
+                  <div className="w-full h-full main-die-optical-center">
+                    <LazyDice3D
+                      sides={displayDie}
+                      value={state.rolledResult || 1}
+                      isRolling={state.isRolling}
+                      showValue={false}
+                      color={0xffffff}
+                      onRollComplete={() => state.setDiceState('rolled')}
+                    />
+                  </div>
                 </div>
-              </div>
-              <RollCta
-                isRolling={state.isRolling}
-                hasRolled={state.diceState !== 'idle'}
-                onRoll={actions.handleRoll}
-              />
+                <RollCta
+                  isRolling={state.isRolling}
+                  hasRolled={state.diceState !== 'idle'}
+                  onRoll={actions.handleRoll}
+                />
+              </>
             ) : (
               <RatingView
                 activeRatingThread={state.activeRatingThread}
