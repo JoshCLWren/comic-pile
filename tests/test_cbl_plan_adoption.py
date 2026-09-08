@@ -210,7 +210,6 @@ async def test_strict_plan_fails_before_mutation(
         )
 
     assert caught.value.code == "strict_plan_writer_not_extracted"
-    await async_db.rollback()
     fresh = await async_db.get(ContinuityPlan, plan.id)
     assert fresh is not None
     assert fresh.nodes_json == []
