@@ -737,5 +737,6 @@ async def test_commit_endpoint_maps_stale_preview_to_conflict() -> None:
             db=db,
         )
     assert exc_info.value.status_code == 409
-    assert exc_info.value.detail.get("code") == "stale_preview"
+    detail = cast(dict[str, object], exc_info.value.detail)
+    assert detail.get("code") == "stale_preview"
     assert db.commit_count == 0
