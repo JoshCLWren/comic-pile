@@ -182,7 +182,6 @@ async def replace_compiled_rules(
     if not edges_to_add:
         return True
 
-
     # Check for plan-level cycles using in-memory graph
     all_plan_keys: set[tuple[str, int]] = set()
     for node in nodes:
