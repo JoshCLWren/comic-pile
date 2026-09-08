@@ -339,21 +339,27 @@ async def _find_or_create_series_thread(
 def _resolve_decision(
     entry: CBLSourceEntry,
     entry_decisions: dict[int, SourceBackedDecision],
+    series_overrides: dict[int, SourceBackedDecision],
     series_decisions: dict[str, SourceBackedDecision],
 ) -> SourceBackedDecision | None:
     """Resolve the effective decision for one CBL source entry.
 
-    An explicit per-entry decision wins; otherwise the series-level decision for
-    the entry's series name applies; otherwise None (preserve the default).
+    An explicit per-position override wins, then the per-position decision, then
+    the series-level decision for the entry's series name; otherwise None
+    (preserve the default).
 
     Args:
         entry: CBL source entry.
         entry_decisions: Per-CBL-position decisions.
+        series_overrides: Per-CBL-position overrides of series decisions.
         series_decisions: Per-series-name decisions.
 
     Returns:
         The effective decision, or None when none was provided.
     """
+    override = series_overrides.get(entry.position)
+    if override is not None:
+        return override
     position_decision = entry_decisions.get(entry.position)
     if position_decision is not None:
         return position_decision
@@ -392,6 +398,7 @@ async def _merge_adopted_nodes(
     facts_by_entry_id: dict[int, dict[str, object]],
     source_path: str,
     entry_decisions: dict[int, SourceBackedDecision],
+    series_overrides: dict[int, SourceBackedDecision],
     series_decisions: dict[str, SourceBackedDecision],
 ) -> None:
     """Merge approved source entries into the plan node set in CBL order.
@@ -410,6 +417,7 @@ async def _merge_adopted_nodes(
         facts_by_entry_id: Reconciliation facts keyed by CBL entry id.
         source_path: CBL source path recorded as provenance.
         entry_decisions: Per-CBL-position decisions.
+        series_overrides: Per-CBL-position overrides of series decisions.
         series_decisions: Per-series-name decisions.
     """
     existing_nodes = list(plan.nodes_json or [])
@@ -419,16 +427,6 @@ async def _merge_adopted_nodes(
         ref_id = _node_ref_id(node)
         if ref_id is not None:
             issues_by_id.setdefault(ref_id, node)
-
-    lanes = list(plan.lanes_json or [])
-    default_lane_ids = [
-        str(lane.get("id")) for lane in lanes if str(lane.get("id")) == "default"
-    ]
-    target_lane_id = (
-        "default"
-        if default_lane_ids or not lanes
-        else str(lanes[0].get("id"))
-    )
 
     next_position = 0
     positions = [
@@ -454,7 +452,12 @@ async def _merge_adopted_nodes(
         if existing_issue_id is None and not importable:
             continue
 
-        decision = _resolve_decision(entry, entry_decisions, series_decisions)
+        decision = _resolve_decision(
+            entry,
+            entry_decisions,
+            series_overrides,
+            series_decisions,
+        )
         if decision == SourceBackedDecision.EXCLUDE:
             continue
         if importable and decision != SourceBackedDecision.INCLUDE:
@@ -536,6 +539,7 @@ async def adopt_cbl_material_into_reading_plan(
     entry_decisions: dict[int, SourceBackedDecision],
     series_decisions: dict[str, SourceBackedDecision],
     *,
+    series_overrides: dict[int, SourceBackedDecision] | None = None,
     client_content_hash: str | None = None,
     client_revision_sha: str | None = None,
 ) -> ContinuityPlan:
@@ -551,6 +555,7 @@ async def adopt_cbl_material_into_reading_plan(
         list_id: CBL source list ID.
         entry_decisions: Per-CBL-position decisions.
         series_decisions: Per-series-name decisions.
+        series_overrides: Per-CBL-position overrides of series decisions.
         client_content_hash: Content hash from the client's preview request.
         client_revision_sha: Revision SHA from the client's preview request.
 
@@ -561,6 +566,7 @@ async def adopt_cbl_material_into_reading_plan(
         StalePreviewError: If the preview fingerprint has changed.
         AdoptionCommitError: For other adoption failures.
     """
+    effective_overrides: dict[int, SourceBackedDecision] = series_overrides or {}
     result = await db.execute(
         select(CBLSourceList).where(CBLSourceList.id == list_id)
     )
@@ -616,6 +622,7 @@ async def adopt_cbl_material_into_reading_plan(
         facts_by_entry_id,
         source_path,
         entry_decisions,
+        effective_overrides,
         series_decisions,
     )
 

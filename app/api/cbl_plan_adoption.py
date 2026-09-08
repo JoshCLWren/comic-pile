@@ -56,7 +56,7 @@ from app.schemas.continuity_plan import (
 )
 from app.services.cbl_plan_adoption import adopt_cbl_material_into_reading_plan
 
-router = APIRouter(tags=["cbl-adoption-commit"])
+router = APIRouter(prefix="/api/v1", tags=["cbl-adoption-commit"])
 
 
 @router.post(
@@ -115,16 +115,9 @@ async def api_cbl_adoption_commit(
         series_decisions={
             sd.series_name: sd.decision for sd in request.series_decisions
         },
-        series_overrides=(
-            {
-                sd.series_name: {
-                    eo.cbl_position: eo.decision for eo in request.series_overrides
-                }
-                for sd in request.series_decisions
-            }
-            if request.series_overrides
-            else {}
-        ),
+        series_overrides={
+            eo.cbl_position: eo.decision for eo in request.series_overrides
+        },
         client_content_hash=request.content_hash,
         client_revision_sha=request.revision_sha,
     )
@@ -161,8 +154,8 @@ async def api_cbl_adoption_commit(
         user_id=plan.user_id,
         name=plan.name,
         ordering_mode=plan.ordering_mode,
-        lanes=[_to_continuity_plan_lane(l) for l in plan.lanes_json or []],
-        nodes=[_to_continuity_plan_node(n) for n in plan.nodes_json or []],
+        lanes=[_to_continuity_plan_lane(lane) for lane in plan.lanes_json or []],
+        nodes=[_to_continuity_plan_node(node) for node in plan.nodes_json or []],
         created_at=plan.created_at,
         updated_at=plan.updated_at,
     )
