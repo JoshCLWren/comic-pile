@@ -96,6 +96,25 @@ class EntryOverride(BaseModel):
     )
 
 
+class CBLAdoptionCommitRequest(BaseModel):
+    """Reader decisions for committing CBL adoption to a Reading Plan."""
+
+    entry_decisions: dict[int, SourceBackedDecision] = Field(
+        default_factory=dict,
+        description="Decisions per entry (cbl_position -> decision)",
+    )
+
+    series_decisions: list[SeriesDecision] = Field(
+        default_factory=list,
+        description="Series-level inclusion/exclusion decisions",
+    )
+
+    series_overrides: list[EntryOverride] = Field(
+        default_factory=list,
+        description="Individual entry overrides of series decisions",
+    )
+
+
 class CBLPlanCalculationRequest(BaseModel):
     """Reader decisions for selective CBL adoption."""
 
