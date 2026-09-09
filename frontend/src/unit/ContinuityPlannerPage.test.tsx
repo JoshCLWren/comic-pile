@@ -1,14 +1,49 @@
 import { type PropsWithChildren } from 'react'
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { continuityPlansApi } from '../services/api-continuity-plans'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api'
 import ContinuityPlannerPage from '../pages/ContinuityPlannerPage'
+
+const mocks = {
+  create: vi.fn(),
+  list: vi.fn(),
+  get: vi.fn(),
+  update: vi.fn(),
+  readiness: vi.fn(),
+  listGroups: vi.fn(),
+  listIssues: vi.fn(),
+  getIssue: vi.fn(),
+  listThreads: vi.fn(),
+  getThread: vi.fn(),
+}
+
+const _origCreate = continuityPlansApi.create
+const _origList = continuityPlansApi.list
+const _origGet = continuityPlansApi.get
+const _origUpdate = continuityPlansApi.update
+const _origReadiness = continuityPlansApi.readiness
+const _origGroupsList = dependencyGroupsApi.list
+const _origIssuesList = issuesApi.list
+const _origIssuesGetIssue = issuesApi.getIssue
+const _origThreadsList = threadsApi.list
+const _origThreadsGet = threadsApi.get
+
+continuityPlansApi.create = mocks.create as never
+continuityPlansApi.list = mocks.list as never
+continuityPlansApi.get = mocks.get as never
+continuityPlansApi.update = mocks.update as never
+continuityPlansApi.readiness = mocks.readiness as never
+dependencyGroupsApi.list = mocks.listGroups as never
+issuesApi.list = mocks.listIssues as never
+issuesApi.getIssue = mocks.getIssue as never
+threadsApi.list = mocks.listThreads as never
+threadsApi.get = mocks.getThread as never
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
 
@@ -112,6 +147,20 @@ beforeEach(() => {
     created_at: '2026-08-12T00:00:00Z',
     updated_at: '2026-08-12T00:00:00Z',
   })
+})
+
+afterEach(() => {
+  cleanup()
+  continuityPlansApi.create = _origCreate
+  continuityPlansApi.list = _origList
+  continuityPlansApi.get = _origGet
+  continuityPlansApi.update = _origUpdate
+  continuityPlansApi.readiness = _origReadiness
+  dependencyGroupsApi.list = _origGroupsList
+  issuesApi.list = _origIssuesList
+  issuesApi.getIssue = _origIssuesGetIssue
+  threadsApi.list = _origThreadsList
+  threadsApi.get = _origThreadsGet
 })
 
 describe('ContinuityPlannerPage', () => {
