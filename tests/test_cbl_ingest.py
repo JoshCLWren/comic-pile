@@ -20,6 +20,18 @@ CBL = """<?xml version="1.0"?>
 </ReadingList>
 """
 
+CV_ALIAS_CBL = """<?xml version="1.0"?>
+<ReadingList>
+  <Name>B.P.R.D. source syntax</Name>
+  <NumIssues>1</NumIssues>
+  <Books>
+    <Book Series="B.P.R.D.: The Universal Machine" Number="1" Volume="2006" Year="2006">
+      <Database Name="cv" Series="18435" Issue="108135" />
+    </Book>
+  </Books>
+</ReadingList>
+"""
+
 
 def test_discovers_all_cbl_files_recursively_and_deterministically(tmp_path: Path) -> None:
     """Discover CBL files recursively in deterministic relative-path order."""
@@ -59,6 +71,18 @@ def test_parses_order_provenance_and_comicvine_evidence(tmp_path: Path) -> None:
     assert parsed.books[0].comicvine_issue_id == "456"
     assert parsed.books[1].comicvine_series_id == "789"
     assert parsed.books[1].comicvine_issue_id == "101112"
+
+
+def test_parses_cv_database_alias_used_by_source_repository(tmp_path: Path) -> None:
+    """Accept the standard ``cv`` shorthand for ComicVine database evidence."""
+    path = tmp_path / "bprd.cbl"
+    path.write_text(CV_ALIAS_CBL)
+
+    parsed = parse_cbl_file(path, mirror_path=tmp_path)
+
+    assert len(parsed.books) == 1
+    assert parsed.books[0].comicvine_series_id == "18435"
+    assert parsed.books[0].comicvine_issue_id == "108135"
 
 
 def test_malformed_file_is_isolated_from_successful_files(tmp_path: Path) -> None:
