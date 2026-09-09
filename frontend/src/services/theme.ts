@@ -28,9 +28,14 @@ function isBrowser(): boolean {
   return typeof document !== 'undefined' && typeof localStorage !== 'undefined'
 }
 
+/** Narrow a plain string to a supported theme id. */
+function isKnownThemeId(themeId: string): themeId is ThemeId {
+  return (THEME_IDS as readonly string[]).includes(themeId)
+}
+
 /** Check whether a raw value is a supported theme id. */
 export function isSupportedTheme(value: unknown): value is ThemeId {
-  return typeof value === 'string' && (THEME_IDS as readonly string[]).includes(value)
+  return typeof value === 'string' && isKnownThemeId(value)
 }
 
 /** Read the locally persisted theme preference, or null when absent/invalid. */
@@ -104,7 +109,7 @@ export function getThemeSelectionToken(): number {
  * apply immediately. Returns null when the requested theme is unsupported.
  */
 export function selectTheme(themeId: string): ThemeId | null {
-  if (!isSupportedTheme(themeId)) {
+  if (!isKnownThemeId(themeId)) {
     return null
   }
   selectionToken += 1
