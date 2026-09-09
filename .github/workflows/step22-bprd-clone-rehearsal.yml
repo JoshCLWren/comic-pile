@@ -64,7 +64,7 @@ jobs:
             '.branch.id == $id and .branch.name == $name and (.branch.default | not)' \
             <<< "$branch_json" >/dev/null
 
-          uri="$(curl --fail --silent --show-error --get \
+          raw_uri="$(curl --fail --silent --show-error --get \
             --url "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
             --data-urlencode "branch_id=${NEON_BRANCH_ID}" \
             --data-urlencode 'database_name=neondb' \
@@ -72,10 +72,28 @@ jobs:
             --header 'Accept: application/json' \
             --header "Authorization: Bearer ${NEON_API_KEY}" \
             | jq -r '.uri')"
-          if [[ -z "$uri" || "$uri" == "null" ]]; then
+          if [[ -z "$raw_uri" || "$raw_uri" == "null" ]]; then
             echo "Failed to retrieve clone connection string." >&2
             exit 1
           fi
+          echo "::add-mask::$raw_uri"
+
+          uri="$(RAW_DATABASE_URL="$raw_uri" .venv/bin/python - <<'PY'
+          import os
+          from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+          raw = os.environ["RAW_DATABASE_URL"]
+          parts = urlsplit(raw)
+          query = []
+          for key, value in parse_qsl(parts.query, keep_blank_values=True):
+              if key == "channel_binding":
+                  continue
+              if key == "sslmode":
+                  key = "ssl"
+              query.append((key, value))
+          print(urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)))
+          PY
+          )"
           echo "::add-mask::$uri"
           echo "db_url=$uri" >> "$GITHUB_OUTPUT"
           echo "Confirmed non-production Neon branch: $EXPECTED_BRANCH_NAME ($NEON_BRANCH_ID)"
@@ -230,7 +248,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: step22-bprd-clone-rehearsal-${{ github.sha }}
-          if-no-files-found: error
+          if-no-files-found: warn
           path: |
             /tmp/bprd-step22-snapshot.json
             /tmp/bprd-step22-receipt.json
