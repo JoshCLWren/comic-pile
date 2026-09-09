@@ -334,18 +334,25 @@ class TestNeonFailureIsolation:
         await acc.initialize(engine)
         assert acc.degraded is False
 
-        # Dispose the engine to simulate Neon failure
-        await engine.dispose()
+        # Drop the table to deterministically force Neon failure on the
+        # next replenishment attempt.  This avoids a double-task race: the
+        # background task is already armed by initialize(), so we must NOT
+        # create a second one.
+        async with engine.begin() as conn:
+            await conn.execute(text("DROP TABLE cache_usage"))
 
-        # Consume to trigger replenishment
+        # Consume below low-water so the existing background task retries.
         acc.record(80)
-        acc._replenish_task = asyncio.create_task(
-            acc._background_replenish(), name="test-replenish"
-        )
 
-        await asyncio.sleep(0.3)
+        # Poll-wait for the background task to observe the failure.
+        deadline = asyncio.get_event_loop().time() + 3.0
+        while not acc.degraded and asyncio.get_event_loop().time() < deadline:
+            await asyncio.sleep(0.05)
 
         assert acc.degraded is True
+
+        await acc.close()
+        await engine.dispose()
 
     @pytest.mark.asyncio
     async def test_redis_record_never_blocks_on_neon(self) -> None:
