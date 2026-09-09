@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const schemaPath = resolve(__dirname, '../generated/openapi.json')
 const schema = JSON.parse(readFileSync(schemaPath, 'utf-8')) as {
-  paths: Record<string, unknown>
+  paths: OpenApiPaths
 }
 
 // Bare `/api` domain routes are legacy compatibility aliases served only until

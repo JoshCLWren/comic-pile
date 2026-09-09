@@ -39,7 +39,7 @@ vi.mock('@testing-library/react', async (importOriginal) => {
     ...actual,
     render: (
       ui: Parameters<typeof actual.render>[0],
-      options?: Record<string, unknown>,
+      options?: RenderOptions,
     ) => {
       const wrapper = options?.wrapper as
         | ((props: { children: ReactNode }) => ReactElement)
@@ -48,7 +48,7 @@ vi.mock('@testing-library/react', async (importOriginal) => {
     },
     renderHook: (
       callback: Parameters<typeof actual.renderHook>[0],
-      options?: Record<string, unknown>,
+      options?: RenderOptions,
     ) => {
       const wrapper = options?.wrapper as
         | ((props: { children: ReactNode }) => ReactElement)

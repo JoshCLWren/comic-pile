@@ -83,7 +83,7 @@ describe('useDiagnostics', () => {
     const passthrough = vi.fn()
     console.error = passthrough
     const { result, unmount } = renderHook(() => useDiagnostics())
-    const circular: Record<string, unknown> = {}
+    const circular: CircularObject = {}
     circular.self = circular
 
     console.error('plain message')

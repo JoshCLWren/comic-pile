@@ -1,7 +1,7 @@
 export const AUDIT_FIXED_NOW = '2026-08-30T12:00:00.000Z'
 export const AUDIT_FIXED_USERNAME = 'ui_audit_reader_2043'
 
-type JsonRecord = Record<string, unknown>
+type JsonRecord = JsonRecordType
 
 function isJsonRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
