@@ -81,12 +81,17 @@ async function seedCoverIdentity(
   })
   expect(csrfResponse.ok()).toBeTruthy()
   const data = (await csrfResponse.json()) as { csrf_token?: string }
+  const seedHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (token) {
+    seedHeaders.Authorization = `Bearer ${token}`
+  }
+  if (data.csrf_token) {
+    seedHeaders['X-CSRF-Token'] = data.csrf_token
+  }
   const response = await page.request.post('/api/test/issue-identity', {
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      'Content-Type': 'application/json',
-      ...(data.csrf_token ? { 'X-CSRF-Token': data.csrf_token } : {}),
-    },
+    headers: seedHeaders,
     data: { thread_id: threadId, series_name: seriesName, series_id: seriesId },
   })
   expect(response.ok(), `identity seed failed: ${await response.text()}`).toBeTruthy()

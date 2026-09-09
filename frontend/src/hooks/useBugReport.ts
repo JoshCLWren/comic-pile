@@ -25,12 +25,20 @@ export function useBugReport() {
         description: string
         diagnostics?: DiagnosticData
       }) => Promise<{ issue_url: string }>
-      const response = await createReport({
+      const reportPayload: {
+        report_type: ReportType
+        title: string
+        description: string
+        diagnostics?: DiagnosticData
+      } = {
         report_type: reportType,
         title,
         description,
-        ...(diagnosticData ? { diagnostics: diagnosticData } : {}),
-      })
+      }
+      if (diagnosticData) {
+        reportPayload.diagnostics = diagnosticData
+      }
+      const response = await createReport(reportPayload)
       setIssueUrl(response.issue_url)
     } catch (err: unknown) {
       setError(getApiErrorDetail(err) ?? 'Failed to submit report')

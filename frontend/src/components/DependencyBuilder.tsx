@@ -16,11 +16,14 @@ async function fetchAllUnreadIssues(threadId: number): Promise<Issue[]> {
   let nextPageToken: string | null = null
 
   while (true) {
-    const data = await issuesApi.list(threadId, {
+    const params: { status: 'unread'; page_size: number; page_token?: string } = {
       status: 'unread',
       page_size: 100,
-      ...(nextPageToken ? { page_token: nextPageToken } : {}),
-    })
+    }
+    if (nextPageToken) {
+      params.page_token = nextPageToken
+    }
+    const data = await issuesApi.list(threadId, params)
     allIssues.push(...data.issues)
 
     if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {

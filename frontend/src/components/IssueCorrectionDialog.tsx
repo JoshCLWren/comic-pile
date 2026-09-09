@@ -39,10 +39,11 @@ export default function IssueCorrectionDialog({
     let nextPageToken: string | null = null
 
     while (true) {
-      const data = await issuesApi.list(threadId, {
-        page_size: 100,
-        ...(nextPageToken ? { page_token: nextPageToken } : {}),
-      })
+      const params: { page_size: number; page_token?: string } = { page_size: 100 }
+      if (nextPageToken) {
+        params.page_token = nextPageToken
+      }
+      const data = await issuesApi.list(threadId, params)
 
       if (!data.issues || data.issues.length === 0) {
         break

@@ -132,10 +132,11 @@ export default function ThreadDetailView() {
     setIssuesLoading(true)
     setIssuesError(null)
     try {
-      const data = await issuesApi.list(threadId, {
-        page_size: 100,
-        ...(pageToken ? { page_token: pageToken } : {}),
-      })
+      const params: { page_size: number; page_token?: string } = { page_size: 100 }
+      if (pageToken) {
+        params.page_token = pageToken
+      }
+      const data = await issuesApi.list(threadId, params)
       if (activeThreadIdRef.current !== threadId) return
       setIssues((prev) => (pageToken ? [...prev, ...data.issues] : data.issues))
       setNextPageToken(data.next_page_token)

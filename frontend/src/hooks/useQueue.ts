@@ -5,7 +5,7 @@ import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { queueApi, threadsApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
-import type { MoveToPositionPayload, Thread, ThreadListResponse } from '../types'
+import type { MoveToPositionPayload, Thread, ThreadListResponse, ThreadQueryParams } from '../types'
 import type { QueueSortBy } from '../pages/QueuePage/useQueueFilters'
 import type { QueueSort } from '../query/queryKeys'
 
@@ -38,15 +38,16 @@ export function queueThreadsQueryOptions(searchTerm?: string, sort: QueueSortBy 
 
   return {
     queryKey: queryKeys.queue.list({ search: normalizedSearch, sort: sort as QueueSort, pageSize: QUEUE_PAGE_SIZE }),
-    queryFn: ({ pageParam }: { pageParam: string | null }) =>
-      threadsApi.list(
-        {
-          ...(normalizedSearch ? { search: normalizedSearch } : {}),
-          sort: apiSort,
-          ...(pageParam ? {} : { page_size: QUEUE_PAGE_SIZE }),
-        },
-        pageParam ?? undefined,
-      ),
+    queryFn: ({ pageParam }: { pageParam: string | null }) => {
+      const params: ThreadQueryParams = { sort: apiSort }
+      if (normalizedSearch) {
+        params.search = normalizedSearch
+      }
+      if (!pageParam) {
+        params.page_size = QUEUE_PAGE_SIZE
+      }
+      return threadsApi.list(params, pageParam ?? undefined)
+    },
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: ThreadListResponse) => lastPage.next_page_token ?? undefined,
     /**

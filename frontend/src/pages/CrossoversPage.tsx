@@ -24,10 +24,11 @@ async function fetchAllIssues(threadId: number): Promise<PositionedIssue[]> {
   let nextPageToken: string | null = null
 
   while (true) {
-    const data = await issuesApi.list(threadId, {
-      page_size: 100,
-      ...(nextPageToken ? { page_token: nextPageToken } : {}),
-    })
+    const params: { page_size: number; page_token?: string } = { page_size: 100 }
+    if (nextPageToken) {
+      params.page_token = nextPageToken
+    }
+    const data = await issuesApi.list(threadId, params)
     const pageIssues = data.issues as PositionedIssue[]
     if (pageIssues.some((issue) => !Number.isInteger(issue.position) || issue.position < 1)) {
       throw new Error('Comic issue order is unavailable for this series.')

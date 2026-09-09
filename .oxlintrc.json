@@ -1,0 +1,53 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "off"
+  },
+  "ignorePatterns": [
+    ".agent/**",
+    ".agents/**",
+    ".claude/**",
+    ".codex/**",
+    ".continue/**",
+    ".cursor/**",
+    ".gemini/**",
+    ".opencode/**",
+    ".pi/**",
+    ".roo/**",
+    ".windsurf/**",
+    "tools/oxlint/anti-slop/**",
+    "frontend/src/generated/**"
+  ],
+  "jsPlugins": [
+    { "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" }
+  ],
+  "rules": {
+    // Per-rule ratchet: a rule is enforced repo-wide ("error") only once its
+    // existing backlog has been driven to zero. Each staged rule below is "off"
+    // and owned by a GitHub issue that fixes every finding for that rule and
+    // then flips it here from "off" to "error" in the same PR. Do not enable a
+    // staged rule until its category is clean (`pnpm run lint:anti-slop` green).
+
+    // --- Enforced (backlog already zero) ---
+    "oxc/no-accumulating-spread": "error",
+    "anti-slop/no-reduce-accumulator-copy": "error",
+    "anti-slop/no-reflect-apply": "error",
+    "anti-slop/no-reflect-get": "error",
+    "anti-slop/no-shape-in-symbol-names": "error",
+    "anti-slop/no-unknown-type-aliases": "error",
+    "anti-slop/no-widen-then-assert": "error",
+
+    // --- Staged (fix the category, then flip to "error") ---
+    "anti-slop/no-object-parameters": "off",
+    "anti-slop/no-array-filter-map": "off",
+    "anti-slop/no-conditional-empty-object-spread": "error",
+    "anti-slop/no-unsafe-dictionary-type": "off",
+    "anti-slop/no-runtime-typeof": "off",
+    "anti-slop/no-unknown-returns": "off",
+    "anti-slop/no-chained-type-assertions": "off",
+    "anti-slop/no-known-value-widening": "off",
+    "anti-slop/no-unknown-parameters": "off",
+    "anti-slop/no-module-mocking": "off",
+    "anti-slop/require-safety-comment-for-type-assertion": "off"
+  }
+}

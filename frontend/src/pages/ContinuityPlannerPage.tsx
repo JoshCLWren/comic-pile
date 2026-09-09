@@ -105,10 +105,11 @@ async function fetchAllIssues(threadId: number): Promise<Issue[]> {
   const seen = new Set<string>()
   let token: string | null = null
   do {
-    const page = await issuesApi.list(threadId, {
-      page_size: 100,
-      ...(token ? { page_token: token } : {}),
-    })
+    const params: { page_size: number; page_token?: string } = { page_size: 100 }
+    if (token) {
+      params.page_token = token
+    }
+    const page = await issuesApi.list(threadId, params)
     result.push(...page.issues)
     token = page.next_page_token
     if (token && seen.has(token)) break
