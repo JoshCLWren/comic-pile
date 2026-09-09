@@ -9,16 +9,16 @@ import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 
 interface RollMutations {
-  setDieMutation: { mutate: (die: number) => Promise<unknown>; isPending: boolean }
-  clearManualDieMutation: { mutate: () => Promise<unknown>; isPending: boolean }
+  setDieMutation: { mutate: (die: number) => Promise<void>; isPending: boolean }
+  clearManualDieMutation: { mutate: () => Promise<void>; isPending: boolean }
   rollMutation: { mutate: () => Promise<RollResponse>; isPending: boolean }
-  snoozeMutation: { mutate: (expectedPendingThreadId?: number) => Promise<unknown>; isPending: boolean }
-  unsnoozeMutation: { mutate: (threadId: number) => Promise<unknown>; isPending: boolean }
-  skipMutation: { mutate: (expectedPendingThreadId?: number) => Promise<unknown>; isPending: boolean }
-  unskipMutation: { mutate: (threadId: number) => Promise<unknown>; isPending: boolean }
-  moveToFrontMutation: { mutate: (id: number) => Promise<unknown>; isPending: boolean }
-  moveToBackMutation: { mutate: (id: number) => Promise<unknown>; isPending: boolean }
-  shuffleQueueMutation: { mutate: () => Promise<unknown>; isPending: boolean }
+  snoozeMutation: { mutate: (expectedPendingThreadId?: number) => Promise<void>; isPending: boolean }
+  unsnoozeMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean }
+  skipMutation: { mutate: (expectedPendingThreadId?: number) => Promise<void>; isPending: boolean }
+  unskipMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean }
+  moveToFrontMutation: { mutate: (id: number) => Promise<void>; isPending: boolean }
+  moveToBackMutation: { mutate: (id: number) => Promise<void>; isPending: boolean }
+  shuffleQueueMutation: { mutate: () => Promise<void>; isPending: boolean }
 }
 
 interface UseRollActionsParams {

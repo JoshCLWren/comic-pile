@@ -30,24 +30,171 @@ const COVER_DATA_URI = (() => {
 })()
 
 interface RatingStateRoutes {
-  readingOrders: unknown[]
-  connectedThreads: unknown[]
-  readerContext: unknown | null
-  comicvine: unknown | null
-  identity: unknown | null
-  groups: unknown[]
-  settleText: string
+  readingOrders: ReadonlyArray<{
+    id: number;
+    name: string;
+    description: null;
+    total_items: number;
+    completed_items: number;
+    items: ReadonlyArray<{
+      id: number;
+      name: string;
+      description: null;
+    }>;
+  }>;
+  connectedThreads: ReadonlyArray<{
+    thread_id: number;
+    title: string;
+    connection_type: string;
+    dependency_id: number;
+  }>;
+  readerContext: null | {
+    issue_id: number;
+    series: {
+      identity_source: 'comicvine' | 'unavailable';
+      canonical_series_id: string | null;
+      series_name: string;
+      average_rating: number | null;
+      ratings_count: number;
+      previous_issue?: {
+        issue_id: number;
+        issue_number: string;
+        rating: number | null;
+      };
+      recent_ratings: ReadonlyArray<{
+        issue_id: number;
+        issue_number: string;
+        rating: number;
+      }>;
+      highest_rating: number | null;
+      lowest_rating: number | null;
+    };
+    comicvine: null | {
+      identity_source: 'comicvine' | 'unavailable';
+      canonical_series_id: string | null;
+      series_name: string;
+      average_rating: number | null;
+      ratings_count: number;
+      previous_issue?: {
+        issue_id: number;
+        issue_number: string;
+        rating: number | null;
+      };
+      recent_ratings: ReadonlyArray<{
+        issue_id: number;
+        issue_number: string;
+        rating: number;
+      }>;
+      highest_rating: number | null;
+      lowest_rating: number | null;
+    };
+    identity: null | {
+      issue_id: number;
+      thread_id: number;
+      thread_title: string;
+      has_confirmed_identity: boolean;
+      confirmed_mappings: ReadonlyArray<{
+        id: number;
+        name: string;
+      }>;
+      candidate_mappings: ReadonlyArray<{
+        issue_id: number;
+        issue_number: string;
+      }>;
+      has_unresolved: boolean;
+    };
+    groups: ReadonlyArray<{
+      id: number;
+      name: string;
+    }>;
+    settleText: string;
+  };
+  settleText: string;
 }
 
-function readingOrder(id: number, name: string) {
+function readingOrder(id: number, name: string): {
+  id: number;
+  name: string;
+  description: null;
+  total_items: number;
+  completed_items: number;
+  items: ReadonlyArray<{
+    id: number;
+    name: string;
+    description: null;
+  }>;
+} {
   return { id, name, description: null, total_items: 8, completed_items: 3, items: [] }
 }
 
-function connectedThread(id: number, title: string) {
+function connectedThread(id: number, title: string): {
+  thread_id: number;
+  title: string;
+  connection_type: string;
+  dependency_id: number;
+} {
   return { thread_id: id, title, connection_type: 'blocked_by', dependency_id: id }
 }
 
-function richReaderContext() {
+function richReaderContext(): {
+  issue_id: number;
+  series: {
+    identity_source: 'comicvine' | 'unavailable';
+    canonical_series_id: string | null;
+    series_name: string;
+    average_rating: number | null;
+    ratings_count: number;
+    previous_issue?: {
+      issue_id: number;
+      issue_number: string;
+      rating: number | null;
+    };
+    recent_ratings: ReadonlyArray<{
+      issue_id: number;
+      issue_number: string;
+      rating: number;
+    }>;
+    highest_rating: number | null;
+    lowest_rating: number | null;
+  };
+  crossovers: ReadonlyArray<{
+    id: number;
+    name: string;
+    applies_to_current_issue: boolean;
+    membership_kind: 'issue' | 'thread';
+    next_member?: null;
+    average_rating: number | null;
+    ratings_count: number;
+    read_count: number;
+  }>;
+  local_chain: {
+    issues: ReadonlyArray<{
+      issue_id: number;
+      issue_number: string;
+      position: number;
+      status: string;
+      rating: number | null;
+      crossover_memberships: ReadonlyArray<{
+        id: number;
+        name: string;
+      }>;
+    }>;
+    edges: ReadonlyArray<{
+      id: number;
+      kind: 'dependency' | 'continuity';
+      source_issue_id: number;
+      target_issue_id: number;
+      source_thread_id?: number | null;
+      target_thread_id?: number | null;
+      source_label?: string | null;
+      target_label?: string | null;
+      source_status?: string | null;
+      target_status?: string | null;
+      note?: string | null;
+      explanation: string | null;
+    }>;
+  };
+} {
   return {
     issue_id: 100,
     series: {
@@ -99,7 +246,61 @@ function richReaderContext() {
   }
 }
 
-function sparseReaderContext() {
+function sparseReaderContext(): {
+  issue_id: number;
+  series: {
+    identity_source: 'comicvine' | 'unavailable';
+    canonical_series_id: string | null;
+    series_name: string | null;
+    average_rating: number | null;
+    ratings_count: number;
+    previous_issue: null;
+    recent_ratings: ReadonlyArray<{
+      issue_id: number;
+      issue_number: string;
+      rating: number | null;
+    }>;
+    highest_rating: number | null;
+    lowest_rating: number | null;
+  };
+  crossovers: ReadonlyArray<{
+    id?: number;
+    name?: string;
+    applies_to_current_issue?: boolean;
+    membership_kind?: 'issue' | 'thread';
+    next_member?: null;
+    average_rating?: number | null;
+    ratings_count?: number;
+    read_count?: number;
+  }>;
+  local_chain: {
+    issues: ReadonlyArray<{
+      issue_id: number;
+      issue_number: string;
+      position: number;
+      status: string;
+      rating: number | null;
+      crossover_memberships: ReadonlyArray<{
+        id: number;
+        name: string;
+      }>;
+    }>;
+    edges: ReadonlyArray<{
+      id: number;
+      kind: 'dependency' | 'continuity';
+      source_issue_id: number;
+      target_issue_id: number;
+      source_thread_id?: number | null;
+      target_thread_id?: number | null;
+      source_label?: string | null;
+      target_label?: string | null;
+      source_status?: string | null;
+      target_status?: string | null;
+      note?: string | null;
+      explanation: string | null;
+    }>;
+  };
+} {
   return {
     issue_id: 100,
     series: {
@@ -123,7 +324,21 @@ function sparseReaderContext() {
   }
 }
 
-function confirmedIdentity() {
+function confirmedIdentity(): {
+  issue_id: number;
+  thread_id: number;
+  thread_title: string;
+  has_confirmed_identity: boolean;
+  confirmed_mappings: ReadonlyArray<{
+    id: number;
+    name: string;
+  }>;
+  candidate_mappings: ReadonlyArray<{
+    issue_id: number;
+    issue_number: string;
+  }>;
+  has_unresolved: boolean;
+} {
   return {
     issue_id: 1,
     thread_id: 1,
@@ -135,7 +350,21 @@ function confirmedIdentity() {
   }
 }
 
-function noIdentity() {
+function noIdentity(): {
+  issue_id: number;
+  thread_id: number;
+  thread_title: string;
+  has_confirmed_identity: false;
+  confirmed_mappings: ReadonlyArray<{
+    id: number;
+    name: string;
+  }>;
+  candidate_mappings: ReadonlyArray<{
+    issue_id: number;
+    issue_number: string;
+  }>;
+  has_unresolved: false;
+} {
   return {
     issue_id: 1,
     thread_id: 1,
@@ -147,7 +376,7 @@ function noIdentity() {
   }
 }
 
-const RATING_STATES = {
+const RATING_STATES: Record<string, RatingStateRoutes> = {
   rich: {
     readingOrders: [readingOrder(7, 'Main route'), readingOrder(8, 'Alt reading order')],
     connectedThreads: [connectedThread(200, 'Connected Thread A'), connectedThread(201, 'Connected Thread B')],
@@ -210,7 +439,7 @@ const RATING_STATES = {
     groups: [],
     settleText: 'ComicVine linked',
   },
-} satisfies Record<string, RatingStateRoutes>
+}
 
 async function installRatingRoutes(page: Page, state: RatingStateRoutes): Promise<void> {
   await page.route('**/v1/threads/*/reading-orders', (route) =>
