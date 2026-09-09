@@ -87,10 +87,12 @@ export default function QueuePage() {
 
   const modals = useQueueModalsHook({
     threads,
-    onCreated: () => {},
-    onUpdated: () => {},
-    onReactivated: () => {},
-    refetchSession: () => refetchSession(),
+    onCreated: async () => {},
+    onUpdated: async () => {},
+    onReactivated: async () => {},
+    refetchSession: async () => {
+      await refetchSession()
+    },
     submitCreate,
     submitEdit,
     submitReactivate,
