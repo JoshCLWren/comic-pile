@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { type PropsWithChildren } from 'react'
 import { render, screen, waitFor, act, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'

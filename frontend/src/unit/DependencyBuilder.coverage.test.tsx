@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import { ToastContext, type ToastContextType } from '../contexts/ToastContext'
-import type { Dependency, Issue, IssueListResponse, Thread, ThreadListResponse } from '../types'
+import type { Dependency, Thread } from '../types'
 import DependencyBuilder from '../components/DependencyBuilder'
 
 const api = {
@@ -30,18 +30,6 @@ function renderBuilder(ui: ReactElement) {
 
 const thread: Thread = { id: 1, title: 'Target', format: 'Comic', issues_remaining: 1, total_issues: 3, next_unread_issue_id: null, reading_progress: null, queue_position: 1, status: 'active', is_blocked: false, blocking_reasons: [], created_at: 'now' }
 const dependency: Dependency = { id: 4, source_thread_id: 2, target_thread_id: 1, source_issue_id: null, target_issue_id: null, source_label: 'Source', target_label: 'Target', created_at: 'now' }
-
-function threadList(threads: readonly Thread[], nextPageToken: string | null = null): ThreadListResponse {
-  return { threads: [...threads], next_page_token: nextPageToken }
-}
-
-function issue(id: number, threadId: number, issueNumber: string): Issue {
-  return { id, thread_id: threadId, issue_number: issueNumber, status: 'unread', read_at: null, created_at: 'now' }
-}
-
-function issueList(issues: readonly Issue[], nextPageToken: string | null = null): IssueListResponse {
-  return { issues: [...issues], total_count: issues.length, page_size: 100, next_page_token: nextPageToken }
-}
 
 describe('DependencyBuilder', () => {
   beforeEach(() => {
