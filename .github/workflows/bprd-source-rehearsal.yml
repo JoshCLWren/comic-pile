@@ -166,13 +166,13 @@ jobs:
                   assert plan.ordering_mode == 'strict_sequential'
                   assert len(plan.nodes_json or []) == 22
 
-                  async with db.begin():
-                      summary = await sync_cbl_lists(
-                          db,
-                          repository=os.environ['SOURCE_REPOSITORY'],
-                          revision_sha=os.environ['SOURCE_SHA'],
-                          parsed_lists=(parsed,),
-                      )
+                  summary = await sync_cbl_lists(
+                      db,
+                      repository=os.environ['SOURCE_REPOSITORY'],
+                      revision_sha=os.environ['SOURCE_SHA'],
+                      parsed_lists=(parsed,),
+                  )
+                  await db.commit()
                   assert summary.inserted_lists == 1
                   assert summary.entries_written == 15
 
