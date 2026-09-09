@@ -65,21 +65,7 @@ export interface CBLAdoptionPreview {
   }
 }
 
-export interface CBLReadingPlanCommitResult {
-  plan_id: number
-  source_list_id: number
-  reused_issue_ids: number[]
-  added_issue_ids: number[]
-  created_issue_ids: number[]
-  created_thread_ids: number[]
-  excluded_source_positions: number[]
-  unresolved_source_positions: number[]
-  awaiting_opt_in_source_positions: number[]
-  final_adopted_source_positions: number[]
-  idempotent_replay: boolean
-}
-
-interface CBLTargetedCommitResponse {
+export interface CBLAdoptionCommitResult {
   id: number
   reused_positions: number[]
   created_positions: number[]
@@ -101,18 +87,18 @@ export const cblSourcesApi = {
     api.get<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-preview`),
   plan: (listId: number, choices: CBLAdoptionPlanChoices) =>
     api.post<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-plan`, choices),
-  commit: async (
+  commit: (
     listId: number,
     planId: number,
     preview: CBLAdoptionPreview,
     _choices: CBLAdoptionPlanChoices,
-  ): Promise<CBLReadingPlanCommitResult> => {
+  ) => {
     const entryDecisions = Object.fromEntries(
       preview.entries
         .filter((entry) => entry.adoption_class === 'missing_importable')
         .map((entry) => [entry.cbl_position, entry.adopted ? 'include' : 'exclude']),
     )
-    const committed = await api.post<CBLTargetedCommitResponse>(
+    return api.post<CBLAdoptionCommitResult>(
       `/v1/cbl/${listId}/reading-plans/${planId}/adoption-commit`,
       {
         entry_decisions: entryDecisions,
@@ -122,18 +108,5 @@ export const cblSourcesApi = {
         revision_sha: preview.source.revision_sha,
       },
     )
-    return {
-      plan_id: committed.id,
-      source_list_id: listId,
-      reused_issue_ids: committed.reused_positions,
-      added_issue_ids: [...committed.reused_positions, ...committed.created_positions],
-      created_issue_ids: committed.created_positions,
-      created_thread_ids: [],
-      excluded_source_positions: committed.excluded_positions,
-      unresolved_source_positions: committed.unresolved_positions,
-      awaiting_opt_in_source_positions: [],
-      final_adopted_source_positions: preview.summary.final_adopted_order,
-      idempotent_replay: committed.created_positions.length === 0,
-    }
   },
 }
