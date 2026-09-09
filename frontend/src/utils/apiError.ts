@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { isObject, hasProperty } from './runtimeChecks'
 
 export type ApiErrorPayload = { detail?: string }
 export type ApiLikeError = { response?: { status?: number; data?: ApiErrorPayload } }
@@ -13,7 +14,7 @@ export function getApiErrorStatus(error: unknown): number | null {
   if (axios.isAxiosError(error)) {
     return error.response?.status ?? null
   }
-  if (error && typeof error === 'object' && 'response' in error) {
+  if (isObject(error) && hasProperty(error, 'response')) {
     return (error as ApiLikeError).response?.status ?? null
   }
   return null
@@ -29,7 +30,7 @@ export function getApiErrorDetail(error: unknown): string {
     }
     return error.message ?? 'Unknown error'
   }
-  if (error && typeof error === 'object' && 'response' in error) {
+  if (isObject(error) && hasProperty(error, 'response')) {
     return (error as ApiLikeError).response?.data?.detail ?? 'Unknown error'
   }
   if (error instanceof Error) {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
+import { isString, isObject, isNonEmptyString } from '../utils/runtimeChecks'
 
 interface InboxCandidate {
   external_identity_id: number
@@ -83,11 +84,11 @@ function CandidateCard({
 }) {
   const meta = candidate.metadata_json
   const toText = (value: unknown): string | null =>
-    typeof value === 'string' && value.length > 0 ? value : null
+    isNonEmptyString(value) ? value : null
 
   const volumeObj = meta.volume
   const volumeName =
-    typeof volumeObj === 'object' && volumeObj !== null
+    isObject(volumeObj)
       ? toText((volumeObj as Record<string, unknown>).name)
       : toText(meta.volume_name)
   const issueName = toText(meta.name) ?? toText(meta.issue_name)
