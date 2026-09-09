@@ -28,7 +28,7 @@ def _fact(series: str, number: str) -> dict[str, object]:
 async def test_materialized_series_uses_thread_local_positions_and_rollable_state(
     async_db: AsyncSession,
 ) -> None:
-    """New source-backed series enter the queue with canonical issue tracking."""
+    """New source-backed series enter the queue with canonical tracked state."""
     user = await get_or_create_user_async(async_db, "cbl-materialized-series")
     async_db.add(
         Thread(
