@@ -4,6 +4,7 @@ import type {
   DiceRenderSideConfig,
   DiceSide,
 } from './diceTypes'
+import { isBoolean, isString } from '../utils/runtimeChecks'
 
 const DEFAULT_GLOBAL_CONFIG = {
   tileSize: 256,
@@ -61,11 +62,11 @@ function clampInteger(value: number, fallback: number, min: number, max: number)
 }
 
 function pickString(value: unknown, fallback: string): string {
-  return typeof value === 'string' && value.length > 0 ? value : fallback
+  return isString(value) && value.length > 0 ? value : fallback
 }
 
 function pickBoolean(value: unknown, fallback: boolean): boolean {
-  return typeof value === 'boolean' ? value : fallback
+  return isBoolean(value) ? value : fallback
 }
 
 export function getDiceRenderConfigForSides(

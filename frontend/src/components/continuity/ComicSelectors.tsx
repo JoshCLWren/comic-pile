@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { Issue, Thread } from '../../types'
+import { isNumber } from '../../utils/runtimeChecks'
 
 export interface SelectedComic {
   thread: Thread
@@ -138,8 +139,8 @@ export function ContinuityThreadSelector({
               <span className="block text-xs text-stone-500">
                 {[
                   thread.format,
-                  typeof thread.issues_remaining === 'number' ? `${thread.issues_remaining} remaining` : null,
-                  typeof thread.total_issues === 'number' ? `${thread.total_issues} total` : null,
+                  isNumber(thread.issues_remaining) ? `${thread.issues_remaining} remaining` : null,
+                  isNumber(thread.total_issues) ? `${thread.total_issues} total` : null,
                 ]
                   .filter(Boolean)
                   .join(' • ')}

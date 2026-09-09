@@ -1,5 +1,6 @@
 import { type Page, type Locator, expect } from '@playwright/test';
 import type { Thread } from '../types';
+import { isObject, isString } from '../utils/runtimeChecks';
 
 type Violation = {
   id: string;
@@ -69,13 +70,8 @@ export async function clickThreadAction(threadItem: Locator, actionName: string)
   await menu.getByRole('menuitem', { name: actionName }).click()
 }
 
-function isAuthResponse(data: unknown): data is { access_token: string } {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    'access_token' in data &&
-    typeof data.access_token === 'string'
-  )
+export function isAuthResponse(data: unknown): data is { access_token: string } {
+  return isObject(data) && isString(data.access_token)
 }
 
 export function expectDefined<T>(value: T | null | undefined, message?: string): T {
@@ -430,7 +426,7 @@ export function extractThreadsFromResponse(response: unknown): Thread[] {
   if (Array.isArray(response)) {
     return response as Thread[];
   }
-  if (response && typeof response === 'object' && 'threads' in response) {
+  if (isObject(response) && 'threads' in response) {
     return (response as { threads: Thread[] }).threads;
   }
   return [];
