@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_plan import ContinuityPlan
@@ -440,6 +440,112 @@ async def test_step22_rollback_restores_exact_legacy_edges(
     assert war_on_frogs.is_blocked is True
     pool = await _bprd_pool(spec.user_id, async_db)
     assert [thread.id for thread in pool] == [black_flame.id]
+
+
+@pytest.mark.asyncio
+async def test_step22_rollback_handles_production_dependency_sync_trigger(
+    async_db: AsyncSession,
+) -> None:
+    """Rollback cooperates with the production legacy-dependency mirror trigger."""
+    spec, black_flame, war_on_frogs = await _seed_migration_shape(async_db)
+    trigger_function = "test_step22_sync_legacy_dependency"
+    trigger_name = "trg_test_step22_sync_legacy_dependency"
+    await async_db.execute(
+        text(
+            f"""
+            CREATE OR REPLACE FUNCTION {trigger_function}()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            DECLARE
+                owner_id integer;
+            BEGIN
+                SELECT thread.user_id
+                  INTO owner_id
+                  FROM issues AS issue
+                  JOIN threads AS thread ON thread.id = issue.thread_id
+                 WHERE issue.id = NEW.source_issue_id;
+
+                DELETE FROM continuity_rules
+                 WHERE legacy_dependency_id = NEW.id;
+
+                INSERT INTO continuity_rules (
+                    user_id, source_type, source_id, target_type, target_id,
+                    satisfaction_type, checkpoint_issue_id, legacy_dependency_id,
+                    note, created_at, updated_at
+                )
+                VALUES (
+                    owner_id, 'issue', NEW.source_issue_id, 'issue',
+                    NEW.target_issue_id, 'item_read', NULL, NEW.id, NEW.note,
+                    NEW.created_at, CURRENT_TIMESTAMP
+                )
+                ON CONFLICT (user_id, source_type, source_id, target_type, target_id)
+                DO UPDATE SET
+                    satisfaction_type = 'item_read',
+                    checkpoint_issue_id = NULL,
+                    legacy_dependency_id = EXCLUDED.legacy_dependency_id,
+                    note = EXCLUDED.note,
+                    updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$
+            """
+        )
+    )
+    await async_db.execute(
+        text(
+            f"""
+            CREATE TRIGGER {trigger_name}
+            AFTER INSERT OR UPDATE OF source_issue_id, target_issue_id, note
+            ON dependencies
+            FOR EACH ROW
+            EXECUTE FUNCTION {trigger_function}()
+            """
+        )
+    )
+    await async_db.commit()
+
+    try:
+        snapshot = await build_bprd_dry_run(async_db, spec)
+        receipt = await apply_bprd_migration(async_db, snapshot=snapshot, spec=spec)
+        await async_db.commit()
+
+        result = await rollback_bprd_migration(
+            async_db,
+            snapshot=snapshot,
+            receipt=receipt,
+            spec=spec,
+        )
+        await async_db.commit()
+
+        assert result["restored_dependency_ids"] == sorted(
+            edge.dependency_id for edge in spec.legacy_edges
+        )
+        restored_rules = (
+            await async_db.execute(
+                select(ContinuityRule).where(
+                    ContinuityRule.legacy_dependency_id.in_(
+                        [edge.dependency_id for edge in spec.legacy_edges]
+                    )
+                )
+            )
+        ).scalars().all()
+        assert {rule.id for rule in restored_rules} == {
+            edge.rule_id for edge in spec.legacy_edges
+        }
+        assert await async_db.get(ContinuityPlan, receipt["plan_id"]) is None
+        await async_db.refresh(black_flame)
+        await async_db.refresh(war_on_frogs)
+        assert black_flame.is_blocked is False
+        assert war_on_frogs.is_blocked is True
+        assert [thread.id for thread in await _bprd_pool(spec.user_id, async_db)] == [
+            black_flame.id
+        ]
+    finally:
+        await async_db.rollback()
+        await async_db.execute(text(f"DROP TRIGGER IF EXISTS {trigger_name} ON dependencies"))
+        await async_db.execute(text(f"DROP FUNCTION IF EXISTS {trigger_function}()"))
+        await async_db.commit()
 
 
 @pytest.mark.asyncio
