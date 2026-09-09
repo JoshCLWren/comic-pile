@@ -61,6 +61,7 @@ from app.repositories import issue_repository, thread_repository
 from app.schemas.continuity_plan import ContinuityPlanNode, PlanOrderingMode
 from app.schemas.shared_types import SourceBackedDecision
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
+from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
 
 
@@ -245,17 +246,7 @@ async def _ensure_missing_issue_created(
     db.add(issue)
     await db.flush()
 
-    issues = [*existing_issues, issue]
-    unread_issues = [item for item in issues if item.status != "read"]
-    thread.total_issues = len(issues)
-    thread.issues_remaining = len(unread_issues)
-    thread.next_unread_issue_id = min(
-        unread_issues,
-        key=lambda item: (item.position, item.id),
-    ).id
-    thread.reading_progress = (
-        "not_started" if len(unread_issues) == len(issues) else "in_progress"
-    )
+    apply_thread_issue_tracking_state(thread, [*existing_issues, issue])
     thread.status = "active"
 
     if comicvine_issue_id is not None:
