@@ -169,6 +169,10 @@ logs/
 .specify/
 HANDOFF.md
 
+# Vendored anti-slop installer skill: re-fetchable via skills-lock.json
+# (source dmmulroy/anti-slop). The runtime plugin lives in tools/oxlint/anti-slop/.
+.agents/skills/install-anti-slop/
+
 # Node.js dependencies (covers both directories and symlinks)
 node_modules
 
