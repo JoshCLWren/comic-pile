@@ -65,6 +65,19 @@ export interface CBLAdoptionPreview {
   }
 }
 
+export interface CBLAdoptionCommitResult {
+  id: number
+  reused_positions: number[]
+  created_positions: number[]
+  excluded_positions: number[]
+  unresolved_positions: number[]
+}
+
+interface CBLAdoptionPlanChoices {
+  series_decisions: Record<string, boolean>
+  entry_decisions: Record<string, boolean>
+}
+
 export const cblSourcesApi = {
   discover: (query: string, limit = 25) =>
     api.get<CBLSourceListDiscoveryItem[]>('/v1/issue-identity/cbl-sources', {
@@ -72,4 +85,23 @@ export const cblSourcesApi = {
     }),
   preview: (listId: number) =>
     api.get<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-preview`),
+  plan: (listId: number, choices: CBLAdoptionPlanChoices) =>
+    api.post<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-plan`, choices),
+  commit: (listId: number, planId: number, preview: CBLAdoptionPreview) => {
+    const entry_decisions = Object.fromEntries(
+      preview.entries
+        .filter((entry) => entry.adoption_class === 'missing_importable')
+        .map((entry) => [entry.cbl_position, entry.adopted ? 'include' : 'exclude']),
+    )
+    return api.post<CBLAdoptionCommitResult>(
+      `/v1/cbl/${listId}/reading-plans/${planId}/adoption-commit`,
+      {
+        entry_decisions,
+        series_decisions: [],
+        series_overrides: [],
+        content_hash: preview.source.content_hash,
+        revision_sha: preview.source.revision_sha,
+      },
+    )
+  },
 }
