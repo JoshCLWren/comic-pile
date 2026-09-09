@@ -2,9 +2,9 @@ import axios from 'axios'
 import { FormEvent, useState } from 'react'
 import {
   cblSourcesApi,
+  type CBLAdoptionCommitResult,
   type CBLAdoptionPreview,
   type CBLAdoptionPreviewEntry,
-  type CBLReadingPlanCommitResult,
   type CBLSourceListDiscoveryItem,
 } from '../services/api-cbl-sources'
 
@@ -63,7 +63,7 @@ export default function ReadingPlanAddMaterial({
   const [isCommitting, setIsCommitting] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const [staleReview, setStaleReview] = useState(false)
-  const [result, setResult] = useState<CBLReadingPlanCommitResult | null>(null)
+  const [result, setResult] = useState<CBLAdoptionCommitResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const search = async (event?: FormEvent) => {
@@ -298,7 +298,7 @@ export default function ReadingPlanAddMaterial({
 
           {result && (
             <p role="status" className="text-sm text-emerald-300">
-              Added {result.added_issue_ids.length} plan step{result.added_issue_ids.length === 1 ? '' : 's'} · created {result.created_issue_ids.length} comic{result.created_issue_ids.length === 1 ? '' : 's'} · reused {result.reused_issue_ids.length} existing.
+              Added material to this Reading Plan · created {result.created_positions.length} · reused {result.reused_positions.length}.
             </p>
           )}
         </div>
