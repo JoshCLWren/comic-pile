@@ -5,6 +5,7 @@
   "description": "Dice-Driven Comic Reading Tracker - FastAPI + HTMX + Tailwind CSS",
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@oxlint/plugins": "1.82.0",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.6",
     "@typescript-eslint/eslint-plugin": "^8.57.2",
@@ -14,6 +15,7 @@
     "globals": "^15.13.0",
     "htmlhint": "^1.1.5",
     "jiti": "^2.6.1",
+    "oxlint": "1.82.0",
     "testdriverai": "^7.11.58-test",
     "vitest": "^4.1.10"
   },
@@ -24,6 +26,7 @@
     "lint:html": "pnpm exec htmlhint app/templates/*.html",
     "lint": "pnpm run lint:js && pnpm run lint:html",
     "lint:fix": "sh -c 'if ls static/react/assets/*.js >/dev/null 2>&1 || ls static/assets/*.js >/dev/null 2>&1; then pnpm exec eslint static/react/assets/*.js static/assets/*.js --fix; else echo \"No JavaScript files to fix\"; fi'",
+    "lint:anti-slop": "oxlint -c .oxlintrc.json frontend",
     "dice:playground": "pnpm --filter frontend run dice:playground",
     "test:dice-playground": "pnpm --filter frontend run test:dice-playground",
     "test:dice-playground:update": "pnpm --filter frontend run test:dice-playground:update",
