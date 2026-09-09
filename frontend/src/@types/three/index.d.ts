@@ -30,9 +30,19 @@ declare module 'three' {
     dispose(): void
   }
 
+  export class Object3D {
+    rotation: {
+      x: number
+      y: number
+      z: number
+      set(x: number, y: number, z: number): void
+    }
+    castShadow: boolean
+  }
+
   export class Scene {
-    add(object: object): void
-    remove(object: object): void
+    add(object: Object3D): void
+    remove(object: Object3D): void
   }
 
   export class PerspectiveCamera {
@@ -52,11 +62,11 @@ declare module 'three' {
     dispose(): void
   }
 
-  export class AmbientLight {
+  export class AmbientLight extends Object3D {
     constructor(color?: number, intensity?: number)
   }
 
-  export class DirectionalLight {
+  export class DirectionalLight extends Object3D {
     constructor(color?: number, intensity?: number)
     position: Vector3
   }
@@ -100,24 +110,17 @@ declare module 'three' {
   export class Box3 {
     min: Vector3
     max: Vector3
-    setFromObject(object: object): this
+    setFromObject(object: Object3D): this
     isEmpty(): boolean
   }
 
   export class Mesh<
     TGeometry extends BufferGeometry = BufferGeometry,
     TMaterial extends MeshStandardMaterial = MeshStandardMaterial
-  > {
+  > extends Object3D {
     constructor(geometry: TGeometry, material: TMaterial)
     geometry: TGeometry
     material: TMaterial
-    rotation: {
-      x: number
-      y: number
-      z: number
-      set(x: number, y: number, z: number): void
-    }
-    castShadow: boolean
   }
 
   export const MathUtils: {
