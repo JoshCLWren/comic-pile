@@ -1,0 +1,61 @@
+name: Refine CBL materialization
+
+on:
+  push:
+    branches:
+      - manual/2366-cbl-materialization-state
+
+permissions:
+  contents: write
+
+jobs:
+  refine:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: manual/2366-cbl-materialization-state
+          fetch-depth: 1
+      - name: Reuse canonical issue-tracking derivation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/services/cbl_plan_adoption.py')
+          text = path.read_text()
+          old_import = 'from app.services.cbl_reconciliation import reconcile_cbl_source_list\n'
+          new_import = (
+              'from app.services.cbl_reconciliation import reconcile_cbl_source_list\n'
+              'from app.services.issue_tracking import apply_thread_issue_tracking_state\n'
+          )
+          assert old_import in text
+          text = text.replace(old_import, new_import, 1)
+
+          old = '''    issues = [*existing_issues, issue]
+          unread_issues = [item for item in issues if item.status != "read"]
+          thread.total_issues = len(issues)
+          thread.issues_remaining = len(unread_issues)
+          thread.next_unread_issue_id = min(
+              unread_issues,
+              key=lambda item: (item.position, item.id),
+          ).id
+          thread.reading_progress = (
+              "not_started" if len(unread_issues) == len(issues) else "in_progress"
+          )
+          thread.status = "active"
+          '''.replace('          ', '')
+          new = '''    apply_thread_issue_tracking_state(thread, [*existing_issues, issue])
+          thread.status = "active"
+          '''.replace('          ', '')
+          assert old in text
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+
+          git rm .github/workflows/refine-cbl-materialization.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/services/cbl_plan_adoption.py
+          git commit -m 'Reuse canonical issue tracking during CBL materialization'
+          git push origin HEAD:manual/2366-cbl-materialization-state
