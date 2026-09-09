@@ -79,6 +79,14 @@ export interface CBLReadingPlanCommitResult {
   idempotent_replay: boolean
 }
 
+interface CBLTargetedCommitResponse {
+  id: number
+  reused_positions: number[]
+  created_positions: number[]
+  excluded_positions: number[]
+  unresolved_positions: number[]
+}
+
 interface CBLAdoptionPlanChoices {
   series_decisions: Record<string, boolean>
   entry_decisions: Record<string, boolean>
@@ -93,20 +101,39 @@ export const cblSourcesApi = {
     api.get<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-preview`),
   plan: (listId: number, choices: CBLAdoptionPlanChoices) =>
     api.post<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-plan`, choices),
-  commit: (
+  commit: async (
     listId: number,
     planId: number,
     preview: CBLAdoptionPreview,
-    choices: CBLAdoptionPlanChoices,
-  ) =>
-    api.post<CBLReadingPlanCommitResult>(
-      `/v1/issue-identity/cbl-sources/${listId}/reading-plans/${planId}/commit`,
+    _choices: CBLAdoptionPlanChoices,
+  ): Promise<CBLReadingPlanCommitResult> => {
+    const entryDecisions = Object.fromEntries(
+      preview.entries
+        .filter((entry) => entry.adoption_class === 'missing_importable')
+        .map((entry) => [entry.cbl_position, entry.adopted ? 'include' : 'exclude']),
+    )
+    const committed = await api.post<CBLTargetedCommitResponse>(
+      `/v1/cbl/${listId}/reading-plans/${planId}/adoption-commit`,
       {
-        source: preview.source,
-        reviewed_entries: preview.entries,
-        reviewed_final_positions: preview.summary.final_adopted_order,
-        series_decisions: choices.series_decisions,
-        entry_decisions: choices.entry_decisions,
+        entry_decisions: entryDecisions,
+        series_decisions: [],
+        series_overrides: [],
+        content_hash: preview.source.content_hash,
+        revision_sha: preview.source.revision_sha,
       },
-    ),
+    )
+    return {
+      plan_id: committed.id,
+      source_list_id: listId,
+      reused_issue_ids: committed.reused_positions,
+      added_issue_ids: [...committed.reused_positions, ...committed.created_positions],
+      created_issue_ids: committed.created_positions,
+      created_thread_ids: [],
+      excluded_source_positions: committed.excluded_positions,
+      unresolved_source_positions: committed.unresolved_positions,
+      awaiting_opt_in_source_positions: [],
+      final_adopted_source_positions: preview.summary.final_adopted_order,
+      idempotent_replay: committed.created_positions.length === 0,
+    }
+  },
 }
