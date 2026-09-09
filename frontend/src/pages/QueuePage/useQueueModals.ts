@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import type { Thread } from '../../types'
+import type { Thread, SessionListResponse } from '../../types'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { getApiErrorDetail } from '../../utils/apiError'
@@ -17,26 +17,24 @@ type ModalKey =
 
 interface QueueModalsParams {
   threads: Thread[] | null | undefined
-  onCreated: () => Promise<unknown> | unknown
-  onUpdated: () => Promise<unknown> | unknown
-  onReactivated: () => Promise<unknown> | unknown
-  refetchSession: () => Promise<unknown> | unknown
+  onCreated: () => Promise<void>
+  onUpdated: () => Promise<void>
+  onReactivated: () => Promise<void>
+  refetchSession: () => Promise<SessionListResponse>
   submitCreate: (input: {
     title: string
     format: string
     issues_remaining: number
     notes: string | null
-  }) => Promise<{ id?: number } | unknown>
+  }) => Promise<{ id?: number }>
   submitEdit: (input: {
     id: number
     data: { title: string; format: string; notes: string | null; issues_remaining?: number }
-  }) => Promise<unknown>
+  }) => Promise<Thread>
   submitReactivate: (input: {
     thread_id: number
     issues_to_add: number
-  }) => Promise<unknown>
-  isPendingCreate: boolean
-  isPendingEdit: boolean
+  }) => Promise<Thread>
 }
 
 interface UseQueueModalsResult {
