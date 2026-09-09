@@ -69,9 +69,9 @@ async def _add_issue(
     )
     db.add(issue)
     await db.flush()
-    thread.total_issues += 1
+    thread.total_issues = (thread.total_issues or 0) + 1
     if not read:
-        thread.issues_remaining += 1
+        thread.issues_remaining = (thread.issues_remaining or 0) + 1
         if thread.next_unread_issue_id is None:
             thread.next_unread_issue_id = issue.id
     return issue
@@ -334,13 +334,14 @@ async def test_bprd_step21_uses_targeted_adoption_and_advances_roll_boundary(
     assert reload_after_adoption.status_code == 200, reload_after_adoption.text
     reloaded = reload_after_adoption.json()
     assert len(reloaded["nodes"]) == 37
+    assert reloaded["lanes"] == [{"id": "main", "name": "Reading order", "order": 0}]
     assert [node["ref_id"] for node in reloaded["nodes"][:22]] == [
         issue.id for issue in current_order
     ]
-    assert [node["ref_id"] for node in reloaded["nodes"][22:]] == [
-        issue.id for issue in next_phase
-    ]
-    assert all(source_path in (node.get("source_paths") or []) for node in reloaded["nodes"][22:])
+    adopted_nodes = reloaded["nodes"][22:]
+    assert [node["ref_id"] for node in adopted_nodes] == [issue.id for issue in next_phase]
+    assert {node["lane_id"] for node in adopted_nodes} == {"main"}
+    assert all(source_path in (node.get("source_paths") or []) for node in adopted_nodes)
 
     groups_after = await async_db.scalar(
         select(func.count()).select_from(DependencyGroup).where(DependencyGroup.user_id == user.id)
