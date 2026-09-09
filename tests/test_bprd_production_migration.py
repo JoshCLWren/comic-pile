@@ -267,6 +267,7 @@ async def _seed_migration_shape(
     await db.refresh(black_flame)
     await db.refresh(war_on_frogs)
 
+    threads = (plague, dead, black_flame, war_on_frogs)
     spec = BPRDMigrationSpec(
         user_id=user.id,
         plan_name="B.P.R.D.",
@@ -274,49 +275,23 @@ async def _seed_migration_shape(
             IssueExpectation(
                 issue.id,
                 issue.thread_id,
-                next(thread.title for thread in (plague, dead, black_flame, war_on_frogs) if thread.id == issue.thread_id),
+                next(thread.title for thread in threads if thread.id == issue.thread_id),
                 issue.issue_number,
                 issue.status,
             )
             for issue in ordered
         ),
-        threads=(
+        threads=tuple(
             ThreadExpectation(
-                plague.id,
-                plague.title,
-                plague.status,
-                plague.is_blocked,
-                plague.next_unread_issue_id,
-                plague.issues_remaining,
-                plague.reading_progress,
-            ),
-            ThreadExpectation(
-                dead.id,
-                dead.title,
-                dead.status,
-                dead.is_blocked,
-                dead.next_unread_issue_id,
-                dead.issues_remaining,
-                dead.reading_progress,
-            ),
-            ThreadExpectation(
-                black_flame.id,
-                black_flame.title,
-                black_flame.status,
-                black_flame.is_blocked,
-                black_flame.next_unread_issue_id,
-                black_flame.issues_remaining,
-                black_flame.reading_progress,
-            ),
-            ThreadExpectation(
-                war_on_frogs.id,
-                war_on_frogs.title,
-                war_on_frogs.status,
-                war_on_frogs.is_blocked,
-                war_on_frogs.next_unread_issue_id,
-                war_on_frogs.issues_remaining,
-                war_on_frogs.reading_progress,
-            ),
+                thread.id,
+                thread.title,
+                thread.status,
+                thread.is_blocked,
+                thread.next_unread_issue_id,
+                thread.issues_remaining,
+                thread.reading_progress,
+            )
+            for thread in threads
         ),
         legacy_edges=tuple(legacy_expectations),
         dependency_group_id=group.id,
@@ -331,6 +306,7 @@ async def _bprd_pool(user_id: int, db: AsyncSession) -> list[Thread]:
 
 @pytest.mark.asyncio
 async def test_step22_dry_run_is_read_only(async_db: AsyncSession) -> None:
+    """Dry-run reports the exact plan without creating or deleting rows."""
     spec, _, _ = await _seed_migration_shape(async_db)
     plan_count_before = await async_db.scalar(
         select(func.count()).select_from(ContinuityPlan)
@@ -351,15 +327,25 @@ async def test_step22_dry_run_is_read_only(async_db: AsyncSession) -> None:
     assert report["dependency_group"]["ordered_membership_count"] == 0
     assert len(report["planned"]["nodes"]) == 22
     assert len(report["planned"]["rule_edges"]) == 21
-    assert await async_db.scalar(select(func.count()).select_from(ContinuityPlan)) == plan_count_before
-    assert await async_db.scalar(select(func.count()).select_from(Dependency)) == dependency_count_before
-    assert await async_db.scalar(select(func.count()).select_from(ContinuityRule)) == rule_count_before
+    assert (
+        await async_db.scalar(select(func.count()).select_from(ContinuityPlan))
+        == plan_count_before
+    )
+    assert (
+        await async_db.scalar(select(func.count()).select_from(Dependency))
+        == dependency_count_before
+    )
+    assert (
+        await async_db.scalar(select(func.count()).select_from(ContinuityRule))
+        == rule_count_before
+    )
 
 
 @pytest.mark.asyncio
 async def test_step22_apply_replaces_legacy_authority_and_preserves_roll(
     async_db: AsyncSession,
 ) -> None:
+    """Apply replaces five legacy edges while preserving the active Roll boundary."""
     spec, black_flame, war_on_frogs = await _seed_migration_shape(async_db)
     before_pool = await _bprd_pool(spec.user_id, async_db)
     assert [thread.id for thread in before_pool] == [black_flame.id]
@@ -409,6 +395,7 @@ async def test_step22_apply_replaces_legacy_authority_and_preserves_roll(
 async def test_step22_rollback_restores_exact_legacy_edges(
     async_db: AsyncSession,
 ) -> None:
+    """Rollback restores exact dependency/rule IDs and the original Roll boundary."""
     spec, black_flame, war_on_frogs = await _seed_migration_shape(async_db)
     snapshot = await build_bprd_dry_run(async_db, spec)
     receipt = await apply_bprd_migration(async_db, snapshot=snapshot, spec=spec)
@@ -438,8 +425,14 @@ async def test_step22_rollback_restores_exact_legacy_edges(
     assert {rule.id for rule in restored_rules} == {
         edge.rule_id for edge in spec.legacy_edges
     }
-    assert result["factual"]["issue_state_hash"] == snapshot["factual"]["issue_state_hash"]
-    assert result["factual"]["event_state_hash"] == snapshot["factual"]["event_state_hash"]
+    assert (
+        result["factual"]["issue_state_hash"]
+        == snapshot["factual"]["issue_state_hash"]
+    )
+    assert (
+        result["factual"]["event_state_hash"]
+        == snapshot["factual"]["event_state_hash"]
+    )
 
     await async_db.refresh(black_flame)
     await async_db.refresh(war_on_frogs)
@@ -453,6 +446,7 @@ async def test_step22_rollback_restores_exact_legacy_edges(
 async def test_step22_rollback_refuses_after_reader_edits_plan(
     async_db: AsyncSession,
 ) -> None:
+    """Rollback fails closed instead of overwriting reader changes to the plan."""
     spec, _, _ = await _seed_migration_shape(async_db)
     snapshot = await build_bprd_dry_run(async_db, spec)
     receipt = await apply_bprd_migration(async_db, snapshot=snapshot, spec=spec)
