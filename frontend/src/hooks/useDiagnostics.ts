@@ -32,6 +32,11 @@ interface ConsoleError {
   timestamp: string
 }
 
+interface PerformanceTiming {
+  domContentLoaded: number | null
+  loadComplete: number | null
+}
+
 const MAX_ERRORS = 20
 const errorBuffer: ConsoleError[] = []
 let originalConsoleError: (typeof console.error) | null = null
@@ -42,7 +47,7 @@ export type { DiagnosticData }
 export function useDiagnostics() {
   const isPatched = useRef(false)
 
-  const getPerformanceTiming = useCallback((): { domContentLoaded: number | null; loadComplete: number | null } => {
+  const getPerformanceTiming = useCallback((): PerformanceTiming => {
     try {
       if (typeof performance === 'undefined' || !performance) {
         return { domContentLoaded: null, loadComplete: null }

@@ -39,15 +39,15 @@ interface RatingStateRoutes {
   settleText: string
 }
 
-function readingOrder(id: number, name: string): unknown {
+function readingOrder(id: number, name: string) {
   return { id, name, description: null, total_items: 8, completed_items: 3, items: [] }
 }
 
-function connectedThread(id: number, title: string): unknown {
+function connectedThread(id: number, title: string) {
   return { thread_id: id, title, connection_type: 'blocked_by', dependency_id: id }
 }
 
-function richReaderContext(): unknown {
+function richReaderContext() {
   return {
     issue_id: 100,
     series: {
@@ -99,7 +99,7 @@ function richReaderContext(): unknown {
   }
 }
 
-function sparseReaderContext(): unknown {
+function sparseReaderContext() {
   return {
     issue_id: 100,
     series: {
@@ -123,7 +123,7 @@ function sparseReaderContext(): unknown {
   }
 }
 
-function confirmedIdentity(): unknown {
+function confirmedIdentity() {
   return {
     issue_id: 1,
     thread_id: 1,
@@ -135,7 +135,7 @@ function confirmedIdentity(): unknown {
   }
 }
 
-function noIdentity(): unknown {
+function noIdentity() {
   return {
     issue_id: 1,
     thread_id: 1,
@@ -147,7 +147,7 @@ function noIdentity(): unknown {
   }
 }
 
-const RATING_STATES: Record<string, RatingStateRoutes> = {
+const RATING_STATES = {
   rich: {
     readingOrders: [readingOrder(7, 'Main route'), readingOrder(8, 'Alt reading order')],
     connectedThreads: [connectedThread(200, 'Connected Thread A'), connectedThread(201, 'Connected Thread B')],
@@ -210,7 +210,7 @@ const RATING_STATES: Record<string, RatingStateRoutes> = {
     groups: [],
     settleText: 'ComicVine linked',
   },
-}
+} satisfies Record<string, RatingStateRoutes>
 
 async function installRatingRoutes(page: Page, state: RatingStateRoutes): Promise<void> {
   await page.route('**/v1/threads/*/reading-orders', (route) =>

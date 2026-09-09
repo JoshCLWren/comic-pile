@@ -25,7 +25,9 @@ const FONT_FAMILIES = [
   'Courier New',
   'Monaco',
 ]
-const CONTROL_HELP: Record<string, string> = {
+interface ControlHelpMap extends Record<string, string> {}
+
+const CONTROL_HELP: ControlHelpMap = {
   'UV Inset': 'Shrinks UVs inward to reduce tile bleeding at face edges.',
   'Font Scale': 'Scales numeral size within each atlas tile.',
   'Text Offset X': 'Moves numbers left/right inside each tile.',

@@ -5,7 +5,7 @@ import type { Thread } from '../../types'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { getApiErrorDetail } from '../../utils/apiError'
-import { DEFAULT_CREATE_STATE, type QueueFormState } from './types'
+import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
 
 type ModalKey =
   | 'create'
@@ -29,7 +29,7 @@ interface QueueModalsParams {
   }) => Promise<{ id?: number } | unknown>
   submitEdit: (input: {
     id: number
-    data: { title: string; format: string; notes: string | null; issues_remaining?: number }
+    data: EditThreadData
   }) => Promise<unknown>
   submitReactivate: (input: {
     thread_id: number
@@ -321,12 +321,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
       event.preventDefault()
       if (!editingThread) return
       try {
-        const data: {
-          title: string
-          format: string
-          notes: string | null
-          issues_remaining?: number
-        } = {
+        const data: EditThreadData = {
           title: editForm.title,
           format: editForm.format,
           notes: editForm.notes || null,

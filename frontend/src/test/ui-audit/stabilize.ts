@@ -11,8 +11,8 @@ function stableIso(offsetMinutes: number): string {
   return new Date(Date.parse(AUDIT_FIXED_NOW) + offsetMinutes * 60_000).toISOString()
 }
 
-function normalizeSessionRecord(record: JsonRecord, index: number): JsonRecord {
-  const normalized: JsonRecord = {
+function normalizeSessionRecord(record: JsonRecord, index: number) {
+  const normalized = {
     ...record,
     started_at: stableIso(index),
   }
@@ -34,7 +34,7 @@ function normalizeSessionRecord(record: JsonRecord, index: number): JsonRecord {
  * Replace only volatile, user-visible fixture fields used by audit screenshots.
  * Authentication identity and persisted test data remain untouched on the server.
  */
-export function stabilizeAuditApiPayload(pathname: string, payload: unknown): unknown {
+export function stabilizeAuditApiPayload(pathname: string, payload: unknown) {
   if (pathname === '/api/v1/auth/me' && isJsonRecord(payload)) {
     return { ...payload, username: AUDIT_FIXED_USERNAME }
   }

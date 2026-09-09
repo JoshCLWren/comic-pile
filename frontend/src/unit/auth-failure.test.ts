@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { isDefinitiveAuthenticationFailure } from '../services/authFailure'
 
-function axiosError(status?: number): unknown {
+function axiosError(status?: number) {
   return {
     isAxiosError: true,
     response: status === undefined ? undefined : { status },
