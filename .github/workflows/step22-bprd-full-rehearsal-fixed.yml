@@ -1,0 +1,290 @@
+name: Step 22 B.P.R.D. Full Clone Rehearsal Fixed
+
+on:
+  push:
+    branches:
+      - manual/2431-step22-full-rehearsal-fixed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: step22-bprd-full-rehearsal-fixed
+  cancel-in-progress: false
+
+jobs:
+  rehearse:
+    name: Fresh dry-run, apply, verify, rollback, and exact restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEON_BRANCH_ID: br-flat-star-ay6bmye0
+      PRODUCTION_BRANCH_ID: br-silent-violet-ayobfez5
+      EXPECTED_BRANCH_NAME: step22-bprd-rehearsal
+      SNAPSHOT: /tmp/bprd-step22-fresh-snapshot.json
+      RECEIPT: /tmp/bprd-step22-fresh-receipt.json
+      POSTROLLBACK: /tmp/bprd-step22-fresh-postrollback.json
+    steps:
+      - name: Check out fixed migration code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: '3.14'
+          enable-cache: true
+
+      - name: Install locked runtime dependencies
+        run: uv sync --locked --no-dev
+
+      - name: Refuse production target and resolve clone connection
+        id: neon
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$NEON_API_KEY" || -z "$NEON_PROJECT_ID" ]]; then
+            echo 'NEON_API_KEY secret and NEON_PROJECT_ID variable are required.' >&2
+            exit 1
+          fi
+          if [[ "$NEON_BRANCH_ID" == "$PRODUCTION_BRANCH_ID" ]]; then
+            echo 'Refusing to run clone rehearsal against production branch.' >&2
+            exit 1
+          fi
+
+          branch_json="$(curl --fail --silent --show-error \
+            --url "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${NEON_BRANCH_ID}" \
+            --header 'Accept: application/json' \
+            --header "Authorization: Bearer ${NEON_API_KEY}")"
+          jq -e --arg id "$NEON_BRANCH_ID" --arg name "$EXPECTED_BRANCH_NAME" \
+            '.branch.id == $id and .branch.name == $name and (.branch.default | not)' \
+            <<< "$branch_json" >/dev/null
+
+          raw_uri="$(curl --fail --silent --show-error --get \
+            --url "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
+            --data-urlencode "branch_id=${NEON_BRANCH_ID}" \
+            --data-urlencode 'database_name=neondb' \
+            --data-urlencode 'role_name=neondb_owner' \
+            --header 'Accept: application/json' \
+            --header "Authorization: Bearer ${NEON_API_KEY}" \
+            | jq -r '.uri')"
+          test -n "$raw_uri"
+          test "$raw_uri" != 'null'
+          echo "::add-mask::$raw_uri"
+
+          uri="$(RAW_DATABASE_URL="$raw_uri" .venv/bin/python - <<'PY'
+          import os
+          from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+          raw = os.environ['RAW_DATABASE_URL']
+          parts = urlsplit(raw)
+          query = []
+          for key, value in parse_qsl(parts.query, keep_blank_values=True):
+              if key == 'channel_binding':
+                  continue
+              if key == 'sslmode':
+                  key = 'ssl'
+              query.append((key, value))
+          print(urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)))
+          PY
+          )"
+          echo "::add-mask::$uri"
+          echo "db_url=$uri" >> "$GITHUB_OUTPUT"
+          echo "Confirmed non-production Neon branch: $EXPECTED_BRANCH_NAME ($NEON_BRANCH_ID)"
+
+      - name: Capture fresh clean dry-run snapshot
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          ENVIRONMENT: development
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/bprd_step22_migration.py dry-run --output "$SNAPSHOT" >/dev/null
+          jq -e '.ok == true and (.errors | length) == 0' "$SNAPSHOT" >/dev/null
+          test "$(jq '.overlapping_plans | length' "$SNAPSHOT")" = '0'
+          test "$(jq '.legacy_dependencies | length' "$SNAPSHOT")" = '5'
+          test "$(jq '.legacy_rules | length' "$SNAPSHOT")" = '5'
+          jq '{ok, snapshot_token, errors, bprd_source_list_ids, planned_node_count:(.planned.nodes|length), planned_rule_count:(.planned.rule_edges|length), legacy_dependency_count:(.legacy_dependencies|length), legacy_rule_count:(.legacy_rules|length)}' "$SNAPSHOT"
+
+      - name: Apply migration to clone
+        id: apply
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          ENVIRONMENT: development
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/bprd_step22_migration.py apply \
+            --snapshot "$SNAPSHOT" \
+            --receipt "$RECEIPT" \
+            --confirm STEP22-BPRD >/dev/null
+          jq '{plan_id, plan_marker, plan_fingerprint, plan_rule_count, issue_state_hash, thread_state_hash, event_state_hash, identity_state_hash, source_snapshot_token}' "$RECEIPT"
+
+      - name: Verify migrated clone through canonical runtime
+        id: verify
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          ENVIRONMENT: development
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import asyncio
+          import json
+          import os
+          from pathlib import Path
+
+          from sqlalchemy import func, select
+
+          from app.database import AsyncSessionLocal
+          from app.models.continuity_plan import ContinuityPlan
+          from app.models.continuity_rule import ContinuityRule
+          from app.models.dependency import Dependency
+          from app.models.dependency_group import DependencyGroupMembership
+          from comic_pile.queue import get_roll_pool
+
+          EXPECTED = [
+              25035, 25036, 25037, 25038, 25039,
+              25040, 25041, 25042, 25043, 25044, 25045,
+              25046, 25052, 25056, 25053, 25055,
+              25047, 25048, 25049, 25050, 25051, 25054,
+          ]
+          LEGACY = [1358, 1359, 1360, 1575, 1576]
+
+          async def main() -> None:
+              snapshot = json.loads(Path(os.environ['SNAPSHOT']).read_text())
+              receipt = json.loads(Path(os.environ['RECEIPT']).read_text())
+              assert receipt['source_snapshot_token'] == snapshot['snapshot_token']
+              for key in ('issue_state_hash', 'thread_state_hash', 'event_state_hash', 'identity_state_hash'):
+                  assert receipt[key] == snapshot['factual'][key], key
+
+              async with AsyncSessionLocal() as db:
+                  plans = (await db.execute(
+                      select(ContinuityPlan).where(
+                          ContinuityPlan.user_id == 1,
+                          ContinuityPlan.name == 'B.P.R.D.',
+                      )
+                  )).scalars().all()
+                  assert len(plans) == 1
+                  plan = plans[0]
+                  assert plan.id == receipt['plan_id']
+                  assert plan.ordering_mode == 'strict_sequential'
+                  assert plan.lanes_json == [{'id': 'main', 'name': 'Reading order', 'order': 0}]
+                  assert [node['ref_id'] for node in plan.nodes_json] == EXPECTED
+                  assert [node['position'] for node in plan.nodes_json] == list(range(22))
+                  assert {node['lane_id'] for node in plan.nodes_json} == {'main'}
+
+                  rules = (await db.execute(
+                      select(ContinuityRule).where(
+                          ContinuityRule.user_id == 1,
+                          ContinuityRule.note == receipt['plan_marker'],
+                      )
+                  )).scalars().all()
+                  assert len(rules) == 21
+                  assert {(r.source_id, r.target_id) for r in rules} == set(zip(EXPECTED, EXPECTED[1:]))
+
+                  remaining_legacy = (await db.execute(
+                      select(Dependency.id).where(Dependency.id.in_(LEGACY))
+                  )).scalars().all()
+                  assert remaining_legacy == []
+
+                  ordered_group_members = await db.scalar(
+                      select(func.count())
+                      .select_from(DependencyGroupMembership)
+                      .where(
+                          DependencyGroupMembership.group_id == 9,
+                          DependencyGroupMembership.sequence_order.is_not(None),
+                      )
+                  )
+                  assert ordered_group_members == 0
+
+                  pool = await get_roll_pool(1, db)
+                  bprd_ids = [thread.id for thread in pool if thread.id in {3382, 3383, 3384, 3385}]
+                  assert bprd_ids == [3384], bprd_ids
+
+              print(json.dumps({
+                  'plan_id': receipt['plan_id'],
+                  'nodes': 22,
+                  'compiled_rules': 21,
+                  'legacy_dependencies_remaining': 0,
+                  'dependency_group_sequence_authority': 0,
+                  'bprd_roll_thread_ids': [3384],
+                  'protected_hashes_match': True,
+              }, sort_keys=True))
+
+          asyncio.run(main())
+          PY
+
+      - name: Roll back clone even if verification failed
+        id: rollback
+        if: always() && steps.apply.outcome == 'success'
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          ENVIRONMENT: development
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/bprd_step22_migration.py rollback \
+            --snapshot "$SNAPSHOT" \
+            --receipt "$RECEIPT" \
+            --confirm STEP22-BPRD \
+            | tee /tmp/bprd-step22-fresh-rollback-result.json
+
+      - name: Prove exact pre-migration state restored
+        id: postrollback
+        if: always() && steps.rollback.outcome == 'success'
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          ENVIRONMENT: development
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/bprd_step22_migration.py dry-run --output "$POSTROLLBACK" >/dev/null
+          before="$(jq -r '.snapshot_token' "$SNAPSHOT")"
+          after="$(jq -r '.snapshot_token' "$POSTROLLBACK")"
+          test "$before" = "$after"
+          jq -e '.ok == true and (.errors | length) == 0' "$POSTROLLBACK" >/dev/null
+          test "$(jq '.legacy_dependencies | length' "$POSTROLLBACK")" = '5'
+          test "$(jq '.legacy_rules | length' "$POSTROLLBACK")" = '5'
+          test "$(jq '.overlapping_plans | length' "$POSTROLLBACK")" = '0'
+
+          .venv/bin/python - <<'PY'
+          import asyncio
+          import json
+          from sqlalchemy import select
+          from app.database import AsyncSessionLocal
+          from app.models.continuity_rule import ContinuityRule
+          from comic_pile.queue import get_roll_pool
+
+          EXPECTED_RULE_IDS = {117, 125, 625, 626, 627}
+          async def main() -> None:
+              async with AsyncSessionLocal() as db:
+                  rules = (await db.execute(
+                      select(ContinuityRule).where(
+                          ContinuityRule.legacy_dependency_id.in_([1358, 1359, 1360, 1575, 1576])
+                      )
+                  )).scalars().all()
+                  assert {rule.id for rule in rules} == EXPECTED_RULE_IDS
+                  pool = await get_roll_pool(1, db)
+                  bprd_ids = [thread.id for thread in pool if thread.id in {3382, 3383, 3384, 3385}]
+                  assert bprd_ids == [3384]
+              print(json.dumps({
+                  'restored_rule_ids': sorted(EXPECTED_RULE_IDS),
+                  'bprd_roll_thread_ids': [3384],
+                  'snapshot_restored': True,
+              }, sort_keys=True))
+
+          asyncio.run(main())
+          PY
+          echo "Exact fresh dry-run snapshot restored: $after"
+
+      - name: Upload fresh rehearsal evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: step22-bprd-full-rehearsal-fixed-${{ github.sha }}
+          if-no-files-found: warn
+          path: |
+            /tmp/bprd-step22-fresh-snapshot.json
+            /tmp/bprd-step22-fresh-receipt.json
+            /tmp/bprd-step22-fresh-rollback-result.json
+            /tmp/bprd-step22-fresh-postrollback.json
