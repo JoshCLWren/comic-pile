@@ -69,13 +69,11 @@ export async function clickThreadAction(threadItem: Locator, actionName: string)
   await menu.getByRole('menuitem', { name: actionName }).click()
 }
 
-function isAuthResponse(data: unknown): data is { access_token: string } {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    'access_token' in data &&
-    typeof data.access_token === 'string'
-  )
+export function isAuthResponse(data: unknown): data is { access_token: string } {
+  if (typeof data !== 'object' || data === null) {
+    return false
+  }
+  return typeof data.access_token === 'string' && 'access_token' in data
 }
 
 export function expectDefined<T>(value: T | null | undefined, message?: string): T {
