@@ -880,12 +880,26 @@ async def rollback_bprd_migration(
             "refusing automatic rollback"
         )
 
-    await db.execute(
-        delete(ContinuityRule).where(
-            ContinuityRule.user_id == spec.user_id,
-            ContinuityRule.note == marker,
+    # Delete the exact rule objects we fingerprinted above. Production still has
+    # the legacy dependency compatibility trigger, so leaving even one plan edge
+    # alive would let a restored Dependency claim that row via ON CONFLICT.
+    for rule in plan_rules:
+        await db.delete(rule)
+    await db.flush()
+    remaining_plan_rule_ids = (
+        await db.execute(
+            select(ContinuityRule.id).where(
+                ContinuityRule.user_id == spec.user_id,
+                ContinuityRule.note == marker,
+            )
         )
-    )
+    ).scalars().all()
+    if remaining_plan_rule_ids:
+        raise MigrationInvariantError(
+            "plan-owned rules survived rollback removal: "
+            f"{remaining_plan_rule_ids}"
+        )
+
     await db.delete(plan)
     await db.flush()
 
@@ -908,16 +922,30 @@ async def rollback_bprd_migration(
         )
     await db.flush()
 
+    # Production migration c84400000002 mirrors Dependency inserts into
+    # continuity_rules. Base.metadata.create_all() test databases do not install
+    # that trigger. Reconcile the mirrored row when present, otherwise create the
+    # captured row directly. In both cases the rollback restores the exact rule ID
+    # and metadata recorded by the dry-run snapshot.
+    restored_rule_ids: set[int] = set()
     for row in legacy_rules:
         if not isinstance(row, dict):
             raise MigrationInvariantError(
                 "invalid continuity-rule row in dry-run snapshot"
             )
-        db.add(
-            ContinuityRule(
+        legacy_dependency_id = int(row["legacy_dependency_id"])
+        rule = (
+            await db.execute(
+                select(ContinuityRule).where(
+                    ContinuityRule.legacy_dependency_id == legacy_dependency_id
+                )
+            )
+        ).scalar_one_or_none()
+        if rule is None:
+            rule = ContinuityRule(
                 id=int(row["id"]),
                 user_id=int(row["user_id"]),
-                legacy_dependency_id=int(row["legacy_dependency_id"]),
+                legacy_dependency_id=legacy_dependency_id,
                 source_type=str(row["source_type"]),
                 source_id=int(row["source_id"]),
                 target_type=str(row["target_type"]),
@@ -929,8 +957,51 @@ async def rollback_bprd_migration(
                 created_at=_parse_datetime(row["created_at"]),
                 updated_at=_parse_datetime(row["updated_at"]),
             )
-        )
+            db.add(rule)
+        else:
+            expected_edge = (
+                int(row["user_id"]),
+                str(row["source_type"]),
+                int(row["source_id"]),
+                str(row["target_type"]),
+                int(row["target_id"]),
+            )
+            actual_edge = (
+                rule.user_id,
+                rule.source_type,
+                rule.source_id,
+                rule.target_type,
+                rule.target_id,
+            )
+            if actual_edge != expected_edge:
+                raise MigrationInvariantError(
+                    "legacy dependency trigger restored an unexpected rule edge: "
+                    f"expected {expected_edge!r}, got {actual_edge!r}"
+                )
+            rule.id = int(row["id"])
+            rule.satisfaction_type = str(row["satisfaction_type"])
+            rule.checkpoint_issue_id = row.get("checkpoint_issue_id")
+            rule.convergence_targets = row.get("convergence_targets")
+            rule.note = row.get("note")
+            rule.created_at = _parse_datetime(row["created_at"])
+            rule.updated_at = _parse_datetime(row["updated_at"])
+        restored_rule_ids.add(int(row["id"]))
     await db.flush()
+
+    actual_restored_rule_ids = set(
+        (
+            await db.execute(
+                select(ContinuityRule.id).where(
+                    ContinuityRule.legacy_dependency_id.in_(dependency_ids)
+                )
+            )
+        ).scalars().all()
+    )
+    if actual_restored_rule_ids != restored_rule_ids:
+        raise MigrationInvariantError(
+            "rollback failed to restore exact legacy continuity rules: "
+            f"{sorted(actual_restored_rule_ids)}"
+        )
     await refresh_user_blocked_status(spec.user_id, db)
     await db.flush()
 
