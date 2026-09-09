@@ -23,167 +23,103 @@ jobs:
           from pathlib import Path
           from textwrap import dedent
 
-          adoption_path = Path("app/services/cbl_plan_adoption.py")
-          text = adoption_path.read_text()
-
-          old = "from app.models.thread import Thread\nfrom app.schemas.continuity_plan import ContinuityPlanNode, PlanOrderingMode\n"
-          new = "from app.models.thread import Thread\nfrom app.repositories import issue_repository, thread_repository\nfrom app.schemas.continuity_plan import ContinuityPlanNode, PlanOrderingMode\n"
-          assert old in text
-          text = text.replace(old, new, 1)
-
-          old = dedent('''\
-          async def _ensure_missing_issue_created(
-              db: AsyncSession,
-              user_id: int,
-              *,
-              fact: dict[str, object],
-              position: int,
-              volume_year: int | None,
-          ) -> Issue:
-          ''')
-          new = dedent('''\
-          async def _ensure_missing_issue_created(
-              db: AsyncSession,
-              user_id: int,
-              *,
-              fact: dict[str, object],
-              volume_year: int | None,
-          ) -> Issue:
-          ''')
-          assert old in text
-          text = text.replace(old, new, 1)
+          path = Path("app/services/cbl_plan_adoption.py")
+          text = path.read_text()
+          import_old = "from app.models.thread import Thread\nfrom app.schemas.continuity_plan import ContinuityPlanNode, PlanOrderingMode\n"
+          assert import_old in text
           text = text.replace(
+              import_old,
+              "from app.models.thread import Thread\n"
+              "from app.repositories import issue_repository, thread_repository\n"
+              "from app.schemas.continuity_plan import ContinuityPlanNode, PlanOrderingMode\n",
+              1,
+          )
+
+          start = text.index("async def _ensure_missing_issue_created(")
+          end = text.index("\n\nasync def _find_or_create_series_thread", start)
+          chunk = text[start:end]
+          assert "    position: int,\n" in chunk
+          chunk = chunk.replace("    position: int,\n", "", 1)
+          chunk = chunk.replace(
               "        position: CBL source position used as the issue position in the series.\n",
               "",
               1,
           )
+          assert "    issue = Issue(\n" in chunk
+          chunk = chunk.replace(
+              "    issue = Issue(\n",
+              "    if thread.queue_position < 1:\n"
+              "        thread.queue_position = await thread_repository.max_queue_position(db, user_id) + 1\n\n"
+              "    existing_issues = await issue_repository.locked_issues(db, thread.id)\n"
+              "    issue_position = max((item.position for item in existing_issues), default=0) + 1\n"
+              "    issue = Issue(\n",
+              1,
+          )
+          assert "        position=position,\n" in chunk
+          chunk = chunk.replace("        position=position,\n", "        position=issue_position,\n", 1)
+          flush_marker = "    db.add(issue)\n    await db.flush()\n\n    if comicvine_issue_id is not None:\n"
+          assert flush_marker in chunk
+          chunk = chunk.replace(
+              flush_marker,
+              "    db.add(issue)\n"
+              "    await db.flush()\n\n"
+              "    issues = [*existing_issues, issue]\n"
+              "    unread_issues = [item for item in issues if item.status != \"read\"]\n"
+              "    thread.total_issues = len(issues)\n"
+              "    thread.issues_remaining = len(unread_issues)\n"
+              "    thread.next_unread_issue_id = min(\n"
+              "        unread_issues,\n"
+              "        key=lambda item: (item.position, item.id),\n"
+              "    ).id\n"
+              "    thread.reading_progress = (\n"
+              "        \"not_started\" if len(unread_issues) == len(issues) else \"in_progress\"\n"
+              "    )\n"
+              "    thread.status = \"active\"\n\n"
+              "    if comicvine_issue_id is not None:\n",
+              1,
+          )
+          text = text[:start] + chunk + text[end:]
 
-          old = dedent('''\
-              issue = Issue(
-                  thread_id=thread.id,
-                  issue_number=issue_number,
-                  position=position,
-                  status="unread",
-              )
-              db.add(issue)
-              await db.flush()
+          start = text.index("async def _find_or_create_series_thread(")
+          end = text.index("\n\ndef _resolve_decision", start)
+          chunk = text[start:end]
+          assert chunk.count("queue_position=0,") == 2
+          chunk = chunk.replace(
+              "queue_position=0,",
+              "queue_position=await thread_repository.max_queue_position(db, user_id) + 1,",
+          )
+          assert chunk.count('reading_progress="unstarted",') == 2
+          chunk = chunk.replace('reading_progress="unstarted",', 'reading_progress="not_started",')
+          text = text[:start] + chunk + text[end:]
 
-              if comicvine_issue_id is not None:
-          ''')
-          new = dedent('''\
-              if thread.queue_position < 1:
-                  thread.queue_position = await thread_repository.max_queue_position(db, user_id) + 1
+          start = text.index("async def _merge_adopted_nodes(")
+          end = text.index("\n\ndef _plan_ordering_mode", start)
+          chunk = text[start:end]
+          signature_tail = "    series_decisions: dict[str, SourceBackedDecision],\n) -> AdoptionMergeReport:\n"
+          assert signature_tail in chunk
+          chunk = chunk.replace(
+              signature_tail,
+              "    series_decisions: dict[str, SourceBackedDecision],\n"
+              "    *,\n"
+              "    new_node_lane_id: str = \"default\",\n"
+              ") -> AdoptionMergeReport:\n",
+              1,
+          )
+          assert "                position=entry.position,\n" in chunk
+          chunk = chunk.replace("                position=entry.position,\n", "", 1)
+          assert '            "lane_id": "default",\n' in chunk
+          chunk = chunk.replace(
+              '            "lane_id": "default",\n',
+              '            "lane_id": new_node_lane_id,\n',
+              1,
+          )
+          text = text[:start] + chunk + text[end:]
+          path.write_text(text)
 
-              existing_issues = await issue_repository.locked_issues(db, thread.id)
-              issue_position = max((item.position for item in existing_issues), default=0) + 1
-              issue = Issue(
-                  thread_id=thread.id,
-                  issue_number=issue_number,
-                  position=issue_position,
-                  status="unread",
-              )
-              db.add(issue)
-              await db.flush()
-
-              issues = [*existing_issues, issue]
-              unread_issues = [item for item in issues if item.status != "read"]
-              thread.total_issues = len(issues)
-              thread.issues_remaining = len(unread_issues)
-              thread.next_unread_issue_id = min(
-                  unread_issues,
-                  key=lambda item: (item.position, item.id),
-              ).id
-              thread.reading_progress = (
-                  "not_started" if len(unread_issues) == len(issues) else "in_progress"
-              )
-              thread.status = "active"
-
-              if comicvine_issue_id is not None:
-          ''')
-          assert old in text
-          text = text.replace(old, new, 1)
-
-          old = dedent('''\
-                      queue_position=0,
-                      status="active",
-                      reading_progress="unstarted",
-          ''')
-          new = dedent('''\
-                      queue_position=await thread_repository.max_queue_position(db, user_id) + 1,
-                      status="active",
-                      total_issues=0,
-                      issues_remaining=0,
-                      reading_progress="not_started",
-          ''')
-          assert old in text
-          text = text.replace(old, new, 1)
-
-          old = dedent('''\
-                  queue_position=0,
-                  status="active",
-                  reading_progress="unstarted",
-          ''')
-          new = dedent('''\
-                  queue_position=await thread_repository.max_queue_position(db, user_id) + 1,
-                  status="active",
-                  total_issues=0,
-                  issues_remaining=0,
-                  reading_progress="not_started",
-          ''')
-          assert old in text
-          text = text.replace(old, new, 1)
-
-          old = dedent('''\
-          async def _merge_adopted_nodes(
-              db: AsyncSession,
-              plan: ContinuityPlan,
-              user_id: int,
-              entries: list[CBLSourceEntry],
-              facts_by_entry_id: dict[int, dict[str, object]],
-              source_path: str,
-              entry_decisions: dict[int, SourceBackedDecision],
-              series_overrides: dict[int, SourceBackedDecision],
-              series_decisions: dict[str, SourceBackedDecision],
-          ) -> AdoptionMergeReport:
-          ''')
-          new = dedent('''\
-          async def _merge_adopted_nodes(
-              db: AsyncSession,
-              plan: ContinuityPlan,
-              user_id: int,
-              entries: list[CBLSourceEntry],
-              facts_by_entry_id: dict[int, dict[str, object]],
-              source_path: str,
-              entry_decisions: dict[int, SourceBackedDecision],
-              series_overrides: dict[int, SourceBackedDecision],
-              series_decisions: dict[str, SourceBackedDecision],
-              *,
-              new_node_lane_id: str = "default",
-          ) -> AdoptionMergeReport:
-          ''')
-          assert old in text
-          text = text.replace(old, new, 1)
-
-          old = dedent('''\
-                      fact=fact,
-                      position=entry.position,
-                      volume_year=entry.volume_year,
-          ''')
-          new = dedent('''\
-                      fact=fact,
-                      volume_year=entry.volume_year,
-          ''')
-          assert old in text
-          text = text.replace(old, new, 1)
-          old = '            "lane_id": "default",\n'
-          assert old in text
-          text = text.replace(old, '            "lane_id": new_node_lane_id,\n', 1)
-          adoption_path.write_text(text)
-
-          targeted_path = Path("app/services/cbl_targeted_plan_adoption.py")
-          targeted = targeted_path.read_text()
-          start = targeted.index("def _place_new_nodes_on_existing_plan_lane(")
-          end = targeted.index("\n\nasync def adopt_cbl_into_existing_reading_plan", start)
+          path = Path("app/services/cbl_targeted_plan_adoption.py")
+          text = path.read_text()
+          start = text.index("def _place_new_nodes_on_existing_plan_lane(")
+          end = text.index("\n\nasync def adopt_cbl_into_existing_reading_plan", start)
           selector = dedent('''\
           def _adoption_lane_id(plan: ContinuityPlan) -> str:
               """Choose the declared lane that new targeted-adoption nodes should join."""
@@ -221,41 +157,44 @@ jobs:
                   return str(first_lane["id"])
               return "default"
           ''').rstrip()
-          targeted = targeted[:start] + selector + targeted[end:]
-
-          old = '    existing_node_ids = {str(node.get("id")) for node in plan.nodes_json or []}\n'
-          assert old in targeted
-          targeted = targeted.replace(old, "", 1)
-          old = dedent('''\
-                  series_overrides or {},
-                  series_decisions,
-              )
-              _place_new_nodes_on_existing_plan_lane(
-                  plan,
-                  existing_node_ids=existing_node_ids,
-              )
-          ''')
-          new = dedent('''\
-                  series_overrides or {},
-                  series_decisions,
-                  new_node_lane_id=_adoption_lane_id(plan),
-              )
-          ''')
-          assert old in targeted
-          targeted = targeted.replace(old, new, 1)
-          assert "_place_new_nodes_on_existing_plan_lane" not in targeted
-          targeted_path.write_text(targeted)
+          text = text[:start] + selector + text[end:]
+          old_ids = '    existing_node_ids = {str(node.get("id")) for node in plan.nodes_json or []}\n'
+          assert old_ids in text
+          text = text.replace(old_ids, "", 1)
+          old_call = (
+              "        series_overrides or {},\n"
+              "        series_decisions,\n"
+              "    )\n"
+              "    _place_new_nodes_on_existing_plan_lane(\n"
+              "        plan,\n"
+              "        existing_node_ids=existing_node_ids,\n"
+              "    )\n"
+          )
+          assert old_call in text
+          text = text.replace(
+              old_call,
+              "        series_overrides or {},\n"
+              "        series_decisions,\n"
+              "        new_node_lane_id=_adoption_lane_id(plan),\n"
+              "    )\n",
+              1,
+          )
+          assert "_place_new_nodes_on_existing_plan_lane" not in text
+          path.write_text(text)
 
           Path("tests/test_cbl_materialization_state.py").write_text(dedent('''\
           """Regression coverage for source-backed issue materialization state."""
 
           from datetime import UTC, datetime
+          from types import SimpleNamespace
+          from typing import cast
 
           import pytest
           from sqlalchemy import select
           from sqlalchemy.ext.asyncio import AsyncSession
 
           from app.models import Issue, Thread
+          from app.models.continuity_plan import ContinuityPlan
           from app.services.cbl_plan_adoption import _ensure_missing_issue_created
           from app.services.cbl_targeted_plan_adoption import _adoption_lane_id
           from tests.conftest import get_or_create_user_async
@@ -373,20 +312,19 @@ jobs:
 
 
           def test_targeted_adoption_selects_existing_tail_lane_without_repairing_nodes() -> None:
-              plan = type(
-                  "Plan",
-                  (),
-                  {
-                      "lanes_json": [
+              plan = cast(
+                  ContinuityPlan,
+                  SimpleNamespace(
+                      lanes_json=[
                           {"id": "secondary", "name": "Secondary", "order": 1},
                           {"id": "main", "name": "Main", "order": 0},
                       ],
-                      "nodes_json": [
+                      nodes_json=[
                           {"id": "a", "lane_id": "main", "position": 0},
                           {"id": "b", "lane_id": "secondary", "position": 9},
                       ],
-                  },
-              )()
+                  ),
+              )
 
               assert _adoption_lane_id(plan) == "secondary"
           '''))
