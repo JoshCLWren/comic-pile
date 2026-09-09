@@ -24,8 +24,14 @@ vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
   ReadingRouteExplanation: () => null,
 }))
 
-const { comicvineState } = vi.hoisted(() => ({
-  comicvineState: { metadata: null as unknown },
+interface HoistedComicVineModule {
+  comicvineState: {
+    metadata: unknown
+  }
+}
+
+const { comicvineState } = vi.hoisted((): HoistedComicVineModule => ({
+  comicvineState: { metadata: null },
 }))
 vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
   useComicVineIssueIntelligence: () => ({
