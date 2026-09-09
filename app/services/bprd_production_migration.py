@@ -209,6 +209,7 @@ def _plan_nodes(spec: BPRDMigrationSpec) -> list[ContinuityPlanNode]:
             ref_id=issue_id,
             lane_id="main",
             position=position,
+            convergence_gate=[],
         )
         for position, issue_id in enumerate(spec.issue_ids)
     ]
@@ -730,10 +731,11 @@ async def apply_bprd_migration(
     result = await db.execute(
         delete(Dependency).where(Dependency.id.in_(dependency_ids))
     )
-    if result.rowcount != len(dependency_ids):
+    deleted_count = getattr(result, "rowcount", None)
+    if deleted_count != len(dependency_ids):
         raise MigrationInvariantError(
             f"expected to remove {len(dependency_ids)} legacy dependencies, "
-            f"removed {result.rowcount}"
+            f"removed {deleted_count}"
         )
     await db.flush()
 
