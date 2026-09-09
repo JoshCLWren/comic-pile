@@ -70,7 +70,7 @@ function preview(entries: CBLAdoptionPreviewEntry[] = [existingEntry, missingAwa
       awaiting_opt_in_count: awaiting.length,
       final_adopted_count: adopted.length,
       final_adopted_order: adopted.map((entry) => entry.cbl_position),
-      reused_existing_positions: entries.filter((entry) => entry.adoption_class === 'existing').map((entry) => entry.cbl_position),
+      reused_existing_positions: entries.flatMap((entry) => entry.adoption_class === 'existing' ? [entry.cbl_position] : []),
       missing_would_create_positions: selectedMissing.map((entry) => entry.cbl_position),
       excluded_positions: excluded.map((entry) => entry.cbl_position),
       unresolved_positions: unresolved.map((entry) => entry.cbl_position),
