@@ -1,0 +1,324 @@
+name: B.P.R.D. Source Rehearsal
+
+on:
+  push:
+    branches:
+      - manual/2366-bprd-source-rehearsal-v2
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bprd-source-rehearsal-v2
+  cancel-in-progress: false
+
+jobs:
+  rehearse:
+    name: Rehearse real issue-level B.P.R.D. source adoption
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEON_BRANCH_ID: br-old-waterfall-ay409wlc
+      PRODUCTION_BRANCH_ID: br-silent-violet-ayobfez5
+      EXPECTED_BRANCH_NAME: bprd-source-rehearsal
+      SOURCE_SHA: 22dfc2c0297bc913f311ea04363147ed1973d949
+      SOURCE_REPOSITORY: JoshCLWren/CBL-ReadingLists-bprd-source-rehearsal-v2
+      SOURCE_FILE: cbl-source/Dark Horse/Characters/Hellboy/[Dark Horse] B.P.R.D. Plague of Frogs Omnibus Vol. 3 (Issues).cbl
+    steps:
+      - name: Check out exact ComicPile code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out exact source-list commit
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/CBL-ReadingLists
+          ref: 22dfc2c0297bc913f311ea04363147ed1973d949
+          path: cbl-source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact source commit
+        run: |
+          set -euo pipefail
+          test "$(git -C cbl-source rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Set up Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install locked runtime dependencies
+        run: uv sync --locked --no-dev
+
+      - name: Refuse production target and resolve clone connection
+        id: neon
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$NEON_API_KEY" || -z "$NEON_PROJECT_ID" ]]; then
+            echo 'NEON_API_KEY secret and NEON_PROJECT_ID variable are required.' >&2
+            exit 1
+          fi
+          if [[ "$NEON_BRANCH_ID" == "$PRODUCTION_BRANCH_ID" ]]; then
+            echo 'Refusing B.P.R.D. source rehearsal against production.' >&2
+            exit 1
+          fi
+
+          branch_json="$(curl --fail --silent --show-error \
+            --url "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${NEON_BRANCH_ID}" \
+            --header 'Accept: application/json' \
+            --header "Authorization: Bearer ${NEON_API_KEY}")"
+          jq -e --arg id "$NEON_BRANCH_ID" --arg name "$EXPECTED_BRANCH_NAME" \
+            '.branch.id == $id and .branch.name == $name and (.branch.default | not) and (.branch.primary | not)' \
+            <<< "$branch_json" >/dev/null
+
+          raw_uri="$(curl --fail --silent --show-error --get \
+            --url "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
+            --data-urlencode "branch_id=${NEON_BRANCH_ID}" \
+            --data-urlencode 'database_name=neondb' \
+            --data-urlencode 'role_name=neondb_owner' \
+            --header 'Accept: application/json' \
+            --header "Authorization: Bearer ${NEON_API_KEY}" \
+            | jq -r '.uri')"
+          test -n "$raw_uri"
+          test "$raw_uri" != 'null'
+          echo "::add-mask::$raw_uri"
+
+          uri="$(RAW_DATABASE_URL="$raw_uri" .venv/bin/python - <<'PY'
+          import os
+          from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+          parts = urlsplit(os.environ['RAW_DATABASE_URL'])
+          query = []
+          for key, value in parse_qsl(parts.query, keep_blank_values=True):
+              if key == 'channel_binding':
+                  continue
+              if key == 'sslmode':
+                  key = 'ssl'
+              query.append((key, value))
+          print(urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)))
+          PY
+          )"
+          echo "::add-mask::$uri"
+          echo "db_url=$uri" >> "$GITHUB_OUTPUT"
+          echo "Confirmed non-production Neon branch: $EXPECTED_BRANCH_NAME ($NEON_BRANCH_ID)"
+
+      - name: Parse, sync, preview, and adopt real missing material
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          ENVIRONMENT: development
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import asyncio
+          import json
+          import os
+          from pathlib import Path
+
+          from sqlalchemy import func, select
+
+          from app.cbl_ingest import parse_cbl_file
+          from app.cbl_sync import sync_cbl_lists
+          from app.database import AsyncSessionLocal
+          from app.models.cbl_reference import CBLSource, CBLSourceList
+          from app.models.continuity_plan import ContinuityPlan
+          from app.models.continuity_rule import ContinuityRule
+          from app.models.dependency_group import DependencyGroupMembership
+          from app.models.issue import Issue
+          from app.models.thread import Thread
+          from app.schemas.shared_types import SourceBackedDecision
+          from app.services.cbl_reconciliation import preview_cbl_adoption
+          from app.services.cbl_targeted_plan_adoption import adopt_cbl_into_existing_reading_plan
+          from comic_pile.queue import get_roll_pool
+
+          EXPECTED_EXTERNAL_IDS = [
+              '108135', '108461', '108462', '108464', '108465',
+              '106976', '108460', '109745', '110497', '111474',
+              '112968', '114393', '115407', '117742', '119864',
+          ]
+          EXPECTED_SERIES = [
+              'B.P.R.D.: The Universal Machine',
+              'B.P.R.D.: Garden of Souls',
+              'B.P.R.D.: Killing Ground',
+          ]
+
+          async def main() -> None:
+              source_path = Path(os.environ['SOURCE_FILE'])
+              mirror_root = Path('cbl-source')
+              parsed = parse_cbl_file(source_path, mirror_path=mirror_root)
+              assert parsed.name == '[Dark Horse] B.P.R.D. Plague of Frogs Omnibus Vol. 3 (Issues)'
+              assert parsed.declared_issue_count == 15
+              assert len(parsed.books) == 15
+              assert [book.comicvine_issue_id for book in parsed.books] == EXPECTED_EXTERNAL_IDS
+              assert [book.position for book in parsed.books] == list(range(1, 16))
+
+              async with AsyncSessionLocal() as db:
+                  plan = await db.get(ContinuityPlan, 6)
+                  assert plan is not None
+                  assert plan.user_id == 1
+                  assert plan.name == 'B.P.R.D.'
+                  assert plan.ordering_mode == 'strict_sequential'
+                  assert len(plan.nodes_json or []) == 22
+
+                  async with db.begin():
+                      summary = await sync_cbl_lists(
+                          db,
+                          repository=os.environ['SOURCE_REPOSITORY'],
+                          revision_sha=os.environ['SOURCE_SHA'],
+                          parsed_lists=(parsed,),
+                      )
+                  assert summary.inserted_lists == 1
+                  assert summary.entries_written == 15
+
+                  source = await db.scalar(
+                      select(CBLSource).where(CBLSource.repository == os.environ['SOURCE_REPOSITORY'])
+                  )
+                  assert source is not None
+                  source_list = await db.scalar(
+                      select(CBLSourceList).where(
+                          CBLSourceList.source_id == source.id,
+                          CBLSourceList.source_path == parsed.source_path,
+                          CBLSourceList.active.is_(True),
+                      )
+                  )
+                  assert source_list is not None
+
+                  report, preview = await preview_cbl_adoption(
+                      db,
+                      user_id=1,
+                      list_id=source_list.id,
+                  )
+                  statuses = [str(entry['resolution_status']) for entry in report.entries]
+                  classes = [str(entry['adoption_class']) for entry in preview.entries]
+                  decisions = [str(entry['adoption_decision']) for entry in preview.entries]
+                  assert report.total_positions == 15
+                  assert statuses == ['no_owned_issue_for_comicvine_id'] * 15
+                  assert classes == ['missing_importable'] * 15
+                  assert decisions == ['awaiting_opt_in'] * 15
+                  assert preview.final_adopted_count == 0
+
+                  result = await adopt_cbl_into_existing_reading_plan(
+                      db,
+                      user_id=1,
+                      plan_id=6,
+                      list_id=source_list.id,
+                      entry_decisions={
+                          position: SourceBackedDecision.INCLUDE for position in range(1, 16)
+                      },
+                      series_decisions={},
+                      client_content_hash=source_list.content_hash,
+                      client_revision_sha=source_list.revision_sha,
+                  )
+                  assert result.plan.id == 6
+                  assert result.created_positions == list(range(1, 16))
+                  assert result.reused_positions == []
+                  assert result.excluded_positions == []
+                  assert result.unresolved_positions == []
+                  assert len(result.plan.nodes_json or []) == 37
+                  assert {str(node.get('lane_id')) for node in result.plan.nodes_json or []} == {'main'}
+
+                  rule_count = await db.scalar(
+                      select(func.count()).select_from(ContinuityRule).where(
+                          ContinuityRule.user_id == 1,
+                          ContinuityRule.note == 'continuity-plan:6',
+                      )
+                  )
+                  assert rule_count == 36
+                  ordered_group_members = await db.scalar(
+                      select(func.count()).select_from(DependencyGroupMembership).where(
+                          DependencyGroupMembership.group_id == 9,
+                          DependencyGroupMembership.sequence_order.is_not(None),
+                      )
+                  )
+                  assert ordered_group_members == 0
+
+                  threads = list((await db.execute(
+                      select(Thread).where(
+                          Thread.user_id == 1,
+                          Thread.title.in_([f'CBL: {name}' for name in EXPECTED_SERIES]),
+                      ).order_by(Thread.id)
+                  )).scalars().all())
+                  thread_state = []
+                  failures = []
+                  for thread in threads:
+                      issues = list((await db.execute(
+                          select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position, Issue.id)
+                      )).scalars().all())
+                      state = {
+                          'id': thread.id,
+                          'title': thread.title,
+                          'queue_position': thread.queue_position,
+                          'status': thread.status,
+                          'reading_progress': thread.reading_progress,
+                          'total_issues': thread.total_issues,
+                          'issues_remaining': thread.issues_remaining,
+                          'next_unread_issue_id': thread.next_unread_issue_id,
+                          'issue_numbers': [issue.issue_number for issue in issues],
+                          'issue_positions': [issue.position for issue in issues],
+                          'issue_ids': [issue.id for issue in issues],
+                      }
+                      thread_state.append(state)
+                      if thread.queue_position < 1:
+                          failures.append(f'{thread.title}: queue_position={thread.queue_position}')
+                      if thread.total_issues != 5:
+                          failures.append(f'{thread.title}: total_issues={thread.total_issues}')
+                      if thread.issues_remaining != 5:
+                          failures.append(f'{thread.title}: issues_remaining={thread.issues_remaining}')
+                      if not issues or thread.next_unread_issue_id != issues[0].id:
+                          failures.append(
+                              f'{thread.title}: next_unread_issue_id={thread.next_unread_issue_id}, expected={issues[0].id if issues else None}'
+                          )
+                      if [issue.position for issue in issues] != [1, 2, 3, 4, 5]:
+                          failures.append(
+                              f"{thread.title}: issue_positions={[issue.position for issue in issues]}"
+                          )
+
+                  if len(threads) != 3:
+                      failures.append(f'expected 3 materialized threads, found {len(threads)}')
+
+                  pool = await get_roll_pool(1, db)
+                  bprdish_pool = [
+                      {'id': thread.id, 'title': thread.title, 'queue_position': thread.queue_position}
+                      for thread in pool
+                      if 'B.P.R.D.' in thread.title
+                  ]
+
+                  diagnostic = {
+                      'source_list_id': source_list.id,
+                      'preview': {
+                          'positions': report.total_positions,
+                          'missing_importable': classes.count('missing_importable'),
+                          'awaiting_opt_in': decisions.count('awaiting_opt_in'),
+                      },
+                      'adoption': {
+                          'plan_id': result.plan.id,
+                          'node_count': len(result.plan.nodes_json or []),
+                          'compiled_rules': rule_count,
+                          'created_positions': result.created_positions,
+                      },
+                      'materialized_threads': thread_state,
+                      'bprd_roll_pool_after_adoption': bprdish_pool,
+                      'thread_state_failures': failures,
+                  }
+                  print(json.dumps(diagnostic, indent=2, sort_keys=True))
+                  Path('/tmp/bprd-source-rehearsal.json').write_text(
+                      json.dumps(diagnostic, indent=2, sort_keys=True)
+                  )
+                  assert not failures, '; '.join(failures)
+
+          asyncio.run(main())
+          PY
+
+      - name: Upload rehearsal diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bprd-source-rehearsal-${{ github.sha }}
+          if-no-files-found: warn
+          path: /tmp/bprd-source-rehearsal.json
