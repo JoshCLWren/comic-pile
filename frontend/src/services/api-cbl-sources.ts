@@ -87,8 +87,13 @@ export const cblSourcesApi = {
     api.get<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-preview`),
   plan: (listId: number, choices: CBLAdoptionPlanChoices) =>
     api.post<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-plan`, choices),
-  commit: (listId: number, planId: number, preview: CBLAdoptionPreview) => {
-    const entry_decisions = Object.fromEntries(
+  commit: (
+    listId: number,
+    planId: number,
+    preview: CBLAdoptionPreview,
+    _choices: CBLAdoptionPlanChoices,
+  ) => {
+    const entryDecisions = Object.fromEntries(
       preview.entries
         .filter((entry) => entry.adoption_class === 'missing_importable')
         .map((entry) => [entry.cbl_position, entry.adopted ? 'include' : 'exclude']),
@@ -96,7 +101,7 @@ export const cblSourcesApi = {
     return api.post<CBLAdoptionCommitResult>(
       `/v1/cbl/${listId}/reading-plans/${planId}/adoption-commit`,
       {
-        entry_decisions,
+        entry_decisions: entryDecisions,
         series_decisions: [],
         series_overrides: [],
         content_hash: preview.source.content_hash,
