@@ -1,0 +1,359 @@
+name: Apply CBL materialization state fix
+
+on:
+  push:
+    branches:
+      - manual/2366-cbl-materialization-state
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: manual/2366-cbl-materialization-state
+          fetch-depth: 1
+      - name: Apply focused production and regression changes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          adoption_path = Path('app/services/cbl_plan_adoption.py')
+          text = adoption_path.read_text()
+
+          old = 'from app.models.thread import Thread\nfrom app.schemas.continuity_plan import ContinuityPlanNode, PlanOrderingMode\n'
+          new = 'from app.models.thread import Thread\nfrom app.repositories import issue_repository, thread_repository\nfrom app.schemas.continuity_plan import ContinuityPlanNode, PlanOrderingMode\n'
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = '''async def _ensure_missing_issue_created(
+              db: AsyncSession,
+              user_id: int,
+              *,
+              fact: dict[str, object],
+              position: int,
+              volume_year: int | None,
+          ) -> Issue:'''.replace('          ', '')
+          new = '''async def _ensure_missing_issue_created(
+              db: AsyncSession,
+              user_id: int,
+              *,
+              fact: dict[str, object],
+              volume_year: int | None,
+          ) -> Issue:'''.replace('          ', '')
+          assert old in text
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              '        position: CBL source position used as the issue position in the series.\n',
+              '',
+              1,
+          )
+
+          old = '''    issue = Issue(
+              thread_id=thread.id,
+              issue_number=issue_number,
+              position=position,
+              status="unread",
+          )
+          db.add(issue)
+          await db.flush()
+
+          if comicvine_issue_id is not None:
+          '''.replace('          ', '')
+          new = '''    if thread.queue_position < 1:
+              thread.queue_position = await thread_repository.max_queue_position(db, user_id) + 1
+
+          existing_issues = await issue_repository.locked_issues(db, thread.id)
+          issue_position = max((item.position for item in existing_issues), default=0) + 1
+          issue = Issue(
+              thread_id=thread.id,
+              issue_number=issue_number,
+              position=issue_position,
+              status="unread",
+          )
+          db.add(issue)
+          await db.flush()
+
+          issues = [*existing_issues, issue]
+          unread_issues = [item for item in issues if item.status != "read"]
+          thread.total_issues = len(issues)
+          thread.issues_remaining = len(unread_issues)
+          thread.next_unread_issue_id = min(
+              unread_issues,
+              key=lambda item: (item.position, item.id),
+          ).id
+          thread.reading_progress = (
+              "not_started" if len(unread_issues) == len(issues) else "in_progress"
+          )
+          thread.status = "active"
+
+          if comicvine_issue_id is not None:
+          '''.replace('          ', '')
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          text = text.replace(
+              '                queue_position=0,\n                status="active",\n                reading_progress="unstarted",\n',
+              '                queue_position=await thread_repository.max_queue_position(db, user_id) + 1,\n                status="active",\n                total_issues=0,\n                issues_remaining=0,\n                reading_progress="not_started",\n',
+              1,
+          )
+          text = text.replace(
+              '        queue_position=0,\n        status="active",\n        reading_progress="unstarted",\n',
+              '        queue_position=await thread_repository.max_queue_position(db, user_id) + 1,\n        status="active",\n        total_issues=0,\n        issues_remaining=0,\n        reading_progress="not_started",\n',
+              1,
+          )
+          assert 'queue_position=0' not in text[text.index('async def _find_or_create_series_thread'):text.index('def _resolve_decision')]
+
+          old = '''async def _merge_adopted_nodes(
+              db: AsyncSession,
+              plan: ContinuityPlan,
+              user_id: int,
+              entries: list[CBLSourceEntry],
+              facts_by_entry_id: dict[int, dict[str, object]],
+              source_path: str,
+              entry_decisions: dict[int, SourceBackedDecision],
+              series_overrides: dict[int, SourceBackedDecision],
+              series_decisions: dict[str, SourceBackedDecision],
+          ) -> AdoptionMergeReport:'''.replace('          ', '')
+          new = '''async def _merge_adopted_nodes(
+              db: AsyncSession,
+              plan: ContinuityPlan,
+              user_id: int,
+              entries: list[CBLSourceEntry],
+              facts_by_entry_id: dict[int, dict[str, object]],
+              source_path: str,
+              entry_decisions: dict[int, SourceBackedDecision],
+              series_overrides: dict[int, SourceBackedDecision],
+              series_decisions: dict[str, SourceBackedDecision],
+              *,
+              new_node_lane_id: str = "default",
+          ) -> AdoptionMergeReport:'''.replace('          ', '')
+          assert old in text
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              '''                fact=fact,\n                position=entry.position,\n                volume_year=entry.volume_year,\n''',
+              '''                fact=fact,\n                volume_year=entry.volume_year,\n''',
+              1,
+          )
+          text = text.replace('            "lane_id": "default",\n', '            "lane_id": new_node_lane_id,\n', 1)
+          adoption_path.write_text(text)
+
+          targeted_path = Path('app/services/cbl_targeted_plan_adoption.py')
+          targeted = targeted_path.read_text()
+          start = targeted.index('def _place_new_nodes_on_existing_plan_lane(')
+          end = targeted.index('\n\nasync def adopt_cbl_into_existing_reading_plan', start)
+          selector = '''def _adoption_lane_id(plan: ContinuityPlan) -> str:
+              """Choose the declared lane that new targeted-adoption nodes should join."""
+              lanes = list(plan.lanes_json or [])
+              lane_ids = [
+                  str(lane["id"])
+                  for lane in lanes
+                  if isinstance(lane, dict) and lane.get("id") is not None
+              ]
+              if not lane_ids:
+                  return "default"
+
+              declared = set(lane_ids)
+              existing_nodes = [
+                  node
+                  for node in plan.nodes_json or []
+                  if str(node.get("lane_id")) in declared
+              ]
+              existing_nodes.sort(
+                  key=lambda node: int(node.get("position", -1))
+                  if isinstance(node.get("position"), int)
+                  else -1
+              )
+              if existing_nodes:
+                  return str(existing_nodes[-1]["lane_id"])
+
+              ordered_lanes = sorted(
+                  lanes,
+                  key=lambda lane: int(lane.get("order", 0))
+                  if isinstance(lane, dict) and isinstance(lane.get("order"), int)
+                  else 0,
+              )
+              first_lane = ordered_lanes[0] if ordered_lanes else None
+              if isinstance(first_lane, dict) and first_lane.get("id") is not None:
+                  return str(first_lane["id"])
+              return "default"
+          '''.replace('          ', '')
+          targeted = targeted[:start] + selector.rstrip() + targeted[end:]
+          targeted = targeted.replace(
+              '    existing_node_ids = {str(node.get("id")) for node in plan.nodes_json or []}\n',
+              '',
+              1,
+          )
+          old = '''        series_overrides or {},
+              series_decisions,
+          )
+          _place_new_nodes_on_existing_plan_lane(
+              plan,
+              existing_node_ids=existing_node_ids,
+          )
+          '''.replace('          ', '')
+          new = '''        series_overrides or {},
+              series_decisions,
+              new_node_lane_id=_adoption_lane_id(plan),
+          )
+          '''.replace('          ', '')
+          assert old in targeted
+          targeted = targeted.replace(old, new, 1)
+          assert '_place_new_nodes_on_existing_plan_lane' not in targeted
+          targeted_path.write_text(targeted)
+
+          test_path = Path('tests/test_cbl_materialization_state.py')
+          test_path.write_text('''"""Regression coverage for source-backed issue materialization state."""
+
+          from datetime import UTC, datetime
+
+          import pytest
+          from sqlalchemy import select
+          from sqlalchemy.ext.asyncio import AsyncSession
+
+          from app.models import Issue, Thread
+          from app.services.cbl_plan_adoption import _ensure_missing_issue_created
+          from app.services.cbl_targeted_plan_adoption import _adoption_lane_id
+          from tests.conftest import get_or_create_user_async
+
+
+          def _fact(series: str, number: str) -> dict[str, object]:
+              return {
+                  "series_name": series,
+                  "issue_number": number,
+                  "comicvine_issue_id": None,
+                  "external_series_identity_id": None,
+              }
+
+
+          @pytest.mark.asyncio
+          async def test_materialized_series_uses_thread_local_positions_and_rollable_state(
+              async_db: AsyncSession,
+          ) -> None:
+              user = await get_or_create_user_async(async_db, "cbl-materialized-series")
+              async_db.add(
+                  Thread(
+                      user_id=user.id,
+                      title="Existing queue item",
+                      format="comic",
+                      queue_position=3,
+                      status="active",
+                      issues_remaining=1,
+                      created_at=datetime.now(UTC),
+                  )
+              )
+              await async_db.flush()
+
+              first = await _ensure_missing_issue_created(
+                  async_db,
+                  user.id,
+                  fact=_fact("B.P.R.D.: Garden of Souls", "1"),
+                  volume_year=2007,
+              )
+              second = await _ensure_missing_issue_created(
+                  async_db,
+                  user.id,
+                  fact=_fact("B.P.R.D.: Garden of Souls", "2"),
+                  volume_year=2007,
+              )
+
+              thread = await async_db.scalar(
+                  select(Thread).where(
+                      Thread.user_id == user.id,
+                      Thread.title == "CBL: B.P.R.D.: Garden of Souls (2007)",
+                  )
+              )
+              assert thread is not None
+              issues = list(
+                  (
+                      await async_db.execute(
+                          select(Issue)
+                          .where(Issue.thread_id == thread.id)
+                          .order_by(Issue.position, Issue.id)
+                      )
+                  ).scalars().all()
+              )
+              assert [issue.id for issue in issues] == [first.id, second.id]
+              assert [issue.position for issue in issues] == [1, 2]
+              assert thread.queue_position == 4
+              assert thread.total_issues == 2
+              assert thread.issues_remaining == 2
+              assert thread.next_unread_issue_id == first.id
+              assert thread.reading_progress == "not_started"
+              assert thread.status == "active"
+
+
+          @pytest.mark.asyncio
+          async def test_materialization_appends_to_existing_thread_and_recomputes_tracking(
+              async_db: AsyncSession,
+          ) -> None:
+              user = await get_or_create_user_async(async_db, "cbl-existing-series")
+              thread = Thread(
+                  user_id=user.id,
+                  title="CBL: B.P.R.D.: The Universal Machine (2006)",
+                  format="comic",
+                  queue_position=2,
+                  status="completed",
+                  total_issues=1,
+                  issues_remaining=0,
+                  reading_progress="completed",
+                  created_at=datetime.now(UTC),
+              )
+              async_db.add(thread)
+              await async_db.flush()
+              read_issue = Issue(
+                  thread_id=thread.id,
+                  issue_number="1",
+                  position=7,
+                  status="read",
+                  read_at=datetime.now(UTC),
+              )
+              async_db.add(read_issue)
+              await async_db.flush()
+
+              created = await _ensure_missing_issue_created(
+                  async_db,
+                  user.id,
+                  fact=_fact("B.P.R.D.: The Universal Machine", "2"),
+                  volume_year=2006,
+              )
+
+              assert created.thread_id == thread.id
+              assert created.position == 8
+              assert thread.total_issues == 2
+              assert thread.issues_remaining == 1
+              assert thread.next_unread_issue_id == created.id
+              assert thread.reading_progress == "in_progress"
+              assert thread.status == "active"
+
+
+          def test_targeted_adoption_selects_existing_tail_lane_without_repairing_nodes() -> None:
+              plan = type(
+                  "Plan",
+                  (),
+                  {
+                      "lanes_json": [
+                          {"id": "secondary", "name": "Secondary", "order": 1},
+                          {"id": "main", "name": "Main", "order": 0},
+                      ],
+                      "nodes_json": [
+                          {"id": "a", "lane_id": "main", "position": 0},
+                          {"id": "b", "lane_id": "secondary", "position": 9},
+                      ],
+                  },
+              )()
+
+              assert _adoption_lane_id(plan) == "secondary"
+          '''.replace('          ', ''))
+          PY
+
+          git rm .github/workflows/apply-cbl-materialization-state-fix.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/services/cbl_plan_adoption.py app/services/cbl_targeted_plan_adoption.py tests/test_cbl_materialization_state.py
+          git commit -m 'Materialize CBL issues as rollable thread state'
+          git push origin HEAD:manual/2366-cbl-materialization-state
