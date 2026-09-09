@@ -1,3 +1,5 @@
+import type { JsonRecordType } from '../../types'
+
 export const AUDIT_FIXED_NOW = '2026-08-30T12:00:00.000Z'
 export const AUDIT_FIXED_USERNAME = 'ui_audit_reader_2043'
 
@@ -42,7 +44,7 @@ export function stabilizeAuditApiPayload(pathname: string, payload: unknown): un
   if (pathname === '/api/v1/sessions/' && isJsonRecord(payload) && Array.isArray(payload.sessions)) {
     return {
       ...payload,
-      sessions: payload.sessions.map((session, index) =>
+      sessions: payload.sessions.map((session: unknown, index: number) =>
         isJsonRecord(session) ? normalizeSessionRecord(session, index) : session,
       ),
     }

@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom'
 import { beforeEach, vi } from 'vitest'
 import { createElement, type ReactElement, type ReactNode } from 'react'
+import type { RenderOptions } from '@testing-library/react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from '../query/queryClient'
 

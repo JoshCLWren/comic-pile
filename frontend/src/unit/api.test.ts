@@ -121,7 +121,7 @@ it('calls every remaining API resource endpoint', async () => {
   await rollApi.setDie(6)
   await rollApi.clearManualDie()
   await rateApi.rate({ thread_id: 1, rating: 4 })
-  await sessionApi.list({ status: 'complete' }, 'page')
+  await sessionApi.list({ page_size: 10 }, 'page')
   await sessionApi.get(1)
   await sessionApi.getCurrent()
   await sessionApi.getDetails('2')

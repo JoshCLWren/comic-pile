@@ -6,6 +6,7 @@ import {
   loginUser,
   registerUser,
 } from './helpers';
+import type { ApiResponseRecord } from '../types';
 
 type TestUser = {
   email: string;

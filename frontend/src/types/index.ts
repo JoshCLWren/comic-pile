@@ -1,5 +1,5 @@
 /** Custom dictionary types to replace unsafe Record<string, unknown> */
-type JsonRecordType = Record<string, unknown>
+export type JsonRecordType = Record<string, unknown>
 export type OpenApiPaths = Record<string, unknown>
 
 /** Specialized dictionary for correction guidance data */
