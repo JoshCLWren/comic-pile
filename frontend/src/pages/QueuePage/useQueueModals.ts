@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import type { Thread, SessionListResponse } from '../../types'
+import type { Thread } from '../../types'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { getApiErrorDetail } from '../../utils/apiError'
@@ -20,7 +20,7 @@ interface QueueModalsParams {
   onCreated: () => Promise<void>
   onUpdated: () => Promise<void>
   onReactivated: () => Promise<void>
-  refetchSession: () => Promise<SessionListResponse>
+  refetchSession: () => Promise<void>
   submitCreate: (input: {
     title: string
     format: string
@@ -35,6 +35,8 @@ interface QueueModalsParams {
     thread_id: number
     issues_to_add: number
   }) => Promise<Thread>
+  isPendingCreate: boolean
+  isPendingEdit: boolean
 }
 
 interface UseQueueModalsResult {

@@ -222,9 +222,9 @@ function richReaderContext(): {
     ],
     local_chain: {
       issues: [
-        { issue_id: 99, issue_number: '2', position: 1, status: 'read', relation: 'previous', rating: 4.0, crossover_memberships: [] },
-        { issue_id: 100, issue_number: '3', position: 2, status: 'unread', relation: 'current', rating: null, crossover_memberships: [{ id: 500, name: 'Crisis Crossover' }] },
-        { issue_id: 101, issue_number: '4', position: 3, status: 'unread', relation: 'next', rating: null, crossover_memberships: [] },
+        { issue_id: 99, issue_number: '2', position: 1, status: 'read', rating: 4.0, crossover_memberships: [] },
+        { issue_id: 100, issue_number: '3', position: 2, status: 'unread', rating: null, crossover_memberships: [{ id: 500, name: 'Crisis Crossover' }] },
+        { issue_id: 101, issue_number: '4', position: 3, status: 'unread', rating: null, crossover_memberships: [] },
       ],
       edges: [
         {
@@ -317,7 +317,7 @@ function sparseReaderContext(): {
     crossovers: [],
     local_chain: {
       issues: [
-        { issue_id: 100, issue_number: '3', position: 1, status: 'unread', relation: 'current', rating: null, crossover_memberships: [] },
+        { issue_id: 100, issue_number: '3', position: 1, status: 'unread', rating: null, crossover_memberships: [] },
       ],
       edges: [],
     },
@@ -380,63 +380,58 @@ const RATING_STATES: Record<string, RatingStateRoutes> = {
   rich: {
     readingOrders: [readingOrder(7, 'Main route'), readingOrder(8, 'Alt reading order')],
     connectedThreads: [connectedThread(200, 'Connected Thread A'), connectedThread(201, 'Connected Thread B')],
-    readerContext: richReaderContext(),
-    comicvine: {
-      comicvine_issue_id: '12345',
-      comicvine_url: null,
-      series_name: 'Rich Series',
-      series_id: 1,
-      issue_number: '3',
-      name: 'The Pretending Town',
-      description: 'A town that pretends.',
-      image_url: COVER_DATA_URI,
-      cover_date: '2020-01-01',
-      store_date: null,
-      creators: [{ name: 'Brian K. Vaughan', roles: ['writer'] }],
-      story_arcs: [],
+    readerContext: {
+      issue_id: 100,
+      series: {
+        identity_source: 'comicvine',
+        canonical_series_id: 'series-1',
+        series_name: 'Rich Series',
+        average_rating: 4.2,
+        ratings_count: 12,
+        previous_issue: { issue_id: 99, issue_number: '2', rating: 4.0 },
+        recent_ratings: [{ issue_id: 99, issue_number: '2', rating: 4.0 }],
+        highest_rating: 5.0,
+        lowest_rating: 2.0,
+      },
+      comicvine: null,
+      identity: confirmedIdentity(),
+      groups: [],
+      settleText: 'Your Place in the Story',
     },
-    identity: confirmedIdentity(),
-    groups: [],
     settleText: 'Your Place in the Story',
   },
   sparse: {
     readingOrders: [readingOrder(9, 'Solo route')],
     connectedThreads: [connectedThread(202, 'One Connected Thread')],
-    readerContext: sparseReaderContext(),
-    comicvine: null,
-    identity: noIdentity(),
-    groups: [],
+    readerContext: {
+      issue_id: 100,
+      series: {
+        identity_source: 'unavailable',
+        canonical_series_id: null,
+        series_name: 'Unknown Series',
+        average_rating: null,
+        ratings_count: 0,
+        recent_ratings: [],
+        highest_rating: null,
+        lowest_rating: null,
+      },
+      comicvine: null,
+      identity: noIdentity(),
+      groups: [],
+      settleText: 'Reading Routes',
+    },
     settleText: 'Reading Routes',
   },
   noContext: {
     readingOrders: [],
     connectedThreads: [],
     readerContext: null,
-    comicvine: null,
-    identity: noIdentity(),
-    groups: [],
     settleText: 'Your Context',
   },
   coverHeavy: {
     readingOrders: [],
     connectedThreads: [],
     readerContext: null,
-    comicvine: {
-      comicvine_issue_id: '54321',
-      comicvine_url: null,
-      series_name: 'Cover Series',
-      series_id: 2,
-      issue_number: '1',
-      name: 'Just a Cover',
-      description: null,
-      image_url: COVER_DATA_URI,
-      cover_date: '2021-06-15',
-      store_date: null,
-      creators: [],
-      story_arcs: [],
-    },
-    identity: confirmedIdentity(),
-    groups: [],
     settleText: 'ComicVine linked',
   },
 }
@@ -449,16 +444,16 @@ async function installRatingRoutes(page: Page, state: RatingStateRoutes): Promis
     route.fulfill({ json: { connected_threads: state.connectedThreads } }),
   )
   await page.route('**/v1/reading-order-groups/threads/*/groups', (route) =>
-    route.fulfill({ json: state.groups }),
+    route.fulfill({ json: state.readerContext?.groups ?? [] }),
   )
   await page.route('**/v1/issues/*/reader-context', (route) =>
     route.fulfill({ json: state.readerContext }),
   )
   await page.route('**/v1/issues/*/comicvine', (route) =>
-    route.fulfill({ json: state.comicvine }),
+    route.fulfill({ json: state.readerContext?.comicvine ?? null }),
   )
   await page.route('**/v1/comicvine/issues/*/identity', (route) =>
-    route.fulfill({ json: state.identity }),
+    route.fulfill({ json: state.readerContext?.identity ?? null }),
   )
   await page.route('**/v1/continuity/readiness', (route) =>
     route.fulfill({
