@@ -21,9 +21,9 @@ jobs:
       NEON_BRANCH_ID: br-flat-star-ay6bmye0
       PRODUCTION_BRANCH_ID: br-silent-violet-ayobfez5
       EXPECTED_BRANCH_NAME: step22-bprd-rehearsal
-      SNAPSHOT: ${{ runner.temp }}/bprd-step22-snapshot.json
-      RECEIPT: ${{ runner.temp }}/bprd-step22-receipt.json
-      POSTROLLBACK: ${{ runner.temp }}/bprd-step22-postrollback.json
+      SNAPSHOT: /tmp/bprd-step22-snapshot.json
+      RECEIPT: /tmp/bprd-step22-receipt.json
+      POSTROLLBACK: /tmp/bprd-step22-postrollback.json
     steps:
       - name: Check out exact rehearsal commit
         uses: actions/checkout@v7
@@ -232,6 +232,6 @@ jobs:
           name: step22-bprd-clone-rehearsal-${{ github.sha }}
           if-no-files-found: error
           path: |
-            ${{ runner.temp }}/bprd-step22-snapshot.json
-            ${{ runner.temp }}/bprd-step22-receipt.json
-            ${{ runner.temp }}/bprd-step22-postrollback.json
+            /tmp/bprd-step22-snapshot.json
+            /tmp/bprd-step22-receipt.json
+            /tmp/bprd-step22-postrollback.json
