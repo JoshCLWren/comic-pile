@@ -341,7 +341,11 @@ async def test_bprd_step21_uses_targeted_adoption_and_advances_roll_boundary(
     adopted_nodes = reloaded["nodes"][22:]
     assert [node["ref_id"] for node in adopted_nodes] == [issue.id for issue in next_phase]
     assert {node["lane_id"] for node in adopted_nodes} == {"main"}
-    assert all(source_path in (node.get("source_paths") or []) for node in adopted_nodes)
+    assert [
+        placement["source_path"]
+        for node in adopted_nodes
+        for placement in node.get("source_cbl_placements", [])
+    ] == [source_path] * len(adopted_nodes)
 
     groups_after = await async_db.scalar(
         select(func.count()).select_from(DependencyGroup).where(DependencyGroup.user_id == user.id)
