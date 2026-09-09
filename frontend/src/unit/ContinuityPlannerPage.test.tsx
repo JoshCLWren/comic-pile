@@ -30,20 +30,8 @@ const _origUpdate = continuityPlansApi.update
 const _origReadiness = continuityPlansApi.readiness
 const _origGroupsList = dependencyGroupsApi.list
 const _origIssuesList = issuesApi.list
-const _origIssuesGetIssue = issuesApi.getIssue
 const _origThreadsList = threadsApi.list
 const _origThreadsGet = threadsApi.get
-
-continuityPlansApi.create = mocks.create as never
-continuityPlansApi.list = mocks.list as never
-continuityPlansApi.get = mocks.get as never
-continuityPlansApi.update = mocks.update as never
-continuityPlansApi.readiness = mocks.readiness as never
-dependencyGroupsApi.list = mocks.listGroups as never
-issuesApi.list = mocks.listIssues as never
-issuesApi.getIssue = mocks.getIssue as never
-threadsApi.list = mocks.listThreads as never
-threadsApi.get = mocks.getThread as never
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
 
@@ -105,12 +93,21 @@ beforeEach(() => {
   if (typeof window !== "undefined") {
       window.localStorage.clear();
     }
+  continuityPlansApi.create = mocks.create as never
+  continuityPlansApi.list = mocks.list as never
+  continuityPlansApi.get = mocks.get as never
+  continuityPlansApi.update = mocks.update as never
+  continuityPlansApi.readiness = mocks.readiness as never
+  dependencyGroupsApi.list = mocks.listGroups as never
+  issuesApi.list = mocks.listIssues as never
+  threadsApi.list = mocks.listThreads as never
+  threadsApi.get = mocks.getThread as never
   vi.clearAllMocks()
-  continuityPlansApi.create.mockReset()
-  continuityPlansApi.get.mockReset()
-  continuityPlansApi.update.mockReset()
-  continuityPlansApi.readiness.mockReset()
-  continuityPlansApi.readiness.mockResolvedValue({
+  mocks.create.mockReset()
+  mocks.get.mockReset()
+  mocks.update.mockReset()
+  mocks.readiness.mockReset()
+  mocks.readiness.mockResolvedValue({
     plan_id: 12,
     plan_name: 'Saved lane',
     ordering_mode: 'strict_sequential',
@@ -120,14 +117,14 @@ beforeEach(() => {
     summary: { total: 0, readable: 0, blocked: 0, complete: 0, unavailable: 0 },
     generated_at: '2026-08-12T00:00:00Z',
   })
-  continuityPlansApi.list.mockResolvedValue({ plans: [], next_page_token: null })
-  dependencyGroupsApi.list.mockResolvedValue([{ id: 8, name: 'Fourth World', memberships: [], created_at: '2026-08-12T00:00:00Z' }])
-  issuesApi.list.mockReset()
-  issuesApi.list.mockResolvedValue({ issues: [issue], total_count: 1, page_size: 100, next_page_token: null })
-  issuesApi.getIssue.mockResolvedValue(issue)
-  threadsApi.list.mockResolvedValue({ threads: [thread, secondThread], next_page_token: null })
-  threadsApi.get.mockResolvedValue(thread)
-  continuityPlansApi.create.mockResolvedValue({
+  mocks.list.mockResolvedValue({ plans: [], next_page_token: null })
+  mocks.listGroups.mockResolvedValue([{ id: 8, name: 'Fourth World', memberships: [], created_at: '2026-08-12T00:00:00Z' }])
+  mocks.listIssues.mockReset()
+  mocks.listIssues.mockResolvedValue({ issues: [issue], total_count: 1, page_size: 100, next_page_token: null })
+  mocks.getIssue.mockResolvedValue(issue)
+  mocks.listThreads.mockResolvedValue({ threads: [thread, secondThread], next_page_token: null })
+  mocks.getThread.mockResolvedValue(thread)
+  mocks.create.mockResolvedValue({
     id: 12,
     user_id: 1,
     name: 'Kirby lane',
@@ -137,7 +134,7 @@ beforeEach(() => {
     created_at: '2026-08-12T00:00:00Z',
     updated_at: '2026-08-12T00:00:00Z',
   })
-  continuityPlansApi.update.mockResolvedValue({
+  mocks.update.mockResolvedValue({
     id: 12,
     user_id: 1,
     name: 'Saved lane',
@@ -158,7 +155,6 @@ afterEach(() => {
   continuityPlansApi.readiness = _origReadiness
   dependencyGroupsApi.list = _origGroupsList
   issuesApi.list = _origIssuesList
-  issuesApi.getIssue = _origIssuesGetIssue
   threadsApi.list = _origThreadsList
   threadsApi.get = _origThreadsGet
 })
