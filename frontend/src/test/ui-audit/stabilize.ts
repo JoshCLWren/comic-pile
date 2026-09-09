@@ -15,15 +15,15 @@ function normalizeSessionRecord(record: JsonRecord, index: number) {
   const normalized = {
     ...record,
     started_at: stableIso(index),
-  }
+  } satisfies JsonRecord;
 
-  if ('ended_at' in record) {
+  if ('ended_at' in normalized) {
     normalized.ended_at = record.ended_at == null ? record.ended_at : stableIso(index + 15)
   }
-  if ('created_at' in record) {
+  if ('created_at' in normalized) {
     normalized.created_at = stableIso(index)
   }
-  if ('updated_at' in record) {
+  if ('updated_at' in normalized) {
     normalized.updated_at = stableIso(index + 15)
   }
 
