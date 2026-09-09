@@ -40,7 +40,7 @@ class _Rows:
     def scalar_one_or_none(self) -> object | None:
         return self.rows[0] if self.rows else None
 
-    def scalars(self) -> "_Rows":
+    def scalars(self) -> _Rows:
         return self
 
     def all(self) -> list[object]:
@@ -111,6 +111,7 @@ async def test_adoption_mutates_exact_owned_plan() -> None:
 
     assert result.plan is plan
     assert db.commits == 1
+    assert merge.await_args is not None
     assert merge.await_args.args[1] is plan
 
 
