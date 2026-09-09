@@ -10,6 +10,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache_invalidation import invalidate_user_view
 from app.models.cbl_reference import CBLSourceEntry, CBLSourceList
 from app.models.continuity_plan import ContinuityPlan
 from app.schemas.shared_types import SourceBackedDecision
@@ -23,6 +24,7 @@ from app.services.cbl_plan_adoption import (
 )
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
+from comic_pile.dependencies import refresh_user_blocked_status
 
 
 def _place_new_nodes_on_existing_plan_lane(
@@ -166,11 +168,13 @@ async def adopt_cbl_into_existing_reading_plan(
             nodes=node_models,
             ordering_mode=_plan_ordering_mode(plan),
         )
+        await refresh_user_blocked_status(user_id, db)
         await db.commit()
     except Exception:
         await db.rollback()
         raise
 
+    await invalidate_user_view(user_id)
     await db.refresh(plan)
     return AdoptionCommitResult(
         plan=plan,
