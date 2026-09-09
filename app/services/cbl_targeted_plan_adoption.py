@@ -63,6 +63,7 @@ def _adoption_lane_id(plan: ContinuityPlan) -> str:
         return str(first_lane["id"])
     return "default"
 
+
 async def adopt_cbl_into_existing_reading_plan(
     db: AsyncSession,
     *,
