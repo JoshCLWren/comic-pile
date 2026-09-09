@@ -1,41 +1,4 @@
-"""Canonical CBL adoption commit: atomic materialization of reviewed decisions into a Reading Plan.
-
-This module implements the corrective implementation slice for #2127 under #2366.
-It takes the exact reviewed CBL adoption preview/decisions from #2126 and
-atomically creates/updates the existing canonical Reading Plan (`ContinuityPlan`).
-
-Do NOT persist reader intent into `DependencyGroup` or make `DependencyGroupMembership.sequence_order` a runtime authority.
-
-The endpoint targets one owned Reading Plan and one active CBL source list.
-Revalidates the source fingerprint and reviewed entry facts at commit time;
-stale preview fails with a structured conflict and no partial writes.
-
-Reuses canonical existing issues. Materializes only explicitly approved
-`missing_importable` issues, using stable external series identity and ComicVine
-issue identity; fail closed rather than title-guessing.
-
-Preserves existing issue IDs, read status, `read_at`, ratings/events/history,
-thread identity, existing Reading Plan node IDs, reader overrides, checkpoints,
-convergence gates, lanes, name, and ordering mode.
-
-Adds approved source entries to the **same Reading Plan** in reviewed CBL source
-order. Existing plan nodes for the same issue are reused, never duplicated.
-
-Persists source provenance on Reading Plan nodes via existing `source_paths` /
-`source_cbl_placements` fields.
-
-CBL source position is provenance/order input only. No legacy `cbl-order:source:*`
-dependencies and no new `DependencyGroup` reader-state representation.
-
-Does not silently change `informational` to `strict_sequential`. Existing explicit
-Reading Plan semantics remain authoritative.
-
-Transactional and idempotent. Concurrent same-user/same-source adoption must
-not duplicate issues or Reading Plan nodes.
-
-Returns the updated Reading Plan plus machine-readable reused/created/excluded/
-unresolved source positions.
-"""
+"""Canonical CBL adoption commit into an explicitly selected Reading Plan."""
 
 from __future__ import annotations
 
@@ -47,84 +10,37 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.cbl_adoption import (
-    CBLAdoptionCommitRequest,
-    CBLAdoptionCommitResponse,
-)
-from app.schemas.continuity_plan import (
-    ContinuityPlanLane,
-    ContinuityPlanNode,
-    PlanNodeType,
-)
-from app.services.cbl_plan_adoption import (
-    AdoptionCommitError,
-    StalePreviewError,
-    adopt_cbl_material_into_reading_plan,
-)
+from app.schemas.cbl_adoption import CBLAdoptionCommitRequest, CBLAdoptionCommitResponse
+from app.schemas.continuity_plan import ContinuityPlanLane, ContinuityPlanNode, PlanNodeType
+from app.services.cbl_plan_adoption import AdoptionCommitError, StalePreviewError
+from app.services.cbl_targeted_plan_adoption import adopt_cbl_into_existing_reading_plan
 
 router = APIRouter(prefix="/api/v1", tags=["cbl-adoption-commit"])
 
 
 @router.post(
-    "/cbl/{list_id}/adoption-commit",
+    "/cbl/{list_id}/reading-plans/{plan_id}/adoption-commit",
     response_model=CBLAdoptionCommitResponse,
     status_code=status.HTTP_200_OK,
-    description="Atomically commit reviewed CBL adoption material into the existing Reading Plan.",
+    description="Atomically commit reviewed CBL material into the selected existing Reading Plan.",
 )
 async def api_cbl_adoption_commit(
     list_id: int,
+    plan_id: int,
     request: CBLAdoptionCommitRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CBLAdoptionCommitResponse:
-    """Commit reviewed CBL adoption material into the existing Reading Plan.
-
-    This endpoint implements the corrective implementation slice for #2127 under #2366.
-    It takes the exact reviewed CBL adoption preview/decisions from #2126 and
-    atomically creates/updates the existing canonical Reading Plan (`ContinuityPlan`).
-
-    The endpoint targets one owned Reading Plan and one active CBL source list.
-    Revalidates the source fingerprint and reviewed entry facts at commit time;
-    stale preview fails with a structured conflict and no partial writes.
-
-    Reuses canonical existing issues. Materializes only explicitly approved
-    `missing_importable` issues, using stable external series identity and ComicVine
-    issue identity; fail closed rather than title-guessing.
-
-    Preserves existing issue IDs, read status, `read_at`, ratings/events/history,
-    thread identity, existing Reading Plan node IDs, reader overrides, checkpoints,
-    convergence gates, lanes, name, and ordering mode.
-
-    Adds approved source entries to the **same Reading Plan** in reviewed CBL source
-    order. Existing plan nodes for the same issue are reused, never duplicated.
-
-    Persists source provenance on Reading Plan nodes via existing `source_paths` /
-    `source_cbl_placements` fields.
-
-    CBL source position is provenance/order input only. No legacy `cbl-order:source:*`
-    dependencies and no new `DependencyGroup` reader-state representation.
-
-    Does not silently change `informational` to `strict_sequential`. Existing explicit
-    Reading Plan semantics remain authoritative.
-
-    Transactional and idempotent. Concurrent same-user/same-source adoption must
-    not duplicate issues or Reading Plan nodes.
-
-    Returns the updated Reading Plan plus machine-readable reused/created/excluded/
-    unresolved source positions.
-    """
+    """Commit reviewed source material into the exact owned Reading Plan."""
     try:
-        commit = await adopt_cbl_material_into_reading_plan(
+        commit = await adopt_cbl_into_existing_reading_plan(
             db,
             user_id=current_user.id,
+            plan_id=plan_id,
             list_id=list_id,
             entry_decisions=request.entry_decisions,
-            series_decisions={
-                sd.series_name: sd.decision for sd in request.series_decisions
-            },
-            series_overrides={
-                eo.cbl_position: eo.decision for eo in request.series_overrides
-            },
+            series_decisions={sd.series_name: sd.decision for sd in request.series_decisions},
+            series_overrides={eo.cbl_position: eo.decision for eo in request.series_overrides},
             client_content_hash=request.content_hash,
             client_revision_sha=request.revision_sha,
         )
@@ -134,14 +50,19 @@ async def api_cbl_adoption_commit(
             detail={"code": exc.code, "message": str(exc)},
         ) from exc
     except AdoptionCommitError as exc:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if str(exc) == "Reading Plan not found"
+            else status.HTTP_422_UNPROCESSABLE_ENTITY
+        )
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status_code,
             detail={"code": "adoption_error", "message": str(exc)},
         ) from exc
+
     plan = commit.plan
 
     def _to_continuity_plan_lane(lane: dict[str, object]) -> ContinuityPlanLane:
-        """Convert a stored lane JSON dict to the response schema."""
         return ContinuityPlanLane(
             id=str(lane["id"]),
             name=str(lane["name"]),
@@ -149,7 +70,6 @@ async def api_cbl_adoption_commit(
         )
 
     def _to_continuity_plan_node(node: dict[str, object]) -> ContinuityPlanNode:
-        """Convert a stored node JSON dict to the response schema."""
         placements_raw = node.get("source_cbl_placements")
         source_paths: tuple[str, ...] | None = None
         if isinstance(placements_raw, list):
