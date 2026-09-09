@@ -605,12 +605,15 @@ function sharedLiteralTokenValues(declarations) {
     byValue.set(declaration.value, entry)
   }
   return [...byValue.entries()]
-    .filter(([, entry]) => entry.names.size > 1)
-    .map(([value, entry]) => ({
-      value,
-      names: [...entry.names].sort(compareText),
-      locations: entry.locations.sort(compareLocation),
-    }))
+    .flatMap(([value, entry]) =>
+      entry.names.size > 1
+        ? [{
+            value,
+            names: [...entry.names].sort(compareText),
+            locations: entry.locations.sort(compareLocation),
+          }]
+        : [],
+    )
     .sort((left, right) => right.names.length - left.names.length || compareText(left.value, right.value))
 }
 
