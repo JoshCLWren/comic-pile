@@ -52,10 +52,10 @@ export function optimizedImageSrcSet(
 ): string | null {
   if (!sourceUrl) return null
 
-  const entries = widths.map((width) => {
+  const entries = widths.flatMap((width) => {
     const url = optimizedImageUrl(sourceUrl, width)
-    return url ? `${url} ${width}w` : null
-  }).filter((entry): entry is string => entry !== null)
+    return url ? [`${url} ${width}w`] : []
+  })
 
   return entries.length > 0 ? entries.join(', ') : null
 }
