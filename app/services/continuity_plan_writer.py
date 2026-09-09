@@ -28,6 +28,16 @@ from app.models.continuity_rule import ContinuityRule
 from app.models.thread import Thread
 from app.schemas.continuity_plan import ContinuityPlanNode, PlanOrderingMode
 from app.schemas.continuity_rule import ContinuityNodeType
+from app.services.continuity_graph import SNAPSHOT_SESSION_KEY
+
+
+def _invalidate_session_snapshot(db: AsyncSession, user_id: int) -> None:
+    """Discard continuity graph state made stale by a plan rule mutation."""
+    if db.info is None:
+        return
+    session_cache = db.info.get(SNAPSHOT_SESSION_KEY)
+    if isinstance(session_cache, dict):
+        session_cache.pop(user_id, None)
 
 
 async def validate_node_ownership(
@@ -106,6 +116,7 @@ async def replace_compiled_rules(
     Returns:
         True when all rules compiled without cycle conflicts.
     """
+    _invalidate_session_snapshot(db, user_id)
     marker = plan_rule_marker(plan.id)
     await db.execute(
         delete(ContinuityRule).where(
