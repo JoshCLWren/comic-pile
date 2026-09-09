@@ -15,6 +15,11 @@ export interface SetCurrentIssueResponse {
   reading_progress: string | null
 }
 
+interface CreateIssuesPayload {
+  issue_range: string
+  insert_after_issue_id?: number | null
+}
+
 /**
  * Issue tracking API service
  * Provides methods for managing comic issues within threads
@@ -48,7 +53,7 @@ export const issuesApi = {
     issueRange: string,
     options?: { insert_after_issue_id?: number | null }
   ): Promise<IssueListResponse> => {
-    const payload: { issue_range: string; insert_after_issue_id?: number | null } = {
+    const payload: CreateIssuesPayload = {
       issue_range: issueRange,
     }
 

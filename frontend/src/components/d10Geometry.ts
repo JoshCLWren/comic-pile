@@ -1,6 +1,15 @@
 type Vector3Tuple = [number, number, number]
 type QuadFace = [Vector3Tuple, Vector3Tuple, Vector3Tuple, Vector3Tuple]
 
+export interface D10Geometry {
+  faces: QuadFace[]
+  faceNumbers: readonly number[]
+  upperRing: Vector3Tuple[]
+  lowerRing: Vector3Tuple[]
+  topApex: Vector3Tuple
+  bottomApex: Vector3Tuple
+}
+
 export const D10_FACE_NUMBERS = [1, 10, 2, 9, 3, 8, 4, 7, 5, 6] as const
 
 function computeApexHeight(
@@ -21,14 +30,7 @@ function computeApexHeight(
   return upperA[1] - (normal[0] * (-upperA[0]) + normal[2] * (-upperA[2])) / normal[1]
 }
 
-export function buildD10Faces(): {
-  faces: QuadFace[]
-  faceNumbers: readonly number[]
-  upperRing: Vector3Tuple[]
-  lowerRing: Vector3Tuple[]
-  topApex: Vector3Tuple
-  bottomApex: Vector3Tuple
-} {
+export function buildD10Faces(): D10Geometry {
   const R = 1
   const beltHeight = 0.105
 

@@ -22,7 +22,9 @@ type DisplayEvent = {
   issue_number?: string | null
 }
 
-const EVENT_LABELS: Record<string, string> = {
+interface EventLabelMap extends Record<string, string> {}
+
+const EVENT_LABELS: EventLabelMap = {
   roll: 'Rolled',
   rate: 'Rated',
   snooze: 'Snoozed',

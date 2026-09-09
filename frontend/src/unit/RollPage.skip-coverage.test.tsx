@@ -23,8 +23,13 @@ const spies = vi.hoisted(() => ({
   unskip: vi.fn().mockResolvedValue({}),
   setPending: vi.fn().mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 }),
 }))
-const bootstrapHook = vi.hoisted(() => ({ value: null as unknown }))
-const skipHookValue = vi.hoisted(() => ({ value: null as unknown }))
+
+interface HoistedHookValue {
+  value: unknown
+}
+
+const bootstrapHook = vi.hoisted((): HoistedHookValue => ({ value: null }))
+const skipHookValue = vi.hoisted((): HoistedHookValue => ({ value: null }))
 
 const relatedApi = vi.hoisted(() => ({ readingOrders: vi.fn(), connectedThreads: vi.fn(), blockingInfo: vi.fn(), batchBlockingInfo: vi.fn() }))
 const bootstrapData: any = {
