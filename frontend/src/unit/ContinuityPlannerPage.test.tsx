@@ -4,6 +4,10 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { continuityPlansApi } from '../services/api-continuity-plans'
+import { dependencyGroupsApi } from '../services/api-dependency-groups'
+import { issuesApi } from '../services/api-issues'
+import { threadsApi } from '../services/api'
 import ContinuityPlannerPage from '../pages/ContinuityPlannerPage'
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -22,39 +26,6 @@ function renderNewPlanPage() {
     { wrapper: queryWrapper },
   )
 }
-
-const mocks = vi.hoisted(() => ({
-  create: vi.fn(),
-  get: vi.fn(),
-  update: vi.fn(),
-  readiness: vi.fn(),
-  listGroups: vi.fn(),
-  listIssues: vi.fn(),
-  getIssue: vi.fn(),
-  listThreads: vi.fn(),
-  getThread: vi.fn(),
-}))
-
-vi.mock('../services/api-continuity-plans', () => ({
-  continuityPlansApi: {
-    create: mocks.create,
-    get: mocks.get,
-    update: mocks.update,
-    readiness: mocks.readiness,
-  },
-}))
-
-vi.mock('../services/api-dependency-groups', () => ({
-  dependencyGroupsApi: { list: mocks.listGroups },
-}))
-
-vi.mock('../services/api-issues', () => ({
-  issuesApi: { list: mocks.listIssues, get: mocks.getIssue },
-}))
-
-vi.mock('../services/api', () => ({
-  threadsApi: { list: mocks.listThreads, get: mocks.getThread },
-}))
 
 const thread = {
   id: 4,
@@ -99,11 +70,12 @@ beforeEach(() => {
   if (typeof window !== "undefined") {
       window.localStorage.clear();
     }
-  mocks.get.mockReset()
-  mocks.create.mockReset()
-  mocks.update.mockReset()
-  mocks.readiness.mockReset()
-  mocks.readiness.mockResolvedValue({
+  vi.clearAllMocks()
+  continuityPlansApi.create.mockReset()
+  continuityPlansApi.get.mockReset()
+  continuityPlansApi.update.mockReset()
+  continuityPlansApi.readiness.mockReset()
+  continuityPlansApi.readiness.mockResolvedValue({
     plan_id: 12,
     plan_name: 'Saved lane',
     ordering_mode: 'strict_sequential',
@@ -113,13 +85,14 @@ beforeEach(() => {
     summary: { total: 0, readable: 0, blocked: 0, complete: 0, unavailable: 0 },
     generated_at: '2026-08-12T00:00:00Z',
   })
-  mocks.listIssues.mockReset()
-  mocks.listThreads.mockResolvedValue({ threads: [thread, secondThread], next_page_token: null })
-  mocks.listGroups.mockResolvedValue([{ id: 8, name: 'Fourth World', memberships: [], created_at: '2026-08-12T00:00:00Z' }])
-  mocks.listIssues.mockResolvedValue({ issues: [issue], total_count: 1, page_size: 100, next_page_token: null })
-  mocks.getIssue.mockResolvedValue(issue)
-  mocks.getThread.mockResolvedValue(thread)
-  mocks.create.mockResolvedValue({
+  continuityPlansApi.list.mockResolvedValue({ plans: [], next_page_token: null })
+  dependencyGroupsApi.list.mockResolvedValue([{ id: 8, name: 'Fourth World', memberships: [], created_at: '2026-08-12T00:00:00Z' }])
+  issuesApi.list.mockReset()
+  issuesApi.list.mockResolvedValue({ issues: [issue], total_count: 1, page_size: 100, next_page_token: null })
+  issuesApi.getIssue.mockResolvedValue(issue)
+  threadsApi.list.mockResolvedValue({ threads: [thread, secondThread], next_page_token: null })
+  threadsApi.get.mockResolvedValue(thread)
+  continuityPlansApi.create.mockResolvedValue({
     id: 12,
     user_id: 1,
     name: 'Kirby lane',
@@ -129,7 +102,7 @@ beforeEach(() => {
     created_at: '2026-08-12T00:00:00Z',
     updated_at: '2026-08-12T00:00:00Z',
   })
-  mocks.update.mockResolvedValue({
+  continuityPlansApi.update.mockResolvedValue({
     id: 12,
     user_id: 1,
     name: 'Saved lane',
