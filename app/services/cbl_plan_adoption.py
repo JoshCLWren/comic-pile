@@ -57,6 +57,7 @@ from app.models.external_identity import (
 )
 from app.models.issue import Issue
 from app.models.thread import Thread
+from app.repositories import issue_repository, thread_repository
 from app.schemas.continuity_plan import ContinuityPlanNode, PlanOrderingMode
 from app.schemas.shared_types import SourceBackedDecision
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
@@ -191,7 +192,6 @@ async def _ensure_missing_issue_created(
     user_id: int,
     *,
     fact: dict[str, object],
-    position: int,
     volume_year: int | None,
 ) -> Issue:
     """Materialize a missing issue for an explicitly approved CBL entry.
@@ -206,7 +206,6 @@ async def _ensure_missing_issue_created(
         db: Database session.
         user_id: User ID for ownership.
         fact: Reconciliation facts for the CBL entry.
-        position: CBL source position used as the issue position in the series.
         volume_year: Volume year used to disambiguate the series thread title.
 
     Returns:
@@ -232,14 +231,32 @@ async def _ensure_missing_issue_created(
         volume_year=volume_year,
     )
 
+    if thread.queue_position < 1:
+        thread.queue_position = await thread_repository.max_queue_position(db, user_id) + 1
+
+    existing_issues = await issue_repository.locked_issues(db, thread.id)
+    issue_position = max((item.position for item in existing_issues), default=0) + 1
     issue = Issue(
         thread_id=thread.id,
         issue_number=issue_number,
-        position=position,
+        position=issue_position,
         status="unread",
     )
     db.add(issue)
     await db.flush()
+
+    issues = [*existing_issues, issue]
+    unread_issues = [item for item in issues if item.status != "read"]
+    thread.total_issues = len(issues)
+    thread.issues_remaining = len(unread_issues)
+    thread.next_unread_issue_id = min(
+        unread_issues,
+        key=lambda item: (item.position, item.id),
+    ).id
+    thread.reading_progress = (
+        "not_started" if len(unread_issues) == len(issues) else "in_progress"
+    )
+    thread.status = "active"
 
     if comicvine_issue_id is not None:
         identity_result = await db.execute(
@@ -315,9 +332,9 @@ async def _find_or_create_series_thread(
                 user_id=user_id,
                 title=f"CBL: {series_name}",
                 format="comic",
-                queue_position=0,
+                queue_position=await thread_repository.max_queue_position(db, user_id) + 1,
                 status="active",
-                reading_progress="unstarted",
+                reading_progress="not_started",
                 created_at=datetime.now(UTC),
             )
             db.add(thread)
@@ -350,9 +367,9 @@ async def _find_or_create_series_thread(
         user_id=user_id,
         title=title,
         format="comic",
-        queue_position=0,
+        queue_position=await thread_repository.max_queue_position(db, user_id) + 1,
         status="active",
-        reading_progress="unstarted",
+        reading_progress="not_started",
         created_at=datetime.now(UTC),
     )
     db.add(thread)
@@ -424,6 +441,8 @@ async def _merge_adopted_nodes(
     entry_decisions: dict[int, SourceBackedDecision],
     series_overrides: dict[int, SourceBackedDecision],
     series_decisions: dict[str, SourceBackedDecision],
+    *,
+    new_node_lane_id: str = "default",
 ) -> AdoptionMergeReport:
     """Merge approved source entries into the plan node set in CBL order.
 
@@ -495,7 +514,6 @@ async def _merge_adopted_nodes(
                 db,
                 user_id,
                 fact=fact,
-                position=entry.position,
                 volume_year=entry.volume_year,
             )
             existing_issue_id = issue.id
@@ -524,7 +542,7 @@ async def _merge_adopted_nodes(
             "id": f"cbl-{entry.id}",
             "node_type": "issue",
             "ref_id": existing_issue_id,
-            "lane_id": "default",
+            "lane_id": new_node_lane_id,
             "position": next_position,
             "is_checkpoint": False,
             "convergence_gate": [],
