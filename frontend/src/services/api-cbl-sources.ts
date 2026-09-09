@@ -65,12 +65,18 @@ export interface CBLAdoptionPreview {
   }
 }
 
-export interface CBLAdoptionCommitResult {
-  id: number
-  reused_positions: number[]
-  created_positions: number[]
-  excluded_positions: number[]
-  unresolved_positions: number[]
+export interface CBLReadingPlanCommitResult {
+  plan_id: number
+  source_list_id: number
+  reused_issue_ids: number[]
+  added_issue_ids: number[]
+  created_issue_ids: number[]
+  created_thread_ids: number[]
+  excluded_source_positions: number[]
+  unresolved_source_positions: number[]
+  awaiting_opt_in_source_positions: number[]
+  final_adopted_source_positions: number[]
+  idempotent_replay: boolean
 }
 
 interface CBLAdoptionPlanChoices {
@@ -87,21 +93,20 @@ export const cblSourcesApi = {
     api.get<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-preview`),
   plan: (listId: number, choices: CBLAdoptionPlanChoices) =>
     api.post<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-plan`, choices),
-  commit: (listId: number, planId: number, preview: CBLAdoptionPreview) => {
-    const entry_decisions = Object.fromEntries(
-      preview.entries
-        .filter((entry) => entry.adoption_class === 'missing_importable')
-        .map((entry) => [entry.cbl_position, entry.adopted ? 'include' : 'exclude']),
-    )
-    return api.post<CBLAdoptionCommitResult>(
-      `/v1/cbl/${listId}/reading-plans/${planId}/adoption-commit`,
+  commit: (
+    listId: number,
+    planId: number,
+    preview: CBLAdoptionPreview,
+    choices: CBLAdoptionPlanChoices,
+  ) =>
+    api.post<CBLReadingPlanCommitResult>(
+      `/v1/issue-identity/cbl-sources/${listId}/reading-plans/${planId}/commit`,
       {
-        entry_decisions,
-        series_decisions: [],
-        series_overrides: [],
-        content_hash: preview.source.content_hash,
-        revision_sha: preview.source.revision_sha,
+        source: preview.source,
+        reviewed_entries: preview.entries,
+        reviewed_final_positions: preview.summary.final_adopted_order,
+        series_decisions: choices.series_decisions,
+        entry_decisions: choices.entry_decisions,
       },
-    )
-  },
+    ),
 }
