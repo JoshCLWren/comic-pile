@@ -28,6 +28,7 @@ def _fact(series: str, number: str) -> dict[str, object]:
 async def test_materialized_series_uses_thread_local_positions_and_rollable_state(
     async_db: AsyncSession,
 ) -> None:
+    """New source-backed series enter the queue with canonical issue tracking."""
     user = await get_or_create_user_async(async_db, "cbl-materialized-series")
     async_db.add(
         Thread(
@@ -85,6 +86,7 @@ async def test_materialized_series_uses_thread_local_positions_and_rollable_stat
 async def test_materialization_appends_to_existing_thread_and_recomputes_tracking(
     async_db: AsyncSession,
 ) -> None:
+    """Appending missing material reactivates and recomputes an existing thread."""
     user = await get_or_create_user_async(async_db, "cbl-existing-series")
     thread = Thread(
         user_id=user.id,
@@ -127,6 +129,7 @@ async def test_materialization_appends_to_existing_thread_and_recomputes_trackin
 
 
 def test_targeted_adoption_selects_existing_tail_lane_without_repairing_nodes() -> None:
+    """Targeted adoption chooses the tail lane before creating new plan nodes."""
     plan = cast(
         ContinuityPlan,
         SimpleNamespace(
