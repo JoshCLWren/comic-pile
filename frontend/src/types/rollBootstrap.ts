@@ -3,6 +3,17 @@ import type { SessionThread } from './index'
 /** Custom dictionary types to replace unsafe Record<string, unknown> */
 type JsonRecord = Record<string, unknown>
 
+/** Lightweight thread summary returned by the Roll bootstrap endpoint. */
+export interface RollBootstrapThread {
+  id: number
+  title: string
+  format: string
+  issue_id?: number | null
+  issue_number?: string | null
+  route_labels?: string[]
+  last_activity_at?: string | null
+}
+
 /** Specialized dictionary for correction guidance data */
 export interface SessionModeCorrectionGuidance extends Record<string, unknown> {}
 
@@ -81,8 +92,6 @@ export interface SessionMode {
   intent_version: string | null
   session_mode_correction_guidance: SessionModeCorrectionGuidance | null
 }
-
-export type SessionModeCorrectionGuidance = Record<string, unknown>
 
 /** Reader bandwidth for the current session: how demanding comics feel right now. */
 export type ReadingBandwidth = 'light' | 'balanced' | 'deep'

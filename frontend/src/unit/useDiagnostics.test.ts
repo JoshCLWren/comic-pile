@@ -2,6 +2,10 @@ import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDiagnostics } from '../hooks/useDiagnostics'
 
+interface CircularObject {
+  self?: CircularObject
+}
+
 describe('useDiagnostics', () => {
   beforeEach(() => {
     vi.clearAllMocks()

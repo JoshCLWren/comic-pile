@@ -29,6 +29,7 @@ import type {
   ThreadDependenciesResponse,
   ThreadListResponse,
   ThreadQueryParams,
+  SessionListParams,
   ThreadUpdatePayload,
 } from '../types'
 

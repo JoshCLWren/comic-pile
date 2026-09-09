@@ -3,10 +3,10 @@ type JsonRecordType = Record<string, unknown>
 export type OpenApiPaths = Record<string, unknown>
 
 /** Specialized dictionary for correction guidance data */
-export interface SessionModeCorrectionGuidance extends Record<string, unknown>
+export interface SessionModeCorrectionGuidance extends Record<string, unknown> {}
 
 /** Specialized dictionary for path mappings */
-export interface StableJsonObject extends Record<string, unknown>
+export interface StableJsonObject extends Record<string, unknown> {}
 
 /** Specialized dictionary for API responses */
 export type ApiResponseRecord = StableJsonObject
@@ -63,6 +63,10 @@ export interface ThreadQueryParams {
   sort?: 'position' | 'title' | 'created';
   page_size?: number;
   page_token?: string;
+}
+
+export interface SessionListParams {
+  page_size?: number;
 }
 
 export interface ThreadCreatePayload {

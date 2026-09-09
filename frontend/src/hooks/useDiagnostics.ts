@@ -40,6 +40,74 @@ let mountCount = 0
 interface ConsoleWithPatchedError {
   error: (...args: unknown[]) => void
 }
+
+export type { DiagnosticData }
+
+export function useDiagnostics() {
+  const isPatched = useRef(false)
+
+  const getPerformanceTiming = useCallback((): { domContentLoaded: number | null; loadComplete: number | null } => {
+    try {
+      if (typeof performance === 'undefined' || !performance) {
+        return { domContentLoaded: null, loadComplete: null }
+      }
+
+      const navEntry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
+      if (navEntry) {
+        return {
+          domContentLoaded: navEntry.domContentLoadedEventEnd,
+          loadComplete: navEntry.loadEventEnd,
+        }
+      }
+
+      return { domContentLoaded: null, loadComplete: null }
+    } catch {
+      return { domContentLoaded: null, loadComplete: null }
+    }
+  }, [])
+
+  const collectDiagnostics = useCallback((): DiagnosticData => {
+    const performanceTiming = getPerformanceTiming()
+
+    return {
+      timestamp: new Date().toISOString(),
+      url: typeof window !== 'undefined' ? window.location.href : '',
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+      screen: typeof window !== 'undefined' && window.screen ? {
+        width: window.screen.width,
+        height: window.screen.height,
+        pixelRatio: typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
+      } : {
+        width: 0,
+        height: 0,
+        pixelRatio: 1,
+      },
+      viewport: typeof window !== 'undefined' ? {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      } : {
+        width: 0,
+        height: 0,
+      },
+      scroll: typeof window !== 'undefined' ? {
+        x: window.scrollX,
+        y: window.scrollY,
+      } : {
+        x: 0,
+        y: 0,
+      },
+      performance: performanceTiming,
+      errors: [...errorBuffer],
+    }
+  }, [getPerformanceTiming])
+
+  useEffect(() => {
+    mountCount++
+
+    if (mountCount === 1 && typeof console !== 'undefined' && console.error && !isPatched.current) {
+      const original = console.error
+      originalConsoleError = original
+      ;(console as unknown as ConsoleWithPatchedError)['error'] = (...args: unknown[]) => {
         const timestamp = new Date().toISOString()
         const message = args.map((arg) => {
           if (typeof arg === 'string') return arg
