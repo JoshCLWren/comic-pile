@@ -152,17 +152,11 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     mocks.preview.mockResolvedValue(preview())
     mocks.plan.mockResolvedValue(preview([existingEntry, missingSelected]))
     mocks.commit.mockResolvedValue({
-      plan_id: 77,
-      source_list_id: 42,
-      reused_issue_ids: [25051],
-      added_issue_ids: [90001],
-      created_issue_ids: [90001],
-      created_thread_ids: [901],
-      excluded_source_positions: [],
-      unresolved_source_positions: [],
-      awaiting_opt_in_source_positions: [],
-      final_adopted_source_positions: [1, 2],
-      idempotent_replay: false,
+      id: 77,
+      reused_positions: [1],
+      created_positions: [2],
+      excluded_positions: [],
+      unresolved_positions: [],
     })
   })
 
@@ -193,7 +187,7 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     expect(reviewed.summary.final_adopted_order).toEqual([1, 2])
     expect(choices).toEqual({ series_decisions: {}, entry_decisions: { '102': true } })
     expect(onCommitted).toHaveBeenCalledOnce()
-    expect(await screen.findByText(/Added 1 plan step · created 1 comic · reused 1 existing/)).toBeInTheDocument()
+    expect(await screen.findByText(/Added material to this Reading Plan · created 1 · reused 1/)).toBeInTheDocument()
   })
 
   it('lets the reader exclude missing material and commits the remaining reviewed selection', async () => {
