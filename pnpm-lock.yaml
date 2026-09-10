@@ -39,15 +39,9 @@ importers:
       oxlint:
         specifier: 1.82.0
         version: 1.82.0
-      react:
-        specifier: ^19.2.0
-        version: 19.2.7
-      react-dom:
-        specifier: ^19.2.0
-        version: 19.2.7(react@19.2.7)
       testdriverai:
         specifier: ^7.11.58-test
-        version: 7.11.58-test(@types/node@25.9.5)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.11)
+        version: 7.11.58-test(@types/node@25.9.5)(react-dom@19.2.7(react@18.3.1))(react@18.3.1)(vitest@4.1.11)
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(jsdom@28.1.0)(msw@2.15.0(@types/node@25.9.5)(typescript@5.9.3))(vite@7.3.6(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.32.0))
@@ -5761,14 +5755,14 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@3.25.76)':
+  '@modelcontextprotocol/ext-apps@1.7.5(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(react-dom@19.2.7(react@18.3.1))(react@18.3.1)(zod@3.25.76)':
     dependencies:
       '@modelcontextprotocol/sdk': 1.30.0(zod@3.25.76)
       '@standard-schema/spec': 1.1.0
       zod: 3.25.76
     optionalDependencies:
-      react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react: 18.3.1
+      react-dom: 19.2.7(react@18.3.1)
 
   '@modelcontextprotocol/sdk@1.30.0(zod@3.25.76)':
     dependencies:
@@ -6858,7 +6852,7 @@ snapshots:
 
   '@xmldom/xmldom@0.9.11': {}
 
-  ably@2.27.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+  ably@2.27.0(react-dom@19.2.7(react@18.3.1))(react@18.3.1):
     dependencies:
       '@ably/msgpack-js': 0.4.1
       dequal: 2.0.3
@@ -6867,8 +6861,8 @@ snapshots:
       ulid: 2.4.0
       ws: 8.21.3
     optionalDependencies:
-      react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
+      react: 18.3.1
+      react-dom: 19.2.7(react@18.3.1)
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -8914,6 +8908,12 @@ snapshots:
       iconv-lite: 0.7.3
       unpipe: 1.0.0
 
+  react-dom@19.2.7(react@18.3.1):
+    dependencies:
+      react: 18.3.1
+      scheduler: 0.27.0
+    optional: true
+
   react-dom@19.2.7(react@19.2.7):
     dependencies:
       react: 19.2.7
@@ -9299,9 +9299,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  testdriverai@7.11.58-test(@types/node@25.9.5)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@4.1.11):
+  testdriverai@7.11.58-test(@types/node@25.9.5)(react-dom@19.2.7(react@18.3.1))(react@18.3.1)(vitest@4.1.11):
     dependencies:
-      '@modelcontextprotocol/ext-apps': 1.7.5(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@3.25.76)
+      '@modelcontextprotocol/ext-apps': 1.7.5(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(react-dom@19.2.7(react@18.3.1))(react@18.3.1)(zod@3.25.76)
       '@modelcontextprotocol/sdk': 1.30.0(zod@3.25.76)
       '@npmcli/redact': 3.2.2
       '@oclif/core': 4.13.5
@@ -9312,7 +9312,7 @@ snapshots:
       '@octokit/rest': 20.1.2
       '@sentry/node': 9.47.1
       '@stoplight/yaml-ast-parser': 0.0.50
-      ably: 2.27.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      ably: 2.27.0(react-dom@19.2.7(react@18.3.1))(react@18.3.1)
       ajv: 8.20.0
       arktype: 2.2.3
       axios: 1.18.1

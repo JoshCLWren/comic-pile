@@ -14,9 +14,7 @@
     "jiti": "^2.6.1",
     "oxlint": "1.82.0",
     "testdriverai": "^7.11.58-test",
-    "vitest": "^4.1.11",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "vitest": "^4.1.11"
   },
   "scripts": {
     "build": "pnpm --filter frontend run build",
