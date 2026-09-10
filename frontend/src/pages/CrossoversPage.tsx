@@ -13,6 +13,7 @@ import {
   type DependencyGroupMember,
 } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
+import type { IssueListParams } from '../services/api-issues'
 import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
 import { isString } from '../utils/runtimeChecks'
@@ -25,10 +26,11 @@ async function fetchAllIssues(threadId: number): Promise<PositionedIssue[]> {
   let nextPageToken: string | null = null
 
   while (true) {
-    const data = await issuesApi.list(threadId, {
-      page_size: 100,
-      ...(nextPageToken ? { page_token: nextPageToken } : {}),
-    })
+    const params: IssueListParams = { page_size: 100 }
+    if (nextPageToken) {
+      params.page_token = nextPageToken
+    }
+    const data = await issuesApi.list(threadId, params)
     // SAFETY: the issues endpoint returns position-ordered issues; the integer-position check below enforces the contract.
     const pageIssues = data.issues as PositionedIssue[]
     if (pageIssues.some((issue) => !Number.isInteger(issue.position) || issue.position < 1)) {
