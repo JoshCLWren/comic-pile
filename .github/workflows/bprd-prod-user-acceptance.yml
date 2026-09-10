@@ -1,0 +1,382 @@
+name: B.P.R.D. Production User Acceptance
+
+on:
+  push:
+    branches:
+      - manual/2366-bprd-prod-user-acceptance
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bprd-prod-user-acceptance
+  cancel-in-progress: false
+
+jobs:
+  accept:
+    name: Prove real B.P.R.D. source adoption for isolated production user
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PRODUCTION_BRANCH_ID: br-silent-violet-ayobfez5
+      EXPECTED_BRANCH_NAME: production
+      TEST_USER_ID: "23189"
+      SOURCE_SHA: 22dfc2c0297bc913f311ea04363147ed1973d949
+      SOURCE_REPOSITORY: acceptance-bprd-2366
+      SOURCE_FILE: cbl-source/Dark Horse/Characters/Hellboy/[Dark Horse] B.P.R.D. Plague of Frogs Omnibus Vol. 3 (Issues).cbl
+    steps:
+      - name: Check out exact ComicPile code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out exact source-list commit
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/CBL-ReadingLists
+          ref: ${{ env.SOURCE_SHA }}
+          path: cbl-source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact source commit
+        run: |
+          set -euo pipefail
+          test "$(git -C cbl-source rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Set up Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install locked runtime dependencies
+        run: uv sync --locked --no-dev
+
+      - name: Resolve and verify production connection
+        id: neon
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$NEON_API_KEY" || -z "$NEON_PROJECT_ID" ]]; then
+            echo 'NEON_API_KEY secret and NEON_PROJECT_ID variable are required.' >&2
+            exit 1
+          fi
+
+          branch_json="$(curl --fail --silent --show-error \
+            --url "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${PRODUCTION_BRANCH_ID}" \
+            --header 'Accept: application/json' \
+            --header "Authorization: Bearer ${NEON_API_KEY}")"
+          jq -e --arg id "$PRODUCTION_BRANCH_ID" --arg name "$EXPECTED_BRANCH_NAME" \
+            '.branch.id == $id and .branch.name == $name and .branch.default and .branch.primary' \
+            <<< "$branch_json" >/dev/null
+
+          raw_uri="$(curl --fail --silent --show-error --get \
+            --url "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
+            --data-urlencode "branch_id=${PRODUCTION_BRANCH_ID}" \
+            --data-urlencode 'database_name=neondb' \
+            --data-urlencode 'role_name=neondb_owner' \
+            --header 'Accept: application/json' \
+            --header "Authorization: Bearer ${NEON_API_KEY}" \
+            | jq -r '.uri')"
+          test -n "$raw_uri"
+          test "$raw_uri" != 'null'
+          echo "::add-mask::$raw_uri"
+
+          uri="$(RAW_DATABASE_URL="$raw_uri" .venv/bin/python - <<'PY'
+          import os
+          from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+          parts = urlsplit(os.environ['RAW_DATABASE_URL'])
+          query = []
+          for key, value in parse_qsl(parts.query, keep_blank_values=True):
+              if key == 'channel_binding':
+                  continue
+              if key == 'sslmode':
+                  key = 'ssl'
+              query.append((key, value))
+          print(urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)))
+          PY
+          )"
+          echo "::add-mask::$uri"
+          echo "db_url=$uri" >> "$GITHUB_OUTPUT"
+          echo "Confirmed production Neon branch: $EXPECTED_BRANCH_NAME ($PRODUCTION_BRANCH_ID)"
+
+      - name: Seed isolated user and prove source adoption
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          ENVIRONMENT: development
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import asyncio
+          import json
+          import os
+          from datetime import UTC, datetime
+          from pathlib import Path
+
+          from sqlalchemy import func, select
+
+          from app.cbl_ingest import parse_cbl_file
+          from app.cbl_sync import sync_cbl_lists
+          from app.database import AsyncSessionLocal
+          from app.models.cbl_reference import CBLSource, CBLSourceList
+          from app.models.continuity_plan import ContinuityPlan
+          from app.models.continuity_rule import ContinuityRule
+          from app.models.issue import Issue
+          from app.models.thread import Thread
+          from app.models.user import User
+          from app.schemas.continuity_plan import ContinuityPlanNode
+          from app.schemas.shared_types import SourceBackedDecision
+          from app.services.cbl_reconciliation import preview_cbl_adoption
+          from app.services.cbl_targeted_plan_adoption import adopt_cbl_into_existing_reading_plan
+          from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
+          from app.services.issue_tracking import apply_thread_issue_tracking_state
+          from comic_pile.dependencies import refresh_user_blocked_status
+          from comic_pile.queue import get_roll_pool
+
+          TEST_USER_ID = int(os.environ['TEST_USER_ID'])
+          EXPECTED_EXTERNAL_IDS = [
+              '108135', '108461', '108462', '108464', '108465',
+              '106976', '108460', '109745', '110497', '111474',
+              '112968', '114393', '115407', '117742', '119864',
+          ]
+          EXPECTED_SERIES = [
+              'B.P.R.D.: The Universal Machine',
+              'B.P.R.D.: Garden of Souls',
+              'B.P.R.D.: Killing Ground',
+          ]
+
+          async def main() -> None:
+              source_path = Path(os.environ['SOURCE_FILE'])
+              mirror_root = Path('cbl-source')
+              parsed = parse_cbl_file(source_path, mirror_path=mirror_root)
+              assert parsed.declared_issue_count == 15
+              assert len(parsed.books) == 15
+              assert [book.comicvine_issue_id for book in parsed.books] == EXPECTED_EXTERNAL_IDS
+              assert [book.position for book in parsed.books] == list(range(1, 16))
+
+              async with AsyncSessionLocal() as db:
+                  user = await db.get(User, TEST_USER_ID)
+                  assert user is not None
+                  assert user.username == 'acceptance-bprd-2366'
+
+                  existing_threads = await db.scalar(
+                      select(func.count()).select_from(Thread).where(Thread.user_id == TEST_USER_ID)
+                  )
+                  existing_plans = await db.scalar(
+                      select(func.count()).select_from(ContinuityPlan).where(ContinuityPlan.user_id == TEST_USER_ID)
+                  )
+                  assert existing_threads == 0, f'test user already has {existing_threads} threads'
+                  assert existing_plans == 0, f'test user already has {existing_plans} plans'
+
+                  gate_thread = Thread(
+                      user_id=TEST_USER_ID,
+                      title='B.P.R.D. Acceptance Gate',
+                      format='comic',
+                      queue_position=1,
+                      status='active',
+                      total_issues=1,
+                      issues_remaining=1,
+                      reading_progress='not_started',
+                      created_at=datetime.now(UTC),
+                  )
+                  db.add(gate_thread)
+                  await db.flush()
+                  gate_issue = Issue(
+                      thread_id=gate_thread.id,
+                      issue_number='gate',
+                      position=1,
+                      status='unread',
+                  )
+                  db.add(gate_issue)
+                  await db.flush()
+                  apply_thread_issue_tracking_state(gate_thread, [gate_issue])
+
+                  node = ContinuityPlanNode(
+                      id=f'issue-{gate_issue.id}',
+                      node_type='issue',
+                      ref_id=gate_issue.id,
+                      lane_id='main',
+                      position=0,
+                      is_checkpoint=False,
+                      convergence_gate=[],
+                  )
+                  await validate_node_ownership(db, user_id=TEST_USER_ID, nodes=[node])
+                  plan = ContinuityPlan(
+                      user_id=TEST_USER_ID,
+                      name='B.P.R.D. Acceptance',
+                      ordering_mode='strict_sequential',
+                      lanes_json=[{'id': 'main', 'name': 'Reading order', 'order': 0}],
+                      nodes_json=[node.model_dump()],
+                  )
+                  db.add(plan)
+                  await db.flush()
+                  await replace_compiled_rules(
+                      db,
+                      user_id=TEST_USER_ID,
+                      plan=plan,
+                      nodes=[node],
+                      ordering_mode='strict_sequential',
+                  )
+                  await refresh_user_blocked_status(TEST_USER_ID, db)
+                  await db.commit()
+
+                  summary = await sync_cbl_lists(
+                      db,
+                      repository=os.environ['SOURCE_REPOSITORY'],
+                      revision_sha=os.environ['SOURCE_SHA'],
+                      parsed_lists=(parsed,),
+                  )
+                  await db.commit()
+                  assert summary.inserted_lists == 1
+                  assert summary.entries_written == 15
+
+                  source = await db.scalar(
+                      select(CBLSource).where(CBLSource.repository == os.environ['SOURCE_REPOSITORY'])
+                  )
+                  assert source is not None
+                  source_list = await db.scalar(
+                      select(CBLSourceList).where(
+                          CBLSourceList.source_id == source.id,
+                          CBLSourceList.source_path == parsed.source_path,
+                          CBLSourceList.active.is_(True),
+                      )
+                  )
+                  assert source_list is not None
+
+                  report, preview = await preview_cbl_adoption(
+                      db,
+                      user_id=TEST_USER_ID,
+                      list_id=source_list.id,
+                  )
+                  statuses = [str(entry['resolution_status']) for entry in report.entries]
+                  classes = [str(entry['adoption_class']) for entry in preview.entries]
+                  decisions = [str(entry['adoption_decision']) for entry in preview.entries]
+                  assert report.total_positions == 15
+                  assert statuses == ['no_owned_issue_for_comicvine_id'] * 15
+                  assert classes == ['missing_importable'] * 15
+                  assert decisions == ['awaiting_opt_in'] * 15
+
+                  result = await adopt_cbl_into_existing_reading_plan(
+                      db,
+                      user_id=TEST_USER_ID,
+                      plan_id=plan.id,
+                      list_id=source_list.id,
+                      entry_decisions={
+                          position: SourceBackedDecision.INCLUDE for position in range(1, 16)
+                      },
+                      series_decisions={},
+                      client_content_hash=source_list.content_hash,
+                      client_revision_sha=source_list.revision_sha,
+                  )
+                  assert result.plan.id == plan.id
+                  assert result.created_positions == list(range(1, 16))
+                  assert len(result.plan.nodes_json or []) == 16
+                  assert {str(n.get('lane_id')) for n in result.plan.nodes_json or []} == {'main'}
+
+                  rule_count = await db.scalar(
+                      select(func.count()).select_from(ContinuityRule).where(
+                          ContinuityRule.user_id == TEST_USER_ID,
+                          ContinuityRule.note == f'continuity-plan:{plan.id}',
+                      )
+                  )
+                  assert rule_count == 15
+
+                  threads = list((await db.execute(
+                      select(Thread).where(
+                          Thread.user_id == TEST_USER_ID,
+                          Thread.title.in_([f'CBL: {name}' for name in EXPECTED_SERIES]),
+                      ).order_by(Thread.queue_position, Thread.id)
+                  )).scalars().all())
+                  assert len(threads) == 3
+
+                  materialized = []
+                  for thread in threads:
+                      issues = list((await db.execute(
+                          select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position, Issue.id)
+                      )).scalars().all())
+                      assert [issue.position for issue in issues] == [1, 2, 3, 4, 5]
+                      assert thread.queue_position > 0
+                      assert thread.total_issues == 5
+                      assert thread.issues_remaining == 5
+                      assert thread.next_unread_issue_id == issues[0].id
+                      assert thread.reading_progress == 'not_started'
+                      assert thread.status == 'active'
+                      materialized.append({
+                          'id': thread.id,
+                          'title': thread.title,
+                          'queue_position': thread.queue_position,
+                          'next_unread_issue_id': thread.next_unread_issue_id,
+                          'issue_ids': [issue.id for issue in issues],
+                      })
+
+                  pool_before = await get_roll_pool(TEST_USER_ID, db)
+                  assert [thread.id for thread in pool_before] == [gate_thread.id]
+
+                  gate_issue.status = 'read'
+                  gate_issue.read_at = datetime.now(UTC)
+                  apply_thread_issue_tracking_state(gate_thread, [gate_issue])
+                  gate_thread.status = 'completed'
+                  await refresh_user_blocked_status(TEST_USER_ID, db)
+                  await db.commit()
+
+                  pool_after = await get_roll_pool(TEST_USER_ID, db)
+                  pool_after_titles = [thread.title for thread in pool_after]
+                  assert 'CBL: B.P.R.D.: The Universal Machine' in pool_after_titles
+                  assert 'CBL: B.P.R.D.: Garden of Souls' not in pool_after_titles
+                  assert 'CBL: B.P.R.D.: Killing Ground' not in pool_after_titles
+
+                  diagnostic = {
+                      'test_user_id': TEST_USER_ID,
+                      'plan_id': plan.id,
+                      'source_list_id': source_list.id,
+                      'created_positions': result.created_positions,
+                      'node_count': len(result.plan.nodes_json or []),
+                      'compiled_rules': rule_count,
+                      'materialized_threads': materialized,
+                      'roll_pool_before_gate': [thread.title for thread in pool_before],
+                      'roll_pool_after_gate': pool_after_titles,
+                  }
+                  print(json.dumps(diagnostic, indent=2, sort_keys=True))
+                  Path('/tmp/bprd-prod-user-acceptance.json').write_text(
+                      json.dumps(diagnostic, indent=2, sort_keys=True)
+                  )
+
+          asyncio.run(main())
+          PY
+
+      - name: Clean up temporary global CBL source
+        if: always()
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          ENVIRONMENT: development
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import asyncio
+          import os
+          from sqlalchemy import delete
+          from app.database import AsyncSessionLocal
+          from app.models.cbl_reference import CBLSource
+
+          async def main() -> None:
+              async with AsyncSessionLocal() as db:
+                  await db.execute(
+                      delete(CBLSource).where(CBLSource.repository == os.environ['SOURCE_REPOSITORY'])
+                  )
+                  await db.commit()
+
+          asyncio.run(main())
+          PY
+
+      - name: Upload acceptance diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bprd-prod-user-acceptance-${{ github.sha }}
+          if-no-files-found: warn
+          path: /tmp/bprd-prod-user-acceptance.json
