@@ -83,7 +83,8 @@ export function getTopologicalPath(
     }
   })
 
-  return sorted
-    .map(id => threadById.get(id))
-    .filter((t): t is Thread => t !== undefined)
+  return sorted.flatMap((id) => {
+    const thread = threadById.get(id)
+    return thread ? [thread] : []
+  })
 }

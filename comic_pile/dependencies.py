@@ -10,10 +10,19 @@ from app.continuity_blocking import get_continuity_blocked_thread_ids
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
+from app.services.continuity_graph import SNAPSHOT_SESSION_KEY
+
+
+def _invalidate_continuity_snapshot(user_id: int, db: AsyncSession) -> None:
+    """Discard session-local graph state before an explicitly uncached evaluation."""
+    session_cache = db.info.get(SNAPSHOT_SESSION_KEY)
+    if isinstance(session_cache, dict):
+        session_cache.pop(user_id, None)
 
 
 async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
     """Read unified blocked thread IDs directly from the current transaction."""
+    _invalidate_continuity_snapshot(user_id, db)
     source_issue = Issue.__table__.alias("source_issue")
     next_unread_issue = Issue.__table__.alias("next_unread_issue")
     target_thread = Thread.__table__.alias("target_thread")

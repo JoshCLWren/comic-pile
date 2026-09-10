@@ -13,6 +13,7 @@ import PlanProjectionDialog from '../components/PlanProjectionDialog'
 import ReadingPlanAddMaterial from '../components/ReadingPlanAddMaterial'
 import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
+import { isObject, isString } from '../utils/runtimeChecks'
 
 const LAST_PLAN_KEY = 'comic-pile:last-continuity-plan'
 const DEFAULT_LANE_ID = 'main'
@@ -22,7 +23,7 @@ const DEFAULT_PLAN_NAME = 'My reading plan'
 function errorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail
-    if (typeof detail === 'string' && detail.trim()) return detail
+    if (isString(detail) && detail.trim()) return detail
   }
   return error instanceof Error && error.message ? error.message : fallback
 }
@@ -54,11 +55,11 @@ function getConflictMessage(
   }
 
   const detail = error.response?.data?.detail
-  if (typeof detail === 'string' && detail.trim()) {
+  if (isString(detail) && detail.trim()) {
     return detail
   }
 
-  if (detail && typeof detail === 'object' && 'code' in detail) {
+  if (detail && isObject(detail) && 'code' in detail) {
     const conflict = detail as ConflictDetail
     if (conflict.code === 'plan_rule_conflict' || conflict.code === 'continuity_cycle') {
       const sourceId = conflict.source_node_id
@@ -203,7 +204,8 @@ export default function ContinuityPlannerPage() {
   const hydrateLabels = useCallback((rawNodes: ContinuityPlanNode[], loadedGroups: DependencyGroup[]): PlannerNode[] => {
     const groupNames = new Map(loadedGroups.map((group) => [group.id, group.name]))
     return rawNodes.map((node): PlannerNode => {
-      const stored = typeof (node as PlannerNode).label === 'string' ? (node as PlannerNode).label.trim() : ''
+      const label = (node as PlannerNode).label
+      const stored = isString(label) ? label.trim() : ''
       if (node.node_type === 'crossover') {
         if (stored) return { ...(node as PlannerNode), label: stored }
         return { ...(node as PlannerNode), label: groupNames.get(node.ref_id) ?? '[deleted crossover]' }

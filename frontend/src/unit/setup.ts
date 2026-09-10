@@ -3,6 +3,7 @@ import { beforeEach, vi } from 'vitest'
 import { createElement, type ReactElement, type ReactNode } from 'react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from '../query/queryClient'
+import { isFunction } from '../utils/runtimeChecks'
 
 // Tests run against the same process-wide `queryClient` singleton the app uses
 // (see App.tsx) so cache writes (`setQueryData`/`invalidateQueries`, e.g. roll
@@ -132,7 +133,7 @@ if (typeof IntersectionObserver === 'undefined' || typeof globalThis.Intersectio
   })
 }
 
-if (typeof Element.prototype.scrollIntoView !== 'function') {
+if (!isFunction(Element.prototype.scrollIntoView)) {
   Element.prototype.scrollIntoView = vi.fn()
 }
 

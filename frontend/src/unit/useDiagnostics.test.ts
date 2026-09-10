@@ -53,8 +53,8 @@ describe('useDiagnostics', () => {
 
     const diagnostics = result.current.collectDiagnostics()
 
-    expect(typeof diagnostics.scroll.x).toBe('number')
-    expect(typeof diagnostics.scroll.y).toBe('number')
+    expect(diagnostics.scroll.x).toBeTypeOf('number')
+    expect(diagnostics.scroll.y).toBeTypeOf('number')
   })
 
   it('should have performance data', () => {
@@ -63,10 +63,10 @@ describe('useDiagnostics', () => {
     const diagnostics = result.current.collectDiagnostics()
 
     if (diagnostics.performance.domContentLoaded !== null) {
-      expect(typeof diagnostics.performance.domContentLoaded).toBe('number')
+      expect(diagnostics.performance.domContentLoaded).toBeTypeOf('number')
     }
     if (diagnostics.performance.loadComplete !== null) {
-      expect(typeof diagnostics.performance.loadComplete).toBe('number')
+      expect(diagnostics.performance.loadComplete).toBeTypeOf('number')
     }
   })
 

@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { FormEvent, useState } from 'react'
+import { isObject, isString } from '../utils/runtimeChecks'
 import {
   cblSourcesApi,
   type CBLAdoptionCommitResult,
@@ -39,8 +40,8 @@ function statusClass(entry: CBLAdoptionPreviewEntry): string {
 function errorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail
-    if (typeof detail === 'string' && detail.trim()) return detail
-    if (detail && typeof detail === 'object' && 'message' in detail && typeof detail.message === 'string') {
+    if (isString(detail) && detail.trim()) return detail
+    if (detail && isObject(detail) && 'message' in detail && isString(detail.message)) {
       return detail.message
     }
   }

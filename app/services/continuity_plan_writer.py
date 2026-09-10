@@ -74,6 +74,27 @@ async def validate_node_ownership(
             ) from exc
 
 
+def _is_equivalent_reusable_item_read_rule(
+    rule: ContinuityRule,
+    *,
+    requested_satisfaction_type: str,
+) -> bool:
+    """Return whether an existing standalone rule already satisfies a plan edge.
+
+    Equivalent standalone ``item_read`` rules may satisfy the same hard edge
+    without being re-owned by the Reading Plan. Rules owned by another Reading
+    Plan remain conflicts so two plans cannot silently share execution ownership.
+    """
+    note = rule.note or ""
+    return (
+        requested_satisfaction_type == "item_read"
+        and rule.satisfaction_type == "item_read"
+        and not note.startswith("continuity-plan:")
+        and rule.checkpoint_issue_id is None
+        and not rule.convergence_targets
+    )
+
+
 async def replace_compiled_rules(
     db: AsyncSession,
     *,
@@ -94,6 +115,9 @@ async def replace_compiled_rules(
 
     Convergence semantics: a node with convergence targets is blocked until all
     referenced upstream nodes are read.
+
+    An equivalent non-plan-owned ``item_read`` rule may satisfy a strict edge
+    without changing that standalone rule's ownership or provenance.
 
     Args:
         db: Async database session.
@@ -241,6 +265,11 @@ async def replace_compiled_rules(
         ).scalar_one_or_none()
         if existing is not None:
             if existing.note == marker:
+                continue
+            if _is_equivalent_reusable_item_read_rule(
+                existing,
+                requested_satisfaction_type=satisfaction_type,
+            ):
                 continue
             raise HTTPException(
                 status_code=409,

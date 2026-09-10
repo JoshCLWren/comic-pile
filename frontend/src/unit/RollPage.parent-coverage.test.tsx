@@ -126,7 +126,7 @@ describe('RollPage parent handlers', () => {
     bootstrapData.pending_thread_id = null
     bootstrapData.last_rolled_result = sessionData.last_rolled_result ?? null
     bootstrapData.active_thread = null
-    bootstrapData.roll_pool = (threadsValue ? (threadsValue as any[]).filter((t: any) => t.status === 'active' && !t.is_blocked).map((t: any) => ({ id: t.id, title: t.title, format: t.format })) : threadData.filter((t: any) => t.status === 'active' && !t.is_blocked).map((t: any) => ({ id: t.id, title: t.title, format: t.format })))
+    bootstrapData.roll_pool = (threadsValue ? (threadsValue as any[]).flatMap((t: any) => t.status === 'active' && !t.is_blocked ? [{ id: t.id, title: t.title, format: t.format }] : []) : threadData.flatMap((t: any) => t.status === 'active' && !t.is_blocked ? [{ id: t.id, title: t.title, format: t.format }] : []))
     bootstrapData.snoozed_threads = sessionData.snoozed_threads
     bootstrapData.snoozed_count = 0
     bootstrapData.blocked_count = 0

@@ -9,6 +9,8 @@
  * downgraded — by server preference data.
  */
 
+import { isString } from '../utils/runtimeChecks'
+
 export const THEME_IDS = ['classic', 'ink-gold', 'command-center'] as const
 
 export type ThemeId = (typeof THEME_IDS)[number]
@@ -35,7 +37,7 @@ function isKnownThemeId(themeId: string): themeId is ThemeId {
 
 /** Check whether a raw value is a supported theme id. */
 export function isSupportedTheme(value: unknown): value is ThemeId {
-  return typeof value === 'string' && isKnownThemeId(value)
+  return isString(value) && isKnownThemeId(value)
 }
 
 /** Read the locally persisted theme preference, or null when absent/invalid. */
