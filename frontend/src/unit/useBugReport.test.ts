@@ -1,20 +1,12 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-const bugReportsApiMock = vi.hoisted(() => ({
-  create: vi.fn(),
-}))
-
-vi.mock('../services/api', () => ({
-  bugReportsApi: bugReportsApiMock,
-  default: {},
-}))
-
-vi.mock('../utils/apiError', () => ({
-  getApiErrorDetail: vi.fn((error: { message?: string } | null | undefined) => error?.message ?? null),
-}))
-
+import { bugReportsApi } from '../services/api'
+import * as apiError from '../utils/apiError'
 import { useBugReport } from '../hooks/useBugReport'
+
+const bugReportsApiMock = bugReportsApi
+vi.spyOn(bugReportsApiMock, 'create').mockImplementation(() => new Promise(() => {}))
+vi.spyOn(apiError, 'getApiErrorDetail').mockImplementation((error: unknown) => (error as { message?: string | null | undefined })?.message ?? null)
 
 describe('useBugReport', () => {
   beforeEach(() => {
@@ -30,7 +22,7 @@ describe('useBugReport', () => {
   })
 
   it('should set isSubmitting during submission', async () => {
-    bugReportsApiMock.create.mockReturnValue(new Promise(() => {}))
+    bugReportsApiMock.create.mockResolvedValue(new Promise(() => {}))
 
     const { result } = renderHook(() => useBugReport())
 
@@ -43,7 +35,7 @@ describe('useBugReport', () => {
 
   it('should set issueUrl on success', async () => {
     const mockResponse = { issue_url: 'https://github.com/test/issues/1' }
-    bugReportsApiMock.create.mockResolvedValue(mockResponse)
+    bugReportsApiMock.create.mockResolvedValue(mockResponse as never)
 
     const { result } = renderHook(() => useBugReport())
 
@@ -76,7 +68,7 @@ describe('useBugReport', () => {
     await waitFor(() => {
       expect(result.current.error).toBe('GitHub API error')
       expect(result.current.isSubmitting).toBe(false)
-      expect(result.current.issueUrl).toBeNull()
+      expect(result.current.error).toBeNull()
       expect(thrownError).toBe(error)
     })
   })
@@ -97,7 +89,7 @@ describe('useBugReport', () => {
 
   it('should include diagnostics and report type in payload when provided', async () => {
     const mockResponse = { issue_url: 'https://github.com/test/issues/1' }
-    bugReportsApiMock.create.mockResolvedValue(mockResponse)
+    bugReportsApiMock.create.mockResolvedValue(mockResponse as never)
 
     const { result } = renderHook(() => useBugReport())
 
@@ -126,7 +118,7 @@ describe('useBugReport', () => {
 
   it('should not include diagnostics key when null', async () => {
     const mockResponse = { issue_url: 'https://github.com/test/issues/1' }
-    bugReportsApiMock.create.mockResolvedValue(mockResponse)
+    bugReportsApiMock.create.mockResolvedValue(mockResponse as never)
 
     const { result } = renderHook(() => useBugReport())
 
