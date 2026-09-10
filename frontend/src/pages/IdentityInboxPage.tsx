@@ -7,11 +7,11 @@ interface InboxCandidate {
   provider: string
   comicvine_id: string | null
   external_url: string | null
-  metadata_json: Record<string, unknown>
+  metadata_json: unknown
   status: string
   confidence: number | null
   evidence_source: string | null
-  evidence_json: Record<string, unknown>
+  evidence_json: unknown
   rejection_reason: string | null
 }
 
@@ -88,7 +88,7 @@ function CandidateCard({
   const volumeObj = meta.volume
   const volumeName =
     typeof volumeObj === 'object' && volumeObj !== null
-      ? toText((volumeObj as Record<string, unknown>).name)
+      ? toText((volumeObj as unknown).name)
       : toText(meta.volume_name)
   const issueName = toText(meta.name) ?? toText(meta.issue_name)
 
