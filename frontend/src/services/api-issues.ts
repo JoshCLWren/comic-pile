@@ -1,6 +1,13 @@
 import api from './api'
 import type { Issue, IssueListResponse, ReaderContextResponse, Thread } from '../types'
 
+/** HTTP client contract required by the issue service. */
+export interface IssuesApiHttpClient {
+  get<T = unknown>(url: string, config?: unknown): Promise<T>
+  post<T = unknown, D = unknown>(url: string, data?: D, config?: unknown): Promise<T>
+  delete<T = unknown>(url: string, config?: unknown): Promise<T>
+}
+
 export interface SetCurrentIssueResponse {
   thread_id: number
   title: string
@@ -24,139 +31,143 @@ interface CreateIssuesPayload {
  * Issue tracking API service
  * Provides methods for managing comic issues within threads
  */
-export const issuesApi = {
-  /**
-   * List issues for a thread with optional status filter and pagination
-   * @param threadId - The thread ID to list issues for
-   * @param params - Optional query parameters
-   * @param params.status - Filter by status ('unread' | 'read')
-   * @param params.page_size - Number of issues per page (default: 50)
-   * @param params.page_token - Pagination token for next page
-   * @returns Paginated list of issues
-   */
-  list: async (
-    threadId: number,
-    params?: { status?: 'unread' | 'read'; page_size?: number; page_token?: string }
-  ): Promise<IssueListResponse> => {
-    return api.get(`/v1/threads/${threadId}/issues`, { params })
-  },
+export function createIssuesApi(client: IssuesApiHttpClient) {
+  return {
+    /**
+     * List issues for a thread with optional status filter and pagination
+     * @param threadId - The thread ID to list issues for
+     * @param params - Optional query parameters
+     * @param params.status - Filter by status ('unread' | 'read')
+     * @param params.page_size - Number of issues per page (default: 50)
+     * @param params.page_token - Pagination token for next page
+     * @returns Paginated list of issues
+     */
+    list: async (
+      threadId: number,
+      params?: { status?: 'unread' | 'read'; page_size?: number; page_token?: string }
+    ): Promise<IssueListResponse> => {
+      return client.get(`/v1/threads/${threadId}/issues`, { params })
+    },
+
+    /**
+     * Create issues from a range format (e.g., "1-25" or "1, 3, 5-7")
+     * @param threadId - The thread ID to create issues for
+     * @param issueRange - Issue range string to parse and create
+     * @param options - Optional insert positioning options
+     * @returns List of created issues
+     */
+    create: async (
+      threadId: number,
+      issueRange: string,
+      options?: { insert_after_issue_id?: number | null }
+    ): Promise<IssueListResponse> => {
+      const payload: CreateIssuesPayload = {
+        issue_range: issueRange,
+      }
+
+      if (options && 'insert_after_issue_id' in options) {
+        payload.insert_after_issue_id = options.insert_after_issue_id ?? null
+      }
+
+      return client.post(`/v1/threads/${threadId}/issues`, payload)
+    },
+
+    /**
+     * Get a single issue by ID
+     * @param issueId - The issue ID to retrieve
+     * @returns The issue details
+     */
+    get: async (issueId: number): Promise<Issue> => {
+      return client.get(`/v1/issues/${issueId}`)
+    },
+
+    /**
+     * Mark an issue as read
+     * Updates thread's next_unread_issue_id and reading progress
+     * @param issueId - The issue ID to mark as read
+     */
+    markRead: async (issueId: number): Promise<void> => {
+      await client.post(`/v1/issues/${issueId}:markRead`)
+    },
+
+    /**
+     * Mark an issue as unread
+     * Reactivates thread if it was completed
+     * @param issueId - The issue ID to mark as unread
+     */
+    markUnread: async (issueId: number): Promise<void> => {
+      await client.post(`/v1/issues/${issueId}:markUnread`)
+    },
+
+    /**
+     * Move an issue to a new position within its thread
+     * @param issueId - The issue ID to move
+     * @param afterIssueId - Move after this issue ID, or null to move to the top
+     */
+    move: async (issueId: number, afterIssueId: number | null): Promise<void> => {
+      await client.post<void, { after_issue_id: number | null }>(`/v1/issues/${issueId}:move`, {
+        after_issue_id: afterIssueId,
+      })
+    },
+
+    /**
+     * Rewrite the full issue order for a thread
+     * @param threadId - The thread whose issues should be reordered
+     * @param issueIds - Full ordered list of issue IDs
+     */
+    reorder: async (threadId: number, issueIds: number[]): Promise<void> => {
+      await client.post<void, { issue_ids: number[] }>(`/v1/threads/${threadId}/issues:reorder`, {
+        issue_ids: issueIds,
+      })
+    },
+
+    /**
+     * Delete a single issue from its thread
+     * @param issueId - The issue ID to delete
+     */
+    delete: async (issueId: number): Promise<void> => {
+      await client.delete<void>(`/v1/issues/${issueId}`)
+    },
+
+    /**
+     * Migrate a thread to use issue tracking
+     * Converts thread from simple format to issue-based tracking
+     * @param threadId - The thread ID to migrate
+     * @param lastIssueRead - The number of the last issue read
+     * @param totalIssues - Total number of issues in the series
+     * @returns The updated thread object
+     */
+    migrateThread: async (threadId: number, lastIssueRead: number, totalIssues: number): Promise<Thread> => {
+      return client.post(`/v1/threads/${threadId}:migrateToIssues`, {
+        last_issue_read: lastIssueRead,
+        total_issues: totalIssues,
+      })
+    },
 
   /**
-   * Create issues from a range format (e.g., "1-25" or "1, 3, 5-7")
-   * @param threadId - The thread ID to create issues for
-   * @param issueRange - Issue range string to parse and create
-   * @param options - Optional insert positioning options
-   * @returns List of created issues
+   * Atomically set the current issue for an active thread
+   * Marks all issues before the target as read, sets target as unread,
+   * and updates the session's pending issue.
+   * @param threadId - The thread to correct
+   * @param issueNumber - The target issue number to set as current
+   * @returns Response with corrected thread and issue info
    */
-  create: async (
-    threadId: number,
-    issueRange: string,
-    options?: { insert_after_issue_id?: number | null }
-  ): Promise<IssueListResponse> => {
-    const payload: CreateIssuesPayload = {
-      issue_range: issueRange,
-    }
+    setCurrentIssue: async (threadId: number, issueNumber: string): Promise<SetCurrentIssueResponse> => {
+      return client.post(`/v1/threads/${threadId}:setCurrentIssue`, {
+        issue_number: issueNumber,
+      })
+    },
 
-    if (options && 'insert_after_issue_id' in options) {
-      payload.insert_after_issue_id = options.insert_after_issue_id ?? null
-    }
-
-    return api.post(`/v1/threads/${threadId}/issues`, payload)
-  },
-
-  /**
-   * Get a single issue by ID
-   * @param issueId - The issue ID to retrieve
-   * @returns The issue details
-   */
-  get: async (issueId: number): Promise<Issue> => {
-    return api.get(`/v1/issues/${issueId}`)
-  },
-
-  /**
-   * Mark an issue as read
-   * Updates thread's next_unread_issue_id and reading progress
-   * @param issueId - The issue ID to mark as read
-   */
-  markRead: async (issueId: number): Promise<void> => {
-    await api.post(`/v1/issues/${issueId}:markRead`)
-  },
-
-  /**
-   * Mark an issue as unread
-   * Reactivates thread if it was completed
-   * @param issueId - The issue ID to mark as unread
-   */
-  markUnread: async (issueId: number): Promise<void> => {
-    await api.post(`/v1/issues/${issueId}:markUnread`)
-  },
-
-  /**
-   * Move an issue to a new position within its thread
-   * @param issueId - The issue ID to move
-   * @param afterIssueId - Move after this issue ID, or null to move to the top
-   */
-  move: async (issueId: number, afterIssueId: number | null): Promise<void> => {
-    await api.post<void, { after_issue_id: number | null }>(`/v1/issues/${issueId}:move`, {
-      after_issue_id: afterIssueId,
-    })
-  },
-
-  /**
-   * Rewrite the full issue order for a thread
-   * @param threadId - The thread whose issues should be reordered
-   * @param issueIds - Full ordered list of issue IDs
-   */
-  reorder: async (threadId: number, issueIds: number[]): Promise<void> => {
-    await api.post<void, { issue_ids: number[] }>(`/v1/threads/${threadId}/issues:reorder`, {
-      issue_ids: issueIds,
-    })
-  },
-
-  /**
-   * Delete a single issue from its thread
-   * @param issueId - The issue ID to delete
-   */
-  delete: async (issueId: number): Promise<void> => {
-    await api.delete<void>(`/v1/issues/${issueId}`)
-  },
-
-  /**
-   * Migrate a thread to use issue tracking
-   * Converts thread from simple format to issue-based tracking
-   * @param threadId - The thread ID to migrate
-   * @param lastIssueRead - The number of the last issue read
-   * @param totalIssues - Total number of issues in the series
-   * @returns The updated thread object
-   */
-  migrateThread: async (threadId: number, lastIssueRead: number, totalIssues: number): Promise<Thread> => {
-    return api.post(`/v1/threads/${threadId}:migrateToIssues`, {
-      last_issue_read: lastIssueRead,
-      total_issues: totalIssues,
-    })
-  },
-
-/**
- * Atomically set the current issue for an active thread
- * Marks all issues before the target as read, sets target as unread,
- * and updates the session's pending issue.
- * @param threadId - The thread to correct
- * @param issueNumber - The target issue number to set as current
- * @returns Response with corrected thread and issue info
- */
-  setCurrentIssue: async (threadId: number, issueNumber: string): Promise<SetCurrentIssueResponse> => {
-    return api.post(`/v1/threads/${threadId}:setCurrentIssue`, {
-      issue_number: issueNumber,
-    })
-  },
-
-  /**
-   * Get reader-context for an issue
-   * Returns bounded series history, exact crossover context, and local reading neighborhood
-   * @param issueId - The issue ID to get reader-context for
-   * @returns Reader-context response with series, crossovers, and local_chain data
-   */
-  getReaderContext: async (issueId: number, config?: { signal?: AbortSignal }): Promise<ReaderContextResponse> => {
-    return api.get(`/v1/issues/${issueId}/reader-context`, config)
-  },
+    /**
+     * Get reader-context for an issue
+     * Returns bounded series history, exact crossover context, and local reading neighborhood
+     * @param issueId - The issue ID to get reader-context for
+     * @returns Reader-context response with series, crossovers, and local_chain data
+     */
+    getReaderContext: async (issueId: number, config?: { signal?: AbortSignal }): Promise<ReaderContextResponse> => {
+      return client.get(`/v1/issues/${issueId}/reader-context`, config)
+    },
+  }
 }
+
+export const issuesApi = createIssuesApi(api)
