@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
 
+// SAFETY: Hoisted bootstrap modal state holds nullable manualDie; null represents automatic die mode in the fixture.
 const state = vi.hoisted(() => ({ overridePending: false, setDiePending: false, manualDie: null as number | null }))
 const spies = vi.hoisted(() => ({
   list: vi.fn(), override: vi.fn(), refetch: vi.fn(), navigate: vi.fn(), setDie: vi.fn(), clearDie: vi.fn(),
