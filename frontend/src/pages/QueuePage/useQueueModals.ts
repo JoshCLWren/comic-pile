@@ -30,7 +30,7 @@ interface QueueModalsParams {
   submitEdit: (input: {
     id: number
     data: EditThreadData
-  }) => Promise<Thread>
+}) => Promise<Thread>
   submitReactivate: (input: {
     thread_id: number
     issues_to_add: number
