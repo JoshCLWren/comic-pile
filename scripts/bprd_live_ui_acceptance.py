@@ -7,11 +7,17 @@ import argparse
 import asyncio
 import json
 import os
+import sys
 from datetime import UTC, datetime
+from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import requests
 from sqlalchemy import func, select
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 PRODUCTION_BRANCH_ID = "br-silent-violet-ayobfez5"
 EXPECTED_BRANCH_NAME = "production"
