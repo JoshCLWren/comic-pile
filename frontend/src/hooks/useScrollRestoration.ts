@@ -11,6 +11,7 @@ function readStore(): ScrollPositions {
   }
   try {
     const raw = sessionStorage.getItem(SESSION_STORAGE_KEY)
+    // SAFETY: the JSON was written by writeStore from a Record<string, number>, so parse yields that shape.
     return raw ? (JSON.parse(raw) as ScrollPositions) : {}
   } catch {
     return {}

@@ -59,25 +59,40 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 vi.mock('../hooks', async (importOriginal) => {
+  // SAFETY: the real module is spread back in, so the cast only asserts the object is a string-keyed module map.
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
     useRate: vi.fn(),
   }
 })
+// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseSession = vi.mocked(useSession) as any
+// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseStaleThreads = vi.mocked(useStaleThreads) as any
+// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseRollBootstrap = vi.mocked(useRollBootstrap) as any
+// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseSetDie = vi.mocked(useSetDie) as any
+// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseClearManualDie = vi.mocked(useClearManualDie) as any
+// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseRoll = vi.mocked(useRoll) as any
+// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseOverrideRoll = vi.mocked(useOverrideRoll) as any
+// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseDismissPending = vi.mocked(useDismissPending) as any
+// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseSnooze = vi.mocked(useSnooze) as any
+// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
+// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
+// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
+// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
+// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseRate = vi.mocked(useRate) as any
 
 beforeEach(() => {

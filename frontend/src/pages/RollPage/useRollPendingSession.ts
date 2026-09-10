@@ -72,6 +72,7 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
 
     const pendingResult =
       pendingFromSession?.last_rolled_result ?? bootstrap?.last_rolled_result ?? null
+    // SAFETY: both pendingFromSession and pendingFromPool carry ThreadMetadata when present; the union falls back to null.
     const pendingMetadata = (pendingFromSession ?? pendingFromPool) as ThreadMetadata | null
     const shouldInitializeRatingView = !isRatingView || !isCurrentPendingSelection
 

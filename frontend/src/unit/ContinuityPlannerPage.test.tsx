@@ -229,6 +229,7 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
 
     await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce())
+    // SAFETY: mock call shape matches the create API payload
     const payload = mocks.create.mock.calls[0][0] as { ordering_mode: string }
     expect(payload.ordering_mode).toBe('informational')
   })
@@ -250,6 +251,7 @@ describe('ContinuityPlannerPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
     await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce())
+    // SAFETY: mock call shape matches the create API payload
     const payload = mocks.create.mock.calls[0][0] as { ordering_mode: string }
     expect(payload.ordering_mode).toBe('informational')
   })
@@ -1369,6 +1371,7 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
     await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce())
 
+    // SAFETY: mock call shape matches the create API payload with lanes
     const payload = mocks.create.mock.calls[0][0] as {
       ordering_mode: string
       lanes: Array<{ id: string }>
@@ -1447,6 +1450,7 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
     await waitFor(() => expect(mocks.update).toHaveBeenCalledOnce())
 
+    // SAFETY: mock call shape matches the update API payload with lanes
     const payload = mocks.update.mock.calls[0][1] as {
       lanes: Array<{ id: string }>
       nodes: Array<{ id: string; lane_id: string }>
@@ -1513,6 +1517,7 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
     await waitFor(() => expect(mocks.update).toHaveBeenCalledOnce())
 
+    // SAFETY: mock call shape matches the update API payload with checkpoints
     const payload = mocks.update.mock.calls[0][1] as { nodes: Array<{ id: string; is_checkpoint?: boolean }> }
     const checkpointNode = payload.nodes.find((n) => n.id === 'a-2')
     expect(checkpointNode?.is_checkpoint).toBe(true)
@@ -1584,6 +1589,7 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
     await waitFor(() => expect(mocks.update).toHaveBeenCalledOnce())
 
+    // SAFETY: mock call shape matches the update API payload with convergence gates
     const payload = mocks.update.mock.calls[0][1] as { nodes: Array<{ id: string; convergence_gate?: Array<{ node_id: string }> }> }
     const convergenceNode = payload.nodes.find((n) => n.id === 'b-1')
     expect(convergenceNode?.convergence_gate).toHaveLength(1)
@@ -1653,6 +1659,7 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
     await waitFor(() => expect(mocks.update).toHaveBeenCalledOnce())
 
+    // SAFETY: mock call shape matches the update API payload with convergence gates
     const payload = mocks.update.mock.calls[0][1] as { nodes: Array<{ id: string; convergence_gate?: Array<{ node_id: string }> }> }
     const convergenceNode = payload.nodes.find((n) => n.id === 'b-1')
     expect(convergenceNode?.convergence_gate).toHaveLength(0)

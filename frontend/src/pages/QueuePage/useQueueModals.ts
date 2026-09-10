@@ -269,6 +269,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         if (hasIssueRange) {
           issuesRemaining = parseIssueRange(createForm.issues)
         }
+        // SAFETY: submitCreate resolves to the created thread record or null when creation is skipped.
         const result = (await submitCreate({
           title: createForm.title,
           format: createForm.format,

@@ -90,6 +90,7 @@ describe('DependencyBuilder', () => {
     const remove = screen.getAllByRole('button', { name: 'Remove' })[0]
     fireEvent.click(remove)
     await waitFor(() => expect(toast.showToast).toHaveBeenCalled())
+    // SAFETY: mock call shape is controlled by the test
     const call = cast<[string, string, { onClick?: () => void }]>(toast.showToast.mock.calls.at(-1))
     const action = call[2]?.onClick
     act(() => action?.())
@@ -185,16 +186,19 @@ describe('DependencyBuilder', () => {
     const { rerender } = renderBuilder(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'late')
     await waitFor(() => expect(api.threadsApi.list).toHaveBeenCalled())
+    // SAFETY: test fixture provides only the fields the component reads
     rerender(<DependencyBuilder thread={thread as never} isOpen={false} onClose={vi.fn()} />)
     resolveThreads({ threads: [], next_page_token: null })
     await Promise.resolve()
 
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Source', total_issues: 2 }], next_page_token: null })
     api.issuesApi.list.mockReturnValue(new Promise((resolve) => { resolveIssues = resolve }))
+    // SAFETY: test fixture provides only the fields the component reads
     rerender(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'Source')
     await waitFor(() => expect(screen.getByRole('button', { name: /Source/ })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /Source/ }))
+    // SAFETY: test fixture provides only the fields the component reads
     rerender(<DependencyBuilder thread={thread as never} isOpen={false} onClose={vi.fn()} />)
     resolveIssues({ issues: [], total_count: 0, page_size: 100, next_page_token: null })
     await Promise.resolve()
@@ -461,6 +465,7 @@ describe('DependencyBuilder', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    // SAFETY: test fixture provides only the fields the component reads
     rerender(<DependencyBuilder thread={thread as never} isOpen={false} onClose={vi.fn()} />)
     await waitFor(() => expect(api.dependenciesApi.deleteDependency).toHaveBeenCalledWith(4))
   })
@@ -474,6 +479,7 @@ describe('DependencyBuilder', () => {
     const { rerender } = renderBuilder(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} onChanged={changed} />)
     await waitFor(() => expect(screen.getByText('Commit on close')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Remove' }))
+    // SAFETY: test fixture provides only the fields the component reads
     rerender(<DependencyBuilder thread={thread as never} isOpen={false} onClose={vi.fn()} onChanged={changed} />)
     await waitFor(() => expect(changed).toHaveBeenCalled())
     expect(toast.removeToast).toHaveBeenCalled()

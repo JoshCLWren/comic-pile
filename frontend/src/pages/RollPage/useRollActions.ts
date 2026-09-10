@@ -105,6 +105,7 @@ export function useRollActions({
         last_rolled_result: response.result ?? response.last_rolled_result,
       }
       if (response.total_issues === null) {
+        // SAFETY: threadMetadata is assembled from the roll response fields RatingThread requires when total_issues is null.
         setThreadToMigrate(threadMetadata as RatingThread)
         setShowMigrationDialog(true)
       } else {
@@ -149,6 +150,7 @@ export function useRollActions({
             last_rolled_result: response.result ?? response.last_rolled_result,
           }
           if (response.total_issues === null) {
+            // SAFETY: threadMetadata is assembled from the roll response fields RatingThread requires when total_issues is null.
             setThreadToMigrate(threadMetadata as RatingThread)
             setShowMigrationDialog(true)
           } else {

@@ -28,6 +28,7 @@ async function fetchCrossoverGroups(threadIds: number[]): Promise<Record<number,
   const responses = await Promise.all(
     chunks.map((threadIdChunk) => dependencyGroupsApi.listForThreads(threadIdChunk)),
   )
+  // SAFETY: Object.assign over the grouped responses produces the thread-id keyed map contract.
   const merged = Object.assign({}, ...responses) as Record<number, DependencyGroupSummary[]>
   // Ensure all requested thread IDs have an entry (empty array if not in response)
   const result: Record<number, DependencyGroupSummary[]> = {}
@@ -63,6 +64,7 @@ export function useCrossoverGroups(threadIds: number[]): CrossoverGroupsState {
   return {
     groupsByThreadId: data ?? EMPTY_GROUPS,
     isPending,
+    // SAFETY: the queryFn normalizes failures to Error, so the query error value is Error | null.
     error: (error as Error | null) ?? null,
   }
 }
