@@ -1,0 +1,226 @@
+name: B.P.R.D. Production Source Sync
+
+on:
+  push:
+    branches:
+      - manual/2366-bprd-production-source-sync
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bprd-production-source-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Add issue-level B.P.R.D. source without disturbing existing lists
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PRODUCTION_BRANCH_ID: br-silent-violet-ayobfez5
+      EXPECTED_BRANCH_NAME: production
+      SOURCE_SHA: 1a4e17d10d1fe802cb5d4804414c8a1320072167
+      STORED_SOURCE_REPOSITORY: /mnt/bigdata/CBL-ReadingLists
+      SOURCE_FILE: cbl-source/Dark Horse/Characters/Hellboy/[Dark Horse] B.P.R.D. Plague of Frogs Omnibus Vol. 3 (Issues).cbl
+    steps:
+      - name: Check out exact ComicPile code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out merged source-list commit
+        uses: actions/checkout@v7
+        with:
+          repository: JoshCLWren/CBL-ReadingLists
+          ref: ${{ env.SOURCE_SHA }}
+          path: cbl-source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact source commit
+        run: |
+          set -euo pipefail
+          test "$(git -C cbl-source rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Set up Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install locked runtime dependencies
+        run: uv sync --locked --no-dev
+
+      - name: Resolve and verify production connection
+        id: neon
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          branch_json="$(curl --fail --silent --show-error \
+            --url "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${PRODUCTION_BRANCH_ID}" \
+            --header 'Accept: application/json' \
+            --header "Authorization: Bearer ${NEON_API_KEY}")"
+          jq -e --arg id "$PRODUCTION_BRANCH_ID" --arg name "$EXPECTED_BRANCH_NAME" \
+            '.branch.id == $id and .branch.name == $name and .branch.default and .branch.primary' \
+            <<< "$branch_json" >/dev/null
+
+          raw_uri="$(curl --fail --silent --show-error --get \
+            --url "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
+            --data-urlencode "branch_id=${PRODUCTION_BRANCH_ID}" \
+            --data-urlencode 'database_name=neondb' \
+            --data-urlencode 'role_name=neondb_owner' \
+            --header 'Accept: application/json' \
+            --header "Authorization: Bearer ${NEON_API_KEY}" \
+            | jq -r '.uri')"
+          test -n "$raw_uri"
+          test "$raw_uri" != 'null'
+          echo "::add-mask::$raw_uri"
+
+          uri="$(RAW_DATABASE_URL="$raw_uri" .venv/bin/python - <<'PY'
+          import os
+          from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+          parts = urlsplit(os.environ['RAW_DATABASE_URL'])
+          query = []
+          for key, value in parse_qsl(parts.query, keep_blank_values=True):
+              if key == 'channel_binding':
+                  continue
+              if key == 'sslmode':
+                  key = 'ssl'
+              query.append((key, value))
+          print(urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)))
+          PY
+          )"
+          echo "::add-mask::$uri"
+          echo "db_url=$uri" >> "$GITHUB_OUTPUT"
+
+      - name: Sync only the new B.P.R.D. list and verify user 1 remains blocked correctly
+        env:
+          DATABASE_URL: ${{ steps.neon.outputs.db_url }}
+          ENVIRONMENT: development
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import asyncio
+          import json
+          import os
+          from pathlib import Path
+
+          from sqlalchemy import func, select
+
+          from app.cbl_ingest import parse_cbl_file
+          from app.cbl_sync import sync_cbl_lists
+          from app.database import AsyncSessionLocal
+          from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
+          from app.models.continuity_plan import ContinuityPlan
+          from app.services.cbl_reconciliation import preview_cbl_adoption
+          from comic_pile.queue import get_roll_pool
+
+          async def main() -> None:
+              parsed = parse_cbl_file(Path(os.environ['SOURCE_FILE']), mirror_path=Path('cbl-source'))
+              assert parsed.declared_issue_count == 15
+              assert len(parsed.books) == 15
+
+              async with AsyncSessionLocal() as db:
+                  source = await db.scalar(
+                      select(CBLSource).where(CBLSource.repository == os.environ['STORED_SOURCE_REPOSITORY'])
+                  )
+                  assert source is not None
+                  assert source.id == 3
+
+                  existing_lists = list((await db.execute(
+                      select(CBLSourceList).where(
+                          CBLSourceList.source_id == source.id,
+                          CBLSourceList.active.is_(True),
+                      ).order_by(CBLSourceList.source_path)
+                  )).scalars().all())
+                  assert len(existing_lists) == 12
+                  existing_paths = frozenset(item.source_path for item in existing_lists)
+                  assert parsed.source_path not in existing_paths
+
+                  summary = await sync_cbl_lists(
+                      db,
+                      repository=source.repository,
+                      revision_sha=os.environ['SOURCE_SHA'],
+                      parsed_lists=(parsed,),
+                      protected_paths=existing_paths,
+                  )
+                  assert summary.source_created is False
+                  assert summary.inserted_lists == 1
+                  assert summary.updated_lists == 0
+                  assert summary.deactivated_lists == 0
+                  assert summary.entries_written == 15
+                  await db.commit()
+
+                  source_list = await db.scalar(
+                      select(CBLSourceList).where(
+                          CBLSourceList.source_id == source.id,
+                          CBLSourceList.source_path == parsed.source_path,
+                          CBLSourceList.active.is_(True),
+                      )
+                  )
+                  assert source_list is not None
+                  entry_count = await db.scalar(
+                      select(func.count()).select_from(CBLSourceEntry).where(CBLSourceEntry.list_id == source_list.id)
+                  )
+                  active_count = await db.scalar(
+                      select(func.count()).select_from(CBLSourceList).where(
+                          CBLSourceList.source_id == source.id,
+                          CBLSourceList.active.is_(True),
+                      )
+                  )
+                  assert entry_count == 15
+                  assert active_count == 13
+
+                  plan = await db.scalar(
+                      select(ContinuityPlan).where(
+                          ContinuityPlan.user_id == 1,
+                          ContinuityPlan.name == 'B.P.R.D.',
+                      )
+                  )
+                  assert plan is not None
+                  assert len(plan.nodes_json or []) == 22
+
+                  report, preview = await preview_cbl_adoption(db, user_id=1, list_id=source_list.id)
+                  status_counts = {}
+                  class_counts = {}
+                  decision_counts = {}
+                  for entry in report.entries:
+                      key = str(entry['resolution_status'])
+                      status_counts[key] = status_counts.get(key, 0) + 1
+                  for entry in preview.entries:
+                      key = str(entry['adoption_class'])
+                      class_counts[key] = class_counts.get(key, 0) + 1
+                      decision = str(entry['adoption_decision'])
+                      decision_counts[decision] = decision_counts.get(decision, 0) + 1
+                  assert report.total_positions == 15
+                  assert class_counts == {'missing_importable': 15}
+                  assert decision_counts == {'awaiting_opt_in': 15}
+
+                  pool = await get_roll_pool(1, db)
+                  bprd_pool = [
+                      {'id': thread.id, 'title': thread.title}
+                      for thread in pool
+                      if 'B.P.R.D.' in thread.title or 'BLACK FLAME' in thread.title.upper()
+                  ]
+                  assert [item['id'] for item in bprd_pool] == [3384]
+
+                  print(json.dumps({
+                      'source_id': source.id,
+                      'source_list_id': source_list.id,
+                      'active_lists': active_count,
+                      'entry_count': entry_count,
+                      'preview_resolution_statuses': status_counts,
+                      'preview_classes': class_counts,
+                      'preview_decisions': decision_counts,
+                      'bprd_plan_id': plan.id,
+                      'bprd_plan_nodes': len(plan.nodes_json or []),
+                      'bprd_roll_pool': bprd_pool,
+                  }, indent=2, sort_keys=True))
+
+          asyncio.run(main())
+          PY
