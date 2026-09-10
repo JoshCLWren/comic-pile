@@ -1400,6 +1400,47 @@ async def rollback_ultimate_universe_migration(
                 f"rollback failed to restore exact temporary rule {row['id']}"
             )
 
+    source_restored_ids = {int(cast(int, row["id"])) for row in source_rows}
+    if source_restored_ids:
+        for row in snapshot.get("reused_standalone_rules", []):
+            rule = await db.get(ContinuityRule, int(cast(int, row["id"])))
+            if rule is None or _rule_snapshot(rule) != row:
+                raise MigrationInvariantError(
+                    f"reusable standalone rule {row['id']} was clobbered by the "
+                    "legacy dependency sync trigger during rollback; "
+                    "refusing automatic rollback"
+                )
+        source_linked_mirrors = list(
+            (
+                await db.execute(
+                    select(ContinuityRule).where(
+                        ContinuityRule.legacy_dependency_id.in_(source_restored_ids)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for rule in source_linked_mirrors:
+            await db.delete(rule)
+        await db.flush()
+        remaining_source_linked_ids = list(
+            (
+                await db.execute(
+                    select(ContinuityRule.id).where(
+                        ContinuityRule.legacy_dependency_id.in_(source_restored_ids)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if remaining_source_linked_ids:
+            raise MigrationInvariantError(
+                "rollback left legacy dependency sync-trigger mirror rules "
+                f"attached to restored source dependencies: {remaining_source_linked_ids}"
+            )
+
     await refresh_user_blocked_status(spec.user_id, db)
     await db.flush()
 

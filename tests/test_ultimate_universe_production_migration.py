@@ -1,11 +1,11 @@
-"""PostgreSQL acceptance coverage for the Step 23A Ultimate Universe dry-run."""
+"""PostgreSQL acceptance coverage for Step 23A dry-run and Step 23B apply/rollback."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
@@ -17,10 +17,15 @@ from app.models.external_identity import ExternalIdentity, IssueExternalIdentity
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.services.ultimate_universe_production_migration import (
+    MigrationInvariantError,
+    TEMPORARY_REPAIR_NOTE,
     UltimateUniverseDryRunSpec,
+    apply_ultimate_universe_migration,
     build_ultimate_universe_dry_run,
+    rollback_ultimate_universe_migration,
 )
 from comic_pile.dependencies import refresh_user_blocked_status
+from comic_pile.queue import get_roll_pool
 from tests.conftest import get_or_create_user_async
 
 
@@ -61,7 +66,7 @@ async def _thread_with_issue(
 
 async def _production_shaped_fixture(
     db: AsyncSession,
-) -> tuple[UltimateUniverseDryRunSpec, list[Issue], list[Thread]]:
+) -> tuple[UltimateUniverseDryRunSpec, list[Issue], list[Thread], Dependency]:
     """Create a four-position source with an unread/read/read/unread history gap."""
     user = await get_or_create_user_async(db)
     rows = [
@@ -178,7 +183,73 @@ async def _production_shaped_fixture(
         expected_positions=4,
         plan_name="Ultimate Universe Test",
     )
-    return spec, issues, threads
+    return spec, issues, threads, legacy
+
+
+async def _step23b_fixture(
+    db: AsyncSession,
+) -> tuple[
+    UltimateUniverseDryRunSpec,
+    list[Issue],
+    list[Thread],
+    Dependency,
+    ContinuityRule,
+    Dependency,
+    ContinuityRule,
+]:
+    """Production shape plus a reusable standalone edge and a temporary repair.
+
+    Returns the spec, issues, threads, the legacy source dependency, the
+    reusable standalone ``item_read`` rule, the temporary repair dependency,
+    and its dependency-linked temporary rule.
+    """
+    spec, issues, threads, legacy_dependency = await _production_shaped_fixture(db)
+    issue_ids = [issue.id for issue in issues]
+
+    standalone_rule = ContinuityRule(
+        user_id=spec.user_id,
+        source_type="issue",
+        source_id=issue_ids[2],
+        target_type="issue",
+        target_id=issue_ids[3],
+        satisfaction_type="item_read",
+        note="standalone prerequisite",
+    )
+    db.add(standalone_rule)
+    await db.flush()
+
+    temp_dependency = Dependency(
+        source_issue_id=issue_ids[1],
+        target_issue_id=issue_ids[3],
+        note=TEMPORARY_REPAIR_NOTE,
+        created_at=datetime.now(UTC),
+    )
+    db.add(temp_dependency)
+    await db.flush()
+    temp_rule = ContinuityRule(
+        user_id=spec.user_id,
+        legacy_dependency_id=temp_dependency.id,
+        source_type="issue",
+        source_id=issue_ids[1],
+        target_type="issue",
+        target_id=issue_ids[3],
+        satisfaction_type="item_read",
+        note=TEMPORARY_REPAIR_NOTE,
+    )
+    db.add(temp_rule)
+    await db.flush()
+    await refresh_user_blocked_status(spec.user_id, db)
+    await db.flush()
+
+    return (
+        spec,
+        issues,
+        threads,
+        legacy_dependency,
+        standalone_rule,
+        temp_dependency,
+        temp_rule,
+    )
 
 
 @pytest.mark.asyncio
@@ -186,7 +257,7 @@ async def test_step23a_dry_run_bridges_historical_read_gap_without_writes(
     async_db: AsyncSession,
 ) -> None:
     """Dry-run preserves Roll eligibility across an out-of-order historical read gap."""
-    spec, issues, threads = await _production_shaped_fixture(async_db)
+    spec, issues, threads, _legacy = await _production_shaped_fixture(async_db)
     issue_ids = [issue.id for issue in issues]
     thread_ids = [thread.id for thread in threads]
     await async_db.commit()
@@ -245,7 +316,7 @@ async def test_step23a_snapshot_token_is_stable_for_unchanged_state(
     async_db: AsyncSession,
 ) -> None:
     """Repeated dry-runs over unchanged PostgreSQL state produce one review token."""
-    spec, _, _ = await _production_shaped_fixture(async_db)
+    spec, _, _, _ = await _production_shaped_fixture(async_db)
     await async_db.commit()
 
     first = await build_ultimate_universe_dry_run(async_db, spec)
