@@ -187,6 +187,8 @@ async def test_step23a_dry_run_bridges_historical_read_gap_without_writes(
 ) -> None:
     """Dry-run preserves Roll eligibility across an out-of-order historical read gap."""
     spec, issues, threads = await _production_shaped_fixture(async_db)
+    issue_ids = [issue.id for issue in issues]
+    thread_ids = [thread.id for thread in threads]
     await async_db.commit()
 
     before = {
@@ -211,18 +213,18 @@ async def test_step23a_dry_run_bridges_historical_read_gap_without_writes(
     assert report["historical_gap_bridges"] == [
         {
             "source_position": 1,
-            "source_issue_id": issues[0].id,
+            "source_issue_id": issue_ids[0],
             "target_position": 4,
-            "target_issue_id": issues[3].id,
+            "target_issue_id": issue_ids[3],
         }
     ]
     assert report["planned"]["adjacent_rule_count"] == 3
     assert report["planned"]["gap_bridge_count"] == 1
     assert report["runtime_behavior"]["current_affected_roll_eligible_thread_ids"] == [
-        threads[0].id
+        thread_ids[0]
     ]
     assert report["runtime_behavior"]["simulated_future_eligible_thread_ids"] == [
-        threads[0].id
+        thread_ids[0]
     ]
     assert report["runtime_behavior"]["planned_extra_direct_blockers"] == []
     assert isinstance(report["snapshot_token"], str)
