@@ -16,7 +16,7 @@ importers:
         specifier: ^9.17.0
         version: 9.39.5
       '@oxlint/plugins':
-        specifier: 1.82.0
+        specifier: ^1.82.0
         version: 1.82.0
       eslint:
         specifier: ^9.17.0
