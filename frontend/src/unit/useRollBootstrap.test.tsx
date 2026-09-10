@@ -217,6 +217,7 @@ describe('useRollBootstrap', () => {
   })
 
   it('uses the anonymous storage key when the bootstrap has no user id', async () => {
+    // SAFETY: Spreading the valid bootstrapResponse and overriding user_id to undefined preserves the RollBootstrapResponse shape for the anonymous-storage test.
     const anonymousResponse = {
       ...bootstrapResponse,
       session_id: 7,

@@ -34,7 +34,31 @@ it('submits ratings, applies the authoritative thread cache, and publishes Roll 
 })
 
 it('shares one in-flight request across repeated submissions', async () => {
-  let resolveRequest: (() => void) | undefined; mockedProtectedApi.rate.mockReturnValue(new Promise((resolve) => { resolveRequest = () => resolve(undefined as never) })); const { result } = renderHook(() => useRate(), { wrapper }); const payload: RatePayload = { thread_id: 1, rating: 4 }; let firstRequest: Promise<unknown> | undefined; let secondRequest: Promise<unknown> | undefined; act(() => { firstRequest = result.current.mutate(payload); secondRequest = result.current.mutate(payload) }); expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1); expect(result.current.isPending).toBe(true); await act(async () => { resolveRequest?.(); await Promise.all([firstRequest, secondRequest]) }); expect(mockedApplyRatedThreadCache).toHaveBeenCalledTimes(1); expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1); expect(result.current.isPending).toBe(false); expect(result.current.isError).toBe(false)
+  let resolveRequest: (() => void) | undefined
+  // SAFETY: Test controls promise resolution; resolving with undefined satisfies the mocked rate promise that the hook awaits.
+  mockedProtectedApi.rate.mockReturnValue(
+    new Promise((resolve) => {
+      resolveRequest = () => resolve(undefined as unknown as Thread)
+    }),
+  )
+  const { result } = renderHook(() => useRate(), { wrapper })
+  const payload: RatePayload = { thread_id: 1, rating: 4 }
+  let firstRequest: Promise<unknown> | undefined
+  let secondRequest: Promise<unknown> | undefined
+  act(() => {
+    firstRequest = result.current.mutate(payload)
+    secondRequest = result.current.mutate(payload)
+  })
+  expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1)
+  expect(result.current.isPending).toBe(true)
+  await act(async () => {
+    resolveRequest?.()
+    await Promise.all([firstRequest, secondRequest])
+  })
+  expect(mockedApplyRatedThreadCache).toHaveBeenCalledTimes(1)
+  expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1)
+  expect(result.current.isPending).toBe(false)
+  expect(result.current.isError).toBe(false)
 })
 
 it('reconciles a committed rating after the delayed response crosses the client timeout', async () => {

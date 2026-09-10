@@ -43,6 +43,7 @@ function renderRatingView() {
   render(
     <MemoryRouter>
       <RatingView
+        // SAFETY: Test supplies a minimal ActiveRatingThread shape with only the fields RatingView reads; cast is safe because the component only accesses title/format and issue numbers.
         activeRatingThread={{
           id: 1,
           title: 'Ultimate X-Men',
@@ -51,7 +52,7 @@ function renderRatingView() {
           total_issues: 12,
           issue_number: '11',
           next_issue_number: '12',
-        } as never}
+        } as unknown as Parameters<typeof RatingView>[0]['activeRatingThread']}
         currentDie={6}
         rolledResult={2}
         rating={4}

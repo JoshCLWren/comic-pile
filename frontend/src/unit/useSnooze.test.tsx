@@ -32,6 +32,7 @@ const bootstrapState = (
 ): RollBootstrapResponse => ({
   session_id: 1,
   user_id: 1,
+  // SAFETY: currentDie test param is constrained to valid die sizes (12/20/etc.); the cast narrows the number to the RollBootstrapResponse die union.
   current_die: currentDie as RollBootstrapResponse['current_die'],
   manual_die: null,
   pending_thread_id: pendingThreadId,

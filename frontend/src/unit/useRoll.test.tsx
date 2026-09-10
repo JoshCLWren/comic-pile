@@ -45,17 +45,24 @@ async function setupMutation<TArg>(
   const { result } = renderHook(() => hook(), { wrapper })
 
   await act(async () => {
-    await result.current.mutate(args as never)
+    // SAFETY: Generic test harness forwards the typed args to the hook's mutate; never widens the arg shape without loss.
+    await result.current.mutate(args as unknown as Parameters<typeof result.current.mutate>[0])
   })
 }
 
 beforeEach(() => {
-  mockedRollApi.roll.mockResolvedValue({} as never)
-  mockedRollApi.override.mockResolvedValue({} as never)
-  mockedRollApi.dismissPending.mockResolvedValue(undefined as never)
-  mockedRollApi.setDie.mockResolvedValue(undefined as never)
-  mockedRollApi.clearManualDie.mockResolvedValue(undefined as never)
-  mockedRollApi.reroll.mockResolvedValue({} as never)
+  // SAFETY: Mocked roll payload is not inspected by the assertions; empty object satisfies the success path shape.
+  mockedRollApi.roll.mockResolvedValue({} as unknown as Awaited<ReturnType<typeof mockedRollApi.roll>>)
+  // SAFETY: Override mock uses the same empty success shape; safe because only call count is asserted.
+  mockedRollApi.override.mockResolvedValue({} as unknown as Awaited<ReturnType<typeof mockedRollApi.override>>)
+  // SAFETY: dismissPending resolves void; undefined is the expected value.
+  mockedRollApi.dismissPending.mockResolvedValue(undefined as unknown as Awaited<ReturnType<typeof mockedRollApi.dismissPending>>)
+  // SAFETY: setDie resolves void; undefined matches the mocked resolution.
+  mockedRollApi.setDie.mockResolvedValue(undefined as unknown as Awaited<ReturnType<typeof mockedRollApi.setDie>>)
+  // SAFETY: clearManualDie resolves void; undefined preserves the contract.
+  mockedRollApi.clearManualDie.mockResolvedValue(undefined as unknown as Awaited<ReturnType<typeof mockedRollApi.clearManualDie>>)
+  // SAFETY: reroll mock returns an empty roll success shape that the test does not inspect.
+  mockedRollApi.reroll.mockResolvedValue({} as unknown as Awaited<ReturnType<typeof mockedRollApi.reroll>>)
 })
 
 it('calls roll mutation', async () => {

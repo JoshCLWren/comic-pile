@@ -97,6 +97,7 @@ describe('useRollViewport (issue #2286)', () => {
   })
 
   it('uses an instant anchor when the reader prefers reduced motion', () => {
+    // SAFETY: Stubbing matchMedia for the reduced-motion test; the minimal MediaQueryList shape with matches is sufficient for the hook.
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({ matches: true }) as unknown as MediaQueryList),
