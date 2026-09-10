@@ -1,5 +1,5 @@
 import { type Page, type Locator, expect } from '@playwright/test';
-import type { Thread } from '../types';
+import type { Thread, ThreadCreatePayload } from '../types';
 import { isObject, isString } from '../utils/runtimeChecks';
 
 type Violation = {
@@ -214,24 +214,18 @@ export async function createThread(
   const token = await getAuthToken(page);
   const csrfToken = await getCsrfToken(page, token);
 
-  const dataWithoutTotal = {
+  const dataWithoutTotal: ThreadCreatePayload = {
     title: threadData.title,
     format: threadData.format,
     issues_remaining: threadData.issues_remaining,
-  } satisfies {
-    title: string;
-    format: string;
-    issues_remaining: number;
-    notes?: string;
   };
   if (threadData.notes !== undefined) {
     dataWithoutTotal.notes = threadData.notes;
   }
 
-  const jsonHeaders = {
-    'Content-Type': 'application/json',
-    'X-CSRF-Token': csrfToken,
-  } satisfies Record<string, string>;
+  const jsonHeaders: Record<string, string> = {};
+  jsonHeaders['Content-Type'] = 'application/json';
+  jsonHeaders['X-CSRF-Token'] = csrfToken;
   if (token) {
     jsonHeaders['Authorization'] = `Bearer ${token}`;
   }

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { DragEvent } from 'react'
 import type { Issue, IssueDependenciesResponse } from '../../types'
 import { issuesApi } from '../../services/api-issues'
+import type { IssueListParams } from '../../services/api-issues'
 import { issueDependenciesApi } from '../../services/api-dependencies'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { isWindowDefined, isFunction } from '../../utils/runtimeChecks'
@@ -84,7 +85,7 @@ export function IssueToggleList({ threadId, onOpenDependencies, onIssueChanged }
     let nextPageToken: string | null = null
 
     while (true) {
-      const params = { page_size: 100 } satisfies { page_size: number; page_token?: string }
+      const params: IssueListParams = { page_size: 100 }
       if (nextPageToken) {
         params.page_token = nextPageToken
       }

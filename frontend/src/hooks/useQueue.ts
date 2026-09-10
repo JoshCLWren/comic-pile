@@ -5,7 +5,7 @@ import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { queueApi, threadsApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
-import type { MoveToPositionPayload, Thread, ThreadListResponse } from '../types'
+import type { MoveToPositionPayload, Thread, ThreadListResponse, ThreadQueryParams } from '../types'
 import type { QueueSortBy } from '../pages/QueuePage/useQueueFilters'
 import type { QueueSort } from '../query/queryKeys'
 

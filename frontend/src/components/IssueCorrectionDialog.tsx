@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { KeyboardEvent } from 'react'
 import Modal from './Modal'
 import { issuesApi } from '../services/api-issues'
+import type { IssueListParams } from '../services/api-issues'
 import type { Issue } from '../types'
 
 interface IssueCorrectionDialogProps {
@@ -39,7 +40,7 @@ export default function IssueCorrectionDialog({
     let nextPageToken: string | null = null
 
     while (true) {
-      const params = { page_size: 100 } satisfies { page_size: number; page_token?: string }
+      const params: IssueListParams = { page_size: 100 }
       if (nextPageToken) {
         params.page_token = nextPageToken
       }

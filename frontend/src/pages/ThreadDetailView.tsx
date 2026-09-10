@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import { CrossoverTags } from '../components/CrossoverTags'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
+import type { IssueListParams } from '../services/api-issues'
 import type { ConnectedThreadInfo, Thread, Issue } from '../types'
 import { FormatSelect } from '../pages/QueuePage/FormatSelect'
 import { useCrossoverGroups } from '../hooks/useCrossoverGroups'
@@ -132,7 +133,7 @@ export default function ThreadDetailView() {
     setIssuesLoading(true)
     setIssuesError(null)
     try {
-      const params = { page_size: 100 } satisfies { page_size: number; page_token?: string }
+      const params: IssueListParams = { page_size: 100 }
       if (pageToken) {
         params.page_token = pageToken
       }

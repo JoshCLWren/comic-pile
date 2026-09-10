@@ -81,9 +81,8 @@ async function seedCoverIdentity(
   })
   expect(csrfResponse.ok()).toBeTruthy()
   const data = (await csrfResponse.json()) as { csrf_token?: string }
-  const seedHeaders = {
-    'Content-Type': 'application/json',
-  } satisfies Record<string, string>
+  const seedHeaders: Record<string, string> = {};
+  seedHeaders['Content-Type'] = 'application/json';
   if (token) {
     seedHeaders.Authorization = `Bearer ${token}`
   }

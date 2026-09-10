@@ -13,6 +13,7 @@ import {
   type DependencyGroupMember,
 } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
+import type { IssueListParams } from '../services/api-issues'
 import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
 import { isString } from '../utils/runtimeChecks'
@@ -25,7 +26,7 @@ async function fetchAllIssues(threadId: number): Promise<PositionedIssue[]> {
   let nextPageToken: string | null = null
 
   while (true) {
-    const params = { page_size: 100 } satisfies { page_size: number; page_token?: string }
+    const params: IssueListParams = { page_size: 100 }
     if (nextPageToken) {
       params.page_token = nextPageToken
     }

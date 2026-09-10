@@ -27,6 +27,13 @@ interface CreateIssuesPayload {
   insert_after_issue_id?: number | null
 }
 
+/** Query parameters accepted by the thread issue list endpoint. */
+export interface IssueListParams {
+  status?: 'unread' | 'read'
+  page_size?: number
+  page_token?: string
+}
+
 /**
  * Issue tracking API service
  * Provides methods for managing comic issues within threads
@@ -44,7 +51,7 @@ export function createIssuesApi(client: IssuesApiHttpClient) {
      */
     list: async (
       threadId: number,
-      params?: { status?: 'unread' | 'read'; page_size?: number; page_token?: string }
+      params?: IssueListParams
     ): Promise<IssueListResponse> => {
       return client.get(`/v1/threads/${threadId}/issues`, { params })
     },
