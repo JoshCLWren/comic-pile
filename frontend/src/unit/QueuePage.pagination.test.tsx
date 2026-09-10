@@ -71,6 +71,7 @@ vi.mock('../pages/QueuePage/QueueModals', () => ({
   QueueModals: () => null,
 }))
 
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
 const mockedUseCreateThread = vi.mocked(useCreateThread) as any
 const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any

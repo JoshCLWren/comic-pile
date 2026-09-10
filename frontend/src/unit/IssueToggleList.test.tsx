@@ -83,6 +83,7 @@ function createDataTransfer(): DataTransfer {
   return {
     dropEffect: 'move',
     effectAllowed: 'move',
+    // SAFETY: empty arrays satisfy DataTransferItemList and FileList shape for test mock
     files: [] as unknown as FileList,
     items: [] as unknown as DataTransferItemList,
     types: [],
@@ -90,6 +91,7 @@ function createDataTransfer(): DataTransfer {
     getData: vi.fn(),
     setData: vi.fn(),
     setDragImage: vi.fn(),
+    // SAFETY: object literal satisfies all DataTransfer members for drag-and-drop testing
   } as unknown as DataTransfer
 }
 

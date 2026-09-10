@@ -56,6 +56,7 @@ vi.mock('../contexts/useToast', () => ({
   useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
 }))
 
+// SAFETY: vi.mocked returns mocked type; cast to any for flexible test stubs
 const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
 const mockedUseSession = vi.mocked(useSession) as any
 const mockedUseSnooze = vi.mocked(useSnooze) as any
@@ -63,6 +64,7 @@ const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 
 beforeEach(() => {
   vi.stubGlobal('alert', vi.fn())
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
   vi.mocked(useUpdateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
   vi.mocked(useDeleteThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
@@ -73,6 +75,7 @@ beforeEach(() => {
   vi.mocked(useShuffleQueue).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
   mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  // SAFETY: useBugReportRestore returns a context shape; cast to any for partial stub
   vi.mocked(useBugReportRestore).mockReturnValue({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),

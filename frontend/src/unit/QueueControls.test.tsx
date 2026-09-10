@@ -10,6 +10,7 @@ const baseProps = {
   shufflePending: false,
   onShuffle: vi.fn(),
   onCreateThread: vi.fn(),
+  // SAFETY: test fixture uses the valid default sort option
   sortBy: 'position' as QueueSortBy,
   onSortChange: vi.fn(),
   searchQuery: '',
@@ -117,6 +118,7 @@ describe('QueueControls', () => {
 
   it('commits on blur when local differs and no debounce is pending', async () => {
     render(<QueueControls {...baseProps} searchQuery="old" />)
+    // SAFETY: getByPlaceholderText returns HTMLElement; test accesses value property
     const input = screen.getByPlaceholderText('Search...') as HTMLInputElement
 
     fireEvent.change(input, { target: { value: 'new' } })
@@ -140,6 +142,7 @@ describe('QueueControls', () => {
   it('syncs local value when searchQuery prop changes externally', async () => {
     const user = userEvent.setup()
     const { rerender } = render(<QueueControls {...baseProps} searchQuery="" />)
+    // SAFETY: getByPlaceholderText returns HTMLElement; test accesses value property
     const input = screen.getByPlaceholderText('Search...') as HTMLInputElement
 
     await user.type(input, 'typed-')

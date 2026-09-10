@@ -80,6 +80,7 @@ vi.mock('../contexts/useToast', () => ({
   useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
 }))
 
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
 const mockedUseCreateThread = vi.mocked(useCreateThread) as any
 const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any
@@ -127,6 +128,7 @@ beforeEach(() => {
     clearRestoreAction: vi.fn(),
     restoreLastView: vi.fn(),
   })
+  // SAFETY: full response shape satisfies RollResponse; never cast bypasses strict mock typing
   mockedThreadsApi.setPending.mockResolvedValue({
     thread_id: 1,
     title: 'Saga',

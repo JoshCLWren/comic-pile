@@ -54,6 +54,7 @@ vi.mock('../contexts/useToast', () => ({
   useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
 }))
 
+// SAFETY: cast mocked hook to a callable fn type so tests can stub return values
 const mockedUseQueueThreads = vi.mocked(useQueueThreads) as unknown as ReturnType<typeof vi.fn>
 
 class NoopIntersectionObserver {
@@ -84,6 +85,7 @@ function renderQueue(): void {
 beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', NoopIntersectionObserver)
   vi.stubGlobal('alert', vi.fn())
+  // SAFETY: mockReturnValue accepts partial hook returns; never cast bypasses full-type requirements
   vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   vi.mocked(useUpdateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   vi.mocked(useDeleteThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)

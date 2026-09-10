@@ -44,6 +44,7 @@ function ScrollSentinel({
   return <div ref={sentinelRef} data-testid="sentinel" />
 }
 
+// SAFETY: minimal entry shape is enough for the callback; as IntersectionObserverEntry in tests
 const intersectingEntry = (isIntersecting: boolean) =>
   ({ isIntersecting } as unknown as IntersectionObserverEntry)
 
@@ -86,6 +87,7 @@ describe('useInfiniteScroll edge-triggering', () => {
     await flushObserver()
 
     const observer = getObserver()
+    // SAFETY: MockIntersectionObserver instances implement the IntersectionObserver surface used by the hook
     act(() => observer.callback([intersectingEntry(true)], observer as unknown as IntersectionObserver))
 
     expect(onLoadMore).toHaveBeenCalledTimes(1)
@@ -97,6 +99,7 @@ describe('useInfiniteScroll edge-triggering', () => {
     await flushObserver()
 
     const observer = getObserver()
+    // SAFETY: MockIntersectionObserver instances implement the IntersectionObserver surface used by the hook
     act(() => observer.callback([intersectingEntry(true)], observer as unknown as IntersectionObserver))
     act(() => observer.callback([intersectingEntry(true)], observer as unknown as IntersectionObserver))
 
@@ -109,6 +112,7 @@ describe('useInfiniteScroll edge-triggering', () => {
     await flushObserver()
 
     const observer = getObserver()
+    // SAFETY: MockIntersectionObserver instances implement the IntersectionObserver surface used by the hook
     act(() => observer.callback([intersectingEntry(true)], observer as unknown as IntersectionObserver))
     act(() => observer.callback([intersectingEntry(false)], observer as unknown as IntersectionObserver))
     act(() => observer.callback([intersectingEntry(true)], observer as unknown as IntersectionObserver))
@@ -124,6 +128,7 @@ describe('useInfiniteScroll edge-triggering', () => {
     await flushObserver()
 
     const first = getObserver()
+    // SAFETY: MockIntersectionObserver implements the IntersectionObserver surface used by the hook
     act(() => first.callback([intersectingEntry(true)], first as unknown as IntersectionObserver))
     expect(onLoadMore).toHaveBeenCalledTimes(1)
 
@@ -132,6 +137,7 @@ describe('useInfiniteScroll edge-triggering', () => {
     await flushObserver()
 
     const second = getObserver()
+    // SAFETY: MockIntersectionObserver implements the IntersectionObserver surface used by the hook
     act(() => second.callback([intersectingEntry(true)], second as unknown as IntersectionObserver))
 
     expect(onLoadMore).toHaveBeenCalledTimes(1)
