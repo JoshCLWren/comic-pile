@@ -62,7 +62,7 @@ export function useScrollRestoration(): void {
         return
       }
       saveScheduled.current = true
-      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      if ('requestAnimationFrame' in window) {
         window.requestAnimationFrame(() => {
           saveScheduled.current = false
           saveCurrentScroll()
@@ -113,7 +113,7 @@ export function useScrollRestoration(): void {
       window.scrollTo(0, navType === 'POP' ? saved : 0)
     }
 
-    if (typeof window.requestAnimationFrame !== 'function') {
+    if (!('requestAnimationFrame' in window)) {
       restore()
       return
     }
@@ -121,15 +121,15 @@ export function useScrollRestoration(): void {
       restore()
       // Late layout (deferred data renders) can shrink the scrollable area and
       // clamp the restored offset; re-apply once the screen has settled.
-      if (navType === 'POP' && typeof window.setTimeout === 'function') {
+      if (navType === 'POP' && 'setTimeout' in window) {
         window.setTimeout(restore, 150)
-      } else if (navType === 'POP' && typeof setTimeout === 'function') {
+      } else if (navType === 'POP' && 'setTimeout' in globalThis) {
         // Fallback when window is gone but global setTimeout survives teardown
-        setTimeout(restore, 150)
+        globalThis.setTimeout(restore, 150)
       }
     })
     return () => {
-      if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+      if ('cancelAnimationFrame' in window) {
         window.cancelAnimationFrame(raf)
       }
     }

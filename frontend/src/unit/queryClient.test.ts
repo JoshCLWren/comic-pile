@@ -22,8 +22,8 @@ describe('queryClient defaults', () => {
 
   it('suppresses deterministic client retries and bounds transient retries', () => {
     const retry = queryRetryPolicy
-    expect(typeof retry).toBe('function')
-    if (typeof retry !== 'function') {
+    expect(retry).toBeTypeOf('function')
+    if (!(retry instanceof Function)) {
       throw new Error('Expected query retry policy to be a function')
     }
 

@@ -2,6 +2,7 @@ import { routeModules } from '../routes/routeModules'
 import type { RouteModuleKey } from '../routes/routeModules'
 import { queryClient } from './queryClient'
 import { queueThreadsQueryOptions } from '../hooks/useQueue'
+import { isFunction } from '../utils/runtimeChecks'
 
 /**
  * Retained-route chunk and bounded-data prefetching.
@@ -104,7 +105,7 @@ type IdleHandle = { cancel: () => void }
 
 function scheduleIdle(task: () => void, timeoutMs: number): IdleHandle {
   const requestIdleCallback = (globalThis as { requestIdleCallback?: typeof globalThis.requestIdleCallback }).requestIdleCallback
-  if (typeof requestIdleCallback === 'function') {
+  if (isFunction(requestIdleCallback)) {
     const id = requestIdleCallback(task, { timeout: timeoutMs })
     return { cancel: () => globalThis.cancelIdleCallback(id) }
   }

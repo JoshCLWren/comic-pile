@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { isFunction } from '../../utils/runtimeChecks'
 
 /**
  * Resolve the scroll behavior for Roll-page viewport transitions. Smooth
@@ -8,7 +9,7 @@ import { useCallback, useEffect, useRef } from 'react'
  */
 function scrollBehavior(): 'auto' | 'smooth' {
   return typeof window !== 'undefined'
-    && typeof window.matchMedia === 'function'
+    && isFunction(window.matchMedia)
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     ? 'auto'
     : 'smooth'

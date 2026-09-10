@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react'
+import { isString } from '../utils/runtimeChecks'
 
 interface DiagnosticData {
   timestamp: string
@@ -111,7 +112,7 @@ export function useDiagnostics() {
       ;(console as unknown as Record<string, unknown>)['error'] = (...args: unknown[]) => {
         const timestamp = new Date().toISOString()
         const message = args.map((arg) => {
-          if (typeof arg === 'string') return arg
+          if (isString(arg)) return arg
           if (arg instanceof Error) return arg.message
           try {
             return JSON.stringify(arg)

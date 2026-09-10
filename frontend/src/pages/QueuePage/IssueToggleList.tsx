@@ -4,6 +4,7 @@ import type { Issue, IssueDependenciesResponse } from '../../types'
 import { issuesApi } from '../../services/api-issues'
 import { issueDependenciesApi } from '../../services/api-dependencies'
 import { getApiErrorDetail } from '../../utils/apiError'
+import { isWindowDefined, isFunction } from '../../utils/runtimeChecks'
 import Tooltip from '../../components/Tooltip'
 import Modal from '../../components/Modal'
 import { getDependencyTooltip } from '../../utils/dependencyHelpers'
@@ -126,7 +127,7 @@ export function IssueToggleList({ threadId, onOpenDependencies, onIssueChanged }
         ?.focus()
     }
 
-    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    if (isWindowDefined() && isFunction(window.requestAnimationFrame)) {
       window.requestAnimationFrame(focusTarget)
       return
     }

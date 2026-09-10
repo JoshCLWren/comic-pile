@@ -133,7 +133,7 @@ function cssLocation(node, file) {
 
 function diagnosticMessage(diagnostic, sourceFile, file) {
   const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')
-  if (typeof diagnostic.start !== 'number') return `${file}: ${message}`
+  if (!Number.isFinite(diagnostic.start)) return `${file}: ${message}`
   const position = sourceFile.getLineAndCharacterOfPosition(diagnostic.start)
   return `${file}:${position.line + 1}:${position.character + 1}: ${message}`
 }
