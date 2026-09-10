@@ -60,6 +60,7 @@ function getConflictMessage(
   }
 
   if (detail && isObject(detail) && 'code' in detail) {
+    // SAFETY: 'code' in detail narrows the object to the ConflictDetail discriminated shape before access.
     const conflict = detail as ConflictDetail
     if (conflict.code === 'plan_rule_conflict' || conflict.code === 'continuity_cycle') {
       const sourceId = conflict.source_node_id
@@ -204,18 +205,19 @@ export default function ContinuityPlannerPage() {
   const hydrateLabels = useCallback((rawNodes: ContinuityPlanNode[], loadedGroups: DependencyGroup[]): PlannerNode[] => {
     const groupNames = new Map(loadedGroups.map((group) => [group.id, group.name]))
     return rawNodes.map((node): PlannerNode => {
-      const label = (node as PlannerNode).label
-      const stored = isString(label) ? label.trim() : ''
+      // SAFETY: rawNodes are ContinuityPlanNode and PlannerNode only adds optional display fields set below.
+      const plannerNode = node as PlannerNode
+      const stored = isString(plannerNode.label) ? plannerNode.label.trim() : ''
       if (node.node_type === 'crossover') {
-        if (stored) return { ...(node as PlannerNode), label: stored }
-        return { ...(node as PlannerNode), label: groupNames.get(node.ref_id) ?? '[deleted crossover]' }
+        if (stored) return { ...plannerNode, label: stored }
+        return { ...plannerNode, label: groupNames.get(node.ref_id) ?? '[deleted crossover]' }
       }
       if (node.node_type === 'thread') {
-        if (stored) return { ...(node as PlannerNode), label: stored }
-        return { ...(node as PlannerNode), label: '[deleted series]' }
+        if (stored) return { ...plannerNode, label: stored }
+        return { ...plannerNode, label: '[deleted series]' }
       }
-      if (stored) return { ...(node as PlannerNode), label: stored }
-      return { ...(node as PlannerNode), label: '[deleted series]' }
+      if (stored) return { ...plannerNode, label: stored }
+      return { ...plannerNode, label: '[deleted series]' }
     })
   }, [])
 
