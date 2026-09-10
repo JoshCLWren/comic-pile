@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
+import { isObject, isNonEmptyString } from '../utils/runtimeChecks'
 
 interface InboxCandidate {
   external_identity_id: number
   provider: string
   comicvine_id: string | null
   external_url: string | null
-  metadata_json: unknown
+  metadata_json: Record<string, unknown>
   status: string
   confidence: number | null
   evidence_source: string | null
-  evidence_json: unknown
+  evidence_json: Record<string, unknown>
   rejection_reason: string | null
 }
 
@@ -81,14 +82,14 @@ function CandidateCard({
   isConfirming: boolean
   isRejecting: boolean
 }) {
-  const meta = candidate.metadata_json as any
+  const meta = candidate.metadata_json
   const toText = (value: unknown): string | null =>
-    typeof value === 'string' && value.length > 0 ? value : null
+    isNonEmptyString(value) ? value : null
 
   const volumeObj = meta.volume
   const volumeName =
-    typeof volumeObj === 'object' && volumeObj !== null
-      ? toText((volumeObj as unknown).name)
+    isObject(volumeObj)
+      ? toText((volumeObj as Record<string, unknown>).name)
       : toText(meta.volume_name)
   const issueName = toText(meta.name) ?? toText(meta.issue_name)
 

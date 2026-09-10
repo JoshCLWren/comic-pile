@@ -129,14 +129,16 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       
 
       // Thread-level deps map directly to FlowchartDependency
-      const threadDeps: FlowchartDependency[] = allDeps
-        .filter((dep) => dep.source_thread_id != null && dep.target_thread_id != null && !dep.is_issue_level)
-        .map((dep) => ({
-          id: String(dep.id),
-          source_id: dep.source_thread_id as number,
-          target_id: dep.target_thread_id as number,
-          created_at: dep.created_at,
-        }))
+      const threadDeps: FlowchartDependency[] = allDeps.flatMap((dep) =>
+        dep.source_thread_id != null && dep.target_thread_id != null && !dep.is_issue_level
+          ? [{
+              id: String(dep.id),
+              source_id: dep.source_thread_id,
+              target_id: dep.target_thread_id,
+              created_at: dep.created_at,
+            }]
+          : [],
+      )
 
       // Collect related thread IDs from thread-level deps
       for (const dep of threadDeps) {

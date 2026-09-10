@@ -23,7 +23,7 @@ export function useTasteDiscoveries() {
   const { data, isPending } = useQuery({
     queryKey: queryKeys.taste.discoveries(),
     queryFn: () => tasteApi.getDiscoveries(),
-    initialData: { discoveries: [] } as { discoveries: TasteDiscovery[] },
+    initialData: { discoveries: [] as TasteDiscovery[], generated_at: '' },
   })
 
   const [dismissed, setDismissed] = useState<Set<number>>(new Set())

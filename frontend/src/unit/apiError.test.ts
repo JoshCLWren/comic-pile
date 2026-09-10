@@ -89,6 +89,13 @@ describe('getApiErrorDetail', () => {
     expect(getApiErrorDetail(error)).toBe('Unknown error')
   })
 
+  it('extracts detail from an Error instance carrying a response', () => {
+    const error = Object.assign(new Error('Request failed'), {
+      response: { status: 409, data: { detail: 'No pending roll to skip. Roll first.' } },
+    })
+    expect(getApiErrorDetail(error)).toBe('No pending roll to skip. Roll first.')
+  })
+
   it('handles Error instances', () => {
     const error = new Error('Something went wrong')
     expect(getApiErrorDetail(error)).toBe('Something went wrong')
@@ -133,6 +140,13 @@ describe('getApiErrorStatus', () => {
       },
     }
     expect(getApiErrorStatus(error)).toBe(500)
+  })
+
+  it('extracts status from an Error instance carrying a response', () => {
+    const error = Object.assign(new Error('Request failed'), {
+      response: { status: 409, data: { detail: 'pending' } },
+    })
+    expect(getApiErrorStatus(error)).toBe(409)
   })
 
   it('returns null for error without response', () => {

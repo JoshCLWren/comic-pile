@@ -6,7 +6,6 @@ import {
   loginUser,
   registerUser,
 } from './helpers';
-import type { ApiResponseRecord } from '../types';
 
 type TestUser = {
   email: string;
@@ -51,7 +50,7 @@ async function apiPost(
   user: TestUser,
   path: string,
   data: unknown,
-): Promise<ApiResponseRecord> {
+): Promise<Record<string, unknown>> {
   const csrfToken = await getCsrfToken(page.request, user.accessToken ?? '');
   const response = await page.request.post(path, {
     data,
@@ -64,7 +63,7 @@ async function apiPost(
   if (!response.ok()) {
     throw new Error(`POST ${path} failed: ${response.status()} ${await response.text()}`);
   }
-  return (await response.json()) as ApiResponseRecord;
+  return (await response.json()) as Record<string, unknown>;
 }
 
 async function listIssues(page: Page, user: TestUser, threadId: number): Promise<IssueInfo[]> {

@@ -37,17 +37,18 @@
     "anti-slop/no-unknown-type-aliases": "error",
     "anti-slop/no-widen-then-assert": "error",
     "anti-slop/no-array-filter-map": "error",
-    "anti-slop/no-known-value-widening": "error",
 
     // --- Staged (fix the category, then flip to "error") ---
-    "anti-slop/no-object-parameters": "off",
+    "anti-slop/no-object-parameters": "error",
     "anti-slop/no-conditional-empty-object-spread": "off",
-    "anti-slop/no-unsafe-dictionary-type": "off",
-    "anti-slop/no-runtime-typeof": "off",
+    "anti-slop/no-unsafe-dictionary-type": "error",
+    "anti-slop/no-runtime-typeof": "error",
     "anti-slop/no-unknown-returns": "off",
-    "anti-slop/no-chained-type-assertions": "off",
+    "anti-slop/no-chained-type-assertions": "error",
+    "anti-slop/no-known-value-widening": "error",
     "anti-slop/no-unknown-parameters": "off",
     "anti-slop/no-module-mocking": "off",
     "anti-slop/require-safety-comment-for-type-assertion": "off"
   }
 }
+

@@ -22,10 +22,11 @@ vi.mock('../services/api-cbl-sources', async () => {
 
 describe('ReadingPlanAddMaterial', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
+    window.history.replaceState({}, '', '/continuity-plans/77')
   })
 
-  it('discovers sources from the plan name and renders a read-only reconciliation preview', async () => {
+  it('discovers sources from the plan name and renders the reconciliation preview for the current plan', async () => {
     mocks.discover.mockResolvedValue([
       {
         id: 42,
@@ -133,10 +134,9 @@ describe('ReadingPlanAddMaterial', () => {
     await waitFor(() => expect(mocks.preview).toHaveBeenCalledWith(42))
     expect(await screen.findByText('B.P.R.D.: The Black Flame #2')).toBeInTheDocument()
     expect(screen.getByText('Already in ComicPile')).toBeInTheDocument()
-    expect(screen.getByText('Missing · can be added')).toBeInTheDocument()
+    expect(screen.getByText('Missing · selected to add')).toBeInTheDocument()
     expect(screen.getByText('Needs identity resolution')).toBeInTheDocument()
-    expect(screen.getByText(/Preview only\. Nothing has been added to this Reading Plan/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /adopt|commit|add selected/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add selected material' })).toBeDisabled()
   })
 
   it('shows an empty discovery result without inventing material', async () => {

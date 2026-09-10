@@ -1,8 +1,5 @@
 import type { SessionThread } from './index'
 
-/** Custom dictionary types to replace unsafe Record<string, unknown> */
-type JsonRecord = Record<string, unknown>
-
 /** Lightweight thread summary returned by the Roll bootstrap endpoint. */
 export interface RollBootstrapThread {
   id: number
@@ -13,9 +10,6 @@ export interface RollBootstrapThread {
   route_labels?: string[]
   last_activity_at?: string | null
 }
-
-/** Specialized dictionary for correction guidance data */
-export interface SessionModeCorrectionGuidance extends Record<string, unknown> {}
 
 /** One direct continuity blocker for a pending roll. */
 export interface RollRecoveryBlocker {
@@ -90,7 +84,7 @@ export interface SessionMode {
   intent_confidence: number | null
   intent_source: 'inferred' | 'manual' | 'snooze' | 'quiz' | null
   intent_version: string | null
-  session_mode_correction_guidance: SessionModeCorrectionGuidance | null
+  session_mode_correction_guidance: Record<string, unknown> | null
 }
 
 /** Reader bandwidth for the current session: how demanding comics feel right now. */

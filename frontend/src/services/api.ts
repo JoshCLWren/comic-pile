@@ -29,7 +29,6 @@ import type {
   ThreadDependenciesResponse,
   ThreadListResponse,
   ThreadQueryParams,
-  SessionListParams,
   ThreadUpdatePayload,
 } from '../types'
 
@@ -61,7 +60,7 @@ const AUTH_ENDPOINT_PATHS = new Set(['/v1/auth/login', '/v1/auth/register', '/v1
 
 // Axios returns AxiosResponse by default, but the response interceptor below unwraps to response.data.
 // Cast once at the boundary so callers get strongly typed payload methods.
-const api = rawApi as unknown as ApiClient
+const api = rawApi as ApiClient
 
 export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
@@ -408,8 +407,8 @@ export const rateApi = {
 }
 
 export const sessionApi = {
-  list: async (params?: SessionListParams, pageToken?: string | null): Promise<SessionListResponse> => {
-    const queryParams: SessionListParams & { page_token?: string } = { ...(params ?? {}) };
+  list: async (params?: Record<string, unknown>, pageToken?: string | null): Promise<SessionListResponse> => {
+    const queryParams = { ...(params ?? {}) } satisfies Record<string, unknown>;
     if (pageToken) {
       queryParams.page_token = pageToken;
     }

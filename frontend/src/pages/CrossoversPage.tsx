@@ -15,6 +15,7 @@ import {
 import { issuesApi } from '../services/api-issues'
 import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
+import { isString } from '../utils/runtimeChecks'
 
 type PositionedIssue = Issue & { position: number }
 
@@ -56,7 +57,7 @@ async function fetchAllThreads(): Promise<Thread[]> {
 function errorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail
-    if (typeof detail === 'string' && detail.trim()) return detail
+    if (isString(detail) && detail.trim()) return detail
   }
   return error instanceof Error && error.message ? error.message : fallback
 }

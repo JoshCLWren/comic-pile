@@ -1,15 +1,26 @@
-/** Custom dictionary types to replace unsafe Record<string, unknown> */
-export type JsonRecordType = Record<string, unknown>
-export type OpenApiPaths = Record<string, unknown>
-
-/** Specialized dictionary for correction guidance data */
-export interface SessionModeCorrectionGuidance extends Record<string, unknown> {}
-
-/** Specialized dictionary for path mappings */
-export interface StableJsonObject extends Record<string, unknown> {}
-
-/** Specialized dictionary for API responses */
-export type ApiResponseRecord = StableJsonObject
+/**
+ * Represents a thread in list view (QueuePage).
+ *
+ * A deliberate subset of Thread — the list endpoint does not return
+ * detail-only fields like reading_progress, next_unread_issue_id,
+ * last_rating, or is_test to reduce payload
+ * size for large lists.
+ */
+export interface ThreadListItem {
+  id: number;
+  title: string;
+  format: string;
+  issues_remaining: number;
+  total_issues: number | null;
+  next_unread_issue_number?: string | null;
+  queue_position: number;
+  status: string;
+  is_blocked: boolean;
+  blocking_reasons: string[];
+  notes?: string | null;
+  last_activity_at?: string | null;
+  created_at: string;
+}
 
 /**
  * Represents a comic thread/series
@@ -63,10 +74,6 @@ export interface ThreadQueryParams {
   sort?: 'position' | 'title' | 'created';
   page_size?: number;
   page_token?: string;
-}
-
-export interface SessionListParams {
-  page_size?: number;
 }
 
 export interface ThreadCreatePayload {
@@ -188,7 +195,7 @@ export interface SessionModeResponse {
   intent_confidence: number | null
   intent_source: IntentSource
   intent_version: string | null
-  session_mode_correction_guidance: SessionModeCorrectionGuidance | null
+  session_mode_correction_guidance: Record<string, unknown> | null
 }
 
 export interface SessionModeUpdateRequest {

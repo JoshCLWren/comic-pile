@@ -1,31 +1,31 @@
-
-
 export const AUDIT_FIXED_NOW = '2026-08-30T12:00:00.000Z'
 export const AUDIT_FIXED_USERNAME = 'ui_audit_reader_2043'
 
-type JsonRecord = unknown
+import { isObject } from '../../utils/runtimeChecks'
+
+type JsonRecord = Record<string, unknown>
 
 function isJsonRecord(value: unknown): value is JsonRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return isObject(value)
 }
 
 function stableIso(offsetMinutes: number): string {
   return new Date(Date.parse(AUDIT_FIXED_NOW) + offsetMinutes * 60_000).toISOString()
 }
 
-function normalizeSessionRecord(record: JsonRecord, index: number): JsonRecord {
-  const normalized: JsonRecord = {
+function normalizeSessionRecord(record: JsonRecord, index: number) {
+  const normalized = {
     ...record,
     started_at: stableIso(index),
-  }
+  } satisfies JsonRecord;
 
-  if ('ended_at' in record) {
+  if ('ended_at' in normalized) {
     normalized.ended_at = record.ended_at == null ? record.ended_at : stableIso(index + 15)
   }
-  if ('created_at' in record) {
+  if ('created_at' in normalized) {
     normalized.created_at = stableIso(index)
   }
-  if ('updated_at' in record) {
+  if ('updated_at' in normalized) {
     normalized.updated_at = stableIso(index + 15)
   }
 
@@ -36,7 +36,7 @@ function normalizeSessionRecord(record: JsonRecord, index: number): JsonRecord {
  * Replace only volatile, user-visible fixture fields used by audit screenshots.
  * Authentication identity and persisted test data remain untouched on the server.
  */
-export function stabilizeAuditApiPayload(pathname: string, payload: unknown): unknown {
+export function stabilizeAuditApiPayload(pathname: string, payload: unknown) {
   if (pathname === '/api/v1/auth/me' && isJsonRecord(payload)) {
     return { ...payload, username: AUDIT_FIXED_USERNAME }
   }
@@ -44,7 +44,7 @@ export function stabilizeAuditApiPayload(pathname: string, payload: unknown): un
   if (pathname === '/api/v1/sessions/' && isJsonRecord(payload) && Array.isArray(payload.sessions)) {
     return {
       ...payload,
-      sessions: payload.sessions.map((session: unknown, index: number) =>
+      sessions: payload.sessions.map((session, index) =>
         isJsonRecord(session) ? normalizeSessionRecord(session, index) : session,
       ),
     }

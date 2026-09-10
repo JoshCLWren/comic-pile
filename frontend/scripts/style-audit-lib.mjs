@@ -133,7 +133,7 @@ function cssLocation(node, file) {
 
 function diagnosticMessage(diagnostic, sourceFile, file) {
   const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')
-  if (typeof diagnostic.start !== 'number') return `${file}: ${message}`
+  if (!Number.isFinite(diagnostic.start)) return `${file}: ${message}`
   const position = sourceFile.getLineAndCharacterOfPosition(diagnostic.start)
   return `${file}:${position.line + 1}:${position.character + 1}: ${message}`
 }
@@ -605,12 +605,15 @@ function sharedLiteralTokenValues(declarations) {
     byValue.set(declaration.value, entry)
   }
   return [...byValue.entries()]
-    .filter(([, entry]) => entry.names.size > 1)
-    .map(([value, entry]) => ({
-      value,
-      names: [...entry.names].sort(compareText),
-      locations: entry.locations.sort(compareLocation),
-    }))
+    .flatMap(([value, entry]) =>
+      entry.names.size > 1
+        ? [{
+            value,
+            names: [...entry.names].sort(compareText),
+            locations: entry.locations.sort(compareLocation),
+          }]
+        : [],
+    )
     .sort((left, right) => right.names.length - left.names.length || compareText(left.value, right.value))
 }
 

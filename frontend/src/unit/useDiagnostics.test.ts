@@ -1,10 +1,7 @@
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDiagnostics } from '../hooks/useDiagnostics'
-
-interface CircularObject {
-  self?: CircularObject
-}
+import { cast } from '../utils/cast'
 
 describe('useDiagnostics', () => {
   beforeEach(() => {
@@ -57,8 +54,8 @@ describe('useDiagnostics', () => {
 
     const diagnostics = result.current.collectDiagnostics()
 
-    expect(typeof diagnostics.scroll.x).toBe('number')
-    expect(typeof diagnostics.scroll.y).toBe('number')
+    expect(diagnostics.scroll.x).toBeTypeOf('number')
+    expect(diagnostics.scroll.y).toBeTypeOf('number')
   })
 
   it('should have performance data', () => {
@@ -67,10 +64,10 @@ describe('useDiagnostics', () => {
     const diagnostics = result.current.collectDiagnostics()
 
     if (diagnostics.performance.domContentLoaded !== null) {
-      expect(typeof diagnostics.performance.domContentLoaded).toBe('number')
+      expect(diagnostics.performance.domContentLoaded).toBeTypeOf('number')
     }
     if (diagnostics.performance.loadComplete !== null) {
-      expect(typeof diagnostics.performance.loadComplete).toBe('number')
+      expect(diagnostics.performance.loadComplete).toBeTypeOf('number')
     }
   })
 
@@ -87,7 +84,7 @@ describe('useDiagnostics', () => {
     const passthrough = vi.fn()
     console.error = passthrough
     const { result, unmount } = renderHook(() => useDiagnostics())
-    const circular: CircularObject = {}
+    const circular: Record<string, unknown> = {}
     circular.self = circular
 
     console.error('plain message')
@@ -105,7 +102,7 @@ describe('useDiagnostics', () => {
 
   it('uses navigation timing values and tolerates missing or broken performance APIs', () => {
     const getEntriesByType = vi.spyOn(performance, 'getEntriesByType')
-      .mockReturnValueOnce([{ domContentLoadedEventEnd: 12, loadEventEnd: 34 }] as unknown as PerformanceEntry[])
+      .mockReturnValueOnce(cast<PerformanceEntry[]>([{ domContentLoadedEventEnd: 12, loadEventEnd: 34 }]))
       .mockReturnValueOnce([])
       .mockImplementationOnce(() => { throw new Error('performance unavailable') })
     const { result, unmount } = renderHook(() => useDiagnostics())

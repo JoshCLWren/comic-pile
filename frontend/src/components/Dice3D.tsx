@@ -417,7 +417,7 @@ function createD10Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
     vNorm: number,
     tileUv: TextureTileUv,
     tilePadding: number,
-  ): { u: number; v: number } {
+  ): FaceProjection {
     return {
       u: tileUv.u0 + (tilePadding + uNorm * (1 - tilePadding * 2)) * (tileUv.u1 - tileUv.u0),
       v: tileUv.v0 + (tilePadding + vNorm * (1 - tilePadding * 2)) * (tileUv.v1 - tileUv.v0)
