@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
+import { cast } from '../utils/cast'
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
 import { RatingView } from '../pages/RollPage/components/RatingView'
@@ -53,13 +54,13 @@ describe('ThreadPool', () => {
 
     const actions = callbacks()
     // SAFETY: Test injects a synthetic staleThread with extra days field to cover the stale branch; the cast widens Thread to the stale shape the component reads.
-    rerender(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Read Saga first' }] }} isRatingView={false} selectedThreadId={null} staleThread={{ ...thread, days: 4 } as unknown as Parameters<typeof ThreadPool>[0]['staleThread']} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    rerender(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Read Saga first' }] }} isRatingView={false} selectedThreadId={null} staleThread={cast<Parameters<typeof ThreadPool>[0]['staleThread']>({ ...thread, days: 4 })} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
     expect(screen.getByText(/Every series is blocked or snoozed/)).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: /go to queue/i }))
     expect(actions.onToggleBlocked).not.toHaveBeenCalled()
 
     // SAFETY: Same synthetic staleThread widening for the second stale branch coverage.
-    rerender(<MemoryRouter><ThreadPool pool={[thread]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} selectedThreadId={1} staleThread={{ ...thread, days: 2 } as unknown as Parameters<typeof ThreadPool>[0]['staleThread']} staleThreadCount={1} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    rerender(<MemoryRouter><ThreadPool pool={[thread]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} selectedThreadId={1} staleThread={cast<Parameters<typeof ThreadPool>[0]['staleThread']>({ ...thread, days: 2 })} staleThreadCount={1} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
     await userEvent.setup().click(screen.getByRole('button', { name: /snoozed/i }))
     await userEvent.setup().click(screen.getAllByText('Saga')[0]!)
     expect(actions.onThreadClick).toHaveBeenCalledWith(thread)
@@ -70,7 +71,7 @@ describe('ThreadPool', () => {
   it('covers expanded blocked, stale, snoozed, selected, rolling, and disabled controls', async () => {
     const actions = callbacks()
     // SAFETY: Synthetic stale thread with days field exercises the stale rendering branch; the type widens Thread to the stale shape.
-    const stale = { ...thread, title: 'Stale Saga', days: 9 } as unknown as Parameters<typeof ThreadPool>[0]['staleThread']
+    const stale = cast<Parameters<typeof ThreadPool>[0]['staleThread']>({ ...thread, title: 'Stale Saga', days: 9 })
     render(<MemoryRouter><ThreadPool pool={[]} blockedThreads={[{ ...thread, id: 2, title: 'Blocked' }]} blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Prerequisite' }] }} isRatingView={false} selectedThreadId={null} staleThread={stale} staleThreadCount={2} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={true} skippedThreads={[]} skippedExpanded={false} blockedExpanded={true} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
     await userEvent.setup().click(screen.getByRole('button', { name: /series waiting for earlier issues/i }))
     expect(screen.getByText('Prerequisite')).toBeInTheDocument()
@@ -96,7 +97,7 @@ describe('ThreadPool', () => {
       blockingDependencyMap={{}}
       isRatingView
       selectedThreadId={null}
-      staleThread={{ ...thread, days: 1 } as unknown as Parameters<typeof ThreadPool>[0]['staleThread']}
+      staleThread={cast<Parameters<typeof ThreadPool>[0]['staleThread']>({ ...thread, days: 1 })}
       staleThreadCount={1}
       snoozedThreads={[{ id: 6, title: 'Snoozed', format: 'Comic' }]}
       snoozedExpanded
@@ -124,7 +125,7 @@ describe('ThreadPool', () => {
       blockingDependencyMap={{ 2: [{ thread_id: 9, thread_title: 'Saga', issue_number: '1', label: 'Read Saga first' }] }}
       isRatingView={false}
       selectedThreadId={null}
-      staleThread={stale as unknown as Parameters<typeof ThreadPool>[0]['staleThread']}
+      staleThread={cast<Parameters<typeof ThreadPool>[0]['staleThread']>(stale)}
       staleThreadCount={1}
       snoozedThreads={[]}
       snoozedExpanded={false}
@@ -150,7 +151,7 @@ describe('RatingView', () => {
     const onUpdateRating = vi.fn(); const onSubmitRating = vi.fn(); const onSnooze = vi.fn(); const onCancel = vi.fn(); const onRefreshThread = vi.fn()
     const user = userEvent.setup()
     // SAFETY: ActiveRatingThread stub uses only the fields RatingView reads (title/issues/progress); cast widens Thread to the rating thread shape.
-    render(<MemoryRouter><RatingView activeRatingThread={{ ...thread, id: 1, issue_number: '2', next_issue_number: '3', reading_progress: 'in_progress' } as unknown as Parameters<typeof RatingView>[0]['activeRatingThread']} currentDie={20} rolledResult={19} rating={5} predictedDie={6} errorMessage="Problem" rateIsPending={false} snoozeIsPending={false} dismissIsPending={false} readingOrders={[]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} onUpdateRating={onUpdateRating} onSubmitRating={onSubmitRating} onSnooze={onSnooze} onCancel={onCancel} onRefreshThread={onRefreshThread} readerContext={null} isReaderContextLoading={false} readerContextError={null} /></MemoryRouter>)
+    render(<MemoryRouter><RatingView activeRatingThread={cast<Parameters<typeof RatingView>[0]['activeRatingThread']>({ ...thread, id: 1, issue_number: '2', next_issue_number: '3', reading_progress: 'in_progress' })} currentDie={20} rolledResult={19} rating={5} predictedDie={6} errorMessage="Problem" rateIsPending={false} snoozeIsPending={false} dismissIsPending={false} readingOrders={[]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} onUpdateRating={onUpdateRating} onSubmitRating={onSubmitRating} onSnooze={onSnooze} onCancel={onCancel} onRefreshThread={onRefreshThread} readerContext={null} isReaderContextLoading={false} readerContextError={null} /></MemoryRouter>)
     expect(screen.getByText(/Rolled 19 on d20/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /fix issue number/i }))
     await user.click(screen.getByRole('button', { name: /close correction/i }))
@@ -167,7 +168,7 @@ describe('RatingView', () => {
     const callbacks = { onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() }
     const user = userEvent.setup()
     // SAFETY: RatingView test stubs use minimal ActiveRatingThread/reading-order shapes; the cast widens to the component's expected types.
-    render(<MemoryRouter><RatingView activeRatingThread={{ ...thread, issue_number: '2', next_issue_number: null, reading_progress: 'completed', issues_remaining: 1 } as unknown as Parameters<typeof RatingView>[0]['activeRatingThread']} currentDie={4} rolledResult={null} rating={1} predictedDie={6} errorMessage="Oops" rateIsPending snoozeIsPending dismissIsPending readingOrders={[{ id: 1, name: 'Order', description: '', completed_items: 0, total_items: 0 } as unknown as Parameters<typeof RatingView>[0]['readingOrders'][number]]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} {...callbacks} /></MemoryRouter>)
+    render(<MemoryRouter><RatingView activeRatingThread={cast<Parameters<typeof RatingView>[0]['activeRatingThread']>({ ...thread, issue_number: '2', next_issue_number: null, reading_progress: 'completed', issues_remaining: 1 })} currentDie={4} rolledResult={null} rating={1} predictedDie={6} errorMessage="Oops" rateIsPending snoozeIsPending dismissIsPending readingOrders={[cast<Parameters<typeof RatingView>[0]['readingOrders'][number]>({ id: 1, name: 'Order', description: '', completed_items: 0, total_items: 0 })]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} {...callbacks} /></MemoryRouter>)
     expect(screen.getByText(/This is the last issue/)).toBeInTheDocument()
     expect(screen.getByText('Oops')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /fix issue number/i }))
@@ -182,15 +183,15 @@ describe('RatingView', () => {
     // SAFETY: Test exercises fallback branches with synthetic die and reading-order shapes; casts narrow to the RatingView prop union.
     render(<MemoryRouter><RatingView
       activeRatingThread={null}
-      currentDie={7 as unknown as Parameters<typeof RatingView>[0]['currentDie']}
+      currentDie={cast<Parameters<typeof RatingView>[0]['currentDie']>(7)}
       rolledResult={7}
       rating={3}
-      predictedDie={7 as unknown as Parameters<typeof RatingView>[0]['predictedDie']}
+      predictedDie={cast<Parameters<typeof RatingView>[0]['predictedDie']>(7)}
       errorMessage=""
       rateIsPending={false}
       snoozeIsPending={false}
       dismissIsPending={false}
-      readingOrders={[{ id: 2, name: 'Main order', description: 'A description', completed_items: 1, total_items: 2 } as unknown as Parameters<typeof RatingView>[0]['readingOrders'][number]]}
+      readingOrders={[cast<Parameters<typeof RatingView>[0]['readingOrders'][number]>({ id: 2, name: 'Main order', description: 'A description', completed_items: 1, total_items: 2 })]}
       connectedThreads={[]}
       onUpdateRating={vi.fn()}
       onSubmitRating={vi.fn()}
@@ -208,7 +209,7 @@ describe('RatingView', () => {
     const user = userEvent.setup()
     // SAFETY: Minimal activeRatingThread/readingOrders stubs cover boundary branches; cast widens to the expected prop types.
     render(<MemoryRouter><RatingView
-      activeRatingThread={{ ...thread, issue_number: null, next_issue_number: null, total_issues: 0, issues_remaining: 2, reading_progress: null } as unknown as Parameters<typeof RatingView>[0]['activeRatingThread']}
+      activeRatingThread={cast<Parameters<typeof RatingView>[0]['activeRatingThread']>({ ...thread, issue_number: null, next_issue_number: null, total_issues: 0, issues_remaining: 2, reading_progress: null })}
       currentDie={6}
       rolledResult={2}
       rating={5}
@@ -217,7 +218,7 @@ describe('RatingView', () => {
       rateIsPending={false}
       snoozeIsPending={false}
       dismissIsPending={false}
-      readingOrders={[{ id: 3, name: 'Empty order', description: '', completed_items: 0, total_items: 0 } as unknown as Parameters<typeof RatingView>[0]['readingOrders'][number]]}
+      readingOrders={[cast<Parameters<typeof RatingView>[0]['readingOrders'][number]>({ id: 3, name: 'Empty order', description: '', completed_items: 0, total_items: 0 })]}
       connectedThreads={[{ thread_id: 2, title: 'Only connection', connection_type: 'blocks', dependency_id: 2 }]}
       {...callbacks}
     /></MemoryRouter>)
@@ -231,7 +232,7 @@ describe('RatingView', () => {
     // connectedThreads are no longer displayed as a list; they are used for the correction workflow
     // SAFETY: Synthetic activeRatingThread with minimal fields exercises the correction button branch.
     render(<MemoryRouter><RatingView
-      activeRatingThread={{ ...thread, issue_number: '2', issues_remaining: 1 } as unknown as Parameters<typeof RatingView>[0]['activeRatingThread']}
+      activeRatingThread={cast<Parameters<typeof RatingView>[0]['activeRatingThread']>({ ...thread, issue_number: '2', issues_remaining: 1 })}
       currentDie={6}
       rolledResult={3}
       rating={3}

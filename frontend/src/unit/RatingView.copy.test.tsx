@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
+import { cast } from '../utils/cast'
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -44,7 +45,7 @@ function renderRatingView() {
     <MemoryRouter>
       <RatingView
         // SAFETY: Test supplies a minimal ActiveRatingThread shape with only the fields RatingView reads; cast is safe because the component only accesses title/format and issue numbers.
-        activeRatingThread={{
+        activeRatingThread={cast<Parameters<typeof RatingView>[0]['activeRatingThread']>({
           id: 1,
           title: 'Ultimate X-Men',
           format: 'Comic',
@@ -52,7 +53,7 @@ function renderRatingView() {
           total_issues: 12,
           issue_number: '11',
           next_issue_number: '12',
-        } as unknown as Parameters<typeof RatingView>[0]['activeRatingThread']}
+        })}
         currentDie={6}
         rolledResult={2}
         rating={4}

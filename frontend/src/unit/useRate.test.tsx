@@ -10,6 +10,7 @@ import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import type { RatePayload, Thread } from '../types'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import { cast } from '../utils/cast'
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -38,7 +39,7 @@ it('shares one in-flight request across repeated submissions', async () => {
   // SAFETY: Test controls promise resolution; resolving with undefined satisfies the mocked rate promise that the hook awaits.
   mockedProtectedApi.rate.mockReturnValue(
     new Promise((resolve) => {
-      resolveRequest = () => resolve(undefined as unknown as Thread)
+      resolveRequest = () => resolve(cast<Thread>(undefined))
     }),
   )
   const { result } = renderHook(() => useRate(), { wrapper })

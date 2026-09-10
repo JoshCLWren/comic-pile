@@ -100,6 +100,7 @@ describe('reading mode label helpers', () => {
 })
 
 describe('ReadingModeControl', () => {
+  // SAFETY: The cast narrows the plain-object fixture tuples to the [SessionModeState, string] shape vitest's each case typing requires; every entry is a valid literal mode pair.
   it.each([
     [{ bandwidth: 'light', intent: 'momentum' }, 'Light · Momentum'],
     [{ bandwidth: 'deep', intent: 'explore' }, 'Deep · Explore'],
