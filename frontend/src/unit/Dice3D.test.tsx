@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as THREE from 'three'
 import Dice3D, { getFaceRotation, getProjectedCenterOffsetPx } from '../components/Dice3D'
 import { DEFAULT_DICE_RENDER_CONFIG } from '../components/diceRenderConfig'
+import { cast } from '../utils/cast'
 
 const diceMock = vi.hoisted(() => ({
   failRenderer: false,
@@ -230,17 +231,19 @@ beforeEach(() => {
   diceMock.setSizeCalls = []
   diceMock.lastMesh = null
   diceMock.throwBox = false
-  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-    fillStyle: '',
-    strokeStyle: '',
-    lineWidth: 0,
-    font: '',
-    textAlign: 'left',
-    textBaseline: 'top',
-    fillRect: vi.fn(),
-    strokeRect: vi.fn(),
-    fillText: vi.fn(),
-  } as CanvasRenderingContext2D)
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+    cast<CanvasRenderingContext2D>({
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 0,
+      font: '',
+      textAlign: 'left',
+      textBaseline: 'top',
+      fillRect: vi.fn(),
+      strokeRect: vi.fn(),
+      fillText: vi.fn(),
+    }),
+  )
   vi.stubGlobal('requestAnimationFrame', vi.fn())
   vi.stubGlobal('cancelAnimationFrame', vi.fn())
 })

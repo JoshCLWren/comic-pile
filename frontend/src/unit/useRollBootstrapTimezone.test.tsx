@@ -6,6 +6,7 @@ import { resolveBrowserTimezone, useRollBootstrap } from '../hooks/useRollBootst
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { ToastProvider } from '../contexts/ToastProvider'
+import { cast } from '../utils/cast'
 
 vi.mock('../services/rollBootstrapApi', () => ({
   rollBootstrapApi: {
@@ -82,9 +83,9 @@ it('resolves to undefined when the browser cannot resolve a timezone', () => {
   const originalDateTimeFormat = Intl.DateTimeFormat
   const brokenIntl = {
     ...Intl,
-    DateTimeFormat: (() => {
+    DateTimeFormat: cast<typeof Intl.DateTimeFormat>(() => {
       throw new Error('Intl unavailable')
-    }) as typeof Intl.DateTimeFormat,
+    }),
   }
   Object.defineProperty(globalThis, 'Intl', {
     configurable: true,

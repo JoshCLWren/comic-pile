@@ -69,7 +69,7 @@ beforeAll(() => {
       this.unobserve = vi.fn()
       this.disconnect = vi.fn()
       return this
-    }) as typeof ResizeObserver,
+    }),
   )
 })
 

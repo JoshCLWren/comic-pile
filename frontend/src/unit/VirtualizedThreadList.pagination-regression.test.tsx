@@ -60,7 +60,7 @@ beforeAll(() => {
       this.observe = vi.fn()
       this.disconnect = vi.fn()
       return this
-    }) as typeof ResizeObserver,
+    }),
   )
   vi.stubGlobal(
     'requestAnimationFrame',

@@ -6,6 +6,7 @@ import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconcilia
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import { queryClient } from '../query/queryClient'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import { cast } from '../utils/cast'
 import { ToastProvider } from '../contexts/ToastProvider'
 
 vi.mock('../services/rollBootstrapApi', () => ({
@@ -217,11 +218,11 @@ describe('useRollBootstrap', () => {
   })
 
   it('uses the anonymous storage key when the bootstrap has no user id', async () => {
-    const anonymousResponse = {
+    const anonymousResponse = cast<RollBootstrapResponse>({
       ...bootstrapResponse,
       session_id: 7,
       user_id: undefined,
-    } as RollBootstrapResponse
+    })
     mockedBootstrap.mockResolvedValue(anonymousResponse)
 
     const { result } = renderBootstrap()
