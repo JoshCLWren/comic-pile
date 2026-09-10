@@ -1,0 +1,96 @@
+name: B.P.R.D. Live Production UI Acceptance v3
+
+on:
+  push:
+    branches:
+      - manual/2366-bprd-live-ui-v3
+
+permissions:
+  contents: read
+
+jobs:
+  accept:
+    name: Prove Add material and Roll on production PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      BASE_URL: https://comic-pile.vercel.app
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install backend runtime
+        run: uv sync --locked --no-dev
+
+      - name: Create disposable production user
+        id: auth
+        run: |
+          set -euo pipefail
+          username="acceptance_bprd_ui_v3_${GITHUB_RUN_ID}"
+          email="${username}@example.com"
+          password="$(openssl rand -base64 24 | tr -d '\n')Aa1!"
+          echo "::add-mask::$password"
+          curl --fail-with-body --silent --show-error \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -nc --arg u "$username" --arg e "$email" --arg p "$password" '{username:$u,email:$e,password:$p}')" \
+            "$BASE_URL/api/auth/register" >/dev/null
+          token="$(curl --fail-with-body --silent --show-error \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -nc --arg u "$username" --arg p "$password" '{username:$u,password:$p}')" \
+            "$BASE_URL/api/auth/login" | jq -r '.access_token')"
+          test -n "$token" && test "$token" != null
+          echo "::add-mask::$token"
+          echo "username=$username" >> "$GITHUB_OUTPUT"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Seed isolated B.P.R.D. plan
+        id: seed
+        run: |
+          set -euo pipefail
+          output="$(.venv/bin/python scripts/bprd_live_ui_acceptance.py seed '${{ steps.auth.outputs.username }}')"
+          echo "$output" | tee bprd-live-ui-v3-seed.json
+          echo "plan_id=$(jq -r '.plan_id' <<< "$output")" >> "$GITHUB_OUTPUT"
+          echo "gate_thread_id=$(jq -r '.gate_thread_id' <<< "$output")" >> "$GITHUB_OUTPUT"
+
+      - name: Install Chromium
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm --filter frontend exec playwright install --with-deps chromium
+
+      - name: Drive live production UI
+        env:
+          ACCESS_TOKEN: ${{ steps.auth.outputs.token }}
+          PLAN_ID: ${{ steps.seed.outputs.plan_id }}
+        run: |
+          cd frontend
+          node scripts/bprd-live-ui-acceptance.cjs
+
+      - name: Verify persisted plan and Roll boundary
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/bprd_live_ui_acceptance.py verify \
+            '${{ steps.auth.outputs.username }}' \
+            '${{ steps.seed.outputs.plan_id }}' \
+            '${{ steps.seed.outputs.gate_thread_id }}' \
+            | tee bprd-live-ui-v3-db.json
+
+      - name: Upload acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bprd-live-ui-v3-${{ github.run_id }}
+          if-no-files-found: warn
+          path: |
+            bprd-live-ui-v3-before.png
+            bprd-live-ui-v3-committed.png
+            bprd-live-ui-v3-reloaded.png
+            bprd-live-ui-v3-browser.json
+            bprd-live-ui-v3-seed.json
+            bprd-live-ui-v3-db.json
