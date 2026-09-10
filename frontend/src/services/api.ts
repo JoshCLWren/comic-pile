@@ -159,7 +159,7 @@ export async function refreshSession(options?: { skipAuthRedirect?: boolean }): 
       return response.access_token
     } catch (error) {
       // SAFETY: catch clause is unknown; axios interceptor always receives AxiosError.
-    if (isAuthenticationFailure(error as AxiosError)) {
+      if (isAuthenticationFailure(error as AxiosError)) {
         markSessionRefreshRejected()
       }
       throw error
@@ -283,7 +283,7 @@ function processQueue(error: unknown | null, token: string | null = null): void 
     } else {
       prom.config.headers = prom.config.headers ?? {}
       // SAFETY: headers is initialized above and is indexable by string; Authorization assignment is safe.
-      (prom.config.headers as Record<string, string>).Authorization = `Bearer ${token}`
+      ;(prom.config.headers as Record<string, string>).Authorization = `Bearer ${token}`
       prom.resolve(api.request(prom.config))
     }
   })
@@ -352,7 +352,7 @@ rawApi.interceptors.response.use(
 
         originalRequest.headers = originalRequest.headers ?? {}
         // SAFETY: headers is initialized above and is indexable by string; Authorization assignment is safe.
-        (originalRequest.headers as Record<string, string>).Authorization = `Bearer ${access_token}`
+        ;(originalRequest.headers as Record<string, string>).Authorization = `Bearer ${access_token}`
         return api.request(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)
