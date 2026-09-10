@@ -42,7 +42,7 @@ interface ReflowGeometry {
   }>
 }
 
-function noIdentity(): unknown {
+function noIdentity() {
   return {
     issue_id: 1,
     thread_id: 1,

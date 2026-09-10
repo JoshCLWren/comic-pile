@@ -334,18 +334,30 @@ class TestNeonFailureIsolation:
         await acc.initialize(engine)
         assert acc.degraded is False
 
-        # Dispose the engine to simulate Neon failure
-        await engine.dispose()
+        # Stop the healthy replenisher created by initialize so this test owns
+        # the one background task it is asserting about.
+        await acc.close()
 
-        # Consume to trigger replenishment
+        # Consume to trigger replenishment, then make the Neon reservation path
+        # fail deterministically instead of relying on disposed in-memory SQLite
+        # connection timing.
         acc.record(80)
-        acc._replenish_task = asyncio.create_task(
-            acc._background_replenish(), name="test-replenish"
-        )
+        with patch.object(
+            acc, "_reserve_block", side_effect=RuntimeError("Neon unavailable")
+        ):
+            acc._replenish_task = asyncio.create_task(
+                acc._background_replenish(), name="test-replenish"
+            )
 
-        await asyncio.sleep(0.3)
+            for _ in range(20):
+                if acc.degraded:
+                    break
+                await asyncio.sleep(0.01)
 
-        assert acc.degraded is True
+            assert acc.degraded is True
+            await acc.close()
+
+        await engine.dispose()
 
     @pytest.mark.asyncio
     async def test_redis_record_never_blocks_on_neon(self) -> None:

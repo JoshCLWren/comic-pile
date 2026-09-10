@@ -132,14 +132,16 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       
 
       // Thread-level deps map directly to FlowchartDependency
-      const threadDeps: FlowchartDependency[] = allDeps
-        .filter((dep) => dep.source_thread_id != null && dep.target_thread_id != null && !dep.is_issue_level)
-        .map((dep) => ({
-          id: String(dep.id),
-          source_id: dep.source_thread_id as number,
-          target_id: dep.target_thread_id as number,
-          created_at: dep.created_at,
-        }))
+      const threadDeps: FlowchartDependency[] = allDeps.flatMap((dep) =>
+        dep.source_thread_id != null && dep.target_thread_id != null && !dep.is_issue_level
+          ? [{
+              id: String(dep.id),
+              source_id: dep.source_thread_id,
+              target_id: dep.target_thread_id,
+              created_at: dep.created_at,
+            }]
+          : [],
+      )
 
       // Collect related thread IDs from thread-level deps
       for (const dep of threadDeps) {
@@ -606,7 +608,9 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                   role="tablist"
                   aria-label="Reading order view"
                   onKeyDown={(e) => {
+                    // SAFETY: all elements with role="tab" inside the tablist are rendered buttons.
                     const tabs = Array.from(e.currentTarget.querySelectorAll('[role="tab"]')) as HTMLElement[];
+                    // SAFETY: tab navigation only runs when the active element is one of the rendered tab buttons.
                     const currentIndex = tabs.indexOf(document.activeElement as HTMLElement);
                     if (currentIndex === -1) return;
                     let newIndex = currentIndex;

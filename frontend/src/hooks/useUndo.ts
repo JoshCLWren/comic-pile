@@ -19,6 +19,7 @@ export function useSnapshots(sessionId: number | string | null | undefined) {
   }, [isError, error])
 
   if (sessionId == null) {
+    // SAFETY: no session id means no snapshots; null is the intentional shape when the query is disabled.
     return { data: null as SessionSnapshotsResponse | null, isPending: false, isError: false }
   }
 

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import { computePredictedDie } from '../pages/RollPage/utils'
+import { cast } from '../utils/cast'
 
 // Mock heavy components
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -77,6 +78,6 @@ describe('RatingView initial preview', () => {
 
   it('computePredictedDie falls back to 6 when currentDie is falsy', () => {
     expect(computePredictedDie(0, 3.0)).toBe(8)
-    expect(computePredictedDie(undefined as unknown as number, 4.0)).toBe(4)
+    expect(computePredictedDie(cast<number>(undefined), 4.0)).toBe(4)
   })
 })

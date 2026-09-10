@@ -1,10 +1,38 @@
+/* eslint-disable max-lines */
 import { type PropsWithChildren } from 'react'
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { continuityPlansApi } from '../services/api-continuity-plans'
+import { dependencyGroupsApi } from '../services/api-dependency-groups'
+import { issuesApi } from '../services/api-issues'
+import { threadsApi } from '../services/api'
 import ContinuityPlannerPage from '../pages/ContinuityPlannerPage'
+
+const mocks = {
+  create: vi.fn(),
+  list: vi.fn(),
+  get: vi.fn(),
+  update: vi.fn(),
+  readiness: vi.fn(),
+  listGroups: vi.fn(),
+  listIssues: vi.fn(),
+  getIssue: vi.fn(),
+  listThreads: vi.fn(),
+  getThread: vi.fn(),
+}
+
+const _origCreate = continuityPlansApi.create
+const _origList = continuityPlansApi.list
+const _origGet = continuityPlansApi.get
+const _origUpdate = continuityPlansApi.update
+const _origReadiness = continuityPlansApi.readiness
+const _origGroupsList = dependencyGroupsApi.list
+const _origIssuesList = issuesApi.list
+const _origThreadsList = threadsApi.list
+const _origThreadsGet = threadsApi.get
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
 
@@ -22,39 +50,6 @@ function renderNewPlanPage() {
     { wrapper: queryWrapper },
   )
 }
-
-const mocks = vi.hoisted(() => ({
-  create: vi.fn(),
-  get: vi.fn(),
-  update: vi.fn(),
-  readiness: vi.fn(),
-  listGroups: vi.fn(),
-  listIssues: vi.fn(),
-  getIssue: vi.fn(),
-  listThreads: vi.fn(),
-  getThread: vi.fn(),
-}))
-
-vi.mock('../services/api-continuity-plans', () => ({
-  continuityPlansApi: {
-    create: mocks.create,
-    get: mocks.get,
-    update: mocks.update,
-    readiness: mocks.readiness,
-  },
-}))
-
-vi.mock('../services/api-dependency-groups', () => ({
-  dependencyGroupsApi: { list: mocks.listGroups },
-}))
-
-vi.mock('../services/api-issues', () => ({
-  issuesApi: { list: mocks.listIssues, get: mocks.getIssue },
-}))
-
-vi.mock('../services/api', () => ({
-  threadsApi: { list: mocks.listThreads, get: mocks.getThread },
-}))
 
 const thread = {
   id: 4,
@@ -99,8 +94,18 @@ beforeEach(() => {
   if (typeof window !== "undefined") {
       window.localStorage.clear();
     }
-  mocks.get.mockReset()
+  continuityPlansApi.create = mocks.create as never
+  continuityPlansApi.list = mocks.list as never
+  continuityPlansApi.get = mocks.get as never
+  continuityPlansApi.update = mocks.update as never
+  continuityPlansApi.readiness = mocks.readiness as never
+  dependencyGroupsApi.list = mocks.listGroups as never
+  issuesApi.list = mocks.listIssues as never
+  threadsApi.list = mocks.listThreads as never
+  threadsApi.get = mocks.getThread as never
+  vi.clearAllMocks()
   mocks.create.mockReset()
+  mocks.get.mockReset()
   mocks.update.mockReset()
   mocks.readiness.mockReset()
   mocks.readiness.mockResolvedValue({
@@ -113,11 +118,12 @@ beforeEach(() => {
     summary: { total: 0, readable: 0, blocked: 0, complete: 0, unavailable: 0 },
     generated_at: '2026-08-12T00:00:00Z',
   })
-  mocks.listIssues.mockReset()
-  mocks.listThreads.mockResolvedValue({ threads: [thread, secondThread], next_page_token: null })
+  mocks.list.mockResolvedValue({ plans: [], next_page_token: null })
   mocks.listGroups.mockResolvedValue([{ id: 8, name: 'Fourth World', memberships: [], created_at: '2026-08-12T00:00:00Z' }])
+  mocks.listIssues.mockReset()
   mocks.listIssues.mockResolvedValue({ issues: [issue], total_count: 1, page_size: 100, next_page_token: null })
   mocks.getIssue.mockResolvedValue(issue)
+  mocks.listThreads.mockResolvedValue({ threads: [thread, secondThread], next_page_token: null })
   mocks.getThread.mockResolvedValue(thread)
   mocks.create.mockResolvedValue({
     id: 12,
@@ -139,6 +145,19 @@ beforeEach(() => {
     created_at: '2026-08-12T00:00:00Z',
     updated_at: '2026-08-12T00:00:00Z',
   })
+})
+
+afterEach(() => {
+  cleanup()
+  continuityPlansApi.create = _origCreate
+  continuityPlansApi.list = _origList
+  continuityPlansApi.get = _origGet
+  continuityPlansApi.update = _origUpdate
+  continuityPlansApi.readiness = _origReadiness
+  dependencyGroupsApi.list = _origGroupsList
+  issuesApi.list = _origIssuesList
+  threadsApi.list = _origThreadsList
+  threadsApi.get = _origThreadsGet
 })
 
 describe('ContinuityPlannerPage', () => {
@@ -210,6 +229,7 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
 
     await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce())
+    // SAFETY: mock call shape matches the create API payload
     const payload = mocks.create.mock.calls[0][0] as { ordering_mode: string }
     expect(payload.ordering_mode).toBe('informational')
   })
@@ -231,6 +251,7 @@ describe('ContinuityPlannerPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
     await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce())
+    // SAFETY: mock call shape matches the create API payload
     const payload = mocks.create.mock.calls[0][0] as { ordering_mode: string }
     expect(payload.ordering_mode).toBe('informational')
   })
@@ -1350,6 +1371,7 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
     await waitFor(() => expect(mocks.create).toHaveBeenCalledOnce())
 
+    // SAFETY: mock call shape matches the create API payload with lanes
     const payload = mocks.create.mock.calls[0][0] as {
       ordering_mode: string
       lanes: Array<{ id: string }>
@@ -1428,6 +1450,7 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
     await waitFor(() => expect(mocks.update).toHaveBeenCalledOnce())
 
+    // SAFETY: mock call shape matches the update API payload with lanes
     const payload = mocks.update.mock.calls[0][1] as {
       lanes: Array<{ id: string }>
       nodes: Array<{ id: string; lane_id: string }>
@@ -1494,6 +1517,7 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
     await waitFor(() => expect(mocks.update).toHaveBeenCalledOnce())
 
+    // SAFETY: mock call shape matches the update API payload with checkpoints
     const payload = mocks.update.mock.calls[0][1] as { nodes: Array<{ id: string; is_checkpoint?: boolean }> }
     const checkpointNode = payload.nodes.find((n) => n.id === 'a-2')
     expect(checkpointNode?.is_checkpoint).toBe(true)
@@ -1565,6 +1589,7 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
     await waitFor(() => expect(mocks.update).toHaveBeenCalledOnce())
 
+    // SAFETY: mock call shape matches the update API payload with convergence gates
     const payload = mocks.update.mock.calls[0][1] as { nodes: Array<{ id: string; convergence_gate?: Array<{ node_id: string }> }> }
     const convergenceNode = payload.nodes.find((n) => n.id === 'b-1')
     expect(convergenceNode?.convergence_gate).toHaveLength(1)
@@ -1634,6 +1659,7 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save plan' }))
     await waitFor(() => expect(mocks.update).toHaveBeenCalledOnce())
 
+    // SAFETY: mock call shape matches the update API payload with convergence gates
     const payload = mocks.update.mock.calls[0][1] as { nodes: Array<{ id: string; convergence_gate?: Array<{ node_id: string }> }> }
     const convergenceNode = payload.nodes.find((n) => n.id === 'b-1')
     expect(convergenceNode?.convergence_gate).toHaveLength(0)

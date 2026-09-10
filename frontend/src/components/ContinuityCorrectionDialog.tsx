@@ -128,11 +128,13 @@ export default function ContinuityCorrectionDialog({
         targetGroup = await dependencyGroupsApi.create(normalizedName)
         createdGroup = targetGroup
       } else {
+        // SAFETY: selectedGroupId is non-null in existing mode and the group was chosen from the loaded groups list.
         targetGroup = groups.find((candidate) => candidate.id === selectedGroupId) as DependencyGroup
       }
 
 
       if (canSaveCurrentIssue) {
+        // SAFETY: canSaveCurrentIssue is derived from issueId != null, so issueId is a number in this branch.
         await dependencyGroupsApi.addMember(targetGroup.id, { issue_id: issueId as number })
         addedLabels.push(`issue ${issueNumber ?? '?'}`)
       }

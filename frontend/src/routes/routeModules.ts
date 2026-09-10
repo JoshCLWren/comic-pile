@@ -40,5 +40,6 @@ export const routeModules = {
 export function lazyRoute<K extends RouteModuleKey>(
   key: K,
 ): LazyExoticComponent<ComponentType> {
+  // SAFETY: every routeModules entry is an identical import() shape resolving to a React component module.
   return lazy(routeModules[key] as () => Promise<{ default: ComponentType }>)
 }

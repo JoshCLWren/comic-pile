@@ -136,7 +136,8 @@ def _comicvine_ids(node: ET.Element) -> tuple[str | None, str | None]:
     series_id = _first_attr(node, "SeriesID", "SeriesId", "VolumeID", "VolumeId")
     issue_id = _first_attr(node, "IssueID", "IssueId")
     database = node.find("Database")
-    if database is not None and (database.get("Name") or "").casefold() == "comicvine":
+    database_name = "" if database is None else (database.get("Name") or "").strip().casefold()
+    if database is not None and database_name in {"comicvine", "cv"}:
         series_id = series_id or _first_attr(database, "Series", "SeriesID", "Volume", "VolumeID")
         issue_id = issue_id or _first_attr(database, "Issue", "IssueID")
     return series_id, issue_id

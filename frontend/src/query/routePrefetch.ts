@@ -1,7 +1,8 @@
 import { routeModules } from '../routes/routeModules'
-import type { RouteModuleKey } from '../routes/routeModules'
+import type { RouteModule, RouteModuleKey } from '../routes/routeModules'
 import { queryClient } from './queryClient'
 import { queueThreadsQueryOptions } from '../hooks/useQueue'
+import { isFunction } from '../utils/runtimeChecks'
 
 /**
  * Retained-route chunk and bounded-data prefetching.
@@ -32,6 +33,17 @@ import { queueThreadsQueryOptions } from '../hooks/useQueue'
 export interface RoutePrefetchCancel {
   (): void
 }
+
+/**
+ * Injected dependencies for the prefetch layer, defaulting to the app
+ * singletons. Tests replace module mocking with real fakes through this seam.
+ */
+export interface RoutePrefetchDependencies {
+  routeModules: Readonly<Record<string, () => Promise<RouteModule>>>
+  queryClient: Pick<typeof queryClient, 'prefetchInfiniteQuery'>
+}
+
+const defaultDependencies: RoutePrefetchDependencies = { routeModules, queryClient }
 
 /** Bounded data warm-ups that have a live cache consumer on a retained screen. */
 type BoundedDataPrefetch = 'queueFirstPage'
@@ -103,8 +115,9 @@ const prefetchedData = new Set<string>()
 type IdleHandle = { cancel: () => void }
 
 function scheduleIdle(task: () => void, timeoutMs: number): IdleHandle {
+  // SAFETY: requestIdleCallback is feature-detected; the failed-probe fallback path returns a timer-based handle.
   const requestIdleCallback = (globalThis as { requestIdleCallback?: typeof globalThis.requestIdleCallback }).requestIdleCallback
-  if (typeof requestIdleCallback === 'function') {
+  if (isFunction(requestIdleCallback)) {
     const id = requestIdleCallback(task, { timeout: timeoutMs })
     return { cancel: () => globalThis.cancelIdleCallback(id) }
   }
@@ -119,10 +132,13 @@ function scheduleIdle(task: () => void, timeoutMs: number): IdleHandle {
  * Idempotent: a chunk is requested once per client lifetime. Errors are
  * swallowed so a prefetch failure never surfaces to the active screen.
  */
-export function prefetchRouteChunk(key: RouteModuleKey): void {
+export function prefetchRouteChunk(
+  key: RouteModuleKey,
+  deps: RoutePrefetchDependencies = defaultDependencies,
+): void {
   if (prefetchedChunks.has(key)) return
 
-  const loader = routeModules[key]
+  const loader = deps.routeModules[key]
   if (!loader) return
 
   prefetchedChunks.add(key)
@@ -186,13 +202,15 @@ function matchLikelyNextData(pathname: string): BoundedDataPrefetch | null {
  * canonical query key. Errors are swallowed; the live screen retries through
  * its own query when it mounts.
  */
-export function prefetchQueueFirstPage(): void {
+export function prefetchQueueFirstPage(
+  deps: RoutePrefetchDependencies = defaultDependencies,
+): void {
   const { queryKey } = queueThreadsQueryOptions()
   const dedupeKey = JSON.stringify(queryKey)
   if (prefetchedData.has(dedupeKey)) return
 
   prefetchedData.add(dedupeKey)
-  queryClient
+  deps.queryClient
     .prefetchInfiniteQuery(queueThreadsQueryOptions())
     .catch(() => {
       // A failed warm-up must not affect navigation; the Queue screen will
@@ -205,7 +223,10 @@ export function prefetchQueueFirstPage(): void {
  * from the given current pathname. Returns a cancel function; calling it before
  * the idle work flushes prevents any fetch.
  */
-export function scheduleRoutePrefetch(pathname: string): RoutePrefetchCancel {
+export function scheduleRoutePrefetch(
+  pathname: string,
+  deps: RoutePrefetchDependencies = defaultDependencies,
+): RoutePrefetchCancel {
   const chunks = matchLikelyNext(pathname)
   const data = matchLikelyNextData(pathname)
 
@@ -214,11 +235,11 @@ export function scheduleRoutePrefetch(pathname: string): RoutePrefetchCancel {
   const pending = scheduleIdle(() => {
     if (chunks && chunks.length > 0) {
       for (const chunk of chunks) {
-        prefetchRouteChunk(chunk)
+        prefetchRouteChunk(chunk, deps)
       }
     }
     if (data === 'queueFirstPage') {
-      prefetchQueueFirstPage()
+      prefetchQueueFirstPage(deps)
     }
   }, IDLE_TIMEOUT_MS)
 

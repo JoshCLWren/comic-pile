@@ -22,7 +22,9 @@ type DisplayEvent = {
   issue_number?: string | null
 }
 
-const EVENT_LABELS: Record<string, string> = {
+interface EventLabelMap extends Record<string, string> {}
+
+const EVENT_LABELS: EventLabelMap = {
   roll: 'Rolled',
   rate: 'Rated',
   snooze: 'Snoozed',
@@ -224,6 +226,7 @@ export default function SessionPage() {
         ) : (
           <div className="space-y-3 min-w-0">
             {details.events.map((event) => (
+              // SAFETY: the session details endpoint returns enriched events with the display-only fields beyond SessionEvent.
               <EventRecord key={event.id} event={event as DisplayEvent} />
             ))}
           </div>

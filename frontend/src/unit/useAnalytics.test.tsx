@@ -1,23 +1,32 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useAnalytics } from '../hooks/useAnalytics'
-import { tasksApi } from '../services/api'
+import type { AnalyticsTasksApi } from '../hooks/useAnalytics'
+import type { AnalyticsMetrics } from '../types'
 
-vi.mock('../services/api', () => ({
-  tasksApi: {
-    getMetrics: vi.fn(),
-  },
-}))
+function makeMetrics(): AnalyticsMetrics {
+  return {
+    total_threads: 5,
+    active_threads: 2,
+    completed_threads: 3,
+    completion_rate: 0.6,
+    average_session_hours: 1.5,
+    recent_sessions: [],
+    event_stats: {},
+    top_rated_threads: [],
+  }
+}
 
-const mockedTasksApi = vi.mocked(tasksApi)
+const getMetrics = vi.fn<() => Promise<AnalyticsMetrics>>()
+const api: AnalyticsTasksApi = { getMetrics }
 
 beforeEach(() => {
-  mockedTasksApi.getMetrics.mockResolvedValue({ total_tasks: 10 } as never)
+  getMetrics.mockResolvedValue(makeMetrics())
 })
 
 it('loads analytics metrics', async () => {
-  const { result } = renderHook(() => useAnalytics())
+  const { result } = renderHook(() => useAnalytics(api))
 
-  await waitFor(() => expect(result.current.data).toEqual({ total_tasks: 10 }))
-  expect(mockedTasksApi.getMetrics).toHaveBeenCalled()
+  await waitFor(() => expect(result.current.data).toEqual(makeMetrics()))
+  expect(getMetrics).toHaveBeenCalled()
 })

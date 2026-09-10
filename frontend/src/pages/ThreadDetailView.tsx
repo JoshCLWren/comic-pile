@@ -11,7 +11,7 @@ import { useCrossoverGroups } from '../hooks/useCrossoverGroups'
 import { useUpdateThread } from '../hooks/useThread'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
-import { DEFAULT_CREATE_STATE, type QueueFormState } from '../pages/QueuePage/types'
+import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from '../pages/QueuePage/types'
 import DependencyBuilder from '../components/DependencyBuilder'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
@@ -176,12 +176,7 @@ export default function ThreadDetailView() {
     const currentThread = thread!
 
     try {
-      const updateData: {
-        title: string
-        format: string
-        notes: string | null
-        issues_remaining?: number
-      } = {
+      const updateData: EditThreadData = {
         title: editForm.title,
         format: editForm.format,
         notes: editForm.notes || null,

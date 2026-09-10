@@ -118,6 +118,7 @@ export function useRollBootstrap() {
 
   useEffect(() => {
     const handleReconciledBootstrap = (event: Event) => {
+      // SAFETY: the helper only dispatches this event name with a RollBootstrapResponse detail payload.
       const reconciled = (event as CustomEvent<RollBootstrapResponse>).detail
       if (!reconciled) return
 
@@ -143,6 +144,7 @@ export function useRollBootstrap() {
     data: data ?? null,
     isPending,
     isError,
+    // SAFETY: the bootstrap queryFn normalizes failures to Error, so the query error value is Error | null.
     error: (error as Error | null) ?? null,
     refetch: refetchBootstrap,
   }

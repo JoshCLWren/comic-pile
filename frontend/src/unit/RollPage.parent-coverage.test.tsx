@@ -14,14 +14,41 @@ const spies = vi.hoisted(() => ({
   rate: vi.fn().mockResolvedValue({}),
   setPending: vi.fn().mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 }),
 }))
-const sessionHook = vi.hoisted(() => ({ value: null as unknown }))
-const bootstrapHook = vi.hoisted(() => ({ value: null as unknown }))
+
+interface HoistedMockValue {
+  value: unknown
+}
+
+interface SessionData {
+  current_die: number
+  snoozed_threads: Array<{ id: number; title: string; format: string }>
+  manual_die?: number
+  last_rolled_result?: number | null
+}
+
+interface BootstrapData {
+  current_die: number
+  snoozed_threads: Array<{ id: number; title: string; format: string }>
+  roll_pool: Array<{ id: number; title: string; format: string }>
+  manual_die?: number | null
+  last_rolled_result?: number | null
+  pending_thread_id?: number | null
+  active_thread?: unknown
+  blocked_count: number
+  blocked_threads: Array<{ id: number; title: string; format: string }>
+  stale_thread_count: number
+  stale_thread: { id: number; title: string; format: string; last_activity_at?: string } | null
+  snoozed_count: number
+}
+
+const sessionHook = vi.hoisted((): HoistedMockValue => ({ value: null }))
+const bootstrapHook = vi.hoisted((): HoistedMockValue => ({ value: null }))
 const relatedApi = vi.hoisted(() => ({ readingOrders: vi.fn(), connectedThreads: vi.fn(), blockingInfo: vi.fn(), batchBlockingInfo: vi.fn() }))
-const sessionData: { current_die: number; snoozed_threads: Array<{ id: number; title: string; format: string }>; manual_die?: number; last_rolled_result?: number | null } = { current_die: 6, snoozed_threads: [] }
-const bootstrapData: { current_die: number; snoozed_threads: Array<{ id: number; title: string; format: string }>; roll_pool: Array<{ id: number; title: string; format: string }>; manual_die?: number | null; last_rolled_result?: number | null; pending_thread_id?: number | null; active_thread?: unknown; blocked_count: number; blocked_threads: Array<{ id: number; title: string; format: string }>; stale_thread_count: number; stale_thread: { id: number; title: string; format: string; last_activity_at?: string } | null; snoozed_count: number } = { current_die: 6, snoozed_threads: [], roll_pool: [{ id: 1, title: 'Saga', format: 'Comic' }], manual_die: null, last_rolled_result: null, pending_thread_id: null, active_thread: null, blocked_count: 0, blocked_threads: [], stale_thread_count: 0, stale_thread: null, snoozed_count: 0 }
+const sessionData: SessionData = { current_die: 6, snoozed_threads: [] }
+const bootstrapData: BootstrapData = { current_die: 6, snoozed_threads: [], roll_pool: [{ id: 1, title: 'Saga', format: 'Comic' }], manual_die: null, last_rolled_result: null, pending_thread_id: null, active_thread: null, blocked_count: 0, blocked_threads: [], stale_thread_count: 0, stale_thread: null, snoozed_count: 0 }
 const threadData: Array<{ id: number; title: string; format: string; status: string; is_blocked?: boolean }> = [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }]
 let staleData: never[] = []
-let threadsValue: unknown = threadData
+let threadsValue: typeof threadData | undefined = threadData
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
 vi.mock('../contexts/useBugReportRestore', () => ({
@@ -99,7 +126,7 @@ describe('RollPage parent handlers', () => {
     bootstrapData.pending_thread_id = null
     bootstrapData.last_rolled_result = sessionData.last_rolled_result ?? null
     bootstrapData.active_thread = null
-    bootstrapData.roll_pool = (threadsValue ? (threadsValue as any[]).filter((t: any) => t.status === 'active' && !t.is_blocked).map((t: any) => ({ id: t.id, title: t.title, format: t.format })) : threadData.filter((t: any) => t.status === 'active' && !t.is_blocked).map((t: any) => ({ id: t.id, title: t.title, format: t.format })))
+    bootstrapData.roll_pool = (threadsValue ? (threadsValue as any[]).flatMap((t: any) => t.status === 'active' && !t.is_blocked ? [{ id: t.id, title: t.title, format: t.format }] : []) : threadData.flatMap((t: any) => t.status === 'active' && !t.is_blocked ? [{ id: t.id, title: t.title, format: t.format }] : []))
     bootstrapData.snoozed_threads = sessionData.snoozed_threads
     bootstrapData.snoozed_count = 0
     bootstrapData.blocked_count = 0

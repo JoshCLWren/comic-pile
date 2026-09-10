@@ -97,6 +97,14 @@ async def test_adoption_mutates_exact_owned_plan() -> None:
             "app.services.cbl_targeted_plan_adoption.replace_compiled_rules",
             new_callable=AsyncMock,
         ),
+        patch(
+            "app.services.cbl_targeted_plan_adoption.refresh_user_blocked_status",
+            new_callable=AsyncMock,
+        ) as refresh_blocked,
+        patch(
+            "app.services.cbl_targeted_plan_adoption.invalidate_user_view",
+            new_callable=AsyncMock,
+        ) as invalidate,
     ):
         result = await adopt_cbl_into_existing_reading_plan(
             db,  # type: ignore[arg-type]
@@ -113,6 +121,8 @@ async def test_adoption_mutates_exact_owned_plan() -> None:
     assert db.commits == 1
     assert merge.await_args is not None
     assert merge.await_args.args[1] is plan
+    refresh_blocked.assert_awaited_once_with(7, db)
+    invalidate.assert_awaited_once_with(7)
 
 
 @pytest.mark.asyncio
