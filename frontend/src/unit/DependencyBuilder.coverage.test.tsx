@@ -30,6 +30,7 @@ describe('DependencyBuilder', () => {
 
   it('shows dependency loading and request errors', async () => {
     api.dependenciesApi.listThreadDependencies.mockRejectedValueOnce(new Error('load failed'))
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('load failed')).toBeInTheDocument())
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [], blocked_by: [] })
@@ -41,6 +42,7 @@ describe('DependencyBuilder', () => {
     api.issuesApi.list.mockResolvedValue({ issues: [{ id: 8, thread_id: 2, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' }], next_page_token: null })
     api.dependenciesApi.createDependency.mockResolvedValue({ warning: 'dependency warning' })
     const user = userEvent.setup(); const changed = vi.fn()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} onChanged={changed} />)
     await waitFor(() => expect(screen.getByText('No prerequisites yet.')).toBeInTheDocument())
     await user.type(screen.getByLabelText('Search prerequisite series'), 'Pre')
@@ -55,11 +57,13 @@ describe('DependencyBuilder', () => {
 
   it('renders existing dependency rows and undo deletion', async () => {
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [dependency], blocked_by: [dependency] })
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getAllByText('Source').length).toBeGreaterThan(0))
     const remove = screen.getAllByRole('button', { name: 'Remove' })[0]
     fireEvent.click(remove)
     await waitFor(() => expect(toast.showToast).toHaveBeenCalled())
+    // SAFETY: mock call shape is controlled by the test
     const call = toast.showToast.mock.calls.at(-1) as unknown as [string, string, { onClick?: () => void }]
     const action = call[2]?.onClick
     act(() => action?.())
@@ -74,6 +78,7 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.deleteDependency.mockResolvedValue({})
     api.dependenciesApi.updateDependency.mockResolvedValue({ ...withNote, note: 'Updated' })
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByRole('button', { name: /view reading order/i })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /view reading order/i }))
@@ -108,6 +113,7 @@ describe('DependencyBuilder', () => {
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Unmigrated', total_issues: null }] })
     api.issuesApi.migrateThread.mockResolvedValue({ ...thread, id: 2, title: 'Unmigrated', total_issues: 5 })
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'Unm')
     await waitFor(() => expect(screen.getByRole('button', { name: /Unmigrated/ })).toBeInTheDocument())
@@ -128,6 +134,7 @@ describe('DependencyBuilder', () => {
       .mockResolvedValueOnce({ issues: [{ id: 8, thread_id: 2, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' }], next_page_token: 'next' })
       .mockResolvedValueOnce({ issues: [{ id: 9, thread_id: 2, issue_number: '2', status: 'unread', read_at: null, created_at: 'now' }], next_page_token: 'next' })
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'x')
     expect(screen.queryByText('No matching series found.')).not.toBeInTheDocument()
@@ -152,19 +159,23 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [], blocked_by: [] })
     api.threadsApi.list.mockReturnValue(new Promise((resolve) => { resolveThreads = resolve }))
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     const { rerender } = render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'late')
     await waitFor(() => expect(api.threadsApi.list).toHaveBeenCalled())
+    // SAFETY: test fixture provides only the fields the component reads
     rerender(<DependencyBuilder thread={thread as never} isOpen={false} onClose={vi.fn()} />)
     resolveThreads({ threads: [] })
     await Promise.resolve()
 
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Source', total_issues: 2 }] })
     api.issuesApi.list.mockReturnValue(new Promise((resolve) => { resolveIssues = resolve }))
+    // SAFETY: test fixture provides only the fields the component reads
     rerender(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'Source')
     await waitFor(() => expect(screen.getByRole('button', { name: /Source/ })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /Source/ }))
+    // SAFETY: test fixture provides only the fields the component reads
     rerender(<DependencyBuilder thread={thread as never} isOpen={false} onClose={vi.fn()} />)
     resolveIssues({ issues: [], next_page_token: null })
     await Promise.resolve()
@@ -175,6 +186,7 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [noted], blocked_by: [] })
     api.dependenciesApi.updateDependency.mockRejectedValueOnce(new Error('note failed'))
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('Existing note')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Edit note' }))
@@ -197,6 +209,7 @@ describe('DependencyBuilder', () => {
       .mockResolvedValueOnce({ issues: [{ id: 8, thread_id: 2, issue_number: '1', status: 'unread' }], next_page_token: null })
       .mockResolvedValueOnce({ issues: [{ id: 9, thread_id: 1, issue_number: '1', status: 'unread' }], next_page_token: null })
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'Source')
     await waitFor(() => expect(screen.getByRole('button', { name: /Source/ })).toBeInTheDocument())
@@ -208,6 +221,7 @@ describe('DependencyBuilder', () => {
     api.issuesApi.list
       .mockResolvedValueOnce({ issues: [{ id: 8, thread_id: 2, issue_number: '1', status: 'unread' }], next_page_token: null })
       .mockResolvedValueOnce({ issues: [{ id: 9, thread_id: 1, issue_number: '1', status: 'unread' }], next_page_token: null })
+    // SAFETY: intentionally null to test unmigrated-target behavior
     render(<DependencyBuilder thread={{ ...thread, total_issues: null } as never} isOpen onClose={vi.fn()} />)
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Unmigrated', total_issues: 2 }] })
     await user.type(screen.getByLabelText('Search prerequisite series'), 'Unm')
@@ -239,6 +253,7 @@ describe('DependencyBuilder', () => {
       .mockResolvedValueOnce({ issues: [{ id: 8, thread_id: 2, issue_number: '1', status: 'unread' }], next_page_token: null })
       .mockResolvedValueOnce({ issues: [{ id: 9, thread_id: 1, issue_number: '2', status: 'unread' }], next_page_token: null })
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByRole('button', { name: /view reading order/i })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /view reading order/i }))
@@ -263,6 +278,7 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.listBlockedThreadIds.mockResolvedValue([1])
     api.threadsApi.list.mockResolvedValue({ threads: [thread, { ...thread, id: 2, title: 'Source thread' }] })
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByRole('button', { name: /view reading order/i })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /view reading order/i }))
@@ -275,6 +291,7 @@ describe('DependencyBuilder', () => {
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Unmigrated', total_issues: null }] })
     api.issuesApi.migrateThread.mockRejectedValueOnce(new Error('migration failed'))
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'Unm')
     await waitFor(() => expect(screen.getByRole('button', { name: /Unmigrated/ })).toBeInTheDocument())
@@ -296,6 +313,7 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.listBlockedThreadIds.mockResolvedValue([])
     api.threadsApi.list.mockRejectedValueOnce(new Error('graph failed'))
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByRole('button', { name: /view reading order/i })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /view reading order/i }))
@@ -326,6 +344,7 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.listBlockedThreadIds.mockRejectedValueOnce(new Error('blocked ids failed'))
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByRole('button', { name: /view reading order/i })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /view reading order/i }))
@@ -342,6 +361,7 @@ describe('DependencyBuilder', () => {
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Prerequisite', total_issues: 2 }] })
     api.issuesApi.list.mockResolvedValue({ issues: [], next_page_token: null })
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Remove' }).length).toBe(2))
     await user.type(screen.getByLabelText('Search prerequisite series'), 'Pre')
@@ -368,6 +388,7 @@ describe('DependencyBuilder', () => {
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'No unread', total_issues: 3 }] })
     api.issuesApi.list.mockResolvedValue({ issues: [], next_page_token: null })
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'No ')
     await waitFor(() => expect(screen.getByRole('button', { name: /No unread/ })).toBeInTheDocument())
@@ -384,6 +405,7 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [], blocked_by: [] })
     api.threadsApi.list.mockReturnValue(new Promise(() => {}))
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'pending')
     await waitFor(() => expect(screen.getByText('Searching…')).toBeInTheDocument())
@@ -397,6 +419,7 @@ describe('DependencyBuilder', () => {
       next_page_token: null,
     })
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'Pre')
     await waitFor(() => expect(screen.getByRole('button', { name: /Prerequisite/ })).toBeInTheDocument())
@@ -407,6 +430,7 @@ describe('DependencyBuilder', () => {
 
     cleanup()
     const unmigratedTarget = { ...thread, total_issues: null }
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={unmigratedTarget as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'Pre')
     await waitFor(() => expect(screen.getByRole('button', { name: /Prerequisite/ })).toBeInTheDocument())
@@ -421,6 +445,7 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [noted], blocked_by: [] })
     api.dependenciesApi.deleteDependency.mockRejectedValue(new Error('delete failed'))
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     const { rerender } = render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('Existing')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Edit note' }))
@@ -429,6 +454,7 @@ describe('DependencyBuilder', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    // SAFETY: test fixture provides only the fields the component reads
     rerender(<DependencyBuilder thread={thread as never} isOpen={false} onClose={vi.fn()} />)
     await waitFor(() => expect(api.dependenciesApi.deleteDependency).toHaveBeenCalledWith(4))
   })
@@ -439,9 +465,11 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.deleteDependency.mockResolvedValue(undefined)
     const changed = vi.fn()
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     const { rerender } = render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} onChanged={changed} />)
     await waitFor(() => expect(screen.getByText('Commit on close')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Remove' }))
+    // SAFETY: test fixture provides only the fields the component reads
     rerender(<DependencyBuilder thread={thread as never} isOpen={false} onClose={vi.fn()} onChanged={changed} />)
     await waitFor(() => expect(changed).toHaveBeenCalled())
     expect(toast.removeToast).toHaveBeenCalled()
@@ -457,6 +485,7 @@ describe('DependencyBuilder', () => {
     ], next_page_token: null })
     api.dependenciesApi.createDependency.mockResolvedValue({ warning: 'Dependency may create a cycle' })
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'Pre')
     await waitFor(() => expect(screen.getByRole('button', { name: /Prerequisite/ })).toBeInTheDocument())
@@ -487,6 +516,7 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.listBlockedThreadIds.mockResolvedValue([1])
     api.threadsApi.list.mockResolvedValue({ threads: [thread, { ...thread, id: 2, title: 'Source', total_issues: 3 }] })
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByRole('button', { name: /view reading order/i })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /view reading order/i }))
@@ -515,6 +545,7 @@ describe('DependencyBuilder', () => {
     api.issuesApi.list.mockResolvedValue({ issues: [], next_page_token: null })
     api.dependenciesApi.updateDependency.mockResolvedValue({ ...malformed, note: null })
     const user = userEvent.setup()
+    // SAFETY: test fixture provides only the fields the component reads
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByRole('button', { name: /view reading order/i })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /view reading order/i }))

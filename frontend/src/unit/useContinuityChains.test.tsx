@@ -63,6 +63,7 @@ describe('useContinuityChains', () => {
         resolveRequest = resolve
       }),
     )
+    // SAFETY: test forces the union to a non-null literal while null is rerendered later
     const { result, rerender } = renderHook(
       ({ issueId }) => useContinuityChains(issueId),
       { initialProps: { issueId: 7 as number | null } },
