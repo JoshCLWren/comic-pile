@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import type { InfiniteData } from '@tanstack/react-query'
 import type { Thread, ThreadListResponse } from '../types'
 import { queryKeys } from './queryKeys'
+import { isObject } from '../utils/runtimeChecks'
 
 export type ThreadCacheRollback = () => void
 
@@ -191,7 +192,7 @@ export function applyComicVineCorrectionOptimistically(
 ): void {
   if (imageUrl === undefined) return
   client.setQueryData(queryKeys.comicVine.issueIntelligence(issueId), (old: unknown) => {
-    if (!old || typeof old !== 'object') return old as never
+    if (!old || !isObject(old)) return old as never
     const record = old as Record<string, unknown>
     if (!('image_url' in record)) return old as never
     return { ...(old as object), image_url: imageUrl } as never
