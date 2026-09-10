@@ -25,7 +25,19 @@ vi.mock('../hooks/useReaderContext', () => ({
   }),
 }))
 
-const thread = { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5, total_issues: 10, next_unread_issue_number: '3' } as Thread
+const thread: Thread = {
+  id: 1,
+  title: 'Saga',
+  format: 'Comic',
+  issues_remaining: 5,
+  total_issues: 10,
+  next_unread_issue_number: '3',
+  queue_position: 1,
+  status: 'active',
+  is_blocked: false,
+  blocking_reasons: [],
+  created_at: '2000-01-01T00:00:00Z',
+}
 const callbacks = () => ({
   onThreadClick: vi.fn(), onUnsnooze: vi.fn(), onUnskip: vi.fn(), onReadStale: vi.fn(), onToggleSnoozed: vi.fn(),
   onToggleSkipped: vi.fn(), onToggleBlocked: vi.fn(), onShuffle: vi.fn(),

@@ -48,7 +48,7 @@
     "anti-slop/no-known-value-widening": "error",
     "anti-slop/no-unknown-parameters": "off",
     "anti-slop/no-module-mocking": "off",
-    "anti-slop/require-safety-comment-for-type-assertion": "off"
+    "anti-slop/require-safety-comment-for-type-assertion": "error"
   }
 }
 
