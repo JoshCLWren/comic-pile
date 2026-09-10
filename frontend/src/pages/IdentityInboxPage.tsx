@@ -81,7 +81,7 @@ function CandidateCard({
   isConfirming: boolean
   isRejecting: boolean
 }) {
-  const meta = candidate.metadata_json
+  const meta = candidate.metadata_json as any
   const toText = (value: unknown): string | null =>
     typeof value === 'string' && value.length > 0 ? value : null
 
