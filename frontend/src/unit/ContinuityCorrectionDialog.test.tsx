@@ -43,6 +43,7 @@ const connectedThread = (overrides: Partial<ConnectedThreadInfo>): ConnectedThre
   ...overrides,
 })
 
+// SAFETY: test prop supplies only the fields the component reads
 const baseProps: ContinuityCorrectionDialogProps = {
   isOpen: true,
   threadId: 1,
