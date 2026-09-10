@@ -987,6 +987,11 @@ async def apply_ultimate_universe_migration(
                 "temporary incident-repair rules survived dependency deletion: "
                 f"{surviving_temporary_rules}"
             )
+        for row in snapshot.get("temporary_repair_rules", []):
+            rule = await db.get(ContinuityRule, int(cast(int, row["id"])))
+            if rule is not None:
+                await db.delete(rule)
+        await db.flush()
 
     plan_payload = dict(snapshot["planned"]["plan"])
     ContinuityPlanWrite.model_validate(plan_payload)
@@ -1230,7 +1235,16 @@ async def rollback_ultimate_universe_migration(
         )
 
     for row in snapshot.get("reused_standalone_rules", []):
-        rule = await db.get(ContinuityRule, int(cast(int, row["id"])))
+        rule = (
+            await db.execute(
+                select(ContinuityRule)
+                .where(
+                    ContinuityRule.id == int(cast(int, row["id"])),
+                    ContinuityRule.user_id == spec.user_id,
+                )
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
         if rule is None or _rule_snapshot(rule) != row:
             raise MigrationInvariantError(
                 f"reused standalone rule {row['id']} changed after cutover; "
@@ -1403,7 +1417,16 @@ async def rollback_ultimate_universe_migration(
     source_restored_ids = {int(cast(int, row["id"])) for row in source_rows}
     if source_restored_ids:
         for row in snapshot.get("reused_standalone_rules", []):
-            rule = await db.get(ContinuityRule, int(cast(int, row["id"])))
+            rule = (
+                await db.execute(
+                    select(ContinuityRule)
+                    .where(
+                        ContinuityRule.id == int(cast(int, row["id"])),
+                        ContinuityRule.user_id == spec.user_id,
+                    )
+                    .execution_options(populate_existing=True)
+                )
+            ).scalar_one_or_none()
             if rule is None:
                 raise MigrationInvariantError(
                     f"reusable standalone rule {row['id']} no longer exists"

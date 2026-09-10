@@ -544,6 +544,8 @@ async def test_step23b_stale_snapshot_token_refuses_apply_before_any_write(
     spec, _issues, _threads, legacy, _standalone, temp_dep, _temp_rule = (
         await _step23b_fixture(async_db)
     )
+    legacy_id = legacy.id
+    temp_dep_id = temp_dep.id
     await async_db.commit()
 
     snapshot = await build_ultimate_universe_dry_run(async_db, spec)
@@ -568,8 +570,18 @@ async def test_step23b_stale_snapshot_token_refuses_apply_before_any_write(
         await async_db.scalar(select(func.count()).select_from(ContinuityPlan))
         == plans_before
     )
-    assert await async_db.get(Dependency, legacy.id) is not None
-    assert await async_db.get(Dependency, temp_dep.id) is not None
+    assert (
+        await async_db.scalar(
+            select(func.count()).select_from(Dependency).where(Dependency.id == legacy_id)
+        )
+        == 1
+    )
+    assert (
+        await async_db.scalar(
+            select(func.count()).select_from(Dependency).where(Dependency.id == temp_dep_id)
+        )
+        == 1
+    )
     assert await async_db.scalar(
         select(func.count())
         .select_from(ContinuityRule)
@@ -691,8 +703,7 @@ async def test_step23b_rollback_cooperates_with_legacy_dependency_sync_trigger(
 async def test_step23b_rollback_repairs_standalone_rule_claimed_by_sync_trigger(
     async_db: AsyncSession,
 ) -> None:
-    """Rollback restores a standalone rule whose edge a restored source
-    dependency re-claims through the production sync trigger.
+    """Restore a standalone rule whose edge a restored source dependency claims.
 
     Production source-12 dependencies include every internal edge, so a
     reusable standalone ``item_read`` rule can share its edge with a restored
