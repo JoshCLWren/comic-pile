@@ -9,7 +9,7 @@
  * downgraded — by server preference data.
  */
 
-import { isString } from './runtimeChecks'
+import { isString } from '../utils/runtimeChecks'
 
 export const THEME_IDS = ['classic', 'ink-gold', 'command-center'] as const
 

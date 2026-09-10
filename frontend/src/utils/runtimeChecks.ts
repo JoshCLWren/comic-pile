@@ -41,6 +41,12 @@ export function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && value !== undefined && classTag(value) === '[object Object]'
 }
 
+export function isNonNullObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || value === undefined) return false
+  const tag = classTag(value)
+  return tag === '[object Object]' || tag === '[object Error]'
+}
+
 export function isPlainObject(value: unknown): value is object {
   return isObject(value)
 }
@@ -49,7 +55,7 @@ export function hasProperty<T extends object, K extends string>(
   obj: T,
   key: K,
 ): obj is T & Record<K, unknown> {
-  return isObject(obj) && key in obj
+  return key in obj
 }
 
 export function isNonEmptyString(value: unknown): value is string {

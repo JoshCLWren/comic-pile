@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
-import { isString, isObject, isNonEmptyString } from '../utils/runtimeChecks'
+import { isObject, isNonEmptyString } from '../utils/runtimeChecks'
 
 interface InboxCandidate {
   external_identity_id: number

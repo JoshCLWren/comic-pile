@@ -1,7 +1,7 @@
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
-import { isWindowDefined, isFunction, isObject } from '../utils/runtimeChecks'
+import { isWindowDefined, isFunction, isNonNullObject } from '../utils/runtimeChecks'
 
 export const ROLL_BOOTSTRAP_RECONCILED_EVENT = 'comic-pile:roll-bootstrap-reconciled'
 
@@ -20,7 +20,7 @@ function normalizePendingThreadId(
 }
 
 export function isAmbiguousNetworkFailure(error: unknown): boolean {
-  if (!error || !isObject(error)) return false
+  if (!error || !isNonNullObject(error)) return false
 
   const candidate = error as { code?: string; message?: string; response?: unknown }
   if (candidate.response) return false
@@ -32,7 +32,7 @@ export function isAmbiguousNetworkFailure(error: unknown): boolean {
 }
 
 export function isAuthenticationMutationFailure(error: unknown): boolean {
-  if (!error || !isObject(error)) return false
+  if (!error || !isNonNullObject(error)) return false
 
   const response = (error as {
     response?: { status?: number; data?: { detail?: unknown } }
