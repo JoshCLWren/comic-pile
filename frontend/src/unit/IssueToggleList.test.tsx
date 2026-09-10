@@ -1,33 +1,27 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
-import { issueDependenciesApi } from '../services/api-dependencies'
-import { issuesApi } from '../services/api-issues'
+import type {
+  IssueToggleListApi,
+  IssueToggleListDependenciesApi,
+} from '../pages/QueuePage/IssueToggleList'
 import type { Issue, IssueListResponse } from '../types'
 import { cast } from '../utils/cast'
 
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    list: vi.fn(),
-    create: vi.fn(),
-    get: vi.fn(),
-    markRead: vi.fn(),
-    markUnread: vi.fn(),
-    move: vi.fn(),
-    reorder: vi.fn(),
-    delete: vi.fn(),
-    migrateThread: vi.fn(),
-  },
-}))
+// Injectable fakes passed through the real `issuesApi`/`dependenciesApi` props —
+// no module mocking of the API services.
+const mockedIssuesApi: IssueToggleListApi = {
+  list: vi.fn(),
+  create: vi.fn(),
+  markRead: vi.fn(),
+  markUnread: vi.fn(),
+  delete: vi.fn(),
+  reorder: vi.fn(),
+}
 
-vi.mock('../services/api-dependencies', () => ({
-  issueDependenciesApi: {
-    listForThread: vi.fn(),
-  },
-}))
-
-const mockedIssuesApi = vi.mocked(issuesApi, { deep: true })
-const mockedIssueDependenciesApi = vi.mocked(issueDependenciesApi, { deep: true })
+const mockedIssueDependenciesApi: IssueToggleListDependenciesApi = {
+  listForThread: vi.fn(),
+}
 
 const BASE_ISSUES: Issue[] = [
   {
@@ -99,7 +93,13 @@ function getIssueOrder(): Array<string | null> {
 }
 
 async function renderIssueToggleList() {
-  render(<IssueToggleList threadId={99} />)
+  render(
+    <IssueToggleList
+      threadId={99}
+      issuesApi={mockedIssuesApi}
+      dependenciesApi={mockedIssueDependenciesApi}
+    />,
+  )
   await waitFor(() => {
     expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
   })
@@ -399,7 +399,11 @@ describe('IssueToggleList', () => {
       ]
       mockedIssuesApi.list.mockResolvedValue(buildListResponse(smallIssueList))
 
-      render(<IssueToggleList threadId={99} />)
+      render(<IssueToggleList
+        threadId={99}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />)
 
       await waitFor(() => {
         expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
@@ -420,7 +424,11 @@ describe('IssueToggleList', () => {
       }))
       mockedIssuesApi.list.mockResolvedValue(buildListResponse(largeIssueList))
 
-      render(<IssueToggleList threadId={99} />)
+      render(<IssueToggleList
+        threadId={99}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />)
 
       await waitFor(() => {
         expect(screen.getByTestId('issue-pill-2')).toBeInTheDocument()
@@ -445,7 +453,11 @@ describe('IssueToggleList', () => {
       }))
       mockedIssuesApi.list.mockResolvedValue(buildListResponse(largeIssueList))
 
-      render(<IssueToggleList threadId={99} />)
+      render(<IssueToggleList
+        threadId={99}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />)
 
       await waitFor(() => {
         expect(screen.getByTestId('issue-pill-2')).toBeInTheDocument()
@@ -472,7 +484,11 @@ describe('IssueToggleList', () => {
       }))
       mockedIssuesApi.list.mockResolvedValue(buildListResponse(largeIssueList))
 
-      render(<IssueToggleList threadId={99} />)
+      render(<IssueToggleList
+        threadId={99}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />)
 
       await waitFor(() => {
         expect(screen.getByTestId('issue-pill-2')).toBeInTheDocument()
@@ -507,7 +523,11 @@ describe('IssueToggleList', () => {
       }))
       mockedIssuesApi.list.mockResolvedValue(buildListResponse(allReadIssueList))
 
-      render(<IssueToggleList threadId={99} />)
+      render(<IssueToggleList
+        threadId={99}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />)
 
       await waitFor(() => {
         expect(screen.getByTestId('issue-pill-8')).toBeInTheDocument()
@@ -530,7 +550,11 @@ describe('IssueToggleList', () => {
       }))
       mockedIssuesApi.list.mockResolvedValue(buildListResponse(twentyIssues))
 
-      render(<IssueToggleList threadId={99} />)
+      render(<IssueToggleList
+        threadId={99}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />)
 
       await waitFor(() => {
         expect(screen.getByTestId('issue-pill-8')).toBeInTheDocument()
@@ -554,7 +578,11 @@ describe('IssueToggleList', () => {
     }))
     mockedIssuesApi.list.mockResolvedValue(buildListResponse(twentyIssues))
 
-    render(<IssueToggleList threadId={99} />)
+    render(<IssueToggleList
+        threadId={99}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />)
 
     await waitFor(() => {
       expect(screen.getByTestId('issue-pill-8')).toBeInTheDocument()
@@ -660,7 +688,11 @@ describe('IssueToggleList', () => {
 
     cleanup()
     mockedIssuesApi.list.mockRejectedValueOnce(new Error('initial load failed'))
-    render(<IssueToggleList threadId={99} />)
+    render(<IssueToggleList
+        threadId={99}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />)
     await waitFor(() => expect(screen.queryByText('Loading issues…')).not.toBeInTheDocument())
   })
 
@@ -675,7 +707,14 @@ describe('IssueToggleList', () => {
 
   it('calls onIssueChanged after a successful delete', async () => {
     const onIssueChanged = vi.fn()
-    render(<IssueToggleList threadId={99} onIssueChanged={onIssueChanged} />)
+    render(
+      <IssueToggleList
+        threadId={99}
+        onIssueChanged={onIssueChanged}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />,
+    )
     await waitFor(() => {
       expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
     })
@@ -689,7 +728,14 @@ describe('IssueToggleList', () => {
 
   it('calls onIssueChanged after a successful toggle', async () => {
     const onIssueChanged = vi.fn()
-    render(<IssueToggleList threadId={99} onIssueChanged={onIssueChanged} />)
+    render(
+      <IssueToggleList
+        threadId={99}
+        onIssueChanged={onIssueChanged}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />,
+    )
     await waitFor(() => {
       expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
     })
@@ -702,7 +748,14 @@ describe('IssueToggleList', () => {
 
   it('does not call onIssueChanged when delete is cancelled', async () => {
     const onIssueChanged = vi.fn()
-    render(<IssueToggleList threadId={99} onIssueChanged={onIssueChanged} />)
+    render(
+      <IssueToggleList
+        threadId={99}
+        onIssueChanged={onIssueChanged}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />,
+    )
     await waitFor(() => {
       expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
     })

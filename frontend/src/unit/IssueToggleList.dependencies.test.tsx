@@ -1,35 +1,27 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
-import {
-  issueDependenciesApi,
-  type ThreadIssueDependenciesResponse,
-} from '../services/api-dependencies'
-import { issuesApi } from '../services/api-issues'
+import type {
+  IssueToggleListApi,
+  IssueToggleListDependenciesApi,
+} from '../pages/QueuePage/IssueToggleList'
+import type { ThreadIssueDependenciesResponse } from '../services/api-dependencies'
 import type { Issue, IssueListResponse } from '../types'
 
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    list: vi.fn(),
-    create: vi.fn(),
-    get: vi.fn(),
-    markRead: vi.fn(),
-    markUnread: vi.fn(),
-    move: vi.fn(),
-    reorder: vi.fn(),
-    delete: vi.fn(),
-    migrateThread: vi.fn(),
-  },
-}))
+// Injectable fakes passed through the real `issuesApi`/`dependenciesApi` props —
+// no module mocking of the API services.
+const mockedIssuesApi: IssueToggleListApi = {
+  list: vi.fn(),
+  create: vi.fn(),
+  markRead: vi.fn(),
+  markUnread: vi.fn(),
+  delete: vi.fn(),
+  reorder: vi.fn(),
+}
 
-vi.mock('../services/api-dependencies', () => ({
-  issueDependenciesApi: {
-    listForThread: vi.fn(),
-  },
-}))
-
-const mockedIssuesApi = vi.mocked(issuesApi, { deep: true })
-const mockedIssueDependenciesApi = vi.mocked(issueDependenciesApi, { deep: true })
+const mockedIssueDependenciesApi: IssueToggleListDependenciesApi = {
+  listForThread: vi.fn(),
+}
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void
@@ -92,7 +84,11 @@ describe('IssueToggleList dependency loading', () => {
   })
 
   it('loads dependencies once for the thread instead of once per issue', async () => {
-    render(<IssueToggleList threadId={99} />)
+    render(<IssueToggleList
+      threadId={99}
+      issuesApi={mockedIssuesApi}
+      dependenciesApi={mockedIssueDependenciesApi}
+    />)
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Show all 40' })).toBeInTheDocument()
@@ -120,12 +116,20 @@ describe('IssueToggleList dependency loading', () => {
     })
     mockedIssueDependenciesApi.listForThread.mockResolvedValue({ thread_id: 2, issues: [] })
 
-    const { rerender } = render(<IssueToggleList threadId={1} />)
+    const { rerender } = render(<IssueToggleList
+      threadId={1}
+      issuesApi={mockedIssuesApi}
+      dependenciesApi={mockedIssueDependenciesApi}
+    />)
     await waitFor(() => {
       expect(mockedIssuesApi.list).toHaveBeenCalledWith(1, { page_size: 100 })
     })
 
-    rerender(<IssueToggleList threadId={2} />)
+    rerender(<IssueToggleList
+      threadId={2}
+      issuesApi={mockedIssuesApi}
+      dependenciesApi={mockedIssueDependenciesApi}
+    />)
     await waitFor(() => {
       expect(screen.getByTestId('issue-toggle-101')).toBeInTheDocument()
     })
@@ -169,12 +173,20 @@ describe('IssueToggleList dependency loading', () => {
       })
     })
 
-    const { rerender } = render(<IssueToggleList threadId={1} />)
+    const { rerender } = render(<IssueToggleList
+      threadId={1}
+      issuesApi={mockedIssuesApi}
+      dependenciesApi={mockedIssueDependenciesApi}
+    />)
     await waitFor(() => {
       expect(mockedIssueDependenciesApi.listForThread).toHaveBeenCalledWith(1)
     })
 
-    rerender(<IssueToggleList threadId={2} />)
+    rerender(<IssueToggleList
+      threadId={2}
+      issuesApi={mockedIssuesApi}
+      dependenciesApi={mockedIssueDependenciesApi}
+    />)
     await waitFor(() => {
       expect(screen.getByTestId('issue-toggle-201')).toBeInTheDocument()
       expect(
@@ -212,7 +224,11 @@ describe('IssueToggleList dependency loading', () => {
   })
 
   it('shows manage dependencies instructions when no onOpenDependencies prop is provided', async () => {
-    render(<IssueToggleList threadId={99} />)
+    render(<IssueToggleList
+      threadId={99}
+      issuesApi={mockedIssuesApi}
+      dependenciesApi={mockedIssueDependenciesApi}
+    />)
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Show all 40' })).toBeInTheDocument()
@@ -234,7 +250,12 @@ describe('IssueToggleList dependency loading', () => {
 
   it('opens dependency builder when onOpenDependencies prop is provided', async () => {
     const openDependencies = vi.fn()
-    render(<IssueToggleList threadId={99} onOpenDependencies={openDependencies} />)
+    render(<IssueToggleList
+      threadId={99}
+      onOpenDependencies={openDependencies}
+      issuesApi={mockedIssuesApi}
+      dependenciesApi={mockedIssueDependenciesApi}
+    />)
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Show all 40' })).toBeInTheDocument()

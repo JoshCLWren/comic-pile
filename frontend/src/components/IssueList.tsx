@@ -1,17 +1,42 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { issuesApi } from '../services/api-issues'
 import { issueDependenciesApi } from '../services/api-dependencies'
-import type { Issue, IssueDependenciesResponse, Thread } from '../types'
+import type { ThreadIssueDependenciesResponse } from '../services/api-dependencies'
+import type { Issue, IssueDependenciesResponse, IssueListResponse, Thread } from '../types'
 import Tooltip from './Tooltip'
 import { getDependencyTooltip } from '../utils/dependencyHelpers'
 import './IssueList.css'
 
+/** The issue-API surface IssueList consumes, injectable for tests. */
+export interface IssueListApi {
+  list: (
+    threadId: number,
+    params?: { status?: 'unread' | 'read'; page_size?: number; page_token?: string },
+  ) => Promise<IssueListResponse>
+  markRead: (issueId: number) => Promise<void>
+  markUnread: (issueId: number) => Promise<void>
+}
+
+/** The dependency-API surface IssueList consumes, injectable for tests. */
+export interface IssueListDependenciesApi {
+  listForThread: (threadId: number) => Promise<ThreadIssueDependenciesResponse>
+}
+
 interface IssueListProps {
   thread: Thread
   onThreadUpdated?: (threadId: number) => void
+  /** Injectable issue API; defaults to the production issuesApi. */
+  issuesApi?: IssueListApi
+  /** Injectable dependency API; defaults to the production issueDependenciesApi. */
+  dependenciesApi?: IssueListDependenciesApi
 }
 
-export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
+export function IssueList({
+  thread,
+  onThreadUpdated,
+  issuesApi: issuesService = issuesApi,
+  dependenciesApi = issueDependenciesApi,
+}: IssueListProps) {
   const [issues, setIssues] = useState<Issue[]>([])
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all')
   const [isLoading, setIsLoading] = useState(true)
@@ -51,7 +76,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
     }
 
     try {
-      const response = await issuesApi.list(requestedThreadId, {
+      const response = await issuesService.list(requestedThreadId, {
         status: requestedFilter === 'all' ? undefined : requestedFilter,
         page_size: 50,
         page_token: pageToken ?? undefined,
@@ -97,7 +122,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
     setDependencies({})
 
     try {
-      const response = await issueDependenciesApi.listForThread(requestedThreadId)
+      const response = await dependenciesApi.listForThread(requestedThreadId)
 
       if (
         !mountedRef.current
@@ -172,9 +197,9 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
 
     try {
       if (issue.status === 'read') {
-        await issuesApi.markUnread(issue.id)
+        await issuesService.markUnread(issue.id)
       } else {
-        await issuesApi.markRead(issue.id)
+        await issuesService.markRead(issue.id)
       }
 
       onThreadUpdated?.(mutationThreadId)

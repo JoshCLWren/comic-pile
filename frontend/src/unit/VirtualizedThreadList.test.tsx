@@ -2,6 +2,10 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi, beforeAll, beforeEach } from 'vitest'
 import { getColumnCount, getRowThreads } from '../pages/QueuePage/VirtualizedThreadList.helpers'
 import VirtualizedThreadList from '../pages/QueuePage/VirtualizedThreadList'
+import type {
+  QueueVirtualizer,
+  UseWindowVirtualizerOptions,
+} from '../pages/QueuePage/VirtualizedThreadList'
 import { cast } from '../utils/cast'
 
 interface MockThread {
@@ -16,21 +20,23 @@ function createMockThreads(count: number): MockThread[] {
   }))
 }
 
-// Mock @tanstack/react-virtual's useWindowVirtualizer
+// Faithful deterministic virtualizer injected through the real
+// `useVirtualizer` prop — no module mocking of @tanstack/react-virtual.
 const mockGetVirtualItems = vi.fn()
 const mockGetTotalSize = vi.fn(() => 0)
 const mockMeasureElement = vi.fn()
 const mockScrollToIndex = vi.fn()
-let resizeCallback: ((entries: Array<{ contentRect: { height: number; width: number } }>) => void) | undefined
 
-vi.mock('@tanstack/react-virtual', () => ({
-  useWindowVirtualizer: () => ({
+function fakeUseVirtualizer(_options: UseVirtualizerOptions<Window, HTMLElement>): QueueVirtualizer {
+  return {
     getVirtualItems: mockGetVirtualItems,
     getTotalSize: mockGetTotalSize,
     measureElement: mockMeasureElement,
     scrollToIndex: mockScrollToIndex,
-  }),
-}))
+  }
+}
+
+let resizeCallback: ((entries: Array<{ contentRect: { height: number; width: number } }>) => void) | undefined
 
 // Stub DragEvent / DataTransfer (not available in jsdom) for drag-reorder tests.
 // Must be defined before the module is loaded so `new DragEvent(...)` works inside
@@ -75,7 +81,7 @@ beforeAll(() => {
 
 it('reacts to resize measurements and auto-scrolls at both container edges', () => {
   const threads = createMockThreads(60)
-  render(<VirtualizedThreadList threads={threads} renderItem={(thread) => <div>{thread.title}</div>} />)
+  render(<VirtualizedThreadList threads={threads} renderItem={(thread) => <div>{thread.title}</div>} useVirtualizer={fakeUseVirtualizer} />)
   act(() => resizeCallback?.([{ contentRect: { height: 500, width: 1000 } }]))
   const container = screen.getByLabelText('Series queue')
   Object.defineProperty(container, 'getBoundingClientRect', { value: () => ({ top: 0, height: 100 }) })
@@ -88,7 +94,7 @@ it('reacts to resize measurements and auto-scrolls at both container edges', () 
 it('ignores throttled and empty virtualized drag-over states', () => {
   mockScrollToIndex.mockClear()
   mockGetVirtualItems.mockReturnValue([])
-  render(<VirtualizedThreadList threads={createMockThreads(60)} renderItem={(thread) => <div>{thread.title}</div>} />)
+  render(<VirtualizedThreadList threads={createMockThreads(60)} renderItem={(thread) => <div>{thread.title}</div>} useVirtualizer={fakeUseVirtualizer} />)
   const container = screen.getByLabelText('Series queue')
   Object.defineProperty(container, 'getBoundingClientRect', { value: () => ({ top: 0, height: 100 }) })
   vi.spyOn(performance, 'now').mockReturnValue(100)
@@ -102,7 +108,7 @@ it('ignores throttled and empty virtualized drag-over states', () => {
 
 it('coalesces resize observer callbacks into one animation frame', () => {
   const threads = createMockThreads(60)
-  render(<VirtualizedThreadList threads={threads} renderItem={(thread) => <div>{thread.title}</div>} />)
+  render(<VirtualizedThreadList threads={threads} renderItem={(thread) => <div>{thread.title}</div>} useVirtualizer={fakeUseVirtualizer} />)
   act(() => {
     resizeCallback?.([{ contentRect: { height: 400, width: 700 } }])
     resizeCallback?.([{ contentRect: { height: 500, width: 900 } }])
@@ -111,7 +117,7 @@ it('coalesces resize observer callbacks into one animation frame', () => {
 })
 
 it('renders a standalone empty queue state', () => {
-  render(<VirtualizedThreadList threads={[]} renderItem={() => <div />} />)
+  render(<VirtualizedThreadList threads={[]} renderItem={() => <div />} useVirtualizer={fakeUseVirtualizer} />)
   expect(screen.getByText('No series in queue')).toBeInTheDocument()
 })
 
@@ -141,6 +147,7 @@ it('renders only the virtualized subset of items (windowing)', () => {
           {(thread as MockThread).title} #{index + 1}
         </div>
       )}
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
 
@@ -161,6 +168,7 @@ it('preserves container selectors for E2E compatibility', () => {
           Item {index + 1}
         </div>
       )}
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
 
@@ -184,6 +192,7 @@ it('renders the total-size spacer div', () => {
           Item {index + 1}
         </div>
       )}
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
 
@@ -205,6 +214,7 @@ it('renders virtual items with correct positioning', () => {
           Item {index + 1}
         </div>
       )}
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
 
@@ -270,6 +280,7 @@ it('renders 3 columns of items when columnCount=3', () => {
           Thread {(thread as MockThread).title}
         </div>
       )}
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
 
@@ -305,6 +316,7 @@ it('renders 1 column when columnCount=1 (single-column fallback)', () => {
           {(thread as MockThread).title} #{index + 1}
         </div>
       )}
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
 
@@ -325,6 +337,7 @@ it('sets aria-label and role on the scroll container', () => {
           Item {index + 1}
         </div>
       )}
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
 
@@ -410,6 +423,7 @@ it('data-index reflects row index in multi-column mode (not thread index)', () =
           {(thread as MockThread).title} #{index + 1}
         </div>
       )}
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
 
@@ -435,6 +449,7 @@ it('empty state preserves the same DOM tree structure', () => {
     <VirtualizedThreadList
       threads={[]}
       renderItem={() => null}
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
 
@@ -475,6 +490,7 @@ it('calls scrollToIndex toward first visible when dragging near the top edge', (
           {(thread as MockThread).title}
         </div>
       )}
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
 
@@ -520,6 +536,7 @@ it('calls scrollToIndex toward last visible when dragging near the bottom edge',
           {(thread as MockThread).title}
         </div>
       )}
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
 
@@ -563,6 +580,7 @@ it('does not call scrollToIndex when dragging in the middle of the container', (
           {(thread as MockThread).title}
         </div>
       )}
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
 
@@ -603,6 +621,7 @@ it('reacts to ResizeObserver measurements and cleans up a pending frame', () => 
     <VirtualizedThreadList
       threads={createMockThreads(60)}
       renderItem={(thread) => <div data-testid="queue-thread-item" key={thread.id}>{thread.title}</div>}
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
   const observerMock = vi.mocked(ResizeObserver)
@@ -617,6 +636,7 @@ it('ignores edge drags when no virtual items are visible', () => {
     <VirtualizedThreadList
       threads={createMockThreads(60)}
       renderItem={(thread) => <div data-testid="queue-thread-item" key={thread.id}>{thread.title}</div>}
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
   const scrollEl = container.querySelector('#queue-container') as HTMLElement

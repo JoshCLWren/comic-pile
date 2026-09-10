@@ -3,32 +3,20 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import { IssueList } from '../components/IssueList'
-import { issueDependenciesApi } from '../services/api-dependencies'
-import { issuesApi } from '../services/api-issues'
+import type { IssueListApi, IssueListDependenciesApi } from '../components/IssueList'
 import type { Issue, IssueDependenciesResponse, IssueListResponse, Thread } from '../types'
 
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    list: vi.fn(),
-    create: vi.fn(),
-    get: vi.fn(),
-    markRead: vi.fn(),
-    markUnread: vi.fn(),
-    move: vi.fn(),
-    reorder: vi.fn(),
-    delete: vi.fn(),
-    migrateThread: vi.fn(),
-  },
-}))
+// Injectable fakes passed through the real `issuesApi`/`dependenciesApi` props —
+// no module mocking of the API services.
+const mockedIssuesApi: IssueListApi = {
+  list: vi.fn(),
+  markRead: vi.fn(),
+  markUnread: vi.fn(),
+}
 
-vi.mock('../services/api-dependencies', () => ({
-  issueDependenciesApi: {
-    listForThread: vi.fn(),
-  },
-}))
-
-const mockedIssuesApi = vi.mocked(issuesApi, { deep: true })
-const mockedIssueDependenciesApi = vi.mocked(issueDependenciesApi, { deep: true })
+const mockedIssueDependenciesApi: IssueListDependenciesApi = {
+  listForThread: vi.fn(),
+}
 
 const BASE_ISSUES: Issue[] = [
   {
@@ -96,7 +84,7 @@ describe('IssueList', () => {
 
     render(
       <BrowserRouter>
-        <IssueList thread={mockThread} />
+        <IssueList thread={mockThread} issuesApi={mockedIssuesApi} dependenciesApi={mockedIssueDependenciesApi} />
       </BrowserRouter>,
     )
 
@@ -138,7 +126,7 @@ describe('IssueList', () => {
 
     render(
       <BrowserRouter>
-        <IssueList thread={mockThread} />
+        <IssueList thread={mockThread} issuesApi={mockedIssuesApi} dependenciesApi={mockedIssueDependenciesApi} />
       </BrowserRouter>,
     )
 
@@ -166,7 +154,7 @@ describe('IssueList', () => {
 
     render(
       <BrowserRouter>
-        <IssueList thread={mockThread} />
+        <IssueList thread={mockThread} issuesApi={mockedIssuesApi} dependenciesApi={mockedIssueDependenciesApi} />
       </BrowserRouter>,
     )
 
@@ -183,7 +171,7 @@ describe('IssueList', () => {
 
   it('renders empty and loading failures without crashing', async () => {
     mockedIssuesApi.list.mockResolvedValueOnce(buildListResponse([]))
-    const { rerender } = render(<IssueList thread={mockThread} />)
+    const { rerender } = render(<IssueList thread={mockThread} issuesApi={mockedIssuesApi} dependenciesApi={mockedIssueDependenciesApi} />)
     await waitFor(() => expect(screen.getByText('No issues found')).toBeInTheDocument())
 
     mockedIssuesApi.list.mockRejectedValueOnce(new Error('load failed'))
@@ -191,7 +179,13 @@ describe('IssueList', () => {
       thread_id: 100,
       issues: [],
     })
-    rerender(<IssueList thread={{ ...mockThread, id: 100 }} />)
+    rerender(
+      <IssueList
+        thread={{ ...mockThread, id: 100 }}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />,
+    )
     await waitFor(() => expect(screen.getByText('No issues found')).toBeInTheDocument())
   })
 
@@ -230,6 +224,8 @@ describe('IssueList', () => {
       <IssueList
         thread={{ ...mockThread, next_unread_issue_id: 3 }}
         onThreadUpdated={onThreadUpdated}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
       />,
     )
 
@@ -253,7 +249,7 @@ describe('IssueList', () => {
     mockedIssuesApi.list.mockResolvedValue(buildListResponse(BASE_ISSUES))
     mockedIssuesApi.markRead.mockRejectedValueOnce(new Error('toggle failed'))
 
-    render(<IssueList thread={mockThread} />)
+    render(<IssueList thread={mockThread} issuesApi={mockedIssuesApi} dependenciesApi={mockedIssueDependenciesApi} />)
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
     await userEvent.click(screen.getByText('#1'))
 
@@ -278,7 +274,7 @@ describe('IssueList', () => {
       .mockResolvedValueOnce(buildListResponse([readIssue], null, 1))
     mockedIssuesApi.markUnread.mockResolvedValue(undefined)
 
-    render(<IssueList thread={mockThread} />)
+    render(<IssueList thread={mockThread} issuesApi={mockedIssuesApi} dependenciesApi={mockedIssueDependenciesApi} />)
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
     await userEvent.selectOptions(screen.getByRole('combobox'), 'read')
     await waitFor(() => expect(screen.getByText(/Read 1 of 1 \(100%\)/)).toBeInTheDocument())
@@ -316,7 +312,13 @@ describe('IssueList', () => {
     })
     mockedIssuesApi.markUnread.mockResolvedValue(undefined)
 
-    render(<IssueList thread={{ ...mockThread, next_unread_issue_id: 999 }} />)
+    render(
+      <IssueList
+        thread={{ ...mockThread, next_unread_issue_id: 999 }}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />,
+    )
 
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
     expect(screen.getByText(/Read 1 of 1 \(100%\)/)).toBeInTheDocument()
@@ -349,10 +351,16 @@ describe('IssueList', () => {
       })
       .mockResolvedValueOnce({ thread_id: 100, issues: [emptyDependencies(issue)] })
 
-    const { rerender } = render(<IssueList thread={mockThread} />)
+    const { rerender } = render(<IssueList thread={mockThread} issuesApi={mockedIssuesApi} dependenciesApi={mockedIssueDependenciesApi} />)
     await waitFor(() => expect(screen.getByTitle('Has dependencies')).toBeInTheDocument())
 
-    rerender(<IssueList thread={{ ...mockThread, id: 100 }} />)
+    rerender(
+      <IssueList
+        thread={{ ...mockThread, id: 100 }}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />,
+    )
     await waitFor(() => expect(screen.queryByTitle('Has dependencies')).not.toBeInTheDocument())
   })
 
@@ -361,7 +369,7 @@ describe('IssueList', () => {
     mockedIssuesApi.list.mockResolvedValue(buildListResponse(BASE_ISSUES))
     mockedIssueDependenciesApi.listForThread.mockRejectedValueOnce(new Error('dependency failed'))
 
-    render(<IssueList thread={mockThread} />)
+    render(<IssueList thread={mockThread} issuesApi={mockedIssuesApi} dependenciesApi={mockedIssueDependenciesApi} />)
 
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
     expect(screen.queryByTitle('Has dependencies')).not.toBeInTheDocument()

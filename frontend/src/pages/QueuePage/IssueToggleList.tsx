@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { DragEvent } from 'react'
-import type { Issue, IssueDependenciesResponse } from '../../types'
+import type { Issue, IssueDependenciesResponse, IssueListResponse } from '../../types'
 import { issuesApi } from '../../services/api-issues'
 import { issueDependenciesApi } from '../../services/api-dependencies'
+import type { ThreadIssueDependenciesResponse } from '../../services/api-dependencies'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { isWindowDefined, isFunction } from '../../utils/runtimeChecks'
 import Tooltip from '../../components/Tooltip'
@@ -18,10 +19,42 @@ import {
 } from './issueUtils'
 import type { IssueMutation, QueuedIssueMutation } from './types'
 
-export function IssueToggleList({ threadId, onOpenDependencies, onIssueChanged }: {
+/** The issue-API surface IssueToggleList consumes, injectable for tests. */
+export interface IssueToggleListApi {
+  list: (
+    threadId: number,
+    params?: { status?: 'unread' | 'read'; page_size?: number; page_token?: string },
+  ) => Promise<IssueListResponse>
+  create: (
+    threadId: number,
+    issueRange: string,
+    options?: { insert_after_issue_id?: number | null },
+  ) => Promise<IssueListResponse>
+  markRead: (issueId: number) => Promise<void>
+  markUnread: (issueId: number) => Promise<void>
+  delete: (issueId: number) => Promise<void>
+  reorder: (threadId: number, issueIds: number[]) => Promise<void>
+}
+
+/** The dependency-API surface IssueToggleList consumes, injectable for tests. */
+export interface IssueToggleListDependenciesApi {
+  listForThread: (threadId: number) => Promise<ThreadIssueDependenciesResponse>
+}
+
+export function IssueToggleList({
+  threadId,
+  onOpenDependencies,
+  onIssueChanged,
+  issuesApi: issuesService = issuesApi,
+  dependenciesApi = issueDependenciesApi,
+}: {
   threadId: number
   onOpenDependencies?: () => void
   onIssueChanged?: () => void
+  /** Injectable issue API; defaults to the production issuesApi. */
+  issuesApi?: IssueToggleListApi
+  /** Injectable dependency API; defaults to the production issueDependenciesApi. */
+  dependenciesApi?: IssueToggleListDependenciesApi
 }) {
   const [issues, setIssues] = useState<Issue[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -84,7 +117,7 @@ export function IssueToggleList({ threadId, onOpenDependencies, onIssueChanged }
     let nextPageToken: string | null = null
 
     while (true) {
-      const data = await issuesApi.list(threadId, {
+      const data = await issuesService.list(threadId, {
         page_size: 100,
         ...(nextPageToken ? { page_token: nextPageToken } : {}),
       })
@@ -101,7 +134,7 @@ export function IssueToggleList({ threadId, onOpenDependencies, onIssueChanged }
 
   const fetchDependencies = useCallback(async (): Promise<Record<number, IssueDependenciesResponse>> => {
     try {
-      const response = await issueDependenciesApi.listForThread(threadId)
+      const response = await dependenciesApi.listForThread(threadId)
       const depsMap: Record<number, IssueDependenciesResponse> = {}
 
       for (const issueDependencies of response.issues) {
@@ -139,16 +172,16 @@ export function IssueToggleList({ threadId, onOpenDependencies, onIssueChanged }
     switch (mutation.type) {
       case 'toggle':
         if (mutation.nextStatus === 'read') {
-          await issuesApi.markRead(mutation.issueId)
+          await issuesService.markRead(mutation.issueId)
         } else {
-          await issuesApi.markUnread(mutation.issueId)
+          await issuesService.markUnread(mutation.issueId)
         }
         return
       case 'delete':
-        await issuesApi.delete(mutation.issueId)
+        await issuesService.delete(mutation.issueId)
         return
       case 'reorder':
-        await issuesApi.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
+        await issuesService.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
     }
   }, [threadId])
 
@@ -284,7 +317,7 @@ export function IssueToggleList({ threadId, onOpenDependencies, onIssueChanged }
     setIsAdding(true)
     setAddError(null)
     try {
-      await issuesApi.create(threadId, addRange.trim())
+      await issuesService.create(threadId, addRange.trim())
       setAddRange('')
       await loadIssues()
     } catch (err: unknown) {

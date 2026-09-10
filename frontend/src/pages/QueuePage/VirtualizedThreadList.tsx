@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
+import type { Virtualizer } from '@tanstack/react-virtual'
 import {
   getRowThreads,
   EDGE_SCROLL_ZONE,
@@ -11,6 +12,15 @@ import {
 
 /** Threshold above which the queue switches from a plain list to a virtualized list. */
 export const VIRTUALIZATION_THRESHOLD = 50
+
+/** The options accepted by the window-virtualizer hook. */
+export type UseWindowVirtualizerOptions = Parameters<typeof useWindowVirtualizer>[0]
+
+/** The minimal window-virtualizer contract the list consumes. */
+export type QueueVirtualizer = Pick<
+  Virtualizer<Window, HTMLElement>,
+  'getVirtualItems' | 'getTotalSize' | 'measureElement' | 'scrollToIndex'
+>
 
 interface VirtualizedThreadListProps<T> {
   /** Threads to render in the virtualized list. */
@@ -31,6 +41,12 @@ interface VirtualizedThreadListProps<T> {
   sentinelRef?: React.RefObject<HTMLDivElement | null>
   scrollRootRef?: React.RefObject<HTMLDivElement | null>
   hasNextPage?: boolean
+  /**
+   * Injectable window-virtualizer hook. Production uses the real
+   * `@tanstack/react-virtual` hook; tests substitute a faithful deterministic
+   * virtualizer so windowing can be exercised without a real browser layout.
+   */
+  useVirtualizer?: (options: UseWindowVirtualizerOptions) => QueueVirtualizer
 }
 
 /**
@@ -64,6 +80,7 @@ export default function VirtualizedThreadList<T>({
   sentinelRef,
   scrollRootRef: _scrollRootRef,
   hasNextPage,
+  useVirtualizer,
 }: VirtualizedThreadListProps<T>) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
@@ -119,7 +136,13 @@ export default function VirtualizedThreadList<T>({
     [rowCount, scrollMargin],
   )
 
-  const virtualizer = useWindowVirtualizer(virtualizerOptions)
+  // SAFETY: the injected prop and the production hook both satisfy the same
+  // structural QueueVirtualizer contract, so the single assertion is safe.
+  const windowVirtualizer = (useVirtualizer ?? useWindowVirtualizer) as (
+    options: UseWindowVirtualizerOptions,
+  ) => QueueVirtualizer
+
+  const virtualizer = windowVirtualizer(virtualizerOptions)
 
   // Keep a ref to the latest virtualizer so the drag-over handler stays
   // referentially stable. useWindowVirtualizer returns a new object every render,

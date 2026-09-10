@@ -1,6 +1,10 @@
 import type { ReactNode } from 'react'
 import type { Thread } from '../../types'
-import VirtualizedThreadList, { VIRTUALIZATION_THRESHOLD } from './VirtualizedThreadList'
+import VirtualizedThreadList, {
+  VIRTUALIZATION_THRESHOLD,
+  type QueueVirtualizer,
+  type UseWindowVirtualizerOptions,
+} from './VirtualizedThreadList'
 
 interface QueueListProps {
   activeThreads: Thread[]
@@ -11,6 +15,11 @@ interface QueueListProps {
   sentinelRef: React.RefObject<HTMLDivElement | null>
   scrollRootRef: React.RefObject<HTMLDivElement | null>
   hasNextPage: boolean
+  /**
+   * Injectable window-virtualizer hook forwarded to VirtualizedThreadList.
+   * Production leaves this unset; tests substitute a deterministic virtualizer.
+   */
+  useVirtualizer?: (options: UseWindowVirtualizerOptions) => QueueVirtualizer
 }
 
 /**
@@ -30,6 +39,7 @@ export function QueueList({
   sentinelRef,
   scrollRootRef,
   hasNextPage,
+  useVirtualizer,
 }: QueueListProps) {
   if (isSearching && filteredThreads.length === 0) {
     return (
@@ -64,6 +74,7 @@ export function QueueList({
           sentinelRef={sentinelRef}
           scrollRootRef={scrollRootRef}
           hasNextPage={hasNextPage}
+          useVirtualizer={useVirtualizer}
         />
       ) : (
         <div
