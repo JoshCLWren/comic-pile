@@ -92,7 +92,7 @@ if (typeof window === 'undefined' || typeof window.localStorage === 'undefined')
 
 // Make window.scrollTo a no-op in environments where it throws
 if (typeof window !== 'undefined') {
-  window.scrollTo = (() => undefined) as unknown as typeof window.scrollTo
+  window.scrollTo = (() => undefined) as typeof window.scrollTo
 }
 
 // Handle IntersectionObserver fallback if needed

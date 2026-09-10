@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as THREE from 'three'
 import Dice3D, { getFaceRotation, getProjectedCenterOffsetPx } from '../components/Dice3D'
 import { DEFAULT_DICE_RENDER_CONFIG } from '../components/diceRenderConfig'
+import { cast } from '../utils/cast'
 
 const diceMock = vi.hoisted(() => ({
   failRenderer: false,
@@ -234,18 +235,20 @@ beforeEach(() => {
   diceMock.setSizeCalls = []
   diceMock.lastMesh = null
   diceMock.throwBox = false
-  // SAFETY: partial 2D context stub covers only the surface Dice3D draws with; getContext resolves to this mock.
-  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-    fillStyle: '',
-    strokeStyle: '',
-    lineWidth: 0,
-    font: '',
-    textAlign: 'left',
-    textBaseline: 'top',
-    fillRect: vi.fn(),
-    strokeRect: vi.fn(),
-    fillText: vi.fn(),
-  } as unknown as CanvasRenderingContext2D)
+// SAFETY: partial 2D context stub covers only the surface Dice3D draws with; getContext resolves to this mock.
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+    cast<CanvasRenderingContext2D>({
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 0,
+      font: '',
+      textAlign: 'left',
+      textBaseline: 'top',
+      fillRect: vi.fn(),
+      strokeRect: vi.fn(),
+      fillText: vi.fn(),
+    }),
+  )
   vi.stubGlobal('requestAnimationFrame', vi.fn())
   vi.stubGlobal('cancelAnimationFrame', vi.fn())
 })

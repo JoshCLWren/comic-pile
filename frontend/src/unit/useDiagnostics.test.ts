@@ -1,6 +1,7 @@
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDiagnostics } from '../hooks/useDiagnostics'
+import { cast } from '../utils/cast'
 
 describe('useDiagnostics', () => {
   beforeEach(() => {
@@ -101,7 +102,7 @@ describe('useDiagnostics', () => {
 
   it('uses navigation timing values and tolerates missing or broken performance APIs', () => {
     const getEntriesByType = vi.spyOn(performance, 'getEntriesByType')
-      .mockReturnValueOnce([{ domContentLoadedEventEnd: 12, loadEventEnd: 34 }] as unknown as PerformanceEntry[])
+      .mockReturnValueOnce(cast<PerformanceEntry[]>([{ domContentLoadedEventEnd: 12, loadEventEnd: 34 }]))
       .mockReturnValueOnce([])
       .mockImplementationOnce(() => { throw new Error('performance unavailable') })
     const { result, unmount } = renderHook(() => useDiagnostics())
