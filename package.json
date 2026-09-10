@@ -13,6 +13,8 @@
     "htmlhint": "^1.1.5",
     "jiti": "^2.6.1",
     "oxlint": "1.82.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "testdriverai": "^7.11.58-test",
     "vitest": "^4.1.11"
   },
