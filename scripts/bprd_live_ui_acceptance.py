@@ -158,7 +158,7 @@ async def verify(username: str, plan_id: int, gate_thread_id: int) -> dict[str, 
             .all()
         )
         assert len(threads) == 3
-        pool_ids = [item.id for item in await get_roll_pool(db, user.id)]
+        pool_ids = [item.id for item in await get_roll_pool(user.id, db)]
         assert pool_ids == [gate_thread_id], pool_ids
         return {
             "user_id": user.id,
