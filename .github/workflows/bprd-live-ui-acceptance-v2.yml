@@ -178,7 +178,7 @@ jobs:
               const responsePromise = page.waitForResponse(r => r.url().includes('/adoption-plan') && r.request().method() === 'POST', { timeout: 30000 })
               await unchecked.first().click()
               const response = await responsePromise
-              if (!response.ok()) throw new Error(`adoption-plan failed: ${response.status()} ${await response.text()}`)
+              if (!response.ok()) throw new Error(`adoption-plan failed with status ${response.status()}`)
               await page.waitForFunction(expected => document.querySelectorAll('input[type="checkbox"]:checked').length === expected, i + 1, { timeout: 30000 })
             }
 
@@ -188,9 +188,7 @@ jobs:
             const commitResponsePromise = page.waitForResponse(r => r.url().includes('/adoption-commit') && r.request().method() === 'POST', { timeout: 30000 })
             await commitButton.click()
             const commitResponse = await commitResponsePromise
-            if (!commitResponse.ok()) throw new Error(`adoption-commit failed: ${commitResponse.status()} ${await commitResponse.text()}`)
-            const committed = await commitResponse.json()
-            if ((committed.created_positions ?? []).length !== 15) throw new Error(`Expected 15 created positions, got ${JSON.stringify(committed)}`)
+            if (!commitResponse.ok()) throw new Error(`adoption-commit failed with status ${commitResponse.status()}`)
             await page.getByText(/Added material to this Reading Plan · created 15 · reused 0/).waitFor({ state: 'visible', timeout: 30000 })
             await page.screenshot({ path: '../bprd-live-ui-v2-committed.png', fullPage: true })
 
@@ -205,7 +203,7 @@ jobs:
             if (existingCount !== 15) throw new Error(`Expected 15 existing entries after reload, got ${existingCount}`)
             if (await page.getByRole('checkbox', { name: 'Add' }).count() !== 0) throw new Error('Add choices remained after reload')
             await page.screenshot({ path: '../bprd-live-ui-v2-reloaded.png', fullPage: true })
-            fs.writeFileSync('../bprd-live-ui-v2-browser.json', JSON.stringify({ plan_id: Number(planId), created_positions: committed.created_positions, existing_after_reload: existingCount, browser_failures: failures }, null, 2))
+            fs.writeFileSync('../bprd-live-ui-v2-browser.json', JSON.stringify({ plan_id: Number(planId), existing_after_reload: existingCount, browser_failures: failures }, null, 2))
             if (failures.length) throw new Error(`Browser console/page failures: ${failures.join(' | ')}`)
             await browser.close()
           })().catch(error => { console.error(error); process.exit(1) })
