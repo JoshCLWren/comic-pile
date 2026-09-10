@@ -14,6 +14,7 @@ export function getApiErrorStatus(error: unknown): number | null {
   if (axios.isAxiosError(error)) {
     return error.response?.status ?? null
   }
+  // SAFETY: isNonNullObject and hasProperty(response) above guarantee the optional response read is safe.
   if (isNonNullObject(error) && hasProperty(error, 'response')) {
     return (error as ApiLikeError).response?.status ?? null
   }
@@ -30,6 +31,7 @@ export function getApiErrorDetail(error: unknown): string {
     }
     return error.message ?? 'Unknown error'
   }
+  // SAFETY: isNonNullObject and hasProperty(response) above guarantee reading response.data.detail is safe.
   if (isNonNullObject(error) && hasProperty(error, 'response')) {
     return (error as ApiLikeError).response?.data?.detail ?? 'Unknown error'
   }

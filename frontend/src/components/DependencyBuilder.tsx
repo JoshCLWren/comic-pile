@@ -605,7 +605,9 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                   role="tablist"
                   aria-label="Reading order view"
                   onKeyDown={(e) => {
+                    // SAFETY: all elements with role="tab" inside the tablist are rendered buttons.
                     const tabs = Array.from(e.currentTarget.querySelectorAll('[role="tab"]')) as HTMLElement[];
+                    // SAFETY: tab navigation only runs when the active element is one of the rendered tab buttons.
                     const currentIndex = tabs.indexOf(document.activeElement as HTMLElement);
                     if (currentIndex === -1) return;
                     let newIndex = currentIndex;

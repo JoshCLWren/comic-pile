@@ -192,9 +192,13 @@ export function applyComicVineCorrectionOptimistically(
 ): void {
   if (imageUrl === undefined) return
   client.setQueryData(queryKeys.comicVine.issueIntelligence(issueId), (old: unknown) => {
+    // SAFETY: non-object cache values are intentionally discarded unchanged; the never widen preserves the cache value type.
     if (!old || !isObject(old)) return old as never
+    // SAFETY: isObject(old) above narrows the cache value to a record shape that supports the 'in' probe.
     const record = old as Record<string, unknown>
+    // SAFETY: the 'in' check above confirms the record already has the image_url key before reading it.
     if (!('image_url' in record)) return old as never
+    // SAFETY: isObject(old) and the 'in' probe guarantee the spread source is an assignable object.
     return { ...(old as object), image_url: imageUrl } as never
   })
 }

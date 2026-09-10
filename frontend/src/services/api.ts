@@ -61,7 +61,7 @@ const AUTH_ENDPOINT_PATHS = new Set(['/v1/auth/login', '/v1/auth/register', '/v1
 // Axios returns AxiosResponse by default, but the response interceptor below unwraps to response.data.
 // Cast once at the boundary so callers get strongly typed payload methods.
 // SAFETY: rawApi is an AxiosInstance; response interceptor unwraps .data at the boundary so the ApiClient contract holds.
-const api = rawApi as unknown as ApiClient
+const api = rawApi as ApiClient
 
 export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
@@ -283,7 +283,8 @@ function processQueue(error: unknown | null, token: string | null = null): void 
     } else {
       prom.config.headers = prom.config.headers ?? {}
       // SAFETY: headers is initialized above and is indexable by string; Authorization assignment is safe.
-      ;(prom.config.headers as Record<string, string>).Authorization = `Bearer ${token}`
+      const authHeaders = prom.config.headers as Record<string, string>
+      authHeaders.Authorization = `Bearer ${token}`
       prom.resolve(api.request(prom.config))
     }
   })
@@ -352,7 +353,8 @@ rawApi.interceptors.response.use(
 
         originalRequest.headers = originalRequest.headers ?? {}
         // SAFETY: headers is initialized above and is indexable by string; Authorization assignment is safe.
-        ;(originalRequest.headers as Record<string, string>).Authorization = `Bearer ${access_token}`
+        const authHeaders = originalRequest.headers as Record<string, string>
+        authHeaders.Authorization = `Bearer ${access_token}`
         return api.request(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)

@@ -89,6 +89,7 @@ function CandidateCard({
   const volumeObj = meta.volume
   const volumeName =
     isObject(volumeObj)
+      // SAFETY: isObject(volumeObj) above guarantees a record with an optional name field.
       ? toText((volumeObj as Record<string, unknown>).name)
       : toText(meta.volume_name)
   const issueName = toText(meta.name) ?? toText(meta.issue_name)
@@ -115,6 +116,7 @@ function CandidateCard({
           {candidate.evidence_json &&
             Array.isArray(candidate.evidence_json.evidence) && (
               <div className="mt-2 flex flex-wrap gap-1">
+                {/* SAFETY: Array.isArray above guarantees the evidence list is an array of strings. */}
                 {(candidate.evidence_json.evidence as string[]).map((e, i) => (
                   <span
                     key={i}

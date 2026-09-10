@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query'
 
 export const queryRetryPolicy = (failureCount: number, error: unknown): boolean => {
+    // SAFETY: only the optional response/data fields are read; missing fields are handled by the guards below.
     const e = error as {
         response?: { status?: number; data?: { detail?: unknown } }
         data?: { detail?: unknown }

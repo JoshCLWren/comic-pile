@@ -31,6 +31,7 @@ function isBrowser(): boolean {
 }
 
 /** Narrow a plain string to a supported theme id. */
+// SAFETY: THEME_IDS is a literal ThemeId tuple, so the includes() probe is a ThemeId membership check.
 function isKnownThemeId(themeId: string): themeId is ThemeId {
   return (THEME_IDS as readonly string[]).includes(themeId)
 }

@@ -18,6 +18,7 @@ export function useAnalytics() {
   return {
     data: data ?? null,
     isLoading: isPending,
+    // SAFETY: the queryFn catches and normalizes failures to Error, so the query error value is Error | null.
     error: (error as Error | null) ?? null,
   }
 }

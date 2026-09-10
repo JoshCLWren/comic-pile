@@ -79,6 +79,7 @@ export function useSessions(params = EMPTY_PARAMS) {
     queryKey: ['sessions', params],
     queryFn: async ({ pageParam }) => {
       try {
+        // SAFETY: useInfiniteQuery starts at the null initialPageParam and only advances with page tokens.
         return await sessionApi.list(params, pageParam as string | null);
       } catch (error: unknown) {
         if (error instanceof Error) throw error;
@@ -87,6 +88,7 @@ export function useSessions(params = EMPTY_PARAMS) {
         );
       }
     },
+    // SAFETY: null is the intentional first pageParam; later pages always receive page tokens.
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: SessionListResponse) => lastPage.next_page_token ?? undefined,
   });
