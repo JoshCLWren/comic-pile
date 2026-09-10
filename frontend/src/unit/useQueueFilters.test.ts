@@ -47,19 +47,22 @@ describe('useQueueFilters', () => {
     expect(result.current.filteredThreads).toEqual([])
   })
 
-  it('sorts alphabetically and by created date', () => {
+  it('preserves server cursor order for alphabetical and created sorts', () => {
+    // Server keyset pages arrive in SQL ORDER BY order; the client must not
+    // re-sort with localeCompare/date parsing, which would interleave later
+    // pages into earlier ones (issue #2452).
     const oldest = makeThread({ id: 1, title: 'Zeta', queue_position: 2, created_at: '2024-01-01' })
     const newest = makeThread({ id: 2, title: 'Alpha', queue_position: 1, created_at: '2025-01-01' })
 
     const { result: alphabetical } = renderHook(() =>
       useQueueFilters([oldest, newest], 'alphabetical'),
     )
-    expect(alphabetical.current.sortedThreads.map((t) => t.title)).toEqual(['Alpha', 'Zeta'])
+    expect(alphabetical.current.sortedThreads.map((t) => t.title)).toEqual(['Zeta', 'Alpha'])
 
     const { result: created } = renderHook(() =>
       useQueueFilters([oldest, newest], 'created'),
     )
-    expect(created.current.sortedThreads.map((t) => t.id)).toEqual([2, 1])
+    expect(created.current.sortedThreads.map((t) => t.id)).toEqual([1, 2])
   })
 
   it('returns all active threads sorted by position since search is handled on backend', () => {
@@ -90,5 +93,60 @@ describe('useQueueFilters', () => {
     ]
     const { result } = renderHook(() => useQueueFilters(threads, 'position'))
     expect(result.current.filteredThreads.length).toBe(2)
+  })
+
+  it('flattens multi-page Title order without re-sorting or interleaving loaded rows', () => {
+    // Regression for issue #2452: the server returns deterministic keyset
+    // pages in SQL title order. Concatenating pages must preserve that exact
+    // order — no localeCompare reshuffle, no row interleaving, no dupes.
+    const page1 = [
+      makeThread({ id: 1, title: 'Batman', queue_position: 5 }),
+      makeThread({ id: 2, title: 'Descender', queue_position: 1 }),
+      makeThread({ id: 3, title: 'Saga', queue_position: 3 }),
+    ]
+    const page2 = [
+      makeThread({ id: 4, title: 'Watchmen', queue_position: 4 }),
+      makeThread({ id: 5, title: 'Y: The Last Man', queue_position: 2 }),
+    ]
+    const page3 = [
+      makeThread({ id: 6, title: 'Zot!', queue_position: 6 }),
+    ]
+
+    const { result } = renderHook(() =>
+      useQueueFilters([...page1, ...page2, ...page3], 'alphabetical'),
+    )
+
+    expect(result.current.activeThreads.map((t) => t.id)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(result.current.sortedThreads.map((t) => t.id)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(result.current.filteredThreads.map((t) => t.title)).toEqual([
+      'Batman',
+      'Descender',
+      'Saga',
+      'Watchmen',
+      'Y: The Last Man',
+      'Zot!',
+    ])
+  })
+
+  it('flattens multi-page Created order without client re-sort', () => {
+    const page1 = [
+      makeThread({ id: 1, title: 'Newest', created_at: '2025-06-01T00:00:00Z' }),
+      makeThread({ id: 2, title: 'Middle', created_at: '2025-03-01T00:00:00Z' }),
+    ]
+    const page2 = [
+      makeThread({ id: 3, title: 'Older', created_at: '2025-01-01T00:00:00Z' }),
+      makeThread({ id: 4, title: 'Oldest', created_at: '2024-06-01T00:00:00Z' }),
+    ]
+
+    const { result } = renderHook(() => useQueueFilters([...page1, ...page2], 'created'))
+
+    expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2, 3, 4])
+    expect(result.current.filteredThreads.map((t) => t.title)).toEqual([
+      'Newest',
+      'Middle',
+      'Older',
+      'Oldest',
+    ])
   })
 })
