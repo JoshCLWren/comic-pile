@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cast } from '../utils/cast'
 
 const api = vi.hoisted(() => ({
   dependenciesApi: { listThreadDependencies: vi.fn(), listBlockedThreadIds: vi.fn(), createDependency: vi.fn(), deleteDependency: vi.fn(), updateDependency: vi.fn() },
@@ -64,7 +65,7 @@ describe('DependencyBuilder', () => {
     fireEvent.click(remove)
     await waitFor(() => expect(toast.showToast).toHaveBeenCalled())
     // SAFETY: mock call shape is controlled by the test
-    const call = toast.showToast.mock.calls.at(-1) as unknown as [string, string, { onClick?: () => void }]
+    const call = cast<[string, string, { onClick?: () => void }]>(toast.showToast.mock.calls.at(-1))
     const action = call[2]?.onClick
     act(() => action?.())
     expect(toast.removeToast).toHaveBeenCalled()

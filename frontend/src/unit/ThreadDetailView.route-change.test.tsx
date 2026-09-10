@@ -48,7 +48,7 @@ function threadResult(id: number): Thread {
     total_issues: 1,
     next_unread_issue_number: '1',
     notes: null,
-  } as unknown as Thread
+  } as Thread
 }
 
 function issueResult(threadId: number): IssueListResponse {
