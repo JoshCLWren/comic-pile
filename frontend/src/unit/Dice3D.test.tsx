@@ -240,7 +240,7 @@ beforeEach(() => {
     fillRect: vi.fn(),
     strokeRect: vi.fn(),
     fillText: vi.fn(),
-  } as unknown as CanvasRenderingContext2D)
+  } as CanvasRenderingContext2D)
   vi.stubGlobal('requestAnimationFrame', vi.fn())
   vi.stubGlobal('cancelAnimationFrame', vi.fn())
 })

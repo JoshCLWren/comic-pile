@@ -84,7 +84,7 @@ it('resolves to undefined when the browser cannot resolve a timezone', () => {
     ...Intl,
     DateTimeFormat: (() => {
       throw new Error('Intl unavailable')
-    }) as unknown as typeof Intl.DateTimeFormat,
+    }) as typeof Intl.DateTimeFormat,
   }
   Object.defineProperty(globalThis, 'Intl', {
     configurable: true,

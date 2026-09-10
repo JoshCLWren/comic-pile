@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ContinuityPlansIndexPage from '../pages/ContinuityPlansIndexPage'
 import { continuityPlansApi } from '../services/api-continuity-plans'
+import { cast } from '../utils/cast'
 
 vi.mock('../services/api-continuity-plans', () => ({
   continuityPlansApi: {
@@ -12,8 +13,8 @@ vi.mock('../services/api-continuity-plans', () => ({
   },
 }))
 
-const mockList = continuityPlansApi.list as unknown as ReturnType<typeof vi.fn>
-const mockDelete = continuityPlansApi.delete as unknown as ReturnType<typeof vi.fn>
+const mockList = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.list)
+const mockDelete = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.delete)
 
 beforeEach(() => {
   vi.clearAllMocks()

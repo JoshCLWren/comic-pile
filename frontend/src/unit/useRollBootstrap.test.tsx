@@ -221,7 +221,7 @@ describe('useRollBootstrap', () => {
       ...bootstrapResponse,
       session_id: 7,
       user_id: undefined,
-    } as unknown as RollBootstrapResponse
+    } as RollBootstrapResponse
     mockedBootstrap.mockResolvedValue(anonymousResponse)
 
     const { result } = renderBootstrap()

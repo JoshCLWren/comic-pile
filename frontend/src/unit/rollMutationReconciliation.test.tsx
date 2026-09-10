@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { ToastProvider } from '../contexts/ToastProvider'
 import {
+import { cast } from '../utils/cast'
   isAmbiguousNetworkFailure,
   publishRollBootstrap,
   reconcileAmbiguousRollMutation,
@@ -86,7 +87,7 @@ describe('Roll mutation reconciliation', () => {
       .mockResolvedValueOnce(bootstrapState(12, 9))
       .mockResolvedValueOnce({
         ...bootstrapState(12, null),
-        pending_thread_id: 'invalid' as unknown as number,
+        pending_thread_id: cast<number>('invalid'),
       })
 
     await expect(reconcileAmbiguousRollMutation()).resolves.toBe(true)
