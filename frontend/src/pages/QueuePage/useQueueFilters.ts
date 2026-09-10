@@ -45,7 +45,13 @@ const activeThreads = useMemo(
     if (sortBy === 'alphabetical' || sortBy === 'created') {
       return activeThreads
     }
-    // position: feasible-only ordering — unblocked threads first, then by user-controlled position
+    // position: feasible-only ordering — unblocked threads first, then by
+    // user-controlled position. Keep the grouping client-side deliberately
+    // (introduced via #1644): the backend keyset cursor pages by
+    // queue_position only, so blocked rows stay grouped below the unblocked
+    // set as pages append. Moving that grouping server-side is explicitly
+    // deferred — documented acceptance decision for the position criterion
+    // in #2452 rather than silently fighting the cursor with a re-sort.
     return [...activeThreads].sort((a, b) => {
       if (a.is_blocked !== b.is_blocked) {
         return a.is_blocked ? 1 : -1
