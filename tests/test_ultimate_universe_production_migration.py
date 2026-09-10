@@ -1,11 +1,11 @@
-"""PostgreSQL acceptance coverage for the Step 23A Ultimate Universe dry-run."""
+"""PostgreSQL acceptance coverage for Step 23A dry-run and Step 23B apply/rollback."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
@@ -17,10 +17,15 @@ from app.models.external_identity import ExternalIdentity, IssueExternalIdentity
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.services.ultimate_universe_production_migration import (
+    MigrationInvariantError,
+    TEMPORARY_REPAIR_NOTE,
     UltimateUniverseDryRunSpec,
+    apply_ultimate_universe_migration,
     build_ultimate_universe_dry_run,
+    rollback_ultimate_universe_migration,
 )
 from comic_pile.dependencies import refresh_user_blocked_status
+from comic_pile.queue import get_roll_pool
 from tests.conftest import get_or_create_user_async
 
 
@@ -61,7 +66,7 @@ async def _thread_with_issue(
 
 async def _production_shaped_fixture(
     db: AsyncSession,
-) -> tuple[UltimateUniverseDryRunSpec, list[Issue], list[Thread]]:
+) -> tuple[UltimateUniverseDryRunSpec, list[Issue], list[Thread], Dependency]:
     """Create a four-position source with an unread/read/read/unread history gap."""
     user = await get_or_create_user_async(db)
     rows = [
@@ -178,7 +183,73 @@ async def _production_shaped_fixture(
         expected_positions=4,
         plan_name="Ultimate Universe Test",
     )
-    return spec, issues, threads
+    return spec, issues, threads, legacy
+
+
+async def _step23b_fixture(
+    db: AsyncSession,
+) -> tuple[
+    UltimateUniverseDryRunSpec,
+    list[Issue],
+    list[Thread],
+    Dependency,
+    ContinuityRule,
+    Dependency,
+    ContinuityRule,
+]:
+    """Production shape plus a reusable standalone edge and a temporary repair.
+
+    Returns the spec, issues, threads, the legacy source dependency, the
+    reusable standalone ``item_read`` rule, the temporary repair dependency,
+    and its dependency-linked temporary rule.
+    """
+    spec, issues, threads, legacy_dependency = await _production_shaped_fixture(db)
+    issue_ids = [issue.id for issue in issues]
+
+    standalone_rule = ContinuityRule(
+        user_id=spec.user_id,
+        source_type="issue",
+        source_id=issue_ids[2],
+        target_type="issue",
+        target_id=issue_ids[3],
+        satisfaction_type="item_read",
+        note="standalone prerequisite",
+    )
+    db.add(standalone_rule)
+    await db.flush()
+
+    temp_dependency = Dependency(
+        source_issue_id=issue_ids[1],
+        target_issue_id=issue_ids[3],
+        note=TEMPORARY_REPAIR_NOTE,
+        created_at=datetime.now(UTC),
+    )
+    db.add(temp_dependency)
+    await db.flush()
+    temp_rule = ContinuityRule(
+        user_id=spec.user_id,
+        legacy_dependency_id=temp_dependency.id,
+        source_type="issue",
+        source_id=issue_ids[1],
+        target_type="issue",
+        target_id=issue_ids[3],
+        satisfaction_type="item_read",
+        note=TEMPORARY_REPAIR_NOTE,
+    )
+    db.add(temp_rule)
+    await db.flush()
+    await refresh_user_blocked_status(spec.user_id, db)
+    await db.flush()
+
+    return (
+        spec,
+        issues,
+        threads,
+        legacy_dependency,
+        standalone_rule,
+        temp_dependency,
+        temp_rule,
+    )
 
 
 @pytest.mark.asyncio
@@ -186,7 +257,7 @@ async def test_step23a_dry_run_bridges_historical_read_gap_without_writes(
     async_db: AsyncSession,
 ) -> None:
     """Dry-run preserves Roll eligibility across an out-of-order historical read gap."""
-    spec, issues, threads = await _production_shaped_fixture(async_db)
+    spec, issues, threads, _legacy = await _production_shaped_fixture(async_db)
     issue_ids = [issue.id for issue in issues]
     thread_ids = [thread.id for thread in threads]
     await async_db.commit()
@@ -245,7 +316,7 @@ async def test_step23a_snapshot_token_is_stable_for_unchanged_state(
     async_db: AsyncSession,
 ) -> None:
     """Repeated dry-runs over unchanged PostgreSQL state produce one review token."""
-    spec, _, _ = await _production_shaped_fixture(async_db)
+    spec, _, _, _ = await _production_shaped_fixture(async_db)
     await async_db.commit()
 
     first = await build_ultimate_universe_dry_run(async_db, spec)
@@ -256,3 +327,516 @@ async def test_step23a_snapshot_token_is_stable_for_unchanged_state(
     assert first["ok"] is True
     assert second["ok"] is True
     assert first["snapshot_token"] == second["snapshot_token"]
+
+
+async def _eligible_of(
+    user_id: int,
+    db: AsyncSession,
+    thread_ids: set[int],
+) -> list[int]:
+    """Return roll-eligible thread IDs restricted to one inspected thread set."""
+    pool = await get_roll_pool(user_id, db)
+    return sorted(thread.id for thread in pool if thread.id in thread_ids)
+
+
+@pytest.mark.asyncio
+async def test_step23b_apply_creates_plan_keeps_standalone_and_preserves_roll(
+    async_db: AsyncSession,
+) -> None:
+    """Apply builds the strict plan + gap bridge while preserving Roll eligibility.
+
+    This covers the issue contract: the strict plan and derived convergence gate
+    appear, source and temporary authority are removed, equivalent standalone
+    ``item_read`` edges survive un-owned, temporary rules disappear, and the
+    protected reader facts and affected Roll-eligible set stay byte-for-byte same.
+    """
+    spec, issues, threads, legacy, standalone, temp_dep, temp_rule = (
+        await _step23b_fixture(async_db)
+    )
+    issue_ids = [issue.id for issue in issues]
+    thread_ids = {thread.id for thread in threads}
+    await async_db.commit()
+
+    snapshot = await build_ultimate_universe_dry_run(async_db, spec)
+    assert snapshot["ok"] is True, snapshot["errors"]
+    preflight_eligible = snapshot["runtime_behavior"][
+        "current_affected_roll_eligible_thread_ids"
+    ]
+    assert preflight_eligible == [threads[0].id]
+
+    receipt = await apply_ultimate_universe_migration(
+        async_db,
+        snapshot=snapshot,
+        spec=spec,
+    )
+    await async_db.commit()
+
+    assert receipt["plan_rule_count"] == 3
+    assert receipt["expected_new_plan_rule_count"] == 3
+    assert receipt["removed_source_dependency_count"] == 1
+    assert receipt["removed_temporary_dependency_count"] == 1
+    assert receipt["reused_standalone_rule_count"] == 1
+    assert receipt["affected_roll_eligible_thread_ids"] == preflight_eligible
+
+    plan = await async_db.get(ContinuityPlan, receipt["plan_id"])
+    assert plan is not None
+    assert plan.ordering_mode == "strict_sequential"
+    assert [node["ref_id"] for node in plan.nodes_json] == issue_ids
+    assert plan.nodes_json[-1]["convergence_gate"] == [
+        {"node_type": "issue", "node_id": f"issue-{issue_ids[0]}"}
+    ]
+
+    assert await async_db.get(Dependency, legacy.id) is None
+    assert await async_db.get(Dependency, temp_dep.id) is None
+    assert await async_db.get(ContinuityRule, temp_rule.id) is None
+
+    survivor = await async_db.get(ContinuityRule, standalone.id)
+    assert survivor is not None
+    assert survivor.note == "standalone prerequisite"
+    assert survivor.satisfaction_type == "item_read"
+    edge_rules = (
+        await async_db.execute(
+            select(ContinuityRule).where(
+                ContinuityRule.user_id == spec.user_id,
+                ContinuityRule.source_id == issue_ids[2],
+                ContinuityRule.target_id == issue_ids[3],
+            )
+        )
+    ).scalars().all()
+    assert [rule.id for rule in edge_rules] == [standalone.id]
+    assert not any(
+        (rule.note or "").startswith("continuity-plan:") for rule in edge_rules
+    )
+
+    for key in (
+        "issue_state_hash",
+        "thread_state_hash",
+        "event_state_hash",
+        "identity_state_hash",
+    ):
+        assert receipt[key] == snapshot["factual"][key]
+
+    assert await _eligible_of(spec.user_id, async_db, thread_ids) == preflight_eligible
+
+
+@pytest.mark.asyncio
+async def test_step23b_rollback_restores_exact_ids_and_temporary_linkage(
+    async_db: AsyncSession,
+) -> None:
+    """Rollback restores exact dependency/rule IDs and temporary rule linkage."""
+    spec, _issues, threads, legacy, standalone, temp_dep, temp_rule = (
+        await _step23b_fixture(async_db)
+    )
+    thread_ids = {thread.id for thread in threads}
+    await async_db.commit()
+
+    snapshot = await build_ultimate_universe_dry_run(async_db, spec)
+    preflight_eligible = snapshot["runtime_behavior"][
+        "current_affected_roll_eligible_thread_ids"
+    ]
+    receipt = await apply_ultimate_universe_migration(
+        async_db,
+        snapshot=snapshot,
+        spec=spec,
+    )
+    await async_db.commit()
+
+    result = await rollback_ultimate_universe_migration(
+        async_db,
+        snapshot=snapshot,
+        receipt=receipt,
+        spec=spec,
+    )
+    await async_db.commit()
+
+    assert result["restored_dependency_ids"] == sorted([legacy.id, temp_dep.id])
+    assert result["restored_temporary_rule_ids"] == [temp_rule.id]
+    assert result["affected_roll_eligible_thread_ids"] == preflight_eligible
+
+    assert await async_db.get(ContinuityPlan, receipt["plan_id"]) is None
+    marker = f"continuity-plan:{receipt['plan_id']}"
+    remaining_marked_rules = await async_db.scalar(
+        select(func.count())
+        .select_from(ContinuityRule)
+        .where(
+            ContinuityRule.user_id == spec.user_id,
+            ContinuityRule.note == marker,
+        )
+    )
+    assert remaining_marked_rules == 0
+
+    restored_legacy = await async_db.get(Dependency, legacy.id)
+    assert restored_legacy is not None
+    assert restored_legacy.source_issue_id == legacy.source_issue_id
+    assert restored_legacy.target_issue_id == legacy.target_issue_id
+    assert restored_legacy.note == legacy.note
+    assert restored_legacy.created_at == legacy.created_at
+
+    restored_temp = await async_db.get(Dependency, temp_dep.id)
+    assert restored_temp is not None
+    assert restored_temp.note == TEMPORARY_REPAIR_NOTE
+    assert restored_temp.created_at == temp_dep.created_at
+
+    restored_rule = await async_db.get(ContinuityRule, temp_rule.id)
+    assert restored_rule is not None
+    assert restored_rule.legacy_dependency_id == temp_dep.id
+    assert restored_rule.note == TEMPORARY_REPAIR_NOTE
+    assert restored_rule.source_id == temp_rule.source_id
+    assert restored_rule.target_id == temp_rule.target_id
+
+    survivor = await async_db.get(ContinuityRule, standalone.id)
+    assert survivor is not None
+    assert survivor.note == "standalone prerequisite"
+
+    for key in (
+        "issue_state_hash",
+        "thread_state_hash",
+        "event_state_hash",
+        "identity_state_hash",
+    ):
+        assert result["factual"][key] == snapshot["factual"][key]
+
+    assert await _eligible_of(spec.user_id, async_db, thread_ids) == preflight_eligible
+
+
+@pytest.mark.asyncio
+async def test_step23b_rollback_refuses_after_reader_edits_plan(
+    async_db: AsyncSession,
+) -> None:
+    """Rollback fails closed instead of overwriting reader changes to the plan."""
+    spec, _issues, _threads, _legacy, _standalone, _temp_dep, _temp_rule = (
+        await _step23b_fixture(async_db)
+    )
+    await async_db.commit()
+
+    snapshot = await build_ultimate_universe_dry_run(async_db, spec)
+    receipt = await apply_ultimate_universe_migration(
+        async_db,
+        snapshot=snapshot,
+        spec=spec,
+    )
+    await async_db.commit()
+
+    plan = await async_db.get(ContinuityPlan, receipt["plan_id"])
+    assert plan is not None
+    plan.name = "Reader edited this plan"
+    await async_db.commit()
+
+    with pytest.raises(MigrationInvariantError, match="edited after cutover"):
+        await rollback_ultimate_universe_migration(
+            async_db,
+            snapshot=snapshot,
+            receipt=receipt,
+            spec=spec,
+        )
+    await async_db.rollback()
+
+    edited = await async_db.get(ContinuityPlan, receipt["plan_id"])
+    assert edited is not None
+    assert edited.name == "Reader edited this plan"
+
+
+@pytest.mark.asyncio
+async def test_step23b_stale_snapshot_token_refuses_apply_before_any_write(
+    async_db: AsyncSession,
+) -> None:
+    """Apply refuses a stale token without deleting or persisting any row."""
+    spec, _issues, _threads, legacy, _standalone, temp_dep, _temp_rule = (
+        await _step23b_fixture(async_db)
+    )
+    legacy_id = legacy.id
+    temp_dep_id = temp_dep.id
+    await async_db.commit()
+
+    snapshot = await build_ultimate_universe_dry_run(async_db, spec)
+    assert snapshot["ok"] is True
+
+    source_list = await async_db.get(CBLSourceList, spec.source_list_id)
+    assert source_list is not None
+    source_list.content_hash = "b" * 64
+    await async_db.commit()
+
+    plans_before = await async_db.scalar(select(func.count()).select_from(ContinuityPlan))
+
+    with pytest.raises(MigrationInvariantError, match="changed since dry-run"):
+        await apply_ultimate_universe_migration(
+            async_db,
+            snapshot=snapshot,
+            spec=spec,
+        )
+    await async_db.rollback()
+
+    assert (
+        await async_db.scalar(select(func.count()).select_from(ContinuityPlan))
+        == plans_before
+    )
+    assert (
+        await async_db.scalar(
+            select(func.count()).select_from(Dependency).where(Dependency.id == legacy_id)
+        )
+        == 1
+    )
+    assert (
+        await async_db.scalar(
+            select(func.count()).select_from(Dependency).where(Dependency.id == temp_dep_id)
+        )
+        == 1
+    )
+    assert await async_db.scalar(
+        select(func.count())
+        .select_from(ContinuityRule)
+        .where(ContinuityRule.note.like("continuity-plan:%"))
+    ) == 0
+
+
+@pytest.mark.asyncio
+async def test_step23b_rollback_cooperates_with_legacy_dependency_sync_trigger(
+    async_db: AsyncSession,
+) -> None:
+    """Rollback restores exact rows when the production mirror trigger exists."""
+    spec, _issues, threads, legacy, standalone, temp_dep, temp_rule = (
+        await _step23b_fixture(async_db)
+    )
+    thread_ids = {thread.id for thread in threads}
+    await async_db.commit()
+
+    trigger_function = "test_step23b_sync_legacy_dependency"
+    trigger_name = "trg_test_step23b_sync_legacy_dependency"
+    await async_db.execute(
+        text(
+            f"""
+            CREATE OR REPLACE FUNCTION {trigger_function}()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            DECLARE
+                owner_id integer;
+            BEGIN
+                SELECT thread.user_id
+                  INTO owner_id
+                  FROM issues AS issue
+                  JOIN threads AS thread ON thread.id = issue.thread_id
+                 WHERE issue.id = NEW.source_issue_id;
+
+                DELETE FROM continuity_rules
+                 WHERE legacy_dependency_id = NEW.id;
+
+                INSERT INTO continuity_rules (
+                    user_id, source_type, source_id, target_type, target_id,
+                    satisfaction_type, checkpoint_issue_id, legacy_dependency_id,
+                    note, created_at, updated_at
+                )
+                VALUES (
+                    owner_id, 'issue', NEW.source_issue_id, 'issue',
+                    NEW.target_issue_id, 'item_read', NULL, NEW.id, NEW.note,
+                    NEW.created_at, CURRENT_TIMESTAMP
+                )
+                ON CONFLICT (user_id, source_type, source_id, target_type, target_id)
+                DO UPDATE SET
+                    satisfaction_type = 'item_read',
+                    checkpoint_issue_id = NULL,
+                    legacy_dependency_id = EXCLUDED.legacy_dependency_id,
+                    note = EXCLUDED.note,
+                    updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$
+            """
+        )
+    )
+    await async_db.execute(
+        text(
+            f"""
+            CREATE TRIGGER {trigger_name}
+            AFTER INSERT OR UPDATE OF source_issue_id, target_issue_id, note
+            ON dependencies
+            FOR EACH ROW
+            EXECUTE FUNCTION {trigger_function}()
+            """
+        )
+    )
+    await async_db.commit()
+
+    try:
+        snapshot = await build_ultimate_universe_dry_run(async_db, spec)
+        assert snapshot["ok"] is True, snapshot["errors"]
+        preflight_eligible = snapshot["runtime_behavior"][
+            "current_affected_roll_eligible_thread_ids"
+        ]
+        receipt = await apply_ultimate_universe_migration(
+            async_db,
+            snapshot=snapshot,
+            spec=spec,
+        )
+        await async_db.commit()
+
+        result = await rollback_ultimate_universe_migration(
+            async_db,
+            snapshot=snapshot,
+            receipt=receipt,
+            spec=spec,
+        )
+        await async_db.commit()
+
+        assert result["restored_dependency_ids"] == sorted([legacy.id, temp_dep.id])
+        assert result["restored_temporary_rule_ids"] == [temp_rule.id]
+        assert result["affected_roll_eligible_thread_ids"] == preflight_eligible
+        assert await async_db.get(ContinuityPlan, receipt["plan_id"]) is None
+
+        assert await async_db.get(Dependency, legacy.id) is not None
+        assert await async_db.get(Dependency, temp_dep.id) is not None
+        restored_rule = await async_db.get(ContinuityRule, temp_rule.id)
+        assert restored_rule is not None
+        assert restored_rule.legacy_dependency_id == temp_dep.id
+        survivor = await async_db.get(ContinuityRule, standalone.id)
+        assert survivor is not None
+        assert survivor.note == "standalone prerequisite"
+        assert await _eligible_of(spec.user_id, async_db, thread_ids) == preflight_eligible
+    finally:
+        await async_db.rollback()
+        await async_db.execute(text(f"DROP TRIGGER IF EXISTS {trigger_name} ON dependencies"))
+        await async_db.execute(text(f"DROP FUNCTION IF EXISTS {trigger_function}()"))
+        await async_db.commit()
+
+
+@pytest.mark.asyncio
+async def test_step23b_rollback_repairs_standalone_rule_claimed_by_sync_trigger(
+    async_db: AsyncSession,
+) -> None:
+    """Restore a standalone rule whose edge a restored source dependency claims.
+
+    Production source-12 dependencies include every internal edge, so a
+    reusable standalone ``item_read`` rule can share its edge with a restored
+    source dependency. The sync trigger then rewrites the rule's
+    ``legacy_dependency_id``/``note``/``updated_at`` during rollback; rollback
+    must repair the rule back to its reviewed snapshot instead of refusing.
+    """
+    spec, _issues, threads, legacy, standalone, temp_dep, temp_rule = (
+        await _step23b_fixture(async_db)
+    )
+    thread_ids = {thread.id for thread in threads}
+    overlap = Dependency(
+        source_issue_id=_issues[2].id,
+        target_issue_id=_issues[3].id,
+        note=f"cbl-order:source:{spec.expected_content_hash}:3->4",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(overlap)
+    await async_db.commit()
+
+    trigger_function = "test_step23b_sync_legacy_dependency"
+    trigger_name = "trg_test_step23b_sync_legacy_dependency"
+    await async_db.execute(
+        text(
+            f"""
+            CREATE OR REPLACE FUNCTION {trigger_function}()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            DECLARE
+                owner_id integer;
+            BEGIN
+                SELECT thread.user_id
+                  INTO owner_id
+                  FROM issues AS issue
+                  JOIN threads AS thread ON thread.id = issue.thread_id
+                 WHERE issue.id = NEW.source_issue_id;
+
+                DELETE FROM continuity_rules
+                 WHERE legacy_dependency_id = NEW.id;
+
+                INSERT INTO continuity_rules (
+                    user_id, source_type, source_id, target_type, target_id,
+                    satisfaction_type, checkpoint_issue_id, legacy_dependency_id,
+                    note, created_at, updated_at
+                )
+                VALUES (
+                    owner_id, 'issue', NEW.source_issue_id, 'issue',
+                    NEW.target_issue_id, 'item_read', NULL, NEW.id, NEW.note,
+                    NEW.created_at, CURRENT_TIMESTAMP
+                )
+                ON CONFLICT (user_id, source_type, source_id, target_type, target_id)
+                DO UPDATE SET
+                    satisfaction_type = 'item_read',
+                    checkpoint_issue_id = NULL,
+                    legacy_dependency_id = EXCLUDED.legacy_dependency_id,
+                    note = EXCLUDED.note,
+                    updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$
+            """
+        )
+    )
+    await async_db.execute(
+        text(
+            f"""
+            CREATE TRIGGER {trigger_name}
+            AFTER INSERT OR UPDATE OF source_issue_id, target_issue_id, note
+            ON dependencies
+            FOR EACH ROW
+            EXECUTE FUNCTION {trigger_function}()
+            """
+        )
+    )
+    await async_db.commit()
+
+    try:
+        snapshot = await build_ultimate_universe_dry_run(async_db, spec)
+        assert snapshot["ok"] is True, snapshot["errors"]
+        assert len(snapshot["source_legacy_dependencies"]) == 2
+        preflight_eligible = snapshot["runtime_behavior"][
+            "current_affected_roll_eligible_thread_ids"
+        ]
+        assert preflight_eligible == [threads[0].id]
+
+        receipt = await apply_ultimate_universe_migration(
+            async_db,
+            snapshot=snapshot,
+            spec=spec,
+        )
+        await async_db.commit()
+
+        assert receipt["removed_source_dependency_count"] == 2
+        assert receipt["removed_temporary_dependency_count"] == 1
+        assert receipt["reused_standalone_rule_count"] == 1
+        assert await async_db.get(Dependency, overlap.id) is None
+        survivor = await async_db.get(ContinuityRule, standalone.id)
+        assert survivor is not None
+        assert survivor.note == "standalone prerequisite"
+        assert survivor.legacy_dependency_id is None
+
+        result = await rollback_ultimate_universe_migration(
+            async_db,
+            snapshot=snapshot,
+            receipt=receipt,
+            spec=spec,
+        )
+        await async_db.commit()
+
+        assert result["restored_dependency_ids"] == sorted(
+            [legacy.id, overlap.id, temp_dep.id]
+        )
+        assert result["restored_source_dependency_count"] == 2
+        assert result["restored_temporary_rule_ids"] == [temp_rule.id]
+        assert result["affected_roll_eligible_thread_ids"] == preflight_eligible
+        assert await async_db.get(ContinuityPlan, receipt["plan_id"]) is None
+
+        assert await async_db.get(Dependency, overlap.id) is not None
+        assert await async_db.get(Dependency, legacy.id) is not None
+        assert await async_db.get(Dependency, temp_dep.id) is not None
+        restored_temp_rule = await async_db.get(ContinuityRule, temp_rule.id)
+        assert restored_temp_rule is not None
+        assert restored_temp_rule.legacy_dependency_id == temp_dep.id
+
+        restored_standalone = await async_db.get(ContinuityRule, standalone.id)
+        assert restored_standalone is not None
+        assert restored_standalone.legacy_dependency_id is None
+        assert restored_standalone.note == "standalone prerequisite"
+        assert restored_standalone.satisfaction_type == "item_read"
+        assert await _eligible_of(spec.user_id, async_db, thread_ids) == preflight_eligible
+    finally:
+        await async_db.rollback()
+        await async_db.execute(text(f"DROP TRIGGER IF EXISTS {trigger_name} ON dependencies"))
+        await async_db.execute(text(f"DROP FUNCTION IF EXISTS {trigger_function}()"))
+        await async_db.commit()
