@@ -29,6 +29,7 @@ WOLVERINE_HASH = "1e6b55e99d9317ba68782678710a3e621786c9f57afb1203f44154714acef9
 
 
 async def build_report(user_id: int = 1) -> dict[str, Any]:
+    """Build the read-only Step 14A production classification report."""
     async with AsyncSessionLocal() as db:
         rows = (
             await db.execute(
