@@ -23,6 +23,13 @@ export interface PathStep {
   explanations: string[]
 }
 
+/** Edges grouped by their relationship to the current issue. */
+export interface ClassifiedEdges {
+  intoCurrent: ReaderContextEdge[]
+  fromCurrent: ReaderContextEdge[]
+  later: ReaderContextEdge[]
+}
+
 /**
  * Groups local-chain edges by their relationship to the current issue.
  *
@@ -39,7 +46,7 @@ export interface PathStep {
 export function classifyEdgesRelativeToCurrent(
   edges: ReaderContextEdge[],
   currentIssueId: number,
-): { intoCurrent: ReaderContextEdge[]; fromCurrent: ReaderContextEdge[]; later: ReaderContextEdge[] } {
+): ClassifiedEdges {
   const intoCurrent: ReaderContextEdge[] = []
   const fromCurrent: ReaderContextEdge[] = []
   const later: ReaderContextEdge[] = []

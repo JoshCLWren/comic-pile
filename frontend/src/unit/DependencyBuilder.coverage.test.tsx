@@ -89,7 +89,7 @@ describe('DependencyBuilder', () => {
     const remove = screen.getAllByRole('button', { name: 'Remove' })[0]
     fireEvent.click(remove)
     await waitFor(() => expect(toast.showToast).toHaveBeenCalled())
-    const call = toast.showToast.mock.calls.at(-1) as unknown as [string, string, { onClick?: () => void }]
+    const call = cast<[string, string, { onClick?: () => void }]>(toast.showToast.mock.calls.at(-1))
     const action = call[2]?.onClick
     act(() => action?.())
     expect(toast.removeToast).toHaveBeenCalled()

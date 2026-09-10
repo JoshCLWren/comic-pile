@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { type ReactNode } from 'react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useUpdateThread } from '../hooks/useThread'
-import { applyEditedThreadToQueuePages } from '../query/cacheEffects'
+import * as cacheEffects from '../query/cacheEffects'
 import { threadsApi } from '../services/api'
 import type { Thread } from '../types'
 
@@ -15,22 +15,12 @@ function createTestWrapper() {
   return { client, wrapper }
 }
 
-vi.mock('../services/api', () => ({
-  threadsApi: {
-    update: vi.fn(),
-  },
-}))
-
-vi.mock('../query/cacheEffects', () => ({
-  applyEditedThreadToQueuePages: vi.fn(),
-}))
-
-const mockedThreadsApi = vi.mocked(threadsApi)
-const mockedApplyEditedThreadToQueuePages = vi.mocked(applyEditedThreadToQueuePages)
+const spyThreadsApiUpdate = vi.spyOn(threadsApi, 'update')
+const spyApplyEditedThreadToQueuePages = vi.spyOn(cacheEffects, 'applyEditedThreadToQueuePages')
 
 beforeEach(() => {
-  mockedThreadsApi.update.mockReset()
-  mockedApplyEditedThreadToQueuePages.mockReset()
+  spyThreadsApiUpdate.mockReset()
+  spyApplyEditedThreadToQueuePages.mockReset()
 })
 
 it('publishes the authoritative update through the targeted thread-cache contract', async () => {
@@ -38,7 +28,7 @@ it('publishes the authoritative update through the targeted thread-cache contrac
     id: 7,
     title: 'Updated title',
   } as Thread
-  mockedThreadsApi.update.mockResolvedValue(updatedThread)
+  spyThreadsApiUpdate.mockResolvedValue(updatedThread)
 
   const { client, wrapper } = createTestWrapper()
   const { result } = renderHook(() => useUpdateThread(), { wrapper })
@@ -51,9 +41,9 @@ it('publishes the authoritative update through the targeted thread-cache contrac
     })
   })
 
-  expect(mockedThreadsApi.update).toHaveBeenCalledWith(7, { title: 'Updated title' })
-  expect(mockedApplyEditedThreadToQueuePages).toHaveBeenCalledOnce()
-  expect(mockedApplyEditedThreadToQueuePages).toHaveBeenCalledWith(client, updatedThread)
+  expect(spyThreadsApiUpdate).toHaveBeenCalledWith(7, { title: 'Updated title' })
+  expect(spyApplyEditedThreadToQueuePages).toHaveBeenCalledOnce()
+  expect(spyApplyEditedThreadToQueuePages).toHaveBeenCalledWith(client, updatedThread)
   expect(returnedThread).toBe(updatedThread)
   expect(result.current.isError).toBe(false)
   expect(result.current.isPending).toBe(false)
@@ -61,7 +51,7 @@ it('publishes the authoritative update through the targeted thread-cache contrac
 
 it('does not touch targeted cache state when the update request fails', async () => {
   const failure = new Error('update failed')
-  mockedThreadsApi.update.mockRejectedValue(failure)
+  spyThreadsApiUpdate.mockRejectedValue(failure)
 
   const { wrapper } = createTestWrapper()
   const { result } = renderHook(() => useUpdateThread(), { wrapper })
@@ -79,7 +69,7 @@ it('does not touch targeted cache state when the update request fails', async ()
   })
 
   expect(caught).toBe(failure)
-  expect(mockedApplyEditedThreadToQueuePages).not.toHaveBeenCalled()
+  expect(spyApplyEditedThreadToQueuePages).not.toHaveBeenCalled()
   await waitFor(() => expect(result.current.isError).toBe(true))
   expect(result.current.isPending).toBe(false)
 })

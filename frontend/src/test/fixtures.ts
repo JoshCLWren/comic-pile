@@ -289,9 +289,11 @@ async function assertBrowserHealth(
     ...unexpectedPageErrors.map((message) => ({ category: 'pageerror' as const, message })),
     ...failedRequests.map((message) => ({ category: 'requestfailed' as const, message })),
   ];
-  const failures = browserFailures
-    .filter((failure) => !allowExpectedBrowserFailures.isAllowed(failure))
-    .map((failure) => `${failure.category}: ${failure.message}`);
+  const failures = browserFailures.flatMap((failure) =>
+    !allowExpectedBrowserFailures.isAllowed(failure)
+      ? [`${failure.category}: ${failure.message}`]
+      : [],
+  );
 
   if (failures.length === 0) {
     return;
