@@ -10,7 +10,12 @@ import { issuesApi } from '../services/api-issues'
 
 const navigateSpy = vi.fn()
 const routeParams = { id: '1' }
-const locationState: { state?: { openEditModal?: boolean } } = { state: undefined }
+
+interface LocationState {
+  state?: { openEditModal?: boolean }
+}
+
+const locationState: LocationState = { state: undefined }
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return {

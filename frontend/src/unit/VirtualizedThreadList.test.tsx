@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi, beforeAll, beforeEach } from 'vitest'
 import { getColumnCount, getRowThreads } from '../pages/QueuePage/VirtualizedThreadList.helpers'
 import VirtualizedThreadList from '../pages/QueuePage/VirtualizedThreadList'
+import { cast } from '../utils/cast'
 
 interface MockThread {
   id: number
@@ -41,14 +42,14 @@ beforeAll(() => {
     globalThis.DataTransfer = class {
       effectAllowed = 'none'
       dropEffect = 'none'
-      items = { length: 0, add: () => {}, clear: () => {} } as unknown as DataTransferItemList
+      items = cast<DataTransferItemList>({ length: 0, add: () => {}, clear: () => {} })
       types: string[] = []
       getData = (_format: string) => ''
       setData = () => {}
       clearData = () => {}
       setDragImage = () => {}
-      files = Object.freeze([]) as unknown as FileList
-    } as unknown as typeof DataTransfer
+      files = cast<FileList>(Object.freeze([]))
+    } as typeof DataTransfer
   }
   if (!globalThis.DragEvent) {
     globalThis.DragEvent = class extends MouseEvent {
@@ -57,7 +58,7 @@ beforeAll(() => {
         super(type, eventInitDict ?? {})
         this.dataTransfer = (eventInitDict as DragEventInit | undefined)?.dataTransfer ?? null
       }
-    } as unknown as typeof DragEvent
+    } as typeof DragEvent
   }
   // Stub ResizeObserver (needed for the component's own ResizeObserver)
   vi.stubGlobal(
@@ -68,7 +69,7 @@ beforeAll(() => {
       this.unobserve = vi.fn()
       this.disconnect = vi.fn()
       return this
-    }) as unknown as typeof ResizeObserver,
+    }),
   )
 })
 

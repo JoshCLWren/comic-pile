@@ -37,6 +37,7 @@ export function useReaderContext(issueId: number | null | undefined): ReaderCont
   return {
     context: data ?? null,
     isLoading: isPending,
+    // SAFETY: the queryFn normalizes failures to Error, so the query error value is Error | null.
     error: (error as Error | null) ?? null,
     refetch: () => {
       void refetch()

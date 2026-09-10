@@ -1,4 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
+import { cast } from '../utils/cast'
+import { isString } from '../utils/runtimeChecks'
 
 interface DiagnosticData {
   timestamp: string
@@ -32,6 +34,11 @@ interface ConsoleError {
   timestamp: string
 }
 
+interface PerformanceTiming {
+  domContentLoaded: number | null
+  loadComplete: number | null
+}
+
 const MAX_ERRORS = 20
 const errorBuffer: ConsoleError[] = []
 let originalConsoleError: (typeof console.error) | null = null
@@ -42,12 +49,13 @@ export type { DiagnosticData }
 export function useDiagnostics() {
   const isPatched = useRef(false)
 
-  const getPerformanceTiming = useCallback((): { domContentLoaded: number | null; loadComplete: number | null } => {
+  const getPerformanceTiming = useCallback((): PerformanceTiming => {
     try {
       if (typeof performance === 'undefined' || !performance) {
         return { domContentLoaded: null, loadComplete: null }
       }
 
+      // SAFETY: navigation entries, when present, are always PerformanceNavigationTiming records.
       const navEntry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
       if (navEntry) {
         return {
@@ -103,10 +111,10 @@ export function useDiagnostics() {
     if (mountCount === 1 && typeof console !== 'undefined' && console.error && !isPatched.current) {
       const original = console.error
       originalConsoleError = original
-      ;(console as unknown as Record<string, unknown>)['error'] = (...args: unknown[]) => {
+      ;cast<Record<string, unknown>>(console)['error'] = (...args: unknown[]) => {
         const timestamp = new Date().toISOString()
         const message = args.map((arg) => {
-          if (typeof arg === 'string') return arg
+          if (isString(arg)) return arg
           if (arg instanceof Error) return arg.message
           try {
             return JSON.stringify(arg)

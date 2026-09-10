@@ -13,6 +13,7 @@ import PlanProjectionDialog from '../components/PlanProjectionDialog'
 import ReadingPlanAddMaterial from '../components/ReadingPlanAddMaterial'
 import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
+import { isObject, isString } from '../utils/runtimeChecks'
 
 const LAST_PLAN_KEY = 'comic-pile:last-continuity-plan'
 const DEFAULT_LANE_ID = 'main'
@@ -22,7 +23,7 @@ const DEFAULT_PLAN_NAME = 'My reading plan'
 function errorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail
-    if (typeof detail === 'string' && detail.trim()) return detail
+    if (isString(detail) && detail.trim()) return detail
   }
   return error instanceof Error && error.message ? error.message : fallback
 }
@@ -54,11 +55,12 @@ function getConflictMessage(
   }
 
   const detail = error.response?.data?.detail
-  if (typeof detail === 'string' && detail.trim()) {
+  if (isString(detail) && detail.trim()) {
     return detail
   }
 
-  if (detail && typeof detail === 'object' && 'code' in detail) {
+  if (detail && isObject(detail) && 'code' in detail) {
+    // SAFETY: 'code' in detail narrows the object to the ConflictDetail discriminated shape before access.
     const conflict = detail as ConflictDetail
     if (conflict.code === 'plan_rule_conflict' || conflict.code === 'continuity_cycle') {
       const sourceId = conflict.source_node_id
@@ -203,17 +205,19 @@ export default function ContinuityPlannerPage() {
   const hydrateLabels = useCallback((rawNodes: ContinuityPlanNode[], loadedGroups: DependencyGroup[]): PlannerNode[] => {
     const groupNames = new Map(loadedGroups.map((group) => [group.id, group.name]))
     return rawNodes.map((node): PlannerNode => {
-      const stored = typeof (node as PlannerNode).label === 'string' ? (node as PlannerNode).label.trim() : ''
+      // SAFETY: rawNodes are ContinuityPlanNode and PlannerNode only adds optional display fields set below.
+      const plannerNode = node as PlannerNode
+      const stored = isString(plannerNode.label) ? plannerNode.label.trim() : ''
       if (node.node_type === 'crossover') {
-        if (stored) return { ...(node as PlannerNode), label: stored }
-        return { ...(node as PlannerNode), label: groupNames.get(node.ref_id) ?? '[deleted crossover]' }
+        if (stored) return { ...plannerNode, label: stored }
+        return { ...plannerNode, label: groupNames.get(node.ref_id) ?? '[deleted crossover]' }
       }
       if (node.node_type === 'thread') {
-        if (stored) return { ...(node as PlannerNode), label: stored }
-        return { ...(node as PlannerNode), label: '[deleted series]' }
+        if (stored) return { ...plannerNode, label: stored }
+        return { ...plannerNode, label: '[deleted series]' }
       }
-      if (stored) return { ...(node as PlannerNode), label: stored }
-      return { ...(node as PlannerNode), label: '[deleted series]' }
+      if (stored) return { ...plannerNode, label: stored }
+      return { ...plannerNode, label: '[deleted series]' }
     })
   }, [])
 
@@ -400,7 +404,7 @@ export default function ContinuityPlannerPage() {
         const targetNode = current.find((n) => n.id === targetNodeId)!
         const updated = exists
           ? gate.filter((target) => target.node_id !== targetNodeId)
-          : [...gate, { node_type: targetNode.node_type as ContinuityPlanNodeType, node_id: targetNodeId }]
+          : [...gate, { node_type: targetNode.node_type, node_id: targetNodeId }]
         return { ...node, convergence_gate: updated }
       }),
     )

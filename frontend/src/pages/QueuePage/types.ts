@@ -19,6 +19,14 @@ export type QueueFormState = {
   lastIssueRead: number
 }
 
+/** Body of an edit mutation derived from the queue form state. */
+export interface EditThreadData {
+  title: string
+  format: string
+  notes: string | null
+  issues_remaining?: number
+}
+
 export const DEFAULT_CREATE_STATE: QueueFormState = {
   title: '',
   format: 'Comic',

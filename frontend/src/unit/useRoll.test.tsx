@@ -32,14 +32,14 @@ vi.mock('../services/api', () => ({
 const mockedRollApi = vi.mocked(rollApi)
 
 async function setupMutation(
-  hook: () => { mutate: () => Promise<unknown> },
+  hook: () => { mutate: () => Promise<void> },
 ): Promise<void>
 async function setupMutation<TArg>(
-  hook: () => { mutate: (args: TArg) => Promise<unknown> },
+  hook: () => { mutate: (args: TArg) => Promise<void> },
   args: TArg,
 ): Promise<void>
 async function setupMutation<TArg>(
-  hook: () => { mutate: (args?: TArg) => Promise<unknown> },
+  hook: () => { mutate: (args?: TArg) => Promise<void> },
   args?: TArg,
 ): Promise<void> {
   const { result } = renderHook(() => hook(), { wrapper })

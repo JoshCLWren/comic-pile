@@ -19,6 +19,7 @@ export function useBugReport() {
     setError(null)
     setIssueUrl(null)
     try {
+      // SAFETY: bugReportsApi.create already accepts these fields (diagnostics optional), so the cast narrows to the required subset.
       const createReport = bugReportsApi.create as (data: {
         report_type: ReportType
         title: string

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as THREE from 'three'
 import Dice3D, { getFaceRotation, getProjectedCenterOffsetPx } from '../components/Dice3D'
 import { DEFAULT_DICE_RENDER_CONFIG } from '../components/diceRenderConfig'
+import { cast } from '../utils/cast'
 
 const diceMock = vi.hoisted(() => ({
   failRenderer: false,
@@ -12,10 +13,13 @@ const diceMock = vi.hoisted(() => ({
   noGeometry: false,
   noMaterial: false,
   throwBox: false,
+  // SAFETY: hoisted mock accumulator starts empty and is only consumed by assertions that push number[] counts.
   geometryCounts: [] as number[],
   geometryDisposals: 0,
   materialDisposals: 0,
+  // SAFETY: renders only ever call setSize with [width, height] number tuples recorded verbatim.
   setSizeCalls: [] as Array<[number, number]>,
+  // SAFETY: prefixed mesh slot stays null until a Mesh is constructed, so the union is only read post-assignment.
   lastMesh: null as { rotation: { x: number; y: number; z: number; set: ReturnType<typeof vi.fn> } } | null,
 }))
 
@@ -58,6 +62,7 @@ vi.mock('three', () => {
     }
     setAttribute(name: string, attribute: BufferAttribute) {
       this.attributes[name] = {
+        // SAFETY: position buffers are always Float32Array in the mocked pipeline; itemSize guards the division.
         count: name === 'position' ? (attribute.array as Float32Array).length / attribute.itemSize : undefined,
         getX: () => 0,
         getY: () => 0,
@@ -230,17 +235,20 @@ beforeEach(() => {
   diceMock.setSizeCalls = []
   diceMock.lastMesh = null
   diceMock.throwBox = false
-  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-    fillStyle: '',
-    strokeStyle: '',
-    lineWidth: 0,
-    font: '',
-    textAlign: 'left',
-    textBaseline: 'top',
-    fillRect: vi.fn(),
-    strokeRect: vi.fn(),
-    fillText: vi.fn(),
-  } as unknown as CanvasRenderingContext2D)
+// SAFETY: partial 2D context stub covers only the surface Dice3D draws with; getContext resolves to this mock.
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+    cast<CanvasRenderingContext2D>({
+      fillStyle: '',
+      strokeStyle: '',
+      lineWidth: 0,
+      font: '',
+      textAlign: 'left',
+      textBaseline: 'top',
+      fillRect: vi.fn(),
+      strokeRect: vi.fn(),
+      fillText: vi.fn(),
+    }),
+  )
   vi.stubGlobal('requestAnimationFrame', vi.fn())
   vi.stubGlobal('cancelAnimationFrame', vi.fn())
 })
@@ -271,6 +279,7 @@ it('builds each supported geometry and handles animation/value changes', () => {
 
 it('falls back to a six-sided geometry for an unsupported side count', () => {
   const before = diceMock.geometryCounts.length
+  // SAFETY: sides=7 is deliberately outside the supported set to exercise the geometry fallback branch.
   render(<Dice3D sides={7 as never} value={1} />)
   expect(document.querySelector('.dice-3d')).toBeInTheDocument()
   expect(diceMock.geometryCounts.length).toBeGreaterThan(before)
@@ -381,6 +390,7 @@ it('rebuilds and disposes the previous mesh when render inputs change', () => {
 
 it('returns safe projection and rotation fallbacks for malformed render state', () => {
   diceMock.throwBox = true
+  // SAFETY: the projection util is called with intentionally empty mesh/camera stubs to exercise its error fallback.
   expect(getProjectedCenterOffsetPx({} as THREE.Mesh, {} as THREE.PerspectiveCamera, 200, 200)).toEqual({ x: 0, y: 0 })
   diceMock.throwBox = false
   expect(getFaceRotation(1, null)).toEqual({ x: 0, y: 0, z: 0 })
@@ -389,6 +399,7 @@ it('returns safe projection and rotation fallbacks for malformed render state', 
 it('projects a populated box and resolves a known face normal', () => {
   const normal = new THREE.Vector3(0, 0, 1)
   expect(getFaceRotation(1, new Map([[1, normal]]))).toEqual({ x: 0, y: 0, z: 0 })
+  // SAFETY: the populated-box projection path uses stub mesh/camera objects whose own properties are never read.
   expect(getProjectedCenterOffsetPx({} as THREE.Mesh, {} as THREE.PerspectiveCamera, 200, 100)).toEqual({ x: -0, y: 0 })
 })
 
@@ -420,6 +431,7 @@ it('resizes the renderer when a hidden container becomes visible', () => {
   vi.stubGlobal('ResizeObserver', ResizeObserverMock)
 
   const { container, unmount } = render(<Dice3D sides={4} value={1} />)
+  // SAFETY: Dice3D always mounts the .dice-3d container div, so the selector result is the expected element here.
   const dieContainer = container.querySelector('.dice-3d') as HTMLDivElement
   expect(observe).toHaveBeenCalledWith(dieContainer)
 
@@ -427,6 +439,7 @@ it('resizes the renderer when a hidden container becomes visible', () => {
   Object.defineProperty(dieContainer, 'clientWidth', { configurable: true, value: 0 })
   Object.defineProperty(dieContainer, 'clientHeight', { configurable: true, value: 0 })
   act(() => {
+    // SAFETY: mocked ResizeObserver entry objects carry no fields; the callback only inspects the entry list length.
     resizeCallback?.([], {} as ResizeObserver)
   })
   expect(diceMock.setSizeCalls.at(-1)).toEqual([200, 200])
@@ -436,6 +449,7 @@ it('resizes the renderer when a hidden container becomes visible', () => {
   Object.defineProperty(dieContainer, 'clientWidth', { configurable: true, value: 40 })
   Object.defineProperty(dieContainer, 'clientHeight', { configurable: true, value: 40 })
   act(() => {
+    // SAFETY: mocked ResizeObserver entry objects carry no fields; the callback only inspects the entry list length.
     resizeCallback?.([], {} as ResizeObserver)
   })
   expect(diceMock.setSizeCalls.at(-1)).toEqual([40, 40])
@@ -443,6 +457,7 @@ it('resizes the renderer when a hidden container becomes visible', () => {
   // A repeat callback at the same size must be a no-op.
   const callsAfterFirstResize = diceMock.setSizeCalls.length
   act(() => {
+    // SAFETY: mocked ResizeObserver entry objects carry no fields; the callback only inspects the entry list length.
     resizeCallback?.([], {} as ResizeObserver)
   })
   expect(diceMock.setSizeCalls).toHaveLength(callsAfterFirstResize)

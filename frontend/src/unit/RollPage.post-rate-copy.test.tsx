@@ -25,7 +25,12 @@ const spies = vi.hoisted(() => ({
   unskip: vi.fn().mockResolvedValue({}),
   setPending: vi.fn(),
 }))
-const bootstrapHook = vi.hoisted(() => ({ value: null as unknown }))
+
+interface HoistedHookValue {
+  value: unknown
+}
+
+const bootstrapHook = vi.hoisted((): HoistedHookValue => ({ value: null }))
 const relatedApi = vi.hoisted(() => ({
   readingOrders: vi.fn(),
   connectedThreads: vi.fn(),

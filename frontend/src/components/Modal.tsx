@@ -66,6 +66,7 @@ export default function Modal({
     openModalStack.push(modalId)
     overlayElement.style.zIndex = String(nextModalLayer++)
 
+    // SAFETY: the modal is open here, so document.activeElement is a focusable DOM element that is an HTMLElement.
     previousFocusRef.current = document.activeElement as HTMLElement
 
     const modal = modalRef.current

@@ -69,6 +69,7 @@ export default function QueuePage() {
   })
 
   const submitCreate = useCallback(
+    // SAFETY: the create mutation's async mutationFn resolves to the created thread record before mutate() widens it to void.
     (input: { title: string; format: string; issues_remaining: number; notes: string | null }) =>
       createMutation.mutate(input) as Promise<{ id?: number }>,
     [createMutation],
@@ -87,12 +88,10 @@ export default function QueuePage() {
 
   const modals = useQueueModalsHook({
     threads,
-    onCreated: async () => {},
-    onUpdated: async () => {},
-    onReactivated: async () => {},
-    refetchSession: async () => {
-      await refetchSession()
-    },
+    onCreated: () => {},
+    onUpdated: () => {},
+    onReactivated: () => {},
+    refetchSession: () => refetchSession(),
     submitCreate,
     submitEdit,
     submitReactivate,

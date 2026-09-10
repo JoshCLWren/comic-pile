@@ -10,6 +10,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache_invalidation import invalidate_user_view
 from app.models.cbl_reference import CBLSourceEntry, CBLSourceList
 from app.models.continuity_plan import ContinuityPlan
 from app.schemas.shared_types import SourceBackedDecision
@@ -23,6 +24,44 @@ from app.services.cbl_plan_adoption import (
 )
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
+from comic_pile.dependencies import refresh_user_blocked_status
+
+
+def _adoption_lane_id(plan: ContinuityPlan) -> str:
+    """Choose the declared lane that new targeted-adoption nodes should join."""
+    lanes = list(plan.lanes_json or [])
+    lane_ids = [
+        str(lane["id"])
+        for lane in lanes
+        if isinstance(lane, dict) and lane.get("id") is not None
+    ]
+    if not lane_ids:
+        return "default"
+
+    declared = set(lane_ids)
+    existing_nodes = [
+        node
+        for node in plan.nodes_json or []
+        if str(node.get("lane_id")) in declared
+    ]
+    existing_nodes.sort(
+        key=lambda node: int(node.get("position", -1))
+        if isinstance(node.get("position"), int)
+        else -1
+    )
+    if existing_nodes:
+        return str(existing_nodes[-1]["lane_id"])
+
+    ordered_lanes = sorted(
+        lanes,
+        key=lambda lane: int(lane.get("order", 0))
+        if isinstance(lane, dict) and isinstance(lane.get("order"), int)
+        else 0,
+    )
+    first_lane = ordered_lanes[0] if ordered_lanes else None
+    if isinstance(first_lane, dict) and first_lane.get("id") is not None:
+        return str(first_lane["id"])
+    return "default"
 
 
 async def adopt_cbl_into_existing_reading_plan(
@@ -91,6 +130,7 @@ async def adopt_cbl_into_existing_reading_plan(
         entry_decisions,
         series_overrides or {},
         series_decisions,
+        new_node_lane_id=_adoption_lane_id(plan),
     )
 
     node_models = _to_node_models(plan.nodes_json)
@@ -103,11 +143,13 @@ async def adopt_cbl_into_existing_reading_plan(
             nodes=node_models,
             ordering_mode=_plan_ordering_mode(plan),
         )
+        await refresh_user_blocked_status(user_id, db)
         await db.commit()
     except Exception:
         await db.rollback()
         raise
 
+    await invalidate_user_view(user_id)
     await db.refresh(plan)
     return AdoptionCommitResult(
         plan=plan,

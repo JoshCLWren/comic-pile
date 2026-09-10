@@ -12,27 +12,13 @@ interface RollMutations {
   setDieMutation: { mutate: (die: number) => Promise<void>; isPending: boolean }
   clearManualDieMutation: { mutate: () => Promise<void>; isPending: boolean }
   rollMutation: { mutate: () => Promise<RollResponse>; isPending: boolean }
-  snoozeMutation: {
-    mutate: (expectedPendingThreadId?: number) => Promise<SnoozeSessionResponse | undefined>
-    retryRefresh: () => Promise<boolean>
-    isPending: boolean
-    isError: boolean
-    refreshError: unknown
-    hasRefreshError: boolean
-  }
-  unsnoozeMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean; isError: boolean }
-  skipMutation: {
-    mutate: (expectedPendingThreadId?: number) => Promise<RollResponse | undefined>
-    retryRefresh: () => Promise<boolean>
-    isPending: boolean
-    isError: boolean
-    refreshError: unknown
-    hasRefreshError: boolean
-  }
-  unskipMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean; isError: boolean }
-  moveToFrontMutation: { mutate: (id: number) => Promise<void>; isPending: boolean; isError: boolean }
-  moveToBackMutation: { mutate: (id: number) => Promise<void>; isPending: boolean; isError: boolean }
-  shuffleQueueMutation: { mutate: () => Promise<void>; isPending: boolean; isError: boolean }
+  snoozeMutation: { mutate: (expectedPendingThreadId?: number) => Promise<SnoozeSessionResponse | undefined>; isPending: boolean }
+  unsnoozeMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean }
+  skipMutation: { mutate: (expectedPendingThreadId?: number) => Promise<RollResponse | undefined>; isPending: boolean }
+  unskipMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean }
+  moveToFrontMutation: { mutate: (id: number) => Promise<void>; isPending: boolean }
+  moveToBackMutation: { mutate: (id: number) => Promise<void>; isPending: boolean }
+  shuffleQueueMutation: { mutate: () => Promise<void>; isPending: boolean }
 }
 
 interface UseRollActionsParams {
@@ -119,6 +105,7 @@ export function useRollActions({
         last_rolled_result: response.result ?? response.last_rolled_result,
       }
       if (response.total_issues === null) {
+        // SAFETY: threadMetadata is assembled from the roll response fields RatingThread requires when total_issues is null.
         setThreadToMigrate(threadMetadata as RatingThread)
         setShowMigrationDialog(true)
       } else {
@@ -163,6 +150,7 @@ export function useRollActions({
             last_rolled_result: response.result ?? response.last_rolled_result,
           }
           if (response.total_issues === null) {
+            // SAFETY: threadMetadata is assembled from the roll response fields RatingThread requires when total_issues is null.
             setThreadToMigrate(threadMetadata as RatingThread)
             setShowMigrationDialog(true)
           } else {
