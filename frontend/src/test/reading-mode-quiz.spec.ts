@@ -20,7 +20,7 @@ test.beforeAll(async ({ browser }) => {
   const probe = await browser.newPage()
   await probe.goto('/')
   quizEnabled = await probe.evaluate(
-    () => (window as unknown as { __COMIC_PILE_FEATURES__?: { readingModeQuiz?: boolean } })
+    () => (window as { __COMIC_PILE_FEATURES__?: { readingModeQuiz?: boolean } })
       .__COMIC_PILE_FEATURES__?.readingModeQuiz === true,
   )
   await probe.close()

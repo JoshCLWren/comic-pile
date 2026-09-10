@@ -60,7 +60,7 @@ const AUTH_ENDPOINT_PATHS = new Set(['/v1/auth/login', '/v1/auth/register', '/v1
 
 // Axios returns AxiosResponse by default, but the response interceptor below unwraps to response.data.
 // Cast once at the boundary so callers get strongly typed payload methods.
-const api = rawApi as unknown as ApiClient
+const api = rawApi as ApiClient
 
 export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
