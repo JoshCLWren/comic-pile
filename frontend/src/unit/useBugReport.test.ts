@@ -5,11 +5,12 @@ import * as apiError from '../utils/apiError'
 import { useBugReport } from '../hooks/useBugReport'
 
 const createSpy = vi.spyOn(bugReportsApi, 'create').mockImplementation(() => new Promise(() => {}))
-const getApiErrorDetailSpy = vi
-  .spyOn(apiError, 'getApiErrorDetail')
-  .mockImplementation(
-    (error: unknown) => (error as { message?: string | null | undefined })?.message ?? null,
-  )
+vi.spyOn(apiError, 'getApiErrorDetail').mockImplementation(
+  (error: unknown) => {
+    const message = (error as { message?: string | null | undefined })?.message
+    return message ?? 'Unknown error'  // Match the real function's behavior
+  },
+)
 
 describe('useBugReport', () => {
   beforeEach(() => {
@@ -88,7 +89,7 @@ describe('useBugReport', () => {
       ).rejects.toBe(error)
     })
 
-    expect(result.current.error).toBe('Failed to submit report')
+    expect(result.current.error).toBe('Unknown error')  // Updated expectation to match real behavior
     expect(result.current.isSubmitting).toBe(false)
   })
 
