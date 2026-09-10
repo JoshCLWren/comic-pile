@@ -1,6 +1,7 @@
 import { act, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll'
+import { cast } from '../utils/cast'
 
 class MockIntersectionObserver {
   static instances: MockIntersectionObserver[] = []
@@ -45,7 +46,7 @@ function ScrollSentinel({
 }
 
 const intersectingEntry = (isIntersecting: boolean) =>
-  ({ isIntersecting } as unknown as IntersectionObserverEntry)
+  cast<IntersectionObserverEntry>({ isIntersecting })
 
 function getObserver(): MockIntersectionObserver {
   const observer = MockIntersectionObserver.instances.at(-1)
@@ -86,7 +87,7 @@ describe('useInfiniteScroll edge-triggering', () => {
     await flushObserver()
 
     const observer = getObserver()
-    act(() => observer.callback([intersectingEntry(true)], observer as unknown as IntersectionObserver))
+    act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver>(observer)))
 
     expect(onLoadMore).toHaveBeenCalledTimes(1)
   })
@@ -97,8 +98,8 @@ describe('useInfiniteScroll edge-triggering', () => {
     await flushObserver()
 
     const observer = getObserver()
-    act(() => observer.callback([intersectingEntry(true)], observer as unknown as IntersectionObserver))
-    act(() => observer.callback([intersectingEntry(true)], observer as unknown as IntersectionObserver))
+    act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver>(observer)))
+    act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver>(observer)))
 
     expect(onLoadMore).toHaveBeenCalledTimes(1)
   })
@@ -109,9 +110,9 @@ describe('useInfiniteScroll edge-triggering', () => {
     await flushObserver()
 
     const observer = getObserver()
-    act(() => observer.callback([intersectingEntry(true)], observer as unknown as IntersectionObserver))
-    act(() => observer.callback([intersectingEntry(false)], observer as unknown as IntersectionObserver))
-    act(() => observer.callback([intersectingEntry(true)], observer as unknown as IntersectionObserver))
+    act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver>(observer)))
+    act(() => observer.callback([intersectingEntry(false)], cast<IntersectionObserver>(observer)))
+    act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver>(observer)))
 
     expect(onLoadMore).toHaveBeenCalledTimes(2)
   })
@@ -124,7 +125,7 @@ describe('useInfiniteScroll edge-triggering', () => {
     await flushObserver()
 
     const first = getObserver()
-    act(() => first.callback([intersectingEntry(true)], first as unknown as IntersectionObserver))
+    act(() => first.callback([intersectingEntry(true)], cast<IntersectionObserver>(first)))
     expect(onLoadMore).toHaveBeenCalledTimes(1)
 
     rerender(<ScrollSentinel onLoadMore={onLoadMore} hasMore={true} isLoading={true} />)
@@ -132,7 +133,7 @@ describe('useInfiniteScroll edge-triggering', () => {
     await flushObserver()
 
     const second = getObserver()
-    act(() => second.callback([intersectingEntry(true)], second as unknown as IntersectionObserver))
+    act(() => second.callback([intersectingEntry(true)], cast<IntersectionObserver>(second)))
 
     expect(onLoadMore).toHaveBeenCalledTimes(1)
   })
