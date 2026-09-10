@@ -10,32 +10,25 @@ permissions:
 
 jobs:
   patch:
-    if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           ref: manual/2366-bprd-live-ui-acceptance
           fetch-depth: 1
-      - name: Make checkbox interaction match controlled React behavior
+      - name: Patch controlled checkbox interaction
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-
           path = Path('.github/workflows/bprd-live-ui-acceptance.yml')
           text = path.read_text()
-          old = '''              await unchecked.first().check()
-              const response = await responsePromise
-              if (!response.ok()) throw new Error(`adoption-plan failed: ${response.status()} ${await response.text()}`)
-'''
-          new = '''              await unchecked.first().click()
-              const response = await responsePromise
-              if (!response.ok()) throw new Error(`adoption-plan failed: ${response.status()} ${await response.text()}`)
+          needle = '              await unchecked.first().check()\n'
+          replacement = '''              await unchecked.first().click()
               await page.locator('input[type="checkbox"]:checked').nth(i).waitFor({ state: 'attached', timeout: 30000 })
 '''
-          assert text.count(old) == 1
-          path.write_text(text.replace(old, new, 1))
+          assert text.count(needle) == 1
+          path.write_text(text.replace(needle, replacement, 1))
           PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
