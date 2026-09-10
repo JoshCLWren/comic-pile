@@ -73,6 +73,7 @@ function buildValueList(sides: DiceSide): number[] {
 }
 
 function cloneConfig(config: DiceRenderConfig): DiceRenderConfig {
+  // SAFETY: the JSON round-trip of a plain config object preserves its shape, so parse yields a DiceRenderConfig.
   return JSON.parse(JSON.stringify(config)) as DiceRenderConfig
 }
 
@@ -436,6 +437,7 @@ export default function DicePlayground() {
                   key={die}
                   type="button"
                   data-testid={`die-button-${die}`}
+                  // SAFETY: DICE_LADDER contains exactly the valid DiceSide values, so each die id is a DiceSide.
                   onClick={() => handleSidesClick(die as DiceSide)}
                   className={`rounded-lg border px-3 py-2 text-sm font-black transition-colors ${
                     die === sides

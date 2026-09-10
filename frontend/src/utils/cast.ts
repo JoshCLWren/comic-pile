@@ -4,5 +4,6 @@
  * `as unknown as T` chains flagged by `no-chained-type-assertions`.
  */
 export function cast<T>(value: unknown): T {
+  // SAFETY: cast() is the dedicated boundary helper whose entire contract is deliberately widening unknown to T.
   return value as T
 }

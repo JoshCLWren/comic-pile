@@ -29,6 +29,7 @@ async function fetchAllIssues(threadId: number): Promise<PositionedIssue[]> {
       page_size: 100,
       ...(nextPageToken ? { page_token: nextPageToken } : {}),
     })
+    // SAFETY: the issues endpoint returns position-ordered issues; the integer-position check below enforces the contract.
     const pageIssues = data.issues as PositionedIssue[]
     if (pageIssues.some((issue) => !Number.isInteger(issue.position) || issue.position < 1)) {
       throw new Error('Comic issue order is unavailable for this series.')
@@ -260,7 +261,9 @@ export default function CrossoversPage() {
       setMutationError('Choose a series and an inclusive first and last issue.')
       return
     }
+    // SAFETY: the range selector only offers position-ordered issues, so each selected issue carries a numeric position.
     const startPosition = (rangeSelection.startIssue as PositionedIssue).position
+    // SAFETY: the end issue is subject to the same position-ordered invariant as the start issue.
     const endPosition = (rangeSelection.endIssue as PositionedIssue).position
     if (!Number.isInteger(startPosition) || !Number.isInteger(endPosition) || startPosition < 1 || endPosition < startPosition) {
       setMutationError('Choose a valid issue range in reading order.')

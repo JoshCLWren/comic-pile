@@ -226,6 +226,7 @@ export default function SessionPage() {
         ) : (
           <div className="space-y-3 min-w-0">
             {details.events.map((event) => (
+              // SAFETY: the session details endpoint returns enriched events with the display-only fields beyond SessionEvent.
               <EventRecord key={event.id} event={event as DisplayEvent} />
             ))}
           </div>

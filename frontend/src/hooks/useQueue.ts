@@ -37,6 +37,7 @@ export function queueThreadsQueryOptions(searchTerm?: string, sort: QueueSortBy 
   const apiSort = toApiSort(sort)
 
   return {
+    // SAFETY: queueThreadsQueryOptions only receives canonical QueueSort values from the UI selector.
     queryKey: queryKeys.queue.list({ search: normalizedSearch, sort: sort as QueueSort, pageSize: QUEUE_PAGE_SIZE }),
     queryFn: ({ pageParam }: { pageParam: string | null }) =>
       threadsApi.list(
@@ -47,6 +48,7 @@ export function queueThreadsQueryOptions(searchTerm?: string, sort: QueueSortBy 
         },
         pageParam ?? undefined,
       ),
+    // SAFETY: null is the intentional first pageParam; useInfiniteQuery types it as string after the first page.
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: ThreadListResponse) => lastPage.next_page_token ?? undefined,
     /**

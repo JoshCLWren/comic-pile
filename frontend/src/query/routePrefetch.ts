@@ -104,6 +104,7 @@ const prefetchedData = new Set<string>()
 type IdleHandle = { cancel: () => void }
 
 function scheduleIdle(task: () => void, timeoutMs: number): IdleHandle {
+  // SAFETY: requestIdleCallback is feature-detected; the failed-probe fallback path returns a timer-based handle.
   const requestIdleCallback = (globalThis as { requestIdleCallback?: typeof globalThis.requestIdleCallback }).requestIdleCallback
   if (isFunction(requestIdleCallback)) {
     const id = requestIdleCallback(task, { timeout: timeoutMs })

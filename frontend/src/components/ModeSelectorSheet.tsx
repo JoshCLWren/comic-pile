@@ -77,7 +77,9 @@ export default function ModeSelectorSheet({
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
+  // SAFETY: currentMode.bandwidth is either a ReadingBandwidth value or undefined; the fallback normalizes it.
   const currentBandwidth = (currentMode?.bandwidth as ReadingBandwidth | null) ?? 'balanced'
+  // SAFETY: currentMode.intent is either a ReadingIntent value or undefined; the fallback normalizes it.
   const currentIntent = (currentMode?.intent as ReadingIntent | null) ?? 'balanced'
 
   const handleSubmit = useCallback(

@@ -191,6 +191,7 @@ export default function DependencyFlowchart({
   const handleSvgMouseDown = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
       // Only pan if clicking on the SVG background (not a node)
+      // SAFETY: SVG event targets are always DOM Elements in the browser.
       if ((e.target as Element).closest('.flowchart-node')) return
       setIsPanning(true)
       setPanStart({ x: e.clientX - transform.x, y: e.clientY - transform.y })
