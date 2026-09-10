@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRollViewport } from '../pages/RollPage/useRollViewport'
+import { cast } from '../utils/cast'
 
 function Harness() {
   const [isRatingView, setIsRatingView] = useState(false)
@@ -100,7 +101,7 @@ describe('useRollViewport (issue #2286)', () => {
     // SAFETY: Stubbing matchMedia for the reduced-motion test; the minimal MediaQueryList shape with matches is sufficient for the hook.
     vi.stubGlobal(
       'matchMedia',
-      vi.fn(() => ({ matches: true }) as unknown as MediaQueryList),
+      vi.fn(() => cast<MediaQueryList>({ matches: true })),
     )
     const { getByRole } = render(<Harness />)
     fireEvent.click(getByRole('button', { name: 'toggle rating' }))

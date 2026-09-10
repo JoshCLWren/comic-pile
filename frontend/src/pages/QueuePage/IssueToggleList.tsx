@@ -190,6 +190,7 @@ export function IssueToggleList({ threadId, onOpenDependencies, onIssueChanged }
   }, [fetchAllIssues, runIssueMutation, syncOptimisticIssues, onIssueChanged])
 
   const enqueueIssueMutation = useCallback((mutation: QueuedIssueMutation) => {
+    // SAFETY: spreading the queued mutation and adding the sequential id satisfies the IssueMutation contract.
     const queuedMutation = {
       ...mutation,
       id: nextMutationIdRef.current++,

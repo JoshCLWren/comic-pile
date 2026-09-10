@@ -9,6 +9,7 @@ describe('DependencyFlowchart', () => {
     const empty = render(<DependencyFlowchart threads={[]} dependencies={[]} blockedIds={new Set()} />)
     expect(empty.getByTestId('flowchart-empty')).toBeInTheDocument()
     empty.unmount()
+    // SAFETY: test fixtures use partial thread and dependency shapes
     const view = render(<DependencyFlowchart threads={[makeThread(1), makeThread(2)] as never} dependencies={[{ id: 'd', source_id: 1, target_id: 2, created_at: 'now', isBlocking: true } as never]} blockedIds={new Set([2])} issueNodes={[]} />)
     const svg = view.getByTestId('flowchart-svg')
     fireEvent.wheel(svg, { deltaY: -100, clientX: 10, clientY: 10 })
@@ -30,6 +31,7 @@ describe('DependencyFlowchart', () => {
 
   it('shows pagination for large graphs', () => {
     const threads = Array.from({ length: 101 }, (_, index) => makeThread(index + 1))
+    // SAFETY: test fixtures use partial thread shapes
     render(<DependencyFlowchart threads={threads as never} dependencies={[]} blockedIds={new Set()} />)
     expect(screen.getByTestId('flowchart-warning')).toBeInTheDocument()
     expect(screen.getByText('1/3')).toBeInTheDocument()
@@ -49,6 +51,7 @@ describe('DependencyFlowchart', () => {
       { id: -2, title: 'Target #2', x: 0, y: 0, isBlocked: true, isIssueNode: true, parentThreadId: 2 },
       { id: -3, title: 'Hidden', x: 0, y: 0, isBlocked: false, isIssueNode: true, parentThreadId: 99 },
     ]
+    // SAFETY: test fixtures use partial thread, dependency, and issue-node shapes
     const view = render(<DependencyFlowchart
       threads={[makeThread(1), makeThread(2)] as never}
       dependencies={[
@@ -70,6 +73,7 @@ describe('DependencyFlowchart', () => {
   })
 
   it('ignores issue-level edges without visible parent metadata and handles missing drag targets', () => {
+    // SAFETY: test fixtures use partial thread, dependency, and issue-node shapes
     const view = render(<DependencyFlowchart
       threads={[makeThread(1)] as never}
       dependencies={[{ id: 'orphan', source_id: -10, target_id: -11, is_issue_level: true, created_at: 'now' } as never]}
@@ -84,6 +88,7 @@ describe('DependencyFlowchart', () => {
   })
 
   it('covers zoom limits, issue-node geometry, and drag cancellation paths', () => {
+    // SAFETY: test fixtures use partial thread, dependency, and issue-node shapes
     const view = render(<DependencyFlowchart
       threads={[makeThread(1), makeThread(2)] as never}
       dependencies={[{
@@ -109,6 +114,7 @@ describe('DependencyFlowchart', () => {
   })
 
   it('handles missing SVG geometry and stale dragged nodes safely', () => {
+    // SAFETY: test fixtures use partial thread shapes
     const view = render(<DependencyFlowchart
       threads={[makeThread(1), makeThread(2)] as never}
       dependencies={[]}
@@ -120,11 +126,13 @@ describe('DependencyFlowchart', () => {
     fireEvent.mouseDown(node, { clientX: 1, clientY: 1 })
     fireEvent.mouseMove(svg, { clientX: 4, clientY: 5 })
     fireEvent.mouseEnter(node, { clientX: 4, clientY: 5 })
+    // SAFETY: test fixtures use partial thread shapes
     view.rerender(<DependencyFlowchart threads={[makeThread(2)] as never} dependencies={[]} blockedIds={new Set()} />)
     fireEvent.mouseMove(view.getByTestId('flowchart-svg'), { clientX: 8, clientY: 9 })
   })
 
   it('renders a non-blocking thread edge without a blocking marker', () => {
+    // SAFETY: test fixtures use partial thread and dependency shapes
     const view = render(<DependencyFlowchart
       threads={[makeThread(1), makeThread(2)] as never}
       dependencies={[{ id: 'related', source_id: 1, target_id: 2, created_at: 'now', isBlocking: false } as never]}

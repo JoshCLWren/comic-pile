@@ -238,6 +238,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
         <h3>Issues</h3>
         <select
           value={filter}
+          // SAFETY: the select options are exactly the FilterType union values, so the event value is one of them.
           onChange={(event) => handleFilterChange(event.target.value as 'all' | 'unread' | 'read')}
         >
           <option value="all">All</option>

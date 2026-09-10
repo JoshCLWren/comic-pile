@@ -140,6 +140,7 @@ export default function PositionMenu({
     if (!isOpen) return
 
     const handleClickOutside = (e: MouseEvent) => {
+      // SAFETY: click event targets are always DOM nodes, and Node.contains() requires a Node argument.
       const target = e.target as Node
       if (
         !menuRef.current?.contains(target) &&

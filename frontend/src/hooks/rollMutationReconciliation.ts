@@ -22,6 +22,7 @@ function normalizePendingThreadId(
 export function isAmbiguousNetworkFailure(error: unknown): boolean {
   if (!error || !isNonNullObject(error)) return false
 
+  // SAFETY: isNonNullObject(error) above guarantees a readable object; the cast only widens to optional fields.
   const candidate = error as { code?: string; message?: string; response?: unknown }
   if (candidate.response) return false
 
@@ -34,6 +35,7 @@ export function isAmbiguousNetworkFailure(error: unknown): boolean {
 export function isAuthenticationMutationFailure(error: unknown): boolean {
   if (!error || !isNonNullObject(error)) return false
 
+  // SAFETY: isNonNullObject(error) above guarantees a readable object; .response is an optional field.
   const response = (error as {
     response?: { status?: number; data?: { detail?: unknown } }
   }).response
