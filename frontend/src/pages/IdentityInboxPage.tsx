@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
-import { isObject, isNonEmptyString } from '../utils/runtimeChecks'
+import { isObject, isNonEmptyString, isString } from '../utils/runtimeChecks'
 
 interface InboxCandidate {
   external_identity_id: number
@@ -89,10 +89,12 @@ function CandidateCard({
   const volumeObj = meta.volume
   const volumeName =
     isObject(volumeObj)
-      // SAFETY: isObject(volumeObj) above guarantees a record with an optional name field.
-      ? toText((volumeObj as Record<string, unknown>).name)
+      ? toText(volumeObj.name)
       : toText(meta.volume_name)
   const issueName = toText(meta.name) ?? toText(meta.issue_name)
+  const evidenceItems = Array.isArray(candidate.evidence_json.evidence)
+    ? candidate.evidence_json.evidence.filter(isString)
+    : []
 
   return (
     <div className="border border-[var(--theme-border)] rounded-lg p-3 bg-[var(--theme-bg-panel)] hover:border-[var(--theme-text-dim)] transition-colors">
@@ -116,8 +118,7 @@ function CandidateCard({
           {candidate.evidence_json &&
             Array.isArray(candidate.evidence_json.evidence) && (
               <div className="mt-2 flex flex-wrap gap-1">
-                {/* SAFETY: Array.isArray above guarantees the evidence list is an array of strings. */}
-                {(candidate.evidence_json.evidence as string[]).map((e, i) => (
+                {evidenceItems.map((e, i) => (
                   <span
                     key={i}
                     className="inline-block text-xs bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] px-2 py-0.5 rounded border border-[var(--theme-border)]"

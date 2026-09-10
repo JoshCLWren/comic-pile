@@ -263,6 +263,7 @@ export default function CrossoversPage() {
     }
     // SAFETY: the range selector only offers position-ordered issues, so each selected issue carries a numeric position.
     const startPosition = (rangeSelection.startIssue as PositionedIssue).position
+    // SAFETY: the end issue is subject to the same position-ordered invariant as the start issue.
     const endPosition = (rangeSelection.endIssue as PositionedIssue).position
     if (!Number.isInteger(startPosition) || !Number.isInteger(endPosition) || startPosition < 1 || endPosition < startPosition) {
       setMutationError('Choose a valid issue range in reading order.')

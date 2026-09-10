@@ -404,8 +404,7 @@ export default function ContinuityPlannerPage() {
         const targetNode = current.find((n) => n.id === targetNodeId)!
         const updated = exists
           ? gate.filter((target) => target.node_id !== targetNodeId)
-          // SAFETY: the convergence gate only stores ContinuityPlanNodeType node types, and targetNode is from the same collection.
-          : [...gate, { node_type: targetNode.node_type as ContinuityPlanNodeType, node_id: targetNodeId }]
+          : [...gate, { node_type: targetNode.node_type, node_id: targetNodeId }]
         return { ...node, convergence_gate: updated }
       }),
     )
