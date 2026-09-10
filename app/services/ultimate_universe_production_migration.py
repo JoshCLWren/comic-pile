@@ -256,18 +256,16 @@ async def _factual_snapshot(
             "last_activity_at": _json_value(thread.last_activity_at),
         }
         for thread in sorted(
-            list(
-                (
-                    await db.execute(
-                        select(Thread).where(
-                            Thread.user_id == spec.user_id,
-                            Thread.id.in_(thread_ids),
-                        )
+            (
+                await db.execute(
+                    select(Thread).where(
+                        Thread.user_id == spec.user_id,
+                        Thread.id.in_(thread_ids),
                     )
                 )
-                .scalars()
-                .all()
-            ),
+            )
+            .scalars()
+            .all(),
             key=lambda row: row.id,
         )
     ]
@@ -601,7 +599,7 @@ async def build_ultimate_universe_dry_run(
     ]
     affected_thread_ids = {thread.id for thread in affected_threads}
     next_issue_ids = {
-        cast(int, thread.next_unread_issue_id)
+        thread.next_unread_issue_id
         for thread in affected_threads
         if thread.next_unread_issue_id is not None
     }
