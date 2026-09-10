@@ -1,6 +1,6 @@
-import { afterEach, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
 import { threadsApi } from '../services/api'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
@@ -8,7 +8,6 @@ import { issuesApi } from '../services/api-issues'
 
 const api = vi.mocked(dependencyGroupsApi)
 const threadApi = vi.mocked(threadsApi)
-const issueApi = vi.mocked(issuesApi)
 
 function renderPage() {
   return render(
