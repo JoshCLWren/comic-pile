@@ -28,7 +28,7 @@ it('publishes the authoritative update through the targeted thread-cache contrac
     id: 7,
     title: 'Updated title',
   } as Thread
-  spyThreadsApiUpdate.mockResolvedValue(updatedThread as never)
+  spyThreadsApiUpdate.mockResolvedValue(updatedThread)
 
   const { client, wrapper } = createTestWrapper()
   const { result } = renderHook(() => useUpdateThread(), { wrapper })

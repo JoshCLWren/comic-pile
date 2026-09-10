@@ -39,7 +39,7 @@ describe('useBugReport', () => {
 
   it('should set issueUrl on success', async () => {
     const mockResponse = { issue_url: 'https://github.com/test/issues/1' }
-    createSpy.mockResolvedValue(mockResponse as never)
+    createSpy.mockResolvedValue(mockResponse)
 
     const { result } = renderHook(() => useBugReport())
 
@@ -95,7 +95,7 @@ describe('useBugReport', () => {
 
   it('should include diagnostics and report type in payload when provided', async () => {
     const mockResponse = { issue_url: 'https://github.com/test/issues/1' }
-    createSpy.mockResolvedValue(mockResponse as never)
+    createSpy.mockResolvedValue(mockResponse)
 
     const { result } = renderHook(() => useBugReport())
 
@@ -124,7 +124,7 @@ describe('useBugReport', () => {
 
   it('should not include diagnostics key when null', async () => {
     const mockResponse = { issue_url: 'https://github.com/test/issues/1' }
-    createSpy.mockResolvedValue(mockResponse as never)
+    createSpy.mockResolvedValue(mockResponse)
 
     const { result } = renderHook(() => useBugReport())
 
