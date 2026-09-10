@@ -6,6 +6,7 @@ import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import { ToastContext, type ToastContextType } from '../contexts/ToastContext'
 import type { Dependency, IssueListResponse, Thread, ThreadListResponse } from '../types'
+import { cast } from '../utils/cast'
 import DependencyBuilder from '../components/DependencyBuilder'
 
 const api = {
@@ -21,7 +22,7 @@ const toast = {
 }
 
 function ToastStubProvider({ children }: PropsWithChildren) {
-  return <ToastContext.Provider value={toast as unknown as ToastContextType}>{children}</ToastContext.Provider>
+  return <ToastContext.Provider value={cast<ToastContextType>(toast)}>{children}</ToastContext.Provider>
 }
 
 function renderBuilder(ui: ReactElement) {
