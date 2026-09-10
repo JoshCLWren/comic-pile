@@ -19,10 +19,16 @@ export function useQueueFilters(
 ) {
 const activeThreads = useMemo(
   () => {
-    const filtered = threads?.filter((thread) => thread.status === 'active') ?? [];
-    return filtered.sort((a, b) => a.queue_position - b.queue_position);
+    const filtered = threads?.filter((thread) => thread.status === 'active') ?? []
+    // Position keeps the user-controlled order client-side. Alphabetical and
+    // created preserve the server's keyset-cursor order so appended pages
+    // never reshuffle already-loaded rows.
+    if (sortBy === 'position') {
+      return [...filtered].sort((a, b) => a.queue_position - b.queue_position)
+    }
+    return filtered
   },
-  [threads],
+  [threads, sortBy],
 )
 
   const completedThreads = useMemo(
@@ -31,13 +37,13 @@ const activeThreads = useMemo(
   )
 
   const sortedThreads = useMemo(() => {
-    if (sortBy === 'alphabetical') {
-      return [...activeThreads].sort((a, b) => a.title.localeCompare(b.title))
-    }
-    if (sortBy === 'created') {
-      return [...activeThreads].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      )
+    // Trust server cursor order for alphabetical and created sorts. The
+    // backend returns deterministic keyset-paginated pages; re-sorting with
+    // JS localeCompare or date parsing produces a different comparator than
+    // the SQL ORDER BY, causing new pages to interleave into earlier pages
+    // and breaking infinite-scroll stability (issue #2452).
+    if (sortBy === 'alphabetical' || sortBy === 'created') {
+      return activeThreads
     }
     // position: feasible-only ordering — unblocked threads first, then by user-controlled position
     return [...activeThreads].sort((a, b) => {
