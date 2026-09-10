@@ -26,15 +26,15 @@ export function useBugReport() {
         description: string
         diagnostics?: DiagnosticData
       }) => Promise<{ issue_url: string }>
-      const reportPayload: {
+      const reportPayload = {
+        report_type: reportType,
+        title,
+        description,
+      } satisfies {
         report_type: ReportType
         title: string
         description: string
         diagnostics?: DiagnosticData
-      } = {
-        report_type: reportType,
-        title,
-        description,
       }
       if (diagnosticData) {
         reportPayload.diagnostics = diagnosticData

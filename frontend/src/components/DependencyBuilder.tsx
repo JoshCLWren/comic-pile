@@ -16,10 +16,10 @@ async function fetchAllUnreadIssues(threadId: number): Promise<Issue[]> {
   let nextPageToken: string | null = null
 
   while (true) {
-    const params: { status: 'unread'; page_size: number; page_token?: string } = {
+    const params = {
       status: 'unread',
       page_size: 100,
-    }
+    } satisfies { status: 'unread'; page_size: number; page_token?: string }
     if (nextPageToken) {
       params.page_token = nextPageToken
     }

@@ -132,7 +132,7 @@ export default function ThreadDetailView() {
     setIssuesLoading(true)
     setIssuesError(null)
     try {
-      const params: { page_size: number; page_token?: string } = { page_size: 100 }
+      const params = { page_size: 100 } satisfies { page_size: number; page_token?: string }
       if (pageToken) {
         params.page_token = pageToken
       }

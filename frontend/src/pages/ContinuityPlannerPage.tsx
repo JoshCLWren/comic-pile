@@ -107,7 +107,7 @@ async function fetchAllIssues(threadId: number): Promise<Issue[]> {
   const seen = new Set<string>()
   let token: string | null = null
   do {
-    const params: { page_size: number; page_token?: string } = { page_size: 100 }
+    const params = { page_size: 100 } satisfies { page_size: number; page_token?: string }
     if (token) {
       params.page_token = token
     }

@@ -25,7 +25,7 @@ async function fetchAllIssues(threadId: number): Promise<PositionedIssue[]> {
   let nextPageToken: string | null = null
 
   while (true) {
-    const params: { page_size: number; page_token?: string } = { page_size: 100 }
+    const params = { page_size: 100 } satisfies { page_size: number; page_token?: string }
     if (nextPageToken) {
       params.page_token = nextPageToken
     }

@@ -214,24 +214,24 @@ export async function createThread(
   const token = await getAuthToken(page);
   const csrfToken = await getCsrfToken(page, token);
 
-  const dataWithoutTotal: {
+  const dataWithoutTotal = {
+    title: threadData.title,
+    format: threadData.format,
+    issues_remaining: threadData.issues_remaining,
+  } satisfies {
     title: string;
     format: string;
     issues_remaining: number;
     notes?: string;
-  } = {
-    title: threadData.title,
-    format: threadData.format,
-    issues_remaining: threadData.issues_remaining,
   };
   if (threadData.notes !== undefined) {
     dataWithoutTotal.notes = threadData.notes;
   }
 
-  const jsonHeaders: Record<string, string> = {
+  const jsonHeaders = {
     'Content-Type': 'application/json',
     'X-CSRF-Token': csrfToken,
-  };
+  } satisfies Record<string, string>;
   if (token) {
     jsonHeaders['Authorization'] = `Bearer ${token}`;
   }
