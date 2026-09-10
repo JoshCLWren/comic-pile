@@ -1404,12 +1404,29 @@ async def rollback_ultimate_universe_migration(
     if source_restored_ids:
         for row in snapshot.get("reused_standalone_rules", []):
             rule = await db.get(ContinuityRule, int(cast(int, row["id"])))
-            if rule is None or _rule_snapshot(rule) != row:
+            if rule is None:
                 raise MigrationInvariantError(
-                    f"reusable standalone rule {row['id']} was clobbered by the "
-                    "legacy dependency sync trigger during rollback; "
-                    "refusing automatic rollback"
+                    f"reusable standalone rule {row['id']} no longer exists"
                 )
+            if _rule_snapshot(rule) != row:
+                rule.id = int(cast(int, row["id"]))
+                rule.legacy_dependency_id = None
+                rule.source_type = str(row["source_type"])
+                rule.source_id = int(cast(int, row["source_id"]))
+                rule.target_type = str(row["target_type"])
+                rule.target_id = int(cast(int, row["target_id"]))
+                rule.satisfaction_type = str(row["satisfaction_type"])
+                rule.checkpoint_issue_id = row.get("checkpoint_issue_id")
+                rule.convergence_targets = row.get("convergence_targets")
+                rule.note = row.get("note")
+                rule.created_at = _parse_datetime(row["created_at"])
+                rule.updated_at = _parse_datetime(row["updated_at"])
+                if _rule_snapshot(rule) != row:
+                    raise MigrationInvariantError(
+                        f"reusable standalone rule {row['id']} cannot be restored "
+                        "to its reviewed snapshot"
+                    )
+        await db.flush()
         source_linked_mirrors = list(
             (
                 await db.execute(
