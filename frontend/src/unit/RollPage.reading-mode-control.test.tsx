@@ -28,6 +28,7 @@ function toSessionMode(state: SessionModeState | null | undefined): SessionMode 
     active_bandwidth: state.bandwidth ?? null,
     predicted_bandwidth: null,
     bandwidth_confidence: state.confidence ?? null,
+    // SAFETY: SessionModeState.source in tests is a string literal constrained to manual/inferred; the cast narrows it to the API union without widening.
     bandwidth_source: (state.source as 'manual' | 'inferred' | null) ?? null,
     bandwidth_version: state.version != null ? String(state.version) : null,
     active_intent: state.intent ?? null,
@@ -99,6 +100,7 @@ describe('reading mode label helpers', () => {
 })
 
 describe('ReadingModeControl', () => {
+  // SAFETY: The cast narrows the plain-object fixture tuples to the [SessionModeState, string] shape vitest's each case typing requires; every entry is a valid literal mode pair.
   it.each([
     [{ bandwidth: 'light', intent: 'momentum' }, 'Light · Momentum'],
     [{ bandwidth: 'deep', intent: 'explore' }, 'Deep · Explore'],

@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cast } from '../utils/cast'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
@@ -54,8 +55,7 @@ vi.mock('../contexts/useToast', () => ({
   useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
 }))
 
-// SAFETY: cast mocked hook to a callable fn type so tests can stub return values
-const mockedUseQueueThreads = vi.mocked(useQueueThreads) as unknown as ReturnType<typeof vi.fn>
+const mockedUseQueueThreads = cast<ReturnType<typeof vi.fn>>(vi.mocked(useQueueThreads))
 
 class NoopIntersectionObserver {
   observe(): void {

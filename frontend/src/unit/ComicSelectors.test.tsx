@@ -8,12 +8,14 @@ import {
 } from '../components/continuity/ComicSelectors'
 import type { Issue, Thread } from '../types'
 
+// SAFETY: test fixture supplies only the fields the selector reads
 const threads = [
   { id: 1, title: 'Alpha Flight', format: 'ongoing', issues_remaining: 5, total_issues: 10, queue_position: 1, status: 'active', is_blocked: false, blocking_reasons: [], created_at: '2026-01-01T00:00:00Z' },
   { id: 2, title: 'New Mutants', format: 'ongoing', issues_remaining: 3, total_issues: 12, queue_position: 2, status: 'active', is_blocked: false, blocking_reasons: [], created_at: '2026-01-01T00:00:00Z' },
 ] as Thread[]
 const thread = threads[0]
 
+// SAFETY: test fixture supplies only the fields the selector reads
 const issues = [
   { id: 11, issue_number: 'Annual 1' },
   { id: 12, issue_number: '1/2' },
@@ -207,6 +209,7 @@ describe('continuity comic selectors', () => {
   })
 
   it('distinguishes ambiguous series with issue counts in selector options', () => {
+    // SAFETY: test fixture supplies only the fields the selector reads
     const ambiguous = [
       { id: 1, title: 'Starman', format: 'ongoing', issues_remaining: 61, total_issues: 80, queue_position: 1, status: 'active', is_blocked: false, blocking_reasons: [], created_at: '2026-01-01T00:00:00Z' },
       { id: 2, title: 'Starman (Vol. 2) (1994 - 2001)', format: 'ongoing', issues_remaining: 3, total_issues: 12, queue_position: 2, status: 'active', is_blocked: false, blocking_reasons: [], created_at: '2026-01-01T00:00:00Z' },
@@ -226,6 +229,7 @@ describe('continuity comic selectors', () => {
   it('keeps the full selected series title readable instead of a clipped single-line value', () => {
     const longTitle =
       'B.P.R.D.: PLAGUE OF FROGS (COMPLETE OMNIBUS COLLECTION, NEW PRINTING 2025)'
+    // SAFETY: test fixture supplies only the fields the selector reads
     const longThread = {
       id: 3,
       title: longTitle,
@@ -268,6 +272,7 @@ describe('continuity comic selectors', () => {
   })
 
   it('shows the selected title while the suggestion list stays open after selection', () => {
+    // SAFETY: test fixture supplies only the fields the selector reads
     const longThread = {
       id: 4,
       title: 'Starman (Vol. 2) (1994 - 2001)',

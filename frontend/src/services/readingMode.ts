@@ -40,6 +40,7 @@ export async function setReadingModeFromQuiz(
 ): Promise<ReadingModeState> {
   return api.post<ReadingModeState>('/v1/reading-mode', {
     answers,
+    // SAFETY: the quiz flow always records the source as 'quiz' in the payload contract.
     source: 'quiz' as ReadingModeSource,
   })
 }
@@ -51,6 +52,7 @@ export async function setReadingModeManual(
   return api.post<ReadingModeState>('/v1/reading-mode', {
     bandwidth,
     intent,
+    // SAFETY: the manual flow always records the source as 'manual' in the payload contract.
     source: 'manual' as ReadingModeSource,
   })
 }

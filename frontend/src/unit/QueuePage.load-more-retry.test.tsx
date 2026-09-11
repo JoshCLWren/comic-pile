@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { BrowserRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { cast } from '../utils/cast'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import {
@@ -62,11 +63,10 @@ vi.mock('../contexts/useToast', () => ({
   useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
 }))
 
-// SAFETY: cast mocked hooks to callable fn types so tests can stub return values
-const mockedUseQueueThreads = vi.mocked(useQueueThreads) as unknown as ReturnType<typeof vi.fn>
-const mockedUseSession = vi.mocked(useSession) as unknown as ReturnType<typeof vi.fn>
-const mockedUseSnooze = vi.mocked(useSnooze) as unknown as ReturnType<typeof vi.fn>
-const mockedUseUnsnooze = vi.mocked(useUnsnooze) as unknown as ReturnType<typeof vi.fn>
+const mockedUseQueueThreads = cast<ReturnType<typeof vi.fn>>(vi.mocked(useQueueThreads))
+const mockedUseSession = cast<ReturnType<typeof vi.fn>>(vi.mocked(useSession))
+const mockedUseSnooze = cast<ReturnType<typeof vi.fn>>(vi.mocked(useSnooze))
+const mockedUseUnsnooze = cast<ReturnType<typeof vi.fn>>(vi.mocked(useUnsnooze))
 
 class NoopIntersectionObserver {
   observe(): void {

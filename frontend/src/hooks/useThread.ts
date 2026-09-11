@@ -10,6 +10,7 @@ export function useThread(id?: number | null) {
     queryKey: id ? queryKeys.thread.detail(id) : [],
     queryFn: () => threadsApi.get(id!),
     enabled: !!id,
+    // SAFETY: null is the intentional initialData while the thread query is loading or disabled.
     initialData: null as Thread | null,
   });
 

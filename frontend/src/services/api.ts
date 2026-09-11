@@ -60,7 +60,8 @@ const AUTH_ENDPOINT_PATHS = new Set(['/v1/auth/login', '/v1/auth/register', '/v1
 
 // Axios returns AxiosResponse by default, but the response interceptor below unwraps to response.data.
 // Cast once at the boundary so callers get strongly typed payload methods.
-const api = rawApi as unknown as ApiClient
+// SAFETY: rawApi is an AxiosInstance; response interceptor unwraps .data at the boundary so the ApiClient contract holds.
+const api = rawApi as ApiClient
 
 export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
@@ -157,6 +158,7 @@ export async function refreshSession(options?: { skipAuthRedirect?: boolean }): 
       setAccessToken(response.access_token)
       return response.access_token
     } catch (error) {
+      // SAFETY: catch clause is unknown; axios interceptor always receives AxiosError.
       if (isAuthenticationFailure(error as AxiosError)) {
         markSessionRefreshRejected()
       }
@@ -204,6 +206,7 @@ async function ensureCsrfToken(): Promise<string | null> {
   }
 
   if (!csrfTokenPromise) {
+    // SAFETY: only the skipAuthRedirect flag is needed from ApiRequestConfig; other fields have sensible defaults.
     csrfTokenPromise = api
       .get<{ csrf_token: string }>('/v1/auth/csrf', { skipAuthRedirect: true } as ApiRequestConfig)
       .then((response) => response.csrf_token ?? getCookieValue(CSRF_COOKIE_NAME))
@@ -245,6 +248,7 @@ function isAuthenticationFailure(error: AxiosError): boolean {
     return false
   }
 
+  // SAFETY: axios 403 responses always carry a JSON body; narrowing to check for auth-failure detail.
   const responseData = error.response.data as { detail?: unknown } | undefined
   return responseData?.detail === 'Not authenticated'
 }
@@ -255,13 +259,15 @@ rawApi.interceptors.request.use(
     config.headers = config.headers ?? {}
 
     if (token) {
-      ;(config.headers as Record<string, string>).Authorization = `Bearer ${token}`
+      // SAFETY: InternalAxiosRequestHeaders is indexable by string key; setting Authorization is safe.
+      (config.headers as Record<string, string>).Authorization = `Bearer ${token}`
     }
 
     if (shouldAttachCsrfToken(config)) {
       const csrfToken = await ensureCsrfToken()
       if (csrfToken) {
-        ;(config.headers as Record<string, string>)[CSRF_HEADER_NAME] = csrfToken
+        // SAFETY: InternalAxiosRequestHeaders is indexable by string key; CSRF header assignment is safe.
+        (config.headers as Record<string, string>)[CSRF_HEADER_NAME] = csrfToken
       }
     }
 
@@ -276,7 +282,9 @@ function processQueue(error: unknown | null, token: string | null = null): void 
       prom.reject(error)
     } else {
       prom.config.headers = prom.config.headers ?? {}
-      ;(prom.config.headers as Record<string, string>).Authorization = `Bearer ${token}`
+      // SAFETY: headers is initialized above and is indexable by string; Authorization assignment is safe.
+      const authHeaders = prom.config.headers as Record<string, string>
+      authHeaders.Authorization = `Bearer ${token}`
       prom.resolve(api.request(prom.config))
     }
   })
@@ -286,6 +294,7 @@ function processQueue(error: unknown | null, token: string | null = null): void 
 rawApi.interceptors.response.use(
   (response) => response.data,
   async (error: AxiosError) => {
+    // SAFETY: error.config may be absent for network errors; default to empty object and widen to ApiRequestConfig.
     const originalRequest = (error.config ?? {}) as ApiRequestConfig
 
     if (!error.response) {
@@ -323,6 +332,7 @@ rawApi.interceptors.response.use(
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject, config: originalRequest })
         }).then((token) => token).catch((err) => {
+          // SAFETY: rejected value from refresh queue is either an AxiosError or a plain error from processQueue.
           if ((err as AxiosError)?.response?.status === 401) {
             return Promise.reject(error)
           }
@@ -342,11 +352,14 @@ rawApi.interceptors.response.use(
         isRefreshing = false
 
         originalRequest.headers = originalRequest.headers ?? {}
-        ;(originalRequest.headers as Record<string, string>).Authorization = `Bearer ${access_token}`
+        // SAFETY: headers is initialized above and is indexable by string; Authorization assignment is safe.
+        const authHeaders = originalRequest.headers as Record<string, string>
+        authHeaders.Authorization = `Bearer ${access_token}`
         return api.request(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)
         isRefreshing = false
+        // SAFETY: catch clause is unknown; refreshSession rethrows AxiosError on auth failure.
         if (
           !originalRequest.skipAuthRedirect &&
           isAuthenticationFailure(refreshError as AxiosError)
@@ -369,9 +382,9 @@ export default api
 
 export const threadsApi = {
   list: async (params?: ThreadQueryParams, pageToken?: string | null): Promise<ThreadListResponse> => {
-    const queryParams = {
-      ...(params ?? {}),
-      ...(pageToken ? { page_token: pageToken } : {}),
+    const queryParams = { ...(params ?? {}) } satisfies Record<string, unknown>;
+    if (pageToken) {
+      queryParams.page_token = pageToken;
     }
     const response = await api.get<ThreadListResponse>('/v1/threads/', {
       params: Object.keys(queryParams).length ? queryParams : undefined,

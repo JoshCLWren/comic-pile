@@ -23,6 +23,7 @@ export function useTasteDiscoveries() {
   const { data, isPending } = useQuery({
     queryKey: queryKeys.taste.discoveries(),
     queryFn: () => tasteApi.getDiscoveries(),
+    // SAFETY: the discoveries API always returns an array for the discoveries field.
     initialData: { discoveries: [] as TasteDiscovery[], generated_at: '' },
   })
 

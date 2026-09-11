@@ -12,6 +12,7 @@ import {
 } from '../hooks/useRoll'
 import { rollApi } from '../services/api'
 import type { OverrideRollPayload } from '../types'
+import { cast } from '../utils/cast'
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -31,31 +32,38 @@ vi.mock('../services/api', () => ({
 
 const mockedRollApi = vi.mocked(rollApi)
 
-async function setupMutation(
-  hook: () => { mutate: () => Promise<unknown> },
+async function setupMutation<TReturn>(
+  hook: () => { mutate: () => Promise<TReturn> },
 ): Promise<void>
-async function setupMutation<TArg>(
-  hook: () => { mutate: (args: TArg) => Promise<unknown> },
+async function setupMutation<TArg, TReturn>(
+  hook: () => { mutate: (args: TArg) => Promise<TReturn> },
   args: TArg,
 ): Promise<void>
-async function setupMutation<TArg>(
-  hook: () => { mutate: (args?: TArg) => Promise<unknown> },
+async function setupMutation<TArg, TReturn>(
+  hook: () => { mutate: (args?: TArg) => Promise<TReturn> },
   args?: TArg,
 ): Promise<void> {
   const { result } = renderHook(() => hook(), { wrapper })
 
   await act(async () => {
-    await result.current.mutate(args as never)
+    // SAFETY: Generic test harness forwards the typed args to the hook's mutate; cast is safe because args match the mutation contract.
+    await result.current.mutate(cast<Parameters<typeof result.current.mutate>[0]>(args))
   })
 }
 
 beforeEach(() => {
-  mockedRollApi.roll.mockResolvedValue({} as never)
-  mockedRollApi.override.mockResolvedValue({} as never)
-  mockedRollApi.dismissPending.mockResolvedValue(undefined as never)
-  mockedRollApi.setDie.mockResolvedValue(undefined as never)
-  mockedRollApi.clearManualDie.mockResolvedValue(undefined as never)
-  mockedRollApi.reroll.mockResolvedValue({} as never)
+  // SAFETY: Mocked roll payload is not inspected by the assertions; empty object satisfies the success path shape.
+  mockedRollApi.roll.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.roll>>>({}))
+  // SAFETY: Override mock uses the same empty success shape; safe because only call count is asserted.
+  mockedRollApi.override.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.override>>>({}))
+  // SAFETY: dismissPending resolves void; undefined is the expected value.
+  mockedRollApi.dismissPending.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.dismissPending>>>(undefined))
+  // SAFETY: setDie resolves void; undefined matches the mocked resolution.
+  mockedRollApi.setDie.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.setDie>>>(undefined))
+  // SAFETY: clearManualDie resolves void; undefined preserves the contract.
+  mockedRollApi.clearManualDie.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.clearManualDie>>>(undefined))
+  // SAFETY: reroll mock returns an empty roll success shape that the test does not inspect.
+  mockedRollApi.reroll.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.reroll>>>({}))
 })
 
 it('calls roll mutation', async () => {

@@ -1,40 +1,13 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
 import { threadsApi } from '../services/api'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 
-vi.mock('../services/api', () => ({
-  threadsApi: {
-    list: vi.fn(),
-    get: vi.fn(),
-  },
-}))
-
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    list: vi.fn(),
-  },
-}))
-
-vi.mock('../services/api-dependency-groups', () => ({
-  dependencyGroupsApi: {
-    list: vi.fn(),
-    get: vi.fn(),
-    create: vi.fn(),
-    rename: vi.fn(),
-    delete: vi.fn(),
-    addMember: vi.fn(),
-    addIssueRange: vi.fn(),
-    removeMember: vi.fn(),
-  },
-}))
-
 const api = vi.mocked(dependencyGroupsApi)
 const threadApi = vi.mocked(threadsApi)
-const issueApi = vi.mocked(issuesApi)
 
 function renderPage() {
   return render(
@@ -111,18 +84,29 @@ function selectThread(label: string, query: string, title: string) {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
-  api.list.mockResolvedValue([crossover])
-  threadApi.list.mockResolvedValue({
+  vi.spyOn(dependencyGroupsApi, 'list').mockResolvedValue([crossover])
+  vi.spyOn(dependencyGroupsApi, 'get').mockResolvedValue(crossover)
+  vi.spyOn(dependencyGroupsApi, 'create').mockResolvedValue({ id: 0, name: '', created_at: '', memberships: [] })
+  vi.spyOn(dependencyGroupsApi, 'rename').mockResolvedValue({ id: 0, name: '', created_at: '', memberships: [] })
+  vi.spyOn(dependencyGroupsApi, 'delete').mockResolvedValue(undefined)
+  vi.spyOn(dependencyGroupsApi, 'addMember').mockResolvedValue({ id: 0, issue_id: null, thread_id: null })
+  vi.spyOn(dependencyGroupsApi, 'addIssueRange').mockResolvedValue({ thread_id: 0, start_position: 0, end_position: 0, added_issue_ids: [], already_present_issue_ids: [] })
+  vi.spyOn(dependencyGroupsApi, 'removeMember').mockResolvedValue(undefined)
+  vi.spyOn(threadsApi, 'list').mockResolvedValue({
     threads: [thread, xmenThread],
     next_page_token: null,
   })
-  issueApi.list.mockResolvedValue({
+  vi.spyOn(threadsApi, 'get').mockResolvedValue(thread)
+  vi.spyOn(issuesApi, 'list').mockResolvedValue({
     issues,
     total_count: issues.length,
     page_size: 100,
     next_page_token: null,
   })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 describe('CrossoversPage membership editing', () => {

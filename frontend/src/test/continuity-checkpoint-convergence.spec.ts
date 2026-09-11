@@ -3,8 +3,12 @@ import type { Page } from '@playwright/test'
 import { createThread, getAuthToken } from './helpers'
 
 async function getCsrf(page: Page, token: string | null): Promise<string> {
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
   const response = await page.request.get('/api/auth/csrf', {
-    headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+    headers,
   })
   expect(response.ok()).toBeTruthy()
   const data = await response.json() as { csrf_token?: string }
@@ -13,8 +17,12 @@ async function getCsrf(page: Page, token: string | null): Promise<string> {
 }
 
 async function getIssueIds(page: Page, token: string | null, threadId: number): Promise<number[]> {
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
   const response = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
-    headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+    headers,
   })
   expect(response.ok(), `issue list failed: ${await response.text()}`).toBeTruthy()
   const data = await response.json() as { issues: Array<{ id: number }> }
@@ -38,12 +46,12 @@ async function createPlanViaApi(
     convergence_gate?: Array<{ node_type: string; node_id: string }>
   }>,
 ): Promise<number> {
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
   const response = await page.request.post('/api/v1/continuity-plans/', {
-    headers: {
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      'Content-Type': 'application/json',
-      'X-CSRF-Token': csrf,
-    },
+    headers: { ...headers, 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
     data: { name, ordering_mode: 'informational', lanes, nodes },
   })
   expect(response.ok(), `plan create failed: ${await response.text()}`).toBeTruthy()

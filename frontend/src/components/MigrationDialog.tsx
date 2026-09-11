@@ -121,6 +121,7 @@ export default function MigrationDialog({ thread, onComplete, onSkip, onClose }:
     setIsSubmitting(true)
 
     try {
+      // SAFETY: lastRead and total are valid numbers after the numeric field validation above passes.
       const updatedThread: Thread = await migrationApi.migrateThread(thread.id, {
         last_issue_read: lastRead,
         total_issues: total,

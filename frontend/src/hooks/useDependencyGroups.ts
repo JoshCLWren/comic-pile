@@ -36,6 +36,7 @@ export function useDependencyGroups(threadId: number | null | undefined): Depend
   return {
     groups: data ?? [],
     isLoading: isPending,
+    // SAFETY: the queryFn normalizes failures to Error, so the query error value is Error | null.
     error: (error as Error | null) ?? null,
   }
 }

@@ -106,7 +106,7 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
       x: 0,
       y: 0,
       toJSON() {},
-    } as unknown as DOMRect
+    } as DOMRect
     const controlsRect = {
       left: 0,
       right: 210,
@@ -117,7 +117,7 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
       x: 0,
       y: 62,
       toJSON() {},
-    } as unknown as DOMRect
+    } as DOMRect
 
     vi.spyOn(titleRegion, 'getBoundingClientRect').mockReturnValue(titleRect)
     vi.spyOn(controlsRegion, 'getBoundingClientRect').mockReturnValue(controlsRect)
@@ -175,7 +175,7 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
       x: 0,
       y: 0,
       toJSON() {},
-    } as unknown as DOMRect
+    } as DOMRect
     const controlsRect = {
       left: 612,
       right: 822,
@@ -186,7 +186,7 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
       x: 612,
       y: 0,
       toJSON() {},
-    } as unknown as DOMRect
+    } as DOMRect
 
     vi.spyOn(titleRegion, 'getBoundingClientRect').mockReturnValue(titleRect)
     vi.spyOn(controlsRegion, 'getBoundingClientRect').mockReturnValue(controlsRect)
