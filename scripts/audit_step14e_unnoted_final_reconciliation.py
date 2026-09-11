@@ -39,14 +39,15 @@ LEGACY_ORDER_NAMES = (
 
 def _sha256(ids: list[int]) -> str:
     """Fingerprint an ordered dependency-ID manifest."""
-    payload = ",".join(str(value) for value in ids).encode()
-    return hashlib.sha256(payload).hexdigest()
+    return hashlib.sha256(",".join(str(value) for value in ids).encode()).hexdigest()
 
 
 def _md5(ids: list[int]) -> str:
     """Match the compact PostgreSQL manifest fingerprint used by Step 14."""
-    payload = ",".join(str(value) for value in ids).encode()
-    return hashlib.md5(payload, usedforsecurity=False).hexdigest()
+    return hashlib.md5(  # noqa: S324 - non-security manifest fingerprint
+        ",".join(str(value) for value in ids).encode(),
+        usedforsecurity=False,
+    ).hexdigest()
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -69,20 +70,22 @@ async def _select(
 def _explicit(index: dict[str, Any]) -> dict[int, dict[str, str]]:
     """Expand compact Step 14C-14E family buckets into an exact ID lookup."""
     lookup: dict[int, dict[str, str]] = {}
-    families = cast(list[dict[str, Any]], index["explicit_families"])
-    for family in families:
-        metadata = {
-            "slice": str(family["slice"]),
-            "classification": str(family["classification"]),
-            "family_key": str(family["family_key"]),
-            "evidence_artifact": str(family["evidence_artifact"]),
-        }
-        for dependency_id in cast(list[int], family["dependency_ids"]):
-            if dependency_id in lookup:
-                raise AssertionError(
-                    f"duplicate final-index dependency ID {dependency_id}"
-                )
-            lookup[dependency_id] = metadata
+    slices = cast(dict[str, dict[str, Any]], index["lookup"]["explicit_slices"])
+    for slice_name, slice_data in slices.items():
+        evidence_artifact = str(slice_data["evidence_artifact"])
+        for family in cast(list[dict[str, Any]], slice_data["families"]):
+            metadata = {
+                "slice": slice_name,
+                "classification": str(family["classification"]),
+                "family_key": str(family["family_key"]),
+                "evidence_artifact": evidence_artifact,
+            }
+            for dependency_id in cast(list[int], family["ids"]):
+                if dependency_id in lookup:
+                    raise AssertionError(
+                        f"duplicate final-index dependency ID {dependency_id}"
+                    )
+                lookup[dependency_id] = metadata
     return lookup
 
 
@@ -94,15 +97,13 @@ def _classify(
     """Classify one dependency from frozen Step 14 selectors."""
     dependency_id = int(row["id"])
     note = row["note"]
+    lookup = cast(dict[str, Any], index["lookup"])
     if isinstance(note, str):
         match = STEP14A.fullmatch(note)
         if match is not None:
             source_hash = match.group(1)
-            selector = cast(dict[str, Any], index["selectors"]["14A"])
-            sources = {
-                str(source["content_hash"]): source
-                for source in cast(list[dict[str, object]], selector["sources"])
-            }
+            selector = cast(dict[str, Any], lookup["14A"])
+            sources = cast(dict[str, list[object]], selector["source_hash_map"])
             source = sources.get(source_hash)
             if source is None:
                 raise AssertionError(
@@ -112,7 +113,7 @@ def _classify(
             return {
                 "slice": "14A",
                 "classification": "reading_plan_order",
-                "family_key": f"cbl_source_list_{source['source_list_id']}",
+                "family_key": f"cbl_source_list_{int(source[0])}",
             }
         if STEP14B.fullmatch(note) is not None:
             return {
@@ -155,8 +156,7 @@ async def _snapshot(db: AsyncSession) -> dict[str, object]:
         db,
         """
         SELECT cr.id, cr.legacy_dependency_id, cr.source_type, cr.source_id,
-               cr.target_type, cr.target_id, cr.satisfaction_type,
-               cr.checkpoint_issue_id, cr.convergence_targets, cr.note
+               cr.target_type, cr.target_id, cr.satisfaction_type
         FROM continuity_rules cr
         WHERE cr.user_id = :user_id
           AND cr.legacy_dependency_id IS NOT NULL
@@ -204,8 +204,7 @@ async def _snapshot(db: AsyncSession) -> dict[str, object]:
           AND EXISTS (
             SELECT 1
             FROM reading_orders ro
-            JOIN reading_order_items roi
-              ON roi.reading_order_id = ro.id
+            JOIN reading_order_items roi ON roi.reading_order_id = ro.id
             JOIN issues oi
               ON oi.thread_id = roi.thread_id
              AND oi.issue_number = roi.issue_number
@@ -265,7 +264,7 @@ async def _snapshot(db: AsyncSession) -> dict[str, object]:
 
 
 def _reconcile(snapshot: dict[str, object]) -> dict[str, object]:
-    """Reconcile the fresh production facts against the frozen Step 14 package."""
+    """Reconcile fresh production facts against the frozen Step 14 package."""
     evidence = _load(EVIDENCE)
     index = _load(FINAL_INDEX)
     explicit = _explicit(index)
@@ -274,14 +273,12 @@ def _reconcile(snapshot: dict[str, object]) -> dict[str, object]:
     by_slice: dict[str, list[int]] = defaultdict(list)
     by_classification: Counter[str] = Counter()
     active: Counter[str] = Counter()
-    classified: dict[int, dict[str, str]] = {}
     for row in dependencies:
         dependency_id = int(row["id"])
         result = _classify(row, index, explicit)
         classification = result["classification"]
         if classification not in ALLOWED:
             raise AssertionError(f"dependency {dependency_id}: invalid classification")
-        classified[dependency_id] = result
         by_slice[result["slice"]].append(dependency_id)
         by_classification[classification] += 1
         if (
@@ -313,15 +310,15 @@ def _reconcile(snapshot: dict[str, object]) -> dict[str, object]:
         raise AssertionError("Step 14E exact dependency population drifted")
     if _sha256(step14e_ids) != scope["manifest_sha256"]:
         raise AssertionError("Step 14E manifest fingerprint drifted")
+    step14e_set = set(step14e_ids)
 
     rules_by_dependency: dict[int, list[dict[str, object]]] = defaultdict(list)
     for rule in cast(list[dict[str, object]], snapshot["rules"]):
         rules_by_dependency[int(rule["legacy_dependency_id"])].append(rule)
     mirrored = 0
-    for row in dependencies:
-        dependency_id = int(row["id"])
-        if dependency_id not in set(step14e_ids):
-            continue
+    dependency_by_id = {int(row["id"]): row for row in dependencies}
+    for dependency_id in step14e_ids:
+        row = dependency_by_id[dependency_id]
         linked = rules_by_dependency.get(dependency_id, [])
         if len(linked) != 1:
             raise AssertionError(
@@ -336,17 +333,15 @@ def _reconcile(snapshot: dict[str, object]) -> dict[str, object]:
             and rule["satisfaction_type"] == "item_read"
         ):
             mirrored += 1
-    if mirrored != 149:
+    if mirrored != len(step14e_ids):
         raise AssertionError("Step 14E linked-rule mirror coverage drifted")
 
-    step14e_set = set(step14e_ids)
     group_hits = [
         row
         for row in cast(list[dict[str, object]], snapshot["group_hits"])
         if int(row["dependency_id"]) in step14e_set
     ]
-    grouped_ids = {int(row["dependency_id"]) for row in group_hits}
-    if grouped_ids != step14e_set:
+    if {int(row["dependency_id"]) for row in group_hits} != step14e_set:
         raise AssertionError("Step 14E dependency-group coverage drifted")
     if any(row["sequence_order"] is not None for row in group_hits):
         raise AssertionError("Step 14E unexpectedly gained sequence_order authority")
