@@ -154,20 +154,23 @@ export function RollRecoveryCard({
               </>
             )
 
+const rowClass =
+              'flex w-full flex-col gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between sm:gap-3'
+
             return isClickable ? (
               <button
                 key={`${prerequisite.node_type}-${prerequisite.node_id}`}
                 type="button"
                 onClick={() => onReadNow?.(prerequisite)}
                 disabled={isPending}
-                className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition-colors hover:bg-white/10 disabled:opacity-60"
+                className={`${rowClass} transition-colors hover:bg-white/10 disabled:opacity-60`}
               >
                 {content}
               </button>
             ) : (
               <div
                 key={`${prerequisite.node_type}-${prerequisite.node_id}`}
-                className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                className={rowClass}
               >
                 {content}
               </div>

@@ -4,11 +4,9 @@ import type { ReadingOrder } from '../../../services/api-reading-orders'
 import type { ConnectedThreadInfo, ReaderContextResponse } from '../../../types'
 import type { RatingThread } from '../types'
 import ContinuityCorrectionDialog from '../../../components/ContinuityCorrectionDialog'
-import { ContinuityReadinessSummary } from './ContinuityReadinessSummary'
 import { ReadingOrderGroups } from './ReadingOrderGroups'
 import { ReadingRouteExplanation } from './ReadingRouteExplanation'
 import { ReadingPathPanel } from './ReadingPathPanel'
-import { useContinuityReadiness } from '../../../hooks/useContinuityReadiness'
 import { readingContextType } from '../readingContextTypography'
 import { hasReadingContextContent } from '../readingContextContent'
 import { ReadingContextStatusCard } from './ReadingContextStatusCard'
@@ -95,7 +93,6 @@ export function ReadingContextPillar({
   const threadTitle = activeRatingThread?.title ?? 'Loading…'
   const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
   const issueId = activeRatingThread?.issue_id ?? activeRatingThread?.next_issue_id
-  const readinessState = useContinuityReadiness(issueId)
 
   const seriesName = useMemo(
     () => readerContext ? (() => {
@@ -172,18 +169,18 @@ export function ReadingContextPillar({
           Reading Context
         </span>
       </div>
-      <ContinuityReadinessSummary issueId={issueId} readinessState={readinessState} />
-
       {readerContext && (
         <ReadingPathPanel
           context={readerContext}
-          readinessState={readinessState}
           fallbackAnchorLabel={`${threadTitle}${issueNumber != null ? ` #${issueNumber}` : ''}`}
           onOpenThread={openThread}
         />
       )}
 
-      <section className="grid grid-cols-2 gap-x-6 gap-y-3 border-b border-[var(--theme-border)] pb-3">
+      <section
+        className="grid grid-cols-1 gap-y-3 border-b border-[var(--theme-border)] pb-3 md:grid-cols-2 md:gap-x-6"
+        data-testid="roll-stats-section"
+      >
         <div className="min-w-0">
           <div
             className="font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"

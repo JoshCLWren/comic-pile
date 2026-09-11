@@ -4,12 +4,10 @@ import {
   buildPrerequisiteLanes,
   classifyEdgesRelativeToCurrent,
 } from '../readingPath'
-import type { ContinuityReadinessState } from '../../../hooks/useContinuityReadiness'
 import { readingContextType } from '../readingContextTypography'
 
 interface ReadingPathPanelProps {
   context: ReaderContextResponse
-  readinessState: ContinuityReadinessState
   /** Human label for the active issue, used when series identity is unavailable. */
   fallbackAnchorLabel: string
   onOpenThread: (threadId: number) => void
@@ -65,7 +63,6 @@ function StepStateMark({ status }: { status: string | null }) {
 
 export function ReadingPathPanel({
   context,
-  readinessState,
   fallbackAnchorLabel,
   onOpenThread,
 }: ReadingPathPanelProps) {
@@ -99,24 +96,6 @@ export function ReadingPathPanel({
     )
   }, [prerequisiteLanes, rawLater])
 
-  const blockerLabels = useMemo(() => {
-    if (!readinessState.readiness || readinessState.readiness.is_readable) return []
-    const labels: string[] = []
-    for (const blocker of readinessState.readiness.blockers) {
-      for (const detail of blocker.unread_issue_details) {
-        if (!labels.includes(detail.label)) labels.push(detail.label)
-      }
-      if (blocker.unread_issue_details.length === 0 && !labels.includes(blocker.source_label)) {
-        labels.push(blocker.source_label)
-      }
-    }
-    return labels
-  }, [readinessState])
-
-  const readinessResolved =
-    !readinessState.isLoading &&
-    !readinessState.error &&
-    readinessState.readiness !== null
 
   return (
     <section
@@ -132,31 +111,6 @@ export function ReadingPathPanel({
         Your Place in the Story
       </h3>
 
-      {readinessResolved && readinessState.readiness?.is_readable && (
-        <p
-          className="mt-2 flex flex-wrap items-center gap-x-2 font-bold text-emerald-300"
-          style={readingContextType('bodyCopy')}
-          role="status"
-          data-testid="reading-path-readable"
-        >
-          <span aria-hidden="true">✓</span>
-          <span>Caught up — you can read {anchorLabel} now.</span>
-        </p>
-      )}
-
-      {readinessResolved && readinessState.readiness && !readinessState.readiness.is_readable && (
-        <p
-          className="mt-2 flex flex-wrap items-center gap-x-2 font-bold text-amber-300"
-          style={readingContextType('bodyCopy')}
-          role="status"
-          data-testid="reading-path-blocked"
-        >
-          <span aria-hidden="true">✳</span>
-          <span>
-            Not yet — read {blockerLabels.join(', ') || 'your prerequisites'} before {anchorLabel}.
-          </span>
-        </p>
-      )}
 
       {prerequisiteLanes.length > 0 && (
         <div className="mt-3 space-y-3" aria-label="Before this issue">

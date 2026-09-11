@@ -21,13 +21,67 @@ from fastapi import HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.continuity_plan_readiness import _detect_plan_cycles, plan_rule_marker
 from app.continuity_rules import _would_create_cycle, ensure_owned_continuity_node
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.thread import Thread
 from app.schemas.continuity_plan import ContinuityPlanNode, PlanOrderingMode
 from app.schemas.continuity_rule import ContinuityNodeType
+
+
+PLAN_RULE_MARKER_PREFIX = "continuity-plan"
+
+
+def plan_rule_marker(plan_id: int) -> str:
+    """Return the durable ownership marker for rules compiled from one plan."""
+    return f"{PLAN_RULE_MARKER_PREFIX}:{plan_id}"
+
+
+def _detect_plan_cycles(
+    nodes: list[tuple[str, int]],
+    edges: list[tuple[tuple[str, int], tuple[str, int]]],
+) -> set[tuple[str, int]]:
+    """Return every plan node participating in a directed cycle."""
+    adjacency: dict[tuple[str, int], list[tuple[str, int]]] = {node: [] for node in nodes}
+    for source, target in edges:
+        if source in adjacency and target in adjacency:
+            adjacency[source].append(target)
+    for target_list in adjacency.values():
+        target_list.sort()
+
+    color: dict[tuple[str, int], int] = dict.fromkeys(nodes, 0)
+    in_cycle: set[tuple[str, int]] = set()
+
+    for start_node in sorted(nodes):
+        if color[start_node] != 0:
+            continue
+
+        stack: list[tuple[tuple[str, int], int]] = [(start_node, 0)]
+        path: list[tuple[str, int]] = []
+
+        while stack:
+            node, state = stack.pop()
+            if state == 0:
+                if color[node] in {1, 2}:
+                    continue
+                color[node] = 1
+                path.append(node)
+                stack.append((node, 1))
+                for nxt in reversed(adjacency.get(node, ())):
+                    if color[nxt] == 0:
+                        stack.append((nxt, 0))
+                    elif color[nxt] == 1:
+                        try:
+                            idx = path.index(nxt)
+                            in_cycle.update(path[idx:])
+                        except ValueError:
+                            pass
+            else:
+                if path and path[-1] == node:
+                    path.pop()
+                color[node] = 2
+
+    return in_cycle
 
 
 async def validate_node_ownership(

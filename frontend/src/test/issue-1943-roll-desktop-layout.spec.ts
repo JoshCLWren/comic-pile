@@ -231,17 +231,6 @@ async function installRatingRoutes(page: Page, state: RatingStateRoutes): Promis
   await page.route('**/v1/comicvine/issues/*/identity', (route) =>
     route.fulfill({ json: state.identity }),
   )
-  await page.route('**/v1/continuity/readiness', (route) =>
-    route.fulfill({
-      json: {
-        node_type: 'issue',
-        node_id: 1,
-        is_readable: true,
-        evaluated_issue_id: null,
-        blockers: [],
-      },
-    }),
-  )
 }
 
 /**
