@@ -128,6 +128,7 @@ class RollRecoveryPrerequisite(BaseModel):
     node_type: Literal["issue", "crossover"]
     node_id: int
     label: str
+    is_readable: bool = True
 
 
 class RollRecoveryChainNode(BaseModel):

@@ -123,9 +123,12 @@ export function RollRecoveryCard({
       {recommendations.length > 0 ? (
         <div className="mt-4 space-y-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-stone-500">
-            {recommendations.length === 1 ? 'Read this first' : 'Readable prerequisites'}
+            {primaryBlocker?.source_type === 'issue' || recommendations.length === 1
+              ? 'Read this first'
+              : 'Readable prerequisites'}
           </p>
           {recommendations.map((prerequisite, index) => {
+            const isClickable = onReadNow && prerequisite.is_readable !== false
             const content = (
               <>
                 <span className="min-w-0">
@@ -136,17 +139,24 @@ export function RollRecoveryCard({
                     </span>
                   )}
                 </span>
-                <span className="shrink-0 text-xs font-black uppercase tracking-widest text-amber-400">
-                  Read now
-                </span>
+                {isClickable && (
+                  <span className="shrink-0 text-xs font-black uppercase tracking-widest text-amber-400">
+                    Read now
+                  </span>
+                )}
+                {!isClickable && (
+                  <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-stone-500">
+                    Blocked
+                  </span>
+                )}
               </>
             )
 
-            return onReadNow ? (
+            return isClickable ? (
               <button
                 key={`${prerequisite.node_type}-${prerequisite.node_id}`}
                 type="button"
-                onClick={() => onReadNow(prerequisite)}
+                onClick={() => onReadNow?.(prerequisite)}
                 disabled={isPending}
                 className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition-colors hover:bg-white/10 disabled:opacity-60"
               >

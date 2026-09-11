@@ -79,6 +79,7 @@ async def build_roll_recovery(
                 node_type=node.node_type,
                 node_id=node.node_id,
                 label=node.label,
+                is_readable=node.is_readable,
             )
             for node in traversal.readable_prerequisites
         ],
