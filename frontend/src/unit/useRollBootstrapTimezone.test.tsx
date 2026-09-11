@@ -3,12 +3,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { type ReactNode } from 'react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { resolveBrowserTimezone, useRollBootstrap } from '../hooks/useRollBootstrap'
-import type { RollBootstrapApi } from '../services/apiTypes'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { cast } from '../utils/cast'
 
-function makeBootstrapApi(): RollBootstrapApi {
+function makeBootstrapApi() {
   return { get: vi.fn(), switchPrerequisite: vi.fn() }
 }
 

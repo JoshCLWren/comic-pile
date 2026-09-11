@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSkip, useUnskip } from '../hooks/useSkip'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
-import type { CacheEffectsApi, ProtectedRollMutationApi, RollBootstrapApi, SkipApi } from '../services/apiTypes'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
 let client: QueryClient
@@ -13,15 +12,15 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>
 }
 
-function makeSkipApi(): SkipApi {
+function makeSkipApi() {
   return { skip: vi.fn(), unskip: vi.fn() }
 }
 
-function makeProtectedApi(): ProtectedRollMutationApi {
+function makeProtectedApi() {
   return { rate: vi.fn(), snooze: vi.fn(), skip: vi.fn(), bootstrap: vi.fn() }
 }
 
-function makeBootstrapApi(): RollBootstrapApi {
+function makeBootstrapApi() {
   return { get: vi.fn(), switchPrerequisite: vi.fn() }
 }
 
@@ -29,7 +28,7 @@ const skipApi = makeSkipApi()
 const protectedRollMutationApi = makeProtectedApi()
 const rollBootstrapApi = makeBootstrapApi()
 const invalidateCurrentSessionAfterSnooze = vi.fn()
-const cacheEffects: CacheEffectsApi = {
+const cacheEffects = {
   applyRatedThreadCache: vi.fn(),
   invalidateCurrentSessionAfterSnooze,
 }

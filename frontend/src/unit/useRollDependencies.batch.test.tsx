@@ -1,8 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RollDependenciesApi } from '../services/apiTypes'
 
-const dependenciesApi: RollDependenciesApi = { getBatchBlockingInfo: vi.fn() }
+const dependenciesApi = { getBatchBlockingInfo: vi.fn() }
 
 import { useRollDependencies } from '../pages/RollPage/useRollDependencies'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'

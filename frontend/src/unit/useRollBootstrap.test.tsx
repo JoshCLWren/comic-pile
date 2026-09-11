@@ -3,13 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
-import type { RollBootstrapApi } from '../services/apiTypes'
 import { queryClient } from '../query/queryClient'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { cast } from '../utils/cast'
 import { ToastProvider } from '../contexts/ToastProvider'
 
-function makeBootstrapApi(): RollBootstrapApi {
+function makeBootstrapApi() {
   return { get: vi.fn(), switchPrerequisite: vi.fn() }
 }
 
