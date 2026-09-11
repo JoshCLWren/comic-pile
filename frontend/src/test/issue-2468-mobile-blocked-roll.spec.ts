@@ -294,12 +294,14 @@ test.describe('Mobile blocked Roll layout (#2468)', () => {
         ? main.getBoundingClientRect().left + main.getBoundingClientRect().width / 2
         : window.innerWidth / 2
       const samples = [navTop - 4, navTop - 24, navTop - 44]
+        .values()
         .filter((y) => y > 0)
         .map((y) => {
           const element = document.elementFromPoint(centerX, y)
           const hitNav = element?.closest('nav[aria-label="Mobile navigation"]') !== null
           return { y, hitNav, hitMain: element?.closest('main') !== null }
         })
+        .toArray()
       return {
         samples,
         scrollHeight: documentElement.scrollHeight,
