@@ -35,7 +35,7 @@ def test_step14d_population_and_classifications_reconcile() -> None:
     totals = cast(dict[str, int], report["classification_totals"])
 
     seen: set[int] = set()
-    actual = {name: 0 for name in EXPECTED_TOTALS}
+    actual: dict[str, int] = dict.fromkeys(EXPECTED_TOTALS, 0)
     for family in families:
         classification = str(family["classification"])
         ids = cast(list[int], family["dependency_ids"])
