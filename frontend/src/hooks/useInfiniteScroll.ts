@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface UseInfiniteScrollOptions {
   onLoadMore: () => void
@@ -15,12 +15,18 @@ export function useInfiniteScroll({
   threshold = 200,
   rootRef,
 }: UseInfiniteScrollOptions) {
-  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const [sentinelElement, setSentinelElement] = useState<HTMLDivElement | null>(null)
+  const sentinelRef = useCallback((el: HTMLDivElement | null) => {
+    setSentinelElement(el)
+  }, [])
+
   // Tracks the previous intersection state so a load only fires on a real
   // outside->inside transition. IntersectionObserver enqueues an entry with the
   // element's current state synchronously when `observe()` is called, so without
   // edge-triggering every page load would immediately re-request (and greedily
   // prefetch) the following page on mount and after each successful fetch.
+  // Reset when the sentinel element changes so remounts (e.g. plain→virtualized
+  // threshold crossing) don't inherit stale intersection state.
   const wasIntersecting = useRef(false)
 
   const handleIntersect = useCallback(
@@ -36,7 +42,7 @@ export function useInfiniteScroll({
   )
 
   useEffect(() => {
-    const sentinel = sentinelRef.current
+    const sentinel = sentinelElement
     if (!sentinel) return
 
     const observer = new IntersectionObserver(handleIntersect, {
@@ -49,7 +55,7 @@ export function useInfiniteScroll({
     return () => {
       observer.disconnect()
     }
-  }, [handleIntersect, threshold, rootRef])
+  }, [handleIntersect, threshold, rootRef, sentinelElement])
 
   return { sentinelRef }
 }
