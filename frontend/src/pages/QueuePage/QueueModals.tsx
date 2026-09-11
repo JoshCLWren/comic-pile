@@ -31,7 +31,7 @@ interface QueueModalsProps {
   onEditSubmit: (event: FormEvent) => Promise<void>
   onReactivateSubmit: (event: FormEvent) => Promise<void>
   onRepositionConfirm: (targetPosition: number) => Promise<void> | void
-  onDependencyChanged: () => Promise<unknown> | unknown
+  onDependencyChanged: () => Promise<void>
   onCloseCreate: () => void
   onCloseEdit: () => void
   onCloseReactivate: () => void

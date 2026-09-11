@@ -26,7 +26,7 @@ const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] a
     config: { url: string; headers?: Record<string, string>; skipAuthRedirect?: boolean }
     response: { status: number }
   },
-) => Promise<unknown>
+) => Promise<Record<string, unknown>>
 
 beforeEach(() => {
   apiMock.post.mockReset()
