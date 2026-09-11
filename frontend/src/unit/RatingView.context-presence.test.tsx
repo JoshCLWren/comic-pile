@@ -42,7 +42,39 @@ const callbacks = {
   onRefreshThread: vi.fn(),
 }
 
-type RatingViewOverride = Record<string, string | number | boolean | null | Array<Record<string, string | number | boolean>> | Record<string, string> | (() => unknown)>
+interface RatingViewOverride {
+  activeRatingThread?: {
+    id: number
+    title: string
+    format: string
+    issues_remaining: number
+    total_issues: number
+    issue_number: string
+    next_issue_number: string | null
+    reading_progress: string
+    queue_position: number
+    issue_id: number
+    next_issue_id: number | null
+  }
+  currentDie?: number
+  rolledResult?: number
+  rating?: number
+  predictedDie?: number
+  errorMessage?: string
+  rateIsPending?: boolean
+  snoozeIsPending?: boolean
+  dismissIsPending?: boolean
+  readingOrders?: Array<Record<string, string | number | boolean | null>>
+  connectedThreads?: Array<Record<string, string | number | boolean | null>>
+  onUpdateRating?: () => void
+  onSubmitRating?: () => void
+  onSnooze?: () => void
+  onCancel?: () => void
+  onRefreshThread?: () => void
+  readerContext?: ReaderContextResponse | null
+  isReaderContextLoading?: boolean
+  readerContextError?: string | null
+}
 function renderRatingView(overrides: RatingViewOverride = {}) {
   const defaults = {
     activeRatingThread: {
