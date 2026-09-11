@@ -23,6 +23,23 @@ interface UseQueueThreadActionsParams {
   refetchSession: () => Promise<unknown> | unknown
 }
 
+/**
+ * Injectable seams for the row-action hook tree. Production callers omit
+ * `deps` so every seam resolves to the real hook/service; tests substitute
+ * deterministic doubles without module mocking.
+ */
+export interface UseQueueThreadActionsDeps {
+  deleteHook?: typeof useDeleteThread
+  moveToFrontHook?: typeof useMoveToFront
+  moveToBackHook?: typeof useMoveToBack
+  moveToPositionHook?: typeof useMoveToPosition
+  shuffleHook?: typeof useShuffleQueue
+  snoozeHook?: typeof useSnooze
+  unsnoozeHook?: typeof useUnsnooze
+  toastHook?: typeof useToast
+  setPending?: typeof threadsApi.setPending
+}
+
 interface QueueThreadActionResult {
   draggedThreadId: number | null
   dragOverThreadId: number | null
@@ -54,16 +71,29 @@ interface QueueThreadActionResult {
  */
 export function useQueueThreadActions(
   params: UseQueueThreadActionsParams,
+  deps: UseQueueThreadActionsDeps = {},
 ): QueueThreadActionResult {
   const { navigateToRoll, refetchSession } = params
-  const { showToast } = useToast()
-  const deleteMutation = useDeleteThread()
-  const moveToFrontMutation = useMoveToFront()
-  const moveToBackMutation = useMoveToBack()
-  const moveToPositionMutation = useMoveToPosition()
-  const shuffleQueueMutation = useShuffleQueue()
-  const snoozeMutation = useSnooze()
-  const unsnoozeMutation = useUnsnooze()
+  const {
+    deleteHook = useDeleteThread,
+    moveToFrontHook = useMoveToFront,
+    moveToBackHook = useMoveToBack,
+    moveToPositionHook = useMoveToPosition,
+    shuffleHook = useShuffleQueue,
+    snoozeHook = useSnooze,
+    unsnoozeHook = useUnsnooze,
+    toastHook = useToast,
+    setPending = threadsApi.setPending,
+  } = deps
+
+  const { showToast } = toastHook()
+  const deleteMutation = deleteHook()
+  const moveToFrontMutation = moveToFrontHook()
+  const moveToBackMutation = moveToBackHook()
+  const moveToPositionMutation = moveToPositionHook()
+  const shuffleQueueMutation = shuffleHook()
+  const snoozeMutation = snoozeHook()
+  const unsnoozeMutation = unsnoozeHook()
 
   const [draggedThreadId, setDraggedThreadId] = useState<number | null>(null)
   const [dragOverThreadId, setDragOverThreadId] = useState<number | null>(null)
@@ -197,7 +227,7 @@ export function useQueueThreadActions(
         return
       }
       try {
-        const response = await threadsApi.setPending(thread.id)
+        const response = await setPending(thread.id)
         // Roll hydrates the rating view from the bootstrap query, so the
         // cached snapshot must not outlive the selection we just persisted.
         await resetRollBootstrapAfterManualSelection(queryClient)
@@ -207,7 +237,7 @@ export function useQueueThreadActions(
         window.alert(`Action failed: ${getApiErrorDetail(error)}`)
       }
     },
-    [navigateToRoll],
+    [navigateToRoll, setPending],
   )
 
   const handleSnoozeToggle = useCallback(

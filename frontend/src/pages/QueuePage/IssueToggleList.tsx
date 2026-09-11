@@ -130,7 +130,7 @@ export function IssueToggleList({
       seenPageTokens.add(data.next_page_token)
       nextPageToken = data.next_page_token
     }
-  }, [threadId])
+  }, [issuesService, threadId])
 
   const fetchDependencies = useCallback(async (): Promise<Record<number, IssueDependenciesResponse>> => {
     try {
@@ -151,7 +151,7 @@ export function IssueToggleList({
       console.error(`Failed to load dependencies for thread ${threadId}:`, error)
       return {}
     }
-  }, [threadId])
+  }, [dependenciesApi, threadId])
 
   const focusMoveControl = useCallback((issueId: number, direction: 'up' | 'down') => {
     const focusTarget = () => {

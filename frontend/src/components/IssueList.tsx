@@ -114,7 +114,7 @@ export function IssueList({
         setIsLoadingMore(false)
       }
     }
-  }, [thread.id])
+  }, [issuesService, thread.id])
 
   const loadDependencies = useCallback(async () => {
     const requestId = ++dependencyLoadRequestRef.current
@@ -153,7 +153,7 @@ export function IssueList({
         console.error(`Failed to load dependencies for thread ${requestedThreadId}:`, error)
       }
     }
-  }, [thread.id])
+  }, [dependenciesApi, thread.id])
 
   useEffect(() => {
     void Promise.all([loadIssues(false), loadDependencies()])

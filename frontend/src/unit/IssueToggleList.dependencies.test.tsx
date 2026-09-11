@@ -10,17 +10,17 @@ import type { Issue, IssueListResponse } from '../types'
 
 // Injectable fakes passed through the real `issuesApi`/`dependenciesApi` props —
 // no module mocking of the API services.
-const mockedIssuesApi: IssueToggleListApi = {
-  list: vi.fn(),
-  create: vi.fn(),
-  markRead: vi.fn(),
-  markUnread: vi.fn(),
-  delete: vi.fn(),
-  reorder: vi.fn(),
+const mockedIssuesApi = {
+  list: vi.fn<IssueToggleListApi['list']>(),
+  create: vi.fn<IssueToggleListApi['create']>(),
+  markRead: vi.fn<IssueToggleListApi['markRead']>(),
+  markUnread: vi.fn<IssueToggleListApi['markUnread']>(),
+  delete: vi.fn<IssueToggleListApi['delete']>(),
+  reorder: vi.fn<IssueToggleListApi['reorder']>(),
 }
 
-const mockedIssueDependenciesApi: IssueToggleListDependenciesApi = {
-  listForThread: vi.fn(),
+const mockedIssueDependenciesApi = {
+  listForThread: vi.fn<IssueToggleListDependenciesApi['listForThread']>(),
 }
 
 function createDeferred<T>() {

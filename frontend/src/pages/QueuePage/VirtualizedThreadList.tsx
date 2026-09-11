@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
-import type { Virtualizer } from '@tanstack/react-virtual'
+import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual'
 import {
   getRowThreads,
   EDGE_SCROLL_ZONE,
@@ -16,11 +16,18 @@ export const VIRTUALIZATION_THRESHOLD = 50
 /** The options accepted by the window-virtualizer hook. */
 export type UseWindowVirtualizerOptions = Parameters<typeof useWindowVirtualizer>[0]
 
-/** The minimal window-virtualizer contract the list consumes. */
+/**
+ * The minimal window-virtualizer contract the list consumes.
+ *
+ * `getVirtualItems` is declared as the bare call signature because the library
+ * type also attaches an internal `updateDeps` method that a deterministic test
+ * double cannot (and should not) reproduce. The component only calls it as a
+ * function.
+ */
 export type QueueVirtualizer = Pick<
   Virtualizer<Window, HTMLElement>,
-  'getVirtualItems' | 'getTotalSize' | 'measureElement' | 'scrollToIndex'
->
+  'getTotalSize' | 'measureElement' | 'scrollToIndex'
+> & { getVirtualItems: () => VirtualItem[] }
 
 interface VirtualizedThreadListProps<T> {
   /** Threads to render in the virtualized list. */

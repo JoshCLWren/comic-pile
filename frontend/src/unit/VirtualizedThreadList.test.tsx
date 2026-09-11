@@ -27,7 +27,7 @@ const mockGetTotalSize = vi.fn(() => 0)
 const mockMeasureElement = vi.fn()
 const mockScrollToIndex = vi.fn()
 
-function fakeUseVirtualizer(_options: UseVirtualizerOptions<Window, HTMLElement>): QueueVirtualizer {
+function fakeUseVirtualizer(_options: UseWindowVirtualizerOptions): QueueVirtualizer {
   return {
     getVirtualItems: mockGetVirtualItems,
     getTotalSize: mockGetTotalSize,

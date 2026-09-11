@@ -2,57 +2,15 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useDeleteThread } from '../hooks/useThread'
-import {
-  useMoveToBack,
-  useMoveToFront,
-  useMoveToPosition,
-  useShuffleQueue,
-} from '../hooks/useQueue'
-import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
-import { useToast } from '../contexts/useToast'
-import { threadsApi } from '../services/api'
+import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
+import type { UseQueueThreadActionsDeps } from '../pages/QueuePage/useQueueThreadActions'
 import { queryClient as sharedQueryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
-import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
-import type { Thread } from '../types'
+import type { RollResponse, Thread } from '../types'
+import { cast } from '../utils/cast'
 
-vi.mock('../hooks/useThread', () => ({
-  useDeleteThread: vi.fn(),
-}))
-
-vi.mock('../hooks/useQueue', () => ({
-  useMoveToBack: vi.fn(),
-  useMoveToFront: vi.fn(),
-  useMoveToPosition: vi.fn(),
-  useShuffleQueue: vi.fn(),
-}))
-
-vi.mock('../hooks/useSnooze', () => ({
-  useSnooze: vi.fn(),
-  useUnsnooze: vi.fn(),
-}))
-
-vi.mock('../contexts/useToast', () => ({
-  useToast: vi.fn(),
-}))
-
-vi.mock('../services/api', () => ({
-  threadsApi: {
-    setPending: vi.fn(),
-  },
-}))
-
-const mockedDelete = vi.mocked(useDeleteThread)
-const mockedMoveToFront = vi.mocked(useMoveToFront)
-const mockedMoveToBack = vi.mocked(useMoveToBack)
-const mockedMoveToPosition = vi.mocked(useMoveToPosition)
-const mockedShuffle = vi.mocked(useShuffleQueue)
-const mockedSnooze = vi.mocked(useSnooze)
-const mockedUnsnooze = vi.mocked(useUnsnooze)
-const mockedToast = vi.mocked(useToast)
-const mockedSetPending = vi.mocked(threadsApi.setPending)
 const toastSpy = vi.fn()
+const setPending = vi.fn()
 
 function mutationStubs() {
   return {
@@ -81,6 +39,23 @@ function makeThread(overrides: Partial<Thread>): Thread {
   }
 }
 
+// Injectable seams passed through the real `useQueueThreadActions` second
+// argument — no module mocking of the hooks or API services.
+function buildDeps(overrides: Partial<UseQueueThreadActionsDeps> = {}): UseQueueThreadActionsDeps {
+  return {
+    deleteHook: () => mutationStubs(),
+    moveToFrontHook: () => mutationStubs(),
+    moveToBackHook: () => mutationStubs(),
+    moveToPositionHook: () => mutationStubs(),
+    shuffleHook: () => mutationStubs(),
+    snoozeHook: () => mutationStubs(),
+    unsnoozeHook: () => mutationStubs(),
+    toastHook: () => ({ showToast: toastSpy, removeToast: vi.fn(), toasts: [] }),
+    setPending,
+    ...overrides,
+  }
+}
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 })
@@ -93,24 +68,19 @@ beforeEach(() => {
   vi.clearAllMocks()
   sharedQueryClient.clear()
   vi.stubGlobal('alert', vi.fn())
-  mockedToast.mockReturnValue({ showToast: toastSpy, removeToast: vi.fn(), toasts: [] })
-  mockedDelete.mockReturnValue(mutationStubs())
-  mockedMoveToFront.mockReturnValue(mutationStubs())
-  mockedMoveToBack.mockReturnValue(mutationStubs())
-  mockedMoveToPosition.mockReturnValue(mutationStubs())
-  mockedShuffle.mockReturnValue(mutationStubs())
-  mockedSnooze.mockReturnValue(mutationStubs())
-  mockedUnsnooze.mockReturnValue(mutationStubs())
 })
 
 describe('useQueueThreadActions', () => {
   it('persists drag state across start, over, drop, and end', () => {
     const { result } = renderHook(
       () =>
-        useQueueThreadActions({
-          navigateToRoll: vi.fn(),
-          refetchSession: vi.fn(),
-        }),
+        useQueueThreadActions(
+          {
+            navigateToRoll: vi.fn(),
+            refetchSession: vi.fn(),
+          },
+          buildDeps(),
+        ),
       { wrapper },
     )
 
@@ -127,13 +97,15 @@ describe('useQueueThreadActions', () => {
 
   it('moves to position using the target thread queue position', async () => {
     const movePosition = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
-    mockedMoveToPosition.mockReturnValue(movePosition)
     const { result } = renderHook(
       () =>
-        useQueueThreadActions({
-          navigateToRoll: vi.fn(),
-          refetchSession: vi.fn(),
-        }),
+        useQueueThreadActions(
+          {
+            navigateToRoll: vi.fn(),
+            refetchSession: vi.fn(),
+          },
+          buildDeps({ moveToPositionHook: () => movePosition }),
+        ),
       { wrapper },
     )
 
@@ -147,13 +119,15 @@ describe('useQueueThreadActions', () => {
 
   it('reports move-to-position failures as a reorder error without crashing', async () => {
     const movePosition = { mutate: vi.fn().mockRejectedValue(new Error('reorder failed')), isPending: false, isError: false }
-    mockedMoveToPosition.mockReturnValue(movePosition)
     const { result } = renderHook(
       () =>
-        useQueueThreadActions({
-          navigateToRoll: vi.fn(),
-          refetchSession: vi.fn(),
-        }),
+        useQueueThreadActions(
+          {
+            navigateToRoll: vi.fn(),
+            refetchSession: vi.fn(),
+          },
+          buildDeps({ moveToPositionHook: () => movePosition }),
+        ),
       { wrapper },
     )
 
@@ -168,30 +142,33 @@ describe('useQueueThreadActions', () => {
   })
 
   it('rejects read for blocked threads and routes allowed reads through setPending', async () => {
-    mockedSetPending.mockResolvedValue({
-    thread_id: 9,
-    title: 'Test Thread',
-    format: 'Comic',
-    issues_remaining: 5,
-    queue_position: 2,
-    die_size: 6,
-    result: 1,
-    offset: 0,
-    snoozed_count: 0,
-    issue_id: null,
-    issue_number: null,
-    next_issue_id: null,
-    next_issue_number: null,
-    total_issues: null,
-    reading_progress: null,
-  })
+    setPending.mockResolvedValue({
+      thread_id: 9,
+      title: 'Test Thread',
+      format: 'Comic',
+      issues_remaining: 5,
+      queue_position: 2,
+      die_size: 6,
+      result: 1,
+      offset: 0,
+      snoozed_count: 0,
+      issue_id: null,
+      issue_number: null,
+      next_issue_id: null,
+      next_issue_number: null,
+      total_issues: null,
+      reading_progress: null,
+    })
     const navigate = vi.fn()
     const { result } = renderHook(
       () =>
-        useQueueThreadActions({
-          navigateToRoll: navigate,
-          refetchSession: vi.fn(),
-        }),
+        useQueueThreadActions(
+          {
+            navigateToRoll: navigate,
+            refetchSession: vi.fn(),
+          },
+          buildDeps(),
+        ),
       { wrapper },
     )
 
@@ -200,7 +177,7 @@ describe('useQueueThreadActions', () => {
     expect(navigate).not.toHaveBeenCalled()
 
     await result.current.handleThreadRead(makeThread({ id: 8 }))
-    expect(mockedSetPending).toHaveBeenCalledWith(8)
+    expect(setPending).toHaveBeenCalledWith(8)
     expect(navigate).toHaveBeenCalled()
   })
 
@@ -208,7 +185,9 @@ describe('useQueueThreadActions', () => {
     const staleBootstrap = { session_id: 1, pending_thread_id: null, roll_pool: [] }
     sharedQueryClient.setQueryData(queryKeys.roll.bootstrap(), staleBootstrap)
     sharedQueryClient.setQueryData(queryKeys.session.current(), { id: 1, pending_thread_id: null })
-    mockedSetPending.mockResolvedValue({ thread_id: 8, title: 'Saga' } as never)
+    // SAFETY: the queue only reads `thread_id`/`title` from the roll response
+    // before navigating; a minimal double keeps the assertion focused.
+    setPending.mockResolvedValue(cast<RollResponse>({ thread_id: 8, title: 'Saga' }))
 
     const callOrder: string[] = []
     const navigate = vi.fn(() => {
@@ -217,10 +196,13 @@ describe('useQueueThreadActions', () => {
     })
     const { result } = renderHook(
       () =>
-        useQueueThreadActions({
-          navigateToRoll: navigate,
-          refetchSession: vi.fn(),
-        }),
+        useQueueThreadActions(
+          {
+            navigateToRoll: navigate,
+            refetchSession: vi.fn(),
+          },
+          buildDeps(),
+        ),
       { wrapper },
     )
 
@@ -235,14 +217,17 @@ describe('useQueueThreadActions', () => {
   })
 
   it('does not navigate to Roll when set-pending fails', async () => {
-    mockedSetPending.mockRejectedValue(new Error('Thread 8 has no issues remaining'))
+    setPending.mockRejectedValue(new Error('Thread 8 has no issues remaining'))
     const navigate = vi.fn()
     const { result } = renderHook(
       () =>
-        useQueueThreadActions({
-          navigateToRoll: navigate,
-          refetchSession: vi.fn(),
-        }),
+        useQueueThreadActions(
+          {
+            navigateToRoll: navigate,
+            refetchSession: vi.fn(),
+          },
+          buildDeps(),
+        ),
       { wrapper },
     )
 
@@ -257,15 +242,16 @@ describe('useQueueThreadActions', () => {
   it('delegates snooze vs unsnooze based on the current snoozed state', async () => {
     const snooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false, retryRefresh: vi.fn().mockResolvedValue(true), refreshError: null, hasRefreshError: false }
     const unsnooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
-    mockedSnooze.mockReturnValue(snooze)
-    mockedUnsnooze.mockReturnValue(unsnooze)
     const refetchSession = vi.fn().mockResolvedValue(undefined)
     const { result } = renderHook(
       () =>
-        useQueueThreadActions({
-          navigateToRoll: vi.fn(),
-          refetchSession,
-        }),
+        useQueueThreadActions(
+          {
+            navigateToRoll: vi.fn(),
+            refetchSession,
+          },
+          buildDeps({ snoozeHook: () => snooze, unsnoozeHook: () => unsnooze }),
+        ),
       { wrapper },
     )
 
@@ -278,13 +264,17 @@ describe('useQueueThreadActions', () => {
   })
 
   it('reports shuffle failure as an alert', async () => {
-    mockedShuffle.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('shuffle failed')), isPending: false, isError: false })
     const { result } = renderHook(
       () =>
-        useQueueThreadActions({
-          navigateToRoll: vi.fn(),
-          refetchSession: vi.fn(),
-        }),
+        useQueueThreadActions(
+          {
+            navigateToRoll: vi.fn(),
+            refetchSession: vi.fn(),
+          },
+          buildDeps({
+            shuffleHook: () => ({ mutate: vi.fn().mockRejectedValue(new Error('shuffle failed')), isPending: false, isError: false }),
+          }),
+        ),
       { wrapper },
     )
 
@@ -294,13 +284,15 @@ describe('useQueueThreadActions', () => {
 
   it('validates reposition bounds before calling the mutation', async () => {
     const movePosition = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
-    mockedMoveToPosition.mockReturnValue(movePosition)
     const { result } = renderHook(
       () =>
-        useQueueThreadActions({
-          navigateToRoll: vi.fn(),
-          refetchSession: vi.fn(),
-        }),
+        useQueueThreadActions(
+          {
+            navigateToRoll: vi.fn(),
+            refetchSession: vi.fn(),
+          },
+          buildDeps({ moveToPositionHook: () => movePosition }),
+        ),
       { wrapper },
     )
 
@@ -312,13 +304,15 @@ describe('useQueueThreadActions', () => {
 
   it('opens and cancels the delete confirmation without mutating', async () => {
     const remove = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
-    mockedDelete.mockReturnValue(remove)
     const { result } = renderHook(
       () =>
-        useQueueThreadActions({
-          navigateToRoll: vi.fn(),
-          refetchSession: vi.fn(),
-        }),
+        useQueueThreadActions(
+          {
+            navigateToRoll: vi.fn(),
+            refetchSession: vi.fn(),
+          },
+          buildDeps({ deleteHook: () => remove }),
+        ),
       { wrapper },
     )
 
@@ -333,13 +327,15 @@ describe('useQueueThreadActions', () => {
 
   it('confirms delete, closes the dialog, and shows a success toast', async () => {
     const remove = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
-    mockedDelete.mockReturnValue(remove)
     const { result } = renderHook(
       () =>
-        useQueueThreadActions({
-          navigateToRoll: vi.fn(),
-          refetchSession: vi.fn(),
-        }),
+        useQueueThreadActions(
+          {
+            navigateToRoll: vi.fn(),
+            refetchSession: vi.fn(),
+          },
+          buildDeps({ deleteHook: () => remove }),
+        ),
       { wrapper },
     )
 
@@ -358,13 +354,15 @@ describe('useQueueThreadActions', () => {
       isPending: false,
       isError: false,
     }
-    mockedDelete.mockReturnValue(remove)
     const { result } = renderHook(
       () =>
-        useQueueThreadActions({
-          navigateToRoll: vi.fn(),
-          refetchSession: vi.fn(),
-        }),
+        useQueueThreadActions(
+          {
+            navigateToRoll: vi.fn(),
+            refetchSession: vi.fn(),
+          },
+          buildDeps({ deleteHook: () => remove }),
+        ),
       { wrapper },
     )
 

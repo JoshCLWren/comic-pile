@@ -7,14 +7,14 @@ import type { Issue, IssueDependenciesResponse, IssueListResponse, Thread } from
 
 // Injectable fakes passed through the real `issuesApi`/`dependenciesApi` props —
 // no module mocking of the API services.
-const mockedIssuesApi: IssueListApi = {
-  list: vi.fn(),
-  markRead: vi.fn(),
-  markUnread: vi.fn(),
+const mockedIssuesApi = {
+  list: vi.fn<IssueListApi['list']>(),
+  markRead: vi.fn<IssueListApi['markRead']>(),
+  markUnread: vi.fn<IssueListApi['markUnread']>(),
 }
 
-const mockedIssueDependenciesApi: IssueListDependenciesApi = {
-  listForThread: vi.fn(),
+const mockedIssueDependenciesApi = {
+  listForThread: vi.fn<IssueListDependenciesApi['listForThread']>(),
 }
 
 function createDeferred<T>() {
