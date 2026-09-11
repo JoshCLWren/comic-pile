@@ -20,7 +20,7 @@ import { getApiErrorDetail } from '../../utils/apiError'
 
 interface UseQueueThreadActionsParams {
   navigateToRoll: (thread: Thread, response: unknown) => void
-  refetchSession: () => Promise<unknown> | unknown
+  refetchSession: () => Promise<void>
 }
 
 /**

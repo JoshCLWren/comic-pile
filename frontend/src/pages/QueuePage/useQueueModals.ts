@@ -17,24 +17,24 @@ type ModalKey =
 
 interface QueueModalsParams {
   threads: Thread[] | null | undefined
-  onCreated: () => Promise<unknown> | unknown
-  onUpdated: () => Promise<unknown> | unknown
-  onReactivated: () => Promise<unknown> | unknown
-  refetchSession: () => Promise<unknown> | unknown
+  onCreated: () => Promise<void>
+  onUpdated: () => Promise<void>
+  onReactivated: () => Promise<void>
+  refetchSession: () => Promise<void>
   submitCreate: (input: {
     title: string
     format: string
     issues_remaining: number
     notes: string | null
-  }) => Promise<{ id?: number } | unknown>
+  }) => Promise<{ id?: number }>
   submitEdit: (input: {
     id: number
     data: EditThreadData
-  }) => Promise<unknown>
+}) => Promise<Thread>
   submitReactivate: (input: {
     thread_id: number
     issues_to_add: number
-  }) => Promise<unknown>
+  }) => Promise<Thread>
   isPendingCreate: boolean
   isPendingEdit: boolean
 }

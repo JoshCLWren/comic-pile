@@ -65,7 +65,9 @@ export default function QueuePage() {
 
   const actions = useQueueThreadActions({
     navigateToRoll,
-    refetchSession: () => refetchSession(),
+    refetchSession: async () => {
+      await refetchSession()
+    },
   })
 
   const submitCreate = useCallback(
@@ -88,10 +90,12 @@ export default function QueuePage() {
 
   const modals = useQueueModalsHook({
     threads,
-    onCreated: () => {},
-    onUpdated: () => {},
-    onReactivated: () => {},
-    refetchSession: () => refetchSession(),
+    onCreated: async () => {},
+    onUpdated: async () => {},
+    onReactivated: async () => {},
+    refetchSession: async () => {
+      await refetchSession()
+    },
     submitCreate,
     submitEdit,
     submitReactivate,
@@ -280,7 +284,9 @@ export default function QueuePage() {
           onEditSubmit={modals.handleEditSubmit}
           onReactivateSubmit={modals.handleReactivateSubmit}
           onRepositionConfirm={handleRepositionConfirm}
-          onDependencyChanged={() => void invalidateAfterQueueMutation(queryClient)}
+          onDependencyChanged={async () => {
+            await invalidateAfterQueueMutation(queryClient)
+          }}
           onCloseCreate={modals.closeCreateModal}
           onCloseEdit={modals.closeEditModal}
           onCloseReactivate={modals.closeReactivateModal}

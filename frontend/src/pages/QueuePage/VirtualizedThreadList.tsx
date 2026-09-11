@@ -45,7 +45,7 @@ interface VirtualizedThreadListProps<T> {
    * virtualized and non-virtualized presentations are both one full-width row.
    */
   explicitColumnCount?: number
-  sentinelRef?: React.RefObject<HTMLDivElement | null>
+  sentinelRef?: React.Ref<HTMLDivElement>
   scrollRootRef?: React.RefObject<HTMLDivElement | null>
   hasNextPage?: boolean
   /**

@@ -12,7 +12,7 @@ interface QueueListProps {
   reorderError: string | null
   renderItem: (thread: Thread, index: number) => ReactNode
   isSearching: boolean
-  sentinelRef: React.RefObject<HTMLDivElement | null>
+  sentinelRef: React.Ref<HTMLDivElement>
   scrollRootRef: React.RefObject<HTMLDivElement | null>
   hasNextPage: boolean
   /**
