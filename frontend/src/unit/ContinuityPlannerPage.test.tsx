@@ -267,7 +267,7 @@ describe('ContinuityPlannerPage', () => {
     )
 
     expect(await screen.findByText('Mister Miracle #Annual 1')).toBeVisible()
-    expect(screen.getByText('Fourth World')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Remove Fourth World' })).toBeVisible()
     expect(screen.getByDisplayValue('Saved lane')).toBeVisible()
     await waitFor(() => expect(mocks.get).toHaveBeenCalledWith(12))
     expect(mocks.get).toHaveBeenCalledTimes(1)
