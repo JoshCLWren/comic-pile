@@ -1,1 +1,136 @@
-PLACEHOLDER
+{
+  "step": "14D",
+  "result": "PASS",
+  "capture": {
+    "timestamp": "2026-09-11T03:24:49.345Z",
+    "base_main_sha": "8d9389e0d1f79626036ee1b31b23b6d2d8f3615c",
+    "user_id": 1,
+    "read_only": true
+  },
+  "scope": {
+    "definition": "All user-1 production Dependency rows where note IS NOT NULL, excluding the exact Step 14A, 14B, and 14C populations. Unnoted dependencies are excluded for Step 14E.",
+    "count": 154,
+    "dependency_ids": [955,1314,1375,1383,1415,1416,1417,1420,1424,1425,1428,1533,1534,1535,1536,1537,1538,1539,1540,1541,1542,1543,1551,1552,1553,1554,1558,1577,1578,1579,1580,1581,1582,1583,1584,1588,1589,1590,1591,1592,1593,1594,1595,1596,1597,1598,1599,1600,1601,1602,1603,1604,1605,1606,1783,1784,1785,1786,1790,1834,1836,1837,1839,1840,1841,1843,1844,1845,1848,1849,1850,1851,1852,1853,1854,1855,1856,1857,1858,1859,1860,1861,1862,1863,1864,1865,1866,1867,1868,1869,1870,1871,1872,1873,1874,1875,1876,1878,1879,1880,1881,1882,1883,1884,1885,1886,1887,1888,1889,1890,1891,1892,1893,1894,1895,1896,1897,1898,1900,1908,1909,1910,1911,1912,1913,1914,1915,1916,1917,1918,1919,1920,1921,1922,1923,1924,1927,1928,1929,1930,1932,1936,1937,2677,2771,2777,2778,2779,2780,2781,2782,723729,723730,723731],
+    "manifest_sha256": "706051bcb11f29a6a999078294aebe5b93f70dc05ad70406935756d1750b95ee",
+    "postgres_md5": "c276f385f116cdea8524cf1c7254d7ac",
+    "distinct_note_count": 152,
+    "created_at_min": "2026-03-19T02:59:35.750Z",
+    "created_at_max": "2026-09-05T18:52:02.023Z",
+    "overlap_step14a": 0,
+    "overlap_step14b": 0,
+    "overlap_step14c": 0
+  },
+  "prior_exclusions": {
+    "step14a": "101632 exact cbl-order:source:<hash>:<source>-><target> dependencies from merged Step 14A evidence",
+    "step14b": "1228 exact cbl-order:group-16 generated dependencies plus 73 exact temporary Ultimate Universe repair dependencies from merged Step 14B evidence",
+    "step14c_dependency_ids": [18,19,20,21,1388,1389,1390,1391,1392,1396,1397,1398,1399,1400,1404,1414,1789,1791,1792,1793,1794,1795,1796,1797,1798,1799,1800,1801,1802,1803,1804,1805,1806,1807,1808,1810,1811,1812,1813,1814,1815,1816,1817,1818,1819,1820,1821,1822,1823,1824,1825,1826,1827,1828,1829,1830,1832,1833,1846,1847,2678,2679,2680,2681,2682,2683,2684,2685,2686,2687,2688,2689,2772,2773,2774,2775,2776]
+  },
+  "classification_totals": {
+    "reading_plan_order": 114,
+    "standalone_prerequisite": 39,
+    "needs_review": 1
+  },
+  "manifest_strategy": "Each family below is an exact-ID classification manifest: family_key + classification + dependency_ids + family fingerprint + evidence_ref. Families are disjoint and their union is the exact 154-ID scope.",
+  "families": [
+    {"family_key":"starman_compendium_order","classification":"reading_plan_order","dependency_ids":[955,1551,1552],"sha256":"dc310215b755ffcb330d0125dbd9479815861ca64031c9743d0b09900aa5adbb","evidence_ref":"e_starman"},
+    {"family_key":"unnamed_universe_reader_order","classification":"reading_plan_order","dependency_ids":[1314],"sha256":"3324dab86f4dcdf48ba8ed6d736dcf050f09a23bf617c7d3579224548269ba1f","evidence_ref":"e_unnamed"},
+    {"family_key":"daredevil_frank_miller_collected_order","classification":"reading_plan_order","dependency_ids":[1375],"sha256":"d818f221cbcb7016316f8a918c9a9967eb7d71ec54785211ec1d0a9ba7923dcd","evidence_ref":"e_daredevil"},
+    {"family_key":"fourth_world_cross_title_prerequisite","classification":"standalone_prerequisite","dependency_ids":[1383,1784],"sha256":"b8be5a3b7b2b9d339a7b363824f5f1c81eb39fce918a1af39a71d95ec55867fa","evidence_ref":"e_fourth_world_hard"},
+    {"family_key":"jli_reader_schedule","classification":"reading_plan_order","dependency_ids":[1415,1589,1790,1895,1896,1897,1898],"sha256":"53eb81c061ef401ba621fe5bd2ff0665a8ae7c7f444be5ed716373506e4ecdb2","evidence_ref":"e_jli"},
+    {"family_key":"stormwatch_wildcats_aliens_bridge","classification":"standalone_prerequisite","dependency_ids":[1416,1417],"sha256":"0c3d48413bc6662fe03c271fbfb8acc2926c554527e53b91f134d7aed94be9c1","evidence_ref":"e_stormwatch"},
+    {"family_key":"planetary_authority_reader_order","classification":"reading_plan_order","dependency_ids":[1420,1424,1425,1558,723729,723730,723731],"sha256":"65a7a524346089da165538bcff039686ac0167aff3d9fd3a112bdd2464b00159","evidence_ref":"e_planetary"},
+    {"family_key":"ultimate_universe_reader_order","classification":"reading_plan_order","dependency_ids":[1428,1908,1909,1910,1911,1914,1915,1917,1919,1920,1921,1922,1923,1927,1930,1932],"sha256":"5a917c1ed8a05c1db04f0dde3febd35c8fd7a138985408285a3feb8f062d2f6e","evidence_ref":"e_ultimate_order"},
+    {"family_key":"annihilation_event_prerequisites","classification":"standalone_prerequisite","dependency_ids":[1533,1534,1535,1536,1537,1538,1539,1540,1541,1542,1543],"sha256":"d101dc0aedaa80bda92934811bb53adfec9b8b15ac9b46acb03307d96ef4badd","evidence_ref":"e_annihilation"},
+    {"family_key":"black_panther_cat_trap","classification":"standalone_prerequisite","dependency_ids":[1553],"sha256":"8012472a35fd40939e08041936918ad9f975579bff2519a6fa568774057a799c","evidence_ref":"e_black_panther"},
+    {"family_key":"starlin_thanos_war_prerequisite","classification":"standalone_prerequisite","dependency_ids":[1554],"sha256":"6fb4775fed7293b1da12333ce782e879cefce4ca3b83e12628b1a54e062606b6","evidence_ref":"e_thanos_war"},
+    {"family_key":"magneto_war_prerequisites","classification":"standalone_prerequisite","dependency_ids":[1577,1578,1579,1580,1581],"sha256":"a93db5f0360e34d170bf2872f615ccad5a99c118f091c779d38241a938a02083","evidence_ref":"e_magneto_war"},
+    {"family_key":"ultimate_step23_proven_standalone_milestones","classification":"standalone_prerequisite","dependency_ids":[1582,1912,1913,1916,1918,1928,1936,1937],"sha256":"f05b0d82cc718a68916a38ef03d33e8c0e8f1a16b71b6e0554b2905d47fd411d","evidence_ref":"e_ultimate_step23"},
+    {"family_key":"ultimate_explicit_preludes","classification":"standalone_prerequisite","dependency_ids":[1583,1584],"sha256":"4e98e444919ea26997e66b2a9dadce675c143deec538723ca6230b339960352b","evidence_ref":"e_ultimate_preludes"},
+    {"family_key":"absolute_universe_reader_order","classification":"reading_plan_order","dependency_ids":[1588,1834,1836,1837,1839,1840,1841,1843,1844,1845],"sha256":"681b7278b217e04613bfdcc006dcbf51680527c13bcc3be9f21eaf84bf1614a1","evidence_ref":"e_absolute"},
+    {"family_key":"fourth_world_reader_order","classification":"reading_plan_order","dependency_ids":[1590,1591,1592,1783,1785,1786],"sha256":"d46fbfefbc628b6579a8e1dbb64a2b067b6acf4854013f6536cee637c7afc7c9","evidence_ref":"e_fourth_world_order"},
+    {"family_key":"manhattan_projects_continuation","classification":"standalone_prerequisite","dependency_ids":[1593],"sha256":"38813d9a6e5332787f13dac070d265339c4c711beea8b21f82966684bda30e79","evidence_ref":"e_manhattan"},
+    {"family_key":"dc_ko_reader_order","classification":"reading_plan_order","dependency_ids":[1594,1595,1596,1597,1598,1599,1600,1601,1602,1603,1604,1605,1606],"sha256":"207b92f91c243c8a18b1a4249e11426aa5898f98eae31e69660e8ba71d791dfb","evidence_ref":"e_dc_ko"},
+    {"family_key":"xmen_hunt_for_xavier_prerequisites","classification":"standalone_prerequisite","dependency_ids":[1848,1849,1850,1851,1852],"sha256":"59e63ba861070762ed10264062ff3a3ab826c715d5c296846766bccaeea28163","evidence_ref":"e_hunt_hard"},
+    {"family_key":"xmen_chronology_reader_order","classification":"reading_plan_order","dependency_ids":[1853,1854,1855,1856,1857,1858,1863,1864,1865,1866,1867,1868,1869,1870,1871,1872,1873,1874,1875,1876,1878,1879,1880,1881,1882,1883,1884,1885,1886,1887,1888,1889,1890,1891,1892,1893,1894,1900],"sha256":"6a5acb17ba81374dbb785fe6ed8657ceb3faa05dd1e59ef3cf467756a818002e","evidence_ref":"e_xmen_order"},
+    {"family_key":"xmen_hunt_setup_reader_order","classification":"reading_plan_order","dependency_ids":[1859,1860,1861,1862],"sha256":"21272ab8ceaaac8a9af357194558045f3e6420c00e4cd5ccf412834f7101ab8a","evidence_ref":"e_hunt_setup"},
+    {"family_key":"ultimate_endgame_to_finale","classification":"standalone_prerequisite","dependency_ids":[1924],"sha256":"3849ba084da2faea804918e8d999dee3f176659e0216debcccbf86b3e6b769ef","evidence_ref":"e_endgame_finale"},
+    {"family_key":"ultimate_finale_to_impact_contradiction","classification":"needs_review","dependency_ids":[1929],"sha256":"639c1115ab55d139a527f7bb3c1a9570bb60cf96f5c13bdaa41a7264a74e748f","evidence_ref":"e_impact_review"},
+    {"family_key":"astro_city_recovery_order","classification":"reading_plan_order","dependency_ids":[2677],"sha256":"50825d7e9707bb6cb23e0737fd7945c0723096951e89328bf1b8c557282c71dc","evidence_ref":"e_astro"},
+    {"family_key":"starlin_cosmic_cbl_order","classification":"reading_plan_order","dependency_ids":[2771,2777,2778,2779,2780,2781,2782],"sha256":"7254706538619928d2674de4d997c9d07db06422452c678b1fdaf23c2d3c0cbb","evidence_ref":"e_starlin_cbl"}
+  ],
+  "evidence": {
+    "e_starman": "Production notes/thread metadata describe Compendium reading-order repair and stitching, not independent prerequisites.",
+    "e_unnamed": "The surviving noted group-16 edge is a selected Unnamed Universe handoff outside Step 14B's generated compatibility note pattern.",
+    "e_daredevil": "Peter Parker Spectacular Spider-Man #28 -> Daredevil #158 is a collected/creator placement; no direct story prerequisite provenance was found.",
+    "e_fourth_world_hard": "Mister Miracle #6 explicitly points readers to New Gods #7 for the Scott Free/Orion origin reveal, then New Gods #7 feeds Mister Miracle #7. Story-specific handoff survives without a selected plan.",
+    "e_jli": "Rows are defer/recovery/chronology scheduling, including conservative whole-issue gates. Chronology alone is not hard-prerequisite proof.",
+    "e_stormwatch": "WildC.A.T.s/Aliens is set between Stormwatch vol.2 #10 and #11 and causes the status-quo change leading out of Stormwatch: https://en.wikipedia.org/wiki/WildC.A.T.s/Aliens",
+    "e_planetary": "Production notes and issue #528 describe Planetary/Authority edges as crossover reading-order placement/repair rather than universal prerequisites.",
+    "e_ultimate_order": "Recovery, convergence, catch-up, and source-position choreography from the full Ultimate Universe reading-order repair, separated from Step 23's proven standalone rules.",
+    "e_annihilation": "Single event DAG from Drax through Prologue, four minis, Annihilation, and Heralds. Marvel collections preserve the same event phases: https://www.marvel.com/comics/collection/97245/",
+    "e_black_panther": "Deadpool #44 and Black Panther #23 are Priest Cat Trap crossover material repeatedly collected together by Marvel: https://www.marvel.com/comics/collection/98743/",
+    "e_thanos_war": "Marvel Feature #12 immediately feeds Captain Marvel #31 in the Starlin Thanos War reprint sequence: https://atomicavenue.com/atomic/TitleDetail.aspx?TitleID=2330",
+    "e_magneto_war": "Exact Magneto War prelude/part chain, not surrounding chronology: https://uncannyxmen.net/story-arc/magneto-war",
+    "e_ultimate_step23": "Current Step 23A code explicitly discovers and preserves reusable non-plan item_read rules on planned adjacent edges. Fresh production reconstruction places these eight noted IDs in that already-reviewed standalone set; four additional unnoted reusable rules remain outside 14D and were not classified here.",
+    "e_ultimate_preludes": "One Year In explicitly preludes Ultimate Wolverine, and FCBD 2025 explicitly preludes Ultimate Spider-Man: Incursion: https://icv2.com/articles/previews/view/58149/preview-ultimate-universe-one-year-in-1-one-shot ; https://www.freecomicbookday.com/Article/281250-Free-Comic-Book-Day-Preview-Get-a-Sneak-Peek-inside-Ultimate-Spider-Man-Incursion",
+    "e_absolute": "Project-level Absolute Universe ordering/gating. Group context establishes selected order; no direct story proof makes these universal prerequisites.",
+    "e_fourth_world_order": "Recovery/chronology handoffs distinct from the two independently evidenced Fourth World origin-story gates.",
+    "e_manhattan": "The Manhattan Projects #25 -> Sun Beyond the Stars #1 is the boundary into the publisher-designated next volume/phase: https://imagecomics.com/comics/releases/the-manhattan-projects-vol-6-tp",
+    "e_dc_ko": "All thirteen rows are one DC K.O. cross-title serialization batch in group 1. Evidence proves a selected event path, not that every pair is universally prerequisite.",
+    "e_hunt_hard": "Exact Hunt for Xavier numbered Part 1-6 chain: UXM #362 -> X-Men #82 -> UXM #363 -> X-Men #83 -> UXM #364 -> X-Men #84: https://uncannyxmen.net/story-arc/the-hunt-for-xavier",
+    "e_xmen_order": "Broader UXRO/late-90s X-Men chronology outside explicit crossover-part chains. Chronology and group membership prove selected sequencing, not independent necessity.",
+    "e_hunt_setup": "Four setup rows precede Hunt for Xavier but are outside its numbered Part 1-6 chain, which starts at UXM #362.",
+    "e_endgame_finale": "Publisher copy says Ultimate Universe: Finale #1 follows the events of Ultimate Endgame #5: https://prhcomics.com/book/?isbn=75960621283500111",
+    "e_impact_review": "Persisted Finale #1 -> Ultimate Impact: Reborn #1 conflicts with publisher chronology. Impact went on sale 2026-05-20, Finale on 2026-06-24; available story copy does not establish Finale as Impact's prerequisite.",
+    "e_astro": "Note explicitly preserves sequence after the Flip Book was read earlier, which is recovery serialization of selected order.",
+    "e_starlin_cbl": "Notes record exact Starlin CBL positions. Under the frozen architecture, CBL is source evidence for reader intent, not independent intent."
+  },
+  "dependency_group_clustering": {
+    "clusters": [
+      [1,"DC K.O.",13],[2,"Starlin’s Cosmic Marvel Saga early 90s",7],[3,"Annihilation",11],[4,"Late-90s X-Men Reading Order",50],[5,"Magneto War",8],[6,"Starman",3],[7,"Justice League International / Europe",5],[8,"Breakdowns",3],[10,"Planetary / Authority Crossovers",7],[11,"Stormwatch / WildC.A.T.s: Change or Die",2],[13,"Fourth World / Mister Miracle",8],[14,"Absolute Universe Reading Order",14],[15,"Ultimate Universe Reading Order",26],[16,"The Unnamed Universe",1],[17,"Black Panther: Priest Crossovers",1],[18,"Captain Marvel Starlin era",1],[19,"Daredevil Crossovers",1],[21,"ClanDestine Reading Order",1],[25,"The Manhattan Projects",1],[26,"Astro City",1],[27,"Marvel Cosmic: Annihilation to Thanos Imperative",5],[190,"Black Panther by Christopher Priest",1]
+    ],
+    "ungrouped_dependency_ids": [1866,1895,1898,1924,1929],
+    "ordered_membership_overlap_count": 0,
+    "interpretation": "Dependency groups are provenance/context only; no touched membership had non-null sequence_order."
+  },
+  "linked_continuity_rules": {
+    "dependency_count": 154,
+    "linked_rule_count": 154,
+    "distinct_linked_rule_count": 154,
+    "missing_rule_count": 0,
+    "exact_endpoint_item_read_mirror_count": 154,
+    "nontrivial_payload_count": 0,
+    "interpretation": "Rule linkage corroborates persistence history only and did not determine semantic classification."
+  },
+  "current_blocking_overlay": {
+    "count": 50,
+    "dependency_ids": [1415,1420,1424,1425,1534,1535,1536,1537,1538,1539,1540,1541,1542,1543,1577,1584,1589,1590,1591,1592,1594,1595,1596,1597,1598,1599,1600,1605,1783,1845,1863,1864,1869,1896,1897,1898,1900,1916,1917,1920,1921,1924,1928,1929,1932,2677,2771,2777,2778,723729],
+    "sha256": "e9fb5129a920c22c9311d4af38b1051d2a5dc8e91100b24586d1cdc7a2edc3d3",
+    "by_classification": {"reading_plan_order":34,"standalone_prerequisite":15,"needs_review":1},
+    "interpretation": "Current next-unread blocking overlap is migration-risk annotation only, not semantic classification evidence."
+  },
+  "mixed_families": [
+    {"project":"Fourth World / Mister Miracle","standalone_prerequisite":[1383,1784],"reading_plan_order":[1590,1591,1592,1783,1785,1786]},
+    {"project":"Late-90s X-Men","standalone_prerequisite":[1577,1578,1579,1580,1581,1848,1849,1850,1851,1852],"reading_plan_order":[1853,1854,1855,1856,1857,1858,1859,1860,1861,1862,1863,1864,1865,1866,1867,1868,1869,1870,1871,1872,1873,1874,1875,1876,1878,1879,1880,1881,1882,1883,1884,1885,1886,1887,1888,1889,1890,1891,1892,1893,1894,1900]},
+    {"project":"Ultimate Universe","standalone_prerequisite":[1582,1583,1584,1912,1913,1916,1918,1924,1928,1936,1937],"reading_plan_order":[1428,1908,1909,1910,1911,1914,1915,1917,1919,1920,1921,1922,1923,1927,1930,1932],"needs_review":[1929]}
+  ],
+  "needs_review": {
+    "dependency_ids": [1929],
+    "reason": "Ultimate Universe: Finale #1 -> Ultimate Impact: Reborn #1 conflicts with publisher chronology and lacks provenance proving either a deliberate reverse reader-order override or a true prerequisite.",
+    "evidence_needed": ["Historical issue/PR/thread evidence of deliberate reverse reader placement","Publisher/editorial/story evidence that Finale #1 is genuinely required before Ultimate Impact: Reborn #1"],
+    "sources": ["https://prhcomics.com/book/?isbn=75960621461700111","https://prhcomics.com/book/?isbn=75960621283500111"]
+  },
+  "safety": {
+    "production_mutated": false,
+    "dependencies_modified": false,
+    "reading_plans_modified": false,
+    "legacy_reading_orders_modified": false,
+    "continuity_rules_modified": false,
+    "blocked_state_modified": false,
+    "sequence_order_modified": false,
+    "roll_behavior_modified": false,
+    "migration_authorized": false,
+    "architecture_hold_2363_lifted": false,
+    "step_14e_started": false
+  }
+}
