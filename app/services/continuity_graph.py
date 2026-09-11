@@ -1,9 +1,8 @@
-"""Shared continuity graph snapshot and per-node readiness primitives.
+"""Shared continuity graph snapshot and per-node blocker primitives.
 
-Public home for graph-snapshot loading and per-node readiness helpers used by
-continuity readiness, plan readiness, blocking, and chain traversal. Centralizing
-these primitives behind a documented public API lets the base readiness module
-refactor freely without silently breaking plan-readiness consumers.
+Public home for graph-snapshot loading and per-node hard-prerequisite helpers
+used by Roll blocking, candidate filtering, and internal chain traversal.
+These primitives are not a product readiness API.
 """
 
 import logging

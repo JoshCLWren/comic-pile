@@ -477,8 +477,8 @@ async def get_group_detail(
         db: The asynchronous database session.
 
     Returns:
-        The requested owned group with enriched member data, continuity
-        readiness, and linked plans, avoiding per-member N+1 requests.
+        The requested owned group with enriched member, plan, and project
+        data, avoiding per-member N+1 requests.
     """
     group = await _owned_group(db, group_id, current_user.id)
     return await _group_detail_response(db, group, current_user.id)
