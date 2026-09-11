@@ -20,6 +20,7 @@ vi.mock('../services/api-issues', () => ({ issuesApi: { create: vi.fn(), markRea
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: () => ({ setRestoreAction: vi.fn(), clearRestoreAction: vi.fn() }) }))
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }) }))
 type CardProps = Record<string, string | (() => void) | ((event: unknown) => void)>
+// SAFETY: mock component receives the exact QueueThreadCard prop callbacks; non-sugar casts expose the minimal callable contract exercised by the tests.
 vi.mock('../pages/QueuePage/QueueThreadCard', () => ({ default: (props: CardProps) => <article><button onClick={props.onCardClick as () => void}>card callback</button><button onClick={() => (props.onDragStart as (event: unknown) => void)({ dataTransfer: { effectAllowed: '', setData: vi.fn() } })}>drag start</button><button onClick={() => (props.onDragOver as (event: unknown) => void)({ preventDefault: vi.fn() })}>drag over</button><button onClick={() => (props.onDrop as (event: unknown) => void)({ preventDefault: vi.fn() })}>drop</button><button onClick={props.onDragEnd as () => void}>drag end</button><button onClick={props.onRead as () => void}>read callback</button><button onClick={props.onEdit as () => void}>edit callback</button><button onClick={props.onSnooze as () => void}>snooze callback</button><button onClick={props.onDelete as () => void}>delete callback</button><button onClick={props.onMoveToFront as () => void}>front callback</button><button onClick={props.onMoveToBack as () => void}>back callback</button><button onClick={props.onReposition as () => void}>reposition callback</button><button onClick={props.onEdit as () => void}>edit modal callback</button><button onClick={props.onDependencies as () => void}>dependencies callback</button></article> }))
 vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children, onClose }: { isOpen: boolean; title: string; children: React.ReactNode; onClose: () => void }) => isOpen ? <section><h2>{title}</h2><button onClick={onClose}>close modal</button>{children}</section> : null }))
 vi.mock('../components/PositionSlider', () => ({ default: ({ onPositionSelect, onCancel }: { onPositionSelect: (n: number) => void; onCancel: () => void }) => <div><button onClick={() => onPositionSelect(0)}>invalid position</button><button onClick={() => onPositionSelect(1)}>confirm position</button><button onClick={onCancel}>cancel position</button></div> }))
@@ -39,6 +40,7 @@ beforeEach(() => {
   vi.stubGlobal('alert', vi.fn())
   mocks.mutate.mockResolvedValue(undefined)
   vi.mocked(useQueueThreads).mockImplementation(() => {
+     // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
      return {
   // SAFETY: as never is used for type narrowing in mock data
   // SAFETY: mock data shape satisfies the hook return type; as never bridges the type gap
@@ -281,6 +283,7 @@ describe('QueuePage callback coverage', () => {
           { ...thread, id: 3, title: 'Alpha', queue_position: 2, created_at: '2025-01-01' },
         ]
       }
+      // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
       return {
   // SAFETY: as never is used for type narrowing in mock data
   // SAFETY: mock data shape satisfies the hook return type; as never bridges the type gap

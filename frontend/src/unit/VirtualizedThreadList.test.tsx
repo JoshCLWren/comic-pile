@@ -39,6 +39,7 @@ vi.mock('@tanstack/react-virtual', () => ({
 // Also stub ResizeObserver (needed by the component's useEffect).
 beforeAll(() => {
   if (!globalThis.DataTransfer) {
+    // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
     globalThis.DataTransfer = class {
       effectAllowed = 'none'
       dropEffect = 'none'
@@ -49,10 +50,10 @@ beforeAll(() => {
       clearData = () => {}
       setDragImage = () => {}
       files = cast<FileList>(Object.freeze([]))
-    // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
     } as typeof DataTransfer
   }
   if (!globalThis.DragEvent) {
+    // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
     globalThis.DragEvent = class extends MouseEvent {
       declare dataTransfer: DataTransfer | null
       constructor(type: string, eventInitDict?: DragEventInit) {
@@ -60,7 +61,6 @@ beforeAll(() => {
         // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
         this.dataTransfer = (eventInitDict as DragEventInit | undefined)?.dataTransfer ?? null
       }
-    // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
     } as typeof DragEvent
   }
   // Stub ResizeObserver (needed for the component's own ResizeObserver)

@@ -58,20 +58,30 @@ vi.mock('../contexts/useToast', () => ({
 
 // SAFETY: vi.mocked returns mocked type; cast to any for flexible test stubs
 const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
+// SAFETY: vi.mocked returns mocked type; cast to any for flexible test stubs
 const mockedUseSession = vi.mocked(useSession) as any
+// SAFETY: vi.mocked returns mocked type; cast to any for flexible test stubs
 const mockedUseSnooze = vi.mocked(useSnooze) as any
+// SAFETY: vi.mocked returns mocked type; cast to any for flexible test stubs
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 
 beforeEach(() => {
   vi.stubGlobal('alert', vi.fn())
   // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useUpdateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useDeleteThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useReactivateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useMoveToFront).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useMoveToBack).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useMoveToPosition).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useShuffleQueue).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
   mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })

@@ -111,12 +111,11 @@ beforeEach(() => {
   vi.mocked(useShuffleQueue).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
   vi.mocked(useBugReportRestore).mockReturnValue({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
     restoreLastView: vi.fn(),
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: as never is used for type narrowing in mock data
   } as never)
 })
 

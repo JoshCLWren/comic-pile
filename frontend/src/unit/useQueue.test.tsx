@@ -41,8 +41,11 @@ beforeEach(() => {
   vi.clearAllMocks()
   // SAFETY: mockResolvedValue expects the resolved type; undefined as never satisfies void returns
   mockedQueueApi.moveToPosition.mockResolvedValue(undefined as never)
+  // SAFETY: mockResolvedValue expects the resolved type; undefined as never satisfies void returns
   mockedQueueApi.moveToFront.mockResolvedValue(undefined as never)
+  // SAFETY: mockResolvedValue expects the resolved type; undefined as never satisfies void returns
   mockedQueueApi.moveToBack.mockResolvedValue(undefined as never)
+  // SAFETY: mockResolvedValue expects the resolved type; undefined as never satisfies void returns
   mockedQueueApi.shuffle.mockResolvedValue(undefined as never)
   mockedInvalidateAfterQueueMovement.mockResolvedValue()
   mockedThreadsApi.list.mockResolvedValue({ threads: [], next_page_token: null })

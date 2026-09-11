@@ -57,6 +57,7 @@ vi.mock('../contexts/useToast', () => ({
 
 // SAFETY: vi.mocked returns mocked type; cast to any for flexible test stubs
 const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
+// SAFETY: vi.mocked returns mocked type; cast to any for flexible test stubs
 const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
 
 function renderQueue(): void {
@@ -72,14 +73,23 @@ function renderQueue(): void {
 beforeEach(() => {
   // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useUpdateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useDeleteThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useReactivateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useMoveToFront).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useMoveToBack).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useMoveToPosition).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useSession).mockReturnValue({ data: { snoozed_threads: [] }, refetch: vi.fn() } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useSnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
+  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useUnsnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
   // SAFETY: useBugReportRestore returns a context shape; cast to any for partial stub
   vi.mocked(useBugReportRestore).mockReturnValue({
