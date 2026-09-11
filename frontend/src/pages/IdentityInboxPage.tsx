@@ -91,7 +91,7 @@ function CandidateCard({
   const volumeObj = meta.volume
   const volumeName =
     isObject(volumeObj)
-? toText(volumeObj.name)
+      ? toText(volumeObj.name)
       : toText(meta.volume_name)
   const issueName = toText(meta.name) ?? toText(meta.issue_name)
   const evidenceItems = Array.isArray(candidate.evidence_json.evidence)

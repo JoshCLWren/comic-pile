@@ -111,7 +111,8 @@ export function useDiagnostics() {
     if (mountCount === 1 && typeof console !== 'undefined' && console.error && !isPatched.current) {
       const original = console.error
       originalConsoleError = original
-;cast<Record<string, unknown>>(console)['error'] = (...args: unknown[]) => {
+      // SAFETY: patching console.error with an indexable record preserves the callable signature; Record<string, (...args: unknown[]) => void> is the narrowest indexable contract for the patch.
+      ;cast<Record<string, (...args: unknown[]) => void>>(console)['error'] = (...args: unknown[]) => {
         const timestamp = new Date().toISOString()
         const message = args.map((arg) => {
           if (isString(arg)) return arg

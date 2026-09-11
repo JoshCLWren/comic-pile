@@ -382,7 +382,7 @@ export default api
 
 export const threadsApi = {
   list: async (params?: ThreadQueryParams, pageToken?: string | null): Promise<ThreadListResponse> => {
-const queryParams = { ...(params ?? {}) } satisfies Record<string, unknown>;
+    const queryParams = { ...(params ?? {}) } satisfies ThreadQueryParams;
     if (pageToken) {
       queryParams.page_token = pageToken;
     }
