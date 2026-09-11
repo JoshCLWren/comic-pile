@@ -153,8 +153,7 @@ export function RollRecoveryCard({
                 )}
               </>
             )
-
-const rowClass =
+            const rowClass =
               'flex w-full flex-col gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between sm:gap-3'
 
             return isClickable ? (
