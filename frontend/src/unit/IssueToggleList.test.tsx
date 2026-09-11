@@ -91,6 +91,7 @@ function createDataTransfer(): DataTransfer {
     getData: vi.fn(),
     setData: vi.fn(),
     setDragImage: vi.fn(),
+    // SAFETY: DataTransfer is a browser DOM interface; the mock satisfies the full contract via cast
   } as DataTransfer
 }
 

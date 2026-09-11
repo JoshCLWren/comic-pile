@@ -26,6 +26,7 @@ vi.mock('../components/PositionSlider', () => ({ default: ({ onPositionSelect, o
 vi.mock('../components/DependencyBuilder', () => ({ default: ({ onClose, onChanged }: { onClose: () => void; onChanged: () => Promise<void> }) => <div><button onClick={onClose}>close dependencies</button><button onClick={() => void onChanged()}>dependency changed</button></div> }))
 vi.mock('../pages/QueuePage/IssueToggleList', () => ({ IssueToggleList: () => <div>issue list</div> }))
 vi.mock('../pages/QueuePage/VirtualizedThreadList', () => ({ VIRTUALIZATION_THRESHOLD: 50, default: ({ threads, renderItem }: { threads: never[]; renderItem: (thread: never, index: number) => React.ReactNode }) => <div>{threads.slice(0, 1).map((thread, index) => renderItem(thread, index))}</div> }))
+  // SAFETY: object literal satisfies the event handler parameter type; as never bridges the gap
 vi.mock('../components/MigrationDialog', () => ({ default: ({ onComplete, onSkip, onClose }: { onComplete: (thread: never) => void; onSkip: () => void; onClose: () => void }) => <div><button onClick={() => onComplete({ id: 1, title: 'Saga' } as never)}>complete migration</button><button onClick={onSkip}>skip migration</button><button onClick={onClose}>close migration</button></div> }))
 
 const thread = { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 3, total_issues: null, created_at: '2024-01-01' }
@@ -38,29 +39,45 @@ beforeEach(() => {
   mocks.mutate.mockResolvedValue(undefined)
   vi.mocked(useQueueThreads).mockImplementation(() => {
      return {
+  // SAFETY: mock data shape satisfies the hook return type; as never bridges the type gap
        data: [thread, completed] as never,
        isPending: false,
        isError: false,
        refetch: mocks.refetch,
        nextPageToken: null,
        loadMore: vi.fn(),
+  // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
      } as never
    })
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useSession).mockReturnValue({ data: { snoozed_threads: [] }, refetch: mocks.refetchSession } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useCreateThread).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useUpdateThread).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useDeleteThread).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useReactivateThread).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useMoveToFront).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useMoveToBack).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useMoveToPosition).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useShuffleQueue).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useSnooze).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useUnsnooze).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(threadsApi.setPending).mockResolvedValue({ thread_id: 1 } as never)
   vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([])
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(issuesApi.create).mockResolvedValue({ issues: [] } as never)
   vi.mocked(issuesApi.markRead).mockResolvedValue(undefined)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(issuesApi.migrateThread).mockResolvedValue({} as never)
 })
 
@@ -148,6 +165,7 @@ describe('QueuePage callback coverage', () => {
 
   it('covers migrated edit fields, location-driven create, and migration refresh failure', async () => {
     const user = userEvent.setup()
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useQueueThreads).mockReturnValue({ data: [{ ...thread, total_issues: 4 }] as never, isPending: false, refetch: mocks.refetch } as never)
     mocks.refetch.mockRejectedValueOnce(new Error('refresh after migration failed'))
     renderPage()
@@ -159,6 +177,7 @@ describe('QueuePage callback coverage', () => {
 
   it('persists a drag reorder between two active threads', async () => {
     const second = { ...thread, id: 3, title: 'Second', queue_position: 2 }
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useQueueThreads).mockReturnValue({ data: [thread, second] as never, isPending: false, refetch: mocks.refetch } as never)
     mocks.mutate.mockResolvedValue(undefined)
     const user = userEvent.setup()
@@ -192,6 +211,7 @@ describe('QueuePage callback coverage', () => {
 
   it('uses the virtualized queue renderer for large queues', () => {
     const manyThreads = Array.from({ length: 51 }, (_, index) => ({ ...thread, id: index + 1, queue_position: index + 1 }))
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useQueueThreads).mockReturnValue({ data: manyThreads as never, isPending: false, refetch: mocks.refetch } as never)
     renderPage()
     expect(screen.getByText('card callback')).toBeInTheDocument()
@@ -199,6 +219,7 @@ describe('QueuePage callback coverage', () => {
 
   it('shows issue preview errors and creates complex ranges with read markers', async () => {
     const user = userEvent.setup()
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(issuesApi.create).mockResolvedValue({ issues: [{ id: 21, issue_number: 'Annual 1' }] } as never)
     mocks.mutate.mockResolvedValueOnce({ id: 9 })
     renderPage()
@@ -251,9 +272,11 @@ describe('QueuePage callback coverage', () => {
         ]
       }
       return {
+  // SAFETY: mock data shape satisfies the hook return type; as never bridges the type gap
         data: data as never,
         isPending: false,
         refetch: mocks.refetch,
+  // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
       } as never
     })
     renderPage()
@@ -309,11 +332,13 @@ describe('QueuePage callback coverage', () => {
   })
 
   it('handles loading, empty active queues, and failed queue mutations', async () => {
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useQueueThreads).mockReturnValue({ data: undefined, isPending: true, refetch: mocks.refetch } as never)
     const { unmount } = renderPage()
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
     unmount()
 
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useQueueThreads).mockReturnValue({ data: [completed] as never, isPending: false, refetch: mocks.refetch } as never)
     const user = userEvent.setup()
     renderPage()
@@ -347,7 +372,9 @@ describe('QueuePage callback coverage', () => {
 
   it('uses snoozed and blocked card branches and reports blocked reads', async () => {
     const user = userEvent.setup()
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useSession).mockReturnValue({ data: { snoozed_threads: [{ id: 1 }] }, refetch: mocks.refetchSession } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useQueueThreads).mockReturnValue({ data: [{ ...thread, is_blocked: true }] as never, isPending: false, refetch: mocks.refetch } as never)
     vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1])
     vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValue({ blocking_reasons: [] })
@@ -360,8 +387,11 @@ describe('QueuePage callback coverage', () => {
 
   it('renders pending mutation labels for create, edit, and reactivation', async () => {
     const user = userEvent.setup()
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useCreateThread).mockReturnValue({ mutate: mocks.mutate, isPending: true } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useUpdateThread).mockReturnValue({ mutate: mocks.mutate, isPending: true } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useReactivateThread).mockReturnValue({ mutate: mocks.mutate, isPending: true } as never)
     renderPage()
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0]!)

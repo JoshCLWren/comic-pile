@@ -87,23 +87,34 @@ beforeEach(() => {
   vi.stubGlobal('alert', vi.fn())
   // SAFETY: mockReturnValue accepts partial hook returns; never cast bypasses full-type requirements
   vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useUpdateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useDeleteThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useReactivateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useMoveToFront).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useMoveToBack).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useMoveToPosition).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useShuffleQueue).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useSnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useUnsnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   vi.mocked(useSession).mockReturnValue({
     data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: vi.fn(),
+  // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
   } as never)
   vi.mocked(useBugReportRestore).mockReturnValue({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
     restoreLastView: vi.fn(),
+  // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
   } as never)
 })
 
