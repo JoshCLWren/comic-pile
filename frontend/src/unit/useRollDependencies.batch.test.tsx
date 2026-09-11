@@ -1,20 +1,8 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RollDependenciesApi } from '../services/apiTypes'
 
-const axiosInstance = vi.hoisted(() => ({
-  post: vi.fn(),
-  get: vi.fn(),
-  interceptors: {
-    request: { use: vi.fn() },
-    response: { use: vi.fn() },
-  },
-}))
-
-vi.mock('axios', () => ({
-  default: {
-    create: vi.fn(() => axiosInstance),
-  },
-}))
+const dependenciesApi: RollDependenciesApi = { getBatchBlockingInfo: vi.fn() }
 
 import { useRollDependencies } from '../pages/RollPage/useRollDependencies'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
@@ -58,19 +46,19 @@ function bootstrapWith(
 
 describe('useRollDependencies batched blocking details', () => {
   beforeEach(() => {
-    axiosInstance.post.mockReset()
+    dependenciesApi.getBatchBlockingInfo.mockReset()
   })
 
   function renderDependencies(bootstrap: RollBootstrapResponse | null) {
     return renderHook(() => {
       const state = useRollPageState()
-      const dependencies = useRollDependencies({ state, bootstrap })
+      const dependencies = useRollDependencies({ state, bootstrap, dependencies: dependenciesApi })
       return { state, handleToggleBlocked: dependencies.handleToggleBlocked }
     })
   }
 
   it('loads one named-blocker map for every blocked thread in a single request', async () => {
-    axiosInstance.post.mockResolvedValue({
+    dependenciesApi.getBatchBlockingInfo.mockResolvedValue({
       threads: {
         '2': {
           blocking_reasons: [],
@@ -88,10 +76,8 @@ describe('useRollDependencies batched blocking details', () => {
       await result.current.handleToggleBlocked()
     })
 
-    expect(axiosInstance.post).toHaveBeenCalledTimes(1)
-    expect(axiosInstance.post).toHaveBeenCalledWith('/v1/threads:getBlockingInfo', {
-      thread_ids: [2],
-    })
+    expect(dependenciesApi.getBatchBlockingInfo).toHaveBeenCalledTimes(1)
+    expect(dependenciesApi.getBatchBlockingInfo).toHaveBeenCalledWith([2])
     expect(result.current.state.blockingDependencyMap).toEqual({
       2: [{ thread_id: 9, thread_title: 'Prequel', issue_number: '1', label: 'Read Prequel first' }],
     })
@@ -99,22 +85,20 @@ describe('useRollDependencies batched blocking details', () => {
   })
 
   it('falls back to empty blocker lists without a bootstrap or dependency payload', async () => {
-    axiosInstance.post.mockResolvedValue({ threads: { '3': { blocking_reasons: ['legacy'] } } })
+    dependenciesApi.getBatchBlockingInfo.mockResolvedValue({ threads: { '3': { blocking_reasons: ['legacy'] } } })
     const { result } = renderDependencies(null)
 
     await act(async () => {
       await result.current.handleToggleBlocked()
     })
 
-    expect(axiosInstance.post).toHaveBeenCalledWith('/v1/threads:getBlockingInfo', {
-      thread_ids: [],
-    })
+    expect(dependenciesApi.getBatchBlockingInfo).toHaveBeenCalledWith([])
     expect(result.current.state.blockingDependencyMap).toEqual({ 3: [] })
     expect(result.current.state.blockedExpanded).toBe(true)
   })
 
   it('clears the blocker map and still expands when the batch request fails', async () => {
-    axiosInstance.post.mockRejectedValue(new Error('blocking batch unavailable'))
+    dependenciesApi.getBatchBlockingInfo.mockRejectedValue(new Error('blocking batch unavailable'))
     const { result } = renderDependencies(
       bootstrapWith([{ id: 4, title: 'Blocked', format: 'Comic' }]),
     )
@@ -129,7 +113,7 @@ describe('useRollDependencies batched blocking details', () => {
     await act(async () => {
       await result.current.handleToggleBlocked()
     })
-    expect(axiosInstance.post).toHaveBeenCalledTimes(1)
+    expect(dependenciesApi.getBatchBlockingInfo).toHaveBeenCalledTimes(1)
     expect(result.current.state.blockedExpanded).toBe(false)
   })
 })

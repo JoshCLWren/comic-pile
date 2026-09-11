@@ -3,18 +3,17 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { type ReactNode } from 'react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { resolveBrowserTimezone, useRollBootstrap } from '../hooks/useRollBootstrap'
-import { rollBootstrapApi } from '../services/rollBootstrapApi'
+import type { RollBootstrapApi } from '../services/apiTypes'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { cast } from '../utils/cast'
 
-vi.mock('../services/rollBootstrapApi', () => ({
-  rollBootstrapApi: {
-    get: vi.fn(),
-  },
-}))
+function makeBootstrapApi(): RollBootstrapApi {
+  return { get: vi.fn(), switchPrerequisite: vi.fn() }
+}
 
-const mockedBootstrap = vi.mocked(rollBootstrapApi.get)
+const bootstrapApi = makeBootstrapApi()
+const mockedBootstrap = bootstrapApi.get
 
 const bootstrapResponse: RollBootstrapResponse = {
   session_id: 1,
@@ -60,11 +59,11 @@ function createTestWrapper() {
 
 function renderBootstrap() {
   const { wrapper } = createTestWrapper()
-  return renderHook(() => useRollBootstrap(), { wrapper })
+  return renderHook(() => useRollBootstrap(bootstrapApi), { wrapper })
 }
 
 beforeEach(() => {
-  mockedBootstrap.mockReset()
+  bootstrapApi.get.mockReset()
 })
 
 it('captures the browser-resolved timezone on the initial bootstrap fetch', async () => {

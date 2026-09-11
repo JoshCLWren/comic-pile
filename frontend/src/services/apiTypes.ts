@@ -1,4 +1,5 @@
-import type { RollResponse, OverrideRollPayload } from '../types'
+import type { RatePayload, RollResponse, OverrideRollPayload, SnoozeSessionResponse, Thread } from '../types'
+import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
 export interface RollApi {
   roll: () => Promise<RollResponse>
@@ -11,18 +12,19 @@ export interface RollApi {
 }
 
 export interface ProtectedRollMutationApi {
-  rate: (payload: { thread_id: number; rating: number; issues_read?: number; finish_session?: boolean; issue_number?: string }) => Promise<import('../types').Thread>
-  snooze: () => Promise<void>
-  skip: (threadId: number) => Promise<void>
-  bootstrap: (state: import('../types/rollBootstrap').RollBootstrapResponse) => Promise<void>
+  rate: (data: RatePayload) => Promise<Thread>
+  snooze: () => Promise<SnoozeSessionResponse>
+  skip: () => Promise<RollResponse>
+  bootstrap: () => Promise<RollBootstrapResponse>
 }
 
 export interface RollBootstrapApi {
-  get: () => Promise<import('../types/rollBootstrap').RollBootstrapResponse>
+  get: (timezone?: string) => Promise<RollBootstrapResponse>
+  switchPrerequisite: (request: import('../types/rollBootstrap').RollPrerequisiteSwitchRequest) => Promise<import('../types/rollBootstrap').RollPrerequisiteSwitchResponse>
 }
 
 export interface CacheEffectsApi {
-  applyRatedThreadCache: (client: import('@tanstack/react-query').QueryClient, thread: import('../types').Thread) => Promise<void>
+  applyRatedThreadCache: (client: import('@tanstack/react-query').QueryClient, thread: Thread) => Promise<void>
   invalidateCurrentSessionAfterSnooze: (client: import('@tanstack/react-query').QueryClient) => Promise<void>
 }
 
@@ -32,6 +34,20 @@ export interface SkipApi {
 }
 
 export interface SnoozeApi {
-  snooze: () => Promise<void>
+  snooze: () => Promise<SnoozeSessionResponse>
   unsnooze: (threadId: number) => Promise<void>
+}
+
+/** Injectable dependencies for the Roll mutation hooks (snooze/skip/rate). */
+export interface RollMutationDeps {
+  protectedApi?: ProtectedRollMutationApi
+  bootstrapApi?: RollBootstrapApi
+  cacheEffects?: CacheEffectsApi
+  snoozeApi?: SnoozeApi
+  skipApi?: SkipApi
+}
+
+/** The subset of `dependenciesApi` used by the Roll page's batch blocker load. */
+export interface RollDependenciesApi {
+  getBatchBlockingInfo: (threadIds: number[]) => Promise<import('../types').BatchBlockingInfoResponse>
 }

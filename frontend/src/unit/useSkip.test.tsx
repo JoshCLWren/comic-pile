@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSkip, useUnskip } from '../hooks/useSkip'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
+import type { CacheEffectsApi, ProtectedRollMutationApi, RollBootstrapApi, SkipApi } from '../services/apiTypes'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
 let client: QueryClient
@@ -12,20 +13,35 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>
 }
 
-const skipApi = vi.hoisted(() => ({ skip: vi.fn(), unskip: vi.fn() }))
-const protectedRollMutationApi = vi.hoisted(() => ({
-  rate: vi.fn(),
-  snooze: vi.fn(),
-  skip: vi.fn(),
-  bootstrap: vi.fn(),
-}))
-const rollBootstrapApi = vi.hoisted(() => ({ get: vi.fn() }))
-const invalidateCurrentSessionAfterSnooze = vi.hoisted(() => vi.fn())
+function makeSkipApi(): SkipApi {
+  return { skip: vi.fn(), unskip: vi.fn() }
+}
 
-vi.mock('../services/api', () => ({ skipApi }))
-vi.mock('../services/protectedRollMutationApi', () => ({ protectedRollMutationApi }))
-vi.mock('../services/rollBootstrapApi', () => ({ rollBootstrapApi }))
-vi.mock('../query/cacheEffects', () => ({ invalidateCurrentSessionAfterSnooze }))
+function makeProtectedApi(): ProtectedRollMutationApi {
+  return { rate: vi.fn(), snooze: vi.fn(), skip: vi.fn(), bootstrap: vi.fn() }
+}
+
+function makeBootstrapApi(): RollBootstrapApi {
+  return { get: vi.fn(), switchPrerequisite: vi.fn() }
+}
+
+const skipApi = makeSkipApi()
+const protectedRollMutationApi = makeProtectedApi()
+const rollBootstrapApi = makeBootstrapApi()
+const invalidateCurrentSessionAfterSnooze = vi.fn()
+const cacheEffects: CacheEffectsApi = {
+  applyRatedThreadCache: vi.fn(),
+  invalidateCurrentSessionAfterSnooze,
+}
+const deps = { skipApi, protectedApi: protectedRollMutationApi, bootstrapApi: rollBootstrapApi, cacheEffects }
+
+function renderSkip() {
+  return renderHook(() => useSkip(deps), { wrapper })
+}
+
+function renderUnskip() {
+  return renderHook(() => useUnskip(deps), { wrapper })
+}
 
 const bootstrapState = (
   pendingThreadId: number | null,
@@ -78,7 +94,7 @@ describe('skip hooks', () => {
     window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
 
     try {
-      const skip = renderHook(() => useSkip(), { wrapper })
+      const skip = renderSkip()
       await act(async () => await skip.result.current.mutate(7))
 
       expect(protectedRollMutationApi.skip).toHaveBeenCalledTimes(1)
@@ -87,7 +103,7 @@ describe('skip hooks', () => {
       expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledWith(client)
       expect(skip.result.current.isError).toBe(false)
 
-      const unskip = renderHook(() => useUnskip(), { wrapper })
+      const unskip = renderUnskip()
       await act(async () => await unskip.result.current.mutate(7))
       expect(skipApi.unskip).toHaveBeenCalledWith(7)
       expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledTimes(2)
@@ -103,7 +119,7 @@ describe('skip hooks', () => {
       resolveRequest = () => resolve(undefined)
     }))
 
-    const skip = renderHook(() => useSkip(), { wrapper })
+    const skip = renderSkip()
     let firstRequest: Promise<unknown> | undefined
     let secondRequest: Promise<unknown> | undefined
 
@@ -134,7 +150,7 @@ describe('skip hooks', () => {
     window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
 
     try {
-      const skip = renderHook(() => useSkip(), { wrapper })
+      const skip = renderSkip()
       await act(async () => await skip.result.current.mutate(7))
 
       expect(protectedRollMutationApi.skip).toHaveBeenCalledTimes(1)
@@ -150,7 +166,7 @@ describe('skip hooks', () => {
   it('exposes exhausted refresh recovery and retries without repeating the skip', async () => {
     const refreshFailure = new Error('bootstrap unavailable')
     rollBootstrapApi.get.mockRejectedValue(refreshFailure)
-    const skip = renderHook(() => useSkip(), { wrapper })
+    const skip = renderSkip()
 
     await act(async () => await skip.result.current.mutate(7))
 
@@ -174,7 +190,7 @@ describe('skip hooks', () => {
   it('blocks duplicate skip submission while an explicit refresh retry is pending', async () => {
     const refreshFailure = new Error('bootstrap unavailable')
     rollBootstrapApi.get.mockRejectedValue(refreshFailure)
-    const skip = renderHook(() => useSkip(), { wrapper })
+    const skip = renderSkip()
 
     await act(async () => await skip.result.current.mutate(7))
 
@@ -214,7 +230,7 @@ describe('skip hooks', () => {
     rollBootstrapApi.get.mockResolvedValue(bootstrapState(null, 20))
 
     try {
-      const skip = renderHook(() => useSkip(), { wrapper })
+      const skip = renderSkip()
       let request: Promise<unknown> | undefined
 
       act(() => {
@@ -246,7 +262,7 @@ describe('skip hooks', () => {
     rollBootstrapApi.get.mockResolvedValue(bootstrapState(7, 10))
 
     try {
-      const skip = renderHook(() => useSkip(), { wrapper })
+      const skip = renderSkip()
       let request!: Promise<unknown>
 
       act(() => {
@@ -275,7 +291,7 @@ describe('skip hooks', () => {
     protectedRollMutationApi.skip.mockResolvedValueOnce(undefined)
     protectedRollMutationApi.bootstrap.mockResolvedValue(bootstrapState(7, 12))
 
-    const skipHook = renderHook(() => useSkip(), { wrapper })
+    const skipHook = renderSkip()
     await act(async () => await skipHook.result.current.mutate(7))
 
     expect(protectedRollMutationApi.skip).toHaveBeenCalledTimes(2)
@@ -287,7 +303,7 @@ describe('skip hooks', () => {
     protectedRollMutationApi.skip.mockRejectedValueOnce(timeoutError)
     rollBootstrapApi.get.mockResolvedValue(bootstrapState(null, 20))
 
-    const skipHook = renderHook(() => useSkip(), { wrapper })
+    const skipHook = renderSkip()
     await act(async () => await skipHook.result.current.mutate(7))
 
     expect(protectedRollMutationApi.skip).toHaveBeenCalledTimes(1)
@@ -296,12 +312,12 @@ describe('skip hooks', () => {
 
   it('tracks and rethrows ordinary failures', async () => {
     protectedRollMutationApi.skip.mockRejectedValueOnce(new Error('skip failed'))
-    const skip = renderHook(() => useSkip(), { wrapper })
+    const skip = renderSkip()
     await act(async () => await expect(skip.result.current.mutate(7)).rejects.toThrow('skip failed'))
     await waitFor(() => expect(skip.result.current.isError).toBe(true))
 
     skipApi.unskip.mockRejectedValueOnce(new Error('unskip failed'))
-    const unskip = renderHook(() => useUnskip(), { wrapper })
+    const unskip = renderUnskip()
     await act(async () => await expect(unskip.result.current.mutate(7)).rejects.toThrow('unskip failed'))
     await waitFor(() => expect(unskip.result.current.isError).toBe(true))
 
@@ -316,7 +332,7 @@ describe('skip hooks', () => {
     protectedRollMutationApi.skip.mockRejectedValueOnce(authError)
     protectedRollMutationApi.bootstrap.mockRejectedValueOnce(recoveryError)
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const skip = renderHook(() => useSkip(), { wrapper })
+    const skip = renderSkip()
     await act(async () => await expect(skip.result.current.mutate(7)).rejects.toThrow('Not authenticated'))
     expect(errorSpy).toHaveBeenCalledWith(
       'Failed to recover skip after authentication expiry:',
@@ -331,7 +347,7 @@ describe('skip hooks', () => {
     protectedRollMutationApi.skip.mockRejectedValueOnce(timeoutError)
     rollBootstrapApi.get.mockRejectedValueOnce(reconcileError)
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const skip = renderHook(() => useSkip(), { wrapper })
+    const skip = renderSkip()
     await act(async () => await expect(skip.result.current.mutate(7)).rejects.toThrow('timeout'))
     expect(errorSpy).toHaveBeenCalledWith(
       'Failed to reconcile ambiguous skip result:',
@@ -343,7 +359,7 @@ describe('skip hooks', () => {
   it('shares one in-flight authoritative refresh across concurrent retryRefresh calls', async () => {
     const refreshFailure = new Error('bootstrap unavailable')
     rollBootstrapApi.get.mockRejectedValue(refreshFailure)
-    const skip = renderHook(() => useSkip(), { wrapper })
+    const skip = renderSkip()
 
     await act(async () => await skip.result.current.mutate(7))
 

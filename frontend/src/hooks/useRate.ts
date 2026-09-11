@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import type { CacheEffectsApi, ProtectedRollMutationApi, RollBootstrapApi } from '../services/apiTypes'
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
@@ -13,7 +14,19 @@ import {
 
 type RateResult = Awaited<ReturnType<typeof protectedRollMutationApi.rate>> | undefined
 
-export function useRate() {
+export interface RateDeps {
+  protectedApi?: ProtectedRollMutationApi
+  bootstrapApi?: RollBootstrapApi
+  cacheEffects?: CacheEffectsApi
+  queryClientInstance?: typeof queryClient
+}
+
+export function useRate(deps: RateDeps = {}) {
+  const { protectedApi, bootstrapApi, cacheEffects, queryClientInstance } = deps
+  const protectedRollApi = protectedApi ?? protectedRollMutationApi
+  const rollBootstrap = bootstrapApi
+  const applyCache = cacheEffects?.applyRatedThreadCache ?? applyRatedThreadCache
+  const client = queryClientInstance ?? queryClient
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
   const inFlightRequest = useRef<Promise<RateResult> | null>(null)
@@ -26,11 +39,11 @@ export function useRate() {
 
     const request: Promise<RateResult> = (async () => {
       try {
-        const result = await protectedRollMutationApi.rate(data)
-        await applyRatedThreadCache(queryClient, result)
+        const result = await protectedRollApi.rate(data)
+        await applyCache(client, result)
 
         try {
-          await fetchAndPublishRollBootstrap()
+          await fetchAndPublishRollBootstrap(rollBootstrap)
         } catch (reconciliationError: unknown) {
           console.error(
             'Rating saved but authoritative Roll state failed to refresh:',
@@ -44,11 +57,13 @@ export function useRate() {
           try {
             const recovery = await recoverProtectedRollMutation(
               data.thread_id,
-              () => protectedRollMutationApi.rate(data),
+              () => protectedRollApi.rate(data),
+              undefined,
+              protectedRollApi,
             )
             if (recovery.status === 'retried') {
-              await applyRatedThreadCache(queryClient, recovery.value)
-              await fetchAndPublishRollBootstrap()
+              await applyCache(client, recovery.value)
+              await fetchAndPublishRollBootstrap(rollBootstrap)
               return recovery.value
             }
           } catch (recoveryError: unknown) {
@@ -61,7 +76,10 @@ export function useRate() {
 
         if (isAmbiguousNetworkFailure(error)) {
           try {
-            const committed = await reconcileAmbiguousRollMutation(data.thread_id)
+            const committed = await reconcileAmbiguousRollMutation(
+              data.thread_id,
+              rollBootstrap,
+            )
             if (committed) return undefined
           } catch (reconciliationError: unknown) {
             console.error(
