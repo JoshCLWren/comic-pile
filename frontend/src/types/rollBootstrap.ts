@@ -31,6 +31,7 @@ export interface RollRecoveryPrerequisite {
   node_type: 'issue' | 'crossover'
   node_id: number
   label: string
+  is_readable?: boolean
 }
 
 /** One labeled step in a continuity prerequisite path. */

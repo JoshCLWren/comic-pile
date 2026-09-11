@@ -182,8 +182,15 @@ async def test_roll_recovery_preserves_original_and_recommends_readable_leaf(
     assert recovery.original_thread_id == 42
     assert recovery.original_thread_title == "Original Roll"
     assert recovery.direct_blockers == [blocker]
-    assert recovery.readable_prerequisites[0].node_id == 90
-    assert recovery.readable_prerequisites[0].label == "Earlier Series #3"
+    # Recommendations lead with the direct blocker so the "Read this first"
+    # card identifies the same prerequisite issue the blocker explanation names
+    # (issue #2467, acceptance criterion 5); readable leaves follow.
+    assert recovery.readable_prerequisites[0].node_id == 100
+    assert recovery.readable_prerequisites[0].label == "Prerequisite #1"
+    assert recovery.readable_prerequisites[0].is_readable is False
+    assert recovery.readable_prerequisites[1].node_id == 90
+    assert recovery.readable_prerequisites[1].label == "Earlier Series #3"
+    assert recovery.readable_prerequisites[1].is_readable is True
     resolver.assert_awaited_once_with(
         ANY,
         user_id=1,

@@ -885,3 +885,91 @@ async def test_blocking_explanations_identify_comics_without_raw_thread_ids(asyn
             assert not pattern.search(reason)
         assert dep.thread_id == source.id
         assert dep.thread_title == source.title
+
+
+@pytest.mark.asyncio
+async def test_cross_series_prerequisite_blocks_roll_pool(async_db):
+    """Regression: JLE #7 is blocked while JLA #31 prerequisite is unread.
+
+    Reproduces issue #2467: reading JLE #6 advances next_unread to JLE #7,
+    which depends on unread JLA #31.  The roll pool must exclude the JLE
+    thread until JLA #31 is read.
+    """
+    user = User(username="cross_series_user", created_at=datetime.now(UTC))
+    async_db.add(user)
+    await async_db.flush()
+
+    # --- JLE thread: JLE #6 (read), JLE #7 (unread, next) ---
+    jle = Thread(
+        title="Justice League Europe",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    async_db.add(jle)
+    await async_db.flush()
+
+    jle6 = Issue(thread_id=jle.id, issue_number="6", position=1, status="read",
+                 read_at=datetime.now(UTC))
+    jle7 = Issue(thread_id=jle.id, issue_number="7", position=2, status="unread")
+    async_db.add_all([jle6, jle7])
+    await async_db.flush()
+    jle.next_unread_issue_id = jle7.id
+    jle.reading_progress = "in_progress"
+
+    # --- JLA thread: JLA #31 (unread) ---
+    jla = Thread(
+        title="Justice League America",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    async_db.add(jla)
+    await async_db.flush()
+
+    jla31 = Issue(thread_id=jla.id, issue_number="31", position=1, status="unread")
+    async_db.add(jla31)
+    await async_db.flush()
+    jla.next_unread_issue_id = jla31.id
+
+    # Dependency: JLA #31 is prerequisite for JLE #7
+    async_db.add(Dependency(source_issue_id=jla31.id, target_issue_id=jle7.id))
+    await async_db.commit()
+
+    # Refresh and verify JLE is blocked
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+
+    blocked = await get_blocked_thread_ids(user.id, async_db)
+    assert jle.id in blocked, "JLE should be blocked while JLA #31 is unread"
+
+    pool = await get_roll_pool(user.id, async_db)
+    pool_ids = [t.id for t in pool]
+    assert jle.id not in pool_ids, "JLE must not appear in roll pool while blocked"
+    assert jla.id in pool_ids, "JLA should be in roll pool (no prerequisite)"
+
+    # --- Read JLA #31 ---
+    jla31.status = "read"
+    jla31.read_at = datetime.now(UTC)
+    jla.next_unread_issue_id = None
+    jla.status = "completed"
+    jla.reading_progress = "completed"
+    jla.issues_remaining = 0
+    await async_db.commit()
+
+    # Refresh and verify JLE is now unblocked
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+
+    blocked_after = await get_blocked_thread_ids(user.id, async_db)
+    assert jle.id not in blocked_after, "JLE should be unblocked after JLA #31 is read"
+
+    pool_after = await get_roll_pool(user.id, async_db)
+    pool_ids_after = [t.id for t in pool_after]
+    assert jle.id in pool_ids_after, "JLE must appear in roll pool after prerequisite is read"

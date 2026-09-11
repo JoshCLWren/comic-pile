@@ -55,6 +55,7 @@ export function RollRecoveryCard({
   const recommendations = recovery.readable_prerequisites
   const chains = recovery.chains ?? []
   const diagnostics = recovery.diagnostics ?? []
+  const firstReadableIndex = recommendations.findIndex((p) => p.is_readable !== false)
 
   return (
     <section
@@ -123,33 +124,43 @@ export function RollRecoveryCard({
       {recommendations.length > 0 ? (
         <div className="mt-4 space-y-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-stone-500">
-            {recommendations.length === 1 ? 'Read this first' : 'Readable prerequisites'}
+            {primaryBlocker?.source_type === 'issue' || recommendations.length === 1
+              ? 'Read this first'
+              : 'Readable prerequisites'}
           </p>
           {recommendations.map((prerequisite, index) => {
+            const readable = prerequisite.is_readable !== false
+            const isClickable = Boolean(onReadNow && readable)
+            const isRecommendedFirst = index === firstReadableIndex && recommendations.length > 1
             const content = (
               <>
                 <span className="min-w-0">
                   <span className="block text-sm font-black text-stone-100">{prerequisite.label}</span>
-                  {index === 0 && recommendations.length > 1 && (
+                  {isRecommendedFirst && (
                     <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-wider text-amber-500">
                       Recommended first
                     </span>
                   )}
                 </span>
-                <span className="shrink-0 text-xs font-black uppercase tracking-widest text-amber-400">
-                  Read now
-                </span>
+                {readable ? (
+                  <span className="shrink-0 text-xs font-black uppercase tracking-widest text-amber-400">
+                    Read now
+                  </span>
+                ) : (
+                  <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-stone-500">
+                    Blocked
+                  </span>
+                )}
               </>
             )
-
             const rowClass =
               'flex w-full flex-col gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between sm:gap-3'
 
-            return onReadNow ? (
+            return isClickable ? (
               <button
                 key={`${prerequisite.node_type}-${prerequisite.node_id}`}
                 type="button"
-                onClick={() => onReadNow(prerequisite)}
+                onClick={() => onReadNow?.(prerequisite)}
                 disabled={isPending}
                 className={`${rowClass} transition-colors hover:bg-white/10 disabled:opacity-60`}
               >
