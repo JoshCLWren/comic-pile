@@ -86,12 +86,6 @@ async def test_continuity_rule_immediately_updates_denormalized_blocked_state(
     await async_db.refresh(target_thread)
     assert target_thread.is_blocked is True
 
-    readiness_response = await auth_client.post(
-        "/api/v1/continuity/readiness",
-        json={"node_type": "thread", "node_id": target_thread.id},
-    )
-    assert readiness_response.status_code == 200
-    assert readiness_response.json()["is_readable"] is False
 
     source_issue.status = "read"
     await async_db.flush()

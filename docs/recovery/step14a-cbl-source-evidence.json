@@ -1,0 +1,125 @@
+{
+  "step": "14A",
+  "production_project": "comic-pile",
+  "user_id": 1,
+  "captured_at": "2026-09-10",
+  "scope": "dependencies whose note exactly matches ^cbl-order:source:[^:]+:[0-9]+->[0-9]+$ and whose source/target issues belong to user 1",
+  "classification": "reading_plan_order",
+  "total_dependency_count": 101632,
+  "family_count": 11,
+  "global_id_manifest_md5": "0eab3e865b74dcaa2ac95e0e2c751995",
+  "proof": {
+    "all_active_hashes_match_exactly_one_persisted_source_list": true,
+    "all_referenced_positions_exist": true,
+    "all_edges_forward": true,
+    "endpoint_identity_matching": "10 families 100%; Wolverine has 710 generated edges touching positions 63-66 without confirmed mapping rows",
+    "wolverine_exception_resolution": "CBL positions 63-66 are Wolverine #1-4, volume year 1982; every generated edge consistently points to local Wolverine (Vol. 1) (1982) #1-4 (issue ids 101146-101149). The missing evidence is only the newer confirmed external-identity mapping rows, not ambiguous historical dependency provenance."
+  },
+  "families": [
+    {
+      "content_hash": "d3f597e1027d4924d0b0f698c54bc78fa155e0f0a4921f85d6ceadedb204a327",
+      "name": "Fantastic Four 001 - Early Years",
+      "dependency_count": 41318,
+      "id_manifest_md5": "f7a7780fb1b2386c222d60f15ab746b8",
+      "endpoint_mapping_exception_rows": 0
+    },
+    {
+      "content_hash": "5a221581571c7d55083b15641e23d90112c0875d09c875065a78fbb77f117ec2",
+      "name": "[1997-2000] X-Men Era Ten Aftermath (UXRO)",
+      "dependency_count": 21275,
+      "id_manifest_md5": "ab86c7b7a6acffbc41f310e5f74c40bb",
+      "endpoint_mapping_exception_rows": 0
+    },
+    {
+      "content_hash": "1e6b55e99d9317ba68782678710a3e621786c9f57afb1203f44154714acef9b8",
+      "name": "[Marvel] Wolverine no Events (WEB-CBRO)",
+      "dependency_count": 16345,
+      "id_manifest_md5": "48da5a33cdb0f20f84bf556d85f502ad",
+      "endpoint_mapping_exception_rows": 710
+    },
+    {
+      "content_hash": "d8944942bb6115ea9607ac6be0ac53e59368b90a929d44412900b3b9cae8b66a",
+      "name": "[Marvel] [2024-2026] The New Marvel Ultimate Universe 2.0 (CBH)",
+      "dependency_count": 8274,
+      "id_manifest_md5": "8ca76d5a2e1e73eaf93838accc5c2227",
+      "endpoint_mapping_exception_rows": 0
+    },
+    {
+      "content_hash": "be842ff688b9c8c5407308b9b9af82b59ed92df14d1c9cd1a83530a8549c4a32",
+      "name": "Alpha Flight",
+      "dependency_count": 3569,
+      "id_manifest_md5": "e9924a43091dff33fb64bff80fd5cb6e",
+      "endpoint_mapping_exception_rows": 0
+    },
+    {
+      "content_hash": "2ec0db202a62e3ac966fee17b45af6cb46a9e91b00889057d737cd566285e3d6",
+      "name": "Absolute Universe Reading Order",
+      "dependency_count": 2838,
+      "id_manifest_md5": "7690e5f2d66d7c24edeec7796fd7a379",
+      "endpoint_mapping_exception_rows": 0
+    },
+    {
+      "content_hash": "a028059e278535136625ffd4cc6c3a309e96c3473cd583598bed1183145c87f4",
+      "name": "The New Gods 001",
+      "dependency_count": 2494,
+      "id_manifest_md5": "0906273822f1ec2b2005ef8200b49156",
+      "endpoint_mapping_exception_rows": 0
+    },
+    {
+      "content_hash": "8fc8087894488c1899712d0fdb4195ab403747a57903b30d3cecf100fa906084",
+      "name": "America's Best Comics",
+      "dependency_count": 2485,
+      "id_manifest_md5": "3ee4a7e66409b8f28cf33673f2a6a8bb",
+      "endpoint_mapping_exception_rows": 0
+    },
+    {
+      "content_hash": "3c28f4701b5f8d19e6c100253e97099c42088fc9412b83893551daace246c1c4",
+      "name": "Doom Patrol 1",
+      "dependency_count": 2143,
+      "id_manifest_md5": "18cf6cc50bd9df47df61b20bfe2405f1",
+      "endpoint_mapping_exception_rows": 0
+    },
+    {
+      "content_hash": "134c0f89208795c8af81a99baaf63dbe9e53bb6105c52c469200823b15325af6",
+      "name": "Teen Titans With Events (WEB-CBRO)",
+      "dependency_count": 740,
+      "id_manifest_md5": "0f6c9c37302130b84cde34e6d07fe729",
+      "endpoint_mapping_exception_rows": 0
+    },
+    {
+      "content_hash": "ba6aea4858b09f3688e9fc864107c9be3f634c021fa53ea15dbfa119e8042aac",
+      "name": "[Image] Supreme [1992-2015]",
+      "dependency_count": 151,
+      "id_manifest_md5": "bf11ddfc6be59e9f1ab704887ec43694",
+      "endpoint_mapping_exception_rows": 0
+    }
+  ],
+  "wolverine_positions": [
+    {
+      "position": 63,
+      "cbl": "Wolverine #1 (1982)",
+      "local_issue_id": 101146,
+      "local": "Wolverine (Vol. 1) (1982) #1"
+    },
+    {
+      "position": 64,
+      "cbl": "Wolverine #2 (1982)",
+      "local_issue_id": 101147,
+      "local": "Wolverine (Vol. 1) (1982) #2"
+    },
+    {
+      "position": 65,
+      "cbl": "Wolverine #3 (1982)",
+      "local_issue_id": 101148,
+      "local": "Wolverine (Vol. 1) (1982) #3"
+    },
+    {
+      "position": 66,
+      "cbl": "Wolverine #4 (1982)",
+      "local_issue_id": 101149,
+      "local": "Wolverine (Vol. 1) (1982) #4"
+    }
+  ],
+  "result": "PASS",
+  "note": "The companion script emits the exact dependency-ID arrays and SHA-256 manifests from the database. This evidence file records the live production proof summary and MD5 fingerprints from the single closing SQL observation."
+}

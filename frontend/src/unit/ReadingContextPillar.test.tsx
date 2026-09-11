@@ -15,14 +15,8 @@ vi.mock('react-router-dom', async () => {
 vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
   ReadingOrderGroups: () => null,
 }))
-vi.mock('../hooks/useContinuityReadiness', () => ({
-  useContinuityReadiness: () => ({ readiness: null, isLoading: false, error: null, refetch: vi.fn() }),
-}))
 vi.mock('../pages/RollPage/components/ReadingPathPanel', () => ({
   ReadingPathPanel: () => null,
-}))
-vi.mock('../pages/RollPage/components/ContinuityReadinessSummary', () => ({
-  ContinuityReadinessSummary: () => null,
 }))
 vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
   ReadingRouteExplanation: () => null,
@@ -259,6 +253,40 @@ describe('ReadingContextPillar dependency and continuity edges', () => {
     await waitFor(() =>
       expect(screen.getByText('fallback note text')).toBeInTheDocument(),
     )
+  })
+})
+
+describe('ReadingContextPillar roll stats layout', () => {
+  const namedContext: ReaderContextResponse = {
+    ...baseContext,
+    series: {
+      ...baseContext.series,
+      series_name: 'Justice League Europe',
+    },
+  }
+
+  it('collapses Roll Result and Series Progress into one column below the mobile breakpoint', () => {
+    renderPillar(namedContext)
+
+    const section = screen.getByTestId('roll-stats-section')
+    expect(section).toHaveClass('grid-cols-1')
+    expect(section).toHaveClass('md:grid-cols-2')
+    expect(section).not.toHaveClass('grid-cols-2')
+  })
+
+  it('keeps Roll Result above Series Progress in the collapsed mobile column', () => {
+    renderPillar(namedContext)
+
+    const section = screen.getByTestId('roll-stats-section')
+    const children = Array.from(section.children).map(
+      (child) => child.textContent ?? '',
+    )
+    const rollIndex = children.findIndex((text) => text.includes('Roll Result'))
+    const progressIndex = children.findIndex((text) =>
+      text.includes('Series Progress'),
+    )
+    expect(rollIndex).toBeGreaterThanOrEqual(0)
+    expect(progressIndex).toBeGreaterThan(rollIndex)
   })
 })
 

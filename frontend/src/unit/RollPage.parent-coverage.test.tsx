@@ -14,14 +14,51 @@ const spies = vi.hoisted(() => ({
   rate: vi.fn().mockResolvedValue({}),
   setPending: vi.fn().mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 }),
 }))
-const sessionHook = vi.hoisted(() => ({ value: null as unknown }))
-const bootstrapHook = vi.hoisted(() => ({ value: null as unknown }))
+
+interface HoistedMockValue {
+  value: unknown
+}
+
+interface SessionData {
+  current_die: number
+  snoozed_threads: Array<{ id: number; title: string; format: string }>
+  manual_die?: number
+  last_rolled_result?: number | null
+}
+
+interface BootstrapData {
+  current_die: number
+  snoozed_threads: Array<{ id: number; title: string; format: string }>
+  roll_pool: Array<{ id: number; title: string; format: string }>
+  manual_die?: number | null
+  last_rolled_result?: number | null
+  pending_thread_id?: number | null
+  active_thread?: unknown
+  blocked_count: number
+  blocked_threads: Array<{ id: number; title: string; format: string }>
+  stale_thread_count: number
+  stale_thread: { id: number; title: string; format: string; last_activity_at?: string } | null
+  snoozed_count: number
+}
+
+const sessionHook = vi.hoisted((): HoistedMockValue => ({ value: null }))
+const bootstrapHook = vi.hoisted((): HoistedMockValue => ({ value: null }))
 const relatedApi = vi.hoisted(() => ({ readingOrders: vi.fn(), connectedThreads: vi.fn(), blockingInfo: vi.fn(), batchBlockingInfo: vi.fn() }))
-const sessionData: { current_die: number; snoozed_threads: Array<{ id: number; title: string; format: string }>; manual_die?: number; last_rolled_result?: number | null } = { current_die: 6, snoozed_threads: [] }
-const bootstrapData: { current_die: number; snoozed_threads: Array<{ id: number; title: string; format: string }>; roll_pool: Array<{ id: number; title: string; format: string }>; manual_die?: number | null; last_rolled_result?: number | null; pending_thread_id?: number | null; active_thread?: unknown; blocked_count: number; blocked_threads: Array<{ id: number; title: string; format: string }>; stale_thread_count: number; stale_thread: { id: number; title: string; format: string; last_activity_at?: string } | null; snoozed_count: number } = { current_die: 6, snoozed_threads: [], roll_pool: [{ id: 1, title: 'Saga', format: 'Comic' }], manual_die: null, last_rolled_result: null, pending_thread_id: null, active_thread: null, blocked_count: 0, blocked_threads: [], stale_thread_count: 0, stale_thread: null, snoozed_count: 0 }
+const sessionData: SessionData = { current_die: 6, snoozed_threads: [] }
+const bootstrapData: BootstrapData = { current_die: 6, snoozed_threads: [], roll_pool: [{ id: 1, title: 'Saga', format: 'Comic' }], manual_die: null, last_rolled_result: null, pending_thread_id: null, active_thread: null, blocked_count: 0, blocked_threads: [], stale_thread_count: 0, stale_thread: null, snoozed_count: 0 }
 const threadData: Array<{ id: number; title: string; format: string; status: string; is_blocked?: boolean }> = [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }]
-let staleData: never[] = []
-let threadsValue: unknown = threadData
+interface StaleTestThread {
+  id: number
+  title: string
+  format: string
+  status: string
+  is_blocked?: boolean
+  last_activity_at?: string
+  created_at?: string
+}
+
+let staleData: StaleTestThread[] = []
+let threadsValue: typeof threadData | undefined = threadData
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
 vi.mock('../contexts/useBugReportRestore', () => ({
@@ -64,9 +101,11 @@ vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children, onC
 vi.mock('../components/CollectionDialog', () => ({ default: ({ collection }: { collection: { name?: string } | null }) => <div data-testid="collection-dialog">collection dialog {collection?.name ?? 'new'}</div> }))
 vi.mock('../components/MigrationDialog', () => ({ default: ({ onComplete, onSkip, onClose }: { onComplete: (thread: unknown) => void; onSkip: () => void; onClose: () => void }) => <div><button onClick={onSkip}>skip migration</button><button onClick={onClose}>close migration</button><button onClick={() => onComplete({ id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10 })}>complete migration</button></div> }))
 vi.mock('../components/SimpleMigrationDialog', () => ({ default: ({ onComplete, onClose }: { onComplete: (issue: string) => void; onClose: () => void }) => <div><button onClick={() => onComplete('1')}>complete simple</button><button onClick={onClose}>close simple</button></div> }))
-vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: Record<string, unknown>) => <div><button onClick={() => (props.onThreadClick as (thread: unknown) => void)({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle as () => void}>shuffle pool</button><button onClick={props.onReadStale as () => void}>read stale</button><button onClick={props.onUnsnooze as () => void}>unsnooze</button><button onClick={props.onToggleSnoozed as () => void}>toggle snoozed</button><button onClick={props.onToggleBlocked as () => void}>toggle blocked</button><span>{JSON.stringify(props.blockingDependencyMap)}</span></div> }))
-vi.mock('../pages/RollPage/components/RatingView', () => ({ RatingView: (props: Record<string, unknown>) => {
+type MockProps = Record<string, string | (() => void) | ((thread: unknown) => void) | Record<string, string>>
+vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: MockProps) => <div><button onClick={() => (props.onThreadClick as (thread: unknown) => void)({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle as () => void}>shuffle pool</button><button onClick={props.onReadStale as () => void}>read stale</button><button onClick={props.onUnsnooze as () => void}>unsnooze</button><button onClick={props.onToggleSnoozed as () => void}>toggle snoozed</button><button onClick={props.onToggleBlocked as () => void}>toggle blocked</button><span>{JSON.stringify(props.blockingDependencyMap)}</span></div> }))
+vi.mock('../pages/RollPage/components/RatingView', () => ({ RatingView: (props: MockProps) => {
   const thread = props.activeRatingThread as { title?: string; issue_number?: string | null } | null
+  // SAFETY: RatingView mock casts Record<string, unknown> callbacks to the exact handler signatures RollPage passes, so firing them here triggers the real handlers with their declared argument shapes.
   return <div>
     <span data-testid="rating-thread-metadata">{thread?.title ?? 'missing'}:{thread?.issue_number ?? 'none'}</span>
     {props.errorMessage ? <span>{String(props.errorMessage)}</span> : null}
@@ -99,7 +138,7 @@ describe('RollPage parent handlers', () => {
     bootstrapData.pending_thread_id = null
     bootstrapData.last_rolled_result = sessionData.last_rolled_result ?? null
     bootstrapData.active_thread = null
-    bootstrapData.roll_pool = (threadsValue ? (threadsValue as any[]).filter((t: any) => t.status === 'active' && !t.is_blocked).map((t: any) => ({ id: t.id, title: t.title, format: t.format })) : threadData.filter((t: any) => t.status === 'active' && !t.is_blocked).map((t: any) => ({ id: t.id, title: t.title, format: t.format })))
+    bootstrapData.roll_pool = (threadsValue ? threadsValue.flatMap((t) => t.status === 'active' && !t.is_blocked ? [{ id: t.id, title: t.title, format: t.format }] : []) : threadData.flatMap((t) => t.status === 'active' && !t.is_blocked ? [{ id: t.id, title: t.title, format: t.format }] : []))
     bootstrapData.snoozed_threads = sessionData.snoozed_threads
     bootstrapData.snoozed_count = 0
     bootstrapData.blocked_count = 0
@@ -321,7 +360,7 @@ describe('RollPage parent handlers', () => {
     threadData.push({ id: 2, title: 'Blocked', format: 'Comic', status: 'active', is_blocked: true })
     bootstrapData.blocked_threads = [{ id: 2, title: 'Blocked', format: 'Comic' }]
     bootstrapData.blocked_count = 1
-    staleData = [{ id: 3, title: 'Stale', format: 'Comic', status: 'active', is_blocked: false, created_at: '2000-01-01' }] as never[]
+    staleData = [{ id: 3, title: 'Stale', format: 'Comic', status: 'active', is_blocked: false, created_at: '2000-01-01' }]
     bootstrapData.stale_thread = { id: 3, title: 'Stale', format: 'Comic', last_activity_at: '2000-01-01T00:00:00Z' }
     bootstrapData.stale_thread_count = 1
     render(<RollPage />)
@@ -420,7 +459,7 @@ describe('RollPage parent handlers', () => {
 
   it('reads stale threads and handles unsnooze failures', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    staleData = [{ id: 7, title: 'Old', format: 'Comic', status: 'active', is_blocked: false, created_at: '2000-01-01' }] as never[]
+    staleData = [{ id: 7, title: 'Old', format: 'Comic', status: 'active', is_blocked: false, created_at: '2000-01-01' }]
     bootstrapData.stale_thread = { id: 7, title: 'Old', format: 'Comic', last_activity_at: '2000-01-01T00:00:00Z' }
     bootstrapData.stale_thread_count = 1
     spies.unsnooze.mockRejectedValueOnce(new Error('unsnooze failed'))
@@ -439,7 +478,7 @@ describe('RollPage parent handlers', () => {
     staleData = [
       { id: 8, title: 'Blocked old', format: 'Comic', status: 'active', is_blocked: true, created_at: '2000-01-01' },
       { id: 9, title: 'Recent', format: 'Comic', status: 'active', is_blocked: false, last_activity_at: new Date().toISOString(), created_at: '2000-01-01' },
-    ] as never[]
+    ]
     bootstrapData.stale_thread = null
     bootstrapData.stale_thread_count = 0
     threadData.push({ id: 2, title: 'Blocked', format: 'Comic', status: 'active', is_blocked: true })
@@ -483,7 +522,7 @@ describe('RollPage parent handlers', () => {
   })
 
   it('uses stale roll-result fallback without loading hidden blocking reasons', async () => {
-    staleData = [{ id: 7, title: 'Old', format: 'Comic', status: 'active', is_blocked: false, created_at: '2000-01-01' }] as never[]
+    staleData = [{ id: 7, title: 'Old', format: 'Comic', status: 'active', is_blocked: false, created_at: '2000-01-01' }]
     threadData.push({ id: 2, title: 'Blocked', format: 'Comic', status: 'active', is_blocked: true })
     bootstrapData.stale_thread = { id: 7, title: 'Old', format: 'Comic', last_activity_at: '2000-01-01T00:00:00Z' }
     bootstrapData.stale_thread_count = 1
@@ -760,7 +799,7 @@ describe('RollPage parent handlers', () => {
       isPending: false,
       isError: false,
       error: null,
-    } as never
+    }
     render(<RollPage />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
   })
@@ -915,7 +954,7 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Failed to shuffle pool: pool failed'))
 
     cleanup()
-    bootstrapData.stale_thread = { id: 7, title: 'Old', format: 'Comic', last_activity_at: '2000-01-01' } as never
+    bootstrapData.stale_thread = { id: 7, title: 'Old', format: 'Comic', last_activity_at: '2000-01-01' }
     bootstrapData.stale_thread_count = 1
     spies.setPending.mockRejectedValueOnce(new Error('stale failed'))
     render(<RollPage />)
@@ -942,7 +981,7 @@ describe('RollPage parent handlers', () => {
     staleData = [{
       id: 8, title: 'Recently active', format: 'Comic', status: 'active', is_blocked: false,
       created_at: '2026-07-18T00:00:00Z', last_activity_at: '2026-07-18T00:00:00Z',
-    }] as never[]
+    }]
     spies.setPending.mockResolvedValueOnce({
       thread_id: 1, title: 'Sparse', format: 'Comic', issues_remaining: 1,
       queue_position: 1, total_issues: 2, result: undefined, last_rolled_result: 4,

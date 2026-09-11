@@ -503,7 +503,6 @@ async def rate_thread(
             db,
             commit=False,
         )
-        blocked_changes = await refresh_user_blocked_status(user_id, db)
     elif rate_data.rating >= rating_threshold:
         queue_position_changes = await move_to_front(
             thread_id,
@@ -511,7 +510,6 @@ async def rate_thread(
             db,
             commit=False,
         )
-        blocked_changes = {}
     else:
         queue_position_changes = await move_to_safe_position(
             thread_id,
@@ -520,7 +518,12 @@ async def rate_thread(
             db,
             excluded_thread_ids=current_session.snoozed_thread_ids,
         )
-        blocked_changes = {}
+
+    # Always refresh blocked status after reading.  Advancing next_unread_issue_id
+    # or completing a thread can change hard-prerequisite eligibility for this
+    # thread and others (issue #2467).  Refreshing only on thread completion
+    # left stale is_blocked flags that let blocked threads enter the roll pool.
+    blocked_changes = await refresh_user_blocked_status(user_id, db)
 
     if rate_data.finish_session:
         current_session.ended_at = datetime.now(UTC)

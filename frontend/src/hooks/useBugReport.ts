@@ -4,6 +4,13 @@ import { getApiErrorDetail } from '../utils/apiError'
 import type { ReportType } from '../components/BugReportModal'
 import type { DiagnosticData } from './useDiagnostics'
 
+interface BugReportPayload {
+  report_type: ReportType
+  title: string
+  description: string
+  diagnostics?: DiagnosticData
+}
+
 export function useBugReport() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -19,18 +26,13 @@ export function useBugReport() {
     setError(null)
     setIssueUrl(null)
     try {
-      const createReport = bugReportsApi.create as (data: {
-        report_type: ReportType
-        title: string
-        description: string
-        diagnostics?: DiagnosticData
-      }) => Promise<{ issue_url: string }>
-      const response = await createReport({
-        report_type: reportType,
-        title,
-        description,
-        ...(diagnosticData ? { diagnostics: diagnosticData } : {}),
-      })
+      // SAFETY: bugReportsApi.create already accepts these fields (diagnostics optional), so the cast narrows to the required subset.
+      const createReport = bugReportsApi.create as (data: BugReportPayload) => Promise<{ issue_url: string }>
+      const reportPayload: BugReportPayload = { report_type: reportType, title, description }
+      if (diagnosticData) {
+        reportPayload.diagnostics = diagnosticData
+      }
+      const response = await createReport(reportPayload)
       setIssueUrl(response.issue_url)
     } catch (err: unknown) {
       setError(getApiErrorDetail(err) ?? 'Failed to submit report')

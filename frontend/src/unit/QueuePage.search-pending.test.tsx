@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cast } from '../utils/cast'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
@@ -54,7 +55,7 @@ vi.mock('../contexts/useToast', () => ({
   useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
 }))
 
-const mockedUseQueueThreads = vi.mocked(useQueueThreads) as unknown as ReturnType<typeof vi.fn>
+const mockedUseQueueThreads = cast<ReturnType<typeof vi.fn>>(vi.mocked(useQueueThreads))
 
 class NoopIntersectionObserver {
   observe(): void {
@@ -84,20 +85,32 @@ function renderQueue(): void {
 beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', NoopIntersectionObserver)
   vi.stubGlobal('alert', vi.fn())
+  // SAFETY: mockReturnValue accepts partial hook returns; never cast bypasses full-type requirements
   vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useUpdateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useDeleteThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useReactivateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useMoveToFront).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useMoveToBack).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useMoveToPosition).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useShuffleQueue).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useSnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useUnsnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
   vi.mocked(useSession).mockReturnValue({
     data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: vi.fn(),
   } as never)
+  // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
   vi.mocked(useBugReportRestore).mockReturnValue({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),

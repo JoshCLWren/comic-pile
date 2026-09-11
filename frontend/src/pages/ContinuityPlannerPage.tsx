@@ -8,11 +8,13 @@ import {
 import { continuityPlansApi, type ContinuityPlanNode, type ContinuityPlanNodeType, type ContinuityPlanOrderingMode } from '../services/api-continuity-plans'
 import { dependencyGroupsApi, type DependencyGroup } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
+import type { IssueListParams } from '../services/api-issues'
 import { threadsApi } from '../services/api'
 import PlanProjectionDialog from '../components/PlanProjectionDialog'
 import ReadingPlanAddMaterial from '../components/ReadingPlanAddMaterial'
 import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
+import { isObject, isString } from '../utils/runtimeChecks'
 
 const LAST_PLAN_KEY = 'comic-pile:last-continuity-plan'
 const DEFAULT_LANE_ID = 'main'
@@ -22,7 +24,7 @@ const DEFAULT_PLAN_NAME = 'My reading plan'
 function errorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail
-    if (typeof detail === 'string' && detail.trim()) return detail
+    if (isString(detail) && detail.trim()) return detail
   }
   return error instanceof Error && error.message ? error.message : fallback
 }
@@ -54,11 +56,12 @@ function getConflictMessage(
   }
 
   const detail = error.response?.data?.detail
-  if (typeof detail === 'string' && detail.trim()) {
+  if (isString(detail) && detail.trim()) {
     return detail
   }
 
-  if (detail && typeof detail === 'object' && 'code' in detail) {
+  if (detail && isObject(detail) && 'code' in detail) {
+    // SAFETY: 'code' in detail narrows the object to the ConflictDetail discriminated shape before access.
     const conflict = detail as ConflictDetail
     if (conflict.code === 'plan_rule_conflict' || conflict.code === 'continuity_cycle') {
       const sourceId = conflict.source_node_id
@@ -105,10 +108,11 @@ async function fetchAllIssues(threadId: number): Promise<Issue[]> {
   const seen = new Set<string>()
   let token: string | null = null
   do {
-    const page = await issuesApi.list(threadId, {
-      page_size: 100,
-      ...(token ? { page_token: token } : {}),
-    })
+    const params: IssueListParams = { page_size: 100 }
+    if (token) {
+      params.page_token = token
+    }
+    const page = await issuesApi.list(threadId, params)
     result.push(...page.issues)
     token = page.next_page_token
     if (token && seen.has(token)) break
@@ -203,17 +207,19 @@ export default function ContinuityPlannerPage() {
   const hydrateLabels = useCallback((rawNodes: ContinuityPlanNode[], loadedGroups: DependencyGroup[]): PlannerNode[] => {
     const groupNames = new Map(loadedGroups.map((group) => [group.id, group.name]))
     return rawNodes.map((node): PlannerNode => {
-      const stored = typeof (node as PlannerNode).label === 'string' ? (node as PlannerNode).label.trim() : ''
+      // SAFETY: rawNodes are ContinuityPlanNode and PlannerNode only adds optional display fields set below.
+      const plannerNode = node as PlannerNode
+      const stored = isString(plannerNode.label) ? plannerNode.label.trim() : ''
       if (node.node_type === 'crossover') {
-        if (stored) return { ...(node as PlannerNode), label: stored }
-        return { ...(node as PlannerNode), label: groupNames.get(node.ref_id) ?? '[deleted crossover]' }
+        if (stored) return { ...plannerNode, label: stored }
+        return { ...plannerNode, label: groupNames.get(node.ref_id) ?? '[deleted crossover]' }
       }
       if (node.node_type === 'thread') {
-        if (stored) return { ...(node as PlannerNode), label: stored }
-        return { ...(node as PlannerNode), label: '[deleted series]' }
+        if (stored) return { ...plannerNode, label: stored }
+        return { ...plannerNode, label: '[deleted series]' }
       }
-      if (stored) return { ...(node as PlannerNode), label: stored }
-      return { ...(node as PlannerNode), label: '[deleted series]' }
+      if (stored) return { ...plannerNode, label: stored }
+      return { ...plannerNode, label: '[deleted series]' }
     })
   }, [])
 
@@ -250,25 +256,10 @@ export default function ContinuityPlannerPage() {
           : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
         ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
           .sort((a, b) => a.order - b.order)
-        let hydrated = hydrateLabels(
+        const hydrated = hydrateLabels(
           [...plan.nodes].sort((a, b) => a.position - b.position),
           loadedGroups,
         )
-        const needsBatch = hydrated.some(
-          (node) => node.label === '[deleted series]' || node.label === '[deleted crossover]',
-        )
-        if (needsBatch) {
-          try {
-            const readiness = await continuityPlansApi.readiness(plan.id)
-            const labelMap = new Map(readiness.nodes.map((item) => [item.node_id, item.label] as const))
-            hydrated = hydrated.map((node) => {
-              const batchLabel = labelMap.get(node.id)
-              return batchLabel ? { ...node, label: batchLabel } : node
-            })
-          } catch {
-            // Keep placeholder labels; never issue per-missing-issue GETs.
-          }
-        }
         if (!active) return
         setName(plan.name)
         setLanes(loadedLanes)
@@ -400,7 +391,7 @@ export default function ContinuityPlannerPage() {
         const targetNode = current.find((n) => n.id === targetNodeId)!
         const updated = exists
           ? gate.filter((target) => target.node_id !== targetNodeId)
-          : [...gate, { node_type: targetNode.node_type as ContinuityPlanNodeType, node_id: targetNodeId }]
+          : [...gate, { node_type: targetNode.node_type, node_id: targetNodeId }]
         return { ...node, convergence_gate: updated }
       }),
     )

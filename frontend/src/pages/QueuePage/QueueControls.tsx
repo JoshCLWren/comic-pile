@@ -106,12 +106,14 @@ function QueueControlsInner({
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
+              // SAFETY: clearTimeout tolerates an undefined/number timer handle; the cast unifies the ref's null initial value.
               clearTimeout(debounceRef.current as ReturnType<typeof setTimeout> | undefined)
               onSearchChange(localValue)
             }
           }}
           onBlur={() => {
             if (localValue !== searchQuery) {
+              // SAFETY: clearTimeout tolerates an undefined/number timer handle; the cast unifies the ref's null initial value.
               clearTimeout(debounceRef.current as ReturnType<typeof setTimeout> | undefined)
               onSearchChange(localValue)
             }

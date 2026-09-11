@@ -16,17 +16,11 @@ vi.mock('react-router-dom', async () => {
 })
 
 vi.mock('../components/ContinuityCorrectionDialog', () => ({ default: () => null }))
-vi.mock('../pages/RollPage/components/ContinuityReadinessSummary', () => ({
-  ContinuityReadinessSummary: () => null,
-}))
 vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
   ReadingOrderGroups: () => <div data-testid="series-progress-stub">2 / 5</div>,
 }))
 vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
   ReadingRouteExplanation: () => null,
-}))
-vi.mock('../hooks/useContinuityReadiness', () => ({
-  useContinuityReadiness: () => ({ readiness: null, isLoading: false, error: null, refetch: vi.fn() }),
 }))
 vi.mock('../pages/RollPage/components/ReadingPathPanel', () => ({
   ReadingPathPanel: () => null,
@@ -123,6 +117,7 @@ describe('ReadingContextPillar rendered typography (#1873)', () => {
 
   it('keeps every role of the shared type scale above its readability floor', () => {
     for (const [role, size] of Object.entries(READING_CONTEXT_TYPE)) {
+      // SAFETY: Object.entries loses the literal key type; role is guaranteed to be a key of READING_CONTEXT_TYPE by iteration.
       const floor = READING_CONTEXT_TYPE_FLOORS[role as ReadingContextTypeRole]
       expect(size, `${role} (${size}px)`).toBeGreaterThanOrEqual(floor)
     }
@@ -161,12 +156,14 @@ describe('ReadingContextPillar rendered typography (#1873)', () => {
     const currentIssueButton = screen.getByRole('button', {
       name: /show context for ultimate black panther issue 5/i,
     })
+    // SAFETY: closest('[role="listitem"]') is guaranteed to return the listitem rendered for the current issue button in this fixture.
     const currentIssueRow = currentIssueButton.closest('[role="listitem"]') as HTMLElement
     expectComputedFontSize(within(currentIssueRow).getByText('5'), 'primaryValue')
 
     const ratedIssueButton = screen.getByRole('button', {
       name: /show context for ultimate black panther issue 3/i,
     })
+    // SAFETY: The rated issue button is rendered inside a listitem in the constructed context, so closest returns an element.
     const ratedIssueRow = ratedIssueButton.closest('[role="listitem"]') as HTMLElement
     expectComputedFontSize(
       within(ratedIssueRow).getByLabelText('Your rating: 3.5 stars'),

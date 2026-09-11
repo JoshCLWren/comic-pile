@@ -2,6 +2,7 @@ import { lazy, Suspense, type ComponentType } from 'react'
 import type { Dice3DProps } from './diceTypes'
 
 const Dice3D = lazy(async () => ({
+  // SAFETY: the Dice3D module's default export is the Dice3D React component, matching the ComponentType contract.
   default: (await import('./Dice3D')).default as ComponentType<Dice3DProps>,
 }))
 

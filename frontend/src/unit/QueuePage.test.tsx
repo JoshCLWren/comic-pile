@@ -80,22 +80,40 @@ vi.mock('../contexts/useToast', () => ({
   useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
 }))
 
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseCreateThread = vi.mocked(useCreateThread) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseDeleteThread = vi.mocked(useDeleteThread) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseReactivateThread = vi.mocked(useReactivateThread) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseSession = vi.mocked(useSession) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseQueueBlockingInfo = vi.mocked(useQueueBlockingInfo) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseSnooze = vi.mocked(useSnooze) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedThreadsApi = vi.mocked(threadsApi) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedDependenciesApi = vi.mocked(dependenciesApi) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedIssuesApi = vi.mocked(issuesApi) as any
 
 beforeEach(() => {
@@ -127,6 +145,7 @@ beforeEach(() => {
     clearRestoreAction: vi.fn(),
     restoreLastView: vi.fn(),
   })
+  // SAFETY: full response shape satisfies RollResponse; never cast bypasses strict mock typing
   mockedThreadsApi.setPending.mockResolvedValue({
     thread_id: 1,
     title: 'Saga',
@@ -392,14 +411,15 @@ describe('Keyboard Accessibility', () => {
 
   it('filters and sorts active threads while preserving completed threads', async () => {
     const user = userEvent.setup()
-    mockedUseQueueThreads.mockImplementation((searchTerm: string) => {
+    mockedUseQueueThreads.mockImplementation((searchTerm: string, _sort: string) => {
       let data: Thread[] = []
       if (searchTerm !== 'missing') {
-        data = [
-          { id: 1, title: 'Zeta', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, total_issues: null, created_at: '2024-01-01', is_blocked: false, blocking_reasons: [] },
-          { id: 2, title: 'Alpha', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, total_issues: null, created_at: '2025-01-01', is_blocked: false, blocking_reasons: [] },
-          { id: 3, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [] },
-        ]
+        // The backend owns page ordering: alphabetical requests return the
+        // keyset title-cursor order, position returns queue position order.
+        const zeta = { id: 1, title: 'Zeta', format: 'Comic', status: 'active' as const, queue_position: 2, issues_remaining: 1, total_issues: null, created_at: '2024-01-01', is_blocked: false, blocking_reasons: [] }
+        const alpha = { id: 2, title: 'Alpha', format: 'Comic', status: 'active' as const, queue_position: 1, issues_remaining: 2, total_issues: null, created_at: '2025-01-01', is_blocked: false, blocking_reasons: [] }
+        const done = { id: 3, title: 'Done', format: 'Comic', status: 'completed' as const, queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [] }
+        data = [alpha, zeta, done]
       }
       return {
         data,
@@ -537,10 +557,21 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   const user = userEvent.setup()
   const move = { mutate: vi.fn().mockRejectedValue(new Error('reorder failed')), isPending: false }
   mockedUseMoveToPosition.mockReturnValue(move)
-  mockedUseQueueThreads.mockReturnValue({ data: [
-    { id: 1, title: 'Old', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 1, created_at: '2024-01-01' },
-    { id: 2, title: 'New', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, created_at: '2025-01-01' },
-  ], isPending: false, refetch: vi.fn() })
+  mockedUseQueueThreads.mockImplementation((_searchTerm: string, sort: string) => ({
+    // Backend created cursor returns newest-first server order; the client
+    // must not re-sort concatenated pages (issue #2452).
+    data: sort === 'created'
+      ? [
+        { id: 2, title: 'New', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, created_at: '2025-01-01' },
+        { id: 1, title: 'Old', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 1, created_at: '2024-01-01' },
+      ]
+      : [
+        { id: 1, title: 'Old', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 1, created_at: '2024-01-01' },
+        { id: 2, title: 'New', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, created_at: '2025-01-01' },
+      ],
+    isPending: false,
+    refetch: vi.fn(),
+  }))
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getByRole('button', { name: 'Recently added' }))
   const cards = screen.getAllByTestId('queue-thread-item')

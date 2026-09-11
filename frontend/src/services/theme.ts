@@ -9,6 +9,8 @@
  * downgraded — by server preference data.
  */
 
+import { isString } from '../utils/runtimeChecks'
+
 export const THEME_IDS = ['classic', 'ink-gold', 'command-center'] as const
 
 export type ThemeId = (typeof THEME_IDS)[number]
@@ -28,9 +30,15 @@ function isBrowser(): boolean {
   return typeof document !== 'undefined' && typeof localStorage !== 'undefined'
 }
 
+/** Narrow a plain string to a supported theme id. */
+function isKnownThemeId(themeId: string): themeId is ThemeId {
+  // SAFETY: THEME_IDS is a literal ThemeId tuple, so the includes() probe is a ThemeId membership check.
+  return (THEME_IDS as readonly string[]).includes(themeId)
+}
+
 /** Check whether a raw value is a supported theme id. */
 export function isSupportedTheme(value: unknown): value is ThemeId {
-  return typeof value === 'string' && (THEME_IDS as readonly string[]).includes(value)
+  return isString(value) && isKnownThemeId(value)
 }
 
 /** Read the locally persisted theme preference, or null when absent/invalid. */
@@ -104,7 +112,7 @@ export function getThemeSelectionToken(): number {
  * apply immediately. Returns null when the requested theme is unsupported.
  */
 export function selectTheme(themeId: string): ThemeId | null {
-  if (!isSupportedTheme(themeId)) {
+  if (!isKnownThemeId(themeId)) {
     return null
   }
   selectionToken += 1

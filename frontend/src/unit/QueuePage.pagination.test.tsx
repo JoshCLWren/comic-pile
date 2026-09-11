@@ -71,12 +71,19 @@ vi.mock('../pages/QueuePage/QueueModals', () => ({
   QueueModals: () => null,
 }))
 
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseCreateThread = vi.mocked(useCreateThread) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseReactivateThread = vi.mocked(useReactivateThread) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseSession = vi.mocked(useSession) as any
 
 const thread = {

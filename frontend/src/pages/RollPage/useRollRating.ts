@@ -14,7 +14,7 @@ interface UseRollRatingParams {
   state: RollPageState & RollPageStateSetters
   bootstrap?: RollBootstrapResponse | null
   rateMutation: { mutate: (payload: RatePayload) => Promise<Thread | undefined>; isPending: boolean }
-  dismissPendingMutation: { mutate: () => Promise<unknown>; isPending: boolean }
+  dismissPendingMutation: { mutate: () => Promise<void>; isPending: boolean }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
 }
 

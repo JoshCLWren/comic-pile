@@ -50,7 +50,6 @@ REQUIRED_V1_FAMILIES = frozenset(
         "analytics",
         "auth",
         "bug-reports",
-        "continuity",
         "continuity-plans",
         "continuity-rules",
         "dependencies",

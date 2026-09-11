@@ -5,7 +5,7 @@ import type { Thread } from '../../types'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { getApiErrorDetail } from '../../utils/apiError'
-import { DEFAULT_CREATE_STATE, type QueueFormState } from './types'
+import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
 
 type ModalKey =
   | 'create'
@@ -17,24 +17,24 @@ type ModalKey =
 
 interface QueueModalsParams {
   threads: Thread[] | null | undefined
-  onCreated: () => Promise<unknown> | unknown
-  onUpdated: () => Promise<unknown> | unknown
-  onReactivated: () => Promise<unknown> | unknown
-  refetchSession: () => Promise<unknown> | unknown
+  onCreated: () => Promise<void>
+  onUpdated: () => Promise<void>
+  onReactivated: () => Promise<void>
+  refetchSession: () => Promise<void>
   submitCreate: (input: {
     title: string
     format: string
     issues_remaining: number
     notes: string | null
-  }) => Promise<{ id?: number } | unknown>
+  }) => Promise<{ id?: number }>
   submitEdit: (input: {
     id: number
-    data: { title: string; format: string; notes: string | null; issues_remaining?: number }
-  }) => Promise<unknown>
+    data: EditThreadData
+}) => Promise<Thread>
   submitReactivate: (input: {
     thread_id: number
     issues_to_add: number
-  }) => Promise<unknown>
+  }) => Promise<Thread>
   isPendingCreate: boolean
   isPendingEdit: boolean
 }
@@ -269,6 +269,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         if (hasIssueRange) {
           issuesRemaining = parseIssueRange(createForm.issues)
         }
+        // SAFETY: submitCreate resolves to the created thread record or null when creation is skipped.
         const result = (await submitCreate({
           title: createForm.title,
           format: createForm.format,
@@ -321,12 +322,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
       event.preventDefault()
       if (!editingThread) return
       try {
-        const data: {
-          title: string
-          format: string
-          notes: string | null
-          issues_remaining?: number
-        } = {
+        const data: EditThreadData = {
           title: editForm.title,
           format: editForm.format,
           notes: editForm.notes || null,

@@ -4,7 +4,7 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.schemas.continuity_readiness import ContinuityBlocker
+from app.schemas.continuity_blocking import ContinuityBlocker
 from app.schemas.session import ActiveThreadInfo, BandwidthSource, IntentSource, SessionBandwidthState, SessionMode
 from comic_pile.recommendation_selection import Bandwidth, Intent
 
@@ -128,6 +128,7 @@ class RollRecoveryPrerequisite(BaseModel):
     node_type: Literal["issue", "crossover"]
     node_id: int
     label: str
+    is_readable: bool = True
 
 
 class RollRecoveryChainNode(BaseModel):

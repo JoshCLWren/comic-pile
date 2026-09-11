@@ -73,8 +73,8 @@ const DEFINITIONS: Term[] = [
   },
   {
     id: 'readiness',
-    term: 'Readiness / Blocked',
-    def: 'A reading step is ready when everything required before it has been read. Until then it is blocked and stays out of the roll pool.',
+    term: 'Blocked',
+    def: 'A comic with an unsatisfied hard prerequisite stays out of the roll pool until that prerequisite is read. Roll is the authority for what can be selected; the product does not ask a second subsystem whether the selected item is ready.',
   },
   {
     id: 'crossover',

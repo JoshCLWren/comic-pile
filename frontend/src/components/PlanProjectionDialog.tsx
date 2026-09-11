@@ -16,11 +16,11 @@ interface PlanProjectionDialogProps {
   onClose: () => void
 }
 
-const SOURCE_LABEL: Record<string, string> = {
+const SOURCE_LABEL = {
   existing: 'Kept',
   added: 'Added',
   updated: 'Moved',
-}
+} satisfies Record<string, string>
 
 export default function PlanProjectionDialog({
   isOpen,

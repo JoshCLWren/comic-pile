@@ -5,13 +5,14 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import { CrossoverTags } from '../components/CrossoverTags'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
+import type { IssueListParams } from '../services/api-issues'
 import type { ConnectedThreadInfo, Thread, Issue } from '../types'
 import { FormatSelect } from '../pages/QueuePage/FormatSelect'
 import { useCrossoverGroups } from '../hooks/useCrossoverGroups'
 import { useUpdateThread } from '../hooks/useThread'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
-import { DEFAULT_CREATE_STATE, type QueueFormState } from '../pages/QueuePage/types'
+import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from '../pages/QueuePage/types'
 import DependencyBuilder from '../components/DependencyBuilder'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
 import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
@@ -132,10 +133,11 @@ export default function ThreadDetailView() {
     setIssuesLoading(true)
     setIssuesError(null)
     try {
-      const data = await issuesApi.list(threadId, {
-        page_size: 100,
-        ...(pageToken ? { page_token: pageToken } : {}),
-      })
+      const params: IssueListParams = { page_size: 100 }
+      if (pageToken) {
+        params.page_token = pageToken
+      }
+      const data = await issuesApi.list(threadId, params)
       if (activeThreadIdRef.current !== threadId) return
       setIssues((prev) => (pageToken ? [...prev, ...data.issues] : data.issues))
       setNextPageToken(data.next_page_token)
@@ -175,12 +177,7 @@ export default function ThreadDetailView() {
     const currentThread = thread!
 
     try {
-      const updateData: {
-        title: string
-        format: string
-        notes: string | null
-        issues_remaining?: number
-      } = {
+      const updateData: EditThreadData = {
         title: editForm.title,
         format: editForm.format,
         notes: editForm.notes || null,

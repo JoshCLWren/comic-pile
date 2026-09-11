@@ -25,11 +25,12 @@ async def build_roll_recovery(
 ) -> RollRecoveryInfo | None:
     """Return recovery guidance when the preserved pending roll is blocked.
 
-    The pending roll remains the source of truth. This helper only explains its
-    direct blockers and recommends currently readable prerequisite leaves from
-    the canonical continuity traversal. A stale pending-thread reference is
-    treated as no recovery data so bootstrap can still render and let the
-    existing session-reconciliation path recover it.
+    The pending roll remains the source of truth. This helper explains its
+    direct blockers and builds a recommended-prerequisites list that leads
+    with the direct blocker(s) (issue #2467).  Readable prerequisite leaves
+    follow so the frontend can offer actionable "Read now" CTAs.  A stale
+    pending-thread reference is treated as no recovery data so bootstrap can
+    still render and let the existing session-reconciliation path recover it.
 
     Args:
         db: Async database session used for continuity resolution.
@@ -70,18 +71,36 @@ async def build_roll_recovery(
     if not traversal.direct_blockers:
         return None
 
+    # Lead recommendations with direct blockers so the "Read this first"
+    # card identifies the same prerequisite issue the blocker explanation
+    # names (issue #2467, acceptance criterion 5).  Readable leaves follow
+    # and remain the actionable CTA rows when they are reachable.
+    recommended: dict[tuple[str, int], RollRecoveryPrerequisite] = {}
+    for blocker in traversal.direct_blockers:
+        key = (blocker.source_type, blocker.source_id)
+        recommended.setdefault(
+            key,
+            RollRecoveryPrerequisite(
+                node_type=blocker.source_type,
+                node_id=blocker.source_id,
+                label=blocker.source_label,
+                is_readable=False,
+            ),
+        )
+    for node in traversal.readable_prerequisites:
+        key = (node.node_type, node.node_id)
+        recommended[key] = RollRecoveryPrerequisite(
+            node_type=node.node_type,
+            node_id=node.node_id,
+            label=node.label,
+            is_readable=node.is_readable,
+        )
+
     return RollRecoveryInfo(
         original_thread_id=pending_thread_id,
         original_thread_title=pending_thread_title or f"Thread {pending_thread_id}",
         direct_blockers=list(traversal.direct_blockers),
-        readable_prerequisites=[
-            RollRecoveryPrerequisite(
-                node_type=node.node_type,
-                node_id=node.node_id,
-                label=node.label,
-            )
-            for node in traversal.readable_prerequisites
-        ],
+        readable_prerequisites=list(recommended.values()),
         chains=[
             [
                 RollRecoveryChainNode(

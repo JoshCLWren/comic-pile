@@ -49,9 +49,6 @@ async function installCoverRoutes(page: Page): Promise<void> {
   await page.route('**/v1/comicvine/issues/*/identity', (route) =>
     route.fulfill({ json: { issue_id: 1, thread_id: 1, thread_title: 'Cover Geometry Thread', has_confirmed_identity: true, confirmed_mappings: [], candidate_mappings: [], has_unresolved: false } }),
   )
-  await page.route('**/v1/continuity/readiness', (route) =>
-    route.fulfill({ json: { node_type: 'issue', node_id: 1, is_readable: true, evaluated_issue_id: null, blockers: [] } }),
-  )
 }
 
 async function enterRatingViewForCover(page: Page, title: string): Promise<void> {

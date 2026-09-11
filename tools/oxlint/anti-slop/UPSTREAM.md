@@ -11,10 +11,18 @@ deviations when pulling upstream changes.
   `scripts/install.mjs`, which copies `assets/anti-slop/` into this directory.
 - **Skill lock hash** (`skills-lock.json` → `install-anti-slop.computedHash`):
   `c9e929154f6eb4309dfee64eeab70b90fcc5d62a23c1712d11593577d17d0e8e`
-- **Exact upstream commit:** unknown. The assets were vendored through the skill
-  bundle, which does not record the source commit. Recover the pristine snapshot
-  from the skill assets at `skills/install-anti-slop/assets/anti-slop/` (or a
-  fresh clone of the upstream repo) before diffing.
+- **Exact upstream commit:** `95a56e5d24fb3d849673c2d51eb0908b8bd2d33b`
+  ("Add array performance rules and safe vendored upgrade guidance", 2026-09-08).
+  Verified: every file in this directory (excluding `UPSTREAM.md`) has a git blob
+  SHA identical to `dmmulroy/anti-slop@95a56e5` under
+  `skills/install-anti-slop/assets/anti-slop/` (26/26 blobs match). Diff future
+  upgrades against that revision.
+
+## License
+
+Upstream is MIT-licensed. The upstream notice is preserved verbatim beside this
+file as `LICENSE` (Copyright (c) 2026 Dillon Mulroy), as the MIT license
+requires for copies of substantial portions of the software.
 
 ## Installed paths
 

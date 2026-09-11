@@ -558,6 +558,9 @@ async def list_sessions(
     history_events = history_events_result.scalars().all()
 
     rate_agg: dict[int, dict] = {}
+    # Historical issue captured at rating time — immutable per session.
+    # Used for History display so advancing the thread does not rewrite past rows.
+    rate_issue_by_session: dict[int, tuple[int | None, str | None]] = {}
     for ev in history_events:
         if ev.type != "rate":
             continue
@@ -567,6 +570,11 @@ async def list_sessions(
             rate_agg[ev.session_id]["issues_read"] += ev.issues_read
         if ev.rating is not None:
             rate_agg[ev.session_id]["last_rating"] = ev.rating
+        # Capture the historically rated issue (denormalized on Event).
+        # history_events is ordered by (session_id, timestamp, id) so the
+        # last rate event for a session overwrites — matches the most recent rate.
+        if ev.issue_id is not None or ev.issue_number is not None:
+            rate_issue_by_session[ev.session_id] = (ev.issue_id, ev.issue_number)
 
     projection = project_session_history_events(session_ids, history_events)
 
@@ -623,13 +631,19 @@ async def list_sessions(
                         issues_remaining = unread_counts.get(thread.id, 0)
                     else:
                         issues_remaining = thread.issues_remaining
-                    issue_id: int | None = None
-                    issue_number: str | None = None
-                    if thread.uses_issue_tracking() and thread.next_unread_issue_id is not None:
-                        resolved_number = issue_numbers.get(thread.next_unread_issue_id)
-                        if resolved_number is not None:
-                            issue_id = thread.next_unread_issue_id
-                            issue_number = resolved_number
+                    # Prefer the historically rated issue over the thread's
+                    # current next_unread_issue_id so History rows are immutable.
+                    historical = rate_issue_by_session.get(sid)
+                    if historical is not None:
+                        issue_id, issue_number = historical
+                    else:
+                        issue_id = None
+                        issue_number = None
+                        if thread.uses_issue_tracking() and thread.next_unread_issue_id is not None:
+                            resolved_number = issue_numbers.get(thread.next_unread_issue_id)
+                            if resolved_number is not None:
+                                issue_id = thread.next_unread_issue_id
+                                issue_number = resolved_number
                     agg = rate_agg.get(sid, {})
                     issues_read = agg.get("issues_read") or None
                     last_rating = agg.get("last_rating")
@@ -661,13 +675,17 @@ async def list_sessions(
                         issues_remaining = unread_counts.get(thread.id, 0)
                     else:
                         issues_remaining = thread.issues_remaining
-                    issue_id_pending: int | None = None
-                    issue_number_pending: str | None = None
-                    if thread.uses_issue_tracking() and thread.next_unread_issue_id is not None:
-                        resolved_number = issue_numbers.get(thread.next_unread_issue_id)
-                        if resolved_number is not None:
-                            issue_id_pending = thread.next_unread_issue_id
-                            issue_number_pending = resolved_number
+                    historical_pending = rate_issue_by_session.get(sid)
+                    if historical_pending is not None:
+                        issue_id_pending, issue_number_pending = historical_pending
+                    else:
+                        issue_id_pending = None
+                        issue_number_pending = None
+                        if thread.uses_issue_tracking() and thread.next_unread_issue_id is not None:
+                            resolved_number = issue_numbers.get(thread.next_unread_issue_id)
+                            if resolved_number is not None:
+                                issue_id_pending = thread.next_unread_issue_id
+                                issue_number_pending = resolved_number
                     agg = rate_agg.get(sid, {})
                     issues_read = agg.get("issues_read") or None
                     last_rating = agg.get("last_rating")

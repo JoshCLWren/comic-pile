@@ -8,7 +8,7 @@ interface UseRollSnoozeParams {
   snoozeMutation: {
     mutate: (expectedPendingThreadId?: number) => Promise<{ correction?: SnoozeCorrectionInfo | null } | undefined>
   }
-  unsnoozeMutation: { mutate: (threadId: number) => Promise<unknown> }
+  unsnoozeMutation: { mutate: (threadId: number) => Promise<void> }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
   onClarificationSuggested?: (correction: SnoozeCorrectionInfo) => void
 }
