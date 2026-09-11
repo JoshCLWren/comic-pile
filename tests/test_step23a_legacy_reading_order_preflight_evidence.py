@@ -84,8 +84,9 @@ def test_step23a_reconciliation_totals_match_the_required_report() -> None:
     assert reconciliation["global_needs_review_dependency_ids_touching"] == []
     assert reconciliation["informational_migration_would_change_roll_eligibility"] is False
     assert reconciliation["factual_reader_state_can_be_preserved_unchanged"] is True
-    assert isinstance(reconciliation["snapshot_token"], str)
-    assert len(cast(str, reconciliation["snapshot_token"])) == 64
+    snapshot_token = reconciliation["snapshot_token"]
+    assert isinstance(snapshot_token, str)
+    assert len(snapshot_token) == 64
 
 
 def test_step23a_every_legacy_item_resolves_exactly_once() -> None:
@@ -95,7 +96,11 @@ def test_step23a_every_legacy_item_resolves_exactly_once() -> None:
     total = 0
     for order in orders:
         items = cast(list[dict[str, object]], order["items"])
-        issue_ids = [int(cast(object, item["resolved_canonical_issue_id"])) for item in items]
+        issue_ids: list[int] = []
+        for item in items:
+            issue_id = item["resolved_canonical_issue_id"]
+            assert isinstance(issue_id, int)
+            issue_ids.append(issue_id)
         assert order["item_count"] == len(items) == len(issue_ids)
         assert order["duplicate_positions"] == []
         assert order["duplicate_canonical_issue_ids"] == []
@@ -196,11 +201,18 @@ def test_step23a_reader_state_and_eligibility_invariants_are_hashed() -> None:
     mismatches = cast(list[dict[str, object]], report["eligibility_mismatches"])
     safety = cast(dict[str, object], report["safety"])
 
-    assert len(cast(str, reader["issue_state_hash"])) == 64
-    assert len(cast(str, reader["thread_state_hash"])) == 64
-    assert len(cast(str, reader["event_state_hash"])) == 64
-    assert len(cast(str, reader["identity_state_hash"])) == 64
-    assert len(cast(list[object], reader["issues"])) == 140
+    for hash_key in (
+        "issue_state_hash",
+        "thread_state_hash",
+        "event_state_hash",
+        "identity_state_hash",
+    ):
+        digest = reader[hash_key]
+        assert isinstance(digest, str)
+        assert len(digest) == 64
+    issues = reader["issues"]
+    assert isinstance(issues, list)
+    assert len(issues) == 140
     assert mismatches == []
     starman = next(row for row in eligibility if int(row["thread_id"]) == 180)
     doctor = next(row for row in eligibility if int(row["thread_id"]) == 105)

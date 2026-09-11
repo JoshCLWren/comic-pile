@@ -675,7 +675,8 @@ def build_report(
         for node in nodes:
             if node.get("node_type") != "issue":
                 continue
-            ref_id = int(cast(object, node.get("ref_id") or 0))
+            raw_ref = node.get("ref_id")
+            ref_id = raw_ref if isinstance(raw_ref, int) else 0
             if ref_id in resolved_issue_set:
                 overlapping_plans.append(
                     {
@@ -961,8 +962,9 @@ def build_report(
                 "persisted_is_blocked": row["persisted_is_blocked"],
                 "authoritative_derived_eligible": row["authoritative_derived_eligible"],
                 "blocker_rule_ids": [
-                    int(cast(dict[str, object], blocker)["rule_id"])
+                    rule_id
                     for blocker in cast(list[dict[str, object]], row["blockers"])
+                    if isinstance((rule_id := blocker["rule_id"]), int)
                 ],
             }
             for row in eligibility
