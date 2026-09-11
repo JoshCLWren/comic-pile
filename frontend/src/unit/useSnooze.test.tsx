@@ -25,13 +25,6 @@ function makeBootstrapApi(): RollBootstrapApi {
   return { get: vi.fn(), switchPrerequisite: vi.fn() }
 }
 
-function makeCacheEffects(): CacheEffectsApi {
-  return {
-    applyRatedThreadCache: vi.fn(),
-    invalidateCurrentSessionAfterSnooze: vi.fn(),
-  }
-}
-
 const snoozeApi = makeSnoozeApi()
 const protectedRollMutationApi = makeProtectedApi()
 const rollBootstrapApi = makeBootstrapApi()
