@@ -18,10 +18,7 @@ from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMem
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.issue import Issue
 from app.models.thread import Thread
-from app.schemas.continuity_readiness import (
-    ContinuityBlocker,
-    UnreadIssueDetail,
-)
+from app.schemas.continuity_blocking import ContinuityBlocker, UnreadIssueDetail
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +29,7 @@ MAX_GRAPH_MEMBERSHIPS = 10_000
 MAX_GRAPH_RULES = 5_000
 MAX_GRAPH_SELECTED_MEMBERS = 10_000
 
-SNAPSHOT_SESSION_KEY = "continuity_readiness_snapshot"
+SNAPSHOT_SESSION_KEY = "continuity_graph_snapshot"
 
 
 @dataclass(frozen=True)

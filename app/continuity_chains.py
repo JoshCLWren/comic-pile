@@ -12,7 +12,7 @@ from app.services.continuity_graph import (
     issue_readiness,
     load_snapshot,
 )
-from app.schemas.continuity_readiness import ContinuityBlocker, ContinuityReadinessNodeType
+from app.schemas.continuity_blocking import ContinuityBlocker, ContinuityTargetNodeType
 
 ContinuityTraversalNodeType = Literal["issue", "crossover"]
 ContinuityTraversalDiagnosticCode = Literal[
@@ -49,7 +49,7 @@ class ContinuityTraversalDiagnostic:
 class ContinuityTraversalResult:
     """Direct blockers plus every bounded path to currently readable prerequisites."""
 
-    node_type: ContinuityReadinessNodeType
+    node_type: ContinuityTargetNodeType
     node_id: int
     evaluated_issue_id: int | None
     direct_blockers: tuple[ContinuityBlocker, ...]
@@ -278,7 +278,7 @@ def _root_paths(
 
 
 def _requested_blockers(
-    node_type: ContinuityReadinessNodeType,
+    node_type: ContinuityTargetNodeType,
     node_id: int,
     snapshot: GraphSnapshot,
 ) -> tuple[int | None, list[ContinuityBlocker]]:
@@ -307,7 +307,7 @@ async def resolve_continuity_chains(
     db: AsyncSession,
     *,
     user_id: int,
-    node_type: ContinuityReadinessNodeType,
+    node_type: ContinuityTargetNodeType,
     node_id: int,
     snapshot: GraphSnapshot | None = None,
 ) -> ContinuityTraversalResult:
