@@ -7,7 +7,9 @@ import {
   hasReadingContextContent,
   hasReadingContextInformation,
 } from '../pages/RollPage/readingContextContent'
-import type { ReaderContextResponse } from '../types'
+import type { ReadingOrder } from '../services/api-reading-orders'
+import type { RatingThread } from '../pages/RollPage/types'
+import type { ConnectedThreadInfo, ReaderContextResponse } from '../types'
 
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -42,7 +44,28 @@ const callbacks = {
   onRefreshThread: vi.fn(),
 }
 
-function renderRatingView(overrides: Record<string, unknown> = {}) {
+interface RatingViewOverride {
+  activeRatingThread?: Partial<RatingThread> | null
+  currentDie?: number
+  rolledResult?: number | null
+  rating?: number
+  predictedDie?: number
+  errorMessage?: string
+  rateIsPending?: boolean
+  snoozeIsPending?: boolean
+  dismissIsPending?: boolean
+  readingOrders?: ReadingOrder[]
+  connectedThreads?: ConnectedThreadInfo[]
+  onUpdateRating?: (value: string) => void
+  onSubmitRating?: (finishSession: boolean) => void
+  onSnooze?: () => void
+  onCancel?: () => void
+  onRefreshThread?: () => void
+  readerContext?: ReaderContextResponse | null
+  isReaderContextLoading?: boolean
+  readerContextError?: string | null
+}
+function renderRatingView(overrides: RatingViewOverride = {}) {
   const defaults = {
     activeRatingThread: {
       id: 1,
@@ -73,7 +96,7 @@ function renderRatingView(overrides: Record<string, unknown> = {}) {
     ...callbacks,
     ...overrides,
   }
-  return render(<MemoryRouter><RatingView {...defaults} /></MemoryRouter>)
+  return render(<MemoryRouter><RatingView {...defaults} activeRatingThread={defaults.activeRatingThread as RatingThread | null} /></MemoryRouter>)
 }
 
 const populatedContext: ReaderContextResponse = {
