@@ -128,7 +128,8 @@ export function RollRecoveryCard({
               : 'Readable prerequisites'}
           </p>
           {recommendations.map((prerequisite, index) => {
-            const isClickable = onReadNow && prerequisite.is_readable !== false
+            const readable = prerequisite.is_readable !== false
+            const isClickable = Boolean(onReadNow && readable)
             const content = (
               <>
                 <span className="min-w-0">
@@ -139,12 +140,11 @@ export function RollRecoveryCard({
                     </span>
                   )}
                 </span>
-                {isClickable && (
+                {readable ? (
                   <span className="shrink-0 text-xs font-black uppercase tracking-widest text-amber-400">
                     Read now
                   </span>
-                )}
-                {!isClickable && (
+                ) : (
                   <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-stone-500">
                     Blocked
                   </span>
