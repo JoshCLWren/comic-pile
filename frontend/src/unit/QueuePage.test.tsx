@@ -81,22 +81,39 @@ vi.mock('../contexts/useToast', () => ({
 }))
 
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseCreateThread = vi.mocked(useCreateThread) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseDeleteThread = vi.mocked(useDeleteThread) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseReactivateThread = vi.mocked(useReactivateThread) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseSession = vi.mocked(useSession) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseQueueBlockingInfo = vi.mocked(useQueueBlockingInfo) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseSnooze = vi.mocked(useSnooze) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedThreadsApi = vi.mocked(threadsApi) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedDependenciesApi = vi.mocked(dependenciesApi) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedIssuesApi = vi.mocked(issuesApi) as any
 
 beforeEach(() => {
