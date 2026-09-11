@@ -112,7 +112,9 @@ test.describe('Issue #2104 zero readiness network requests', () => {
     await page.goto(`/crossovers/${group.id}`, { waitUntil: 'domcontentloaded' })
     await expect(page.getByRole('heading', { name: 'Reading Order' })).toBeVisible()
     await expect(page.getByText('Zero Readiness Crossover')).toBeVisible()
-    await expect(page.getByText('Zero Readiness Series')).toBeVisible()
+    await expect(
+      page.getByTestId('crossover-member-row').getByText('Zero Readiness Series'),
+    ).toBeVisible()
 
     await page.goto(`/continuity-plans/${plan.id}`, { waitUntil: 'domcontentloaded' })
     await expect(page.getByLabel('Plan name')).toHaveValue('Zero Readiness Plan')
