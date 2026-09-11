@@ -41,9 +41,9 @@
     // --- Staged (fix the category, then flip to "error") ---
     "anti-slop/no-object-parameters": "error",
     "anti-slop/no-conditional-empty-object-spread": "error",
-    "anti-slop/no-unsafe-dictionary-type": "error",
+"anti-slop/no-unsafe-dictionary-type": "error",
     "anti-slop/no-runtime-typeof": "error",
-    "anti-slop/no-unknown-returns": "off",
+    "anti-slop/no-unknown-returns": "error",
     "anti-slop/no-chained-type-assertions": "error",
     "anti-slop/no-known-value-widening": "error",
     "anti-slop/no-unknown-parameters": "off",

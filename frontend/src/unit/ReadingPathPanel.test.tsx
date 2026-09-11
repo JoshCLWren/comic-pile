@@ -4,6 +4,48 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ReadingPathPanel } from '../pages/RollPage/components/ReadingPathPanel'
 import type { ReaderContextResponse } from '../types'
 import type { ContinuityReadinessState } from '../hooks/useContinuityReadiness'
+import type {
+  ContinuityBlocker,
+  ContinuityReadinessResponse,
+} from '../services/api-continuity-readiness'
+
+const CURRENT_ISSUE_ID = 22947
+
+function blockedReadiness(blockers: ContinuityBlocker[]): ContinuityReadinessResponse {
+  return {
+    node_type: 'issue',
+    node_id: CURRENT_ISSUE_ID,
+    is_readable: false,
+    evaluated_issue_id: CURRENT_ISSUE_ID,
+    blockers,
+  }
+}
+
+function readableReadiness(): ContinuityReadinessResponse {
+  return {
+    node_type: 'issue',
+    node_id: CURRENT_ISSUE_ID,
+    is_readable: true,
+    evaluated_issue_id: CURRENT_ISSUE_ID,
+    blockers: [],
+  }
+}
+
+function continuityBlocker(overrides: Partial<ContinuityBlocker>): ContinuityBlocker {
+  return {
+    rule_id: null,
+    source_type: 'issue',
+    source_id: 3161,
+    source_label: 'Absolute Evil #1',
+    satisfaction_type: 'unread',
+    satisfied: false,
+    causing_issue_ids: [22950],
+    causing_member_issue_ids: [22950],
+    unread_issue_details: [{ issue_id: 22950, label: 'Absolute Evil #1' }],
+    note: null,
+    ...overrides,
+  }
+}
 
 const navigateSpy = vi.fn()
 vi.mock('react-router-dom', async () => {
@@ -46,16 +88,12 @@ const baseContext: ReaderContextResponse = {
         target_status: 'unread',
         note: null,
         explanation: 'Absolute Martian Manhunter #6 must be read before Absolute Evil #1',
-        source_issue_number: '6',
-        target_issue_number: '1',
-        source_thread_title: 'Absolute Martian Manhunter',
-        target_thread_title: 'Absolute Evil',
-      } as any,
+      },
       {
         id: 945,
         kind: 'continuity',
         source_issue_id: 22950,
-        target_issue_id: 22947,
+        target_issue_id: CURRENT_ISSUE_ID,
         source_thread_id: 3161,
         target_thread_id: 3160,
         source_label: 'Absolute Evil #1',
@@ -64,11 +102,7 @@ const baseContext: ReaderContextResponse = {
         target_status: 'unread',
         note: null,
         explanation: 'Absolute Evil #1 must be read before Absolute Martian Manhunter #7',
-        source_issue_number: '1',
-        target_issue_number: '7',
-        source_thread_title: 'Absolute Evil',
-        target_thread_title: 'Absolute Martian Manhunter',
-      } as any,
+      },
       {
         id: 949,
         kind: 'continuity',
@@ -82,11 +116,7 @@ const baseContext: ReaderContextResponse = {
         target_status: 'unread',
         note: null,
         explanation: 'Future continuity',
-        source_issue_number: '9',
-        target_issue_number: '17',
-        source_thread_title: 'Absolute Martian Manhunter',
-        target_thread_title: 'Absolute Superman',
-      } as any,
+      },
     ],
   },
 }
@@ -112,19 +142,15 @@ describe('ReadingPathPanel regression (issue #1916)', () => {
       <ReadingPathPanel
         context={baseContext}
         readinessState={readiness({
-          readiness: {
-            is_readable: false,
-            blockers: [
-              {
-                target_label: 'Absolute Martian Manhunter #7',
-                source_label: 'Absolute Evil #1',
-                unread_issue_details: [{ label: 'Absolute Evil #1', issue_id: 22950, issue_number: '1', thread_id: 3161 }],
-              } as any,
-            ],
-          } as any,
+          readiness: blockedReadiness([
+            continuityBlocker({
+              source_label: 'Absolute Evil #1',
+              unread_issue_details: [{ issue_id: 22950, label: 'Absolute Evil #1' }],
+            }),
+          ]),
         })}
         fallbackAnchorLabel="Absolute Martian Manhunter #7"
-        onOpenThread={navigateSpy as any}
+        onOpenThread={navigateSpy}
       />,
     )
 
@@ -159,7 +185,7 @@ describe('ReadingPathPanel regression (issue #1916)', () => {
     render(
       <ReadingPathPanel
         context={baseContext}
-        readinessState={readiness({ readiness: { is_readable: true, blockers: [] } as any })}
+readinessState={readiness({ readiness: readableReadiness() })}
         fallbackAnchorLabel="Absolute Martian Manhunter #7"
         onOpenThread={vi.fn()}
       />,
@@ -180,7 +206,7 @@ describe('ReadingPathPanel regression (issue #1916)', () => {
   it('falls back to provided label when series identity or current marker is unavailable', () => {
     const ctxNoSeries: ReaderContextResponse = {
       ...baseContext,
-      series: { ...baseContext.series, series_name: null as any },
+      series: { ...baseContext.series, series_name: null },
       local_chain: {
         ...baseContext.local_chain,
         issues: baseContext.local_chain.issues.map((issue) => ({ ...issue, relation: 'previous' as const })),
@@ -212,11 +238,7 @@ describe('ReadingPathPanel regression (issue #1916)', () => {
             target_status: null,
             note: null,
             explanation: null,
-            source_issue_number: null,
-            target_issue_number: null,
-            source_thread_title: null,
-            target_thread_title: null,
-          } as any,
+          },
         ],
       },
     }
@@ -231,15 +253,14 @@ describe('ReadingPathPanel regression (issue #1916)', () => {
 
   it('surfaces blockers via source_label when unread details are empty and handles loading readiness', () => {
     const ctx = baseContext
-    const blockerWithEmptyDetails = {
-      target_label: 'Absolute Martian Manhunter #7',
+    const blockerWithEmptyDetails = continuityBlocker({
       source_label: 'Mystery Prereq #1',
       unread_issue_details: [],
-    } as any
+    })
     const { rerender } = render(
       <ReadingPathPanel
         context={ctx}
-        readinessState={readiness({ readiness: { is_readable: false, blockers: [blockerWithEmptyDetails] } as any })}
+        readinessState={readiness({ readiness: blockedReadiness([blockerWithEmptyDetails]) })}
         fallbackAnchorLabel="Absolute Martian Manhunter #7"
         onOpenThread={vi.fn()}
       />,
@@ -271,11 +292,7 @@ describe('ReadingPathPanel regression (issue #1916)', () => {
             target_status: 'unread',
             note: null,
             explanation: null,
-            source_issue_number: '6',
-            target_issue_number: '1',
-            source_thread_title: null,
-            target_thread_title: null,
-          } as any,
+          },
           {
             id: 945,
             kind: 'continuity',
@@ -289,11 +306,7 @@ describe('ReadingPathPanel regression (issue #1916)', () => {
             target_status: 'unread',
             note: null,
             explanation: null,
-            source_issue_number: '1',
-            target_issue_number: '7',
-            source_thread_title: null,
-            target_thread_title: null,
-          } as any,
+          },
           // fromCurrent edges
           {
             id: 950,
@@ -308,11 +321,7 @@ describe('ReadingPathPanel regression (issue #1916)', () => {
             target_status: null,
             note: null,
             explanation: null,
-            source_issue_number: '7',
-            target_issue_number: '1',
-            source_thread_title: null,
-            target_thread_title: null,
-          } as any,
+          },
           {
             id: 951,
             kind: 'continuity',
@@ -326,15 +335,11 @@ describe('ReadingPathPanel regression (issue #1916)', () => {
             target_status: null,
             note: null,
             explanation: 'Unlocks later',
-            source_issue_number: '7',
-            target_issue_number: '2',
-            source_thread_title: null,
-            target_thread_title: null,
-          } as any,
+          },
         ],
       },
     }
-    render(<ReadingPathPanel context={ctx} readinessState={readiness({ readiness: { is_readable: true, blockers: [] } as any })} fallbackAnchorLabel="Absolute Martian Manhunter #7" onOpenThread={vi.fn()} />)
+    render(<ReadingPathPanel context={ctx} readinessState={readiness({ readiness: readableReadiness() })} fallbackAnchorLabel="Absolute Martian Manhunter #7" onOpenThread={vi.fn()} />)
     expect(screen.getByText('After you read this')).toBeInTheDocument()
     // both arrows should be present (dependency → and continuity ↝)
     expect(screen.getAllByText('→').length).toBeGreaterThan(0)
@@ -361,11 +366,7 @@ describe('ReadingPathPanel regression (issue #1916)', () => {
             target_status: null,
             note: null,
             explanation: null,
-            source_issue_number: '1',
-            target_issue_number: '7',
-            source_thread_title: null,
-            target_thread_title: null,
-          } as any,
+          },
           {
             id: 961,
             kind: 'continuity',
@@ -379,11 +380,7 @@ describe('ReadingPathPanel regression (issue #1916)', () => {
             target_status: null,
             note: null,
             explanation: null,
-            source_issue_number: '2',
-            target_issue_number: '7',
-            source_thread_title: null,
-            target_thread_title: null,
-          } as any,
+          },
         ],
       },
     }

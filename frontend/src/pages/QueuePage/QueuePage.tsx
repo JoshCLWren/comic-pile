@@ -65,10 +65,13 @@ export default function QueuePage() {
 
   const actions = useQueueThreadActions({
     navigateToRoll,
-    refetchSession: () => refetchSession(),
+    refetchSession: async () => {
+      await refetchSession()
+    },
   })
 
   const submitCreate = useCallback(
+    // SAFETY: the create mutation's async mutationFn resolves to the created thread record before mutate() widens it to void.
     (input: { title: string; format: string; issues_remaining: number; notes: string | null }) =>
       createMutation.mutate(input) as Promise<{ id?: number }>,
     [createMutation],
@@ -87,10 +90,12 @@ export default function QueuePage() {
 
   const modals = useQueueModalsHook({
     threads,
-    onCreated: () => {},
-    onUpdated: () => {},
-    onReactivated: () => {},
-    refetchSession: () => refetchSession(),
+    onCreated: async () => {},
+    onUpdated: async () => {},
+    onReactivated: async () => {},
+    refetchSession: async () => {
+      await refetchSession()
+    },
     submitCreate,
     submitEdit,
     submitReactivate,
@@ -279,7 +284,9 @@ export default function QueuePage() {
           onEditSubmit={modals.handleEditSubmit}
           onReactivateSubmit={modals.handleReactivateSubmit}
           onRepositionConfirm={handleRepositionConfirm}
-          onDependencyChanged={() => void invalidateAfterQueueMutation(queryClient)}
+          onDependencyChanged={async () => {
+            await invalidateAfterQueueMutation(queryClient)
+          }}
           onCloseCreate={modals.closeCreateModal}
           onCloseEdit={modals.closeEditModal}
           onCloseReactivate={modals.closeReactivateModal}

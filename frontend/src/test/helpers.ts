@@ -1,5 +1,5 @@
 import { type Page, type Locator, expect } from '@playwright/test';
-import type { Thread } from '../types';
+import type { Thread, ThreadCreatePayload } from '../types';
 import { isObject, isString } from '../utils/runtimeChecks';
 
 type Violation = {
@@ -167,10 +167,12 @@ export async function getAuthToken(page: Page): Promise<string | null> {
 }
 
 async function getCsrfToken(page: Page, token: string | null): Promise<string> {
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   const response = await page.request.get('/api/auth/csrf', {
-    headers: {
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    },
+    headers,
   });
 
   if (!response.ok()) {
@@ -212,12 +214,26 @@ export async function createThread(
   const token = await getAuthToken(page);
   const csrfToken = await getCsrfToken(page, token);
 
-  const dataWithoutTotal = {
+  const dataWithoutTotal: ThreadCreatePayload = {
     title: threadData.title,
     format: threadData.format,
     issues_remaining: threadData.issues_remaining,
-    ...(threadData.notes !== undefined ? { notes: threadData.notes } : {}),
   };
+  if (threadData.notes !== undefined) {
+    dataWithoutTotal.notes = threadData.notes;
+  }
+
+  const jsonHeaders: Record<string, string> = {};
+  jsonHeaders['Content-Type'] = 'application/json';
+  jsonHeaders['X-CSRF-Token'] = csrfToken;
+  if (token) {
+    jsonHeaders['Authorization'] = `Bearer ${token}`;
+  }
+
+  const authHeaders: Record<string, string> = {};
+  if (token) {
+    authHeaders['Authorization'] = `Bearer ${token}`;
+  }
 
   let success = false;
   let attempts = 0;
@@ -227,11 +243,7 @@ export async function createThread(
   while (!success && attempts < maxAttempts) {
     const response = await page.request.post('/api/threads/', {
       data: dataWithoutTotal,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          'X-CSRF-Token': csrfToken,
-        },
+        headers: jsonHeaders,
       });
 
     if (response.ok()) {
@@ -248,11 +260,7 @@ export async function createThread(
         while (!issueSuccess && issueAttempts < 3) {
           const issuesResponse = await page.request.post(`/api/v1/threads/${threadId}/issues`, {
             data: { issue_range: issueRange },
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-              'X-CSRF-Token': csrfToken,
-            },
+            headers: jsonHeaders,
           });
 
           if (issuesResponse.ok()) {
@@ -261,9 +269,7 @@ export async function createThread(
             // If issues_remaining is 0, mark all issues as read
             if (threadData.issues_remaining === 0 && threadId) {
               const issuesListResponse = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
-                headers: {
-                  ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-                },
+                headers: authHeaders,
               });
               
               if (issuesListResponse.ok()) {
@@ -271,7 +277,7 @@ export async function createThread(
                 for (const issue of issuesData.issues) {
                   await page.request.post(`/api/v1/issues/${issue.id}:markRead`, {
                     headers: {
-                      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                      ...authHeaders,
                       'X-CSRF-Token': csrfToken,
                     },
                   });

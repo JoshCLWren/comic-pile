@@ -55,6 +55,7 @@ export function useDiagnostics() {
         return { domContentLoaded: null, loadComplete: null }
       }
 
+      // SAFETY: navigation entries, when present, are always PerformanceNavigationTiming records.
       const navEntry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
       if (navEntry) {
         return {

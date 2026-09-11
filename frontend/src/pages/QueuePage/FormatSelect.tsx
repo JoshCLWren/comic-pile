@@ -6,6 +6,7 @@ export function FormatSelect({ value, onChange, required, id }: {
   required?: boolean
   id?: string
 }) {
+  // SAFETY: the includes() probe against FORMAT_OPTIONS is exactly the union membership check being asserted.
   const hasCustom = value && !FORMAT_OPTIONS.includes(value as typeof FORMAT_OPTIONS[number])
 
   return (

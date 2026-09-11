@@ -16,7 +16,7 @@ vi.mock('../services/rollBootstrapApi', () => ({
 
 const mockedBootstrap = vi.mocked(rollBootstrapApi.get)
 
-const bootstrapResponse = {
+const bootstrapResponse: RollBootstrapResponse = {
   session_id: 1,
   user_id: 1,
   current_die: 6,
@@ -46,7 +46,7 @@ const bootstrapResponse = {
   blocked_threads: [],
   stale_thread_count: 0,
   stale_thread: null,
-} as RollBootstrapResponse
+}
 
 function createTestWrapper() {
   const client = new QueryClient()
@@ -81,6 +81,7 @@ it('captures the browser-resolved timezone on the initial bootstrap fetch', asyn
 
 it('resolves to undefined when the browser cannot resolve a timezone', () => {
   const originalDateTimeFormat = Intl.DateTimeFormat
+  // SAFETY: Test replaces DateTimeFormat with a throwing stub to simulate missing Intl; the cast preserves the constructor signature for the partial global override.
   const brokenIntl = {
     ...Intl,
     DateTimeFormat: cast<typeof Intl.DateTimeFormat>(() => {

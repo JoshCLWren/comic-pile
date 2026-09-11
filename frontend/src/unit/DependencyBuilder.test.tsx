@@ -46,6 +46,7 @@ const mockedDependenciesApi = vi.mocked(dependenciesApi, { deep: true })
 const mockedThreadsApi = vi.mocked(threadsApi, { deep: true })
 
 function makeThread(overrides: Partial<Thread> & { id: number; title: string }): Thread {
+  // SAFETY: test helper supplies only the fields the component reads
   return {
     format: 'comic',
     status: 'active',
@@ -72,6 +73,7 @@ const PREREQ_THREAD = makeThread({
 })
 
 function makeIssue(overrides: Partial<Issue> & { id: number; thread_id: number }): Issue {
+  // SAFETY: test helper supplies only the fields the component reads
   return {
     issue_number: String(overrides.id),
     status: 'unread',

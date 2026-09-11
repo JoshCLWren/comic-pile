@@ -19,7 +19,7 @@ export function isWindowDefined(): boolean {
   return typeof window !== 'undefined'
 }
 
-export function isFunction<T>(value: T): value is T & ((...args: unknown[]) => unknown) {
+export function isFunction<T>(value: T): value is T & ((...args: unknown[]) => void) {
   return classTag(value) === '[object Function]'
     || classTag(value) === '[object AsyncFunction]'
     || classTag(value) === '[object GeneratorFunction]'

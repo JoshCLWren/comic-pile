@@ -4,21 +4,21 @@ import type { NavigateFunction } from 'react-router-dom'
 import { threadsApi } from '../../services/api'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../../types/rollBootstrap'
-import type { RollResponse } from '../../types'
+import type { RollResponse, SnoozeSessionResponse } from '../../types'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 
 interface RollMutations {
-  setDieMutation: { mutate: (die: number) => Promise<unknown>; isPending: boolean }
-  clearManualDieMutation: { mutate: () => Promise<unknown>; isPending: boolean }
+  setDieMutation: { mutate: (die: number) => Promise<void>; isPending: boolean }
+  clearManualDieMutation: { mutate: () => Promise<void>; isPending: boolean }
   rollMutation: { mutate: () => Promise<RollResponse>; isPending: boolean }
-  snoozeMutation: { mutate: (expectedPendingThreadId?: number) => Promise<unknown>; isPending: boolean }
-  unsnoozeMutation: { mutate: (threadId: number) => Promise<unknown>; isPending: boolean }
-  skipMutation: { mutate: (expectedPendingThreadId?: number) => Promise<unknown>; isPending: boolean }
-  unskipMutation: { mutate: (threadId: number) => Promise<unknown>; isPending: boolean }
-  moveToFrontMutation: { mutate: (id: number) => Promise<unknown>; isPending: boolean }
-  moveToBackMutation: { mutate: (id: number) => Promise<unknown>; isPending: boolean }
-  shuffleQueueMutation: { mutate: () => Promise<unknown>; isPending: boolean }
+  snoozeMutation: { mutate: (expectedPendingThreadId?: number) => Promise<SnoozeSessionResponse | undefined>; isPending: boolean }
+  unsnoozeMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean }
+  skipMutation: { mutate: (expectedPendingThreadId?: number) => Promise<RollResponse | undefined>; isPending: boolean }
+  unskipMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean }
+  moveToFrontMutation: { mutate: (id: number) => Promise<void>; isPending: boolean }
+  moveToBackMutation: { mutate: (id: number) => Promise<void>; isPending: boolean }
+  shuffleQueueMutation: { mutate: () => Promise<void>; isPending: boolean }
 }
 
 interface UseRollActionsParams {
@@ -105,6 +105,7 @@ export function useRollActions({
         last_rolled_result: response.result ?? response.last_rolled_result,
       }
       if (response.total_issues === null) {
+        // SAFETY: threadMetadata is assembled from the roll response fields RatingThread requires when total_issues is null.
         setThreadToMigrate(threadMetadata as RatingThread)
         setShowMigrationDialog(true)
       } else {
@@ -149,6 +150,7 @@ export function useRollActions({
             last_rolled_result: response.result ?? response.last_rolled_result,
           }
           if (response.total_issues === null) {
+            // SAFETY: threadMetadata is assembled from the roll response fields RatingThread requires when total_issues is null.
             setThreadToMigrate(threadMetadata as RatingThread)
             setShowMigrationDialog(true)
           } else {
