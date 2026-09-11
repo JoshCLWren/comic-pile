@@ -6,8 +6,7 @@ import type { ReaderContextEdge } from '../../types'
  *
  * These functions are presentational only: they group and order the already
  * authoritative reader-context payload relative to the active rolled issue.
- * Readiness itself is never re-evaluated here; the verdict comes from the
- * server's continuity readiness API.
+ * They never re-evaluate eligibility; Roll candidate filtering is the authority.
  */
 
 export interface PathStep {

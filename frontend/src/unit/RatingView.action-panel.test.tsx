@@ -4,6 +4,9 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import { RATING_THRESHOLD } from '../pages/RollPage/utils'
+import type { ReadingOrder } from '../services/api-reading-orders'
+import type { RatingThread } from '../pages/RollPage/types'
+import type { ConnectedThreadInfo, ReaderContextResponse } from '../types'
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -14,9 +17,6 @@ vi.mock('../components/IssueCorrectionDialog', () => ({ default: () => null }))
 vi.mock('../components/ContinuityCorrectionDialog', () => ({ default: () => null }))
 vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
   ReadingOrderGroups: () => null,
-}))
-vi.mock('../pages/RollPage/components/ContinuityReadinessSummary', () => ({
-  ContinuityReadinessSummary: () => null,
 }))
 vi.mock('../pages/RollPage/components/ComicVineIssueCard', () => ({
   ComicVineIssueCard: () => null,
@@ -33,7 +33,30 @@ vi.mock('../hooks/useReaderContext', () => ({
   }),
 }))
 
-function ratingView(overrides: Record<string, unknown> = {}) {
+interface RatingViewOverride {
+  activeRatingThread?: Partial<RatingThread> | null
+  currentDie?: number
+  rolledResult?: number | null
+  rating?: number
+  predictedDie?: number
+  errorMessage?: string
+  rateIsPending?: boolean
+  snoozeIsPending?: boolean
+  dismissIsPending?: boolean
+  readingOrders?: ReadingOrder[]
+  connectedThreads?: ConnectedThreadInfo[]
+  onUpdateRating?: (value: string) => void
+  onSubmitRating?: (finishSession: boolean) => void
+  onSnooze?: () => void
+  onCancel?: () => void
+  onRefreshThread?: () => void
+  readerContext?: ReaderContextResponse | null
+  isReaderContextLoading?: boolean
+  readerContextError?: string | null
+  // SAFETY: legacy stray override key only read by tests; the component reads issues_remaining from activeRatingThread.
+  issues_remaining?: number
+}
+function ratingView(overrides: RatingViewOverride = {}) {
   const defaults = {
     activeRatingThread: {
       id: 1,
@@ -68,7 +91,7 @@ function ratingView(overrides: Record<string, unknown> = {}) {
     readerContextError: null,
     ...overrides,
   }
-  return <MemoryRouter><RatingView {...defaults} /></MemoryRouter>
+  return <MemoryRouter><RatingView {...defaults} activeRatingThread={defaults.activeRatingThread as RatingThread | null} /></MemoryRouter>
 }
 
 describe('RatingView action panel (issue #1406)', () => {

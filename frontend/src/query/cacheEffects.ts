@@ -192,7 +192,7 @@ export function applyComicVineCorrectionOptimistically(
 ): void {
   if (imageUrl === undefined) return
   client.setQueryData(queryKeys.comicVine.issueIntelligence(issueId), (old: unknown) => {
-    if (!old || !isObject(old)) {
+if (!old || !isObject(old)) {
       // SAFETY: non-object cache values are intentionally discarded unchanged; the never widen preserves the cache value type.
       return old as never
     }

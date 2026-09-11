@@ -7,18 +7,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, Field, model_validator
 
-from app.schemas.continuity_readiness import ContinuityBlocker
-
 PlanOrderingMode = Literal["informational", "strict_sequential"]
 PlanNodeType = Literal["issue", "crossover", "thread"]
-PlanReadinessDiagnosticCode = Literal[
-    "dangling_plan_reference",
-    "plan_cycle_detected",
-    "cycle_detected",
-    "depth_limit_exceeded",
-    "node_limit_exceeded",
-]
-
 
 def _reject_boolean_item_id(value: object) -> object:
     """Reject boolean JSON values before Pydantic coerces them to integers."""
@@ -345,64 +335,3 @@ class CrossoverTemplateAdoptRequest(BaseModel):
         ):
             raise ValueError("source_list_ids must contain positive integers")
         return self
-
-
-class ContinuityPlanChainNode(BaseModel):
-    """One labeled issue or crossover step in a plan prerequisite chain."""
-
-    node_type: Literal["issue", "crossover"]
-    node_id: int
-    label: str
-    is_readable: bool
-
-
-class ContinuityPlanReadinessDiagnostic(BaseModel):
-    """One structured plan-readiness failure that does not require text parsing."""
-
-    code: PlanReadinessDiagnosticCode
-    node_type: PlanNodeType
-    node_id: int
-    limit: int | None = None
-
-
-class ContinuityPlanNodeReadiness(BaseModel):
-    """Live readiness of one visible node in a saved continuity plan."""
-
-    node_id: str
-    node_type: PlanNodeType
-    ref_id: int
-    lane_id: str
-    position: int
-    label: str
-    is_readable: bool
-    is_complete: bool
-    evaluated_issue_id: int | None = None
-    blockers: list[ContinuityBlocker] = Field(default_factory=list)
-    diagnostics: list[ContinuityPlanReadinessDiagnostic] = Field(default_factory=list)
-    chains: list[list[ContinuityPlanChainNode]] = Field(default_factory=list)
-    readable_prerequisites: list[ContinuityPlanChainNode] = Field(default_factory=list)
-
-
-class ContinuityPlanReadinessSummary(BaseModel):
-    """Deterministic state buckets for one saved plan."""
-
-    total: int = 0
-    readable: int = 0
-    blocked: int = 0
-    complete: int = 0
-    unavailable: int = 0
-
-
-class ContinuityPlanReadinessResponse(BaseModel):
-    """Aggregate live readiness for every visible node of one owned plan."""
-
-    plan_id: int
-    plan_name: str
-    ordering_mode: PlanOrderingMode
-    lanes: list[ContinuityPlanLane] = Field(default_factory=list)
-    nodes: list[ContinuityPlanNodeReadiness] = Field(default_factory=list)
-    plan_diagnostics: list[ContinuityPlanReadinessDiagnostic] = Field(
-        default_factory=list
-    )
-    summary: ContinuityPlanReadinessSummary = Field(default_factory=ContinuityPlanReadinessSummary)
-    generated_at: datetime

@@ -1,10 +1,10 @@
-"""Regression coverage for crossover #15 FCBD read-state reconciliation (issue #2041).
+"""Regression coverage for crossover #15 FCBD prerequisite enforcement (issue #2041).
 
 Proves the canonical evaluator never surfaces a genuinely read prerequisite in
-unread_issue_details, and that Roll eligibility agrees with exact issue readiness
-for Ultimates #18 after the FCBD prerequisite is satisfied.
+unread_issue_details, and that Roll candidate selection agrees with that
+prerequisite state for Ultimates #18.
 
-Also covers aggregate crossover blocking: when the crossover remains blocked for
+Also covers aggregate crossover blocking: when the target remains blocked for
 another branch, the reported cause is the actual remaining unread issue rather
 than the already-read FCBD entry.
 """
@@ -15,12 +15,12 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.continuity_blocking import get_continuity_blocked_thread_ids
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.issue import Issue
 from app.models.thread import Thread
-from comic_pile.dependencies import _get_blocked_thread_ids_uncached, refresh_user_blocked_status
+from app.services.continuity_graph import crossover_readiness, issue_readiness, load_snapshot
+from comic_pile.dependencies import _invalidate_continuity_snapshot, refresh_user_blocked_status
 from comic_pile.queue import get_bounded_roll_pool_rows
 from tests.conftest import get_or_create_user_async
 
@@ -65,12 +65,32 @@ async def _make_thread_with_issue(
     return thread, issue
 
 
+async def _roll_pool_ids(user_id: int, db: AsyncSession) -> set[int]:
+    """Return thread IDs currently eligible for bounded Roll candidate selection."""
+    rows = await get_bounded_roll_pool_rows(user_id, db, current_die=20)
+    return {row[0].id for row in rows}
+
+
+async def _issue_blockers(user_id: int, db: AsyncSession, issue_id: int):
+    """Return canonical hard-prerequisite blockers for one issue."""
+    _invalidate_continuity_snapshot(user_id, db)
+    snapshot = await load_snapshot(db, user_id)
+    return issue_readiness(issue_id, snapshot)
+
+
+async def _crossover_blockers(user_id: int, db: AsyncSession, group_id: int):
+    """Return canonical blockers aggregated for one crossover."""
+    _invalidate_continuity_snapshot(user_id, db)
+    snapshot = await load_snapshot(db, user_id)
+    return crossover_readiness(group_id, snapshot)
+
+
 @pytest.mark.asyncio
-async def test_read_fcbd_does_not_block_ultimates_18_and_roll_agrees(
+async def test_unread_fcbd_excludes_ultimates_18_from_roll_until_satisfied(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """A genuinely read FCBD prerequisite clears both readiness and Roll eligibility."""
+    """Unread FCBD keeps Ultimates #18 out of Roll; satisfying it restores eligibility."""
     user = await get_or_create_user_async(async_db)
 
     fcbd_thread, fcbd_issue = await _make_thread_with_issue(
@@ -107,68 +127,59 @@ async def test_read_fcbd_does_not_block_ultimates_18_and_roll_agrees(
         )
     )
     await async_db.commit()
-
-    # Initially blocked.
-    response = await auth_client.post(
-        "/api/v1/continuity/readiness",
-        json={"node_type": "issue", "node_id": ultimates_18.id},
-    )
-    assert response.status_code == 200, response.text
-    assert response.json()["is_readable"] is False
-    blocker = response.json()["blockers"][0]
-    assert fcbd_issue.id in blocker["causing_issue_ids"]
-    assert any(d["issue_id"] == fcbd_issue.id for d in blocker["unread_issue_details"])
-
-    blocked = await _get_blocked_thread_ids_uncached(user.id, async_db)
-    assert ultimates_thread.id in blocked
-    await async_db.refresh(ultimates_thread)
-    # Denormalized flag should also reflect blocked after rule creation.
-    assert ultimates_thread.is_blocked is True or ultimates_thread.id in blocked
-
-    # Mark FCBD read and recompute.
-    fcbd_issue.status = "read"
-    fcbd_issue.read_at = datetime.now(UTC)
-    async_db.add(fcbd_issue)
-    # Simulate what the API path does: refresh denormalized flags.
     await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()
 
-    # Exact issue readiness must be clear and not mention FCBD.
-    readiness = await auth_client.post(
-        "/api/v1/continuity/readiness",
-        json={"node_type": "issue", "node_id": ultimates_18.id},
-    )
-    assert readiness.status_code == 200, readiness.text
-    payload = readiness.json()
-    assert payload["is_readable"] is True, payload
-    assert payload["blockers"] == []
-    # No unread_issue_details anywhere should contain the read FCBD.
-    for block in payload["blockers"]:
-        assert all(d["issue_id"] != fcbd_issue.id for d in block["unread_issue_details"])
+    blockers = await _issue_blockers(user.id, async_db, ultimates_18.id)
+    assert blockers, "unread FCBD must remain a hard prerequisite"
+    assert fcbd_issue.id in blockers[0].causing_issue_ids
+    assert any(detail.issue_id == fcbd_issue.id for detail in blockers[0].unread_issue_details)
 
-    # Crossover readiness also must not surface the read FCBD.
-    crossover_readiness = await auth_client.post(
-        "/api/v1/continuity/readiness",
-        json={"node_type": "crossover", "node_id": crossover.id},
-    )
-    assert crossover_readiness.status_code == 200, crossover_readiness.text
-    cx_payload = crossover_readiness.json()
-    # After FCBD read, the crossover's only member blockers are gone, so readable.
-    assert cx_payload["is_readable"] is True, cx_payload
-    for block in cx_payload["blockers"]:
-        assert all(d["issue_id"] != fcbd_issue.id for d in block["unread_issue_details"])
+    roll_ids = await _roll_pool_ids(user.id, async_db)
+    assert fcbd_thread.id in roll_ids
+    assert ultimates_thread.id not in roll_ids
 
-    # Roll eligibility must agree with readiness for Ultimates #18.
-    blocked_after = await get_continuity_blocked_thread_ids(user.id, async_db)
-    assert ultimates_thread.id not in blocked_after
+    rolled = await auth_client.post("/api/v1/roll/")
+    assert rolled.status_code == 200, rolled.text
+    assert rolled.json()["thread_id"] != ultimates_thread.id
+
+    blocked_override = await auth_client.post(
+        "/api/v1/roll/override", json={"thread_id": ultimates_thread.id}
+    )
+    assert blocked_override.status_code == 422
+    assert "blocked" in blocked_override.json()["detail"].lower()
+
+    fcbd_issue.status = "read"
+    fcbd_issue.read_at = datetime.now(UTC)
+    async_db.add(fcbd_issue)
+    fcbd_thread.status = "completed"
+    fcbd_thread.reading_progress = "completed"
+    fcbd_thread.issues_remaining = 0
+    fcbd_thread.next_unread_issue_id = None
+    async_db.add(fcbd_thread)
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+
+    blockers_after = await _issue_blockers(user.id, async_db, ultimates_18.id)
+    assert blockers_after == []
+    for blocker in blockers_after:
+        assert all(detail.issue_id != fcbd_issue.id for detail in blocker.unread_issue_details)
+
+    crossover_blockers = await _crossover_blockers(user.id, async_db, crossover.id)
+    for blocker in crossover_blockers:
+        assert all(detail.issue_id != fcbd_issue.id for detail in blocker.unread_issue_details)
 
     await async_db.refresh(ultimates_thread)
     assert ultimates_thread.is_blocked is False
 
-    # Bounded roll pool must contain Ultimates thread now.
-    rows = await get_bounded_roll_pool_rows(user.id, async_db, current_die=20)
-    roll_ids = {row[0].id for row in rows}
-    assert ultimates_thread.id in roll_ids
+    roll_ids_after = await _roll_pool_ids(user.id, async_db)
+    assert ultimates_thread.id in roll_ids_after
+    assert fcbd_thread.id not in roll_ids_after
+
+    await auth_client.post("/api/v1/roll/dismiss-pending")
+    rolled_after = await auth_client.post("/api/v1/roll/")
+    assert rolled_after.status_code == 200, rolled_after.text
+    assert rolled_after.json()["thread_id"] == ultimates_thread.id
 
 
 @pytest.mark.asyncio
@@ -176,10 +187,10 @@ async def test_crossover_aggregate_blocked_identifies_remaining_cause_not_read_f
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """When crossover remains blocked, the cause is the actual unread branch, not the read FCBD."""
+    """When the target remains blocked, the cause is the unread branch, not read FCBD."""
     user = await get_or_create_user_async(async_db)
 
-    fcbd_thread, fcbd_issue = await _make_thread_with_issue(
+    _fcbd_thread, fcbd_issue = await _make_thread_with_issue(
         async_db,
         user_id=user.id,
         title="Free Comic Book Day 2025",
@@ -195,7 +206,7 @@ async def test_crossover_aggregate_blocked_identifies_remaining_cause_not_read_f
         queue_position=21,
         status="unread",
     )
-    # Another unread branch that also blocks the same target via a different rule/crossover.
+    # Another unread branch that also blocks the same target via a different rule.
     other_thread, other_issue = await _make_thread_with_issue(
         async_db,
         user_id=user.id,
@@ -209,7 +220,6 @@ async def test_crossover_aggregate_blocked_identifies_remaining_cause_not_read_f
     await async_db.flush()
     for issue in (fcbd_issue, ultimates_18, other_issue):
         async_db.add(DependencyGroupMembership(group_id=crossover.id, issue_id=issue.id))
-    # Two independent prerequisites for Ultimates #18.
     async_db.add(
         ContinuityRule(
             user_id=user.id,
@@ -232,50 +242,42 @@ async def test_crossover_aggregate_blocked_identifies_remaining_cause_not_read_f
     )
     await async_db.commit()
 
-    # Mark FCBD read, leaving the other prerequisite unread.
     fcbd_issue.status = "read"
     fcbd_issue.read_at = datetime.now(UTC)
     await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()
 
-    readiness = await auth_client.post(
-        "/api/v1/continuity/readiness",
-        json={"node_type": "issue", "node_id": ultimates_18.id},
-    )
-    assert readiness.status_code == 200, readiness.text
-    payload = readiness.json()
-    assert payload["is_readable"] is False
-    # Must not mention the already-read FCBD.
-    for block in payload["blockers"]:
-        assert all(d["issue_id"] != fcbd_issue.id for d in block["unread_issue_details"])
-        assert fcbd_issue.id not in block["causing_issue_ids"]
-        assert fcbd_issue.id not in block["causing_member_issue_ids"]
-    # Must mention the actual remaining unread cause.
-    all_unread = {d["issue_id"] for block in payload["blockers"] for d in block["unread_issue_details"]}
+    blockers = await _issue_blockers(user.id, async_db, ultimates_18.id)
+    assert blockers, "remaining unread prerequisite must still block Ultimates #18"
+    for blocker in blockers:
+        assert all(detail.issue_id != fcbd_issue.id for detail in blocker.unread_issue_details)
+        assert fcbd_issue.id not in blocker.causing_issue_ids
+        assert fcbd_issue.id not in blocker.causing_member_issue_ids
+    all_unread = {detail.issue_id for blocker in blockers for detail in blocker.unread_issue_details}
     assert other_issue.id in all_unread
 
-    crossover_readiness = await auth_client.post(
-        "/api/v1/continuity/readiness",
-        json={"node_type": "crossover", "node_id": crossover.id},
+    roll_ids = await _roll_pool_ids(user.id, async_db)
+    assert ultimates_thread.id not in roll_ids
+    assert other_thread.id in roll_ids
+
+    blocked_override = await auth_client.post(
+        "/api/v1/roll/override", json={"thread_id": ultimates_thread.id}
     )
-    assert crossover_readiness.status_code == 200, crossover_readiness.text
-    cx_blocks = crossover_readiness.json()["blockers"]
-    # Aggregate crossover blockers should also not leak the read FCBD.
-    for block in cx_blocks:
-        assert all(d["issue_id"] != fcbd_issue.id for d in block["unread_issue_details"])
-    # But should still be blocked via the other unread member's prerequisite.
-    assert len(cx_blocks) >= 1
+    assert blocked_override.status_code == 422
+
+    crossover_blockers = await _crossover_blockers(user.id, async_db, crossover.id)
+    assert crossover_blockers
+    for blocker in crossover_blockers:
+        assert all(detail.issue_id != fcbd_issue.id for detail in blocker.unread_issue_details)
 
 
 @pytest.mark.asyncio
 async def test_crossover_thread_membership_read_does_not_leak(
-    auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Thread-level crossover membership with a read issue does not keep the thread blocked."""
+    """Thread-level crossover membership with a read issue does not leak as a blocker."""
     user = await get_or_create_user_async(async_db)
 
-    # FCBD thread with one read issue.
     fcbd_thread, fcbd_issue = await _make_thread_with_issue(
         async_db,
         user_id=user.id,
@@ -284,7 +286,7 @@ async def test_crossover_thread_membership_read_does_not_leak(
         queue_position=30,
         status="read",
     )
-    target_thread, target_issue = await _make_thread_with_issue(
+    _target_thread, target_issue = await _make_thread_with_issue(
         async_db,
         user_id=user.id,
         title="The Ultimates",
@@ -295,7 +297,6 @@ async def test_crossover_thread_membership_read_does_not_leak(
     crossover = DependencyGroup(user_id=user.id, name="Ultimate Universe")
     async_db.add(crossover)
     await async_db.flush()
-    # Membership via thread (covers all issues in thread).
     async_db.add(DependencyGroupMembership(group_id=crossover.id, thread_id=fcbd_thread.id))
     async_db.add(DependencyGroupMembership(group_id=crossover.id, issue_id=target_issue.id))
     async_db.add(
@@ -309,18 +310,14 @@ async def test_crossover_thread_membership_read_does_not_leak(
         )
     )
     await async_db.commit()
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
 
-    # Since the only other member besides the target is the already-read FCBD issue,
-    # the only unread member is the target itself; but target's self-membership
-    # should not cause it to be considered a prerequisite for itself. The
-    # defensive filtering plus is_read means the read FCBD must not appear.
-    # However the rule as written requires all members read, including the target
-    # which is unread, so it would stay blocked by itself. To avoid that
-    # degenerate case, assert that unread_issue_details never contains the read FCBD.
-    readiness = await auth_client.post(
-        "/api/v1/continuity/readiness",
-        json={"node_type": "issue", "node_id": target_issue.id},
-    )
-    assert readiness.status_code == 200, readiness.text
-    for block in readiness.json()["blockers"]:
-        assert all(d["issue_id"] != fcbd_issue.id for d in block["unread_issue_details"])
+    blockers = await _issue_blockers(user.id, async_db, target_issue.id)
+    for blocker in blockers:
+        assert all(detail.issue_id != fcbd_issue.id for detail in blocker.unread_issue_details)
+        assert fcbd_issue.id not in blocker.causing_issue_ids
+        assert fcbd_issue.id not in blocker.causing_member_issue_ids
+
+    roll_ids = await _roll_pool_ids(user.id, async_db)
+    assert fcbd_thread.id not in roll_ids

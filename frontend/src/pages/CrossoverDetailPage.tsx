@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { dependencyGroupsApi, type DependencyGroup, type DependencyGroupMember, type DependencyGroupSummary } from '../services/api-dependency-groups'
-import type { ContinuityReadinessResponse, ContinuityBlocker } from '../services/api-continuity-readiness'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { Thread, Issue } from '../types'
 
@@ -12,12 +11,6 @@ interface CrossoverMember {
   other_crossovers: string[]
 }
 
-interface BlockedMember {
-  membershipId: number
-  threadTitle: string
-  issueNumber: string
-  blockers: ContinuityBlocker[]
-}
 
 export default function CrossoverDetailPage() {
   const { group } = useParams<{ group: string }>()
@@ -25,7 +18,6 @@ export default function CrossoverDetailPage() {
 
   const [crossover, setCrossover] = useState<DependencyGroup | null>(null)
   const [members, setMembers] = useState<CrossoverMember[]>([])
-  const [readiness, setReadiness] = useState<ContinuityReadinessResponse | null>(null)
   const [linkedPlans, setLinkedPlans] = useState<DependencyGroupSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -49,7 +41,6 @@ export default function CrossoverDetailPage() {
           other_crossovers: m.other_crossovers,
         })),
       )
-      setReadiness(detail.readiness ?? null)
       setLinkedPlans(detail.linked_plans ?? [])
     } catch (err) {
       setError(getApiErrorDetail(err))
@@ -135,21 +126,6 @@ export default function CrossoverDetailPage() {
   const totalCount = sortedMembers.filter(m => m.issue).length
   const nextUnread = sortedMembers.find(m => m.issue?.status === 'unread')
 
-  const blockedMembers = readiness?.blockers.flatMap(blocker => {
-    const member = members.find(m => 
-      (blocker.source_type === 'thread' && m.membership.thread_id === blocker.source_id) ||
-      (blocker.source_type === 'issue' && m.membership.issue_id === blocker.source_id)
-    )
-    if (!member) return []
-    return [{
-      membershipId: member.membership.id,
-      threadTitle: member.thread?.title ?? 'Unknown Series',
-      issueNumber: member.issue?.issue_number ?? '?',
-      blockers: [blocker],
-    }]
-  }) ?? []
-
-  const blockedMemberMap = new Map(blockedMembers.map(b => [b.membershipId, b]))
 
   return (
     <div className="space-y-6 md:space-y-8 px-4 pb-6">
@@ -196,51 +172,6 @@ export default function CrossoverDetailPage() {
         </dl>
       </div>
 
-      {readiness && (
-        <div className={'rounded-xl p-4 ' + (readiness.is_readable ? 'border border-[var(--theme-continuity-accent)]/50 bg-[var(--theme-continuity-accent)]/10' : 'border border-[var(--theme-danger)]/50 bg-[var(--theme-danger)]/10')}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className={'rounded-full px-2 py-0.5 text-xs font-bold ' + (readiness.is_readable ? 'bg-[var(--theme-continuity-accent)] text-[var(--theme-text-primary)]' : 'bg-[var(--theme-danger)] text-[var(--theme-text-primary)]')}>
-                {readiness.is_readable ? 'Readable' : 'Blocked'}
-              </span>
-              <span className="text-sm text-[var(--theme-text-muted)]">
-                {readiness.is_readable
-                  ? 'This crossover is ready to read.'
-                  : readiness.blockers.length + ' continuity rule' + (readiness.blockers.length !== 1 ? 's' : '') + ' blocking.'}
-              </span>
-            </div>
-            {readiness.evaluated_issue_id && (
-              <span className="text-xs text-[var(--theme-text-dim)]">Evaluated issue: {readiness.evaluated_issue_id}</span>
-            )}
-          </div>
-          {!readiness.is_readable && readiness.blockers.length > 0 && (
-            <details className="mt-3">
-              <summary className="cursor-pointer text-sm text-[var(--theme-danger)] hover:text-[var(--theme-danger-hover)]">Show blocking details</summary>
-              <div className="mt-2 space-y-2 text-sm">
-                {readiness.blockers.map((blocker, index) => (
-                  <div key={index} className="rounded-lg bg-[var(--theme-bg-panel)] p-3 border border-[var(--theme-border)]">
-                    <div className="flex gap-2">
-                      <span className="font-medium text-[var(--theme-text-primary)]">{blocker.source_label}</span>
-                      <span className="text-[var(--theme-text-muted)]">({blocker.satisfaction_type})</span>
-                    </div>
-                    {blocker.unread_issue_details.length > 0 && (
-                      <ul className="mt-1 ml-4 list-disc space-y-1 text-[var(--theme-text-muted)]">
-                        {blocker.unread_issue_details.map((detail, i) => (
-                          <li key={i}>Unread: {detail.label} (Issue {detail.issue_id})</li>
-                        ))}
-                      </ul>
-                    )}
-                    {blocker.note && (
-                      <p className="mt-1 text-[var(--theme-text-dim)]">{blocker.note}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
-        </div>
-      )}
-
       {nextUnread && (
         <div className="rounded-xl border border-[var(--theme-continuity-accent)]/40 bg-[var(--theme-continuity-accent)]/10 p-4">
           <div className="flex items-center justify-between gap-3">
@@ -277,18 +208,14 @@ export default function CrossoverDetailPage() {
                 const position = member.membership?.sequence_order ?? index + 1
                 const threadTitle = member.thread?.title ?? 'Unknown Series'
                 const issueNumber = member.issue?.issue_number ?? '?'
-                const blockedInfo = blockedMemberMap.get(member.membership.id)
 
               return (
                 <div
                   key={member.membership.id}
                   data-testid="crossover-member-row"
-                  className={'flex items-center gap-3 rounded-lg p-3 transition-colors ' + (
-                    blockedInfo
-                      ? 'bg-[var(--theme-danger)]/10 border border-[var(--theme-danger)]/40'
-                      : isRead
-                      ? 'bg-[var(--theme-bg-panel)] border border-[var(--theme-border)]'
-                      : 'bg-[var(--theme-continuity-accent)]/10 border border-[var(--theme-continuity-accent)]/30'
+                  className={'flex items-center gap-3 rounded-lg p-3 transition-colors ' + (isRead
+                    ? 'bg-[var(--theme-bg-panel)] border border-[var(--theme-border)]'
+                    : 'bg-[var(--theme-continuity-accent)]/10 border border-[var(--theme-continuity-accent)]/30'
                   )}
                 >
                   <span className="w-8 shrink-0 text-center text-sm font-mono font-bold text-[var(--theme-text-muted)]">
@@ -297,11 +224,6 @@ export default function CrossoverDetailPage() {
                   <div className="flex-1 min-w-0">
                     <p className={`truncate font-medium ${isRead ? 'text-[var(--theme-text-muted)] line-through' : 'text-[var(--theme-text-primary)]'}`}>
                       {threadTitle}
-                      {blockedInfo && (
-                        <span className="ml-2 rounded px-1.5 py-0.5 text-xs font-medium bg-[var(--theme-danger)]/20 text-[var(--theme-danger)]">
-                          Blocked
-                        </span>
-                      )}
                     </p>
                     <p className={`truncate text-sm ${isRead ? 'text-[var(--theme-text-dim)]' : 'text-[var(--theme-text-muted)]'}`}>
                       Issue {issueNumber}
@@ -314,24 +236,6 @@ export default function CrossoverDetailPage() {
                         </>
                       )}
                     </p>
-                    {blockedInfo && (
-                      <details className="mt-1">
-                        <summary className="cursor-pointer text-xs text-[var(--theme-danger)] hover:text-[var(--theme-danger-hover)]">Blocking reasons</summary>
-                        <ul className="mt-1 ml-4 list-disc space-y-0.5 text-xs text-[var(--theme-text-dim)]">
-                          {blockedInfo.blockers.map((blocker, i) => (
-                            <li key={i}>
-                              {blocker.source_label} ({blocker.satisfaction_type})
-                              {blocker.unread_issue_details.length > 0 && (
-                                <span className="text-[var(--theme-text-muted)]">
-                                  {' — '}
-                                  {blocker.unread_issue_details.map(d => d.label).join(', ')}
-                                </span>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span

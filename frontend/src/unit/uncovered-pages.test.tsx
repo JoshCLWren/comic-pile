@@ -34,7 +34,7 @@ describe('HelpPage', () => {
       'Continuity Plan',
       'Lane',
       'Reading Order',
-      'Readiness / Blocked',
+      'Blocked',
       'Projection',
       'Die size',
       'Auto',

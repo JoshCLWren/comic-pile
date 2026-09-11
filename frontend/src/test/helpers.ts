@@ -433,7 +433,8 @@ export function extractThreadsFromResponse(response: unknown): Thread[] {
     return response as Thread[];
   }
   if (isObject(response) && 'threads' in response) {
-    return (response as { threads: Thread[] }).threads;
+    const threadsResponse = response as { threads?: unknown };
+    return threadsResponse.threads as Thread[];
   }
   return [];
 }

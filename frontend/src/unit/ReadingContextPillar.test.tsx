@@ -15,14 +15,8 @@ vi.mock('react-router-dom', async () => {
 vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
   ReadingOrderGroups: () => null,
 }))
-vi.mock('../hooks/useContinuityReadiness', () => ({
-  useContinuityReadiness: () => ({ readiness: null, isLoading: false, error: null, refetch: vi.fn() }),
-}))
 vi.mock('../pages/RollPage/components/ReadingPathPanel', () => ({
   ReadingPathPanel: () => null,
-}))
-vi.mock('../pages/RollPage/components/ContinuityReadinessSummary', () => ({
-  ContinuityReadinessSummary: () => null,
 }))
 vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
   ReadingRouteExplanation: () => null,

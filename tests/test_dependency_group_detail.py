@@ -12,6 +12,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Thread, User
+from app.models.continuity_plan import ContinuityPlan
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 
 
@@ -183,12 +184,12 @@ async def test_detail_endpoint_large_crossover_bounded_queries(
 
 
 @pytest.mark.asyncio
-async def test_detail_endpoint_readiness_and_plans(
+async def test_detail_endpoint_memberships_and_linked_plans(
     auth_client: AsyncClient,
     async_db: AsyncSession,
     default_user: User,
 ) -> None:
-    """Detail includes continuity readiness and linked plans."""
+    """Detail returns memberships, issue/thread data, and linked plans without readiness."""
     thread, issues = await _make_thread(
         async_db, default_user, title="Plan Series", issue_count=1, queue_position=200
     )
@@ -196,13 +197,37 @@ async def test_detail_endpoint_readiness_and_plans(
     async_db.add(group)
     await async_db.flush()
     async_db.add(DependencyGroupMembership(group_id=group.id, issue_id=issues[0].id))
+    plan = ContinuityPlan(
+        user_id=default_user.id,
+        name="Linked Ultimate Plan",
+        ordering_mode="informational",
+        lanes_json=[{"id": "main", "name": "Main", "order": 0}],
+        nodes_json=[
+            {
+                "id": f"crossover-{group.id}",
+                "node_type": "crossover",
+                "ref_id": group.id,
+                "lane_id": "main",
+                "position": 0,
+            }
+        ],
+    )
+    async_db.add(plan)
     await async_db.commit()
 
     response = await auth_client.get(f"/api/v1/reading-order-groups/{group.id}/detail")
     assert response.status_code == 200
     data = response.json()
-    # readiness may be None if no rules defined, but field should exist
-    assert "readiness" in data
+    assert "readiness" not in data
+    assert len(data["memberships"]) == 1
+    member = data["memberships"][0]
+    assert member["membership"]["issue_id"] == issues[0].id
+    assert member["issue"] is not None
+    assert member["issue"]["issue_number"] == "1"
+    assert member["thread"] is not None
+    assert member["thread"]["title"] == "Plan Series"
+    assert member["thread"]["id"] == thread.id
+    assert "sequence_order" in member["membership"]
     assert "linked_plans" in data
-    # linked_plans is a list
     assert isinstance(data["linked_plans"], list)
+    assert any(item["id"] == plan.id and item["name"] == "Linked Ultimate Plan" for item in data["linked_plans"])

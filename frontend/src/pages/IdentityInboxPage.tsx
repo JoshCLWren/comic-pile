@@ -3,16 +3,18 @@ import { Link } from 'react-router-dom'
 import api from '../services/api'
 import { isObject, isNonEmptyString, isString } from '../utils/runtimeChecks'
 
+type MetadataValue = string | Record<string, string> | null
+type EvidenceValue = string | string[] | null
 interface InboxCandidate {
   external_identity_id: number
   provider: string
   comicvine_id: string | null
   external_url: string | null
-  metadata_json: Record<string, unknown>
+  metadata_json: Record<string, MetadataValue>
   status: string
   confidence: number | null
   evidence_source: string | null
-  evidence_json: Record<string, unknown>
+  evidence_json: Record<string, EvidenceValue>
   rejection_reason: string | null
 }
 
@@ -89,7 +91,7 @@ function CandidateCard({
   const volumeObj = meta.volume
   const volumeName =
     isObject(volumeObj)
-      ? toText(volumeObj.name)
+? toText(volumeObj.name)
       : toText(meta.volume_name)
   const issueName = toText(meta.name) ?? toText(meta.issue_name)
   const evidenceItems = Array.isArray(candidate.evidence_json.evidence)

@@ -37,11 +37,14 @@ export function isBoolean(value: unknown): value is boolean {
   return classTag(value) === '[object Boolean]'
 }
 
-export function isObject(value: unknown): value is Record<string, unknown> {
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
+export type JsonRecord = Record<string, JsonValue>
+
+export function isObject(value: unknown): value is JsonRecord {
   return value !== null && value !== undefined && classTag(value) === '[object Object]'
 }
 
-export function isNonNullObject(value: unknown): value is Record<string, unknown> {
+export function isNonNullObject(value: unknown): value is JsonRecord {
   if (value === null || value === undefined) return false
   const tag = classTag(value)
   return tag === '[object Object]' || tag === '[object Error]'
@@ -54,7 +57,7 @@ export function isPlainObject(value: unknown): value is object {
 export function hasProperty<T extends object, K extends string>(
   obj: T,
   key: K,
-): obj is T & Record<K, unknown> {
+): obj is T & Record<K, JsonValue> {
   return key in obj
 }
 

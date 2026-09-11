@@ -30,7 +30,8 @@ vi.mock('../pages/RollPage/components/CrossoverAnalytics', () => ({
   ),
 }))
 
-function ratingThread(overrides: Record<string, unknown> = {}) {
+type ThreadOverride = Record<string, string | number | boolean | null>
+function ratingThread(overrides: ThreadOverride = {}) {
   return {
     id: 1,
     title: 'Saga',

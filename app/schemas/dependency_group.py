@@ -6,7 +6,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.schemas.continuity_readiness import ContinuityReadinessResponse
 from app.schemas.issue import IssueResponse
 from app.schemas.thread import ThreadResponse
 
@@ -142,11 +141,10 @@ class DependencyGroupDetailMemberResponse(BaseModel):
 
 
 class DependencyGroupDetailResponse(BaseModel):
-    """Full crossover detail with enriched members, readiness, and linked plans."""
+    """Full crossover detail with enriched members and linked plans."""
 
     id: int
     name: str
     created_at: datetime
     memberships: list[DependencyGroupDetailMemberResponse]
-    readiness: ContinuityReadinessResponse | None = None
     linked_plans: list[DependencyGroupSummary] = []

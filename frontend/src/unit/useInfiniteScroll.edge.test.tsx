@@ -66,6 +66,7 @@ function RemountingSentinel({
   }
   return <div ref={sentinelRef} data-testid="sentinel" />
 }
+
 const intersectingEntry = (isIntersecting: boolean) =>
   cast<IntersectionObserverEntry>({ isIntersecting })
 
@@ -108,7 +109,7 @@ describe('useInfiniteScroll edge-triggering', () => {
     await flushObserver()
 
     const observer = getObserver()
-act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver>(observer)))
+    act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver>(observer)))
 
     expect(onLoadMore).toHaveBeenCalledTimes(1)
   })
@@ -119,7 +120,7 @@ act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver
     await flushObserver()
 
     const observer = getObserver()
-act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver>(observer)))
+    act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver>(observer)))
     act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver>(observer)))
 
     expect(onLoadMore).toHaveBeenCalledTimes(1)
@@ -131,7 +132,7 @@ act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver
     await flushObserver()
 
     const observer = getObserver()
-act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver>(observer)))
+    act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver>(observer)))
     act(() => observer.callback([intersectingEntry(false)], cast<IntersectionObserver>(observer)))
     act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver>(observer)))
 
@@ -146,7 +147,7 @@ act(() => observer.callback([intersectingEntry(true)], cast<IntersectionObserver
     await flushObserver()
 
     const first = getObserver()
-act(() => first.callback([intersectingEntry(true)], cast<IntersectionObserver>(first)))
+    act(() => first.callback([intersectingEntry(true)], cast<IntersectionObserver>(first)))
     expect(onLoadMore).toHaveBeenCalledTimes(1)
 
     rerender(<ScrollSentinel onLoadMore={onLoadMore} hasMore={true} isLoading={true} />)
@@ -154,7 +155,7 @@ act(() => first.callback([intersectingEntry(true)], cast<IntersectionObserver>(f
     await flushObserver()
 
     const second = getObserver()
-act(() => second.callback([intersectingEntry(true)], cast<IntersectionObserver>(second)))
+    act(() => second.callback([intersectingEntry(true)], cast<IntersectionObserver>(second)))
 
     expect(onLoadMore).toHaveBeenCalledTimes(1)
   })

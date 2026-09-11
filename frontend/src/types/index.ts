@@ -184,6 +184,8 @@ export type ReadingModeSource = 'quiz' | 'manual'
 export type BandwidthSource = 'manual' | 'inferred' | 'snooze' | 'quiz' | null
 export type IntentSource = 'manual' | 'inferred' | 'snooze' | 'quiz' | null
 
+export type SessionModeCorrectionGuidance = Record<string, string>
+
 export interface SessionModeResponse {
   active_bandwidth: ReadingBandwidth | string | null
   predicted_bandwidth: ReadingBandwidth | string | null
@@ -195,7 +197,7 @@ export interface SessionModeResponse {
   intent_confidence: number | null
   intent_source: IntentSource
   intent_version: string | null
-  session_mode_correction_guidance: Record<string, unknown> | null
+  session_mode_correction_guidance: SessionModeCorrectionGuidance | null
 }
 
 export interface SessionModeUpdateRequest {
