@@ -60,4 +60,37 @@ describe('RollRecoveryCard mobile', () => {
     expect(screen.getByText(/No readable prerequisite is available yet/)).toBeVisible()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
+
+  it('stacks the Read now CTA below the prerequisite title so they cannot overlap on a phone', () => {
+    const onReadNow = vi.fn()
+    render(<RollRecoveryCard recovery={recovery} onReadNow={onReadNow} />)
+
+    const readNowRows = screen.getAllByRole('button')
+    expect(readNowRows).toHaveLength(2)
+    for (const row of readNowRows) {
+      expect(row).toHaveClass('flex-col')
+      expect(row).toHaveClass('sm:flex-row')
+      expect(row).not.toHaveClass('justify-between')
+    }
+
+    for (const prerequisite of recovery.readable_prerequisites) {
+      expect(screen.getByText(prerequisite.label)).toBeVisible()
+    }
+    expect(screen.getAllByText('Read now')).toHaveLength(2)
+  })
+
+  it('keeps each prerequisite label in its own wrapping region at phone widths', () => {
+    const { container } = render(<RollRecoveryCard recovery={recovery} />)
+
+    const labels = Array.from(
+      container.querySelectorAll<HTMLSpanElement>('span.text-sm.font-black'),
+    )
+    expect(labels.map((label) => label.textContent)).toEqual([
+      'Transitive prerequisite #1',
+      'Alternate readable prerequisite #3',
+    ])
+    for (const label of labels) {
+      expect(label.className).toContain('block')
+    }
+  })
 })
