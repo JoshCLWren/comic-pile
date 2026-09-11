@@ -50,6 +50,7 @@ let resizeCallback:
   | undefined
 
 beforeAll(() => {
+  // SAFETY: stub function satisfies ResizeObserver constructor contract for testing
   vi.stubGlobal(
     'ResizeObserver',
     vi.fn(function (
@@ -124,6 +125,7 @@ it('keeps a single scroll surface when the queue crosses the virtualization thre
     </div>
   )
 
+  // SAFETY: sentinelRef and scrollRootRef are nullable refs; cast to match QueueList prop types
   const { container, rerender } = render(
     <QueueList
       activeThreads={initialThreads}
@@ -149,7 +151,9 @@ it('keeps a single scroll surface when the queue crosses the virtualization thre
   const scrollChannelOf = (el: Element) => {
     const style = getComputedStyle(el)
     return {
+      // SAFETY: getComputedStyle returns CSSStyleDeclaration; overflowY is always a string
       overflowY: style.overflowY as string,
+      // SAFETY: el is known to be an HTMLElement from the querySelector result
       inlineHeight: (el as HTMLElement).style.height,
     }
   }
@@ -159,6 +163,7 @@ it('keeps a single scroll surface when the queue crosses the virtualization thre
   expect(plainSurface.inlineHeight).toBe('')
 
   // Cross the threshold: VirtualizedThreadList replaces the plain list.
+  // SAFETY: same ref casts as the initial render for QueueList prop types
   rerender(
     <QueueList
       activeThreads={grownThreads}

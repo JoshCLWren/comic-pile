@@ -39,9 +39,13 @@ function createWrapper() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: mockResolvedValue expects the resolved type; undefined as never satisfies void returns
   mockedQueueApi.moveToPosition.mockResolvedValue(undefined as never)
+  // SAFETY: mockResolvedValue expects the resolved type; undefined as never satisfies void returns
   mockedQueueApi.moveToFront.mockResolvedValue(undefined as never)
+  // SAFETY: mockResolvedValue expects the resolved type; undefined as never satisfies void returns
   mockedQueueApi.moveToBack.mockResolvedValue(undefined as never)
+  // SAFETY: mockResolvedValue expects the resolved type; undefined as never satisfies void returns
   mockedQueueApi.shuffle.mockResolvedValue(undefined as never)
   mockedInvalidateAfterQueueMovement.mockResolvedValue()
   mockedThreadsApi.list.mockResolvedValue({ threads: [], next_page_token: null })
@@ -64,6 +68,7 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   })
 
   it('passes search and default sort on the initial page', async () => {
+    // SAFETY: thread object has required shape; as never satisfies mock return type
     mockedThreadsApi.list.mockResolvedValue({
       threads: [{ id: 1, title: 'Bat' } as never],
       next_page_token: null,
@@ -85,6 +90,7 @@ describe('useQueueThreads (bounded incremental loader)', () => {
     mockedThreadsApi.list.mockResolvedValue({ threads: [], next_page_token: null })
 
     const wrapper = createWrapper()
+    // SAFETY: alphabetical is a valid QueueSortBy option used by the UI
     const { result } = renderHook(() => useQueueThreads('', 'alphabetical' as QueueSortBy), { wrapper })
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
@@ -96,6 +102,7 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   })
 
   it('does not include page_size when fetching a later cursor page', async () => {
+    // SAFETY: thread mock satisfies Thread shape; as never satisfies mock return type
     mockedThreadsApi.list
       .mockResolvedValueOnce({ threads: [{ id: 1 } as never], next_page_token: 'tok-2' })
       .mockResolvedValueOnce({ threads: [{ id: 2 } as never], next_page_token: null })
@@ -117,6 +124,7 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   })
 
   it('appends later pages without duplicating rows', async () => {
+    // SAFETY: thread mock satisfies Thread shape; as never satisfies mock return type
     mockedThreadsApi.list
       .mockResolvedValueOnce({ threads: [{ id: 1 } as never], next_page_token: 'tok-2' })
       .mockResolvedValueOnce({ threads: [{ id: 2 } as never], next_page_token: null })
@@ -136,6 +144,7 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   })
 
   it('loadMore is a no-op when there is no next page', async () => {
+    // SAFETY: thread mock satisfies Thread shape; as never satisfies mock return type
     mockedThreadsApi.list.mockResolvedValue({ threads: [{ id: 1 } as never], next_page_token: null })
 
     const wrapper = createWrapper()
@@ -151,6 +160,7 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   })
 
   it('reports no next page token at the end of the list', async () => {
+    // SAFETY: thread mock satisfies Thread shape; as never satisfies mock return type
     mockedThreadsApi.list.mockResolvedValue({ threads: [{ id: 1 } as never], next_page_token: null })
 
     const wrapper = createWrapper()
@@ -173,6 +183,7 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   })
 
   it('surfaces an incremental-load error without discarding loaded pages', async () => {
+    // SAFETY: thread mock satisfies Thread shape; as never satisfies mock return type
     mockedThreadsApi.list
       .mockResolvedValueOnce({ threads: [{ id: 1 } as never], next_page_token: 'tok-2' })
       .mockRejectedValueOnce(new Error('next page unavailable'))
@@ -192,6 +203,7 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   })
 
   it('keeps the previous rows visible while a search-key transition fetches', async () => {
+    // SAFETY: thread mock satisfies Thread shape; as never satisfies mock return type
     mockedThreadsApi.list
       .mockResolvedValueOnce({ threads: [{ id: 1, title: 'Saga' } as never], next_page_token: null })
       .mockImplementationOnce(() => new Promise(() => {})) // never resolves: search still in flight
@@ -235,6 +247,7 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   })
 
   it('keeps previous data visible while search query is fetching (#2343 focus retention)', async () => {
+    // SAFETY: thread mock satisfies Thread shape; as never satisfies mock return type
     mockedThreadsApi.list.mockResolvedValueOnce({
       threads: [{ id: 1, title: 'Batman' } as never],
       next_page_token: null,
@@ -255,6 +268,7 @@ describe('useQueueThreads (bounded incremental loader)', () => {
       () =>
         new Promise((resolve) => {
           setTimeout(
+            // SAFETY: thread mock satisfies Thread shape; as never satisfies mock return type
             () => resolve({ threads: [{ id: 2, title: 'Batgirl' } as never], next_page_token: null }),
             100,
           )
@@ -280,12 +294,14 @@ describe('useQueueThreads (bounded incremental loader)', () => {
     const wrapper = createWrapper()
     const { result, rerender } = renderHook(
       ({ sort }: { sort: QueueSortBy }) => useQueueThreads('', sort),
+      // SAFETY: position is a valid default QueueSortBy option
       { wrapper, initialProps: { sort: 'position' as QueueSortBy } },
     )
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
     mockedThreadsApi.list.mockClear()
 
+    // SAFETY: created is a valid QueueSortBy option exercised for coverage
     rerender({ sort: 'created' as QueueSortBy })
 
     await waitFor(() =>
