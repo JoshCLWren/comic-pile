@@ -55,6 +55,7 @@ export function RollRecoveryCard({
   const recommendations = recovery.readable_prerequisites
   const chains = recovery.chains ?? []
   const diagnostics = recovery.diagnostics ?? []
+  const firstReadableIndex = recommendations.findIndex((p) => p.is_readable !== false)
 
   return (
     <section
@@ -130,11 +131,12 @@ export function RollRecoveryCard({
           {recommendations.map((prerequisite, index) => {
             const readable = prerequisite.is_readable !== false
             const isClickable = Boolean(onReadNow && readable)
+            const isRecommendedFirst = index === firstReadableIndex && recommendations.length > 1
             const content = (
               <>
                 <span className="min-w-0">
                   <span className="block text-sm font-black text-stone-100">{prerequisite.label}</span>
-                  {index === 0 && recommendations.length > 1 && (
+                  {isRecommendedFirst && (
                     <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-wider text-amber-500">
                       Recommended first
                     </span>
