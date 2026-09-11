@@ -97,21 +97,9 @@ export const queryKeys = {
     issueIntelligence: (issueId: number) =>
       ['comicVine', 'issueIntelligence', issueId] as const,
   },
-  continuity: {
-    all: ['continuity'] as const,
-    chains: (nodeType: string, nodeId: number) =>
-      ['continuity', 'chains', nodeType, nodeId] as const,
-    readiness: (nodeType: string, nodeId: number) =>
-      ['continuity', 'readiness', nodeType, nodeId] as const,
-  },
   readerContext: {
     all: ['readerContext'] as const,
     detail: (issueId: number) => ['readerContext', issueId] as const,
-  },
-  plans: {
-    all: ['plans'] as const,
-    readiness: (planId: number, refreshKey: number = 0) =>
-      ['plans', 'readiness', planId, refreshKey] as const,
   },
   taste: {
     all: ['taste'] as const,

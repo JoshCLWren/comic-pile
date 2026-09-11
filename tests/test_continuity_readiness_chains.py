@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.continuity_chains as chains
 from app.continuity_chains import resolve_continuity_chains
-from app.continuity_readiness import SNAPSHOT_SESSION_KEY, _load_snapshot
+from app.services.continuity_graph import SNAPSHOT_SESSION_KEY, load_snapshot as _load_snapshot
 from app.models.continuity_rule import ContinuityRule
 from app.models.issue import Issue
 from app.models.thread import Thread

@@ -16,7 +16,6 @@ const mocks = {
   list: vi.fn(),
   get: vi.fn(),
   update: vi.fn(),
-  readiness: vi.fn(),
   listGroups: vi.fn(),
   listIssues: vi.fn(),
   getIssue: vi.fn(),
@@ -28,7 +27,6 @@ const _origCreate = continuityPlansApi.create
 const _origList = continuityPlansApi.list
 const _origGet = continuityPlansApi.get
 const _origUpdate = continuityPlansApi.update
-const _origReadiness = continuityPlansApi.readiness
 const _origGroupsList = dependencyGroupsApi.list
 const _origIssuesList = issuesApi.list
 const _origThreadsList = threadsApi.list
@@ -98,7 +96,6 @@ beforeEach(() => {
   continuityPlansApi.list = mocks.list as never
   continuityPlansApi.get = mocks.get as never
   continuityPlansApi.update = mocks.update as never
-  continuityPlansApi.readiness = mocks.readiness as never
   dependencyGroupsApi.list = mocks.listGroups as never
   issuesApi.list = mocks.listIssues as never
   threadsApi.list = mocks.listThreads as never
@@ -107,17 +104,6 @@ beforeEach(() => {
   mocks.create.mockReset()
   mocks.get.mockReset()
   mocks.update.mockReset()
-  mocks.readiness.mockReset()
-  mocks.readiness.mockResolvedValue({
-    plan_id: 12,
-    plan_name: 'Saved lane',
-    ordering_mode: 'strict_sequential',
-    lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
-    nodes: [],
-    plan_diagnostics: [],
-    summary: { total: 0, readable: 0, blocked: 0, complete: 0, unavailable: 0 },
-    generated_at: '2026-08-12T00:00:00Z',
-  })
   mocks.list.mockResolvedValue({ plans: [], next_page_token: null })
   mocks.listGroups.mockResolvedValue([{ id: 8, name: 'Fourth World', memberships: [], created_at: '2026-08-12T00:00:00Z' }])
   mocks.listIssues.mockReset()
@@ -153,7 +139,6 @@ afterEach(() => {
   continuityPlansApi.list = _origList
   continuityPlansApi.get = _origGet
   continuityPlansApi.update = _origUpdate
-  continuityPlansApi.readiness = _origReadiness
   dependencyGroupsApi.list = _origGroupsList
   issuesApi.list = _origIssuesList
   threadsApi.list = _origThreadsList
@@ -254,6 +239,38 @@ describe('ContinuityPlannerPage', () => {
     // SAFETY: mock call shape matches the create API payload
     const payload = mocks.create.mock.calls[0][0] as { ordering_mode: string }
     expect(payload.ordering_mode).toBe('informational')
+  })
+
+  it('loads persisted plan contents without a standalone readiness client', async () => {
+    expect('readiness' in continuityPlansApi).toBe(false)
+    mocks.get.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Saved lane',
+      ordering_mode: 'strict_sequential',
+      lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
+      nodes: [
+        { id: 'issue-40', node_type: 'issue', ref_id: 40, lane_id: 'main', position: 0, label: 'Mister Miracle #Annual 1' },
+        { id: 'crossover-8', node_type: 'crossover', ref_id: 8, lane_id: 'main', position: 1, label: 'Fourth World' },
+      ],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/12']}>
+        <Routes>
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+      { wrapper: queryWrapper },
+    )
+
+    expect(await screen.findByText('Mister Miracle #Annual 1')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Remove Fourth World' })).toBeVisible()
+    expect(screen.getByDisplayValue('Saved lane')).toBeVisible()
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledWith(12))
+    expect(mocks.get).toHaveBeenCalledTimes(1)
   })
 
   it('restores saved order when unsaved changes are canceled', async () => {

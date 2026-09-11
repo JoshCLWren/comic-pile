@@ -7,7 +7,7 @@ import pytest
 
 from app.continuity_chains import ContinuityTraversalNode, ContinuityTraversalResult
 from app.roll_recovery import build_roll_recovery
-from app.schemas.continuity_readiness import ContinuityBlocker
+from app.schemas.continuity_blocking import ContinuityBlocker
 
 
 @pytest.mark.asyncio

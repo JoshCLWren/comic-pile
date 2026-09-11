@@ -812,10 +812,10 @@ async def test_convergence_cycle_rejected_before_save(
 
 
 @pytest.mark.asyncio
-async def test_convergence_gate_not_false_cyclic_in_readiness(
+async def test_convergence_gate_compiles_without_false_cycle(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """A convergence gate node is not falsely reported as a self cycle in readiness."""
+    """A convergence self-loop compiles as a converged rule, not as a plan cycle."""
     user = await get_or_create_user_async(async_db)
     lane_a = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2)]
     lane_b = [await _make_issue(async_db, user_id=user.id, suffix=str(i)) for i in range(2, 4)]
@@ -830,12 +830,30 @@ async def test_convergence_gate_not_false_cyclic_in_readiness(
     assert created.status_code == 201, created.text
     plan_id = created.json()["id"]
 
-    readiness = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/readiness")
-    assert readiness.status_code == 200, readiness.text
-    body = readiness.json()
-    assert [d for d in body["plan_diagnostics"] if d["code"] == "plan_cycle_detected"] == []
-    conv_node = next(n for n in body["nodes"] if n["node_id"] == f"b-{lane_b[0].id}")
-    assert not any(d["code"] == "plan_cycle_detected" for d in conv_node.get("diagnostics", []))
+    fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
+    assert fetched.status_code == 200
+    conv_node = next(node for node in fetched.json()["nodes"] if node["id"] == f"b-{lane_b[0].id}")
+    assert conv_node["convergence_gate"] == [
+        {"node_type": "issue", "node_id": f"a-{lane_a[1].id}"}
+    ]
+
+    rules = (
+        await async_db.execute(
+            select(ContinuityRule).where(
+                ContinuityRule.user_id == user.id,
+                ContinuityRule.satisfaction_type == "converged",
+            )
+        )
+    ).scalars().all()
+    assert len(rules) == 1
+    rule = rules[0]
+    assert rule.source_id == lane_b[0].id
+    assert rule.target_id == lane_b[0].id
+    assert rule.convergence_targets is not None
+    assert len(rule.convergence_targets) == 1
+    assert rule.convergence_targets[0]["type"] == "issue"
+    assert rule.convergence_targets[0]["id"] == lane_a[1].id
+    assert rule.note == f"continuity-plan:{plan_id}"
 
 
 @pytest.mark.asyncio

@@ -33,8 +33,6 @@ from app.schemas.issue import IssueResponse
 from app.schemas.thread import ThreadResponse
 from comic_pile.dependencies import refresh_user_blocked_status
 
-from app.continuity_readiness import evaluate_continuity_readiness
-
 router = APIRouter(prefix="/reading-order-groups", tags=["reading-order-groups"])
 MAX_RANGE_SIZE = 250
 
@@ -143,7 +141,7 @@ async def _group_detail_response(
         user_id: The authenticated user identifier.
 
     Returns:
-        The group payload with enriched members, readiness, and linked plans.
+        The group payload with enriched members and linked plans.
     """
     # Fetch memberships
     result = await db.execute(
@@ -297,11 +295,6 @@ async def _group_detail_response(
             )
         )
 
-    # Evaluate continuity readiness for crossover
-    readiness = await evaluate_continuity_readiness(
-        db, user_id=user_id, node_type="crossover", node_id=group.id
-    )
-
     # Fetch linked plans (same as list_crossover_plans)
     crossover_node = {"node_type": "crossover", "ref_id": group.id}
     plan_result = await db.execute(
@@ -321,7 +314,6 @@ async def _group_detail_response(
         name=group.name,
         created_at=group.created_at,
         memberships=enriched_members,
-        readiness=readiness,
         linked_plans=linked_plans,
     )
 
@@ -470,7 +462,7 @@ async def get_group(
 @router.get(
     "/{group_id}/detail",
     response_model=DependencyGroupDetailResponse,
-    description="Return one owned group with enriched member, readiness, and plan data.",
+    description="Return one owned group with enriched member, plan, and project data.",
 )
 async def get_group_detail(
     group_id: int,
@@ -485,8 +477,8 @@ async def get_group_detail(
         db: The asynchronous database session.
 
     Returns:
-        The requested owned group with enriched member data, continuity
-        readiness, and linked plans, avoiding per-member N+1 requests.
+        The requested owned group with enriched member, plan, and project
+        data, avoiding per-member N+1 requests.
     """
     group = await _owned_group(db, group_id, current_user.id)
     return await _group_detail_response(db, group, current_user.id)
