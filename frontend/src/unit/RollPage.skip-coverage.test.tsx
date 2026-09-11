@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
 
-// No vi.mock calls - use real imports and manual mock setup
+vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 const spies = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -45,7 +45,44 @@ const bootstrapData: any = {
   stale_thread_count: 0,
   stale_thread: null,
   snoozed_count: 0,
+  skipped_thread_ids: [],
+  skipped_threads: [],
 }
+
+vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
+vi.mock('../contexts/useBugReportRestore', () => ({
+  useBugReportRestore: () => ({ setRestoreAction: vi.fn((r: () => void) => r()), clearRestoreAction: vi.fn() }),
+}))
+vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: () => bootstrapHook.value ?? ({ data: bootstrapData, refetch: spies.refetch, isPending: false, isError: false, error: null }) }))
+vi.mock('../hooks/useThread', () => ({ useStaleThreads: () => ({ data: [], refetch: spies.refetch }) }))
+vi.mock('../hooks/useRoll', () => ({
+  useSetDie: () => ({ mutate: spies.setDie, isPending: false }),
+  useClearManualDie: () => ({ mutate: spies.clearDie, isPending: false }),
+  useRoll: () => ({ mutate: spies.roll, isPending: false }),
+  useDismissPending: () => ({ mutate: spies.dismissPending, isPending: false }),
+  useOverrideRoll: () => ({ mutate: spies.override, isPending: false }),
+}))
+vi.mock('../hooks/useSnooze', () => ({ useSnooze: () => ({ mutate: spies.snooze, isPending: false }), useUnsnooze: () => ({ mutate: spies.unsnooze, isPending: false }) }))
+vi.mock('../hooks/useQueue', () => ({ useMoveToFront: () => ({ mutate: spies.moveFront, isPending: false }), useMoveToBack: () => ({ mutate: spies.moveBack, isPending: false }), useShuffleQueue: () => ({ mutate: spies.shuffle, isPending: false }) }))
+vi.mock('../hooks', () => ({ useRate: () => ({ mutate: spies.rate, isPending: false }) }))
+vi.mock('../hooks/useSkip', () => ({
+  useSkip: () => skipHookValue.value ?? ({ mutate: spies.skip, isPending: false, isError: false, refreshError: null, hasRefreshError: false, retryRefresh: vi.fn() }),
+  useUnskip: () => ({ mutate: spies.unskip, isPending: false, isError: false }),
+}))
+vi.mock('../services/api-taste', () => ({
+  tasteApi: { getDiscoveries: vi.fn().mockResolvedValue({ discoveries: [], generated_at: new Date().toISOString() }), dismiss: vi.fn().mockResolvedValue({ dismissed: true }), submitVerdict: vi.fn().mockResolvedValue({}) },
+}))
+vi.mock('../hooks/useReaderContext', () => ({ useReaderContext: () => ({ context: null, isLoading: false, error: null, refetch: vi.fn() }) }))
+vi.mock('../services/api', () => ({ default: {}, threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }], next_page_token: null }) }, dependenciesApi: { getConnectedThreads: relatedApi.connectedThreads, getBlockingInfo: relatedApi.blockingInfo, getBatchBlockingInfo: relatedApi.batchBlockingInfo } }))
+vi.mock('../services/api-reading-orders', () => ({ readingOrdersApi: { getForThread: relatedApi.readingOrders } }))
+vi.mock('../components/LazyDice3D', () => ({ default: ({ onRollComplete }: { onRollComplete?: () => void }) => <div data-testid="dice"><button type="button" onClick={onRollComplete}>complete dice</button></div> }))
+vi.mock('../components/Tooltip', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
+vi.mock('../components/GlossaryLink', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
+vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children, onClose }: { isOpen: boolean; title: string; children: React.ReactNode; onClose: () => void }) => isOpen ? <section><h2>{title}</h2><button onClick={onClose}>close modal</button>{children}</section> : null }))
+vi.mock('../components/CollectionDialog', () => ({ default: ({ collection }: { collection: { name?: string } | null }) => <div data-testid="collection-dialog">collection dialog {collection?.name ?? 'new'}</div> }))
+vi.mock('../components/MigrationDialog', () => ({ default: ({ onSkip, onClose }: { onSkip: () => void; onClose: () => void }) => <div><button onClick={onSkip}>skip migration</button><button onClick={onClose}>close migration</button></div> }))
+vi.mock('../components/SimpleMigrationDialog', () => ({ default: ({ onComplete, onClose }: { onComplete: (v: string) => void; onClose: () => void }) => <div><button onClick={() => onComplete('1')}>complete simple</button><button onClick={onClose}>close simple</button></div> }))
+vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: () => <div>pool</div> }))
 
 describe('RollPage skip coverage', () => {
   beforeEach(() => {
