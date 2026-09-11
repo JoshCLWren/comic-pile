@@ -7,7 +7,9 @@ import {
   hasReadingContextContent,
   hasReadingContextInformation,
 } from '../pages/RollPage/readingContextContent'
-import type { ReaderContextResponse } from '../types'
+import type { ReadingOrder } from '../services/api-reading-orders'
+import type { RatingThread } from '../pages/RollPage/types'
+import type { ConnectedThreadInfo, ReaderContextResponse } from '../types'
 
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -43,31 +45,19 @@ const callbacks = {
 }
 
 interface RatingViewOverride {
-  activeRatingThread?: {
-    id: number
-    title: string
-    format: string
-    issues_remaining: number
-    total_issues: number
-    issue_number: string
-    next_issue_number: string | null
-    reading_progress: string
-    queue_position: number
-    issue_id: number
-    next_issue_id: number | null
-  }
+  activeRatingThread?: Partial<RatingThread> | null
   currentDie?: number
-  rolledResult?: number
+  rolledResult?: number | null
   rating?: number
   predictedDie?: number
   errorMessage?: string
   rateIsPending?: boolean
   snoozeIsPending?: boolean
   dismissIsPending?: boolean
-  readingOrders?: Array<Record<string, string | number | boolean | null>>
-  connectedThreads?: Array<Record<string, string | number | boolean | null>>
-  onUpdateRating?: () => void
-  onSubmitRating?: () => void
+  readingOrders?: ReadingOrder[]
+  connectedThreads?: ConnectedThreadInfo[]
+  onUpdateRating?: (value: string) => void
+  onSubmitRating?: (finishSession: boolean) => void
   onSnooze?: () => void
   onCancel?: () => void
   onRefreshThread?: () => void

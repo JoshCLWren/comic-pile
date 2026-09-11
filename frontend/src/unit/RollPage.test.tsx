@@ -49,14 +49,14 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 vi.mock('../hooks', async (importOriginal) => {
-  const actual = await importOriginal<{ useRate: () => unknown }>()
+  const actual = await importOriginal<typeof import('../hooks')>()
   return { ...actual, useRate: vi.fn() }
 })
 vi.mock('../services/api-reading-orders', () => ({
   readingOrdersApi: { getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }) },
 }))
 vi.mock('../services/api', async (importOriginal) => {
-  const actual = await importOriginal<{ threadsApi: { list: () => Promise<unknown>; setPending: () => Promise<unknown> }; dependenciesApi: { getBlockingInfo: () => Promise<unknown>; getConnectedThreads: () => Promise<unknown> } }>()
+  const actual = await importOriginal<typeof import('../services/api')>()
   return {
     ...actual,
     threadsApi: {

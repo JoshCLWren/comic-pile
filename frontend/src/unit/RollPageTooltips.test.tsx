@@ -59,8 +59,7 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 vi.mock('../hooks', async (importOriginal) => {
-  // SAFETY: the real module is spread back in, so the cast only asserts the object is a string-keyed module map.
-  const actual = (await importOriginal()) as { useRate: () => unknown }
+  const actual = await importOriginal<typeof import('../hooks')>()
   return {
     ...actual,
     useRate: vi.fn(),
