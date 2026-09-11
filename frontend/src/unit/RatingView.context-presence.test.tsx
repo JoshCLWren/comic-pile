@@ -96,7 +96,7 @@ function renderRatingView(overrides: RatingViewOverride = {}) {
     ...callbacks,
     ...overrides,
   }
-  return render(<MemoryRouter><RatingView {...defaults} /></MemoryRouter>)
+  return render(<MemoryRouter><RatingView {...defaults} activeRatingThread={defaults.activeRatingThread as RatingThread | null} /></MemoryRouter>)
 }
 
 const populatedContext: ReaderContextResponse = {

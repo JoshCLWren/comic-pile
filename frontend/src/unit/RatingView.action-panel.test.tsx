@@ -94,7 +94,7 @@ function ratingView(overrides: RatingViewOverride = {}) {
     readerContextError: null,
     ...overrides,
   }
-  return <MemoryRouter><RatingView {...defaults} /></MemoryRouter>
+  return <MemoryRouter><RatingView {...defaults} activeRatingThread={defaults.activeRatingThread as RatingThread | null} /></MemoryRouter>
 }
 
 describe('RatingView action panel (issue #1406)', () => {

@@ -84,7 +84,9 @@ describe('useDiagnostics', () => {
     const passthrough = vi.fn()
     console.error = passthrough
     const { result, unmount } = renderHook(() => useDiagnostics())
-    type CircularRecord = Record<string, string | CircularRecord>
+    interface CircularRecord {
+      [key: string]: string | CircularRecord
+    }
     const circular: CircularRecord = {}
     circular.self = circular
 
