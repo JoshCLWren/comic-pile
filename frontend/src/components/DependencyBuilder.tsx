@@ -6,6 +6,7 @@ import ReadingOrderTimeline from './ReadingOrderTimeline'
 import DependencyCrossoverControls from './DependencyCrossoverControls'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
+import type { IssueListParams } from '../services/api-issues'
 import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse } from '../types'
 import { getApiErrorDetail } from '../utils/apiError'
 import { useToast } from '../contexts/useToast'
@@ -16,11 +17,14 @@ async function fetchAllUnreadIssues(threadId: number): Promise<Issue[]> {
   let nextPageToken: string | null = null
 
   while (true) {
-    const data = await issuesApi.list(threadId, {
+    const params: IssueListParams = {
       status: 'unread',
       page_size: 100,
-      ...(nextPageToken ? { page_token: nextPageToken } : {}),
-    })
+    }
+    if (nextPageToken) {
+      params.page_token = nextPageToken
+    }
+    const data = await issuesApi.list(threadId, params)
     allIssues.push(...data.issues)
 
     if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {

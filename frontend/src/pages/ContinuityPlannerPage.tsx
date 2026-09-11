@@ -8,6 +8,7 @@ import {
 import { continuityPlansApi, type ContinuityPlanNode, type ContinuityPlanNodeType, type ContinuityPlanOrderingMode } from '../services/api-continuity-plans'
 import { dependencyGroupsApi, type DependencyGroup } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
+import type { IssueListParams } from '../services/api-issues'
 import { threadsApi } from '../services/api'
 import PlanProjectionDialog from '../components/PlanProjectionDialog'
 import ReadingPlanAddMaterial from '../components/ReadingPlanAddMaterial'
@@ -107,10 +108,11 @@ async function fetchAllIssues(threadId: number): Promise<Issue[]> {
   const seen = new Set<string>()
   let token: string | null = null
   do {
-    const page = await issuesApi.list(threadId, {
-      page_size: 100,
-      ...(token ? { page_token: token } : {}),
-    })
+    const params: IssueListParams = { page_size: 100 }
+    if (token) {
+      params.page_token = token
+    }
+    const page = await issuesApi.list(threadId, params)
     result.push(...page.issues)
     token = page.next_page_token
     if (token && seen.has(token)) break
