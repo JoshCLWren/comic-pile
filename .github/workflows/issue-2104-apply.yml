@@ -1,0 +1,42 @@
+name: Apply issue 2104
+
+on:
+  push:
+    branches:
+      - manual/2104-remove-continuity-readiness
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: manual/2104-remove-continuity-readiness
+          fetch-depth: 0
+
+      - name: Apply source changes
+        run: python scripts/apply_issue_2104.py
+
+      - name: Regenerate OpenAPI artifacts
+        run: |
+          docker build -f Dockerfile.ci -t comic-pile-issue-2104 .
+          docker run --rm \
+            -v "$PWD:/repo" \
+            -w /repo \
+            -e PYTHONPATH=/repo \
+            comic-pile-issue-2104 \
+            python scripts/generate_openapi_types.py
+
+      - name: Remove temporary automation and commit result
+        run: |
+          rm -f scripts/apply_issue_2104.py .github/workflows/issue-2104-apply.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git status --short
+          git commit -m "Remove continuity readiness product surface (#2104)"
+          git push origin HEAD:manual/2104-remove-continuity-readiness
