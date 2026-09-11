@@ -1,6 +1,5 @@
 import api from './api'
 import type { Thread, Issue } from '../types'
-import type { ContinuityReadinessResponse } from './api-continuity-readiness'
 
 export interface DependencyGroupMember {
   id: number
@@ -38,7 +37,6 @@ export interface DependencyGroupDetail {
   name: string
   created_at: string
   memberships: DependencyGroupDetailMember[]
-  readiness: ContinuityReadinessResponse | null
   linked_plans: DependencyGroupSummary[]
 }
 

@@ -3,7 +3,6 @@
 from app.api import analytics as analytics
 from app.api import cbl_sources as cbl_sources
 from app.api import continuity_plan as continuity_plan
-from app.api import continuity_readiness as continuity_readiness
 from app.api import continuity_rule as continuity_rule
 from app.api import continuity_template as continuity_template
 from app.api import dependency as dependency
@@ -23,7 +22,6 @@ dependency.router.include_router(dependency_group_batch.router)
 dependency.router.include_router(continuity_rule.router)
 dependency.router.include_router(continuity_plan.router)
 dependency.router.include_router(continuity_template.router)
-dependency.router.include_router(continuity_readiness.router)
 dependency.router.include_router(reading_order_projection.router)
 dependency.router.include_router(cbl_sources.router)
 dependency.router.include_router(roll_recovery_switch.router, prefix="/roll")
@@ -33,7 +31,6 @@ __all__ = [
     "analytics",
     "cbl_sources",
     "continuity_plan",
-    "continuity_readiness",
     "continuity_rule",
     "continuity_template",
     "dependency",

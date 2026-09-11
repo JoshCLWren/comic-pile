@@ -256,25 +256,10 @@ export default function ContinuityPlannerPage() {
           : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
         ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
           .sort((a, b) => a.order - b.order)
-        let hydrated = hydrateLabels(
+        const hydrated = hydrateLabels(
           [...plan.nodes].sort((a, b) => a.position - b.position),
           loadedGroups,
         )
-        const needsBatch = hydrated.some(
-          (node) => node.label === '[deleted series]' || node.label === '[deleted crossover]',
-        )
-        if (needsBatch) {
-          try {
-            const readiness = await continuityPlansApi.readiness(plan.id)
-            const labelMap = new Map(readiness.nodes.map((item) => [item.node_id, item.label] as const))
-            hydrated = hydrated.map((node) => {
-              const batchLabel = labelMap.get(node.id)
-              return batchLabel ? { ...node, label: batchLabel } : node
-            })
-          } catch {
-            // Keep placeholder labels; never issue per-missing-issue GETs.
-          }
-        }
         if (!active) return
         setName(plan.name)
         setLanes(loadedLanes)

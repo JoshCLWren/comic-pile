@@ -22,7 +22,6 @@ STARTUP_SENTINEL_ROUTES = {
     "/api/v1/auth/me": frozenset({"GET"}),
     "/api/v1/crossover-templates/preview": frozenset({"POST"}),
     "/api/v1/crossover-templates/adopt": frozenset({"POST"}),
-    "/api/v1/continuity-plans/{plan_id}/readiness": frozenset({"GET"}),
 }
 
 
@@ -72,7 +71,7 @@ def _route_methods_by_path() -> dict[str, frozenset[str]]:
 
 
 def test_application_startup_loads_cross_feature_routers() -> None:
-    """Require startup to load auth, crossover-template, and readiness routers."""
+    """Require startup to load auth and crossover-template routers."""
     methods_by_path = _route_methods_by_path()
 
     for path, methods in STARTUP_SENTINEL_ROUTES.items():

@@ -20,7 +20,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import continuity_plan as continuity_plan_api
-from app.continuity_plan_readiness import plan_rule_marker
+from app.services.continuity_plan_writer import plan_rule_marker
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.issue import Issue
