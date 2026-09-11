@@ -115,7 +115,7 @@ test.describe('Issue #2104 zero readiness network requests', () => {
     await expect(page.getByText('Zero Readiness Series')).toBeVisible()
 
     await page.goto(`/continuity-plans/${plan.id}`, { waitUntil: 'domcontentloaded' })
-    await expect(page.getByDisplayValue('Zero Readiness Plan')).toBeVisible()
+    await expect(page.getByLabel('Plan name')).toHaveValue('Zero Readiness Plan')
     await expect(page.getByText('Zero Readiness Series #1')).toBeVisible()
 
     expect(hits, `deleted readiness paths were requested: ${hits.join(', ')}`).toEqual([])
