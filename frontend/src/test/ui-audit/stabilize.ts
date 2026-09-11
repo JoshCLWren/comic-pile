@@ -1,9 +1,7 @@
 export const AUDIT_FIXED_NOW = '2026-08-30T12:00:00.000Z'
 export const AUDIT_FIXED_USERNAME = 'ui_audit_reader_2043'
 
-import { isObject } from '../../utils/runtimeChecks'
-
-type JsonRecord = Record<string, unknown>
+import { isObject, type JsonRecord } from '../../utils/runtimeChecks'
 
 function isJsonRecord(value: unknown): value is JsonRecord {
   return isObject(value)

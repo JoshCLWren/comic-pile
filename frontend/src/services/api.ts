@@ -382,7 +382,7 @@ export default api
 
 export const threadsApi = {
   list: async (params?: ThreadQueryParams, pageToken?: string | null): Promise<ThreadListResponse> => {
-    const queryParams = { ...(params ?? {}) } satisfies Record<string, unknown>;
+    const queryParams = { ...(params ?? {}) } satisfies ThreadQueryParams;
     if (pageToken) {
       queryParams.page_token = pageToken;
     }
@@ -419,9 +419,10 @@ export const rateApi = {
     api.post<Thread, { thread_id: number; rating: number; issues_read?: number; finish_session?: boolean; issue_number?: string }>('/v1/rate/', data),
 }
 
+export type SessionListParams = Record<string, string | number | boolean | null>
 export const sessionApi = {
-  list: async (params?: Record<string, unknown>, pageToken?: string | null): Promise<SessionListResponse> => {
-    const queryParams = { ...(params ?? {}) } satisfies Record<string, unknown>;
+  list: async (params?: SessionListParams, pageToken?: string | null): Promise<SessionListResponse> => {
+    const queryParams = { ...(params ?? {}) } satisfies SessionListParams;
     if (pageToken) {
       queryParams.page_token = pageToken;
     }

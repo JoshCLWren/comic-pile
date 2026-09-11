@@ -111,7 +111,7 @@ export function useDiagnostics() {
     if (mountCount === 1 && typeof console !== 'undefined' && console.error && !isPatched.current) {
       const original = console.error
       originalConsoleError = original
-      ;cast<Record<string, unknown>>(console)['error'] = (...args: unknown[]) => {
+      ;cast<Record<string, (...args: unknown[]) => void>>(console)['error'] = (...args: unknown[]) => {
         const timestamp = new Date().toISOString()
         const message = args.map((arg) => {
           if (isString(arg)) return arg

@@ -72,6 +72,8 @@ export interface RollPrerequisiteSwitchResponse {
   changed: boolean
 }
 
+export type SessionModeCorrectionGuidance = Record<string, string>
+
 /** Compact band+intent reading mode record exposed at Roll bootstrap. */
 export interface SessionMode {
   active_bandwidth: string | null
@@ -84,7 +86,7 @@ export interface SessionMode {
   intent_confidence: number | null
   intent_source: 'inferred' | 'manual' | 'snooze' | 'quiz' | null
   intent_version: string | null
-  session_mode_correction_guidance: Record<string, unknown> | null
+  session_mode_correction_guidance: SessionModeCorrectionGuidance | null
 }
 
 /** Reader bandwidth for the current session: how demanding comics feel right now. */
