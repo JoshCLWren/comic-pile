@@ -42,7 +42,8 @@ const callbacks = {
   onRefreshThread: vi.fn(),
 }
 
-function renderRatingView(overrides: Record<string, unknown> = {}) {
+type RatingViewOverride = Record<string, string | number | boolean | null | Array<Record<string, string | number | boolean>> | Record<string, string> | (() => unknown)>
+function renderRatingView(overrides: RatingViewOverride = {}) {
   const defaults = {
     activeRatingThread: {
       id: 1,

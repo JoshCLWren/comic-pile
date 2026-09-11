@@ -33,7 +33,8 @@ vi.mock('../hooks/useReaderContext', () => ({
   }),
 }))
 
-function ratingView(overrides: Record<string, unknown> = {}) {
+type RatingViewOverride = Record<string, string | number | boolean | null | Array<Record<string, string | number | boolean>> | Record<string, string> | (() => unknown)>
+function ratingView(overrides: RatingViewOverride = {}) {
   const defaults = {
     activeRatingThread: {
       id: 1,

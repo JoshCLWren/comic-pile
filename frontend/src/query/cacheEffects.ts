@@ -193,7 +193,7 @@ export function applyComicVineCorrectionOptimistically(
   if (imageUrl === undefined) return
   client.setQueryData(queryKeys.comicVine.issueIntelligence(issueId), (old: unknown) => {
     if (!old || !isObject(old)) return old as never
-    const record = old as Record<string, unknown>
+    const record = old as Record<string, string | null>
     if (!('image_url' in record)) return old as never
     return { ...(old as object), image_url: imageUrl } as never
   })

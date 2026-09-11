@@ -45,12 +45,13 @@ async function getCsrfToken(request: APIRequestContext, token: string): Promise<
   return data.csrf_token;
 }
 
+type ApiPostResult = Record<string, string | number>
 async function apiPost(
   page: Page,
   user: TestUser,
   path: string,
   data: unknown,
-): Promise<Record<string, unknown>> {
+): Promise<ApiPostResult> {
   const csrfToken = await getCsrfToken(page.request, user.accessToken ?? '');
   const response = await page.request.post(path, {
     data,
@@ -63,7 +64,7 @@ async function apiPost(
   if (!response.ok()) {
     throw new Error(`POST ${path} failed: ${response.status()} ${await response.text()}`);
   }
-  return (await response.json()) as Record<string, unknown>;
+  return (await response.json()) as ApiPostResult;
 }
 
 async function listIssues(page: Page, user: TestUser, threadId: number): Promise<IssueInfo[]> {
