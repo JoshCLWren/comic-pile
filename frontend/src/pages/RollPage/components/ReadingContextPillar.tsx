@@ -183,7 +183,10 @@ export function ReadingContextPillar({
         />
       )}
 
-      <section className="grid grid-cols-2 gap-x-6 gap-y-3 border-b border-[var(--theme-border)] pb-3">
+      <section
+        className="grid grid-cols-1 gap-y-3 border-b border-[var(--theme-border)] pb-3 md:grid-cols-2 md:gap-x-6"
+        data-testid="roll-stats-section"
+      >
         <div className="min-w-0">
           <div
             className="font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"
