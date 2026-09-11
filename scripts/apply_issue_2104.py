@@ -213,7 +213,11 @@ sub(
     "frontend/src/pages/CrossoverDetailPage.tsx",
     r'\n                      \{blockedInfo && \(.*?\n                      \)\}',
     "",
-    count=2,
+)
+sub(
+    "frontend/src/pages/CrossoverDetailPage.tsx",
+    r'\n                    \{blockedInfo && \(.*?\n                    \)\}',
+    "",
 )
 
 # Remove readiness-only compatibility files and their dedicated unit tests.
