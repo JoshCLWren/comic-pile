@@ -159,7 +159,7 @@ test.describe('Continuity plan checkpoint and convergence', () => {
     await expect(page.getByText('Convergence (1)')).toBeVisible()
   })
 
-  test('edit a gate, save, and reload observes updated readiness', async ({ authenticatedPage }) => {
+  test('edit a gate, save, and reload observes updated convergence', async ({ authenticatedPage }) => {
     const page = authenticatedPage
     const token = await getAuthToken(page)
     const csrf = await getCsrf(page, token)

@@ -462,7 +462,7 @@ async def get_group(
 @router.get(
     "/{group_id}/detail",
     response_model=DependencyGroupDetailResponse,
-    description="Return one owned group with enriched member, readiness, and plan data.",
+    description="Return one owned group with enriched member, plan, and project data.",
 )
 async def get_group_detail(
     group_id: int,

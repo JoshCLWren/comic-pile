@@ -22,6 +22,8 @@ from app.models.continuity_rule import ContinuityRule
 from app.models.issue import Issue
 from app.models.reading_order import ReadingOrder, ReadingOrderItem
 from app.models.thread import Thread
+from comic_pile.dependencies import refresh_user_blocked_status
+from comic_pile.queue import get_bounded_roll_pool_rows
 from tests.conftest import get_or_create_user_async
 
 
@@ -52,8 +54,14 @@ async def _make_issue_for_thread(
     return issue
 
 
+async def _roll_pool_ids(user_id: int, db: AsyncSession) -> set[int]:
+    """Return thread IDs currently eligible for bounded Roll candidate selection."""
+    rows = await get_bounded_roll_pool_rows(user_id, db, current_die=20)
+    return {row[0].id for row in rows}
+
+
 @pytest.mark.asyncio
-async def test_issue_level_multi_series_plan_round_trips_and_is_readiness_executable(
+async def test_issue_level_multi_series_plan_round_trips_without_hard_edges(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
     """Issue-level entries across multiple series survive save/reopen without thread flattening."""
@@ -92,14 +100,15 @@ async def test_issue_level_multi_series_plan_round_trips_and_is_readiness_execut
     assert all(n["node_type"] == "issue" for n in nodes_by_id.values())
     # lanes preserved, not flattened to thread positions
     assert {lane["id"] for lane in reopened.json()["lanes"]} == {"main", "parallel"}
-    # readiness executes without flattening to thread queue_position
-    readiness = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/readiness")
-    assert readiness.status_code == 200, readiness.text
-    body = readiness.json()
-    assert body["ordering_mode"] == "informational"
-    assert len(body["nodes"]) == 4
-    # no diagnosis spuriously treats cross-series boundary as blocking
-    assert all(node["is_readable"] for node in body["nodes"])
+    assert reopened.json()["ordering_mode"] == "informational"
+    rules = (
+        await async_db.execute(select(ContinuityRule).where(ContinuityRule.user_id == user.id))
+    ).scalars().all()
+    assert rules == [], "informational multi-series plans must not compile hard edges"
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+    roll_ids = await _roll_pool_ids(user.id, async_db)
+    assert {t_a.id, t_b.id, t_c.id} <= roll_ids
 
 
 @pytest.mark.asyncio
@@ -204,9 +213,14 @@ async def test_adopt_preserves_cross_series_boundaries_without_hard_edges(
     plan_id = adopted.json()["id"]
     rules = (await async_db.execute(select(ContinuityRule).where(ContinuityRule.user_id == user.id))).scalars().all()
     assert rules == [], "informational adoption must create zero continuity rules"
-    readiness = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/readiness")
-    assert readiness.status_code == 200
-    assert readiness.json()["summary"]["blocked"] == 0
+    fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
+    assert fetched.status_code == 200
+    assert [node["ref_id"] for node in fetched.json()["nodes"]] == [thread.id for thread in threads]
+    assert all(node["node_type"] == "thread" for node in fetched.json()["nodes"])
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+    roll_ids = await _roll_pool_ids(user.id, async_db)
+    assert {thread.id for thread in threads} <= roll_ids
 
 
 @pytest.mark.asyncio
@@ -279,17 +293,21 @@ async def test_within_series_progression_is_not_a_hard_edge(
     assert resp.status_code == 201, resp.text
     rules = (await async_db.execute(select(ContinuityRule).where(ContinuityRule.user_id == user.id))).scalars().all()
     assert rules == []
-    readiness = await auth_client.get(f"/api/v1/continuity-plans/{resp.json()['id']}/readiness")
-    assert readiness.status_code == 200
-    # Both issues unread but nothing hard-blocks; both are readable
-    assert all(n["is_readable"] for n in readiness.json()["nodes"])
+    fetched = await auth_client.get(f"/api/v1/continuity-plans/{resp.json()['id']}")
+    assert fetched.status_code == 200
+    assert [node["ref_id"] for node in fetched.json()["nodes"]] == [i1.id, i2.id]
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+    # Ordinary Issue.position order is not a hard prerequisite; the series remains Roll-eligible.
+    roll_ids = await _roll_pool_ids(user.id, async_db)
+    assert t.id in roll_ids
 
 
 @pytest.mark.asyncio
 async def test_projection_remains_export_only_and_does_not_reintroduce_peer_source(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """Plan readability does not require consulting both plan and reading order."""
+    """Plan persistence and projection remain independent of legacy reading orders."""
     user = await get_or_create_user_async(async_db)
     t = await _make_thread(async_db, user_id=user.id, title="Solo")
     i = await _make_issue_for_thread(async_db, thread=t, issue_number="1", position=1)
@@ -305,10 +323,13 @@ async def test_projection_remains_export_only_and_does_not_reintroduce_peer_sour
     assert plan_resp.status_code == 201, plan_resp.text
     plan_id = plan_resp.json()["id"]
 
-    # readiness alone determines next position; reading_orders not consulted
-    readiness = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/readiness")
-    assert readiness.status_code == 200
-    assert readiness.json()["nodes"][0]["label"]  # human label without reading_orders
+    fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["nodes"][0]["ref_id"] == i.id
+    listed_orders = await auth_client.get("/api/v1/reading-orders/")
+    assert listed_orders.status_code == 200
+    reread = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
+    assert reread.json()["nodes"] == fetched.json()["nodes"]
 
     # projection exists but is not required for execution decisions
     order = ReadingOrder(name="Export target", user_id=user.id)

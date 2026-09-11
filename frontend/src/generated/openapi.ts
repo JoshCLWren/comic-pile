@@ -2255,7 +2255,7 @@ export interface paths {
         };
         /**
          * Get Group Detail
-         * @description Return one owned group with enriched member, readiness, and plan data.
+         * @description Return one owned group with enriched member, plan, and project data.
          */
         get: operations["get_group_detail_api_v1_reading_order_groups__group_id__detail_get"];
         put?: never;
