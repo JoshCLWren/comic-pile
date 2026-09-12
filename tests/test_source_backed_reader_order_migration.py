@@ -1,4 +1,5 @@
 """PostgreSQL coverage for the generic Step 27 reader-order migration."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -61,12 +62,37 @@ async def _thread_issue(
 async def test_source_backed_migration_accepts_group_superset_and_replaces_live_order(
     async_db: AsyncSession,
 ) -> None:
+    """Ignore extra group members while replacing live legacy order authority."""
     user = await get_or_create_user_async(async_db)
     rows = [
-        await _thread_issue(async_db, user_id=user.id, title="A", queue_position=1, status="read"),
-        await _thread_issue(async_db, user_id=user.id, title="B", queue_position=2, status="unread"),
-        await _thread_issue(async_db, user_id=user.id, title="C", queue_position=3, status="read"),
-        await _thread_issue(async_db, user_id=user.id, title="D", queue_position=4, status="unread"),
+        await _thread_issue(
+            async_db,
+            user_id=user.id,
+            title="A",
+            queue_position=1,
+            status="read",
+        ),
+        await _thread_issue(
+            async_db,
+            user_id=user.id,
+            title="B",
+            queue_position=2,
+            status="unread",
+        ),
+        await _thread_issue(
+            async_db,
+            user_id=user.id,
+            title="C",
+            queue_position=3,
+            status="read",
+        ),
+        await _thread_issue(
+            async_db,
+            user_id=user.id,
+            title="D",
+            queue_position=4,
+            status="unread",
+        ),
     ]
     extra_thread, extra_issue = await _thread_issue(
         async_db,
@@ -105,22 +131,30 @@ async def test_source_backed_migration_accepts_group_superset_and_replaces_live_
         )
         async_db.add(identity)
         await async_db.flush()
-        async_db.add(IssueExternalIdentityMapping(
-            issue_id=issue.id,
-            external_identity_id=identity.id,
-            status="confirmed",
-            evidence_source="step27-test",
-            confidence=1.0,
-        ))
-        async_db.add(CBLSourceEntry(
-            list_id=source_list.id,
-            position=position,
-            series_name=f"Test {position}",
-            issue_number="1",
-            external_issue_identity_id=identity.id,
-        ))
+        async_db.add(
+            IssueExternalIdentityMapping(
+                issue_id=issue.id,
+                external_identity_id=identity.id,
+                status="confirmed",
+                evidence_source="step27-test",
+                confidence=1.0,
+            )
+        )
+        async_db.add(
+            CBLSourceEntry(
+                list_id=source_list.id,
+                position=position,
+                series_name=f"Test {position}",
+                issue_number="1",
+                external_issue_identity_id=identity.id,
+            )
+        )
 
-    group = DependencyGroup(user_id=user.id, name="Absolute Test", created_at=datetime.now(UTC))
+    group = DependencyGroup(
+        user_id=user.id,
+        name="Absolute Test",
+        created_at=datetime.now(UTC),
+    )
     async_db.add(group)
     await async_db.flush()
     memberships = []
@@ -164,17 +198,19 @@ async def test_source_backed_migration_accepts_group_superset_and_replaces_live_
     assert snapshot["dependency_group"]["extra_issue_ids"] == [extra_issue.id]
     assert snapshot["explicit_reader_order_dependencies"][0]["live"] is True
     assert snapshot["explicit_reader_order_dependencies"][0]["implied_by_plan"] is True
-    assert snapshot["historical_gap_bridges"] == [{
-        "source_position": 2,
-        "source_issue_id": issues[1].id,
-        "target_position": 4,
-        "target_issue_id": issues[3].id,
-    }]
+    assert snapshot["historical_gap_bridges"] == [
+        {
+            "source_position": 2,
+            "source_issue_id": issues[1].id,
+            "target_position": 4,
+            "target_issue_id": issues[3].id,
+        }
+    ]
 
     before_memberships = await async_db.scalar(
-        select(func.count()).select_from(DependencyGroupMembership).where(
-            DependencyGroupMembership.group_id == group.id
-        )
+        select(func.count())
+        .select_from(DependencyGroupMembership)
+        .where(DependencyGroupMembership.group_id == group.id)
     )
     receipt = await apply_source_backed_reader_order_migration(
         async_db,
@@ -187,17 +223,24 @@ async def test_source_backed_migration_accepts_group_superset_and_replaces_live_
     assert receipt["removed_explicit_reader_order_dependency_count"] == 1
     assert await async_db.get(Dependency, source_dependency.id) is None
     assert await async_db.get(Dependency, explicit_dependency.id) is None
-    assert await async_db.scalar(
-        select(func.count()).select_from(DependencyGroupMembership).where(
-            DependencyGroupMembership.group_id == group.id
+    assert (
+        await async_db.scalar(
+            select(func.count())
+            .select_from(DependencyGroupMembership)
+            .where(DependencyGroupMembership.group_id == group.id)
         )
-    ) == before_memberships
-    assert await async_db.get(DependencyGroupMembership, extra_membership_id) is not None
+        == before_memberships
+    )
+    assert (
+        await async_db.get(DependencyGroupMembership, extra_membership_id) is not None
+    )
 
     plan = await async_db.get(ContinuityPlan, receipt["plan_id"])
     assert plan is not None
     assert plan.ordering_mode == "strict_sequential"
-    assert [node["ref_id"] for node in plan.nodes_json] == [issue.id for issue in issues]
+    assert [node["ref_id"] for node in plan.nodes_json] == [
+        issue.id for issue in issues
+    ]
     assert plan.nodes_json[-1]["convergence_gate"] == [
         {"node_type": "issue", "node_id": f"issue-{issues[1].id}"}
     ]
