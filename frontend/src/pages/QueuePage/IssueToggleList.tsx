@@ -185,7 +185,7 @@ export function IssueToggleList({
       case 'reorder':
         await issuesService.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
     }
-  }, [threadId])
+  }, [issuesService, threadId])
 
   const processIssueMutations = useCallback(async () => {
     if (isProcessingMutationsRef.current) {
