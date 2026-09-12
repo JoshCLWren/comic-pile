@@ -215,3 +215,41 @@ jobs:
           curl --fail --silent --show-error \
             --retry 10 --retry-delay 2 --retry-all-errors \
             https://comic-pile.vercel.app/health >/dev/null
+
+  prune:
+    name: Prune older Vercel deployments
+    needs:
+      - preflight
+      - deploy
+    if: |
+      always() &&
+      needs.preflight.result == 'success' &&
+      (needs.deploy.result == 'success' || needs.deploy.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out deployment commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.preflight.outputs.deploy_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Require Vercel token
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [[ -z "$VERCEL_TOKEN" ]]; then
+            echo "Repository secret VERCEL_TOKEN is required to prune Vercel deployments." >&2
+            exit 1
+          fi
+
+      - name: Keep current production plus previous Ready production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          python3 scripts/prune_vercel_deployments.py \
+            --project-id "$VERCEL_PROJECT_ID" \
+            --project-name comic-pile \
+            --team-id "$VERCEL_ORG_ID" \
+            --fail-soft
