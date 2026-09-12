@@ -8,6 +8,8 @@ import json
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE = ROOT / "docs/recovery/step23a-legacy-reading-order-preflight-evidence.json"
 SUMMARY = ROOT / "docs/recovery/step23a-legacy-reading-order-preflight.md"
@@ -350,3 +352,20 @@ def test_step23a_builder_reports_dependency_overlap_drift() -> None:
     assert rebuilt["reconciliation"]["dependency_overlap_count"] == 0
     assert any("dependency overlap drifted" in error for error in rebuilt["errors"])
     assert any("Reading Order count drifted" in error for error in rebuilt["errors"])
+
+
+def test_git_head_falls_back_when_git_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CI containers have no git checkout; HEAD is metadata, not the token."""
+    module = _preflight()
+
+    def _missing_git(*_args: object, **_kwargs: object) -> str:
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(module.subprocess, "check_output", _missing_git)
+    monkeypatch.delenv("GITHUB_SHA", raising=False)
+    assert module._git_head() == "unknown"
+
+    monkeypatch.setenv("GITHUB_SHA", "abc123def")
+    assert module._git_head() == "abc123def"

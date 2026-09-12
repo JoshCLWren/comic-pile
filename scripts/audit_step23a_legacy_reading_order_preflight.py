@@ -78,12 +78,24 @@ def _stable_hash(value: object) -> str:
 
 
 def _git_head() -> str:
-    """Return the current repository HEAD SHA."""
-    return subprocess.check_output(
-        ["git", "rev-parse", "HEAD"],
-        cwd=ROOT,
-        text=True,
-    ).strip()
+    """Return the current repository HEAD SHA.
+
+    CI test containers often have no `.git` directory. The SHA is report
+    metadata only and is not part of the snapshot token, so fall back to
+    `GITHUB_SHA` or ``unknown`` instead of failing closed on `git rev-parse`.
+    """
+    try:
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=ROOT,
+            text=True,
+        ).strip()
+    except (FileNotFoundError, OSError, subprocess.CalledProcessError):
+        sha = ""
+    if sha:
+        return sha
+    env_sha = os.environ.get("GITHUB_SHA", "").strip()
+    return env_sha or "unknown"
 
 
 def _async_url(raw: str) -> str:
