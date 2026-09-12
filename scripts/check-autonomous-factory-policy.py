@@ -87,6 +87,9 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "Never implement a transition as separate remove-then-add calls",
         "Heartbeat telemetry never counts as substantive progress",
         "registry issue #1093",
+        "Issues labeled `epic` or `prd` are not ordinary autonomous factory candidates.",
+        "<!-- factory-execution:manual-only -->",
+        "Integrated parent product acceptance is human/interactive controlled.",
     ):
         require(policy, needle, POLICY)
 
@@ -140,6 +143,9 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "ruff check .",
         "ty check --error-on-warning",
         "Path-filtered ruff or ty is not a valid CI substitute",
+        "Autonomous factories must not claim issues labeled `epic` or `prd`",
+        "<!-- factory-execution:manual-only -->",
+        "Integrated parent product acceptance is human/interactive controlled.",
     ):
         require(protocol, needle, PROTOCOL)
     forbid(protocol, "#679", PROTOCOL)
@@ -202,6 +208,8 @@ def validate_local_guidance() -> None:
     require(scheduled, "At the start of every scheduled run", SCHEDULED_PROMPT)
     require(scheduled, "Heartbeat telemetry never counts as substantive progress", SCHEDULED_PROMPT)
     require(scheduled, "independent daily workflow", SCHEDULED_PROMPT)
+    require(scheduled, "FROZEN-SCOPE GOVERNANCE.", SCHEDULED_PROMPT)
+    require(scheduled, "<!-- factory-execution:manual-only -->", SCHEDULED_PROMPT)
 
     next_task = NEXT_TASK_PROMPT.read_text(encoding="utf-8")
     require(next_task, "only\n  after the PR merges", NEXT_TASK_PROMPT)
