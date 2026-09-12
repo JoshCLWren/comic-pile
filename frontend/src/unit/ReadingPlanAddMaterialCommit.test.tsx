@@ -80,10 +80,10 @@ function preview(entries: CBLAdoptionPreviewEntry[] = [existingEntry, missingAwa
 }
 
 async function openSource(): Promise<void> {
-  fireEvent.click(screen.getByRole('button', { name: 'Browse sources' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Add from CBL' }))
   await waitFor(() => expect(mocks.discover).toHaveBeenCalledWith('B.P.R.D.'))
   fireEvent.click(await screen.findByRole('button', { name: /B\.P\.R\.D\. Plague of Frogs Vol\. 3/i }))
-  await waitFor(() => expect(mocks.preview).toHaveBeenCalled())
+  await screen.findByText('Already in ComicPile')
 }
 
 describe('ReadingPlanAddMaterial canonical commit', () => {
@@ -92,7 +92,20 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     mocks.discover.mockResolvedValue([source])
     mocks.preview.mockResolvedValue(preview())
     mocks.plan.mockResolvedValue(preview([existingEntry, missingSelected]))
-    mocks.commit.mockResolvedValue({ id: 77, reused_positions: [1], created_positions: [2], excluded_positions: [], unresolved_positions: [] })
+    mocks.commit.mockResolvedValue({
+      id: 77,
+      user_id: 1,
+      name: 'B.P.R.D.',
+      ordering_mode: 'strict_sequential',
+      lanes: [{ id: 'source-order', name: 'Source order', order: 0 }],
+      nodes: [],
+      created_at: '2026-09-12T00:00:00Z',
+      updated_at: '2026-09-12T00:00:00Z',
+      reused_positions: [1],
+      created_positions: [2],
+      excluded_positions: [],
+      unresolved_positions: [],
+    })
   })
 
   it('requires an explicit missing-comic choice and commits the exact reviewed preview', async () => {
@@ -101,7 +114,7 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     await openSource()
     const commitButton = await screen.findByRole('button', { name: 'Add selected material' })
     expect(commitButton).toBeDisabled()
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Add' }))
+    fireEvent.click(screen.getAllByRole('checkbox', { name: 'Include' })[1])
     await waitFor(() => expect(mocks.plan).toHaveBeenCalledWith(42, { series_decisions: {}, entry_decisions: { '102': true } }))
     await waitFor(() => expect(commitButton).toBeEnabled())
     fireEvent.click(commitButton)
@@ -110,7 +123,7 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     expect(planId).toBe(77)
     expect(reviewed.entries).toEqual([existingEntry, missingSelected])
     expect(choices).toEqual({ series_decisions: {}, entry_decisions: { '102': true } })
-    expect(onCommitted).toHaveBeenCalledOnce()
+    expect(onCommitted).toHaveBeenCalledWith(expect.objectContaining({ id: 77 }))
     expect(await screen.findByText(/Added material to this Reading Plan · created 1 · reused 1/)).toBeInTheDocument()
   })
 
@@ -120,9 +133,9 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
       .mockResolvedValueOnce(preview([existingEntry, missingExcluded]))
     render(<ReadingPlanAddMaterialImpl planId={77} planName="B.P.R.D." />)
     await openSource()
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Add' }))
+    fireEvent.click(screen.getAllByRole('checkbox', { name: 'Include' })[1])
     await screen.findByText('Missing · selected to add')
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Add' }))
+    fireEvent.click(screen.getAllByRole('checkbox', { name: 'Include' })[1])
     await waitFor(() => expect(mocks.plan).toHaveBeenLastCalledWith(42, { series_decisions: {}, entry_decisions: { '102': false } }))
     expect(await screen.findByText('Excluded')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Add selected material' }))
@@ -140,31 +153,29 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
   it('surfaces discovery, preview, selection, and generic commit failures', async () => {
     render(<ReadingPlanAddMaterialImpl planId={77} planName="B.P.R.D." />)
     mocks.discover.mockRejectedValueOnce(new Error('search boom'))
-    fireEvent.click(screen.getByRole('button', { name: 'Browse sources' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add from CBL' }))
     expect(await screen.findByText('search boom')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Browse sources' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add from CBL' }))
     mocks.discover.mockResolvedValueOnce([source])
     fireEvent.submit(screen.getByLabelText('Search source lists').closest('form')!)
-    fireEvent.click(await screen.findByRole('button', { name: /B\.P\.R\.D\. Plague of Frogs Vol\. 3/i }))
-
     mocks.preview.mockRejectedValueOnce(new Error('preview boom'))
-    fireEvent.click(screen.getByRole('button', { name: /B\.P\.R\.D\. Plague of Frogs Vol\. 3/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /B\.P\.R\.D\. Plague of Frogs Vol\. 3/i }))
     expect(await screen.findByText('preview boom')).toBeInTheDocument()
 
     mocks.preview.mockResolvedValueOnce(preview())
     fireEvent.click(screen.getByRole('button', { name: /B\.P\.R\.D\. Plague of Frogs Vol\. 3/i }))
     await screen.findByText('Missing · choose whether to add')
     mocks.plan.mockRejectedValueOnce(new Error('selection boom'))
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Add' }))
+    fireEvent.click(screen.getAllByRole('checkbox', { name: 'Include' })[1])
     expect(await screen.findByText('selection boom')).toBeInTheDocument()
   })
 
   it('shows the empty discovery state without inventing source material', async () => {
     mocks.discover.mockResolvedValue([])
     render(<ReadingPlanAddMaterialImpl planId={77} planName="B.P.R.D." />)
-    fireEvent.click(screen.getByRole('button', { name: 'Browse sources' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add from CBL' }))
     expect(await screen.findByText('No matching source lists found.')).toBeInTheDocument()
     expect(mocks.preview).not.toHaveBeenCalled()
   })

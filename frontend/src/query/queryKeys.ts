@@ -101,6 +101,27 @@ export const queryKeys = {
     all: ['readerContext'] as const,
     detail: (issueId: number) => ['readerContext', issueId] as const,
   },
+  readingPlans: {
+    all: ['readingPlans'] as const,
+    list: () => ['readingPlans', 'list'] as const,
+    detail: (planId: number) => ['readingPlans', 'detail', planId] as const,
+  },
+  cblSources: {
+    all: ['cblSources'] as const,
+    search: (query: string) => ['cblSources', 'search', normalizedSearch(query)] as const,
+    preview: (listId: number) => ['cblSources', 'preview', listId] as const,
+    adoptionPlan: (
+      listId: number,
+      seriesDecisions: Record<string, boolean>,
+      entryDecisions: Record<string, boolean>,
+    ) => [
+      'cblSources',
+      'adoptionPlan',
+      listId,
+      Object.entries(seriesDecisions).sort(([a], [b]) => a.localeCompare(b)),
+      Object.entries(entryDecisions).sort(([a], [b]) => a.localeCompare(b)),
+    ] as const,
+  },
   taste: {
     all: ['taste'] as const,
     discoveries: () => ['taste', 'discoveries'] as const,

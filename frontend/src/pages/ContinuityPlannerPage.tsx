@@ -1,11 +1,11 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   ContinuityIssueSelector,
   ContinuityThreadSelector,
 } from '../components/continuity'
-import { continuityPlansApi, type ContinuityPlanNode, type ContinuityPlanNodeType, type ContinuityPlanOrderingMode } from '../services/api-continuity-plans'
+import { continuityPlansApi, type ContinuityPlan, type ContinuityPlanNode, type ContinuityPlanNodeType, type ContinuityPlanOrderingMode } from '../services/api-continuity-plans'
 import { dependencyGroupsApi, type DependencyGroup } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 import type { IssueListParams } from '../services/api-issues'
@@ -15,6 +15,7 @@ import ReadingPlanAddMaterial from '../components/ReadingPlanAddMaterial'
 import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
 import { isObject, isString } from '../utils/runtimeChecks'
+import { useSaveReadingPlan } from '../hooks/useReadingPlans'
 
 const LAST_PLAN_KEY = 'comic-pile:last-continuity-plan'
 const DEFAULT_LANE_ID = 'main'
@@ -156,6 +157,15 @@ function buildPayload(
       label: node.label ?? null,
       is_checkpoint: node.is_checkpoint ?? false,
       convergence_gate: node.convergence_gate ?? [],
+      source_role: node.source_role ?? null,
+      source_confidence: node.source_confidence ?? null,
+      source_explanation: node.source_explanation ?? null,
+      source_paths: node.source_paths ?? null,
+      source_cbl_placements: node.source_cbl_placements ?? null,
+      source_story_arc_ids: node.source_story_arc_ids ?? null,
+      source_target_story_arc_id: node.source_target_story_arc_id ?? null,
+      reader_role: node.reader_role ?? null,
+      reader_optional: node.reader_optional ?? null,
     })),
   }
 }
@@ -167,6 +177,8 @@ function laneNodeCount(nodes: PlannerNode[], laneId: string): number {
 export default function ContinuityPlannerPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const addFromCblRequested = searchParams.get('addFrom') === 'cbl'
   const parsedId = id ? Number(id) : null
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
   const isInvalidRoute = id !== undefined && parsedId !== null && (!Number.isInteger(parsedId) || parsedId <= 0)
@@ -188,7 +200,6 @@ export default function ContinuityPlannerPage() {
   const [selectedGroupId, setSelectedGroupId] = useState('')
   const [isLoading, setIsLoading] = useState(Boolean(planId))
   const [isLoadingIssues, setIsLoadingIssues] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [issueLoadError, setIssueLoadError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -197,6 +208,7 @@ export default function ContinuityPlannerPage() {
   const [editingGateNodeId, setEditingGateNodeId] = useState<string | null>(null)
   const lastPlanId = typeof window === 'undefined' ? null : window.localStorage.getItem(LAST_PLAN_KEY)
   const issueRequestRef = useRef<AbortController | null>(null)
+  const savePlan = useSaveReadingPlan(planId)
 
   const isDirty =
     name !== savedName ||
@@ -442,13 +454,10 @@ export default function ContinuityPlannerPage() {
       setSaveError('Enter a plan name.')
       return
     }
-    setIsSaving(true)
     setSaveError(null)
     try {
       const payload = buildPayload(name, lanes, nodes, orderingMode)
-      const saved = planId
-        ? await continuityPlansApi.update(planId, payload)
-        : await continuityPlansApi.create(payload)
+      const saved = await savePlan.mutateAsync(payload)
       const savedLanes = (saved.lanes.length > 0
         ? saved.lanes
         : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
@@ -464,12 +473,39 @@ export default function ContinuityPlannerPage() {
       setSavedNodes(normalized)
       setSavedOrderingMode(saved.ordering_mode)
       window.localStorage.setItem(LAST_PLAN_KEY, String(saved.id))
-      if (!planId) navigate(`/continuity-plans/${saved.id}`, { replace: true })
+      if (!planId) {
+        navigate(
+          `/continuity-plans/${saved.id}${addFromCblRequested ? '?addFrom=cbl' : ''}`,
+          { replace: true },
+        )
+      }
     } catch (error) {
       setSaveError(getConflictMessage(error, nodes))
-    } finally {
-      setIsSaving(false)
     }
+  }
+
+  const acceptCommittedPlan = (committed: ContinuityPlan) => {
+    const committedLanes = (committed.lanes.length > 0
+      ? committed.lanes
+      : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
+    ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
+      .sort((a, b) => a.order - b.order)
+    const committedNodes = normalizePositions(
+      hydrateLabels(
+        [...committed.nodes].sort((a, b) => a.position - b.position),
+        groups,
+      ),
+    )
+    setName(committed.name)
+    setLanes(committedLanes)
+    setNodes(committedNodes)
+    setOrderingMode(committed.ordering_mode)
+    setSavedName(committed.name)
+    setSavedLanes(committedLanes)
+    setSavedNodes(committedNodes)
+    setSavedOrderingMode(committed.ordering_mode)
+    setActiveLaneId(committedLanes[0]?.id ?? DEFAULT_LANE_ID)
+    setSaveError(null)
   }
 
   const cancel = () => {
@@ -481,12 +517,17 @@ export default function ContinuityPlannerPage() {
     setSaveError(null)
   }
 
+  const isSaving = savePlan.isPending
   const statusText = isSaving ? 'Saving…' : saveError ? null : isDirty ? 'Unsaved changes' : planId ? 'Saved' : 'New plan'
 
-  if (isLoading) return <p role="status" className="text-stone-400">Loading continuity plan…</p>
+  if (isLoading) return <p role="status" className="text-[var(--theme-text-muted)]">Loading Reading Plan…</p>
   if (loadError) return <div role="alert" className="rounded-2xl border border-red-800 bg-red-950/30 p-4 text-red-200">{loadError}</div>
 
   const globalIndex = new Map<string, number>()
+  const sourcePaths = Array.from(new Set(nodes.flatMap((node) => [
+    ...(node.source_paths ?? []),
+    ...(node.source_cbl_placements ?? []).map((placement) => placement.source_path),
+  ])))
   let runningIndex = 0
   for (const lane of orderedLanes) {
     const laneNodes = nodes
@@ -501,15 +542,26 @@ export default function ContinuityPlannerPage() {
   return (
     <section className="space-y-6 pb-8" aria-labelledby="planner-heading">
       <header>
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--theme-text-muted)]">Continuity</p>
-        <h1 id="planner-heading" className="mt-1 text-3xl font-black text-[var(--theme-text-primary)]">Sequential planner</h1>
+        <h1 id="planner-heading" className="text-2xl font-black text-[var(--theme-text-primary)]">{planId ? name : 'New Reading Plan'}</h1>
         <p className="mt-2 text-sm text-[var(--theme-text-muted)]">
-          Arrange issues and crossovers in one or more parallel reading lanes. Saving creates only the continuity rules you chose.{' '}
-          <GlossaryLink id="continuity-plan">Continuity Plan</GlossaryLink>,{' '}
+          Arrange issues and crossovers in source order or your own order. Strict order keeps later material out of Roll until earlier steps are read.{' '}
+          <GlossaryLink id="continuity-plan">Reading Plan</GlossaryLink>,{' '}
           <GlossaryLink id="lane">Lane</GlossaryLink>, and{' '}
           <GlossaryLink id="crossover">Crossover</GlossaryLink> definitions.
         </p>
       </header>
+
+      {sourcePaths.length > 0 && (
+        <section className="rounded-xl border border-[var(--theme-continuity-accent)] bg-[var(--theme-bg-panel)] p-4" aria-labelledby="plan-sources-heading">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <h2 id="plan-sources-heading" className="text-sm font-black text-[var(--theme-continuity-accent)]">CBL-backed</h2>
+            <p className="text-xs text-[var(--theme-text-muted)]">This Reading Plan uses the following CBL source order.</p>
+          </div>
+          <ul className="mt-2 space-y-1 text-xs text-[var(--theme-text-primary)]">
+            {sourcePaths.map((path) => <li key={path}>Source: {path}</li>)}
+          </ul>
+        </section>
+      )}
 
       {!planId && lastPlanId && (
         <button type="button" onClick={() => navigate(`/continuity-plans/${lastPlanId}`)} className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 text-sm font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]">
@@ -525,9 +577,8 @@ export default function ContinuityPlannerPage() {
       <fieldset className="block" aria-describedby="ordering-mode-help">
         <legend className="text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">Ordering mode</legend>
         <p id="ordering-mode-help" className="mt-1 text-sm text-[var(--theme-text-muted)]">
-          Plan ordering is separate from issue-level <GlossaryLink id="dependency-builder">Dependency Builder</GlossaryLink> blocking.
-          Informational plans create no blocking rules — they are a reading reference only. Strict sequential plans compile one
-          blocking rule per step, exactly like a Dependency rule. <GlossaryLink id="ordering-mode">What is an ordering mode?</GlossaryLink>
+          Informational plans are a reading reference only. Strict sequential plans keep each later step out of Roll until the earlier step is read.{' '}
+          <GlossaryLink id="ordering-mode">What is an ordering mode?</GlossaryLink>
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <label
@@ -573,7 +624,19 @@ export default function ContinuityPlannerPage() {
         )}
       </fieldset>
 
-      {planId && <ReadingPlanAddMaterial planName={savedName || name} />}
+      {planId ? (
+        <ReadingPlanAddMaterial
+          planId={planId}
+          planName={savedName || name}
+          defaultOpen={addFromCblRequested}
+          onCommitted={acceptCommittedPlan}
+        />
+      ) : addFromCblRequested ? (
+        <section className="rounded-xl border border-[var(--theme-continuity-accent)] bg-[var(--theme-bg-panel)] p-4">
+          <h2 className="text-sm font-black text-[var(--theme-text-primary)]">Add from CBL</h2>
+          <p className="mt-1 text-sm text-[var(--theme-text-muted)]">Name and save this Reading Plan first. The CBL source picker will open next.</p>
+        </section>
+      ) : null}
 
       <section aria-labelledby="add-steps-heading" className="border-t border-[var(--theme-border)] pt-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">

@@ -1,5 +1,8 @@
 import axios from 'axios'
 import { FormEvent, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { applyCommittedReadingPlan } from '../query/cacheEffects'
+import { queryKeys } from '../query/queryKeys'
 import { isObject, isString } from '../utils/runtimeChecks'
 import {
   cblSourcesApi,
@@ -12,7 +15,8 @@ import {
 interface ReadingPlanAddMaterialProps {
   planId: number
   planName: string
-  onCommitted?: () => void
+  defaultOpen?: boolean
+  onCommitted?: (plan: CBLAdoptionCommitResult) => void
 }
 
 function statusLabel(entry: CBLAdoptionPreviewEntry): string {
@@ -51,109 +55,118 @@ function errorMessage(error: unknown, fallback: string): string {
 export default function ReadingPlanAddMaterial({
   planId,
   planName,
+  defaultOpen = false,
   onCommitted,
 }: ReadingPlanAddMaterialProps) {
-  const [open, setOpen] = useState(false)
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(defaultOpen)
   const [query, setQuery] = useState(planName)
-  const [sources, setSources] = useState<CBLSourceListDiscoveryItem[]>([])
+  const [submittedQuery, setSubmittedQuery] = useState(defaultOpen ? planName : '')
   const [selectedSource, setSelectedSource] = useState<CBLSourceListDiscoveryItem | null>(null)
-  const [preview, setPreview] = useState<CBLAdoptionPreview | null>(null)
+  const [seriesDecisions, setSeriesDecisions] = useState<Record<string, boolean>>({})
   const [entryDecisions, setEntryDecisions] = useState<Record<string, boolean>>({})
-  const [isSearching, setIsSearching] = useState(false)
-  const [isPreviewing, setIsPreviewing] = useState(false)
-  const [isCommitting, setIsCommitting] = useState(false)
-  const [hasSearched, setHasSearched] = useState(false)
+  const [hasSearched, setHasSearched] = useState(defaultOpen)
   const [staleReview, setStaleReview] = useState(false)
-  const [result, setResult] = useState<CBLAdoptionCommitResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const sourcesQuery = useQuery({
+    queryKey: queryKeys.cblSources.search(submittedQuery),
+    queryFn: () => cblSourcesApi.discover(submittedQuery),
+    enabled: open && hasSearched,
+  })
+  const hasChoices =
+    Object.keys(seriesDecisions).length > 0 || Object.keys(entryDecisions).length > 0
+  const previewQuery = useQuery({
+    queryKey: selectedSource
+      ? queryKeys.cblSources.adoptionPlan(
+          selectedSource.id,
+          seriesDecisions,
+          entryDecisions,
+        )
+      : queryKeys.cblSources.preview(0),
+    queryFn: () => {
+      if (!selectedSource) throw new Error('Choose a CBL source first.')
+      return hasChoices
+        ? cblSourcesApi.plan(selectedSource.id, { series_decisions: seriesDecisions, entry_decisions: entryDecisions })
+        : cblSourcesApi.preview(selectedSource.id)
+    },
+    enabled: selectedSource !== null,
+    placeholderData: (previous) => previous,
+  })
+  const commitMutation = useMutation({
+    mutationFn: ({
+      source,
+      reviewed,
+    }: {
+      source: CBLSourceListDiscoveryItem
+      reviewed: CBLAdoptionPreview
+    }) => cblSourcesApi.commit(source.id, planId, reviewed, {
+      series_decisions: seriesDecisions,
+      entry_decisions: entryDecisions,
+    }),
+    onSuccess: async (committed) => {
+      await applyCommittedReadingPlan(queryClient, committed)
+      onCommitted?.(committed)
+    },
+    onError: (commitError) => {
+      if (axios.isAxiosError(commitError) && commitError.response?.status === 409) {
+        setStaleReview(true)
+      }
+    },
+  })
+
+  const sources = sourcesQuery.data ?? []
+  const preview = previewQuery.data ?? null
+  const result: CBLAdoptionCommitResult | undefined = commitMutation.data
+  const isSearching = sourcesQuery.isFetching
+  const isPreviewing = previewQuery.isFetching
+  const isCommitting = commitMutation.isPending
+  const activeError = commitMutation.error ?? previewQuery.error ?? sourcesQuery.error
+  const error = staleReview
+    ? 'This source changed after you reviewed it. Refresh the preview before adding material.'
+    : activeError
+      ? errorMessage(activeError, 'Unable to complete the CBL workflow.')
+      : null
 
   const search = async (event?: FormEvent) => {
     event?.preventDefault()
-    setIsSearching(true)
     setHasSearched(true)
-    setError(null)
-    setPreview(null)
+    setSubmittedQuery(query.trim())
     setSelectedSource(null)
+    setSeriesDecisions({})
     setEntryDecisions({})
-    setResult(null)
     setStaleReview(false)
-    try {
-      setSources(await cblSourcesApi.discover(query.trim()))
-    } catch (searchError) {
-      setSources([])
-      setError(errorMessage(searchError, 'Unable to search source lists.'))
-    } finally {
-      setIsSearching(false)
-    }
+    commitMutation.reset()
   }
 
-  const loadPreview = async (source: CBLSourceListDiscoveryItem) => {
+  const loadPreview = (source: CBLSourceListDiscoveryItem) => {
+    const reloadSelectedSource = selectedSource?.id === source.id
     setSelectedSource(source)
-    setPreview(null)
+    setSeriesDecisions({})
     setEntryDecisions({})
-    setResult(null)
     setStaleReview(false)
-    setIsPreviewing(true)
-    setError(null)
-    try {
-      setPreview(await cblSourcesApi.preview(source.id))
-    } catch (previewError) {
-      setError(errorMessage(previewError, 'Unable to preview that source.'))
-    } finally {
-      setIsPreviewing(false)
-    }
+    commitMutation.reset()
+    if (reloadSelectedSource) void previewQuery.refetch()
   }
 
-  const chooseMissingEntry = async (entry: CBLAdoptionPreviewEntry, include: boolean) => {
-    if (!selectedSource) return
-    const nextDecisions = { ...entryDecisions, [String(entry.cbl_entry_id)]: include }
-    setEntryDecisions(nextDecisions)
-    setResult(null)
-    setIsPreviewing(true)
-    setError(null)
-    try {
-      setPreview(
-        await cblSourcesApi.plan(selectedSource.id, {
-          series_decisions: {},
-          entry_decisions: nextDecisions,
-        }),
-      )
-    } catch (planError) {
-      setError(errorMessage(planError, 'Unable to update that source selection.'))
-    } finally {
-      setIsPreviewing(false)
-    }
+  const chooseEntry = (entry: CBLAdoptionPreviewEntry, include: boolean) => {
+    setEntryDecisions((current) => ({
+      ...current,
+      [String(entry.cbl_entry_id)]: include,
+    }))
+    commitMutation.reset()
   }
 
-  const commit = async () => {
+  const commit = () => {
     if (!selectedSource || !preview) return
-    setIsCommitting(true)
-    setError(null)
-    setResult(null)
-    try {
-      const committed = await cblSourcesApi.commit(selectedSource.id, planId, preview, {
-        series_decisions: {},
-        entry_decisions: entryDecisions,
-      })
-      setResult(committed)
-      onCommitted?.()
-    } catch (commitError) {
-      if (axios.isAxiosError(commitError) && commitError.response?.status === 409) {
-        setPreview(null)
-        setStaleReview(true)
-        setError('This source changed after you reviewed it. Refresh the preview before adding material.')
-      } else {
-        setError(errorMessage(commitError, 'Unable to add the selected material.'))
-      }
-    } finally {
-      setIsCommitting(false)
-    }
+    commitMutation.mutate({ source: selectedSource, reviewed: preview })
   }
 
   const toggleOpen = () => {
     const next = !open
     setOpen(next)
-    if (next && !hasSearched) void search()
+    if (next && !hasSearched) {
+      setSubmittedQuery(query.trim())
+      setHasSearched(true)
+    }
   }
 
   const commitBlocked =
@@ -161,8 +174,32 @@ export default function ReadingPlanAddMaterial({
     preview.summary.unresolved_count > 0 ||
     preview.summary.awaiting_opt_in_count > 0 ||
     preview.summary.final_adopted_count === 0 ||
+    staleReview ||
     isCommitting ||
     isPreviewing
+  const seriesGroups = preview
+    ? Array.from(
+        new Map(
+          preview.entries.map((entry) => [
+            entry.series_group_id,
+            { id: entry.series_group_id, name: entry.series_name },
+          ]),
+        ).values(),
+      )
+    : []
+
+  const chooseSeries = (seriesId: string, include: boolean) => {
+    setSeriesDecisions((current) => ({ ...current, [seriesId]: include }))
+    commitMutation.reset()
+  }
+
+  const chooseAllSeries = (include: boolean) => {
+    setSeriesDecisions(
+      Object.fromEntries(seriesGroups.map((series) => [series.id, include])),
+    )
+    setEntryDecisions({})
+    commitMutation.reset()
+  }
 
   return (
     <section className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4" aria-labelledby="add-material-heading">
@@ -179,7 +216,7 @@ export default function ReadingPlanAddMaterial({
           className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
           aria-expanded={open}
         >
-          {open ? 'Close' : 'Browse sources'}
+          {open ? 'Close' : 'Add from CBL'}
         </button>
       </div>
 
@@ -216,7 +253,7 @@ export default function ReadingPlanAddMaterial({
                 <button
                   key={source.id}
                   type="button"
-                  onClick={() => void loadPreview(source)}
+                  onClick={() => loadPreview(source)}
                   className={`rounded-xl border p-3 text-left ${selectedSource?.id === source.id ? 'border-[var(--theme-continuity-accent)]' : 'border-[var(--theme-border)]'} hover:bg-white/5`}
                 >
                   <span className="block text-sm font-bold text-[var(--theme-text-primary)]">{source.name}</span>
@@ -232,7 +269,10 @@ export default function ReadingPlanAddMaterial({
           {staleReview && selectedSource && (
             <button
               type="button"
-              onClick={() => void loadPreview(selectedSource)}
+              onClick={() => {
+                setStaleReview(false)
+                void previewQuery.refetch()
+              }}
               className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
             >
               Refresh preview
@@ -256,6 +296,28 @@ export default function ReadingPlanAddMaterial({
                 <div><dt className="text-[var(--theme-text-dim)]">Unresolved</dt><dd className="font-bold text-[var(--theme-text-primary)]">{preview.summary.unresolved_count}</dd></div>
               </dl>
 
+              <section className="space-y-2" aria-labelledby="series-decisions-heading">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 id="series-decisions-heading" className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-primary)]">Series choices</h4>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => chooseAllSeries(true)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)]">Include all</button>
+                    <button type="button" onClick={() => chooseAllSeries(false)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-muted)]">Include none</button>
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {seriesGroups.map((series) => (
+                    <div key={series.id} className="flex items-center justify-between gap-2 rounded-lg border border-[var(--theme-border)] p-2">
+                      <span className="min-w-0 truncate text-xs font-bold text-[var(--theme-text-primary)]">{series.name}</span>
+                      <div className="flex shrink-0 gap-1" role="group" aria-label={`${series.name} series choice`}>
+                        <button type="button" aria-pressed={seriesDecisions[series.id] === true} onClick={() => chooseSeries(series.id, true)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 text-xs text-[var(--theme-text-primary)]">Include</button>
+                        <button type="button" aria-pressed={seriesDecisions[series.id] === false} onClick={() => chooseSeries(series.id, false)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 text-xs text-[var(--theme-text-muted)]">Exclude</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-[var(--theme-text-dim)]">Individual choices below override a series choice.</p>
+              </section>
+
               <ol className="max-h-[28rem] space-y-1 overflow-y-auto pr-1" aria-label="Reconciled source order">
                 {preview.entries.map((entry) => (
                   <li key={entry.cbl_entry_id} className="flex gap-3 rounded-lg border border-[var(--theme-border)] px-3 py-2 text-sm">
@@ -264,15 +326,15 @@ export default function ReadingPlanAddMaterial({
                       <span className="block truncate font-bold text-[var(--theme-text-primary)]">{entry.series_name} #{entry.issue_number}</span>
                       <span className={`block text-xs ${statusClass(entry)}`}>{statusLabel(entry)}</span>
                     </span>
-                    {entry.adoption_class === 'missing_importable' && (
+                    {entry.adoption_class !== 'ambiguous_unresolved' && (
                       <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-[var(--theme-text-primary)]">
                         <input
                           type="checkbox"
                           checked={entry.adopted}
                           disabled={isPreviewing || isCommitting}
-                          onChange={(event) => void chooseMissingEntry(entry, event.target.checked)}
+                          onChange={(event) => chooseEntry(entry, event.target.checked)}
                         />
-                        Add
+                        Include
                       </label>
                     )}
                   </li>
@@ -283,12 +345,12 @@ export default function ReadingPlanAddMaterial({
                 <p className="text-xs text-amber-300">Resolve ambiguous identities before adding this source.</p>
               )}
               {preview.summary.awaiting_opt_in_count > 0 && (
-                <p className="text-xs text-[var(--theme-text-muted)]">Choose Add or leave each missing comic excluded before committing.</p>
+                <p className="text-xs text-[var(--theme-text-muted)]">Choose whether to include each missing comic before committing.</p>
               )}
 
               <button
                 type="button"
-                onClick={() => void commit()}
+                onClick={commit}
                 disabled={commitBlocked}
                 className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
               >

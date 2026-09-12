@@ -160,6 +160,14 @@ class AppSettings(BaseSettings):
         description="Enable internal operations routes",
         json_schema_extra={"env": "ENABLE_INTERNAL_OPS_ROUTES"},
     )
+    legacy_dependency_blocking_enabled: bool = Field(
+        default=True,
+        description=(
+            "Keep the raw Dependency Roll compatibility path enabled until the "
+            "reader-order migration cutover audit passes in production"
+        ),
+        json_schema_extra={"env": "LEGACY_DEPENDENCY_BLOCKING_ENABLED"},
+    )
 
     @property
     def cors_origins_list(self) -> list[str]:

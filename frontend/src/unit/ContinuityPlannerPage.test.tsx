@@ -192,14 +192,11 @@ describe('ContinuityPlannerPage', () => {
     expect(informational).toBeChecked()
     expect(strict).not.toBeChecked()
 
-    expect(screen.getByText(/separate from issue-level/i)).toBeVisible()
-    expect(screen.getByText(/Informational plans create no blocking rules/i)).toBeVisible()
-    expect(screen.getByText(/Strict sequential plans compile one blocking rule per step/i)).toBeVisible()
+    expect(screen.getByText(/Informational plans are a reading reference only/i)).toBeVisible()
+    expect(screen.getByText(/Strict sequential plans keep each later step out of Roll/i)).toBeVisible()
 
     const glossaryLink = screen.getByRole('link', { name: 'What is an ordering mode?' })
     expect(glossaryLink).toHaveAttribute('href', '/glossary#ordering-mode')
-    const dependencyBuilderLink = screen.getByRole('link', { name: 'Dependency Builder' })
-    expect(dependencyBuilderLink).toHaveAttribute('href', '/glossary#dependency-builder')
   })
 
   it('defaults a new plan to informational order so no blocking rules are compiled', async () => {
@@ -1860,7 +1857,7 @@ describe('ContinuityPlannerPage', () => {
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeVisible())
     // Modal content is portaled to document.body
-    expect(await screen.findByText(/Projection plan/)).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Projection plan', level: 1 })).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: 'Close modal' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

@@ -6,6 +6,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import TTL, cached
+from app.config import get_app_settings
 from app.continuity_blocking import get_continuity_blocked_thread_ids
 from app.models.dependency import Dependency
 from app.models.issue import Issue
@@ -23,28 +24,10 @@ def _invalidate_continuity_snapshot(user_id: int, db: AsyncSession) -> None:
 async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
     """Read unified blocked thread IDs directly from the current transaction."""
     _invalidate_continuity_snapshot(user_id, db)
-    source_issue = Issue.__table__.alias("source_issue")
-    next_unread_issue = Issue.__table__.alias("next_unread_issue")
-    target_thread = Thread.__table__.alias("target_thread")
-    source = Thread.__table__.alias("source_thread")
-
-    issue_result = await db.execute(
-        select(target_thread.c.id)
-        .join(
-            next_unread_issue,
-            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
-        )
-        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
-        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
-        .join(source, source_issue.c.thread_id == source.c.id)
-        .where(target_thread.c.user_id == user_id)
-        .where(source.c.user_id == user_id)
-        .where(source_issue.c.status != "read")
-        .where(target_thread.c.next_unread_issue_id.isnot(None))
-        .distinct()
-    )
-    legacy_blocked_ids = {row[0] for row in issue_result.all()}
     continuity_blocked_ids = await get_continuity_blocked_thread_ids(user_id, db)
+    if not get_app_settings().legacy_dependency_blocking_enabled:
+        return continuity_blocked_ids
+    legacy_blocked_ids = await _get_legacy_blocked_thread_ids_uncached(user_id, db)
     return legacy_blocked_ids | continuity_blocked_ids
 
 

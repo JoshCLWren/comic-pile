@@ -112,6 +112,52 @@ async def test_issue_level_multi_series_plan_round_trips_without_hard_edges(
 
 
 @pytest.mark.asyncio
+async def test_reading_plan_index_exposes_cbl_source_provenance(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """The Reading Plans front door can identify source-backed plans."""
+    user = await get_or_create_user_async(async_db)
+    thread = await _make_thread(async_db, user_id=user.id, title="Source-backed")
+    issue = await _make_issue_for_thread(
+        async_db,
+        thread=thread,
+        issue_number="1",
+        position=1,
+    )
+    async_db.add(
+        ContinuityPlan(
+            user_id=user.id,
+            name="CBL plan",
+            ordering_mode="strict_sequential",
+            lanes_json=[{"id": "main", "name": "Source order", "order": 0}],
+            nodes_json=[
+                {
+                    "id": f"issue-{issue.id}",
+                    "node_type": "issue",
+                    "ref_id": issue.id,
+                    "lane_id": "main",
+                    "position": 0,
+                    "source_paths": ["Dark Horse/BPRD/Plague of Frogs.cbl"],
+                    "source_cbl_placements": [
+                        {
+                            "source_path": "Dark Horse/BPRD/Plague of Frogs.cbl",
+                            "position": 1,
+                        }
+                    ],
+                }
+            ],
+        )
+    )
+    await async_db.commit()
+
+    response = await auth_client.get("/api/v1/continuity-plans/")
+    assert response.status_code == 200
+    item = next(plan for plan in response.json() if plan["name"] == "CBL plan")
+    assert item["source_paths"] == ["Dark Horse/BPRD/Plague of Frogs.cbl"]
+
+
+@pytest.mark.asyncio
 async def test_legacy_reading_orders_remain_readable(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Legacy reading_orders endpoint still serves data verbatim (backward compat)."""
     user = await get_or_create_user_async(async_db)
