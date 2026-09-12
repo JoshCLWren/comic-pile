@@ -4166,6 +4166,18 @@
             "title": "Id",
             "type": "integer"
           },
+          "issue_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Denormalized issue number captured at event time",
+            "title": "Issue Number"
+          },
           "issues_read": {
             "anyOf": [
               {
