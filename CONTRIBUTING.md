@@ -12,7 +12,7 @@ The lint script runs:
 - Python compilation check
 - Ruff linting
 - Any type usage check (ruff ANN401 rule)
-- ty type checking (ty check --error-on-warning)
+- ty type checking (`ty check --error-on-warning`). Warnings fail this check, including `redundant-cast`. Do not recast a value after `isinstance` has already narrowed it.
 
 The hook will block commits containing `# type: ignore`, `# noqa`, `# ruff: ignore`, or `# pylint: ignore`.
 

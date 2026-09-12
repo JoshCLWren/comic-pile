@@ -59,6 +59,12 @@ CI is not a debugging tool. Run focused local validation appropriate to the chan
 
 For autonomous factory work, `docs/AUTONOMOUS_FACTORY_POLICY.md` is canonical for validation and browser gates. When browser validation is required, Chromium is the maintained required Playwright target. Firefox and WebKit are optional diagnostics for browser-specific investigations and must not delay ordinary issue closure or merges.
 
+Before pushing Python changes from a normal local checkout:
+1. Run `ruff check` on the changed files. Ruff passing is **not** enough.
+2. Run `ty check --error-on-warning`. CI treats ty **warnings as failures**.
+3. Run the focused pytest files that cover the change.
+4. Fix every ruff, ty, and pytest failure before pushing.
+
 Before pushing frontend changes from a normal local checkout:
 1. Run `cd frontend && pnpm run lint && pnpm run typecheck`.
 2. Run `cd frontend && pnpm run build`.
@@ -101,8 +107,8 @@ Comic Pile is a dice-driven comic reading tracker built with:
 ### Linting
 ```bash
 make lint                    # All linters (Python + JS + HTML)
-ruff check .                 # Python only
-ty check --error-on-warning  # Python type checking
+ruff check .                 # Python style only — not sufficient by itself
+ty check --error-on-warning  # Required Python type check; warnings fail CI
 cd frontend && pnpm run lint  # Frontend ESLint
 ```
 
@@ -137,6 +143,7 @@ Order: standard library, third-party, local. Ruff auto-sorts with `ruff check --
 - **Never use `Any`** - ruff ANN401 rule enforced
 - Use `Mapped[]` for SQLAlchemy model columns
 - Use `|` union syntax, not `Union[]` or `Optional[]`
+- **Never leave a redundant `cast()`.** `ty check --error-on-warning` fails CI on `redundant-cast`. After `isinstance(x, T)`, use `x` directly. Do not write `cast(object, x)` when `x` is already `object`. Narrow with `isinstance` instead of stacking casts.
 
 ### Naming Conventions
 - **Functions/variables**: `snake_case`

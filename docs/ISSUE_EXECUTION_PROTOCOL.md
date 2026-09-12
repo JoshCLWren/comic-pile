@@ -69,9 +69,13 @@ cd frontend && pnpm test
 Common backend checks include:
 
 ```bash
+ruff check <changed-python-files>
+ty check --error-on-warning
 pytest <focused-test-file-or-test>
 pytest
 ```
+
+`ruff check` alone is not Python validation. CI runs `ty check --error-on-warning`, so ty warnings such as `redundant-cast` fail the required type-check job. After `isinstance(x, T)`, do not `cast(T, x)` again.
 
 ## Review feedback
 
