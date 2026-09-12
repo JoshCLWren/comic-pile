@@ -267,6 +267,7 @@ async def test_get_session_details_endpoint(
         die=6,
         result=4,
         selection_method="random",
+        issue_number="11",
     )
     async_db.add(roll_event)
 
@@ -277,6 +278,7 @@ async def test_get_session_details_endpoint(
         rating=4.5,
         issues_read=1,
         die_after=8,
+        issue_number="11",
     )
     async_db.add(rate_event)
     await async_db.commit()
@@ -288,6 +290,7 @@ async def test_get_session_details_endpoint(
     assert "roll" in event_types
     assert "rate" in event_types
     assert any(e.get("thread_title") == "Test Comic" for e in data["events"])
+    assert all(e.get("issue_number") == "11" for e in data["events"])
 
 
 @pytest.mark.asyncio
@@ -341,6 +344,57 @@ async def test_get_session_details_describes_events_in_reader_language(
     assert descriptions["rate"] == "Rated · Promethea · 2 issues read · 4.0/5"
     assert descriptions["snooze"] == "Snoozed Promethea"
     assert all(value for value in descriptions.values()), descriptions
+
+
+@pytest.mark.asyncio
+async def test_session_details_narrative_summary_includes_issue_numbers(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """History narrative entries always pair thread titles with issue numbers."""
+    session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Promethea",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=default_user.id,
+        status="completed",
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    async_db.add_all(
+        [
+            Event(
+                type="rate",
+                session_id=session.id,
+                thread_id=thread.id,
+                rating=4.0,
+                issues_read=2,
+                issue_number="32",
+            ),
+            Event(
+                type="rolled_but_skipped",
+                session_id=session.id,
+                thread_id=thread.id,
+                issue_number="50",
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
+    assert response.status_code == 200
+    data = response.json()
+
+    summary = data["narrative_summary"]
+    assert "Promethea #32 (4.0/5.0)" in summary["read"]
+    assert "Promethea #32" in summary["completed"]
+    assert "Promethea #50" in summary["skipped"]
 
 
 @pytest.mark.asyncio

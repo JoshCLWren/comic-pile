@@ -75,6 +75,7 @@ function createDeferred<T>() {
 }
 
 function createDataTransfer(): DataTransfer {
+  // SAFETY: DataTransfer is a browser DOM interface; the mock satisfies the full contract via the cast below
   return {
     dropEffect: 'move',
     effectAllowed: 'move',

@@ -292,6 +292,10 @@ class EventDetail(BaseModel):
     type: str
     timestamp: datetime
     thread_title: str | None
+    issue_number: str | None = Field(
+        default=None,
+        description="Denormalized issue number captured at event time",
+    )
     description: str | None = None
     die: int | None = None
     result: int | None = None

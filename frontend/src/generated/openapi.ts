@@ -5851,6 +5851,11 @@ export interface components {
             die_after?: number | null;
             /** Id */
             id: number;
+            /**
+             * Issue Number
+             * @description Denormalized issue number captured at event time
+             */
+            issue_number?: string | null;
             /** Issues Read */
             issues_read?: number | null;
             /** Queue Move */

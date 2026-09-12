@@ -91,6 +91,24 @@ describe('RollRecoveryCard', () => {
     expect(screen.queryByRole('button', { name: /Deep prerequisite #1/i })).not.toBeInTheDocument()
   })
 
+  it('labels a non-readable prerequisite as blocked without offering a read action', () => {
+    const onReadNow = vi.fn()
+    render(
+      <RollRecoveryCard
+        recovery={{
+          ...recovery,
+          readable_prerequisites: [
+            { node_type: 'issue', node_id: 30, label: 'Deep prerequisite #1', is_readable: false },
+          ],
+        }}
+        onReadNow={onReadNow}
+      />,
+    )
+
+    expect(screen.getAllByText('Blocked')).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: /Deep prerequisite #1/i })).not.toBeInTheDocument()
+  })
+
   it('keeps the blocked roll visible when traversal has no readable leaf', () => {
     render(
       <RollRecoveryCard

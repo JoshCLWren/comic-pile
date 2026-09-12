@@ -44,7 +44,6 @@ function eventLabel(type: string): string {
 
 function EventRecord({ event }: { event: DisplayEvent }) {
   const metadata = [
-    event.issue_number ? `Issue ${event.issue_number}` : null,
     event.issues_read != null ? `${event.issues_read} ${event.issues_read === 1 ? 'issue' : 'issues'} read` : null,
     event.die != null ? `d${event.die}` : null,
     event.result != null ? `Rolled ${event.result}` : null,
@@ -65,6 +64,9 @@ function EventRecord({ event }: { event: DisplayEvent }) {
       </div>
       <p className="min-w-0 break-words text-sm font-bold text-stone-200">
         {event.thread_title || 'Thread unavailable'}
+        {event.thread_title && event.issue_number ? (
+          <span className="text-stone-400"> · #{event.issue_number}</span>
+        ) : null}
       </p>
       {metadata.length > 0 ? (
         <ul className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-stone-400" aria-label="Event details">

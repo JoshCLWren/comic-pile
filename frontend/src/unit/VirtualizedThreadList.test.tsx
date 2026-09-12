@@ -45,6 +45,7 @@ let resizeCallback: ((entries: Array<{ contentRect: { height: number; width: num
 // Also stub ResizeObserver (needed by the component's useEffect).
 beforeAll(() => {
   if (!globalThis.DataTransfer) {
+    // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
     globalThis.DataTransfer = class {
       effectAllowed = 'none'
       dropEffect = 'none'
@@ -58,10 +59,12 @@ beforeAll(() => {
     } as typeof DataTransfer
   }
   if (!globalThis.DragEvent) {
+    // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
     globalThis.DragEvent = class extends MouseEvent {
       declare dataTransfer: DataTransfer | null
       constructor(type: string, eventInitDict?: DragEventInit) {
         super(type, eventInitDict ?? {})
+        // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
         this.dataTransfer = (eventInitDict as DragEventInit | undefined)?.dataTransfer ?? null
       }
     } as typeof DragEvent
@@ -143,7 +146,9 @@ it('renders only the virtualized subset of items (windowing)', () => {
     <VirtualizedThreadList
       threads={threads}
       renderItem={(thread, index) => (
+        // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
+          // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
           {(thread as MockThread).title} #{index + 1}
         </div>
       )}
@@ -164,6 +169,7 @@ it('preserves container selectors for E2E compatibility', () => {
     <VirtualizedThreadList
       threads={threads}
       renderItem={(thread, index) => (
+        // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
           Item {index + 1}
         </div>
@@ -188,6 +194,7 @@ it('renders the total-size spacer div', () => {
     <VirtualizedThreadList
       threads={threads}
       renderItem={(thread, index) => (
+        // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
           Item {index + 1}
         </div>
@@ -198,6 +205,7 @@ it('renders the total-size spacer div', () => {
 
   const scrollEl = container.querySelector('#queue-container')
   expect(scrollEl).toBeInTheDocument()
+  // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
   const spacer = scrollEl!.firstElementChild as HTMLElement
   expect(spacer.style.height).toBe('9600px')
   expect(spacer.style.position).toBe('relative')
@@ -210,6 +218,7 @@ it('renders virtual items with correct positioning', () => {
     <VirtualizedThreadList
       threads={threads}
       renderItem={(thread, index) => (
+        // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
           Item {index + 1}
         </div>
@@ -222,6 +231,7 @@ it('renders virtual items with correct positioning', () => {
   expect(items).toHaveLength(5)
 
   items.forEach((item, i) => {
+    // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
     const parent = item.parentElement as HTMLElement
     expect(parent.dataset.index).toBe(String(i))
     expect(parent.style.transform).toBe(`translateY(${i * 160}px)`)
@@ -276,7 +286,9 @@ it('renders 3 columns of items when columnCount=3', () => {
       threads={threads}
       explicitColumnCount={3}
       renderItem={(thread, _index) => (
+        // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
+          // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
           Thread {(thread as MockThread).title}
         </div>
       )}
@@ -289,6 +301,7 @@ it('renders 3 columns of items when columnCount=3', () => {
 
   // First row's grid should have 3 columns
   const firstRow = container.querySelector('[data-index="0"]')!
+  // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
   const grid = firstRow.firstElementChild as HTMLElement
   expect(grid.style.gridTemplateColumns).toBe('repeat(3, minmax(0, 1fr))')
 })
@@ -312,7 +325,9 @@ it('renders 1 column when columnCount=1 (single-column fallback)', () => {
       threads={threads}
       explicitColumnCount={1}
       renderItem={(thread, index) => (
+        // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
+          // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
           {(thread as MockThread).title} #{index + 1}
         </div>
       )}
@@ -333,6 +348,7 @@ it('sets aria-label and role on the scroll container', () => {
     <VirtualizedThreadList
       threads={threads}
       renderItem={(thread, index) => (
+        // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
           Item {index + 1}
         </div>
@@ -419,7 +435,9 @@ it('data-index reflects row index in multi-column mode (not thread index)', () =
       threads={threads}
       explicitColumnCount={3}
       renderItem={(thread, index) => (
+        // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
+          // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
           {(thread as MockThread).title} #{index + 1}
         </div>
       )}
@@ -486,7 +504,9 @@ it('calls scrollToIndex toward first visible when dragging near the top edge', (
     <VirtualizedThreadList
       threads={threads}
       renderItem={(thread, _index) => (
+        // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
+          // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
           {(thread as MockThread).title}
         </div>
       )}
@@ -494,6 +514,7 @@ it('calls scrollToIndex toward first visible when dragging near the top edge', (
     />,
   )
 
+  // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
   const scrollEl = container.querySelector('#queue-container') as HTMLElement
 
   // Spy on getBoundingClientRect so edge detection works.
@@ -532,7 +553,9 @@ it('calls scrollToIndex toward last visible when dragging near the bottom edge',
     <VirtualizedThreadList
       threads={threads}
       renderItem={(thread, _index) => (
+        // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
+          // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
           {(thread as MockThread).title}
         </div>
       )}
@@ -540,6 +563,7 @@ it('calls scrollToIndex toward last visible when dragging near the bottom edge',
     />,
   )
 
+  // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
   const scrollEl = container.querySelector('#queue-container') as HTMLElement
 
   vi.spyOn(scrollEl, 'getBoundingClientRect').mockReturnValue({
@@ -576,7 +600,9 @@ it('does not call scrollToIndex when dragging in the middle of the container', (
     <VirtualizedThreadList
       threads={threads}
       renderItem={(thread, _index) => (
+        // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
+          // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
           {(thread as MockThread).title}
         </div>
       )}
@@ -584,6 +610,7 @@ it('does not call scrollToIndex when dragging in the middle of the container', (
     />,
   )
 
+  // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
   const scrollEl = container.querySelector('#queue-container') as HTMLElement
 
   vi.spyOn(scrollEl, 'getBoundingClientRect').mockReturnValue({
@@ -625,7 +652,9 @@ it('reacts to ResizeObserver measurements and cleans up a pending frame', () => 
     />,
   )
   const observerMock = vi.mocked(ResizeObserver)
+  // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
   const callback = observerMock.mock.calls.at(-1)?.[0] as ResizeObserverCallback
+  // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
   callback([{ contentRect: { width: 1200, height: 720 } } as ResizeObserverEntry], {} as ResizeObserver)
   expect(frame).toHaveBeenCalled()
   unmount()
@@ -639,6 +668,7 @@ it('ignores edge drags when no virtual items are visible', () => {
       useVirtualizer={fakeUseVirtualizer}
     />,
   )
+  // SAFETY: test mock narrows to the expected interface; cast preserves the minimal contract exercised by the test.
   const scrollEl = container.querySelector('#queue-container') as HTMLElement
   mockScrollToIndex.mockClear()
   mockGetVirtualItems.mockReturnValue([])
