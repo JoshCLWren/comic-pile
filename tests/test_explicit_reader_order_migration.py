@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_plan import ContinuityPlan
+from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.issue import Issue
@@ -184,12 +185,24 @@ async def test_explicit_reader_order_migration_preserves_partial_order_without_l
     assert {node["ref_id"] for node in plan.nodes_json} == {
         issue.id for issue in issues
     }
+
     plan_rules = list(
         (
             await async_db.execute(
-                select(plan_rule)
-                for plan_rule in []
+                select(ContinuityRule)
+                .where(ContinuityRule.note == f"continuity-plan:{plan.id}")
+                .order_by(ContinuityRule.target_id)
             )
         )
-    ) if False else None
-    assert plan_rules is None
+        .scalars()
+        .all()
+    )
+    assert len(plan_rules) == 2
+    rules_by_target = {rule.target_id: rule for rule in plan_rules}
+    assert rules_by_target[issues[2].id].convergence_targets == [
+        {"type": "issue", "id": issues[0].id},
+        {"type": "issue", "id": issues[1].id},
+    ]
+    assert rules_by_target[issues[3].id].convergence_targets == [
+        {"type": "issue", "id": issues[2].id}
+    ]
