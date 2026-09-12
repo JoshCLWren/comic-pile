@@ -286,8 +286,15 @@ async def build_source_backed_reader_order_dry_run(
     for dependency in explicit_deps:
         source_issue = graph.issues.get(dependency.source_issue_id)
         target_issue = graph.issues.get(dependency.target_issue_id)
+        endpoints_owned = source_issue is not None and target_issue is not None
+        if not endpoints_owned:
+            errors.append(
+                f"classified reader-order dependency {dependency.id} has an "
+                "endpoint outside user ownership"
+            )
         live = (
-            source_issue is not None
+            endpoints_owned
+            and source_issue is not None
             and target_issue is not None
             and source_issue.status != "read"
             and target_issue.status != "read"
@@ -306,6 +313,7 @@ async def build_source_backed_reader_order_dry_run(
         explicit_semantics.append(
             {
                 **_dep(dependency),
+                "endpoints_owned": endpoints_owned,
                 "source_status": None if source_issue is None else source_issue.status,
                 "target_status": None if target_issue is None else target_issue.status,
                 "live": live,
