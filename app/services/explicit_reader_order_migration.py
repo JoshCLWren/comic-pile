@@ -16,7 +16,7 @@ from pathlib import Path
 import re
 from typing import Any, cast
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_plan import ContinuityPlan
@@ -356,8 +356,7 @@ async def build_explicit_reader_order_dry_run(
     for dependency in selected:
         source_issue = graph.issues.get(dependency.source_issue_id)
         target_issue = graph.issues.get(dependency.target_issue_id)
-        endpoints_owned = source_issue is not None and target_issue is not None
-        if not endpoints_owned:
+        if source_issue is None or target_issue is None:
             errors.append(
                 f"classified reader-order dependency {dependency.id} has an endpoint outside user ownership"
             )
@@ -405,17 +404,21 @@ async def build_explicit_reader_order_dry_run(
 
     explicit_classification_ids = set(by_id)
     related_ids = explicit_classification_ids | set(spec.preserved_dependency_ids)
-    related_dependencies = list(
-        (
-            await db.execute(
-                select(Dependency)
-                .where(Dependency.id.in_(related_ids))
-                .order_by(Dependency.id)
+    related_dependencies = (
+        list(
+            (
+                await db.execute(
+                    select(Dependency)
+                    .where(Dependency.id.in_(related_ids))
+                    .order_by(Dependency.id)
+                )
             )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .all()
-    ) if related_ids else []
+        if related_ids
+        else []
+    )
     preserved_standalone: list[Dependency] = []
     needs_review: list[Dependency] = []
     unselected_reader_order: list[Dependency] = []
@@ -451,20 +454,24 @@ async def build_explicit_reader_order_dry_run(
             f"{[dependency.id for dependency in unselected_reader_order]}"
         )
 
-    internal_dependencies = list(
-        (
-            await db.execute(
-                select(Dependency)
-                .where(
-                    Dependency.source_issue_id.in_(issue_ids),
-                    Dependency.target_issue_id.in_(issue_ids),
+    internal_dependencies = (
+        list(
+            (
+                await db.execute(
+                    select(Dependency)
+                    .where(
+                        Dependency.source_issue_id.in_(issue_ids),
+                        Dependency.target_issue_id.in_(issue_ids),
+                    )
+                    .order_by(Dependency.id)
                 )
-                .order_by(Dependency.id)
             )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .all()
-    ) if issue_ids else []
+        if issue_ids
+        else []
+    )
     unknown_internal: list[Dependency] = []
     generated_internal: list[Dependency] = []
     preserved_ids = {dependency.id for dependency in preserved_standalone}
@@ -490,20 +497,24 @@ async def build_explicit_reader_order_dry_run(
         )
 
     removal_ids = found_ids
-    removed_rules = list(
-        (
-            await db.execute(
-                select(ContinuityRule)
-                .where(
-                    ContinuityRule.user_id == spec.user_id,
-                    ContinuityRule.legacy_dependency_id.in_(removal_ids),
+    removed_rules = (
+        list(
+            (
+                await db.execute(
+                    select(ContinuityRule)
+                    .where(
+                        ContinuityRule.user_id == spec.user_id,
+                        ContinuityRule.legacy_dependency_id.in_(removal_ids),
+                    )
+                    .order_by(ContinuityRule.id)
                 )
-                .order_by(ContinuityRule.id)
             )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .all()
-    ) if removal_ids else []
+        if removal_ids
+        else []
+    )
     removed_rule_ids = {rule.id for rule in removed_rules}
 
     predecessors: dict[int, list[int]] = {}
@@ -551,23 +562,27 @@ async def build_explicit_reader_order_dry_run(
         errors.append("proposed Reading Plan does not exactly reproduce classified reader-order edges")
 
     target_ids = set(predecessors)
-    self_loop_conflicts = list(
-        (
-            await db.execute(
-                select(ContinuityRule)
-                .where(
-                    ContinuityRule.user_id == spec.user_id,
-                    ContinuityRule.source_type == "issue",
-                    ContinuityRule.target_type == "issue",
-                    ContinuityRule.source_id.in_(target_ids),
-                    ContinuityRule.source_id == ContinuityRule.target_id,
+    self_loop_conflicts = (
+        list(
+            (
+                await db.execute(
+                    select(ContinuityRule)
+                    .where(
+                        ContinuityRule.user_id == spec.user_id,
+                        ContinuityRule.source_type == "issue",
+                        ContinuityRule.target_type == "issue",
+                        ContinuityRule.source_id.in_(target_ids),
+                        ContinuityRule.source_id == ContinuityRule.target_id,
+                    )
+                    .order_by(ContinuityRule.id)
                 )
-                .order_by(ContinuityRule.id)
             )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .all()
-    ) if target_ids else []
+        if target_ids
+        else []
+    )
     self_loop_conflicts = [
         rule for rule in self_loop_conflicts if rule.id not in removed_rule_ids
     ]
@@ -576,22 +591,25 @@ async def build_explicit_reader_order_dry_run(
             f"planned convergence rules conflict with existing rules: {[rule.id for rule in self_loop_conflicts]}"
         )
 
-    factual = await _factual_snapshot(  # type: ignore[arg-type]
-        db,
-        spec=spec,
-        ordered_issue_ids=ordered_issue_ids,
-    ) if ordered_issue_ids and not any(
-        "outside user ownership" in error for error in errors
-    ) else {
-        "issues": [],
-        "threads": [],
-        "events": [],
-        "identities": [],
-        "issue_state_hash": None,
-        "thread_state_hash": None,
-        "event_state_hash": None,
-        "identity_state_hash": None,
-    }
+    ownership_error = any("outside user ownership" in error for error in errors)
+    factual = (
+        await _factual_snapshot(  # type: ignore[arg-type]
+            db,
+            spec=spec,
+            ordered_issue_ids=ordered_issue_ids,
+        )
+        if ordered_issue_ids and not ownership_error
+        else {
+            "issues": [],
+            "threads": [],
+            "events": [],
+            "identities": [],
+            "issue_state_hash": None,
+            "thread_state_hash": None,
+            "event_state_hash": None,
+            "identity_state_hash": None,
+        }
+    )
 
     affected = [
         thread
@@ -602,19 +620,23 @@ async def build_explicit_reader_order_dry_run(
     ]
     affected_ids = {thread.id for thread in affected}
     next_ids = {
-        cast(int, thread.next_unread_issue_id)
+        thread.next_unread_issue_id
         for thread in affected
         if thread.next_unread_issue_id is not None
     }
-    raw = list(
-        (
-            await db.execute(
-                select(Dependency).where(Dependency.target_issue_id.in_(next_ids))
+    raw = (
+        list(
+            (
+                await db.execute(
+                    select(Dependency).where(Dependency.target_issue_id.in_(next_ids))
+                )
             )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .all()
-    ) if next_ids else []
+        if next_ids
+        else []
+    )
     raw_by_target: dict[int, list[Dependency]] = {}
     for dependency in raw:
         raw_by_target.setdefault(dependency.target_issue_id, []).append(dependency)
@@ -829,7 +851,8 @@ async def apply_explicit_reader_order_migration(
         )
 
     expected = {
-        _stable_hash(rule) for rule in cast(list[dict[str, object]], snapshot["planned"]["rules"])
+        _stable_hash(rule)
+        for rule in cast(list[dict[str, object]], snapshot["planned"]["rules"])
     }
     actual = {
         _stable_hash(
