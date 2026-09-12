@@ -1,25 +1,25 @@
 import ReadingPlanAddMaterialImpl from './ReadingPlanAddMaterialImpl'
+import type { CBLAdoptionCommitResult } from '../services/api-cbl-sources'
 
 interface ReadingPlanAddMaterialProps {
+  planId: number
   planName: string
+  defaultOpen?: boolean
+  onCommitted?: (plan: CBLAdoptionCommitResult) => void
 }
 
-function currentPlanId(): number | null {
-  if (typeof window === 'undefined') return null
-  const match = window.location.pathname.match(/\/continuity-plans\/(\d+)/)
-  if (!match) return null
-  const value = Number(match[1])
-  return Number.isInteger(value) && value > 0 ? value : null
-}
-
-export default function ReadingPlanAddMaterial({ planName }: ReadingPlanAddMaterialProps) {
-  const planId = currentPlanId()
-  if (!planId) return null
+export default function ReadingPlanAddMaterial({
+  planId,
+  planName,
+  defaultOpen = false,
+  onCommitted,
+}: ReadingPlanAddMaterialProps) {
   return (
     <ReadingPlanAddMaterialImpl
       planId={planId}
       planName={planName}
-      onCommitted={() => window.location.reload()}
+      defaultOpen={defaultOpen}
+      onCommitted={onCommitted}
     />
   )
 }

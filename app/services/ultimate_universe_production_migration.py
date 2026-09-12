@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
 import json
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,6 +61,12 @@ class UltimateUniverseDryRunSpec:
     expected_content_hash: str
     expected_positions: int
     plan_name: str = "Ultimate Universe"
+
+
+class ReaderOrderMigrationSpec(Protocol):
+    """Minimum manifest shape required to snapshot protected reader facts."""
+
+    user_id: int
 
 
 PRODUCTION_ULTIMATE_UNIVERSE_SPEC = UltimateUniverseDryRunSpec(
@@ -228,7 +234,7 @@ def _rule_snapshot(rule: ContinuityRule) -> dict[str, object]:
 async def _factual_snapshot(
     db: AsyncSession,
     *,
-    spec: UltimateUniverseDryRunSpec,
+    spec: ReaderOrderMigrationSpec,
     ordered_issue_ids: list[int],
 ) -> dict[str, object]:
     """Capture reader facts that a future cutover must not change."""

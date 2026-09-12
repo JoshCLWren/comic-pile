@@ -125,8 +125,8 @@ describe('ReadingPlanAddMaterial', () => {
       },
     })
 
-    render(<ReadingPlanAddMaterial planName="B.P.R.D." />)
-    fireEvent.click(screen.getByRole('button', { name: 'Browse sources' }))
+    render(<ReadingPlanAddMaterial planId={77} planName="B.P.R.D." />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add from CBL' }))
 
     await waitFor(() => expect(mocks.discover).toHaveBeenCalledWith('B.P.R.D.'))
     fireEvent.click(await screen.findByRole('button', { name: /B\.P\.R\.D\. Plague of Frogs/i }))
@@ -142,8 +142,8 @@ describe('ReadingPlanAddMaterial', () => {
   it('shows an empty discovery result without inventing material', async () => {
     mocks.discover.mockResolvedValue([])
 
-    render(<ReadingPlanAddMaterial planName="B.P.R.D." />)
-    fireEvent.click(screen.getByRole('button', { name: 'Browse sources' }))
+    render(<ReadingPlanAddMaterial planId={77} planName="B.P.R.D." />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add from CBL' }))
 
     expect(await screen.findByText('No matching source lists found.')).toBeInTheDocument()
     expect(mocks.preview).not.toHaveBeenCalled()

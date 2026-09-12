@@ -49,6 +49,26 @@ def _to_response(plan: ContinuityPlan) -> ContinuityPlanResponse:
     )
 
 
+def _source_paths(plan: ContinuityPlan) -> list[str]:
+    """Return unique CBL source paths retained by plan nodes in source order."""
+    paths: list[str] = []
+    for node in plan.nodes_json or []:
+        placements = node.get("source_cbl_placements")
+        if isinstance(placements, list):
+            for placement in placements:
+                if not isinstance(placement, dict):
+                    continue
+                path = placement.get("source_path")
+                if isinstance(path, str) and path not in paths:
+                    paths.append(path)
+        source_paths = node.get("source_paths")
+        if isinstance(source_paths, (list, tuple)):
+            for path in source_paths:
+                if isinstance(path, str) and path not in paths:
+                    paths.append(path)
+    return paths
+
+
 async def _get_owned_plan(db: AsyncSession, user_id: int, plan_id: int) -> ContinuityPlan:
     """Load one plan without leaking another user's identifiers."""
     plan = (
@@ -83,6 +103,7 @@ async def list_continuity_plans(
             ordering_mode=plan.ordering_mode,
             lane_count=len(plan.lanes_json),
             step_count=len(plan.nodes_json),
+            source_paths=_source_paths(plan),
             updated_at=plan.updated_at,
         )
         for plan in ordered

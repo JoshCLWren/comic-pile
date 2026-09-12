@@ -16,27 +16,49 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.database import AsyncSessionLocal  # noqa: E402
-from app.services.explicit_reader_order_migration import (  # noqa: E402
+
+def _load_application_symbols():
+    """Import project modules after making direct script execution import-safe."""
+    from app.database import AsyncSessionLocal
+    from app.services.explicit_reader_order_migration import (
+        PRODUCTION_EXPLICIT_READER_ORDER_SPECS,
+        apply_explicit_reader_order_migration,
+    )
+    from app.services.reader_order_cutover import build_reader_order_cutover_audit
+    from app.services.reader_order_migration_coordinator import build_manifest_report
+    from app.services.source_backed_reader_order_migration import (
+        PRODUCTION_SOURCE_BACKED_SPECS,
+        apply_source_backed_reader_order_migration,
+    )
+    from app.services.ultimate_universe_production_migration import (
+        MigrationInvariantError,
+    )
+
+    return (
+        AsyncSessionLocal,
+        PRODUCTION_EXPLICIT_READER_ORDER_SPECS,
+        apply_explicit_reader_order_migration,
+        build_reader_order_cutover_audit,
+        build_manifest_report,
+        PRODUCTION_SOURCE_BACKED_SPECS,
+        apply_source_backed_reader_order_migration,
+        MigrationInvariantError,
+    )
+
+
+(
+    AsyncSessionLocal,
     PRODUCTION_EXPLICIT_READER_ORDER_SPECS,
-    ExplicitReaderOrderSpec,
     apply_explicit_reader_order_migration,
-    build_explicit_reader_order_dry_run,
-)
-from app.services.source_backed_reader_order_migration import (  # noqa: E402
-    PRODUCTION_ABSOLUTE_UNIVERSE_SPEC,
-    SourceBackedReaderOrderSpec,
+    build_reader_order_cutover_audit,
+    build_manifest_report,
+    PRODUCTION_SOURCE_BACKED_SPECS,
     apply_source_backed_reader_order_migration,
-    build_source_backed_reader_order_dry_run,
-)
-from app.services.ultimate_universe_production_migration import (  # noqa: E402
     MigrationInvariantError,
-)
+) = _load_application_symbols()
 
 CONFIRMATION = "STEP27-READER-ORDER"
-SOURCE_MANIFESTS: dict[str, SourceBackedReaderOrderSpec] = {
-    "absolute-universe": PRODUCTION_ABSOLUTE_UNIVERSE_SPEC,
-}
+SOURCE_MANIFESTS = PRODUCTION_SOURCE_BACKED_SPECS
 EXPLICIT_MANIFESTS = PRODUCTION_EXPLICIT_READER_ORDER_SPECS
 ALL_MANIFESTS = sorted({*SOURCE_MANIFESTS, *EXPLICIT_MANIFESTS})
 
@@ -83,48 +105,23 @@ def _require_confirmation(value: str | None) -> None:
         raise MigrationInvariantError(f"apply requires --confirm {CONFIRMATION}")
 
 
-def _status(report: dict[str, Any]) -> str:
-    """Return the Step 27 coordinator classification for one dry-run."""
-    if report.get("ok") is True:
-        return "clean"
-    errors = [str(error) for error in report.get("errors", [])]
-    if any("needs_review" in error for error in errors):
-        return "blocked-by-needs-review"
-    if any(
-        phrase in error
-        for error in errors
-        for phrase in (
-            "Roll eligibility would change",
-            "loses protection",
-            "does not exactly reproduce",
-        )
-    ):
-        return "behavior-mismatch"
-    return "blocked-by-identity"
-
-
 async def _build_report(manifest: str) -> dict[str, Any]:
     async with AsyncSessionLocal() as db:
-        if manifest in SOURCE_MANIFESTS:
-            report = await build_source_backed_reader_order_dry_run(
-                db,
-                SOURCE_MANIFESTS[manifest],
-            )
-        else:
-            report = await build_explicit_reader_order_dry_run(
-                db,
-                EXPLICIT_MANIFESTS[manifest],
-            )
+        report = await build_manifest_report(
+            db,
+            manifest=manifest,
+            source_manifests=SOURCE_MANIFESTS,
+            explicit_manifests=EXPLICIT_MANIFESTS,
+        )
         await db.rollback()
     return report
 
 
 async def _dry_run(manifest: str, output: Path) -> int:
     report = await _build_report(manifest)
-    report = {"status": _status(report), **report}
     _write_json(output, report)
     print(json.dumps(report, indent=2, sort_keys=True))
-    return 0 if report["ok"] is True else 2
+    return 0 if report["status"] in {"safe-to-migrate", "already-migrated"} else 2
 
 
 async def _batch_dry_run(
@@ -136,25 +133,53 @@ async def _batch_dry_run(
     rows: list[dict[str, Any]] = []
     for manifest in manifests:
         report = await _build_report(manifest)
-        status = _status(report)
-        payload = {"status": status, **report}
+        status = str(report["status"])
+        payload = report
         output = output_dir / f"{manifest}.json"
         _write_json(output, payload)
         rows.append(
             {
                 "manifest": manifest,
                 "status": status,
-                "ok": report.get("ok") is True,
+                "ok": status in {"safe-to-migrate", "already-migrated"},
                 "errors": report.get("errors", []),
                 "snapshot_token": report.get("snapshot_token"),
+                "standalone_prerequisite_count": len(
+                    report.get("preserved_standalone_dependencies", [])
+                ),
                 "output": str(output),
             }
         )
     summary = {
         "manifests": rows,
-        "clean": [row["manifest"] for row in rows if row["status"] == "clean"],
-        "blocked": [row["manifest"] for row in rows if row["status"] != "clean"],
+        "safe_to_migrate": [
+            row["manifest"] for row in rows if row["status"] == "safe-to-migrate"
+        ],
+        "blocked_by_identity_or_source": [
+            row["manifest"]
+            for row in rows
+            if row["status"] == "blocked-by-identity-or-source"
+        ],
+        "blocked_by_needs_review": [
+            row["manifest"]
+            for row in rows
+            if row["status"] == "blocked-by-needs-review"
+        ],
+        "behavior_mismatch": [
+            row["manifest"] for row in rows if row["status"] == "behavior-mismatch"
+        ],
+        "already_migrated": [
+            row["manifest"] for row in rows if row["status"] == "already-migrated"
+        ],
+        "standalone_prerequisite_state": {
+            row["manifest"]: row["standalone_prerequisite_count"] for row in rows
+        },
     }
+    summary["blocked"] = [
+        row["manifest"]
+        for row in rows
+        if row["status"] not in {"safe-to-migrate", "already-migrated"}
+    ]
     _write_json(summary_path, summary)
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0 if not summary["blocked"] else 2
@@ -205,6 +230,94 @@ async def _apply(
     return 0
 
 
+async def _batch_apply(
+    summary_path: Path,
+    receipt_path: Path,
+    confirm: str | None,
+) -> int:
+    """Apply every clean manifest from one exact batch dry-run transactionally."""
+    _require_confirmation(confirm)
+    summary = _read_json(summary_path)
+    raw_rows = summary.get("manifests")
+    if not isinstance(raw_rows, list):
+        raise MigrationInvariantError("batch summary has no manifest rows")
+
+    pending_receipt: Path | None = None
+    batch_receipt: dict[str, Any] | None = None
+    async with AsyncSessionLocal() as db:
+        try:
+            applied: list[dict[str, Any]] = []
+            skipped: list[dict[str, str]] = []
+            for raw_row in raw_rows:
+                if not isinstance(raw_row, dict):
+                    raise MigrationInvariantError("batch summary contains a malformed row")
+                manifest = str(raw_row.get("manifest") or "")
+                status = str(raw_row.get("status") or "")
+                if manifest not in ALL_MANIFESTS:
+                    raise MigrationInvariantError(f"unknown manifest in batch: {manifest!r}")
+                if status != "safe-to-migrate":
+                    skipped.append({"manifest": manifest, "status": status})
+                    continue
+
+                output = raw_row.get("output")
+                if not isinstance(output, str):
+                    raise MigrationInvariantError(
+                        f"safe manifest {manifest} has no snapshot path"
+                    )
+                snapshot = _read_json(Path(output))
+                if (
+                    snapshot.get("status") != "safe-to-migrate"
+                    or snapshot.get("snapshot_token") != raw_row.get("snapshot_token")
+                ):
+                    raise MigrationInvariantError(
+                        f"batch snapshot metadata changed for {manifest}"
+                    )
+                if manifest in SOURCE_MANIFESTS:
+                    result = await apply_source_backed_reader_order_migration(
+                        db,
+                        snapshot=snapshot,
+                        spec=SOURCE_MANIFESTS[manifest],
+                    )
+                else:
+                    result = await apply_explicit_reader_order_migration(
+                        db,
+                        snapshot=snapshot,
+                        spec=EXPLICIT_MANIFESTS[manifest],
+                    )
+                applied.append({"manifest": manifest, **result})
+
+            cutover = await build_reader_order_cutover_audit(db, user_id=1)
+            batch_receipt = {
+                "source_summary": str(summary_path),
+                "applied": applied,
+                "skipped": skipped,
+                "cutover_audit": cutover,
+                "runtime_switch_instruction": (
+                    "Set LEGACY_DEPENDENCY_BLOCKING_ENABLED=false only when "
+                    "cutover_audit.runtime_cutover_safe is true."
+                ),
+            }
+            pending_receipt = _stage_durable_json(receipt_path, batch_receipt)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            if pending_receipt is not None:
+                pending_receipt.unlink(missing_ok=True)
+            raise
+
+    if pending_receipt is None or batch_receipt is None:
+        raise MigrationInvariantError("batch committed without a staged receipt")
+    try:
+        pending_receipt.replace(receipt_path)
+    except OSError as exc:
+        raise MigrationInvariantError(
+            "batch committed, but the durable receipt could not be published; "
+            f"recovery receipt remains at {pending_receipt}"
+        ) from exc
+    print(json.dumps(batch_receipt, indent=2, sort_keys=True))
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Step 27 reader-order migration")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -215,14 +328,14 @@ def _parser() -> argparse.ArgumentParser:
 
     batch = subparsers.add_parser(
         "batch-dry-run",
-        help="read-only preflight for the explicit Step 14 migration batch",
+        help="read-only preflight for every registered Step 27 manifest",
     )
     batch.add_argument(
         "--manifest",
         action="append",
-        choices=sorted(EXPLICIT_MANIFESTS),
+        choices=ALL_MANIFESTS,
         dest="manifests",
-        help="manifest to include; repeat as needed; defaults to every explicit manifest",
+        help="manifest to include; repeat as needed; defaults to every manifest",
     )
     batch.add_argument("--output-dir", type=Path, required=True)
     batch.add_argument("--summary", type=Path, required=True)
@@ -235,6 +348,21 @@ def _parser() -> argparse.ArgumentParser:
     apply_parser.add_argument("--snapshot", type=Path, required=True)
     apply_parser.add_argument("--receipt", type=Path, required=True)
     apply_parser.add_argument("--confirm")
+
+    batch_apply = subparsers.add_parser(
+        "batch-apply",
+        help="apply every safe snapshot from an exact batch summary in one transaction",
+    )
+    batch_apply.add_argument("--summary", type=Path, required=True)
+    batch_apply.add_argument("--receipt", type=Path, required=True)
+    batch_apply.add_argument("--confirm")
+
+    cutover = subparsers.add_parser(
+        "cutover-audit",
+        help="read-only release gate for raw Dependency Roll blocking",
+    )
+    cutover.add_argument("--user-id", type=int, default=1)
+    cutover.add_argument("--output", type=Path, required=True)
     return parser
 
 
@@ -243,7 +371,7 @@ async def _main() -> int:
     if args.command == "dry-run":
         return await _dry_run(args.manifest, args.output)
     if args.command == "batch-dry-run":
-        manifests = args.manifests or sorted(EXPLICIT_MANIFESTS)
+        manifests = args.manifests or ALL_MANIFESTS
         return await _batch_dry_run(manifests, args.output_dir, args.summary)
     if args.command == "apply":
         return await _apply(
@@ -252,6 +380,18 @@ async def _main() -> int:
             args.receipt,
             args.confirm,
         )
+    if args.command == "batch-apply":
+        return await _batch_apply(args.summary, args.receipt, args.confirm)
+    if args.command == "cutover-audit":
+        async with AsyncSessionLocal() as db:
+            report = await build_reader_order_cutover_audit(
+                db,
+                user_id=args.user_id,
+            )
+            await db.rollback()
+        _write_json(args.output, report)
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return 0 if report["runtime_cutover_safe"] is True else 2
     raise AssertionError(f"unhandled command {args.command}")
 
 

@@ -1,4 +1,5 @@
 import api from './api'
+import type { ContinuityPlan } from './api-continuity-plans'
 
 export interface CBLSourceListDiscoveryItem {
   id: number
@@ -65,15 +66,14 @@ export interface CBLAdoptionPreview {
   }
 }
 
-export interface CBLAdoptionCommitResult {
-  id: number
+export interface CBLAdoptionCommitResult extends ContinuityPlan {
   reused_positions: number[]
   created_positions: number[]
   excluded_positions: number[]
   unresolved_positions: number[]
 }
 
-interface CBLAdoptionPlanChoices {
+export interface CBLAdoptionPlanChoices {
   series_decisions: Record<string, boolean>
   entry_decisions: Record<string, boolean>
 }
@@ -91,19 +91,36 @@ export const cblSourcesApi = {
     listId: number,
     planId: number,
     preview: CBLAdoptionPreview,
-    _choices: CBLAdoptionPlanChoices,
+    choices: CBLAdoptionPlanChoices,
   ) => {
-    const entryDecisions = Object.fromEntries(
-      preview.entries
-        .filter((entry) => entry.adoption_class === 'missing_importable')
-        .map((entry) => [entry.cbl_position, entry.adopted ? 'include' : 'exclude']),
+    const entriesById = new Map(
+      preview.entries.map((entry) => [String(entry.cbl_entry_id), entry]),
+    )
+    const seriesByGroup = new Map(
+      preview.entries.map((entry) => [entry.series_group_id, entry.series_name]),
+    )
+    const seriesDecisions = Object.entries(choices.series_decisions).flatMap(
+      ([groupId, include]) => {
+        const seriesName = seriesByGroup.get(groupId)
+        return seriesName
+          ? [{ series_name: seriesName, decision: include ? 'include' : 'exclude' }]
+          : []
+      },
+    )
+    const seriesOverrides = Object.entries(choices.entry_decisions).flatMap(
+      ([entryId, include]) => {
+        const entry = entriesById.get(entryId)
+        return entry
+          ? [{ cbl_position: entry.cbl_position, decision: include ? 'include' : 'exclude' }]
+          : []
+      },
     )
     return api.post<CBLAdoptionCommitResult>(
       `/v1/cbl/${listId}/reading-plans/${planId}/adoption-commit`,
       {
-        entry_decisions: entryDecisions,
-        series_decisions: [],
-        series_overrides: [],
+        entry_decisions: {},
+        series_decisions: seriesDecisions,
+        series_overrides: seriesOverrides,
         content_hash: preview.source.content_hash,
         revision_sha: preview.source.revision_sha,
       },

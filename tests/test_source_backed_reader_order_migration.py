@@ -20,6 +20,7 @@ from app.services.source_backed_reader_order_migration import (
     apply_source_backed_reader_order_migration,
     build_source_backed_reader_order_dry_run,
 )
+from app.services.ultimate_universe_production_migration import MigrationInvariantError
 from comic_pile.dependencies import refresh_user_blocked_status
 from tests.conftest import get_or_create_user_async
 
@@ -194,6 +195,8 @@ async def test_source_backed_migration_accepts_group_superset_and_replaces_live_
     )
     snapshot = await build_source_backed_reader_order_dry_run(async_db, spec)
     assert snapshot["ok"] is True, snapshot["errors"]
+    repeated_snapshot = await build_source_backed_reader_order_dry_run(async_db, spec)
+    assert repeated_snapshot["snapshot_token"] == snapshot["snapshot_token"]
     assert snapshot["dependency_group"]["membership_count"] == 5
     assert snapshot["dependency_group"]["extra_issue_ids"] == [extra_issue.id]
     assert snapshot["explicit_reader_order_dependencies"][0]["live"] is True
@@ -212,6 +215,25 @@ async def test_source_backed_migration_accepts_group_superset_and_replaces_live_
         .select_from(DependencyGroupMembership)
         .where(DependencyGroupMembership.group_id == group.id)
     )
+    source_list.revision_sha = "c" * 40
+    await async_db.flush()
+    with pytest.raises(MigrationInvariantError, match="live state changed"):
+        await apply_source_backed_reader_order_migration(
+            async_db,
+            snapshot=snapshot,
+            spec=spec,
+        )
+    await async_db.rollback()
+    for persisted in (
+        source_list,
+        group,
+        source_dependency,
+        explicit_dependency,
+        extra_issue,
+        *issues,
+    ):
+        await async_db.refresh(persisted)
+
     receipt = await apply_source_backed_reader_order_migration(
         async_db,
         snapshot=snapshot,

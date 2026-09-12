@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, cast
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +11,8 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.cbl_adoption import CBLAdoptionCommitRequest, CBLAdoptionCommitResponse
-from app.schemas.continuity_plan import ContinuityPlanLane, ContinuityPlanNode, PlanNodeType
+from app.schemas.continuity_plan import ContinuityPlanLane, ContinuityPlanNode
+from app.schemas.shared_types import SourceBackedDecision
 from app.services.cbl_plan_adoption import (
     AdoptionCommitError,
     AdoptionCommitResult,
@@ -33,26 +34,7 @@ def _response(commit: AdoptionCommitResult) -> CBLAdoptionCommitResponse:
         )
 
     def node(value: dict[str, object]) -> ContinuityPlanNode:
-        placements = value.get("source_cbl_placements")
-        source_paths: tuple[str, ...] | None = None
-        if isinstance(placements, list):
-            paths = [
-                str(item["source_path"])
-                for item in placements
-                if isinstance(item, dict) and "source_path" in item
-            ]
-            if paths:
-                source_paths = tuple(paths)
-        return ContinuityPlanNode(
-            id=str(value["id"]),
-            node_type=cast(PlanNodeType, str(value["node_type"])),
-            ref_id=int(value["ref_id"]),
-            lane_id=str(value["lane_id"]),
-            position=int(value["position"]),
-            is_checkpoint=bool(value.get("is_checkpoint", False)),
-            convergence_gate=list(value.get("convergence_gate") or []),
-            source_paths=source_paths,
-        )
+        return ContinuityPlanNode.model_validate(value)
 
     return CBLAdoptionCommitResponse(
         id=plan.id,
@@ -70,7 +52,9 @@ def _response(commit: AdoptionCommitResult) -> CBLAdoptionCommitResponse:
     )
 
 
-def _decisions(request: CBLAdoptionCommitRequest) -> tuple[dict[str, object], dict[int, object]]:
+def _decisions(
+    request: CBLAdoptionCommitRequest,
+) -> tuple[dict[str, SourceBackedDecision], dict[int, SourceBackedDecision]]:
     """Normalize request decisions for the service boundary."""
     return (
         {item.series_name: item.decision for item in request.series_decisions},
@@ -100,8 +84,8 @@ async def api_targeted_cbl_adoption_commit(
             plan_id=plan_id,
             list_id=list_id,
             entry_decisions=request.entry_decisions,
-            series_decisions=series_decisions,  # type: ignore[arg-type]
-            series_overrides=series_overrides,  # type: ignore[arg-type]
+            series_decisions=series_decisions,
+            series_overrides=series_overrides,
             client_content_hash=request.content_hash,
             client_revision_sha=request.revision_sha,
         )
@@ -132,8 +116,8 @@ async def api_cbl_adoption_commit(
             user_id=current_user.id,
             list_id=list_id,
             entry_decisions=request.entry_decisions,
-            series_decisions=series_decisions,  # type: ignore[arg-type]
-            series_overrides=series_overrides,  # type: ignore[arg-type]
+            series_decisions=series_decisions,
+            series_overrides=series_overrides,
             client_content_hash=request.content_hash,
             client_revision_sha=request.revision_sha,
         )

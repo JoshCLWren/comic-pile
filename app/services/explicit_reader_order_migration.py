@@ -42,6 +42,7 @@ from app.services.ultimate_universe_production_migration import (
 )
 from comic_pile.dependencies import (
     _get_blocked_thread_ids_uncached,
+    _invalidate_continuity_snapshot,
     refresh_user_blocked_status,
 )
 from comic_pile.queue import get_roll_pool
@@ -146,6 +147,62 @@ PRODUCTION_EXPLICIT_READER_ORDER_SPECS: dict[str, ExplicitReaderOrderSpec] = {
         plan_name="Hickman Marvel - Stage 1: Fantastic Four / FF",
         classification_family_keys=("hickman_marvel_stage_1",),
     ),
+    "fourth-world": ExplicitReaderOrderSpec(
+        user_id=1,
+        dependency_group_ids=(13,),
+        expected_group_names=("Fourth World / Mister Miracle",),
+        plan_name="Fourth World / Mister Miracle",
+        classification_family_keys=("fourth_world_reader_order",),
+    ),
+    "black-panther-priest": ExplicitReaderOrderSpec(
+        user_id=1,
+        dependency_group_ids=(17, 190),
+        expected_group_names=(
+            "Black Panther: Priest Crossovers",
+            "Black Panther by Christopher Priest",
+        ),
+        plan_name="Black Panther by Christopher Priest",
+        classification_family_keys=("black_panther_priest_collected_placement",),
+    ),
+    "doctor-strange-epic-vol-10": ExplicitReaderOrderSpec(
+        user_id=1,
+        dependency_group_ids=(),
+        expected_group_names=(),
+        plan_name="Doctor Strange Epic Collection Vol. 10: Infinity War",
+        classification_family_keys=("doctor_strange_epic_vol_10",),
+    ),
+    "starman-compendiums": ExplicitReaderOrderSpec(
+        user_id=1,
+        dependency_group_ids=(),
+        expected_group_names=(),
+        plan_name="Starman Compendiums 1-2",
+        classification_family_keys=(
+            "starman_legacy_order",
+            "starman_compendium_order",
+            "starman_compendium_stitches",
+        ),
+    ),
+    "starman-jsa-bridge": ExplicitReaderOrderSpec(
+        user_id=1,
+        dependency_group_ids=(),
+        expected_group_names=(),
+        plan_name="JSA: Robinson / Goyer / Johns",
+        classification_family_keys=("starman_jsa_bridge",),
+    ),
+    "majestic-recovery": ExplicitReaderOrderSpec(
+        user_id=1,
+        dependency_group_ids=(),
+        expected_group_names=(),
+        plan_name="Strange New Visitor / Majestic",
+        classification_family_keys=("majestic_recovery_reader_order",),
+    ),
+    "nova-annual": ExplicitReaderOrderSpec(
+        user_id=1,
+        dependency_group_ids=(),
+        expected_group_names=(),
+        plan_name="Nova (2007) Annual Placement",
+        classification_family_keys=("nova_annual_reader_placement",),
+    ),
 }
 
 
@@ -194,6 +251,11 @@ def _generated_reader_order_patterns(index: dict[str, Any]) -> tuple[re.Pattern[
         raw = cast(dict[str, Any], lookup[key]).get("note_regex")
         if raw:
             patterns.append(re.compile(str(raw)))
+    temporary_note = cast(dict[str, Any], lookup["14B_temporary_ultimate"]).get(
+        "note_equals"
+    )
+    if temporary_note:
+        patterns.append(re.compile(f"^{re.escape(str(temporary_note))}$"))
     return tuple(patterns)
 
 
@@ -277,6 +339,7 @@ async def build_explicit_reader_order_dry_run(
     spec: ExplicitReaderOrderSpec,
 ) -> dict[str, Any]:
     """Build a deterministic read-only snapshot for one Step 14 family manifest."""
+    _invalidate_continuity_snapshot(spec.user_id, db)
     errors: list[str] = []
     index = _load_step14_index()
     by_id, by_family = _explicit_classifications(index)
@@ -593,7 +656,7 @@ async def build_explicit_reader_order_dry_run(
 
     ownership_error = any("outside user ownership" in error for error in errors)
     factual = (
-        await _factual_snapshot(  # type: ignore[arg-type]
+        await _factual_snapshot(
             db,
             spec=spec,
             ordered_issue_ids=ordered_issue_ids,
@@ -899,7 +962,7 @@ async def apply_explicit_reader_order_migration(
             )
 
     issue_ids = [int(cast(int, node["ref_id"])) for node in payload["nodes"]]
-    factual = await _factual_snapshot(  # type: ignore[arg-type]
+    factual = await _factual_snapshot(
         db,
         spec=spec,
         ordered_issue_ids=issue_ids,

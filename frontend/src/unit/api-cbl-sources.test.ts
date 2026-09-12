@@ -81,9 +81,9 @@ describe('cblSourcesApi.commit', () => {
     })
   })
 
-  it('targets the selected Reading Plan and maps reviewed missing entries', async () => {
+  it('targets the selected Reading Plan and maps series choices plus entry overrides', async () => {
     const result = await cblSourcesApi.commit(42, 77, reviewedPreview, {
-      series_decisions: {},
+      series_decisions: { bprd: false },
       entry_decisions: { '102': true, '103': false },
     })
 
@@ -97,9 +97,12 @@ describe('cblSourcesApi.commit', () => {
     expect(api.post).toHaveBeenCalledWith(
       '/v1/cbl/42/reading-plans/77/adoption-commit',
       {
-        entry_decisions: { 2: 'include', 3: 'exclude' },
-        series_decisions: [],
-        series_overrides: [],
+        entry_decisions: {},
+        series_decisions: [{ series_name: 'B.P.R.D.', decision: 'exclude' }],
+        series_overrides: [
+          { cbl_position: 2, decision: 'include' },
+          { cbl_position: 3, decision: 'exclude' },
+        ],
         content_hash: 'hash-42',
         revision_sha: 'abcdef1234567890',
       },

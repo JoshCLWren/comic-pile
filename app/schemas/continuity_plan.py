@@ -186,6 +186,7 @@ class ContinuityPlanListItem(BaseModel):
     ordering_mode: PlanOrderingMode
     lane_count: int
     step_count: int
+    source_paths: list[str] = Field(default_factory=list)
     updated_at: datetime
 
 
