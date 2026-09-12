@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import Issue, Session as SessionModel, Thread, User
+from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.external_identity import (
     ExternalIdentity,
     IssueExternalIdentityMapping,
@@ -233,6 +234,142 @@ async def create_test_issue_identity(
         "issue_ids": affected_ids,
         "series_name": series_name,
         "series_id": series_id,
+    }
+
+
+@router.post("/cbl-source")
+async def create_test_cbl_source(
+    payload: dict[str, object],
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, object]:
+    """Seed one discoverable CBL source list for browser golden-path coverage.
+
+    Entries may reference owned issues (existing) or ComicVine identities that are
+    not mapped to any owned issue (missing_importable). This endpoint never creates
+    production migration state.
+    """
+    await _require_test_environment()
+
+    name = str(payload.get("name") or "Fixture CBL Source").strip() or "Fixture CBL Source"
+    source_path = str(payload.get("source_path") or f"Fixtures/{name}.cbl")
+    content_hash = str(payload.get("content_hash") or f"fixture-{current_user.id}-{name}")
+    revision_sha = str(payload.get("revision_sha") or "fixture-revision")
+    repository = str(
+        payload.get("repository")
+        or f"JoshCLWren/CBL-ReadingLists-fixture-{current_user.id}-{datetime.now(UTC).timestamp()}"
+    )
+    raw_entries = payload.get("entries")
+    if not isinstance(raw_entries, list) or not raw_entries:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide a non-empty entries list",
+        )
+
+    source = CBLSource(
+        repository=repository,
+        revision_sha=revision_sha,
+        synced_at=datetime.now(UTC),
+    )
+    db.add(source)
+    await db.flush()
+    source_list = CBLSourceList(
+        source_id=source.id,
+        source_path=source_path,
+        name=name,
+        declared_issue_count=len(raw_entries),
+        content_hash=content_hash,
+        revision_sha=revision_sha,
+        active=True,
+    )
+    db.add(source_list)
+    await db.flush()
+
+    created_entries: list[dict[str, object]] = []
+    for index, raw in enumerate(raw_entries, start=1):
+        if not isinstance(raw, dict):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"entries[{index - 1}] must be an object",
+            )
+        position = int(raw.get("position") or index)
+        series_name = str(raw.get("series_name") or f"Fixture Series {position}")
+        issue_number = str(raw.get("issue_number") or "1")
+        volume_year_raw = raw.get("volume_year")
+        volume_year = int(volume_year_raw) if volume_year_raw is not None else None
+        issue_id_raw = raw.get("issue_id")
+        comicvine_id = str(
+            raw.get("comicvine_issue_id") or f"4000-fixture-{current_user.id}-{position}"
+        )
+
+        identity = ExternalIdentity(
+            provider="comicvine",
+            entity_type="issue",
+            external_id=comicvine_id,
+            metadata_json={
+                "volume": {
+                    "name": series_name,
+                    "start_year": volume_year,
+                }
+            },
+        )
+        db.add(identity)
+        await db.flush()
+
+        if issue_id_raw is not None:
+            issue = (
+                await db.execute(select(Issue).where(Issue.id == int(issue_id_raw)))
+            ).scalar_one_or_none()
+            if issue is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Issue {issue_id_raw} not found",
+                )
+            owner = (
+                await db.execute(select(Thread).where(Thread.id == issue.thread_id))
+            ).scalar_one_or_none()
+            if owner is None or owner.user_id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Issue {issue_id_raw} not found",
+                )
+            db.add(
+                IssueExternalIdentityMapping(
+                    issue_id=issue.id,
+                    external_identity_id=identity.id,
+                    status="confirmed",
+                    evidence_source="e2e-fixture",
+                )
+            )
+
+        db.add(
+            CBLSourceEntry(
+                list_id=source_list.id,
+                position=position,
+                series_name=series_name,
+                issue_number=issue_number,
+                volume_year=volume_year,
+                external_issue_identity_id=identity.id,
+            )
+        )
+        created_entries.append(
+            {
+                "position": position,
+                "series_name": series_name,
+                "issue_number": issue_number,
+                "comicvine_issue_id": comicvine_id,
+                "issue_id": int(issue_id_raw) if issue_id_raw is not None else None,
+            }
+        )
+
+    await db.commit()
+    return {
+        "id": source_list.id,
+        "name": source_list.name,
+        "source_path": source_list.source_path,
+        "content_hash": source_list.content_hash,
+        "revision_sha": source_list.revision_sha,
+        "entries": created_entries,
     }
 
 

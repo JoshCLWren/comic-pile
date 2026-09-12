@@ -12,6 +12,8 @@
 - Starting `main`: `ade255f207d816f30ddd25da9ce32c8c91ac7328`
 - Production was **not** mutated during this work.
 - This checkpoint is progress, not a claim that the feature is shipped.
+- Runtime switch `LEGACY_DEPENDENCY_BLOCKING_ENABLED` remains enabled until the cutover
+  audit proves: no active reader project requires a legacy `reading_plan_order` Dependency.
 
 ## Frozen architecture
 
@@ -42,39 +44,36 @@
       unresolved-item blocking, commit results, and canonical query-cache updates.
 - [x] Preserved CBL provenance/reader metadata when a plan is edited and saved.
 - [x] Replaced frontend implementation-first copy with Reading Plan product language.
+- [x] Coordinator/batch status and receipt edge-case tests.
+- [x] Explicit + source-backed `needs_review` intersection refusal regressions.
+- [x] Confirmed legacy Reading Order import remains on Step 23B / `from-reading-order`, not the
+      Step 27 Dependency-debris batch path.
+- [x] Audited and fixed `get_blocking_explanations` / batch / `:getBlockingInfo` to use continuity
+      blockers when the legacy switch is disabled (legacy rows only while the switch stays on).
+- [x] Integrated backend golden path for missing-comic materialization, replay/idempotency,
+      canonical reload/provenance, Roll eligibility, and no dependency-group execution state.
+- [x] Focused Chromium Playwright coverage for index → create plan → CBL discovery → series
+      choice → individual override → commit → canonical result (plus `/api/test/cbl-source` seed).
 
 ## Validation completed for this checkpoint
 
-- [x] Focused backend migration/cutover/API tests: 15 passed.
-- [x] Focused frontend Reading Plan/CBL tests: 73 passed.
-- [x] Full-repo `ruff check .` and `ty check --error-on-warning` passed.
-- [x] Frontend typecheck passed.
-- [x] Frontend lint passed with eight existing warnings and no errors.
-- [x] Frontend production build passed.
+- [x] Focused backend migration/cutover/API tests: 15 passed (prior checkpoint).
+- [x] Focused frontend Reading Plan/CBL tests: 73 passed (prior checkpoint).
+- [x] Full-repo `ruff check .` and `ty check --error-on-warning` passed (this turn).
+- [x] Frontend typecheck passed (this turn).
+- [x] Frontend lint passed with eight existing warnings and no errors (this turn).
+- [x] Frontend production build passed (this turn).
+- [x] Focused pytest for coordinator / blocking / CBL golden-path suites (this turn).
+- [x] `cd frontend && pnpm test` passed (this turn).
+- [x] Focused Chromium Playwright CBL golden-path spec passed against local TEST_ENVIRONMENT API.
 
-## Remaining implementation and verification
+## Remaining production cutover (operator-gated)
 
-- [ ] Add coordinator/batch status and receipt edge-case tests.
-- [ ] Add an explicit regression for a `needs_review` classification intersecting a migration.
-- [ ] Confirm legacy Reading Order compatibility/import state is handled by the one-shot batch path;
-      do not replace full legacy reader ordering with endpoint-only partial plans.
-- [ ] Audit `get_blocking_explanations` and callers for behavior after the legacy switch is disabled.
-- [ ] Extend the integrated backend golden path for missing-comic materialization, replay/idempotency,
-      canonical reload/provenance, Roll eligibility, and absence of dependency-group execution state.
-- [ ] Add focused Chromium Playwright coverage for index → open/create plan → CBL discovery →
-      series choice → individual override → commit → canonical result.
-- [x] Run `bash scripts/install-git-hooks.sh` before the Python commit.
-- [x] Run `bash scripts/check-python-ci-lint.sh` after the final Python edit.
-- [ ] Run focused pytest suites, then the full Python test suite without skipping failures.
-- [x] Run `cd frontend && pnpm run lint && pnpm run typecheck`.
-- [x] Run `cd frontend && pnpm run build`.
-- [ ] Run `cd frontend && pnpm test`.
-- [ ] Build before running focused Chromium Playwright coverage.
 - [ ] Run the batch dry-run against the real production snapshot using read-only access.
 - [ ] Do not apply the production batch without explicit user authorization.
 - [ ] Prove the release condition before disabling legacy runtime blocking globally:
       no active reader project requires a legacy `reading_plan_order` Dependency.
-- [ ] Reconcile issue/PR factory labels, push final work, and report exact production blockers.
+- [ ] Reconcile issue/PR factory labels after push and report exact production blockers.
 - [ ] Delete this temporary file after the feature and production cutover are verified.
 
 ## Useful commands
@@ -85,12 +84,17 @@ bash scripts/install-git-hooks.sh
 bash scripts/check-python-ci-lint.sh
 uv run pytest -o addopts='' \
   tests/test_reader_order_cutover.py \
+  tests/test_reader_order_migration_coordinator.py \
+  tests/test_blocking_explanations_legacy_cutover.py \
   tests/test_explicit_reader_order_migration.py \
   tests/test_source_backed_reader_order_migration.py \
   tests/test_reader_order_manifest_registry.py \
+  tests/test_reading_plan_cbl_integrated_golden_path.py \
+  tests/test_reader_workflow_legacy_order_compatibility.py \
   tests/test_canonical_reading_plan_1619.py -q
 uv run python scripts/reader_order_migration.py --help
 cd frontend && pnpm run lint && pnpm run typecheck && pnpm run build && pnpm test
+cd frontend && pnpm exec playwright test src/test/reading-plan-cbl-golden-path.spec.ts --project=chromium
 ```
 
 ## Known cautions
@@ -101,3 +105,5 @@ cd frontend && pnpm run lint && pnpm run typecheck && pnpm run build && pnpm tes
 - The historical audit found active legacy reader-order state and `needs_review` rows, but that is
   not a current production observation. The production batch dry-run is the source of truth.
 - The runtime switch must remain enabled until the cutover audit proves the release condition.
+- Prior push of `fa2235f4f` was interrupted mid pre-push suite; remote may still lag local HEAD
+  until a complete hook-backed push succeeds.

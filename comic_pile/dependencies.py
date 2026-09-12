@@ -96,8 +96,28 @@ def format_blocking_reason(dependency: BlockingDependency) -> str:
     return build_blocking_explanation(dependency.issue_number, dependency.thread_title)
 
 
-async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[BlockingDependency]:
-    """Human-readable reasons a thread is blocked."""
+def _merge_blocking_explanations(
+    *groups: list[BlockingDependency],
+) -> list[BlockingDependency]:
+    """Deduplicate blocker rows while preserving first-seen order."""
+    merged: list[BlockingDependency] = []
+    seen: set[tuple[int, str]] = set()
+    for group in groups:
+        for dependency in group:
+            key = (dependency.thread_id, dependency.issue_number)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(dependency)
+    return merged
+
+
+async def _legacy_blocking_explanations(
+    thread_id: int,
+    user_id: int,
+    db: AsyncSession,
+) -> list[BlockingDependency]:
+    """Return unread raw-Dependency blockers for one thread."""
     source_issue = Issue.__table__.alias("source_issue")
     next_unread_issue = Issue.__table__.alias("next_unread_issue")
     source_thread = Thread.__table__.alias("source_thread")
@@ -126,20 +146,21 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
         .distinct()
     )
     return [
-        BlockingDependency(thread_id=thread_id_val, thread_title=thread_title, issue_number=str(issue_number))
+        BlockingDependency(
+            thread_id=thread_id_val,
+            thread_title=thread_title,
+            issue_number=str(issue_number),
+        )
         for thread_id_val, thread_title, _issue_id, issue_number in issue_result.all()
     ]
 
 
-async def get_blocking_explanations_batch(
+async def _legacy_blocking_explanations_batch(
     thread_ids: list[int],
     user_id: int,
     db: AsyncSession,
 ) -> dict[int, list[BlockingDependency]]:
-    """Human-readable blocking reasons for multiple threads in one query."""
-    if not thread_ids:
-        return {}
-
+    """Return unread raw-Dependency blockers for many threads."""
     source_issue = Issue.__table__.alias("source_issue")
     next_unread_issue = Issue.__table__.alias("next_unread_issue")
     source_thread = Thread.__table__.alias("source_thread")
@@ -170,9 +191,130 @@ async def get_blocking_explanations_batch(
     reasons_map: dict[int, list[BlockingDependency]] = {}
     for target_tid, src_tid, src_title, _src_iid, src_issue_num in result.all():
         reasons_map.setdefault(target_tid, []).append(
-            BlockingDependency(thread_id=src_tid, thread_title=src_title, issue_number=str(src_issue_num))
+            BlockingDependency(
+                thread_id=src_tid,
+                thread_title=src_title,
+                issue_number=str(src_issue_num),
+            )
         )
     return reasons_map
+
+
+async def _continuity_blocking_explanations(
+    thread_id: int,
+    user_id: int,
+    db: AsyncSession,
+) -> list[BlockingDependency]:
+    """Convert continuity-graph blockers into shared reader-facing explanations."""
+    from app.services.continuity_graph import issue_readiness, load_snapshot
+
+    _invalidate_continuity_snapshot(user_id, db)
+    snapshot = await load_snapshot(db, user_id)
+    thread = snapshot.threads.get(thread_id)
+    if thread is None or thread.next_unread_issue_id is None:
+        return []
+
+    reasons: list[BlockingDependency] = []
+    seen: set[tuple[int, str]] = set()
+    for blocker in issue_readiness(thread.next_unread_issue_id, snapshot):
+        for detail in blocker.unread_issue_details:
+            issue = snapshot.issues.get(detail.issue_id)
+            if issue is None:
+                continue
+            source_thread = snapshot.threads.get(issue.thread_id)
+            if source_thread is None:
+                continue
+            key = (source_thread.id, str(issue.issue_number))
+            if key in seen:
+                continue
+            seen.add(key)
+            reasons.append(
+                BlockingDependency(
+                    thread_id=source_thread.id,
+                    thread_title=source_thread.title,
+                    issue_number=str(issue.issue_number),
+                )
+            )
+    return reasons
+
+
+async def _continuity_blocking_explanations_batch(
+    thread_ids: list[int],
+    user_id: int,
+    db: AsyncSession,
+) -> dict[int, list[BlockingDependency]]:
+    """Convert continuity-graph blockers for many threads in one snapshot load."""
+    from app.services.continuity_graph import issue_readiness, load_snapshot
+
+    _invalidate_continuity_snapshot(user_id, db)
+    snapshot = await load_snapshot(db, user_id)
+    reasons_map: dict[int, list[BlockingDependency]] = {}
+    for thread_id in thread_ids:
+        thread = snapshot.threads.get(thread_id)
+        if thread is None or thread.next_unread_issue_id is None:
+            continue
+        reasons: list[BlockingDependency] = []
+        seen: set[tuple[int, str]] = set()
+        for blocker in issue_readiness(thread.next_unread_issue_id, snapshot):
+            for detail in blocker.unread_issue_details:
+                issue = snapshot.issues.get(detail.issue_id)
+                if issue is None:
+                    continue
+                source_thread = snapshot.threads.get(issue.thread_id)
+                if source_thread is None:
+                    continue
+                key = (source_thread.id, str(issue.issue_number))
+                if key in seen:
+                    continue
+                seen.add(key)
+                reasons.append(
+                    BlockingDependency(
+                        thread_id=source_thread.id,
+                        thread_title=source_thread.title,
+                        issue_number=str(issue.issue_number),
+                    )
+                )
+        if reasons:
+            reasons_map[thread_id] = reasons
+    return reasons_map
+
+
+async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[BlockingDependency]:
+    """Human-readable reasons a thread is blocked.
+
+    Continuity-rule blockers are always included so reader-facing copy stays
+    accurate after the raw-Dependency Roll switch is disabled. Legacy
+    Dependency rows are included only while
+    ``LEGACY_DEPENDENCY_BLOCKING_ENABLED`` remains true.
+    """
+    continuity = await _continuity_blocking_explanations(thread_id, user_id, db)
+    if not get_app_settings().legacy_dependency_blocking_enabled:
+        return continuity
+    legacy = await _legacy_blocking_explanations(thread_id, user_id, db)
+    return _merge_blocking_explanations(continuity, legacy)
+
+
+async def get_blocking_explanations_batch(
+    thread_ids: list[int],
+    user_id: int,
+    db: AsyncSession,
+) -> dict[int, list[BlockingDependency]]:
+    """Human-readable blocking reasons for multiple threads in one query."""
+    if not thread_ids:
+        return {}
+
+    continuity_map = await _continuity_blocking_explanations_batch(thread_ids, user_id, db)
+    if not get_app_settings().legacy_dependency_blocking_enabled:
+        return {thread_id: continuity_map.get(thread_id, []) for thread_id in thread_ids}
+
+    legacy_map = await _legacy_blocking_explanations_batch(thread_ids, user_id, db)
+    return {
+        thread_id: _merge_blocking_explanations(
+            continuity_map.get(thread_id, []),
+            legacy_map.get(thread_id, []),
+        )
+        for thread_id in thread_ids
+    }
 
 
 async def validate_position_dependency_consistency(
