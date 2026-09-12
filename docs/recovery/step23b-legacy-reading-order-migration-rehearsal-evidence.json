@@ -1,0 +1,126 @@
+{
+  "step": "23B",
+  "result": "PASS",
+  "production_mutated": false,
+  "production_apply_executed": false,
+  "production_rollback_executed": false,
+  "architecture_hold_2363_lifted": false,
+  "reviewed_step23a_snapshot_token": "6cfa01ccc82f33c4e0fc7a23d9b7d4e4b32a66a7aa13bbbfd50bc633e38bdf7c",
+  "snapshot_guard_passed": true,
+  "rehearsal": {
+    "target": "isolated_neon_clone",
+    "project_id": "delicate-sea-51036121",
+    "parent_branch_id": "br-silent-violet-ayobfez5",
+    "rehearsal_branch_id": "br-raspy-term-ay2o0uxl",
+    "rehearsal_branch_name": "step23b-rehearsal-4ee9",
+    "pytest_branch_id": "br-odd-hall-ayvnneiz",
+    "pytest_branch_name": "step23b-pytest-4ee9",
+    "pytest_database": "comic_pile_test",
+    "sequence": [
+      "fresh_dry_run",
+      "apply",
+      "post_apply_verification",
+      "rollback",
+      "exact_restoration_verification"
+    ],
+    "initial_snapshot_token": "6cfa01ccc82f33c4e0fc7a23d9b7d4e4b32a66a7aa13bbbfd50bc633e38bdf7c",
+    "final_snapshot_token": "6cfa01ccc82f33c4e0fc7a23d9b7d4e4b32a66a7aa13bbbfd50bc633e38bdf7c",
+    "returned_to_original_migration_owned_state": true
+  },
+  "apply": {
+    "ok": true,
+    "migration_timestamp": "2026-09-12T01:03:18.006096+00:00",
+    "created_reading_plans": [
+      {
+        "plan_id": 16,
+        "name": "Doctor Strange Epic Collection Vol. 10: Infinity War",
+        "node_count": 17,
+        "ordering_mode": "informational"
+      },
+      {
+        "plan_id": 17,
+        "name": "Starman Compendiums 1-2",
+        "node_count": 66,
+        "ordering_mode": "informational"
+      },
+      {
+        "plan_id": 18,
+        "name": "JSA: Robinson / Goyer / Johns",
+        "node_count": 57,
+        "ordering_mode": "informational"
+      }
+    ],
+    "total_nodes_created": 140,
+    "retired_reading_plan_order_dependency_ids": [1806, 1807, 1808, 1810, 1811, 1832, 1833, 1846, 1847],
+    "retired_continuity_rule_ids": [910, 911, 914, 915, 916, 937, 938, 951, 952],
+    "preserved_standalone_prerequisite_ids": [18, 19, 20, 21],
+    "plan_owned_hard_constraints_created": 0,
+    "legacy_reading_orders_retained": true,
+    "canonical_authority": "informational_reading_plans",
+    "protected_reader_state_hashes_before": {
+      "issue_state_hash": "148838ca59c7835f403bf1b9d14e96a05c94fedc3608373f30be4175be8c9c57",
+      "event_state_hash": "58e3007d6d6fb8f909d5e21c74c373249db60aa68b50be40aaebbd0b7f453abd",
+      "identity_state_hash": "68c1b3f9dd66c83d923014581b460017811430eb3dbe13c1bb108765cb3c6abc",
+      "thread_factual_hash": "8536ed15ea7424f50b331196abf472731243e53c18971b6e640e36df191dbfde"
+    },
+    "protected_reader_state_hashes_after": {
+      "issue_state_hash": "148838ca59c7835f403bf1b9d14e96a05c94fedc3608373f30be4175be8c9c57",
+      "event_state_hash": "58e3007d6d6fb8f909d5e21c74c373249db60aa68b50be40aaebbd0b7f453abd",
+      "identity_state_hash": "68c1b3f9dd66c83d923014581b460017811430eb3dbe13c1bb108765cb3c6abc",
+      "thread_factual_hash": "8536ed15ea7424f50b331196abf472731243e53c18971b6e640e36df191dbfde"
+    },
+    "protected_reader_state_hashes_unchanged": true,
+    "eligibility_baseline_hash": "96abcb79659209ca5db762a161776653e1af336c5da583735e3c22396543f6e4",
+    "eligibility_result_hash": "0d27f340199141111e6f49e7b0a4382b7102f78d6eac35a8d8e548d796f351fc",
+    "step23a_eligibility_forecast": {
+      "field": "reconciliation.informational_migration_would_change_roll_eligibility",
+      "recorded_value": false,
+      "authoritative": false,
+      "reason": "Step 23A hardcoded the forecast rather than simulating retirement of the nine reading_plan_order constraints",
+      "historical_evidence_path": "docs/recovery/step23a-legacy-reading-order-preflight-evidence.json",
+      "historical_evidence_preserved_unchanged": true,
+      "superseded_by": "apply.eligibility_constraint_model_delta"
+    },
+    "eligibility_constraint_model_delta": [
+      {
+        "thread_id": 105,
+        "next_unread_issue_id": 2245,
+        "removed_reading_plan_order_rule_ids": [911],
+        "authoritative_derived_eligible_before": false,
+        "authoritative_derived_eligible_after": true
+      },
+      {
+        "thread_id": 17062,
+        "next_unread_issue_id": 2252,
+        "removed_reading_plan_order_rule_ids": [915],
+        "authoritative_derived_eligible_before": false,
+        "authoritative_derived_eligible_after": true
+      },
+      {
+        "thread_id": 17194,
+        "next_unread_issue_id": 101817,
+        "removed_reading_plan_order_rule_ids": [938],
+        "authoritative_derived_eligible_before": false,
+        "authoritative_derived_eligible_after": true
+      }
+    ],
+    "post_apply_canonical_plan_fingerprint": "b185bdc9c61907de4844c9435421cb4d969a7a67bde352ad0b9825b9eb419c70",
+    "rollback_guard_token": "bf1d232e8b8ab1dfab67854b3afd2850d114b7a1d29dfa0d2be08e48aafab4a9"
+  },
+  "rollback": {
+    "ok": true,
+    "removed_plan_ids": [16, 17, 18],
+    "restored_dependency_ids": [1806, 1807, 1808, 1810, 1811, 1832, 1833, 1846, 1847],
+    "restored_continuity_rule_ids": [910, 911, 914, 915, 916, 937, 938, 951, 952],
+    "preserved_standalone_prerequisite_ids": [18, 19, 20, 21],
+    "factual_reader_state_unchanged": true,
+    "eligibility_restored_to_pre_apply_baseline": true
+  },
+  "local_verification": {
+    "ruff": "passed",
+    "ty": "passed",
+    "pytest_file": "tests/test_legacy_reading_order_production_migration.py",
+    "pytest_result": "16 passed"
+  },
+  "ci_status": "not_yet_reported_at_evidence_write"
+}

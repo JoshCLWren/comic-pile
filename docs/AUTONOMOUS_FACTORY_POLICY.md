@@ -1,6 +1,6 @@
 # ComicPile Autonomous Factory Policy
 
-Version: 23
+Version: 24
 
 This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, fixed-model external factories, and interactive factory repair sessions.
 
@@ -104,6 +104,12 @@ A partial PR does not automatically outrank a fresh higher-priority issue. Conti
 Repeat until the selected issue reaches closure or a valid blocker:
 
 `inspect contract -> implement closure-critical behavior -> focused validation -> commit -> push -> inspect exact SHA -> account for all review feedback -> repair blockers -> verify merge gates -> merge when eligible -> verify issue closure`
+
+Python focused validation must include the exact CI pair `ruff check .` and
+`ty check --error-on-warning` against the whole repo
+(`bash scripts/check-python-ci-lint.sh`). Path-filtered ruff or ty is not a valid CI substitute.
+Re-run that pair after every later Python edit and before every Python push.
+A lint run from before the last edit does not count.
 
 After work becomes blocked, merge-gated, or dependent on a human-only decision, preserve durable context and return to selection rather than polishing indefinitely.
 
