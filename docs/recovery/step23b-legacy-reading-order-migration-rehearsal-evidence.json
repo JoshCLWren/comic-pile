@@ -72,6 +72,15 @@
     "protected_reader_state_hashes_unchanged": true,
     "eligibility_baseline_hash": "96abcb79659209ca5db762a161776653e1af336c5da583735e3c22396543f6e4",
     "eligibility_result_hash": "0d27f340199141111e6f49e7b0a4382b7102f78d6eac35a8d8e548d796f351fc",
+    "step23a_eligibility_forecast": {
+      "field": "reconciliation.informational_migration_would_change_roll_eligibility",
+      "recorded_value": false,
+      "authoritative": false,
+      "reason": "Step 23A hardcoded the forecast rather than simulating retirement of the nine reading_plan_order constraints",
+      "historical_evidence_path": "docs/recovery/step23a-legacy-reading-order-preflight-evidence.json",
+      "historical_evidence_preserved_unchanged": true,
+      "superseded_by": "apply.eligibility_constraint_model_delta"
+    },
     "eligibility_constraint_model_delta": [
       {
         "thread_id": 105,

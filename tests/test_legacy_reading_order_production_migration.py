@@ -755,3 +755,37 @@ def test_step23b_cli_requires_unique_confirmation() -> None:
     cli._require_confirmation(cli.CONFIRMATION)
     with pytest.raises(MigrationInvariantError, match="STEP23B-LEGACY-READING-ORDERS"):
         cli._require_confirmation("STEP22-BPRD")
+
+
+def test_step23b_docs_supersede_step23a_eligibility_forecast() -> None:
+    """Step 23B must record that the Step 23A eligibility forecast is not proof.
+
+    The historical Step 23A evidence still hardcodes
+    ``informational_migration_would_change_roll_eligibility = false``.
+    That artifact stays unchanged. Step 23B documentation must explain the
+    later rehearsal correction instead of rewriting 23A.
+    """
+    docs = (ROOT / "docs/recovery/step23b-legacy-reading-order-migration.md").read_text(
+        encoding="utf-8"
+    )
+    evidence = json.loads(
+        (ROOT / "docs/recovery/step23b-legacy-reading-order-migration-rehearsal-evidence.json")
+        .read_text(encoding="utf-8")
+    )
+    historical = json.loads(EVIDENCE_PATH.read_text(encoding="utf-8"))
+    reconciliation = historical["reconciliation"]
+    assert isinstance(reconciliation, dict)
+    assert reconciliation["informational_migration_would_change_roll_eligibility"] is False
+    assert "informational_migration_would_change_roll_eligibility" in docs
+    assert "forecast only" in docs
+    assert "hardcoded" in docs
+    assert "supersedes the forecast" in docs
+    assert "911" in docs and "915" in docs and "938" in docs
+    assert "expected architecture corrections" in docs
+    apply = evidence["apply"]
+    assert isinstance(apply, dict)
+    forecast = apply["step23a_eligibility_forecast"]
+    assert isinstance(forecast, dict)
+    assert forecast["recorded_value"] is False
+    assert forecast["authoritative"] is False
+    assert forecast["historical_evidence_preserved_unchanged"] is True

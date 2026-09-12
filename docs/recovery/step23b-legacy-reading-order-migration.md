@@ -52,18 +52,46 @@ Before/after factual hashes were identical:
 
 Next unread issue identity and standalone blockers were unchanged.
 
-The expected constraint-model delta from retiring the nine serialization
-edges is that three current next-unread issues are no longer blocked by
-those retired rules:
+### Step 23A forecast is not the authoritative eligibility proof
 
-- Thread 105 next unread 2245: lost rule 911 / dependency 1808
-- Thread 17062 next unread 2252: lost rule 915 / dependency 1810
-- Thread 17194 next unread 101817: lost rule 938 / dependency 1833
+Step 23A recorded:
 
-No candidate became blocked by informational plan position.
-No standalone prerequisite was removed.
-Unrelated blocker #2778 was left in place.
-Persisted blocked state and derived eligibility agreed after refresh.
+`reconciliation.informational_migration_would_change_roll_eligibility = false`
+
+That field is a **forecast only**. Do not treat it as proof that Roll
+eligibility is unchanged. The Step 23A implementation hardcoded `false`
+rather than simulating retirement of the nine reviewed
+`reading_plan_order` serialization constraints.
+
+The historical Step 23A evidence artifact is preserved unchanged at
+`docs/recovery/step23a-legacy-reading-order-preflight-evidence.json`.
+This Step 23B record does not rewrite or falsify that snapshot. The
+isolated PostgreSQL rehearsal is the later, stronger evidence and
+supersedes the forecast.
+
+### Expected eligibility corrections from the rehearsal
+
+After removing the nine reviewed `reading_plan_order` constraints,
+derived eligibility flipped on exactly three next-unread issues:
+
+- Thread `105`, next unread issue `2245`: loses rule `911` /
+  dependency `1808`; derived eligibility `false → true`
+- Thread `17062`, next unread issue `2252`: loses rule `915` /
+  dependency `1810`; derived eligibility `false → true`
+- Thread `17194`, next unread issue `101817`: loses rule `938` /
+  dependency `1833`; derived eligibility `false → true`
+
+These are **expected architecture corrections**, not regressions.
+Rules `911`, `915`, and `938` were legacy reader-order serialization
+and were intentionally retired. Step 14 classified those dependencies
+as `reading_plan_order` with `must_survive_independently = false`.
+Leaving those threads blocked would preserve the obsolete execution
+semantics this migration is intended to remove.
+
+No genuine standalone prerequisite was removed. No candidate became
+blocked by informational plan position. Unrelated blocker #2778 was
+left in place. Persisted blocked state and derived eligibility agreed
+after refresh.
 
 ## Rollback
 
