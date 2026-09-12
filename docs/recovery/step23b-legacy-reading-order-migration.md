@@ -88,8 +88,8 @@ Isolated Neon clone, not production:
 
 ## Local verification
 
-- `ruff check` passed on the Step 23B files
-- `ty check --error-on-warning` passed on the Step 23B files
+- `ruff check .` passed on the full repo
+- `ty check --error-on-warning` passed on the full repo
 - `pytest tests/test_legacy_reading_order_production_migration.py` — 16 passed
   on isolated PostgreSQL (`comic_pile_test` on `br-odd-hall-ayvnneiz`)
 

@@ -20,6 +20,9 @@ Work on the next task in this repository.
 - Implement only that issue's scope.
 - Add regression tests for changed behavior.
 - Fix failures; never skip tests or use CI as a debugger.
+- For any Python change, run `ruff check .` and `ty check --error-on-warning`
+  against the whole repo (`bash scripts/check-python-ci-lint.sh`) after the last
+  edit and before every push. Path-filtered ruff or ty is not a valid CI substitute.
 - If required work is outside the issue, create a linked GitHub issue before expanding scope.
 - If blocked, mark the issue `ralph-status:blocked`, explain the exact blocker, and stop.
 - Do not use the archived Markdown kanban as a status source.

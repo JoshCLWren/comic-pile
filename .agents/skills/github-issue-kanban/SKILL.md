@@ -50,9 +50,11 @@ implementation, push the branch, and open a ready-for-review PR linked to the is
 leave completed issue work only in the local working tree. Use a draft PR only when the user
 explicitly requests one.
 
-For any Python change, local verification must include `ruff check` **and**
-`ty check --error-on-warning` on the changed files. Ruff-only or pytest-only is not
-enough: CI fails the required type-check job on ty warnings, including `redundant-cast`.
+For any Python change, local verification must include the exact CI pair
+`ruff check .` **and** `ty check --error-on-warning` against the whole repo
+(`bash scripts/check-python-ci-lint.sh`). Path-filtered ruff or ty is not a valid CI substitute.
+Ruff-only or pytest-only is not enough: CI fails the required
+type-check job on ty warnings, including `redundant-cast`.
 Do not recast a value after `isinstance` has already narrowed it.
 
 ## Keep status synchronized
@@ -109,5 +111,5 @@ Put `Part of #NUMBER` and `Depends on #NUMBER` in issue bodies. Add `epic`, `ral
 - Do not begin work on an issue without updating its status label.
 - Do not close an issue without a verification comment.
 - Do not skip tests or use CI as a debugger.
-- Do not push Python changes after only `ruff` or pytest. Run `ty check --error-on-warning`; ty warnings fail CI.
+- Do not push Python changes after only path-filtered `ruff` or pytest. Run `ruff check .` and `ty check --error-on-warning`; ty warnings fail CI. Path-filtered ruff or ty is not a valid CI substitute.
 - If the issue is too large for one run, split it into linked GitHub tasks/subtasks before coding.

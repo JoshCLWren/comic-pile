@@ -10,9 +10,13 @@ A pre-commit hook is installed in `.git/hooks/pre-commit` that automatically run
 
 The lint script runs:
 - Python compilation check
-- Ruff linting
+- Full-repo ruff linting (`ruff check .`)
 - Any type usage check (ruff ANN401 rule)
-- ty type checking (`ty check --error-on-warning`). Warnings fail this check, including `redundant-cast`. Do not recast a value after `isinstance` has already narrowed it.
+- Full-repo ty type checking (`ty check --error-on-warning`). Warnings fail this check, including `redundant-cast`. Do not recast a value after `isinstance` has already narrowed it.
+
+Path-filtered ruff or ty is not a valid CI substitute. Use
+`bash scripts/check-python-ci-lint.sh` or `make python-ci-lint` before every
+Python push. Re-run after every later Python edit.
 
 The hook will block commits containing `# type: ignore`, `# noqa`, `# ruff: ignore`, or `# pylint: ignore`.
 

@@ -32,11 +32,15 @@ Runs automatically before each commit.
 
 **What it checks:**
 - Python syntax
-- Ruff linting
+- Full-repo ruff linting (`ruff check .`)
 - Any type usage (ruff ANN401)
-- ty type checking (ty check --error-on-warning).
+- Full-repo ty type checking (`ty check --error-on-warning`)
 - ESLint for JavaScript
 - htmlhint for HTML templates
+
+Path-filtered ruff or ty is not a valid CI substitute. Cursor Cloud remaps
+`core.hooksPath`; run `bash scripts/install-git-hooks.sh` so the dispatcher can
+still chain to `.git/hooks/pre-commit`.
 
 **What happens on failure:**
 - Commit is aborted

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import importlib.util
 import json
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 from sqlalchemy import func, select, text
@@ -25,12 +27,9 @@ from app.services.legacy_reading_order_production_migration import (
     rollback_legacy_reading_order_migration,
 )
 from comic_pile.dependencies import refresh_user_blocked_status
-from scripts.legacy_reading_order_step23b_migration import (
-    CONFIRMATION,
-    _require_confirmation,
-)
 
 ROOT = Path(__file__).resolve().parents[1]
+CLI_SCRIPT = ROOT / "scripts/legacy_reading_order_step23b_migration.py"
 EVIDENCE_PATH = ROOT / "docs/recovery/step23a-legacy-reading-order-preflight-evidence.json"
 RETIRED_DEPENDENCY_IDS = (1806, 1807, 1808, 1810, 1811, 1832, 1833, 1846, 1847)
 STANDALONE_DEPENDENCY_IDS = (18, 19, 20, 21)
@@ -52,7 +51,10 @@ def _object_dict(value: object, *, label: str) -> dict[str, object]:
 def _object_list(value: object, *, label: str) -> list[object]:
     """Narrow one JSON array for ty."""
     assert isinstance(value, list), label
-    return [item for item in value]
+    items: list[object] = []
+    for item in value:
+        items.append(item)
+    return items
 
 
 def _dict_list(value: object, *, label: str) -> list[dict[str, object]]:
@@ -735,8 +737,21 @@ async def test_step23b_rollback_handles_legacy_dependency_sync_trigger(
         await async_db.execute(text(f"DROP FUNCTION IF EXISTS {trigger_function}()"))
 
 
+def _cli_module() -> ModuleType:
+    """Import the Step 23B CLI without treating scripts/ as a package."""
+    spec = importlib.util.spec_from_file_location(
+        "legacy_reading_order_step23b_migration",
+        CLI_SCRIPT,
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_step23b_cli_requires_unique_confirmation() -> None:
     """Apply/rollback refuse anything except the Step 23B confirmation string."""
-    _require_confirmation(CONFIRMATION)
+    cli = _cli_module()
+    cli._require_confirmation(cli.CONFIRMATION)
     with pytest.raises(MigrationInvariantError, match="STEP23B-LEGACY-READING-ORDERS"):
-        _require_confirmation("STEP22-BPRD")
+        cli._require_confirmation("STEP22-BPRD")

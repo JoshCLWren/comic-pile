@@ -40,6 +40,28 @@ If a test is failing:
 - **Update documentation** when you find gaps or outdated information
 
 
+## MANDATORY: Full-repo ruff and ty before every Python push
+
+CI jobs `python-lint` and `python-typecheck` run exactly:
+
+```bash
+ruff check .
+ty check --error-on-warning
+```
+
+**Path-filtered ruff or ty is not a valid CI substitute.** Those two commands, with no path arguments, are the only valid local Python lint/type gate. `bash scripts/check-python-ci-lint.sh` and `make python-ci-lint` run the same pair.
+
+**Forbidden as a push gate:**
+- `ruff check` or `ty check` limited to a file list
+- A lint run from before the last Python edit
+- `--no-verify` or any hook bypass
+
+**Required:**
+1. Before the first Python commit of a session, run `bash scripts/install-git-hooks.sh` so Cursor's remapped `core.hooksPath` can still chain to `.git/hooks/pre-commit`.
+2. After the last Python edit, run `bash scripts/check-python-ci-lint.sh` against the whole repo.
+3. Re-run after every later Python edit. A green run is invalid the moment sources change.
+4. Fix every ruff and ty finding locally. Do not use CI to discover them.
+
 ## CORE PRINCIPLE: PR FEEDBACK TASKS ARE NOT DONE UNTIL PUSHED
 
 **⚠️ When asked to apply PR feedback, the job is: edit → verify → commit → push. All four steps. Every time.**
@@ -60,10 +82,11 @@ CI is not a debugging tool. Run focused local validation appropriate to the chan
 For autonomous factory work, `docs/AUTONOMOUS_FACTORY_POLICY.md` is canonical for validation and browser gates. When browser validation is required, Chromium is the maintained required Playwright target. Firefox and WebKit are optional diagnostics for browser-specific investigations and must not delay ordinary issue closure or merges.
 
 Before pushing Python changes from a normal local checkout:
-1. Run `ruff check` on the changed files. Ruff passing is **not** enough.
-2. Run `ty check --error-on-warning`. CI treats ty **warnings as failures**.
-3. Run the focused pytest files that cover the change.
-4. Fix every ruff, ty, and pytest failure before pushing.
+1. Run `ruff check .` with no path arguments. Path-filtered ruff is not a valid CI substitute.
+2. Run `ty check --error-on-warning` with no path arguments. CI treats ty **warnings as failures**.
+3. Prefer `bash scripts/check-python-ci-lint.sh` so both commands run as one gate.
+4. Run the focused pytest files that cover the change.
+5. Fix every ruff, ty, and pytest failure before pushing.
 
 Before pushing frontend changes from a normal local checkout:
 1. Run `cd frontend && pnpm run lint && pnpm run typecheck`.
@@ -107,6 +130,7 @@ Comic Pile is a dice-driven comic reading tracker built with:
 ### Linting
 ```bash
 make lint                    # All linters (Python + JS + HTML)
+make python-ci-lint          # Exact CI pair: ruff check . + ty check --error-on-warning
 ruff check .                 # Python style only — not sufficient by itself
 ty check --error-on-warning  # Required Python type check; warnings fail CI
 cd frontend && pnpm run lint  # Frontend ESLint
