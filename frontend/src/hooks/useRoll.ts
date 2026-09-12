@@ -1,10 +1,16 @@
 import { useMutation } from '@tanstack/react-query'
 import { rollApi } from '../services/api'
+import type { RollApi } from '../services/apiTypes'
 import type { OverrideRollPayload } from '../types'
 
-export function useRoll() {
+function getRollApi(api?: RollApi): RollApi {
+  return api ?? rollApi
+}
+
+export function useRoll(api?: RollApi) {
+  const rollApiInstance = getRollApi(api)
   const mutation = useMutation({
-    mutationFn: () => rollApi.roll(),
+    mutationFn: () => rollApiInstance.roll(),
   })
 
   return {
@@ -14,9 +20,10 @@ export function useRoll() {
   }
 }
 
-export function useOverrideRoll() {
+export function useOverrideRoll(api?: RollApi) {
+  const rollApiInstance = getRollApi(api)
   const mutation = useMutation({
-    mutationFn: (data: OverrideRollPayload) => rollApi.override(data),
+    mutationFn: (data: OverrideRollPayload) => rollApiInstance.override(data),
   })
 
   return {
@@ -26,9 +33,10 @@ export function useOverrideRoll() {
   }
 }
 
-export function useDismissPending() {
+export function useDismissPending(api?: RollApi) {
+  const rollApiInstance = getRollApi(api)
   const mutation = useMutation({
-    mutationFn: () => rollApi.dismissPending(),
+    mutationFn: () => rollApiInstance.dismissPending(),
   })
 
   return {
@@ -38,9 +46,10 @@ export function useDismissPending() {
   }
 }
 
-export function useSetDie() {
+export function useSetDie(api?: RollApi) {
+  const rollApiInstance = getRollApi(api)
   const mutation = useMutation({
-    mutationFn: (die: number) => rollApi.setDie(die),
+    mutationFn: (die: number) => rollApiInstance.setDie(die),
   })
 
   return {
@@ -50,9 +59,10 @@ export function useSetDie() {
   }
 }
 
-export function useClearManualDie() {
+export function useClearManualDie(api?: RollApi) {
+  const rollApiInstance = getRollApi(api)
   const mutation = useMutation({
-    mutationFn: () => rollApi.clearManualDie(),
+    mutationFn: () => rollApiInstance.clearManualDie(),
   })
 
   return {
@@ -62,9 +72,10 @@ export function useClearManualDie() {
   }
 }
 
-export function useReroll() {
+export function useReroll(api?: RollApi) {
+  const rollApiInstance = getRollApi(api)
   const mutation = useMutation({
-    mutationFn: () => rollApi.reroll(),
+    mutationFn: () => rollApiInstance.reroll(),
   })
 
   return {

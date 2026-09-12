@@ -3,19 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
-import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import { queryClient } from '../query/queryClient'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { cast } from '../utils/cast'
 import { ToastProvider } from '../contexts/ToastProvider'
 
-vi.mock('../services/rollBootstrapApi', () => ({
-  rollBootstrapApi: {
-    get: vi.fn(),
-  },
-}))
+function makeBootstrapApi() {
+  return { get: vi.fn(), switchPrerequisite: vi.fn() }
+}
 
-const mockedBootstrap = vi.mocked(rollBootstrapApi.get)
+const bootstrapApi = makeBootstrapApi()
+const mockedBootstrap = bootstrapApi.get
 
 const bootstrapResponse: RollBootstrapResponse = {
   session_id: 1,
@@ -60,7 +58,7 @@ function deferred<T>() {
 }
 
 function renderBootstrap() {
-  return renderHook(() => useRollBootstrap(), {
+  return renderHook(() => useRollBootstrap(bootstrapApi), {
     wrapper: ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={queryClient}>
         <ToastProvider>{children}</ToastProvider>
@@ -70,7 +68,7 @@ function renderBootstrap() {
 }
 
 beforeEach(() => {
-  mockedBootstrap.mockReset()
+  bootstrapApi.get.mockReset()
   localStorage.clear()
 })
 

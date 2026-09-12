@@ -3,15 +3,14 @@ import {
   isAuthenticationMutationFailure,
   recoverProtectedRollMutation,
 } from '../hooks/rollMutationReconciliation'
-import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
+import type { ProtectedRollMutationApi } from '../services/apiTypes'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
-vi.mock('../services/protectedRollMutationApi', () => ({
-  protectedRollMutationApi: {
-    bootstrap: vi.fn(),
-  },
-}))
+function makeProtectedApi(): ProtectedRollMutationApi {
+  return { rate: vi.fn(), snooze: vi.fn(), skip: vi.fn(), bootstrap: vi.fn() }
+}
 
+const protectedRollMutationApi = makeProtectedApi()
 const mockedProtectedApi = vi.mocked(protectedRollMutationApi)
 
 function bootstrapState(pendingThreadId: number | null): RollBootstrapResponse {
@@ -72,7 +71,7 @@ describe('protected Roll mutation recovery', () => {
     const retry = vi.fn().mockResolvedValue(undefined)
     const wait = vi.fn().mockResolvedValue(undefined)
 
-    await expect(recoverProtectedRollMutation(7, retry, wait)).resolves.toEqual({
+    await expect(recoverProtectedRollMutation(7, retry, wait, protectedRollMutationApi)).resolves.toEqual({
       status: 'retried',
       value: undefined,
     })
@@ -86,7 +85,7 @@ describe('protected Roll mutation recovery', () => {
     mockedProtectedApi.bootstrap.mockResolvedValueOnce(bootstrapState(9))
     const retry = vi.fn()
 
-    await expect(recoverProtectedRollMutation(7, retry, vi.fn())).resolves.toEqual({
+    await expect(recoverProtectedRollMutation(7, retry, vi.fn(), protectedRollMutationApi)).resolves.toEqual({
       status: 'stale',
     })
 
@@ -98,7 +97,7 @@ describe('protected Roll mutation recovery', () => {
     mockedProtectedApi.bootstrap.mockRejectedValueOnce(revoked)
     const retry = vi.fn()
 
-    await expect(recoverProtectedRollMutation(7, retry, vi.fn())).rejects.toBe(revoked)
+    await expect(recoverProtectedRollMutation(7, retry, vi.fn(), protectedRollMutationApi)).rejects.toBe(revoked)
     expect(retry).not.toHaveBeenCalled()
   })
 })
