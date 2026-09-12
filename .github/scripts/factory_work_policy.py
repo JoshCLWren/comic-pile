@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any
 from factory_review_policy import producer_worker_from_pr as producer_worker_from_values
 NON_EXECUTABLE_ISSUES = {679, 1093, 1109}
+MANUAL_ONLY_MARKER = '<!-- factory-execution:manual-only -->'
 
 OWNER_RE = re.compile('^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$')
 
@@ -399,9 +400,14 @@ def issue_is_static_candidate(
     """Return whether an issue is structurally eligible for assignment."""
     number = int(issue['number'])
     labels = labels_of(issue)
+    body = str(issue.get('body') or '')
     if str(issue.get('state') or 'OPEN').upper() != 'OPEN':
         return False
     if number in NON_EXECUTABLE_ISSUES or number in suppressing_pr_issues:
+        return False
+    if labels & {'epic', 'prd'}:
+        return False
+    if MANUAL_ONLY_MARKER in body:
         return False
     if labels & BLOCKED_LABELS:
         return False

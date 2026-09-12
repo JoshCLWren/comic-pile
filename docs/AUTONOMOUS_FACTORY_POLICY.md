@@ -29,6 +29,8 @@ Firefox and WebKit are optional diagnostics for browser-specific investigations.
 
 ## Selection priority
 
+Issues labeled `epic` or `prd` are not ordinary autonomous factory candidates. An issue whose body contains `<!-- factory-execution:manual-only -->` is also excluded from autonomous selection even if its other labels would normally make it executable. Use the marker for coordination, architecture, integrated acceptance, destructive-authorization, and similar human/interactive gates. Narrow corrective child issues remain executable when they have an explicit frozen contract, including children inside a domain under an architecture hold. A factory implements that frozen contract exactly, does not reinterpret the governing architecture, and does not lift or close the hold.
+
 Choose work in this order:
 
 1. The highest-priority unclaimed open issue labeled both `user-reported` and `bug`; within equal priority, choose the newest report first.
@@ -250,16 +252,19 @@ Success hierarchy:
 
 Child closure is evidence of progress, not sufficient evidence that a product epic's acceptance scenarios work. Parent PRD and epic issues require an explicit product-acceptance stage before they may be marked complete.
 
+Integrated parent product acceptance is human/interactive controlled. Autonomous factories do not select parent PRD/epic issues as ordinary work and do not issue the deciding product-acceptance verdict. Factories may implement explicitly scoped child issues and produce focused evidence for later acceptance.
+
 See [`docs/PRODUCT_ACCEPTANCE_PROTOCOL.md`](PRODUCT_ACCEPTANCE_PROTOCOL.md) for the full acceptance workflow, comment structure, and regression targets.
 
 Key rules for factory workers:
 
-- When all children of a parent PRD/epic are closed, the parent is not automatically done. The next action is acceptance verification against integrated current `main`.
-- Acceptance must verify each parent acceptance criterion as pass/fail/not-applicable with evidence. UI/workflow criteria require focused Chromium/E2E coverage or equivalent reproducible browser verification.
-- A failed criterion must produce or reference an executable follow-up issue. The parent remains open.
-- Factory metadata must not close a parent solely because GitHub sub-issue completion reaches 100%.
+- Do not select or claim a parent issue labeled `epic` or `prd`.
+- Do not select or claim any issue containing `<!-- factory-execution:manual-only -->`.
+- Under an architecture hold, implement only an explicitly authorized narrow child with frozen requirements. Do not reinterpret the architecture, broaden the child, lift the hold, or close the parent.
+- Child closure alone does not satisfy parent acceptance.
+- Factories may provide tests, Chromium/E2E evidence, API evidence, and other child-level artifacts for the later interactive acceptance run.
+- A factory must not post the final `<!-- product-acceptance:v1 -->` verdict as the deciding authority, mark the parent `ralph-status:done`, or close the parent.
 - Duplicate factory PRs that attempt to close already-delivered child work do not satisfy product acceptance.
-- The acceptance report is posted as a durable comment on the parent issue using the `<!-- product-acceptance:v1 -->` marker.
 
 ## Markers and leases
 
