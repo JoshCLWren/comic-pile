@@ -23,7 +23,10 @@ CONTROLLER = Path('.github/scripts/factory-work-controller.py')
 POLICY = Path('.github/scripts/factory_work_policy.py')
 KILO_HELPER = Path('.github/scripts/kilo-auto-factory-run.sh')
 GUARD = Path('.github/scripts/fixed-model-guard.py')
-EXPECTED_WORKERS = {9, 10, 11, 14, 16, 17, 18, 19, 20, 21, 23, 29} | set(range(39, 72))
+# OpenCode CLI catalog (opencode 1.18.29) no longer lists these free pins.
+EXPECTED_WORKERS = {9, 10, 11, 14, 16, 17, 18, 19, 20, 21, 23, 29} | (
+    set(range(39, 72)) - {40, 43, 44}
+)
 
 SCHEDULE_MINUTES = tuple(range(0, 60, 5))
 ENTRY_PERMISSIONS = ('contents: write', 'issues: write', 'pull-requests: write', 'actions: write', 'checks: read')
@@ -86,7 +89,9 @@ def main() -> None:
             delimiter='\t',
         ))
 
-    assert len(rows) == 45, f'expected 45 factory slots, got {len(rows)}'
+    assert len(rows) == len(EXPECTED_WORKERS), (
+        f'expected {len(EXPECTED_WORKERS)} factory slots, got {len(rows)}'
+    )
     workers = [int(row['worker']) for row in rows]
     assert set(workers) == EXPECTED_WORKERS
     assert len(workers) == len(set(workers)), 'duplicate worker IDs'
@@ -105,7 +110,7 @@ def main() -> None:
         counts[minute] += 1
     assert set(counts) == set(SCHEDULE_MINUTES)
     assert max(counts.values()) - min(counts.values()) <= 1
-    assert sum(counts.values()) == 45
+    assert sum(counts.values()) == len(EXPECTED_WORKERS)
 
     dispatcher = DISPATCHER.read_text(encoding='utf-8')
     assert 'workflow_run:' not in dispatcher

@@ -15,7 +15,12 @@ HEALTH_SCRIPT = ROOT / ".github" / "scripts" / "factory_candidate_health.py"
 RETIRED_FIXED_MODELS = {
     "nvidia/nvidia-nemotron-nano-9b-v2",
     "thinkingmachines/inkling",
+    # OpenCode CLI catalog miss (opencode 1.18.29): not in `opencode models opencode`
+    "deepseek-v4-flash-free",
+    "laguna-s-2.1-free",
+    "hy3-free",
 }
+REMOVED_WORKERS = {"40", "43", "44"}
 CATALOG_SOURCES = {"opencode-free", "openrouter-free"}
 NOW = 2_000_000
 
@@ -67,6 +72,7 @@ def test_retired_fixed_models_are_replaced_by_catalog_free_slots() -> None:
     rows = _rows()
     configured_models = {row[2] for row in rows}
     assert RETIRED_FIXED_MODELS.isdisjoint(configured_models)
+    assert REMOVED_WORKERS.isdisjoint({row[0] for row in rows})
 
     rows_by_worker = {row[0]: row for row in rows}
     assert rows_by_worker["23"][1] in CATALOG_SOURCES
