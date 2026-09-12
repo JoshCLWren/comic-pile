@@ -27,6 +27,8 @@ Repository engineering rules still apply. Factory workers may not skip tests, we
 5. Claim work using the current factory lease protocol before implementation.
 6. Do not broaden scope. Include a discovered defect only when it is required for coherent issue completion. Preserve unrelated defects as separate issues.
 
+Autonomous factories must not claim issues labeled `epic` or `prd`, and must not claim an issue whose body contains `<!-- factory-execution:manual-only -->`. Those issues are human/interactive coordination, acceptance, architecture, destructive-authorization, or similar gates. A narrow implementation child may remain executable even when it belongs to a domain under an architecture hold, but only when the child has an explicit frozen contract. The factory implements that contract exactly, does not reinterpret the architecture, and does not lift or close the governing hold.
+
 ## Planning gate
 
 For issues explicitly marked **Planning required**:
@@ -115,12 +117,9 @@ A green or ready PR must not monopolize a worker. When another executable issue 
 
 ## Product acceptance for parent PRDs and epics
 
-When executing or selecting a parent PRD or epic issue (labeled `epic` or `prd`), the following acceptance gate applies in addition to the standard lifecycle:
+Parent PRDs and epics are not autonomous factory implementation or acceptance targets. Integrated parent product acceptance is human/interactive controlled.
 
-1. **Pre-acceptance check**: Verify all child issues are closed and no children remain with `ralph-status:pending`, `ralph-status:in-progress`, or `ralph-status:blocked`.
-2. **Acceptance execution**: For each criterion in the parent's acceptance criteria, determine pass/fail/not-applicable with evidence. UI/workflow criteria require focused Chromium/E2E coverage or equivalent reproducible browser verification against integrated current `main`.
-3. **Acceptance report**: Post a durable comment on the parent issue using the `<!-- product-acceptance:v1 -->` marker, listing each criterion's result and evidence.
-4. **Closure or retention**: If all criteria pass, label the parent `ralph-status:done` and close. If any fail, keep the parent open and create or reference executable follow-up issues for the gaps.
+Factories may implement explicitly scoped child issues and may produce focused evidence that a human/interactive acceptance run can later use. They must not select the parent, post the final `<!-- product-acceptance:v1 -->` verdict as the deciding authority, label the parent `ralph-status:done`, or close the parent based on their own integrated acceptance judgment.
 
 Child closure alone does not satisfy parent acceptance. Factory metadata must not close a parent solely because sub-issue completion reaches 100%.
 
