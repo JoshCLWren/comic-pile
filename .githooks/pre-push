@@ -11,6 +11,17 @@ if [ ! -f "pyproject.toml" ]; then
     exit 1
 fi
 
+HEAD_SHA="$(git rev-parse HEAD)"
+VERIFY_STAMP=".git/comic-pile-prepush-verified"
+if [ -f "$VERIFY_STAMP" ]; then
+    stamped="$(tr -d '[:space:]' < "$VERIFY_STAMP" || true)"
+    stamp_age="$(( $(date +%s) - $(stat -c %Y "$VERIFY_STAMP") ))"
+    if [ "$stamped" = "$HEAD_SHA" ] && [ "$stamp_age" -lt 3600 ]; then
+        echo "Pre-push already verified for ${HEAD_SHA:0:12} (${stamp_age}s ago); proceeding to push."
+        exit 0
+    fi
+fi
+
 # Activate venv if not already active (worktree-aware)
 if [ -z "${VIRTUAL_ENV:-}" ]; then
     VENV_PATH=".venv/bin/activate"
