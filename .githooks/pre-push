@@ -77,3 +77,4 @@ pnpm run audit:ui
 echo ""
 echo "All pre-push checks passed."
 echo "Note: full Playwright product E2E is not part of default CI; run make verify-e2e when needed."
+printf '%s\n' "$HEAD_SHA" > "$VERIFY_STAMP"
