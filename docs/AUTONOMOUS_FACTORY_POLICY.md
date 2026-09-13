@@ -83,6 +83,20 @@ Factory ownership is a connection-pool lock around the next action, not a perman
 - A takeover worker continues the current branch/head rather than creating a replacement solely because another model authored the existing commits.
 - Waiting on CI or review never reserves a model indefinitely.
 
+## Fixed-model roster discovery and retirement
+
+The factory roster `.github/free-model-factories.tsv` is a fixed-model pin list. It is not OmniRoute routing. Do not restore OmniRoute as the factory model router from this path.
+
+`.github/workflows/factory-model-discovery.yml` runs on a six-hour schedule and on `workflow_dispatch`. It discovers live models with OpenCode CLI semantics (`opencode models opencode`, `opencode models nvidia`, and `opencode models openrouter` when OpenRouter pins exist), wrapping `scripts/opencode-model-catalog.sh` when present. NVIDIA pins are judged only by that OpenCode nvidia list — never prune a NVIDIA pin solely because integrate.api.nvidia.com omitted it.
+
+`opencode-free` eligibility matches `validate-free-model-factories.py` (`big-pickle`, `*-free`, muse-spark free/contributor-free) and/or explicit cost `0/0` from a verbose catalog. Paid Zen models are never proposed for `opencode-free` lanes. `kilo-auto` and healthy `big-pickle` slots stay unless the OpenCode catalog itself drops them.
+
+When pins are catalog-absent or permanently retired, the workflow opens or updates `factory/model-retirement` with only those removals and rewrites `.github/factory-expected-workers.json` so `EXPECTED_WORKERS` stays generated from the TSV lock. Unused free OpenCode models are uploaded as a discovery report; they are not auto-added.
+
+Operator flow: dispatch **Factory Model Discovery** (or wait for the schedule) → review the bot PR if dead pins were removed → merge after `python3 .github/scripts/validate-free-model-factories.py` and CI are green. Local/CI fixtures: `python3 .github/scripts/factory_model_retirement.py plan --catalog-json tests/fixtures/opencode-catalog/keep-present.json`.
+
+Required secrets on the runner: `OPENCODE_ZEN_API_KEY` (exported as `OPENCODE_API_KEY` for Zen list auth), `NVIDIA_API_KEY` when NVIDIA pins must be listed, `OPENROUTER_API_KEY` when OpenRouter pins exist, and `PR_REBASE_TOKEN` so the retirement PR triggers pull-request workflows. A recorded `--catalog-json` fixture is the CI substitute when the `opencode` binary is unavailable.
+
 ## Anti-loop rules
 
 - Existing open PRs are not automatically higher priority than unclaimed issues.

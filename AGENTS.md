@@ -439,6 +439,22 @@ make migrate  # Run migrations (or: alembic upgrade head)
 - Open PRs as **ready for review by default**. Do **not** open draft PRs unless the user explicitly asks for a draft. This repo relies on CodeRabbit signals that do not arrive on draft PRs for the current plan/tier.
 - **Do not add or repair changelog Markdown for implementation PRs.** Release notes are published after merge by the dedicated release writer to the database-backed release ledger. `docs/changelog.md` and `docs/changelog.d/` are frozen historical provenance only; release-note publication delays do not block implementation merges.
 
+## Factory roster discovery
+
+Fixed-model factories read `.github/free-model-factories.tsv`. Model presence is **OpenCode CLI** (`opencode models <provider>`), not OmniRoute and not integrate.api.nvidia.com alone.
+
+Scheduled workflow: `.github/workflows/factory-model-discovery.yml` (also `workflow_dispatch`). It opens `factory/model-retirement` when pins disappear from the live CLI catalog and writes unused free models to a report artifact. It does not auto-add paid Zen models. `EXPECTED_WORKERS` is generated in `.github/factory-expected-workers.json` by the retirement apply path.
+
+Local plan against a recorded catalog:
+
+```bash
+python3 .github/scripts/factory_model_retirement.py plan \
+  --catalog-json tests/fixtures/opencode-catalog/keep-present.json
+python3 .github/scripts/validate-free-model-factories.py
+```
+
+Secrets for the live CLI path: `OPENCODE_ZEN_API_KEY`, `NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, and `PR_REBASE_TOKEN` to open the retirement PR. Details: `docs/AUTONOMOUS_FACTORY_POLICY.md` (Fixed-model roster discovery and retirement).
+
 ## GitHub Issue Workflow
 
 GitHub Issues are the backlog and status source of truth. The former Markdown
