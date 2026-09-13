@@ -3,23 +3,13 @@ import type { PropsWithChildren } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const axiosInstance = vi.hoisted(() => ({
-  post: vi.fn(),
-  get: vi.fn(),
-  interceptors: {
-    request: { use: vi.fn() },
-    response: { use: vi.fn() },
-  },
-}))
-
-vi.mock('axios', () => ({
-  default: {
-    create: vi.fn(() => axiosInstance),
-  },
-}))
-
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
+import type { QueueBlockingInfoApi } from '../hooks/useQueueBlockingInfo'
 import type { BatchBlockingInfoResponse } from '../types'
+
+const getBatchBlockingInfo = vi.fn<QueueBlockingInfoApi['getBatchBlockingInfo']>()
+
+const api: QueueBlockingInfoApi = { getBatchBlockingInfo }
 
 function createWrapper() {
   const client = new QueryClient({
@@ -32,13 +22,13 @@ function createWrapper() {
 
 describe('useQueueBlockingInfo', () => {
   beforeEach(() => {
-    axiosInstance.post.mockReset()
+    getBatchBlockingInfo.mockReset()
   })
 
   it('returns an empty map without fetching when the queue has no threads', () => {
-    const { result } = renderHook(() => useQueueBlockingInfo([]), { wrapper: createWrapper() })
+    const { result } = renderHook(() => useQueueBlockingInfo([], api), { wrapper: createWrapper() })
     expect(result.current).toEqual({})
-    expect(axiosInstance.post).not.toHaveBeenCalled()
+    expect(getBatchBlockingInfo).not.toHaveBeenCalled()
   })
 
   it('batch-loads named blockers keyed by numeric thread id', async () => {
@@ -53,8 +43,8 @@ describe('useQueueBlockingInfo', () => {
         },
       },
     }
-    axiosInstance.post.mockResolvedValue(response)
-    const { result } = renderHook(() => useQueueBlockingInfo([12, 7]), { wrapper: createWrapper() })
+    getBatchBlockingInfo.mockResolvedValue(response)
+    const { result } = renderHook(() => useQueueBlockingInfo([12, 7], api), { wrapper: createWrapper() })
 
     await waitFor(() =>
       expect(result.current[7]).toEqual([
@@ -62,16 +52,14 @@ describe('useQueueBlockingInfo', () => {
       ]),
     )
     expect(result.current[12]).toEqual([])
-    expect(axiosInstance.post).toHaveBeenCalledTimes(1)
-    expect(axiosInstance.post).toHaveBeenCalledWith('/v1/threads:getBlockingInfo', {
-      thread_ids: [7, 12],
-    })
+    expect(getBatchBlockingInfo).toHaveBeenCalledTimes(1)
+    expect(getBatchBlockingInfo).toHaveBeenCalledWith([7, 12])
   })
 
   it('degrades to an empty map when the batch request fails', async () => {
-    axiosInstance.post.mockRejectedValue(new Error('blocking batch unavailable'))
-    const { result } = renderHook(() => useQueueBlockingInfo([5]), { wrapper: createWrapper() })
+    getBatchBlockingInfo.mockRejectedValue(new Error('blocking batch unavailable'))
+    const { result } = renderHook(() => useQueueBlockingInfo([5], api), { wrapper: createWrapper() })
     await waitFor(() => expect(result.current).toEqual({}))
-    expect(axiosInstance.post).toHaveBeenCalledTimes(1)
+    expect(getBatchBlockingInfo).toHaveBeenCalledTimes(1)
   })
 })

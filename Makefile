@@ -1,4 +1,4 @@
-.PHONY: help init setup next-task start-task lint verify verify-e2e pytest sync venv githook install-githook tidy
+.PHONY: help init setup next-task start-task lint python-ci-lint verify verify-e2e pytest sync venv githook install-githook tidy
 .PHONY: create-phase1 create-phase2 create-phase3 create-phase4 create-phase5 create-phase6 create-phase7 create-phase8 create-phase9
 .PHONY: merge-phase1 merge-phase2 merge-phase3 merge-phase4 merge-phase5 merge-phase6 merge-phase7 merge-phase8 merge-phase9
 .PHONY: dev dev-api test seed seed-dev migrate db-up db-down worktrees status test-integration deploy-prod prod-migrate deploy-prod-migrate dev-all dev-frontend
@@ -54,6 +54,9 @@ init:  ## Initialize project with new name (Usage: make init NAME=your-project)
 
 lint:  ## Run code linting
 	bash scripts/lint.sh
+
+python-ci-lint:  ## Exact CI ruff + ty (full repo, no path filter)
+	bash scripts/check-python-ci-lint.sh
 
 setup:  ## Install dependencies, start PostgreSQL, migrate, and seed deterministic demo data
 	@uv sync --all-extras

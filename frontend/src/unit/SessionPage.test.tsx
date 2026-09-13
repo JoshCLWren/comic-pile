@@ -193,12 +193,39 @@ it('renders a complete rate event as one labeled record', () => {
 
   const eventDetails = within(screen.getByRole('list', { name: 'Event details' }))
   expect(screen.getByText('Rated')).toBeInTheDocument()
-  expect(eventDetails.getByText('Issue 5')).toBeInTheDocument()
+  expect(
+    screen.getByText((_text, node) => node?.textContent === 'A Very Long Saga Title That Must Wrap Safely On Mobile · #5'),
+  ).toBeInTheDocument()
   expect(eventDetails.getByText('1 issue read')).toBeInTheDocument()
   expect(eventDetails.getByText('Rating 4')).toBeInTheDocument()
   expect(eventDetails.getByText('d6')).toBeInTheDocument()
   expect(eventDetails.getByText('Die after: d8')).toBeInTheDocument()
   expect(eventDetails.getByText('Selected by dice roll')).toBeInTheDocument()
+})
+
+it('always pairs a thread title with its issue number in the event timeline', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 19, started_at: '2024-01-01', ended_at: null, start_die: 6, current_die: 6,
+    ladder_path: 'd6', narrative_summary: {},
+    events: [
+      { id: 20, timestamp: '2024-01-01', type: 'roll', thread_title: 'Saga', issue_number: '44', result: 3, die: 6 },
+      { id: 21, timestamp: '2024-01-01', type: 'snooze', thread_title: 'East of West', issue_number: '9' },
+    ],
+  }, isPending: false, refetch: refetchDetailsSpy })
+  mockedUseSessionSnapshots.mockReturnValue({
+    data: { snapshots: [{ id: 7, description: 'Snapshot', created_at: '2024-01-01' }] },
+    refetch: refetchSnapshotsSpy,
+  })
+
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+
+  const sagaTitle = screen.getByText((_text, node) => node?.textContent === 'Saga · #44')
+  expect(sagaTitle.textContent).toContain('Saga')
+  expect(sagaTitle.textContent).toContain('#44')
+  const eastTitle = screen.getByText((_text, node) => node?.textContent === 'East of West · #9')
+  expect(eastTitle.textContent).toContain('East of West')
+  expect(eastTitle.textContent).toContain('#9')
+  expect(screen.queryByText('Issue 44')).not.toBeInTheDocument()
 })
 
 it('uses human labels and explicit fallback text for sparse events', () => {

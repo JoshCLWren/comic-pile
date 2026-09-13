@@ -1,5 +1,9 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
+import type {
+  QueueVirtualizer,
+  UseWindowVirtualizerOptions,
+} from '../pages/QueuePage/VirtualizedThreadList'
 import VirtualizedThreadList from '../pages/QueuePage/VirtualizedThreadList'
 import { QueueList } from '../pages/QueuePage/QueueList'
 import type { Thread } from '../types'
@@ -36,14 +40,16 @@ const virtualItems = [
   { key: 1, index: 1, start: 160, end: 320, size: 160, lane: 0 },
 ]
 
-vi.mock('@tanstack/react-virtual', () => ({
-  useWindowVirtualizer: () => ({
+// Deterministic virtualizer injected through the real `useVirtualizer` prop —
+// no module mocking of @tanstack/react-virtual.
+function fakeUseVirtualizer(_options: UseWindowVirtualizerOptions): QueueVirtualizer {
+  return {
     getVirtualItems: () => virtualItems,
     getTotalSize: () => 9600,
     measureElement: vi.fn(),
     scrollToIndex: vi.fn(),
-  }),
-}))
+  }
+}
 
 let resizeCallback:
   | ((entries: Array<{ contentRect: { height: number; width: number } }>) => void)
@@ -86,6 +92,7 @@ it('keeps paginated queue items as full-width rows on a wide viewport', async ()
           {thread.title} #{index + 1}
         </div>
       )}
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
 
@@ -136,6 +143,7 @@ it('keeps a single scroll surface when the queue crosses the virtualization thre
       sentinelRef={sentinelRef as React.RefObject<HTMLDivElement | null>}
       scrollRootRef={scrollRootRef as React.RefObject<HTMLDivElement | null>}
       hasNextPage
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
 
@@ -174,6 +182,7 @@ it('keeps a single scroll surface when the queue crosses the virtualization thre
       sentinelRef={sentinelRef as React.RefObject<HTMLDivElement | null>}
       scrollRootRef={scrollRootRef as React.RefObject<HTMLDivElement | null>}
       hasNextPage
+      useVirtualizer={fakeUseVirtualizer}
     />,
   )
 

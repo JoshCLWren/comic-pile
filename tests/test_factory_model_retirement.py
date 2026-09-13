@@ -12,10 +12,24 @@ from types import ModuleType
 ROOT = Path(__file__).resolve().parents[1]
 ROSTER = ROOT / ".github" / "free-model-factories.tsv"
 HEALTH_SCRIPT = ROOT / ".github" / "scripts" / "factory_candidate_health.py"
-RETIRED_FIXED_MODELS = {
-    "nvidia/nvidia-nemotron-nano-9b-v2",
-    "thinkingmachines/inkling",
-}
+ROSTER_SCRIPT = ROOT / ".github" / "scripts" / "factory_roster.py"
+
+
+def _load_roster_lock_module() -> ModuleType:
+    """Load the generated roster lock helper."""
+    sys.path.insert(0, str(ROSTER_SCRIPT.parent))
+    spec = importlib.util.spec_from_file_location("factory_roster_retirement_test", ROSTER_SCRIPT)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_ROSTER_LOCK = _load_roster_lock_module().load_roster_lock()
+RETIRED_FIXED_MODELS = set(_ROSTER_LOCK["retired_models"])
+REMOVED_WORKERS = {str(worker) for worker in _ROSTER_LOCK["retired_workers"]}
 CATALOG_SOURCES = {"opencode-free", "openrouter-free"}
 NOW = 2_000_000
 
@@ -67,6 +81,7 @@ def test_retired_fixed_models_are_replaced_by_catalog_free_slots() -> None:
     rows = _rows()
     configured_models = {row[2] for row in rows}
     assert RETIRED_FIXED_MODELS.isdisjoint(configured_models)
+    assert REMOVED_WORKERS.isdisjoint({row[0] for row in rows})
 
     rows_by_worker = {row[0]: row for row in rows}
     assert rows_by_worker["23"][1] in CATALOG_SOURCES

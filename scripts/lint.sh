@@ -153,23 +153,13 @@ if should_run_python; then
     fi
 
     echo ""
-    echo "Running ruff linting..."
-    if [ "$MODE" = "--staged" ] && [ -n "$STAGED_PYTHON_FILES" ]; then
-        mapfile -t STAGED_PYTHON_FILE_LIST <<<"$STAGED_PYTHON_FILES"
-
-        if ! ruff check "${STAGED_PYTHON_FILE_LIST[@]}"; then
-            echo ""
-            echo "${RED}ERROR: Linting failed.${NC}"
-            echo "${RED}Please fix the linting errors and check CONTRIBUTING.md for guidelines.${NC}"
-            exit 1
-        fi
-    else
-        if ! ruff check .; then
-            echo ""
-            echo "${RED}ERROR: Linting failed.${NC}"
-            echo "${RED}Please fix the linting errors and check CONTRIBUTING.md for guidelines.${NC}"
-            exit 1
-        fi
+    echo "Running CI-parity Python lint and type check..."
+    if ! bash scripts/check-python-ci-lint.sh; then
+        echo ""
+        echo "${RED}ERROR: Python CI lint/typecheck failed.${NC}"
+        echo "${RED}Path-filtered ruff or ty is not a valid CI substitute.${NC}"
+        echo "${RED}Fix the findings and rerun: bash scripts/check-python-ci-lint.sh${NC}"
+        exit 1
     fi
 
     echo ""
@@ -221,34 +211,6 @@ if should_run_python; then
         fi
     fi
 
-    echo ""
-    echo "Running ty type checking..."
-
-    if ! command -v ty >/dev/null 2>&1; then
-        echo "${RED}ERROR: ty is not installed in the active environment.${NC}"
-        echo "${RED}Run: uv sync --all-extras${NC}"
-        exit 1
-    fi
-
-    if [ "$MODE" = "--staged" ]; then
-        if [ -n "$STAGED_PYTHON_FILES" ]; then
-            while IFS= read -r file; do
-                if ! ty check --error-on-warning "$file"; then
-                    echo ""
-                    echo "${RED}ERROR: Type checking failed.${NC}"
-                    exit 1
-                fi
-            done <<<"$STAGED_PYTHON_FILES"
-        else
-            echo "No staged Python files to type-check."
-        fi
-    else
-        if ! ty check --error-on-warning; then
-            echo ""
-            echo "${RED}ERROR: Type checking failed.${NC}"
-            exit 1
-        fi
-    fi
 fi
 
 # Handle node_modules in git worktrees

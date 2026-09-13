@@ -56,6 +56,8 @@ if [ -n "$BACKUP_STAGED" ]; then
     exit 1
 fi
 
-# Run the shared lint script (only for staged, relevant files)
+# Shared lint. Python ruff/ty always use the full-repo CI commands, even
+# when only some files are staged. Path-filtered ruff or ty is not a valid
+# CI substitute.
 bash scripts/lint.sh --staged
 

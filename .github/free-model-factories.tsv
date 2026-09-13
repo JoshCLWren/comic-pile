@@ -13,11 +13,8 @@
 23	opencode-free	big-pickle	55	dispatcher	Catalog Free Slot 23
 29	opencode-free	big-pickle	0	dispatcher	Catalog Free Slot 29
 39	opencode-free	big-pickle	5	dispatcher	OpenCode Big Pickle
-40	opencode-free	deepseek-v4-flash-free	10	dispatcher	OpenCode DeepSeek V4 Flash Free
 41	opencode-free	mimo-v2.5-free	15	dispatcher	OpenCode MiMo V2.5 Free
 42	opencode-free	nemotron-3-ultra-free	20	dispatcher	OpenCode Nemotron 3 Ultra Free
-43	opencode-free	laguna-s-2.1-free	25	dispatcher	OpenCode Laguna S 2.1 Free
-44	opencode-free	hy3-free	30	dispatcher	OpenCode Tencent Hy3 Free
 45	opencode-free	nemotron-3.5-lightning-free	35	dispatcher	OpenCode Nemotron 3.5 Lightning Free
 46	kilo-auto	kilo-auto/free	40	dispatcher	Kilo Auto Free · Forge
 47	opencode-free	muse-spark-1.2-contributor-free	45	dispatcher	OpenCode Muse Spark 1.2 Contributor Free

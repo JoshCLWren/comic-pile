@@ -2,32 +2,20 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IssueList } from '../components/IssueList'
-import { issueDependenciesApi } from '../services/api-dependencies'
-import { issuesApi } from '../services/api-issues'
+import type { IssueListApi, IssueListDependenciesApi } from '../components/IssueList'
 import type { Issue, IssueDependenciesResponse, IssueListResponse, Thread } from '../types'
 
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    list: vi.fn(),
-    create: vi.fn(),
-    get: vi.fn(),
-    markRead: vi.fn(),
-    markUnread: vi.fn(),
-    move: vi.fn(),
-    reorder: vi.fn(),
-    delete: vi.fn(),
-    migrateThread: vi.fn(),
-  },
-}))
+// Injectable fakes passed through the real `issuesApi`/`dependenciesApi` props —
+// no module mocking of the API services.
+const mockedIssuesApi = {
+  list: vi.fn<IssueListApi['list']>(),
+  markRead: vi.fn<IssueListApi['markRead']>(),
+  markUnread: vi.fn<IssueListApi['markUnread']>(),
+}
 
-vi.mock('../services/api-dependencies', () => ({
-  issueDependenciesApi: {
-    listForThread: vi.fn(),
-  },
-}))
-
-const mockedIssuesApi = vi.mocked(issuesApi, { deep: true })
-const mockedIssueDependenciesApi = vi.mocked(issueDependenciesApi, { deep: true })
+const mockedIssueDependenciesApi = {
+  listForThread: vi.fn<IssueListDependenciesApi['listForThread']>(),
+}
 
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -105,10 +93,18 @@ describe('IssueList request races and rollback isolation', () => {
       .mockImplementationOnce(() => oldResponse.promise)
       .mockResolvedValueOnce(buildListResponse([newIssue]))
 
-    const { rerender } = render(<IssueList thread={buildThread(99)} />)
+    const { rerender } = render(<IssueList
+        thread={buildThread(99)}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />)
     await waitFor(() => expect(mockedIssuesApi.list).toHaveBeenCalledTimes(1))
 
-    rerender(<IssueList thread={buildThread(100)} />)
+    rerender(<IssueList
+        thread={buildThread(100)}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />)
     await waitFor(() => expect(screen.getByText('#100')).toBeInTheDocument())
 
     await act(async () => {
@@ -135,10 +131,18 @@ describe('IssueList request races and rollback isolation', () => {
         issues: [emptyDependencies(issue)],
       })
 
-    const { rerender } = render(<IssueList thread={buildThread(99)} />)
+    const { rerender } = render(<IssueList
+        thread={buildThread(99)}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />)
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
 
-    rerender(<IssueList thread={buildThread(100)} />)
+    rerender(<IssueList
+        thread={buildThread(100)}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />)
     await waitFor(() => expect(mockedIssueDependenciesApi.listForThread).toHaveBeenCalledTimes(2))
 
     await act(async () => {
@@ -181,7 +185,11 @@ describe('IssueList request races and rollback isolation', () => {
       .mockImplementationOnce(() => firstToggle.promise)
       .mockResolvedValueOnce(undefined)
 
-    render(<IssueList thread={buildThread(99)} />)
+    render(<IssueList
+        thread={buildThread(99)}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />)
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
 
     await userEvent.click(screen.getByText('#1'))
@@ -210,7 +218,11 @@ describe('IssueList request races and rollback isolation', () => {
     mockedIssuesApi.list.mockResolvedValue(buildListResponse([issue]))
     mockedIssuesApi.markRead.mockImplementationOnce(() => toggle.promise)
 
-    render(<IssueList thread={buildThread(99)} />)
+    render(<IssueList
+        thread={buildThread(99)}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />)
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
 
     await userEvent.selectOptions(screen.getByRole('combobox'), 'unread')
@@ -241,7 +253,11 @@ describe('IssueList request races and rollback isolation', () => {
       .mockResolvedValueOnce(buildListResponse([appendedIssue], null, 3))
     mockedIssuesApi.markRead.mockImplementationOnce(() => firstToggle.promise)
 
-    render(<IssueList thread={buildThread(99)} />)
+    render(<IssueList
+        thread={buildThread(99)}
+        issuesApi={mockedIssuesApi}
+        dependenciesApi={mockedIssueDependenciesApi}
+      />)
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
 
     await userEvent.click(screen.getByText('#1'))

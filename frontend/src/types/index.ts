@@ -241,6 +241,7 @@ export interface SessionEvent {
   timestamp: string;
   type: string;
   thread_title?: string | null;
+  issue_number?: string | null;
   rating?: number | null;
   result?: number | null;
   die?: number | null;

@@ -52,7 +52,10 @@ def require_order(text: str, before: str, after: str, source: Path) -> None:
 def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
     """Validate factory control-plane texts against canonical invariants."""
     for needle in (
-"Version: 23",
+        "Version: 24",
+        "ruff check .",
+        "ty check --error-on-warning",
+        "Path-filtered ruff or ty is not a valid CI substitute",
         "Drive the open issue backlog to zero",
         "Factory ownership is a connection-pool lock around the next action",
         "Cross-worker takeover and merge are allowed",
@@ -84,6 +87,9 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "Never implement a transition as separate remove-then-add calls",
         "Heartbeat telemetry never counts as substantive progress",
         "registry issue #1093",
+        "Issues labeled `epic` or `prd` are not ordinary autonomous factory candidates.",
+        "<!-- factory-execution:manual-only -->",
+        "Integrated parent product acceptance is human/interactive controlled.",
     ):
         require(policy, needle, POLICY)
 
@@ -134,6 +140,12 @@ def validate_texts(policy: str, protocol: str, entrypoint: str) -> None:
         "The merge operation must include the exact expected head SHA.",
         "Never enable auto-merge.",
         "Autonomous factory workers may merge",
+        "ruff check .",
+        "ty check --error-on-warning",
+        "Path-filtered ruff or ty is not a valid CI substitute",
+        "Autonomous factories must not claim issues labeled `epic` or `prd`",
+        "<!-- factory-execution:manual-only -->",
+        "Integrated parent product acceptance is human/interactive controlled.",
     ):
         require(protocol, needle, PROTOCOL)
     forbid(protocol, "#679", PROTOCOL)
@@ -196,12 +208,28 @@ def validate_local_guidance() -> None:
     require(scheduled, "At the start of every scheduled run", SCHEDULED_PROMPT)
     require(scheduled, "Heartbeat telemetry never counts as substantive progress", SCHEDULED_PROMPT)
     require(scheduled, "independent daily workflow", SCHEDULED_PROMPT)
+    require(scheduled, "FROZEN-SCOPE GOVERNANCE.", SCHEDULED_PROMPT)
+    require(scheduled, "<!-- factory-execution:manual-only -->", SCHEDULED_PROMPT)
 
     next_task = NEXT_TASK_PROMPT.read_text(encoding="utf-8")
     require(next_task, "only\n  after the PR merges", NEXT_TASK_PROMPT)
+    require(next_task, "ruff check .", NEXT_TASK_PROMPT)
+    require(next_task, "ty check --error-on-warning", NEXT_TASK_PROMPT)
+    require(
+        next_task,
+        "Path-filtered ruff or ty is not a valid CI substitute",
+        NEXT_TASK_PROMPT,
+    )
 
     issue_skill = ISSUE_SKILL.read_text(encoding="utf-8")
     require(issue_skill, "After the PR merges", ISSUE_SKILL)
+    require(issue_skill, "ruff check .", ISSUE_SKILL)
+    require(issue_skill, "ty check --error-on-warning", ISSUE_SKILL)
+    require(
+        issue_skill,
+        "Path-filtered ruff or ty is not a valid CI substitute",
+        ISSUE_SKILL,
+    )
 
     legacy = LEGACY_PIPELINE.read_text(encoding="utf-8")
     forbid(legacy, "core.hooksPath=/dev/null", LEGACY_PIPELINE)

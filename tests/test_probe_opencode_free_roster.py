@@ -33,7 +33,7 @@ PROBE = load_module()
 def test_free_roster_filter_keeps_opencode_and_zen_models() -> None:
     """Factory and catalog ids stay first-class across oc / opencode / zen."""
     assert PROBE.is_free_roster_model("oc/nemotron-3.5-lightning-free")
-    assert PROBE.is_free_roster_model("opencode/deepseek-v4-flash-free")
+    assert PROBE.is_free_roster_model("opencode/mimo-v2.5-free")
     assert PROBE.is_free_roster_model("opencode-zen/muse-spark-1.2")
     assert PROBE.is_free_roster_model("big-pickle")
     assert PROBE.is_free_roster_model("muse-spark-1.2-contributor-free")

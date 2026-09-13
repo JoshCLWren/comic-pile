@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 import scripts.next_task as next_task
-from scripts.next_task import _child_numbers, _issue_context, select_next
+from scripts.next_task import _issue_context, select_next
 
 
 def _issue(number: int, title: str, labels: list[str], body: str = "") -> dict:
@@ -32,18 +32,37 @@ def test_select_next_prefers_highest_priority_pending_issue() -> None:
     assert candidate.issue["number"] == 10
 
 
-def test_select_next_ignores_non_pending_and_epic_issues() -> None:
-    """Only executable pending tasks should be selected."""
+def test_select_next_ignores_non_pending_and_parent_issues() -> None:
+    """Only executable pending child tasks should be selected."""
     issues = [
         _issue(1, "Epic", ["epic", "ralph-status:pending", "ralph-priority:critical"]),
-        _issue(2, "Active", ["ralph-task", "ralph-status:in-progress", "ralph-priority:high"]),
-        _issue(3, "Ready", ["ralph-task", "ralph-status:pending", "ralph-priority:low"]),
+        _issue(2, "PRD", ["prd", "ralph-status:pending", "ralph-priority:critical"]),
+        _issue(3, "Active", ["ralph-task", "ralph-status:in-progress", "ralph-priority:high"]),
+        _issue(4, "Ready", ["ralph-task", "ralph-status:pending", "ralph-priority:low"]),
     ]
 
     candidate = select_next(issues, set())
 
     assert candidate is not None
-    assert candidate.issue["number"] == 3
+    assert candidate.issue["number"] == 4
+
+
+def test_select_next_ignores_manual_only_issue() -> None:
+    """A manual-only issue must never enter autonomous selection."""
+    issues = [
+        _issue(
+            10,
+            "Production acceptance gate",
+            ["ralph-task", "ralph-status:pending", "ralph-priority:critical"],
+            "<!-- factory-execution:manual-only -->\nHuman-controlled gate.",
+        ),
+        _issue(20, "Ready task", ["ralph-task", "ralph-status:pending", "ralph-priority:low"]),
+    ]
+
+    candidate = select_next(issues, set())
+
+    assert candidate is not None
+    assert candidate.issue["number"] == 20
 
 
 def test_select_next_skips_issue_with_open_dependency() -> None:
@@ -105,11 +124,15 @@ Update `scripts/next_task.py` and `docs/ISSUE_EXECUTION_PROTOCOL.md`.
 
 def test_start_task_updates_label_and_posts_comment(monkeypatch: pytest.MonkeyPatch) -> None:
     """A valid task should update its label and post the start comment."""
-    monkeypatch.setattr(next_task, "_gh_issue", lambda issue_number: _issue(
-        issue_number,
-        "Ready task",
-        ["ralph-task", "ralph-status:pending", "ralph-priority:high"],
-    ))
+    monkeypatch.setattr(
+        next_task,
+        "_gh_issue",
+        lambda issue_number: _issue(
+            issue_number,
+            "Ready task",
+            ["ralph-task", "ralph-status:pending", "ralph-priority:high"],
+        ),
+    )
     monkeypatch.setattr(next_task, "_gh_issue_list", lambda state: [])
     gh_runner = Mock(return_value="")
     monkeypatch.setattr(next_task, "_run_gh", gh_runner)
@@ -123,11 +146,15 @@ def test_start_task_updates_label_and_posts_comment(monkeypatch: pytest.MonkeyPa
 
 def test_start_task_rejects_non_pending_issue(monkeypatch: pytest.MonkeyPatch) -> None:
     """A task that is not pending must not trigger GitHub writes."""
-    monkeypatch.setattr(next_task, "_gh_issue", lambda issue_number: _issue(
-        issue_number,
-        "Active task",
-        ["ralph-task", "ralph-status:in-progress", "ralph-priority:high"],
-    ))
+    monkeypatch.setattr(
+        next_task,
+        "_gh_issue",
+        lambda issue_number: _issue(
+            issue_number,
+            "Active task",
+            ["ralph-task", "ralph-status:in-progress", "ralph-priority:high"],
+        ),
+    )
     gh_runner = Mock()
     monkeypatch.setattr(next_task, "_run_gh", gh_runner)
 
@@ -137,14 +164,59 @@ def test_start_task_rejects_non_pending_issue(monkeypatch: pytest.MonkeyPatch) -
     gh_runner.assert_not_called()
 
 
+def test_start_task_rejects_parent_issue(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Explicit start cannot bypass the parent-selection fence."""
+    monkeypatch.setattr(
+        next_task,
+        "_gh_issue",
+        lambda issue_number: _issue(
+            issue_number,
+            "Parent epic",
+            ["ralph-task", "ralph-status:pending", "ralph-priority:high", "epic"],
+        ),
+    )
+    gh_runner = Mock()
+    monkeypatch.setattr(next_task, "_run_gh", gh_runner)
+
+    with pytest.raises(RuntimeError, match="parent PRD/epic"):
+        next_task._start_task(42)
+
+    gh_runner.assert_not_called()
+
+
+def test_start_task_rejects_manual_only_issue(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Explicit start cannot bypass the manual-only marker."""
+    monkeypatch.setattr(
+        next_task,
+        "_gh_issue",
+        lambda issue_number: _issue(
+            issue_number,
+            "Human gate",
+            ["ralph-task", "ralph-status:pending", "ralph-priority:high"],
+            "<!-- factory-execution:manual-only -->",
+        ),
+    )
+    gh_runner = Mock()
+    monkeypatch.setattr(next_task, "_run_gh", gh_runner)
+
+    with pytest.raises(RuntimeError, match="manual-only"):
+        next_task._start_task(42)
+
+    gh_runner.assert_not_called()
+
+
 def test_start_task_rejects_unresolved_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
     """A task with an open dependency must not update its status."""
-    monkeypatch.setattr(next_task, "_gh_issue", lambda issue_number: _issue(
-        issue_number,
-        "Blocked task",
-        ["ralph-task", "ralph-status:pending", "ralph-priority:high"],
-        "Depends on #41",
-    ))
+    monkeypatch.setattr(
+        next_task,
+        "_gh_issue",
+        lambda issue_number: _issue(
+            issue_number,
+            "Blocked task",
+            ["ralph-task", "ralph-status:pending", "ralph-priority:high"],
+            "Depends on #41",
+        ),
+    )
     monkeypatch.setattr(next_task, "_gh_issue_list", lambda state: [])
     gh_runner = Mock()
     monkeypatch.setattr(next_task, "_run_gh", gh_runner)
@@ -159,11 +231,15 @@ def test_start_task_succeeds_when_comment_fails(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A completed label transition remains successful if commenting fails."""
-    monkeypatch.setattr(next_task, "_gh_issue", lambda issue_number: _issue(
-        issue_number,
-        "Ready task",
-        ["ralph-task", "ralph-status:pending", "ralph-priority:high"],
-    ))
+    monkeypatch.setattr(
+        next_task,
+        "_gh_issue",
+        lambda issue_number: _issue(
+            issue_number,
+            "Ready task",
+            ["ralph-task", "ralph-status:pending", "ralph-priority:high"],
+        ),
+    )
     monkeypatch.setattr(next_task, "_gh_issue_list", lambda state: [])
 
     gh_runner = Mock()
@@ -180,101 +256,3 @@ def test_start_task_succeeds_when_comment_fails(
 
     assert gh_runner.call_count == 2
     assert "label updated, but comment failed" in capsys.readouterr().err
-
-
-def test_child_numbers_extracts_checkbox_references() -> None:
-    """Only checkbox-style issue references are treated as children."""
-    body = (
-        "## Executable child work\n"
-        "- [ ] #10\n"
-        "- [x] #20\n"
-        "- [ ] #30\n\n"
-        "## Related\n"
-        "- #99\n"
-        "- #100\n"
-    )
-
-    result = _child_numbers(body, issue_number=1)
-
-    assert result == {10, 20, 30}
-
-
-def test_child_numbers_excludes_self_reference() -> None:
-    """The issue's own number must not appear in the child set."""
-    body = "- [ ] #5\n- [x] #10\n"
-
-    result = _child_numbers(body, issue_number=5)
-
-    assert result == {10}
-
-
-def test_child_numbers_returns_empty_for_no_checkboxes() -> None:
-    """A body with no checkbox references returns an empty set."""
-    body = "Related: #10 #20 #30"
-
-    result = _child_numbers(body, issue_number=1)
-
-    assert result == set()
-
-
-def test_select_next_selects_epic_when_all_children_closed() -> None:
-    """An epic becomes eligible for acceptance when every child is closed."""
-    epic = _issue(
-        100,
-        "Parent epic",
-        ["epic", "ralph-status:pending", "ralph-priority:high"],
-        "Child work:\n- [ ] #10\n- [x] #20\n",
-    )
-    task = _issue(50, "Regular task", ["ralph-task", "ralph-status:pending", "ralph-priority:low"])
-
-    candidate = select_next([epic, task], {10, 20})
-
-    assert candidate is not None
-    assert candidate.issue["number"] == 100
-
-
-def test_select_next_skips_epic_with_open_children() -> None:
-    """An epic with unclosed children must not be selected."""
-    epic = _issue(
-        100,
-        "Parent epic",
-        ["epic", "ralph-status:pending", "ralph-priority:critical"],
-        "Child work:\n- [ ] #10\n- [x] #20\n",
-    )
-    task = _issue(50, "Regular task", ["ralph-task", "ralph-status:pending", "ralph-priority:low"])
-
-    candidate = select_next([epic, task], {20})
-
-    assert candidate is not None
-    assert candidate.issue["number"] == 50
-
-
-def test_select_next_skips_epic_with_only_related_references() -> None:
-    """An epic referencing only related (non-child) issues must not be selected."""
-    epic = _issue(
-        100,
-        "Parent epic",
-        ["epic", "ralph-status:pending", "ralph-priority:critical"],
-        "## Related\n- #200\n- #300\n",
-    )
-    task = _issue(50, "Regular task", ["ralph-task", "ralph-status:pending", "ralph-priority:low"])
-
-    candidate = select_next([epic, task], {200, 300})
-
-    assert candidate is not None
-    assert candidate.issue["number"] == 50
-
-
-def test_issue_context_epic_includes_acceptance_guidance() -> None:
-    """An epic selected for acceptance should include protocol guidance."""
-    epic = _issue(
-        100,
-        "Parent epic",
-        ["epic", "ralph-status:pending", "ralph-priority:high"],
-        "- [x] #10\n- [x] #20\n",
-    )
-
-    context = _issue_context(epic, {10, 20})
-
-    assert "product acceptance" in context.lower()
-    assert "PRODUCT_ACCEPTANCE_PROTOCOL.md" in context

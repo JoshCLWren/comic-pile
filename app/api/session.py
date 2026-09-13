@@ -260,13 +260,14 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
     for event in events:
         thread = threads_dict.get(event.thread_id) if event.thread_id else None
         title = thread.title if thread else f"Thread #{event.thread_id}"
+        issue_suffix = f" #{event.issue_number}" if event.issue_number else ""
 
         if event.type == "rate":
-            read_entries.append(f"{title} ({event.rating}/5.0)")
+            read_entries.append(f"{title}{issue_suffix} ({event.rating}/5.0)")
             if thread and thread.status == "completed":
-                completed_titles.add(title)
+                completed_titles.add(f"{title}{issue_suffix}")
         elif event.type == "rolled_but_skipped":
-            skipped_titles.add(title)
+            skipped_titles.add(f"{title}{issue_suffix}")
 
     summary["read"] = read_entries
     summary["skipped"] = sorted(skipped_titles)
@@ -875,6 +876,7 @@ async def get_session_details(
             type=event.type,
             timestamp=event.timestamp,
             thread_title=thread_title,
+            issue_number=event.issue_number,
         )
 
         if event.type == "roll":
