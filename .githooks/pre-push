@@ -12,7 +12,7 @@ if [ ! -f "pyproject.toml" ]; then
 fi
 
 HEAD_SHA="$(git rev-parse HEAD)"
-VERIFY_STAMP=".git/comic-pile-prepush-verified"
+VERIFY_STAMP="$(git rev-parse --git-path comic-pile-prepush-verified)"
 
 _file_mtime() {
     # Portable mtime: GNU stat uses -c %Y; BSD/macOS uses -f %m.

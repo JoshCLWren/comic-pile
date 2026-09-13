@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
@@ -17,6 +17,7 @@ interface ReadingPlanAddMaterialProps {
   planName: string
   defaultOpen?: boolean
   onCommitted?: (plan: CBLAdoptionCommitResult) => void
+  onCommitPendingChange?: (isPending: boolean) => void
 }
 
 function statusLabel(entry: CBLAdoptionPreviewEntry): string {
@@ -57,6 +58,7 @@ export default function ReadingPlanAddMaterial({
   planName,
   defaultOpen = false,
   onCommitted,
+  onCommitPendingChange,
 }: ReadingPlanAddMaterialProps) {
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(defaultOpen)
@@ -119,6 +121,10 @@ export default function ReadingPlanAddMaterial({
   const isSearching = sourcesQuery.isFetching
   const isPreviewing = previewQuery.isFetching
   const isCommitting = commitMutation.isPending
+  useEffect(() => {
+    onCommitPendingChange?.(isCommitting)
+    return () => onCommitPendingChange?.(false)
+  }, [isCommitting, onCommitPendingChange])
   const activeError = commitMutation.error ?? previewQuery.error ?? sourcesQuery.error
   const error = staleReview
     ? 'This source changed after you reviewed it. Refresh the preview before adding material.'

@@ -203,6 +203,7 @@ export default function ContinuityPlannerPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [issueLoadError, setIssueLoadError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [cblCommitPending, setCblCommitPending] = useState(false)
   const [isProjectionOpen, setIsProjectionOpen] = useState(false)
   const [laneSeq, setLaneSeq] = useState(0)
   const [editingGateNodeId, setEditingGateNodeId] = useState<string | null>(null)
@@ -517,7 +518,7 @@ export default function ContinuityPlannerPage() {
     setSaveError(null)
   }
 
-  const isSaving = savePlan.isPending
+  const isSaving = savePlan.isPending || cblCommitPending
   const statusText = isSaving ? 'Saving…' : saveError ? null : isDirty ? 'Unsaved changes' : planId ? 'Saved' : 'New plan'
 
   if (isLoading) return <p role="status" className="text-[var(--theme-text-muted)]">Loading Reading Plan…</p>
@@ -630,6 +631,7 @@ export default function ContinuityPlannerPage() {
           planName={savedName || name}
           defaultOpen={addFromCblRequested}
           onCommitted={acceptCommittedPlan}
+          onCommitPendingChange={setCblCommitPending}
         />
       ) : addFromCblRequested ? (
         <section className="rounded-xl border border-[var(--theme-continuity-accent)] bg-[var(--theme-bg-panel)] p-4">

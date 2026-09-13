@@ -14,7 +14,6 @@ from app.database import get_db
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.user import User
-from app.repositories.continuity_repository import plans_for_user
 from app.schemas.continuity_plan import (
     ContinuityPlanListItem,
     ContinuityPlanResponse,
@@ -22,6 +21,7 @@ from app.schemas.continuity_plan import (
 )
 from app.schemas.reading_order import ReadingOrderAdoptRequest
 from app.services.continuity_plan_writer import (
+    list_continuity_plan_items,
     plan_rule_marker,
     replace_compiled_rules,
     validate_node_ownership,
@@ -49,26 +49,6 @@ def _to_response(plan: ContinuityPlan) -> ContinuityPlanResponse:
     )
 
 
-def _source_paths(plan: ContinuityPlan) -> list[str]:
-    """Return unique CBL source paths retained by plan nodes in source order."""
-    paths: list[str] = []
-    for node in plan.nodes_json or []:
-        placements = node.get("source_cbl_placements")
-        if isinstance(placements, list):
-            for placement in placements:
-                if not isinstance(placement, dict):
-                    continue
-                path = placement.get("source_path")
-                if isinstance(path, str) and path not in paths:
-                    paths.append(path)
-        source_paths = node.get("source_paths")
-        if isinstance(source_paths, (list, tuple)):
-            for path in source_paths:
-                if isinstance(path, str) and path not in paths:
-                    paths.append(path)
-    return paths
-
-
 async def _get_owned_plan(db: AsyncSession, user_id: int, plan_id: int) -> ContinuityPlan:
     """Load one plan without leaking another user's identifiers."""
     plan = (
@@ -94,20 +74,7 @@ async def list_continuity_plans(
     Plans are returned in descending ``updated_at`` order so the most
     recently modified plan appears first.
     """
-    rows = await plans_for_user(db, user_id=current_user.id)
-    ordered = sorted(rows, key=lambda plan: plan.updated_at, reverse=True)
-    return [
-        ContinuityPlanListItem(
-            id=plan.id,
-            name=plan.name,
-            ordering_mode=plan.ordering_mode,
-            lane_count=len(plan.lanes_json),
-            step_count=len(plan.nodes_json),
-            source_paths=_source_paths(plan),
-            updated_at=plan.updated_at,
-        )
-        for plan in ordered
-    ]
+    return await list_continuity_plan_items(db, user_id=current_user.id)
 
 
 @router.post("/continuity-plans/", response_model=ContinuityPlanResponse, status_code=201)

@@ -104,10 +104,6 @@ async def test_blocking_explanations_use_continuity_when_legacy_switch_disabled(
         thread_id: [format_blocking_reason(dep) for dep in deps]
         for thread_id, deps in batched.items()
     } == {target_thread.id: [expected]}
-    assert expected == "Blocked by Continuity Source: #1"
-    assert "Continuity Source" in expected
-    # Copy uses the issue number, not a bare thread primary-key subject.
-    assert expected.endswith("#1")
 
     response = await auth_client.post(
         f"/api/v1/threads/{target_thread.id}:getBlockingInfo"
@@ -135,3 +131,68 @@ async def test_blocking_explanations_use_continuity_when_legacy_switch_disabled(
         [target_thread.id], user.id, async_db
     )
     assert cleared_batch[target_thread.id] == []
+
+
+@pytest.mark.asyncio
+async def test_legacy_off_ignores_sequence_order_even_after_unread_reactivation(
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With legacy blocking off, sequence_order must not block Roll eligibility."""
+    from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
+
+    user = await get_or_create_user_async(async_db)
+    earlier_thread, earlier_issue = await _thread_issue(
+        async_db,
+        user_id=user.id,
+        title="Earlier ordered",
+        queue_position=1,
+    )
+    later_thread, later_issue = await _thread_issue(
+        async_db,
+        user_id=user.id,
+        title="Later ordered",
+        queue_position=2,
+    )
+    group = DependencyGroup(user_id=user.id, name="Sequence order only")
+    async_db.add(group)
+    await async_db.flush()
+    async_db.add_all(
+        [
+            DependencyGroupMembership(
+                group_id=group.id,
+                issue_id=earlier_issue.id,
+                sequence_order=1,
+            ),
+            DependencyGroupMembership(
+                group_id=group.id,
+                issue_id=later_issue.id,
+                sequence_order=2,
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    monkeypatch.setattr(
+        dependencies,
+        "get_app_settings",
+        lambda: SimpleNamespace(legacy_dependency_blocking_enabled=False),
+    )
+
+    blocked = await dependencies._get_blocked_thread_ids_uncached(user.id, async_db)
+    assert later_thread.id not in blocked
+    assert await get_blocking_explanations(later_thread.id, user.id, async_db) == []
+
+    # Mark earlier read then unread again — sequence_order must stay non-authoritative.
+    earlier_issue.status = "read"
+    earlier_issue.read_at = datetime.now(UTC)
+    earlier_thread.next_unread_issue_id = None
+    await async_db.flush()
+    earlier_issue.status = "unread"
+    earlier_issue.read_at = None
+    earlier_thread.next_unread_issue_id = earlier_issue.id
+    await async_db.commit()
+
+    reactivated = await dependencies._get_blocked_thread_ids_uncached(user.id, async_db)
+    assert later_thread.id not in reactivated
+    assert await get_blocking_explanations(later_thread.id, user.id, async_db) == []

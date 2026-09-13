@@ -308,6 +308,14 @@ async def _explicit_already_migrated(
         }
         if not membership_issue_ids or membership_issue_ids != node_issue_ids:
             return False
+        # Grouped manifests still need the stamped/frozen issue+edge contract so
+        # a coincidental membership set cannot skip a partially edited plan.
+        expected = _groupless_expected_contract(spec, plan)
+        if expected is None:
+            return False
+        expected_issues, expected_edges = expected
+        if node_issue_ids != expected_issues or edges != expected_edges:
+            return False
     else:
         expected = _groupless_expected_contract(spec, plan)
         if expected is None:

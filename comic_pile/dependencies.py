@@ -7,7 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import TTL, cached
 from app.config import get_app_settings
-from app.continuity_blocking import get_continuity_blocked_thread_ids
+from app.continuity_blocking import (
+    get_continuity_blocked_thread_ids,
+    get_continuity_rule_blocked_thread_ids,
+)
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
@@ -24,9 +27,11 @@ def _invalidate_continuity_snapshot(user_id: int, db: AsyncSession) -> None:
 async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
     """Read unified blocked thread IDs directly from the current transaction."""
     _invalidate_continuity_snapshot(user_id, db)
-    continuity_blocked_ids = await get_continuity_blocked_thread_ids(user_id, db)
     if not get_app_settings().legacy_dependency_blocking_enabled:
-        return continuity_blocked_ids
+        # After cutover, compiled ContinuityRule rows are the only Roll authority.
+        # sequence_order must not contribute to eligibility.
+        return await get_continuity_rule_blocked_thread_ids(user_id, db)
+    continuity_blocked_ids = await get_continuity_blocked_thread_ids(user_id, db)
     legacy_blocked_ids = await _get_legacy_blocked_thread_ids_uncached(user_id, db)
     return legacy_blocked_ids | continuity_blocked_ids
 
@@ -206,7 +211,11 @@ async def _continuity_blocking_explanations(
     db: AsyncSession,
 ) -> list[BlockingDependency]:
     """Convert continuity-graph blockers into shared reader-facing explanations."""
-    from app.services.continuity_graph import issue_readiness, load_snapshot
+    from app.services.continuity_graph import (
+        issue_readiness,
+        issue_rule_readiness,
+        load_snapshot,
+    )
 
     _invalidate_continuity_snapshot(user_id, db)
     snapshot = await load_snapshot(db, user_id)
@@ -214,9 +223,14 @@ async def _continuity_blocking_explanations(
     if thread is None or thread.next_unread_issue_id is None:
         return []
 
+    readiness = (
+        issue_rule_readiness
+        if not get_app_settings().legacy_dependency_blocking_enabled
+        else issue_readiness
+    )
     reasons: list[BlockingDependency] = []
     seen: set[tuple[int, str]] = set()
-    for blocker in issue_readiness(thread.next_unread_issue_id, snapshot):
+    for blocker in readiness(thread.next_unread_issue_id, snapshot):
         for detail in blocker.unread_issue_details:
             issue = snapshot.issues.get(detail.issue_id)
             if issue is None:
@@ -244,10 +258,19 @@ async def _continuity_blocking_explanations_batch(
     db: AsyncSession,
 ) -> dict[int, list[BlockingDependency]]:
     """Convert continuity-graph blockers for many threads in one snapshot load."""
-    from app.services.continuity_graph import issue_readiness, load_snapshot
+    from app.services.continuity_graph import (
+        issue_readiness,
+        issue_rule_readiness,
+        load_snapshot,
+    )
 
     _invalidate_continuity_snapshot(user_id, db)
     snapshot = await load_snapshot(db, user_id)
+    readiness = (
+        issue_rule_readiness
+        if not get_app_settings().legacy_dependency_blocking_enabled
+        else issue_readiness
+    )
     reasons_map: dict[int, list[BlockingDependency]] = {}
     for thread_id in thread_ids:
         thread = snapshot.threads.get(thread_id)
@@ -255,7 +278,7 @@ async def _continuity_blocking_explanations_batch(
             continue
         reasons: list[BlockingDependency] = []
         seen: set[tuple[int, str]] = set()
-        for blocker in issue_readiness(thread.next_unread_issue_id, snapshot):
+        for blocker in readiness(thread.next_unread_issue_id, snapshot):
             for detail in blocker.unread_issue_details:
                 issue = snapshot.issues.get(detail.issue_id)
                 if issue is None:
