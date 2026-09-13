@@ -91,7 +91,9 @@ The factory roster `.github/free-model-factories.tsv` is a fixed-model pin list.
 
 `opencode-free` eligibility matches `validate-free-model-factories.py` (`big-pickle`, `*-free`, muse-spark free/contributor-free) and/or explicit cost `0/0` from a verbose catalog. Paid Zen models are never proposed for `opencode-free` lanes. `kilo-auto` and healthy `big-pickle` slots stay unless the OpenCode catalog itself drops them.
 
-When pins are catalog-absent or permanently retired, the workflow opens or updates `factory/model-retirement` with only those removals and rewrites `.github/factory-expected-workers.json` so `EXPECTED_WORKERS` stays generated from the TSV lock. Unused free OpenCode models are uploaded as a discovery report; they are not auto-added.
+When pins are catalog-absent or permanently retired, the workflow opens or updates `factory/model-retirement` with only those removals, reassigns remaining `minute` fields so every dispatcher bucket stays within ±1 worker, and rewrites `.github/factory-expected-workers.json` so `EXPECTED_WORKERS` stays generated from the TSV lock. Worker ids are not rewritten. Unused free OpenCode models are uploaded as a discovery report; they are not auto-added.
+
+Discovery and the free-model factory runner pin the same OpenCode CLI release (`OPENCODE_VERSION` plus `OPENCODE_LINUX_X64_SHA256`) so catalog listing and worker smoke use one binary. The current pin is `1.18.29`, matching recent live factory audits. Do not leave discovery on an older CLI than the runner.
 
 Operator flow: dispatch **Factory Model Discovery** (or wait for the schedule) → review the bot PR if dead pins were removed → merge after `python3 .github/scripts/validate-free-model-factories.py` and CI are green. Local/CI fixtures: `python3 .github/scripts/factory_model_retirement.py plan --catalog-json tests/fixtures/opencode-catalog/keep-present.json`.
 

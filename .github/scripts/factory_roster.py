@@ -197,6 +197,98 @@ def schedule_is_balanced(rows: Sequence[Mapping[str, str]]) -> bool:
     return max(counts.values()) - min(counts.values()) <= 1
 
 
+def _copy_roster_row(row: RosterRow, *, minute: int | None = None) -> RosterRow:
+    """Return a roster row copy, optionally replacing the dispatcher minute."""
+    return RosterRow(
+        worker=row["worker"],
+        source=row["source"],
+        model=row["model"],
+        minute=row["minute"] if minute is None else str(minute),
+        scheduler=row["scheduler"],
+        display_name=row["display_name"],
+    )
+
+
+def _row_schedule_minute(row: Mapping[str, str]) -> int | None:
+    """Return a valid dispatcher minute, or None when the row is unscheduled."""
+    raw = str(row.get("minute") or "").strip()
+    if not raw:
+        return None
+    try:
+        minute = int(raw)
+    except ValueError:
+        return None
+    if minute not in SCHEDULE_MINUTES:
+        return None
+    return minute
+
+
+def rebalance_schedule_minutes(rows: Sequence[RosterRow]) -> list[RosterRow]:
+    """Reassign dispatcher minutes so remaining slots stay within ±1.
+
+    Existing minutes are kept when the roster already satisfies
+    :func:`schedule_is_balanced`. Otherwise each remaining worker keeps its
+    current minute while that bucket still has capacity; overflow workers fill
+    under-filled buckets in dispatcher order. Worker ids are not rewritten.
+
+    Args:
+        rows: Roster rows after pin removal.
+
+    Returns:
+        Rows with balanced ``minute`` values.
+
+    Raises:
+        RuntimeError: If the remaining rows cannot be assigned to the planned
+            bucket capacities. This is a programmer error, not a catalog miss.
+    """
+    if not rows:
+        return []
+    if schedule_is_balanced(rows):
+        return [_copy_roster_row(row) for row in rows]
+
+    ordered = sorted(rows, key=lambda row: int(row["worker"]))
+    n = len(ordered)
+    bucket_count = len(SCHEDULE_MINUTES)
+    base = n // bucket_count
+    extra = n % bucket_count
+    current_counts = schedule_counts(ordered)
+    ranked_minutes = sorted(
+        SCHEDULE_MINUTES,
+        key=lambda minute: (-current_counts[minute], minute),
+    )
+    capacity = dict.fromkeys(SCHEDULE_MINUTES, base)
+    for minute in ranked_minutes[:extra]:
+        capacity[minute] = base + 1
+
+    kept_by_minute: dict[int, list[RosterRow]] = {
+        minute: [] for minute in SCHEDULE_MINUTES
+    }
+    overflow: list[RosterRow] = []
+    for row in ordered:
+        minute = _row_schedule_minute(row)
+        if minute is not None and len(kept_by_minute[minute]) < capacity[minute]:
+            kept_by_minute[minute].append(_copy_roster_row(row, minute=minute))
+        else:
+            overflow.append(row)
+
+    overflow_index = 0
+    result: list[RosterRow] = []
+    for minute in SCHEDULE_MINUTES:
+        assigned = kept_by_minute[minute]
+        while len(assigned) < capacity[minute]:
+            if overflow_index >= len(overflow):
+                break
+            assigned.append(_copy_roster_row(overflow[overflow_index], minute=minute))
+            overflow_index += 1
+        result.extend(assigned)
+
+    if overflow_index != len(overflow):
+        raise RuntimeError("dispatcher minute rebalance left unassigned roster rows")
+    if n >= bucket_count and not schedule_is_balanced(result):
+        raise RuntimeError("dispatcher minute rebalance failed the ±1 invariant")
+    return result
+
+
 def empty_lock() -> RosterLock:
     """Return an empty lock document."""
     return RosterLock(
