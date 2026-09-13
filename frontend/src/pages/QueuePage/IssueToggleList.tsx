@@ -122,7 +122,7 @@ export function IssueToggleList({
       if (nextPageToken) {
         params.page_token = nextPageToken
       }
-      const data = await issuesApi.list(threadId, params)
+      const data = await issuesService.list(threadId, params)
       allIssues.push(...data.issues)
 
       if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {

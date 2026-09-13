@@ -67,7 +67,7 @@ export function queueThreadsQueryOptions(
       if (!pageParam) {
         params.page_size = QUEUE_PAGE_SIZE
       }
-      return threadsApi.list(params, pageParam ?? undefined)
+      return threadsList.list(params, pageParam ?? undefined)
     },
     // SAFETY: null is the intentional first pageParam; useInfiniteQuery types it as string after the first page.
     initialPageParam: null as string | null,

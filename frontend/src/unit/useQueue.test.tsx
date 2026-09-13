@@ -251,7 +251,6 @@ describe('useQueueThreads (bounded incremental loader)', () => {
       () =>
         new Promise((resolve) => {
           setTimeout(
-            // SAFETY: thread mock satisfies Thread shape; as never satisfies mock return type
             () => resolve({ threads: [{ id: 2, title: 'Batgirl' } as never], next_page_token: null }),
             100,
           )
@@ -283,7 +282,6 @@ describe('useQueueThreads (bounded incremental loader)', () => {
     await waitFor(() => expect(result.current.isPending).toBe(false))
     listThreads.mockClear()
 
-    // SAFETY: created is a valid QueueSortBy option exercised for coverage
     rerender({ sort: 'created' as QueueSortBy })
 
     await waitFor(() =>
