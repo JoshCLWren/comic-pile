@@ -143,19 +143,11 @@ def test_kilo_auto_and_big_pickle_stay_unless_catalog_absent() -> None:
     assert by_model["big-pickle"].action == "keep"
 
 
-CLUSTERED_RETIRE_WORKERS = frozenset({"10", "16", "17", "18", "19", "66", "67", "70"})
-CLUSTERED_RETIRE_MODELS = frozenset(
-    {
-        "nvidia/nemotron-3-ultra-550b-a55b",
-        "nvidia/nemotron-3-super-120b-a12b",
-        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-        "nvidia/llama-3.3-nemotron-super-49b-v1.5",
-        "nvidia/nemotron-3-nano-30b-a3b",
-        "minimax/minimax-m2.7:free",
-        "minimax/minimax-m3:free",
-        "openrouter/free",
-    }
-)
+# Temporary IDs only. Never read the live TSV for clustered-retirement
+# coverage: production pins such as 10/16/17/18/19/66/67/70 disappear after
+# a real apply and must not be the only way this suite proves rebalance.
+SYNTHETIC_RETIRE_WORKERS = tuple(str(worker) for worker in range(801, 809))
+SYNTHETIC_KEEP_WORKERS = tuple(str(worker) for worker in range(901, 929))
 
 
 def _plan_for_workers(
@@ -182,22 +174,104 @@ def _plan_for_workers(
     )
 
 
-def _catalog_without_models(models: set[str], tmp_path: Path) -> Path:
-    """Write a keep-present fixture with selected catalog ids removed."""
-    payload = json.loads((FIXTURES / "keep-present.json").read_text(encoding="utf-8"))
-    assert isinstance(payload, dict)
-    providers = payload.get("providers")
-    assert isinstance(providers, dict)
-    for provider, entries in providers.items():
-        assert isinstance(entries, list)
-        providers[provider] = [
-            entry
-            for entry in entries
-            if isinstance(entry, dict) and entry.get("id") not in models
-        ]
-    path = tmp_path / "catalog-missing.json"
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    return path
+def _clustered_retirement_rows() -> tuple[list[dict[str, str]], frozenset[str], frozenset[str]]:
+    """Build a 36-slot roster where eight clustered pins unbalance minutes.
+
+    Every dispatcher minute starts with three workers. Four minutes hold two
+    synthetic retirees each; after those eight pins drop, those buckets have
+    one worker while the other eight stay at three. Worker ids live in the
+    800/900 range so the proof never depends on the live factory TSV.
+
+    Returns:
+        Roster rows, retire worker ids, and retire model ids.
+    """
+    clustered_minutes = ROSTER.SCHEDULE_MINUTES[:4]
+    filled_minutes = ROSTER.SCHEDULE_MINUTES[4:]
+    keep_iter = iter(SYNTHETIC_KEEP_WORKERS)
+    retire_iter = iter(SYNTHETIC_RETIRE_WORKERS)
+    rows: list[dict[str, str]] = []
+    retire_workers: list[str] = []
+    retire_models: list[str] = []
+
+    for minute in clustered_minutes:
+        keeper = next(keep_iter)
+        rows.append(_row(keeper, "nvidia", f"synthetic/keep-{keeper}", minute=str(minute)))
+        for _index in range(2):
+            worker = next(retire_iter)
+            retire_workers.append(worker)
+            if int(worker) <= 805:
+                model = f"synthetic/retire-{worker}"
+                source = "nvidia"
+            else:
+                model = f"synthetic/retire-{worker}:free"
+                source = "openrouter-free"
+            retire_models.append(model)
+            rows.append(_row(worker, source, model, minute=str(minute)))
+
+    for minute in filled_minutes:
+        for _index in range(3):
+            keeper = next(keep_iter)
+            rows.append(_row(keeper, "nvidia", f"synthetic/keep-{keeper}", minute=str(minute)))
+
+    assert next(keep_iter, None) is None
+    assert next(retire_iter, None) is None
+    assert ROSTER.schedule_is_balanced(rows)
+    live_ids = {
+        str(worker)
+        for worker in ROSTER.roster_worker_ids(
+            ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
+        )
+    }
+    assert set(SYNTHETIC_RETIRE_WORKERS).isdisjoint(live_ids)
+    assert set(SYNTHETIC_KEEP_WORKERS).isdisjoint(live_ids)
+    return rows, frozenset(retire_workers), frozenset(retire_models)
+
+
+def _write_clustered_retirement_fixture(
+    tmp_path: Path,
+) -> tuple[Path, Path, Path, list[dict[str, str]], frozenset[str], frozenset[str]]:
+    """Write a temporary roster, lock, and catalog for clustered retirement.
+
+    Args:
+        tmp_path: Pytest temporary directory.
+
+    Returns:
+        Roster path, lock path, catalog path, rows, retire workers, and
+        retire models.
+    """
+    rows, retire_workers, retire_models = _clustered_retirement_rows()
+    roster = tmp_path / "free-model-factories.tsv"
+    lock_path = tmp_path / "factory-expected-workers.json"
+    catalog = tmp_path / "catalog-clustered-miss.json"
+    ROSTER.write_roster_rows(
+        roster,
+        rows,
+        comments=("# worker\tsource\tmodel\tminute\tscheduler\tdisplay_name",),
+    )
+    ROSTER.sync_roster_lock(rows, lock_path=lock_path)
+    keep_models = [
+        {"id": row["model"]}
+        for row in rows
+        if row["worker"] not in retire_workers and row["source"] == "nvidia"
+    ]
+    catalog.write_text(
+        json.dumps(
+            {
+                "source": "synthetic-clustered-retirement",
+                "providers": {
+                    "opencode": [
+                        {"id": "big-pickle", "cost": {"input": 0, "output": 0}},
+                    ],
+                    "nvidia": keep_models,
+                    "openrouter": [{"id": "synthetic/unrelated:free"}],
+                },
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return roster, lock_path, catalog, rows, retire_workers, retire_models
 
 
 def test_rebalance_keeps_minutes_when_already_balanced() -> None:
@@ -230,18 +304,27 @@ def test_rebalance_spreads_clustered_minutes() -> None:
     }
 
 
-def test_apply_rebalances_minutes_after_eight_pin_retirement() -> None:
-    """The 2026-09-13 eight-pin retirement must leave dispatcher minutes balanced."""
-    rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
-    assert ROSTER.schedule_is_balanced(rows)
-    plan = _plan_for_workers(rows, set(CLUSTERED_RETIRE_WORKERS))
-    assert {item.worker for item in plan.retirements} == set(CLUSTERED_RETIRE_WORKERS)
+def test_apply_rebalances_minutes_after_clustered_pin_retirement() -> None:
+    """Removing clustered pins from a temp roster must leave minutes ±1.
+
+    Replaces the live-TSV eight-pin assertion that broke once those production
+    workers were retired. The synthetic roster still has eight clustered pins
+    so apply has real work, then remaining minutes stay within ±1.
+    """
+    rows, retire_workers, _retire_models = _clustered_retirement_rows()
+    raw_remaining = [row for row in rows if row["worker"] not in retire_workers]
+    assert not ROSTER.schedule_is_balanced(raw_remaining)
+    raw_counts = ROSTER.schedule_counts(raw_remaining)
+    assert max(raw_counts.values()) - min(raw_counts.values()) > 1
+
+    plan = _plan_for_workers(rows, set(retire_workers))
+    assert {item.worker for item in plan.retirements} == set(retire_workers)
 
     remaining = RETIRE.apply_plan(rows, plan)
     remaining_ids = {int(row["worker"]) for row in remaining}
 
     assert remaining_ids == ROSTER.roster_worker_ids(rows) - {
-        int(worker) for worker in CLUSTERED_RETIRE_WORKERS
+        int(worker) for worker in retire_workers
     }
     assert ROSTER.schedule_is_balanced(remaining)
     counts = ROSTER.schedule_counts(remaining)
@@ -251,17 +334,9 @@ def test_apply_rebalances_minutes_after_eight_pin_retirement() -> None:
 
 def test_apply_cli_rewrites_balanced_minutes_and_lock(tmp_path: Path) -> None:
     """CLI apply retires clustered pins, rebalances minutes, and syncs the lock."""
-    roster = tmp_path / "free-model-factories.tsv"
-    lock_path = tmp_path / "factory-expected-workers.json"
-    roster.write_text(
-        (ROOT / ".github" / "free-model-factories.tsv").read_text(encoding="utf-8"),
-        encoding="utf-8",
+    roster, lock_path, catalog, _rows, retire_workers, retire_models = (
+        _write_clustered_retirement_fixture(tmp_path)
     )
-    lock_path.write_text(
-        (ROOT / ".github" / "factory-expected-workers.json").read_text(encoding="utf-8"),
-        encoding="utf-8",
-    )
-    catalog = _catalog_without_models(set(CLUSTERED_RETIRE_MODELS), tmp_path)
 
     status = RETIRE.run(
         [
@@ -278,13 +353,11 @@ def test_apply_cli_rewrites_balanced_minutes_and_lock(tmp_path: Path) -> None:
     lock = ROSTER.load_roster_lock(lock_path)
 
     assert status == 0
-    assert {row["worker"] for row in remaining}.isdisjoint(CLUSTERED_RETIRE_WORKERS)
+    assert {row["worker"] for row in remaining}.isdisjoint(retire_workers)
     assert ROSTER.schedule_is_balanced(remaining)
     assert set(lock["expected_workers"]) == ROSTER.roster_worker_ids(remaining)
-    assert {int(worker) for worker in CLUSTERED_RETIRE_WORKERS}.issubset(
-        set(lock["retired_workers"])
-    )
-    assert CLUSTERED_RETIRE_MODELS.issubset(set(lock["retired_models"]))
+    assert {int(worker) for worker in retire_workers}.issubset(set(lock["retired_workers"]))
+    assert retire_models.issubset(set(lock["retired_models"]))
 
 
 def test_apply_removes_dead_pins_and_syncs_expected_workers(tmp_path: Path) -> None:
