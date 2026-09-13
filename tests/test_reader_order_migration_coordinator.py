@@ -1194,13 +1194,66 @@ async def test_post_step23b_rebuild_schedules_residual_starman_overlays(
     async_db: AsyncSession,
 ) -> None:
     """Seed → apply Step 23B → rebuild reports schedules residual Starman overlays."""
+    await _apply_step23b_with_starman_residuals(async_db)
+
+    reports: dict[str, dict[str, object]] = {}
+    for manifest in (
+        LEGACY_READING_ORDERS_MANIFEST,
+        "doctor-strange-epic-vol-10",
+        "starman-compendiums",
+        "starman-jsa-bridge",
+    ):
+        reports[manifest] = await build_manifest_report(
+            async_db,
+            manifest=manifest,
+            source_manifests={},
+            explicit_manifests={
+                key: PRODUCTION_EXPLICIT_READER_ORDER_SPECS[key]
+                for key in (
+                    "doctor-strange-epic-vol-10",
+                    "starman-compendiums",
+                    "starman-jsa-bridge",
+                )
+            },
+        )
+
+    assert reports[LEGACY_READING_ORDERS_MANIFEST]["status"] == "already-migrated"
+    # Raw explicit dry-runs would be blocked; coordinator recovery must make them safe.
+    assert reports["starman-compendiums"]["status"] == "safe-to-migrate"
+    assert reports["starman-compendiums"].get("recovered_after_step23b") is True
+    sealed = reports["starman-compendiums"].get("existing_canonical_plan")
+    assert isinstance(sealed, dict)
+    assert isinstance(sealed.get("plan_fingerprint"), str)
+    assert sealed.get("name") == "Starman Compendiums 1-2"
+    assert reports["starman-jsa-bridge"]["status"] == "safe-to-migrate"
+    assert reports["starman-jsa-bridge"].get("recovered_after_step23b") is True
+
+    reconciled = reconcile_batch_manifest_reports(reports)
+    starman = reconciled["starman-compendiums"]
+    assert starman["apply_mode"] == "existing-plan-overlay"
+    assert starman["covered_dependency_ids"] == [1832, 1846, 1847]
+    assert starman["remaining_dependency_ids"] == [32, 955, 1355, 1551, 1552]
+
+    jsa = reconciled["starman-jsa-bridge"]
+    assert jsa["apply_mode"] == "existing-plan-overlay"
+    assert jsa["covered_dependency_ids"] == [1833]
+    assert jsa["remaining_dependency_ids"] == []
+    assert jsa["overlay_added_issue_ids"] == [26360]
+
+    doctor = reconciled["doctor-strange-epic-vol-10"]
+    assert doctor["apply_mode"] == "existing-plan-overlay"
+    assert doctor["covered_dependency_ids"] == [1806, 1807, 1808, 1810, 1811]
+    assert doctor["remaining_dependency_ids"] == []
+
+
+async def _apply_step23b_with_starman_residuals(async_db: AsyncSession) -> None:
+    """Seed Step 23A shape, apply Step 23B, and reintroduce Starman residual deps."""
     await seed_step23a_shape(async_db)
     pre_apply = await build_legacy_reading_order_dry_run(async_db)
     assert pre_apply["ok"] is True, pre_apply["errors"]
-    token = str(pre_apply["snapshot_token"])
     await apply_legacy_reading_order_migration(
         async_db,
-        accepted_snapshot_token=token,
+        accepted_snapshot_token=str(pre_apply["snapshot_token"]),
         require_reviewed_token=False,
     )
     await async_db.commit()
@@ -1252,47 +1305,137 @@ async def test_post_step23b_rebuild_schedules_residual_starman_overlays(
     await refresh_user_blocked_status(1, async_db)
     await async_db.commit()
 
-    reports: dict[str, dict[str, object]] = {}
-    for manifest in (
-        LEGACY_READING_ORDERS_MANIFEST,
-        "doctor-strange-epic-vol-10",
-        "starman-compendiums",
-        "starman-jsa-bridge",
-    ):
-        reports[manifest] = await build_manifest_report(
-            async_db,
-            manifest=manifest,
-            source_manifests={},
-            explicit_manifests={
-                key: PRODUCTION_EXPLICIT_READER_ORDER_SPECS[key]
-                for key in (
-                    "doctor-strange-epic-vol-10",
-                    "starman-compendiums",
-                    "starman-jsa-bridge",
-                )
-            },
+
+@pytest.mark.asyncio
+async def test_post_step23b_recovery_refuses_canonical_plan_drift(
+    async_db: AsyncSession,
+) -> None:
+    """Edited Step 23B plans must fail recovery before overlay mutation."""
+    await _apply_step23b_with_starman_residuals(async_db)
+
+    plan = (
+        await async_db.execute(
+            select(ContinuityPlan).where(
+                ContinuityPlan.user_id == 1,
+                ContinuityPlan.name == "Starman Compendiums 1-2",
+            )
         )
+    ).scalar_one()
+    drifted_nodes = list(plan.nodes_json or [])
+    assert drifted_nodes
+    drifted_nodes[0] = {**drifted_nodes[0], "position": int(drifted_nodes[0]["position"]) + 99}
+    plan.nodes_json = drifted_nodes
+    await async_db.commit()
 
-    assert reports[LEGACY_READING_ORDERS_MANIFEST]["status"] == "already-migrated"
-    # Raw explicit dry-runs would be blocked; coordinator recovery must make them safe.
-    assert reports["starman-compendiums"]["status"] == "safe-to-migrate"
-    assert reports["starman-compendiums"].get("recovered_after_step23b") is True
-    assert reports["starman-jsa-bridge"]["status"] == "safe-to-migrate"
-    assert reports["starman-jsa-bridge"].get("recovered_after_step23b") is True
+    report = await build_manifest_report(
+        async_db,
+        manifest="starman-compendiums",
+        source_manifests={},
+        explicit_manifests={
+            "starman-compendiums": PRODUCTION_EXPLICIT_READER_ORDER_SPECS[
+                "starman-compendiums"
+            ]
+        },
+    )
+    assert report["status"] != "safe-to-migrate"
+    assert report.get("recovered_after_step23b") is not True
+    assert any(
+        "Step 23B canonical plan drifted from reviewed fingerprint" in str(error)
+        for error in report.get("errors", [])
+    ) or any(
+        "classified reader-order dependencies missing" in str(error)
+        for error in report.get("errors", [])
+    )
 
-    reconciled = reconcile_batch_manifest_reports(reports)
-    starman = reconciled["starman-compendiums"]
-    assert starman["apply_mode"] == "existing-plan-overlay"
-    assert starman["covered_dependency_ids"] == [1832, 1846, 1847]
-    assert starman["remaining_dependency_ids"] == [32, 955, 1355, 1551, 1552]
+    spec = PRODUCTION_EXPLICIT_READER_ORDER_SPECS["starman-compendiums"]
+    recovered = await build_explicit_reader_order_dry_run(
+        async_db,
+        spec,
+        tolerate_step23b_covered_absence=True,
+    )
+    assert recovered["ok"] is not True
+    assert any(
+        "Step 23B canonical plan drifted from reviewed fingerprint" in str(error)
+        for error in recovered["errors"]
+    )
 
-    jsa = reconciled["starman-jsa-bridge"]
-    assert jsa["apply_mode"] == "existing-plan-overlay"
-    assert jsa["covered_dependency_ids"] == [1833]
-    assert jsa["remaining_dependency_ids"] == []
-    assert jsa["overlay_added_issue_ids"] == [26360]
 
-    doctor = reconciled["doctor-strange-epic-vol-10"]
-    assert doctor["apply_mode"] == "existing-plan-overlay"
-    assert doctor["covered_dependency_ids"] == [1806, 1807, 1808, 1810, 1811]
-    assert doctor["remaining_dependency_ids"] == []
+@pytest.mark.asyncio
+async def test_post_step23b_recovery_keeps_roll_equivalence_gate(
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Recovery must not waive before/after Roll mismatches as safe-to-migrate."""
+    await _apply_step23b_with_starman_residuals(async_db)
+
+    async def _all_blocked(user_id: int, db: AsyncSession) -> set[int]:
+        del user_id, db
+        return set(range(1, 50_000))
+
+    async def _empty_roll(user_id: int, db: AsyncSession) -> list[object]:
+        del user_id, db
+        return []
+
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._get_blocked_thread_ids_uncached",
+        _all_blocked,
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration.get_roll_pool",
+        _empty_roll,
+    )
+
+    spec = PRODUCTION_EXPLICIT_READER_ORDER_SPECS["starman-compendiums"]
+    recovered = await build_explicit_reader_order_dry_run(
+        async_db,
+        spec,
+        tolerate_step23b_covered_absence=True,
+    )
+    assert recovered["ok"] is not True
+    assert any(
+        "Roll eligibility would change" in str(error) for error in recovered["errors"]
+    )
+    assert migration_report_status(recovered) == "behavior-mismatch"
+
+
+@pytest.mark.asyncio
+async def test_overlay_apply_refuses_sealed_plan_drift(
+    async_db: AsyncSession,
+) -> None:
+    """Overlay apply compares the locked plan to the sealed recovered fingerprint."""
+    await _apply_step23b_with_starman_residuals(async_db)
+
+    spec = PRODUCTION_EXPLICIT_READER_ORDER_SPECS["starman-compendiums"]
+    snapshot = await build_explicit_reader_order_dry_run(
+        async_db,
+        spec,
+        tolerate_step23b_covered_absence=True,
+    )
+    assert snapshot["ok"] is True, snapshot["errors"]
+    sealed = snapshot.get("existing_canonical_plan")
+    assert isinstance(sealed, dict)
+    assert isinstance(sealed.get("plan_fingerprint"), str)
+
+    plan = (
+        await async_db.execute(
+            select(ContinuityPlan).where(
+                ContinuityPlan.user_id == 1,
+                ContinuityPlan.name == spec.plan_name,
+            )
+        )
+    ).scalar_one()
+    drifted_nodes = list(plan.nodes_json or [])
+    drifted_nodes[0] = {
+        **drifted_nodes[0],
+        "position": int(drifted_nodes[0]["position"]) + 7,
+    }
+    plan.nodes_json = drifted_nodes
+    await async_db.flush()
+
+    with pytest.raises(MigrationInvariantError, match="drifted since dry-run"):
+        await apply_explicit_reader_order_overlay(
+            async_db,
+            snapshot=snapshot,
+            spec=spec,
+            covered_dependency_ids={1832, 1846, 1847},
+        )

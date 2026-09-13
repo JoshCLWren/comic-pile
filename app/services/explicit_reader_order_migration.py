@@ -381,13 +381,13 @@ def _migration_contract(
     }
 
 
-def _reviewed_step23b_plan_names() -> set[str]:
-    """Return the three canonical Step 23B Reading Plan names."""
+def _reviewed_step23b_writer_payloads() -> dict[str, dict[str, object]]:
+    """Return reviewed Step 23A writer payloads keyed by canonical plan name."""
     evidence = load_reviewed_step23a_contract()
     targets = evidence.get("proposed_canonical_targets")
     if not isinstance(targets, list):
-        return set()
-    names: set[str] = set()
+        return {}
+    payloads: dict[str, dict[str, object]] = {}
     for target in targets:
         if not isinstance(target, dict):
             continue
@@ -396,8 +396,13 @@ def _reviewed_step23b_plan_names() -> set[str]:
             continue
         name = payload.get("name")
         if isinstance(name, str) and name:
-            names.add(name)
-    return names
+            payloads[name] = payload
+    return payloads
+
+
+def _reviewed_step23b_plan_names() -> set[str]:
+    """Return the three canonical Step 23B Reading Plan names."""
+    return set(_reviewed_step23b_writer_payloads())
 
 
 def _require_clean(snapshot: dict[str, Any]) -> None:
@@ -416,9 +421,11 @@ async def build_explicit_reader_order_dry_run(
     """Build a deterministic read-only snapshot for one Step 14 family manifest.
 
     When ``tolerate_step23b_covered_absence`` is true, dependencies already retired
-    by Step 23B are reconstructed from the reviewed Step 23A contract and overlap
-    with the same-named Step 23B plan is ignored. Residual live dependencies must
-    still be present.
+    by Step 23B are reconstructed from the reviewed Step 23A contract. The matching
+    Step 23B target plan must still fingerprint-match the reviewed writer payload
+    and is sealed into the snapshot; other Step 23B plans may overlap without
+    blocking. Residual live dependencies must still be present. Roll equivalence
+    remains required.
     """
     _invalidate_continuity_snapshot(spec.user_id, db)
     errors: list[str] = []
@@ -575,7 +582,11 @@ async def build_explicit_reader_order_dry_run(
         ordered_issue_ids = sorted(issue_ids)
 
     overlapping_plans: list[dict[str, object]] = []
-    step23b_plan_names = set(_reviewed_step23b_plan_names()) if tolerate_step23b_covered_absence else set()
+    existing_canonical_plan: dict[str, object] | None = None
+    reviewed_payloads = (
+        _reviewed_step23b_writer_payloads() if tolerate_step23b_covered_absence else {}
+    )
+    step23b_plan_names = set(reviewed_payloads)
     if issue_ids:
         plans = (
             await db.execute(
@@ -591,12 +602,54 @@ async def build_explicit_reader_order_dry_run(
             overlap = refs & issue_ids
             if not overlap:
                 continue
-            # Step 23B canonical plans are expected to overlap residual overlays
-            # (for example JSA issue 26360 already lives on the Starman plan).
-            if tolerate_step23b_covered_absence and plan.name in step23b_plan_names:
+            # Non-target Step 23B plans may overlap residual overlays (for example
+            # JSA issue 26360 already lives on the Starman plan). The target plan
+            # itself must be sealed and fingerprint-checked, not ignored.
+            if (
+                tolerate_step23b_covered_absence
+                and plan.name in step23b_plan_names
+                and plan.name != spec.plan_name
+            ):
+                continue
+            if (
+                tolerate_step23b_covered_absence
+                and plan.name == spec.plan_name
+                and plan.name in reviewed_payloads
+            ):
+                reviewed_payload = reviewed_payloads[plan.name]
+                live_fingerprint = _plan_fingerprint(plan)
+                expected_fingerprint = _plan_fingerprint_from_payload(reviewed_payload)
+                if live_fingerprint != expected_fingerprint:
+                    errors.append(
+                        "Step 23B canonical plan drifted from reviewed fingerprint: "
+                        f"{plan.name!r}"
+                    )
+                    continue
+                if plan.ordering_mode != "informational":
+                    errors.append(
+                        f"Step 23B canonical plan ordering_mode changed: {plan.name!r}"
+                    )
+                    continue
+                existing_canonical_plan = {
+                    "id": plan.id,
+                    "name": plan.name,
+                    "ordering_mode": plan.ordering_mode,
+                    "plan_fingerprint": live_fingerprint,
+                    "nodes": list(plan.nodes_json or []),
+                    "lanes": list(plan.lanes_json or []),
+                }
                 continue
             overlapping_plans.append(
                 {"id": plan.id, "name": plan.name, "overlap_count": len(overlap)}
+            )
+    if tolerate_step23b_covered_absence and spec.plan_name in step23b_plan_names:
+        if existing_canonical_plan is None and not any(
+            "Step 23B canonical plan drifted" in error
+            or "Step 23B canonical plan ordering_mode changed" in error
+            for error in errors
+        ):
+            errors.append(
+                f"Step 23B canonical plan missing for recovery: {spec.plan_name!r}"
             )
     if overlapping_plans:
         errors.append(f"existing Reading Plan overlap: {overlapping_plans}")
@@ -716,8 +769,16 @@ async def build_explicit_reader_order_dry_run(
     )
     removed_rule_ids = {rule.id for rule in removed_rules}
 
+    # Full edge_set drives plan membership/topology (including Step 23B-covered
+    # reconstructed edges). Hard convergence gates and Roll simulation use only
+    # residual live edges after Step 23B: covered edges already live on the
+    # sealed informational plan without hard constraints.
+    live_edge_set = {
+        (dependency.source_issue_id, dependency.target_issue_id) for dependency in selected
+    }
+    rule_edge_set = live_edge_set if tolerate_step23b_covered_absence else edge_set
     predecessors: dict[int, list[int]] = {}
-    for source_id, target_id in sorted(edge_set):
+    for source_id, target_id in sorted(rule_edge_set):
         predecessors.setdefault(target_id, []).append(source_id)
     for values in predecessors.values():
         values.sort()
@@ -757,7 +818,12 @@ async def build_explicit_reader_order_dry_run(
         for target_id, source_ids in predecessors.items()
         for source_id in source_ids
     }
-    if planned_edges != edge_set:
+    if tolerate_step23b_covered_absence:
+        if not live_edge_set <= planned_edges:
+            errors.append(
+                "proposed Reading Plan does not exactly reproduce residual reader-order edges"
+            )
+    elif planned_edges != edge_set:
         errors.append("proposed Reading Plan does not exactly reproduce classified reader-order edges")
 
     target_ids = set(predecessors)
@@ -895,10 +961,7 @@ async def build_explicit_reader_order_dry_run(
         )
 
     future_eligible = sorted(affected_ids - future_blocked)
-    if future_eligible != current_eligible and not tolerate_step23b_covered_absence:
-        # Residual overlays rebuild covered edges that Step 23B already retired.
-        # Point-in-time Roll equality was proven by Step 23B; residual recovery
-        # must not re-litigate that forecast against reconstructed history.
+    if future_eligible != current_eligible:
         errors.append(
             "affected Roll eligibility would change: "
             f"before={current_eligible}, after={future_eligible}"
@@ -944,6 +1007,7 @@ async def build_explicit_reader_order_dry_run(
             _rule_snapshot(rule) for rule in removed_rules
         ],
         "overlapping_plans": overlapping_plans,
+        "existing_canonical_plan": existing_canonical_plan,
         "factual": factual,
         "planned": {
             "plan": plan_payload,

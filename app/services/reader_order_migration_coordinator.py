@@ -29,6 +29,7 @@ from app.services.explicit_reader_order_migration import (
     _migration_contract,
     _planned_rule_descriptor as _explicit_planned_rule_descriptor,
     _resolve_selected_dependency_ids,
+    _reviewed_step23b_writer_payloads,
     build_explicit_reader_order_dry_run,
 )
 from app.services.legacy_reading_order_production_migration import (
@@ -572,6 +573,24 @@ async def apply_explicit_reader_order_overlay(
             f"expected one Step 23B plan named {spec.plan_name!r}, found {len(plans)}"
         )
     plan = plans[0]
+    reviewed_payload = _reviewed_step23b_writer_payloads().get(spec.plan_name)
+    if reviewed_payload is not None:
+        expected_fingerprint = _plan_fingerprint_from_payload(reviewed_payload)
+        sealed = snapshot.get("existing_canonical_plan")
+        if isinstance(sealed, dict):
+            sealed_fingerprint = sealed.get("plan_fingerprint")
+            if sealed_fingerprint != expected_fingerprint:
+                raise MigrationInvariantError(
+                    "recovered snapshot sealed a drifted Step 23B plan"
+                )
+            if _plan_fingerprint(plan) != sealed_fingerprint:
+                raise MigrationInvariantError(
+                    "Step 23B plan drifted since dry-run"
+                )
+        elif _plan_fingerprint(plan) != expected_fingerprint:
+            raise MigrationInvariantError(
+                "Step 23B plan does not match reviewed fingerprint"
+            )
     existing_nodes = [ContinuityPlanNode.model_validate(node) for node in plan.nodes_json or []]
     existing_by_ref = {
         node.ref_id: node for node in existing_nodes if node.node_type == "issue"
@@ -920,18 +939,18 @@ def _normalize_legacy_report(report: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _step23b_retire_set_applied(db: AsyncSession) -> bool:
-    """Return True when the nine Step 23B reading_plan_order deps are gone."""
+    """Return True when Step 23B retire set and reviewed plan fingerprints hold."""
     retired_ids = sorted(_reviewed_step23b_dependency_ids())
     remaining = await db.scalar(
         select(func.count()).select_from(Dependency).where(Dependency.id.in_(retired_ids))
     )
     if remaining != 0:
         return False
-    targets = _reviewed_step23b_target_issue_ids()
-    if len(targets) != 3:
+    payloads = _reviewed_step23b_writer_payloads()
+    if len(payloads) != 3:
         return False
     user_id = int(_load_step23a_module().USER_ID)
-    for plan_name in targets:
+    for plan_name, payload in payloads.items():
         plans = list(
             (
                 await db.execute(
@@ -946,6 +965,12 @@ async def _step23b_retire_set_applied(db: AsyncSession) -> bool:
             .all()
         )
         if len(plans) != 1:
+            return False
+        plan = plans[0]
+        if _plan_fingerprint(plan) != _plan_fingerprint_from_payload(payload):
+            return False
+        owned = await _plan_owned_rule_hashes(db, user_id=user_id, plan_id=plan.id)
+        if owned:
             return False
     return True
 
