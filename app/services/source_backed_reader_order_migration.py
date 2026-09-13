@@ -47,6 +47,17 @@ from comic_pile.dependencies import (
 )
 from comic_pile.queue import get_roll_pool
 
+_DEPENDENCY_ID_BATCH_SIZE = 10_000
+
+
+def _dependency_id_batches(dependency_ids: set[int] | list[int]) -> tuple[tuple[int, ...], ...]:
+    """Split dependency IDs below asyncpg's 32,767 bind-argument limit."""
+    ordered = sorted(set(dependency_ids))
+    return tuple(
+        tuple(ordered[offset : offset + _DEPENDENCY_ID_BATCH_SIZE])
+        for offset in range(0, len(ordered), _DEPENDENCY_ID_BATCH_SIZE)
+    )
+
 
 @dataclass(frozen=True)
 class SourceBackedReaderOrderSpec:
@@ -403,14 +414,15 @@ async def build_source_backed_reader_order_dry_run(
     removal_ids = {
         dependency.id for dependency in [*source_deps, *explicit_deps]
     }
-    removed_rules = (
-        list(
+    removed_rules: list[ContinuityRule] = []
+    for dependency_ids in _dependency_id_batches(removal_ids):
+        removed_rules.extend(
             (
                 await db.execute(
                     select(ContinuityRule)
                     .where(
                         ContinuityRule.user_id == spec.user_id,
-                        ContinuityRule.legacy_dependency_id.in_(removal_ids),
+                        ContinuityRule.legacy_dependency_id.in_(dependency_ids),
                     )
                     .order_by(ContinuityRule.id)
                 )
@@ -418,9 +430,7 @@ async def build_source_backed_reader_order_dry_run(
             .scalars()
             .all()
         )
-        if removal_ids
-        else []
-    )
+    removed_rules.sort(key=lambda rule: rule.id)
     removed_rule_ids = {rule.id for rule in removed_rules}
 
     graph = await load_snapshot(db, spec.user_id)
@@ -756,25 +766,34 @@ async def apply_source_backed_reader_order_migration(
     ]
     removal_ids = [int(cast(int, row["id"])) for row in removed_rows]
     if removal_ids:
-        result = await db.execute(
-            delete(Dependency).where(Dependency.id.in_(removal_ids))
-        )
-        if getattr(result, "rowcount", None) != len(removal_ids):
+        removed_count = 0
+        for dependency_ids in _dependency_id_batches(removal_ids):
+            result = await db.execute(
+                delete(Dependency).where(Dependency.id.in_(dependency_ids))
+            )
+            rowcount = getattr(result, "rowcount", None)
+            if not isinstance(rowcount, int):
+                raise MigrationInvariantError("reader-order dependency delete count unavailable")
+            removed_count += rowcount
+        if removed_count != len(removal_ids):
             raise MigrationInvariantError("reader-order dependency delete count mismatch")
     await db.flush()
 
     if removal_ids:
-        surviving = list(
-            (
-                await db.execute(
-                    select(ContinuityRule.id).where(
-                        ContinuityRule.legacy_dependency_id.in_(removal_ids)
+        surviving: list[int] = []
+        for dependency_ids in _dependency_id_batches(removal_ids):
+            surviving.extend(
+                (
+                    await db.execute(
+                        select(ContinuityRule.id).where(
+                            ContinuityRule.legacy_dependency_id.in_(dependency_ids)
+                        )
                     )
                 )
+                .scalars()
+                .all()
             )
-            .scalars()
-            .all()
-        )
+        surviving.sort()
         if surviving:
             raise MigrationInvariantError(
                 f"dependency-linked rules survived deletion: {surviving}"
