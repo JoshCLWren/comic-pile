@@ -216,6 +216,8 @@ jobs:
             --retry 10 --retry-delay 2 --retry-all-errors \
             https://comic-pile.vercel.app/health >/dev/null
 
+  # Keep-N=1: live production alias only. No rollback candidate.
+  # Fail-soft so prune errors do not fail a finished migrate/deploy/smoke.
   prune:
     name: Prune older Vercel deployments
     needs:
@@ -244,7 +246,7 @@ jobs:
             exit 1
           fi
 
-      - name: Keep current production plus previous Ready production
+      - name: Keep only the live production alias
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
@@ -252,4 +254,5 @@ jobs:
             --project-id "$VERCEL_PROJECT_ID" \
             --project-name comic-pile \
             --team-id "$VERCEL_ORG_ID" \
+            --keep-n 1 \
             --fail-soft

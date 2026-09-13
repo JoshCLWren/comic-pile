@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Prune stale Vercel deployments after a ComicPile production deploy.
 
-Keep policy (keep-N=2 production Ready)
+Keep policy (keep-N=1 production Ready)
 ---------------------------------------
-Never delete the live production alias target. Also keep the most recent
-READY production deployment that is not that alias (one rollback candidate).
-Delete every other terminal deployment, including leftover preview rows and
-ERROR/CANCELED/FAILED records that still consume Functions Storage.
+Never delete the live production alias target (``targets.production``).
+Delete every other terminal deployment, including the previous READY
+production, leftover preview rows, and ERROR/CANCELED/FAILED records that
+still consume Functions Storage. There is no rollback candidate.
 
 Safety
 ------
@@ -19,8 +19,8 @@ Safety
 
 Usage::
 
-    python scripts/prune_vercel_deployments.py --dry-run
-    python scripts/prune_vercel_deployments.py --fail-soft
+    python scripts/prune_vercel_deployments.py --keep-n 1 --dry-run
+    python scripts/prune_vercel_deployments.py --keep-n 1 --fail-soft
 """
 
 from __future__ import annotations
@@ -40,6 +40,7 @@ from typing import Protocol
 
 API_BASE = "https://api.vercel.com"
 DEFAULT_PROJECT_NAME = "comic-pile"
+KEEP_N = 1
 DELETE_BATCH_SIZE = 200
 LIST_PAGE_SIZE = 100
 REQUEST_TIMEOUT_SECONDS = 30.0
@@ -119,7 +120,6 @@ class PruneResult:
 
     Attributes:
         live_id: Current production alias target.
-        rollback_id: Previous READY production id, if one exists.
         kept: Deployment ids the policy refused to delete.
         deleted: Ids successfully removed (empty on dry-run).
         failed: Ids that were selected but not removed.
@@ -128,7 +128,6 @@ class PruneResult:
     """
 
     live_id: str
-    rollback_id: str | None
     kept: tuple[str, ...]
     deleted: tuple[str, ...]
     failed: tuple[str, ...]
@@ -312,27 +311,6 @@ def verify_project(
         )
 
 
-def select_rollback_id(live_id: str, deployments: Sequence[Deployment]) -> str | None:
-    """Return the previous READY production deployment, if one exists.
-
-    Args:
-        live_id: Current production alias target.
-        deployments: All known deployments.
-
-    Returns:
-        The newest READY production id that is not ``live_id``, or ``None``.
-    """
-    ready_production = [
-        item
-        for item in deployments
-        if item.is_production and item.is_ready and item.uid != live_id
-    ]
-    if not ready_production:
-        return None
-    newest = max(ready_production, key=lambda item: item.created)
-    return newest.uid
-
-
 def select_keepers(live_id: str, deployments: Sequence[Deployment]) -> set[str]:
     """Return ids that must not be deleted.
 
@@ -341,12 +319,10 @@ def select_keepers(live_id: str, deployments: Sequence[Deployment]) -> set[str]:
         deployments: All known deployments.
 
     Returns:
-        Live production, the previous READY production, and in-progress ids.
+        The live production alias and in-progress ids. Previous READY
+        production is not kept (keep-N=1).
     """
     keepers = {live_id}
-    rollback_id = select_rollback_id(live_id, deployments)
-    if rollback_id is not None:
-        keepers.add(rollback_id)
     for item in deployments:
         if item.is_in_progress:
             keepers.add(item.uid)
@@ -667,13 +643,11 @@ def run_prune(
     verify_project(project, project_id=project_id, project_name=project_name)
     live_id = production_alias_id(project)
     deployments = client.fetch_deployments()
-    rollback_id = select_rollback_id(live_id, deployments)
     keepers = select_keepers(live_id, deployments)
     in_progress = tuple(item.uid for item in deployments if item.is_in_progress)
     candidates = select_prune_candidates(deployments, keepers)
     emit(
-        "Keep policy: live production alias + previous READY production "
-        f"(keep-N=2). live={live_id} rollback={rollback_id or 'none'}"
+        f"Keep policy: live production alias only (keep-N={KEEP_N}). live={live_id}"
     )
     emit(f"Listed {len(deployments)} deployment(s); keeping {len(keepers)}.")
     if in_progress:
@@ -682,7 +656,6 @@ def run_prune(
         emit("Nothing to prune.")
         return PruneResult(
             live_id=live_id,
-            rollback_id=rollback_id,
             kept=tuple(sorted(keepers)),
             deleted=(),
             failed=(),
@@ -697,7 +670,6 @@ def run_prune(
             emit(f"DRY-RUN would delete {item.uid} state={item.state} target={item.target}")
         return PruneResult(
             live_id=live_id,
-            rollback_id=rollback_id,
             kept=tuple(sorted(keepers)),
             deleted=(),
             failed=(),
@@ -730,7 +702,6 @@ def run_prune(
     )
     return PruneResult(
         live_id=live_id,
-        rollback_id=rollback_id,
         kept=tuple(sorted(keepers)),
         deleted=tuple(deleted),
         failed=tuple(failed),
@@ -767,6 +738,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Vercel bearer token (default: VERCEL_TOKEN). Never printed.",
     )
     parser.add_argument(
+        "--keep-n",
+        type=int,
+        default=KEEP_N,
+        help=(
+            "Production Ready deployments to keep. Default 1: live production "
+            "alias only; no rollback candidate."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="List keepers and candidates without deleting.",
@@ -795,6 +775,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         Process exit code.
     """
     args = build_parser().parse_args(argv)
+    if args.keep_n != KEEP_N:
+        print(
+            f"--keep-n {args.keep_n} is not supported; "
+            f"policy is keep-N={KEEP_N} (live production alias only).",
+            file=sys.stderr,
+        )
+        return prune_exit_code(fail_soft=args.fail_soft, failed=True)
     if not args.token or not args.project_id or not args.team_id:
         message = "VERCEL_TOKEN, VERCEL_PROJECT_ID, and VERCEL_ORG_ID are required."
         print(message, file=sys.stderr)
