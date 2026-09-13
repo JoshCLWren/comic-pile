@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
-import csv
+import importlib.util
 import re
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 import os
 import subprocess
 
@@ -15,6 +17,7 @@ DISPATCHER = Path('.github/workflows/fixed-model-factory-dispatch.yml')
 ENTRY = Path('.github/workflows/free-model-factory-entry.yml')
 RUNNER = Path('.github/workflows/free-model-factory-run.yml')
 DISCOVERY = Path('.github/workflows/chromium-discovery.yml')
+MODEL_DISCOVERY = Path('.github/workflows/factory-model-discovery.yml')
 DISCOVERY_CLASSIFIER = Path('.github/scripts/classify-chromium-discovery.py')
 PLAYWRIGHT_CONFIG = Path('frontend/playwright.config.ts')
 WORKER = Path('.github/scripts/free-model-factory-worker.sh')
@@ -23,39 +26,28 @@ CONTROLLER = Path('.github/scripts/factory-work-controller.py')
 POLICY = Path('.github/scripts/factory_work_policy.py')
 KILO_HELPER = Path('.github/scripts/kilo-auto-factory-run.sh')
 GUARD = Path('.github/scripts/fixed-model-guard.py')
-# OpenCode CLI catalog (opencode 1.18.29) no longer lists these free pins.
-EXPECTED_WORKERS = {9, 10, 11, 14, 16, 17, 18, 19, 20, 21, 23, 29} | (
-    set(range(39, 72)) - {40, 43, 44}
-)
-
-SCHEDULE_MINUTES = tuple(range(0, 60, 5))
+ROSTER_HELPER = Path(__file__).resolve().parent / 'factory_roster.py'
 ENTRY_PERMISSIONS = ('contents: write', 'issues: write', 'pull-requests: write', 'actions: write', 'checks: read')
 OPENCODE_ALWAYS_FREE = frozenset({'big-pickle'})
 OPENCODE_MUSE_SPARK_RE = re.compile(r'muse-spark', re.IGNORECASE)
 
 
-def opencode_model_is_free(model: str) -> bool:
-    """Return whether an OpenCode lane pin is a free-roster model id."""
-    name = model.strip().lower()
-    if not name or '/' in name:
-        return False
-    return (
-        name in OPENCODE_ALWAYS_FREE
-        or name.endswith('-free')
-        or bool(OPENCODE_MUSE_SPARK_RE.search(name))
-    )
+def _load_factory_roster() -> ModuleType:
+    """Load the shared roster helper without packaging ``.github``."""
+    spec = importlib.util.spec_from_file_location('factory_roster_validate', ROSTER_HELPER)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f'unable to load factory roster helper: {ROSTER_HELPER}')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
-def openrouter_model_is_free(model: str) -> bool:
-    """Return whether an OpenRouter lane pin is an explicit free-tier model id.
-
-    Accepts either the live ``:free`` suffix catalog ids or OpenRouter's
-    free auto-router slug ``openrouter/free``.
-    """
-    name = model.strip()
-    if name == 'openrouter/free':
-        return True
-    return bool(name) and name.endswith(':free') and '/' in name
+_ROSTER = _load_factory_roster()
+SCHEDULE_MINUTES: tuple[int, ...] = _ROSTER.SCHEDULE_MINUTES
+EXPECTED_WORKERS: set[int] = _ROSTER.expected_workers()
+opencode_model_is_free: Callable[[str], bool] = _ROSTER.opencode_model_is_free
+openrouter_model_is_free: Callable[[str], bool] = _ROSTER.openrouter_model_is_free
+load_roster_rows = _ROSTER.load_roster_rows
 
 
 def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
@@ -78,16 +70,7 @@ def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
 
 def main() -> None:
     """Validate roster, runtime, lease, assignment, and discovery invariants."""
-    with MANIFEST.open(newline='', encoding='utf-8') as handle:
-        rows = list(csv.DictReader(
-            (
-                line
-                for line in handle
-                if line.strip() and not line.lstrip().startswith('#')
-            ),
-            fieldnames=['worker', 'source', 'model', 'minute', 'scheduler', 'display_name'],
-            delimiter='\t',
-        ))
+    rows = load_roster_rows(MANIFEST)
 
     assert len(rows) == len(EXPECTED_WORKERS), (
         f'expected {len(EXPECTED_WORKERS)} factory slots, got {len(rows)}'
@@ -181,6 +164,22 @@ def main() -> None:
     assert 'Smoke Kilo Auto Free through Kilo CLI' in runner
     assert 'PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}' in runner
     assert 'x-access-token:${PR_REBASE_TOKEN}' in runner
+
+    assert MODEL_DISCOVERY.exists(), 'factory model discovery workflow is missing'
+    model_discovery = MODEL_DISCOVERY.read_text(encoding='utf-8')
+    for required in (
+        'schedule:',
+        'workflow_dispatch:',
+        'factory_model_retirement.py',
+        'opencode-model-catalog.sh',
+        'OPENCODE_ZEN_API_KEY',
+        'NVIDIA_API_KEY',
+        'factory/model-retirement',
+        'integrate.api.nvidia.com',
+    ):
+        assert required in model_discovery, f'model discovery invariant missing: {required}'
+    assert 'omniroute/auto' not in model_discovery
+    assert 'auto/best-free' not in model_discovery
 
     kilo_text = KILO_HELPER.read_text(encoding='utf-8')
     for required in (

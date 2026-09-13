@@ -15,6 +15,11 @@ FACTORY_CONTROL_PREFIXES: tuple[str, ...] = (
     ".github/scripts/free-model-factory-",
     ".github/scripts/classify-fixed-model-run.py",
     ".github/scripts/validate-free-model-factories.py",
+    ".github/scripts/factory_roster.py",
+    ".github/scripts/factory_model_catalog.py",
+    ".github/scripts/factory_model_retirement.py",
+    ".github/workflows/factory-model-discovery.yml",
+    ".github/factory-expected-workers.json",
     ".github/free-model-factories.tsv",
 )
 
