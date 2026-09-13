@@ -170,6 +170,54 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     expect(mocks.commit).not.toHaveBeenCalled()
   })
 
+  it('keeps series and bulk controls locked while commit is in flight', async () => {
+    let resolveCommit: ((value: unknown) => void) | undefined
+    mocks.commit.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCommit = resolve
+        }),
+    )
+    mocks.preview.mockResolvedValue(preview([existingEntry, missingSelected]))
+    const onCommitPendingChange = vi.fn()
+    render(
+      <ReadingPlanAddMaterialImpl
+        planId={77}
+        planName="B.P.R.D."
+        onCommitPendingChange={onCommitPendingChange}
+      />,
+    )
+    await openSource()
+    const commitButton = await screen.findByRole('button', { name: 'Add selected material' })
+    fireEvent.click(commitButton)
+    await waitFor(() => expect(mocks.commit).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(onCommitPendingChange).toHaveBeenCalledWith(true))
+
+    expect(screen.getByRole('button', { name: 'Include all' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Include none' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Include all' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Include none' }))
+    expect(onCommitPendingChange).toHaveBeenLastCalledWith(true)
+    expect(mocks.commit).toHaveBeenCalledTimes(1)
+    expect(mocks.plan).not.toHaveBeenCalled()
+
+    resolveCommit?.({
+      id: 77,
+      user_id: 1,
+      name: 'B.P.R.D.',
+      ordering_mode: 'strict_sequential',
+      lanes: [{ id: 'source-order', name: 'Source order', order: 0 }],
+      nodes: [],
+      created_at: '2026-09-12T00:00:00Z',
+      updated_at: '2026-09-12T00:00:00Z',
+      reused_positions: [1],
+      created_positions: [2],
+      excluded_positions: [],
+      unresolved_positions: [],
+    })
+    await waitFor(() => expect(onCommitPendingChange).toHaveBeenCalledWith(false))
+  })
+
   it('surfaces discovery, preview, selection, and generic commit failures', async () => {
     render(<ReadingPlanAddMaterialImpl planId={77} planName="B.P.R.D." />)
     mocks.discover.mockRejectedValueOnce(new Error('search boom'))

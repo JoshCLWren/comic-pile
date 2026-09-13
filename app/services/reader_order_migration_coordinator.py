@@ -151,6 +151,22 @@ def _legacy_target_issue_ids(report: dict[str, Any]) -> dict[str, set[int]]:
     return result
 
 
+def _reviewed_step23b_dependency_ids() -> set[int]:
+    """Return the nine Step 23A reading_plan_order IDs owned by Step 23B."""
+    return {
+        int(cast(int, row["dependency_id"]))
+        for row in reviewed_reading_plan_order_rows(load_reviewed_step23a_contract())
+    }
+
+
+def _reviewed_step23b_target_issue_ids() -> dict[str, set[int]]:
+    """Return Step 23B plan issue sets from the reviewed Step 23A contract."""
+    evidence = load_reviewed_step23a_contract()
+    return _legacy_target_issue_ids(
+        {"proposed_canonical_targets": evidence.get("proposed_canonical_targets")}
+    )
+
+
 def reconcile_batch_manifest_reports(
     reports: dict[str, dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
@@ -164,6 +180,16 @@ def reconcile_batch_manifest_reports(
 
     legacy_dependency_ids = manifest_reader_order_dependency_ids(legacy)
     legacy_targets = _legacy_target_issue_ids(legacy)
+    # After Step 23B applies, live dependency_overlap no longer contains the
+    # deleted reading_plan_order rows. Recover the reviewed contract so residual
+    # explicit overlays can still be scheduled on a resume.
+    if legacy_status == "already-migrated" and (
+        not legacy_dependency_ids or not legacy_targets
+    ):
+        if not legacy_dependency_ids:
+            legacy_dependency_ids = _reviewed_step23b_dependency_ids()
+        if not legacy_targets:
+            legacy_targets = _reviewed_step23b_target_issue_ids()
     if not legacy_dependency_ids or not legacy_targets:
         return reports
     all_legacy_issue_ids = set().union(*legacy_targets.values())
@@ -486,7 +512,12 @@ async def apply_explicit_reader_order_overlay(
     spec: ExplicitReaderOrderSpec,
     covered_dependency_ids: set[int],
 ) -> dict[str, Any]:
-    """Apply an explicit migration onto a Step 23B-created canonical plan."""
+    """Apply an explicit migration onto a Step 23B-created canonical plan.
+
+    Callers must verify the complete dry-run snapshot against live state before
+    Step 23B mutates the transaction. This path then re-checks residual
+    dependency rows after that mutation.
+    """
     if snapshot.get("ok") is not True or not snapshot.get("snapshot_token"):
         raise MigrationInvariantError(f"snapshot is not clean: {snapshot.get('errors')!r}")
     selected_rows = [

@@ -136,6 +136,7 @@ export default function ReadingPlanAddMaterial({
 
   const search = async (event?: FormEvent) => {
     event?.preventDefault()
+    if (isCommitting) return
     setHasSearched(true)
     setSubmittedQuery(query.trim())
     setSelectedSource(null)
@@ -146,6 +147,7 @@ export default function ReadingPlanAddMaterial({
   }
 
   const loadPreview = (source: CBLSourceListDiscoveryItem) => {
+    if (isCommitting) return
     const reloadSelectedSource = selectedSource?.id === source.id
     setSelectedSource(source)
     setSeriesDecisions({})
@@ -156,6 +158,7 @@ export default function ReadingPlanAddMaterial({
   }
 
   const chooseEntry = (entry: CBLAdoptionPreviewEntry, include: boolean) => {
+    if (isCommitting) return
     setEntryDecisions((current) => ({
       ...current,
       [String(entry.cbl_entry_id)]: include,
@@ -164,11 +167,12 @@ export default function ReadingPlanAddMaterial({
   }
 
   const commit = () => {
-    if (!selectedSource || !preview || commitDisabled) return
+    if (!selectedSource || !preview || commitDisabled || isCommitting) return
     commitMutation.mutate({ source: selectedSource, reviewed: preview })
   }
 
   const toggleOpen = () => {
+    if (isCommitting) return
     const next = !open
     setOpen(next)
     if (next && !hasSearched) {
@@ -198,11 +202,13 @@ export default function ReadingPlanAddMaterial({
     : []
 
   const chooseSeries = (seriesId: string, include: boolean) => {
+    if (isCommitting) return
     setSeriesDecisions((current) => ({ ...current, [seriesId]: include }))
     commitMutation.reset()
   }
 
   const chooseAllSeries = (include: boolean) => {
+    if (isCommitting) return
     setSeriesDecisions(
       Object.fromEntries(seriesGroups.map((series) => [series.id, include])),
     )
@@ -222,7 +228,8 @@ export default function ReadingPlanAddMaterial({
         <button
           type="button"
           onClick={toggleOpen}
-          className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
+          disabled={isCommitting}
+          className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
           aria-expanded={open}
         >
           {open ? 'Close' : 'Add from CBL'}
@@ -239,11 +246,12 @@ export default function ReadingPlanAddMaterial({
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search source lists"
               maxLength={200}
-              className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-card)] px-3 text-[var(--theme-text-primary)]"
+              disabled={isCommitting}
+              className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-card)] px-3 text-[var(--theme-text-primary)] disabled:opacity-50"
             />
             <button
               type="submit"
-              disabled={isSearching}
+              disabled={isSearching || isCommitting}
               className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50"
             >
               {isSearching ? 'Searching…' : 'Search'}
@@ -263,7 +271,8 @@ export default function ReadingPlanAddMaterial({
                   key={source.id}
                   type="button"
                   onClick={() => loadPreview(source)}
-                  className={`rounded-xl border p-3 text-left ${selectedSource?.id === source.id ? 'border-[var(--theme-continuity-accent)]' : 'border-[var(--theme-border)]'} hover:bg-white/5`}
+                  disabled={isCommitting}
+                  className={`rounded-xl border p-3 text-left disabled:opacity-50 ${selectedSource?.id === source.id ? 'border-[var(--theme-continuity-accent)]' : 'border-[var(--theme-border)]'} hover:bg-white/5`}
                 >
                   <span className="block text-sm font-bold text-[var(--theme-text-primary)]">{source.name}</span>
                   <span className="mt-1 block text-xs text-[var(--theme-text-muted)]">{source.source_path}</span>
@@ -278,11 +287,12 @@ export default function ReadingPlanAddMaterial({
           {staleReview && selectedSource && (
             <button
               type="button"
+              disabled={isCommitting}
               onClick={() => {
                 setStaleReview(false)
                 void previewQuery.refetch()
               }}
-              className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5"
+              className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
             >
               Refresh preview
             </button>
@@ -309,8 +319,8 @@ export default function ReadingPlanAddMaterial({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h4 id="series-decisions-heading" className="text-xs font-black uppercase tracking-widest text-[var(--theme-text-primary)]">Series choices</h4>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => chooseAllSeries(true)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)]">Include all</button>
-                    <button type="button" onClick={() => chooseAllSeries(false)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-muted)]">Include none</button>
+                    <button type="button" disabled={isCommitting || isPreviewing} onClick={() => chooseAllSeries(true)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Include all</button>
+                    <button type="button" disabled={isCommitting || isPreviewing} onClick={() => chooseAllSeries(false)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-muted)] disabled:opacity-50">Include none</button>
                   </div>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -318,8 +328,8 @@ export default function ReadingPlanAddMaterial({
                     <div key={series.id} className="flex items-center justify-between gap-2 rounded-lg border border-[var(--theme-border)] p-2">
                       <span className="min-w-0 truncate text-xs font-bold text-[var(--theme-text-primary)]">{series.name}</span>
                       <div className="flex shrink-0 gap-1" role="group" aria-label={`${series.name} series choice`}>
-                        <button type="button" aria-pressed={seriesDecisions[series.id] === true} onClick={() => chooseSeries(series.id, true)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 text-xs text-[var(--theme-text-primary)]">Include</button>
-                        <button type="button" aria-pressed={seriesDecisions[series.id] === false} onClick={() => chooseSeries(series.id, false)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 text-xs text-[var(--theme-text-muted)]">Exclude</button>
+                        <button type="button" disabled={isCommitting || isPreviewing} aria-pressed={seriesDecisions[series.id] === true} onClick={() => chooseSeries(series.id, true)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 text-xs text-[var(--theme-text-primary)] disabled:opacity-50">Include</button>
+                        <button type="button" disabled={isCommitting || isPreviewing} aria-pressed={seriesDecisions[series.id] === false} onClick={() => chooseSeries(series.id, false)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 text-xs text-[var(--theme-text-muted)] disabled:opacity-50">Exclude</button>
                       </div>
                     </div>
                   ))}

@@ -10,7 +10,10 @@ import os
 from pathlib import Path
 import sys
 import tempfile
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -23,10 +26,12 @@ def _load_application_symbols():
     from app.services.explicit_reader_order_migration import (
         PRODUCTION_EXPLICIT_READER_ORDER_SPECS,
         apply_explicit_reader_order_migration,
+        build_explicit_reader_order_dry_run,
     )
     from app.services.reader_order_cutover import build_reader_order_cutover_audit
     from app.services.legacy_reading_order_production_migration import (
         apply_legacy_reading_order_migration,
+        build_legacy_reading_order_dry_run,
     )
     from app.services.reader_order_migration_coordinator import (
         LEGACY_READING_ORDERS_MANIFEST,
@@ -37,6 +42,7 @@ def _load_application_symbols():
     from app.services.source_backed_reader_order_migration import (
         PRODUCTION_SOURCE_BACKED_SPECS,
         apply_source_backed_reader_order_migration,
+        build_source_backed_reader_order_dry_run,
     )
     from app.services.ultimate_universe_production_migration import (
         MigrationInvariantError,
@@ -46,7 +52,9 @@ def _load_application_symbols():
         AsyncSessionLocal,
         PRODUCTION_EXPLICIT_READER_ORDER_SPECS,
         apply_explicit_reader_order_migration,
+        build_explicit_reader_order_dry_run,
         apply_legacy_reading_order_migration,
+        build_legacy_reading_order_dry_run,
         build_reader_order_cutover_audit,
         LEGACY_READING_ORDERS_MANIFEST,
         apply_explicit_reader_order_overlay,
@@ -54,6 +62,7 @@ def _load_application_symbols():
         reconcile_batch_manifest_reports,
         PRODUCTION_SOURCE_BACKED_SPECS,
         apply_source_backed_reader_order_migration,
+        build_source_backed_reader_order_dry_run,
         MigrationInvariantError,
     )
 
@@ -62,7 +71,9 @@ def _load_application_symbols():
     AsyncSessionLocal,
     PRODUCTION_EXPLICIT_READER_ORDER_SPECS,
     apply_explicit_reader_order_migration,
+    build_explicit_reader_order_dry_run,
     apply_legacy_reading_order_migration,
+    build_legacy_reading_order_dry_run,
     build_reader_order_cutover_audit,
     LEGACY_READING_ORDERS_MANIFEST,
     apply_explicit_reader_order_overlay,
@@ -70,6 +81,7 @@ def _load_application_symbols():
     reconcile_batch_manifest_reports,
     PRODUCTION_SOURCE_BACKED_SPECS,
     apply_source_backed_reader_order_migration,
+    build_source_backed_reader_order_dry_run,
     MigrationInvariantError,
 ) = _load_application_symbols()
 
@@ -274,6 +286,44 @@ async def _apply(
     return 0
 
 
+async def _live_batch_snapshot(db: AsyncSession, manifest: str) -> dict[str, Any]:
+    """Rebuild one clean-batch dry-run against the live session before mutation."""
+    if manifest == LEGACY_READING_ORDERS_MANIFEST:
+        return await build_legacy_reading_order_dry_run(db)
+    if manifest in SOURCE_MANIFESTS:
+        return await build_source_backed_reader_order_dry_run(
+            db,
+            SOURCE_MANIFESTS[manifest],
+        )
+    return await build_explicit_reader_order_dry_run(
+        db,
+        EXPLICIT_MANIFESTS[manifest],
+    )
+
+
+async def _verify_clean_batch_snapshots(
+    db: AsyncSession,
+    pending: list[tuple[str, dict[str, Any], dict[str, Any]]],
+) -> None:
+    """Refuse the batch when any clean snapshot drifted before the first write."""
+    for manifest, raw_row, snapshot in pending:
+        if (
+            snapshot.get("status") != "safe-to-migrate"
+            or snapshot.get("snapshot_token") != raw_row.get("snapshot_token")
+        ):
+            raise MigrationInvariantError(
+                f"batch snapshot metadata changed for {manifest}"
+            )
+        current = await _live_batch_snapshot(db, manifest)
+        if (
+            current.get("snapshot_token") != snapshot["snapshot_token"]
+            or current.get("ok") is not True
+        ):
+            raise MigrationInvariantError(
+                f"live state changed since dry-run for {manifest}"
+            )
+
+
 async def _batch_apply(
     summary_path: Path,
     receipt_path: Path,
@@ -302,6 +352,7 @@ async def _batch_apply(
                     str(row.get("manifest") or "") if isinstance(row, dict) else "",
                 ),
             )
+            pending_applies: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
             for raw_row in ordered_rows:
                 if not isinstance(raw_row, dict):
                     raise MigrationInvariantError("batch summary contains a malformed row")
@@ -319,13 +370,13 @@ async def _batch_apply(
                         f"safe manifest {manifest} has no snapshot path"
                     )
                 snapshot = _read_json(Path(output))
-                if (
-                    snapshot.get("status") != "safe-to-migrate"
-                    or snapshot.get("snapshot_token") != raw_row.get("snapshot_token")
-                ):
-                    raise MigrationInvariantError(
-                        f"batch snapshot metadata changed for {manifest}"
-                    )
+                pending_applies.append((manifest, raw_row, snapshot))
+
+            # Verify every clean snapshot before Step 23B (or any other apply)
+            # mutates the transaction. Overlay residual checks still run later.
+            await _verify_clean_batch_snapshots(db, pending_applies)
+
+            for manifest, raw_row, snapshot in pending_applies:
                 if manifest == LEGACY_READING_ORDERS_MANIFEST:
                     result = await apply_legacy_reading_order_migration(
                         db,
@@ -361,13 +412,9 @@ async def _batch_apply(
                     )
                 applied.append({"manifest": manifest, **result})
 
+            # Keep the cutover audit in the receipt for operators, but do not roll
+            # back clean applies when unrelated needs_review / identity debt remains.
             cutover = await build_reader_order_cutover_audit(db, user_id=1)
-            remaining_debt = cutover.get("remaining_reading_plan_order_dependency_ids")
-            if remaining_debt != [] or cutover.get("runtime_cutover_safe") is not True:
-                raise MigrationInvariantError(
-                    "batch apply did not reach a clean reader-order cutover audit: "
-                    f"remaining={remaining_debt!r}"
-                )
             batch_receipt = {
                 "source_summary": str(summary_path),
                 "applied": applied,

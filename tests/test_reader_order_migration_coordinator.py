@@ -197,8 +197,25 @@ def test_reconcile_batch_uses_exact_real_overlap_sets() -> None:
     resumed_reports = _real_overlap_reports()
     resumed_reports[LEGACY_READING_ORDERS_MANIFEST]["status"] = "already-migrated"
     resumed_reports[LEGACY_READING_ORDERS_MANIFEST]["already_migrated"] = True
+    # Post-Step-23B live overlap no longer contains the deleted reader-order rows.
+    live_overlap = resumed_reports[LEGACY_READING_ORDERS_MANIFEST]["dependency_overlap"]
+    assert isinstance(live_overlap, list)
+    resumed_reports[LEGACY_READING_ORDERS_MANIFEST]["dependency_overlap"] = [
+        row
+        for row in live_overlap
+        if not (
+            isinstance(row, dict) and row.get("step14_classification") == "reading_plan_order"
+        )
+    ]
+    assert (
+        manifest_reader_order_dependency_ids(
+            resumed_reports[LEGACY_READING_ORDERS_MANIFEST]
+        )
+        == set()
+    )
     resumed = reconcile_batch_manifest_reports(resumed_reports)["starman-compendiums"]
     assert resumed["apply_mode"] == "existing-plan-overlay"
+    assert resumed["covered_dependency_ids"] == [1832, 1846, 1847]
     assert resumed["remaining_dependency_ids"] == [32, 955, 1355, 1551, 1552]
 
 
@@ -658,6 +675,216 @@ async def test_batch_apply_refuses_token_mismatch(
 
 
 @pytest.mark.asyncio
+async def test_batch_apply_refuses_reader_fact_drift_before_mutation(
+    async_db: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Batch apply rebuilds every clean snapshot before the first write."""
+    user = await get_or_create_user_async(async_db)
+    rows = [
+        await _thread_issue(
+            async_db,
+            user_id=user.id,
+            title=title,
+            queue_position=i,
+            status=status,
+        )
+        for i, (title, status) in enumerate(
+            (("A", "unread"), ("B", "read"), ("C", "unread")),
+            start=1,
+        )
+    ]
+    issues = [row[1] for row in rows]
+    group = DependencyGroup(
+        user_id=user.id,
+        name="Drift Family",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(group)
+    await async_db.flush()
+    for issue in issues:
+        async_db.add(DependencyGroupMembership(group_id=group.id, issue_id=issue.id))
+    reader_order = Dependency(
+        source_issue_id=issues[0].id,
+        target_issue_id=issues[2].id,
+        note="classified reader order",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(reader_order)
+    await async_db.flush()
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+
+    spec = ExplicitReaderOrderSpec(
+        user_id=user.id,
+        dependency_group_ids=(group.id,),
+        expected_group_names=(group.name,),
+        plan_name="Drift Family",
+        reader_order_dependency_ids=(reader_order.id,),
+    )
+    snapshot = await build_explicit_reader_order_dry_run(async_db, spec)
+    assert snapshot["ok"] is True, snapshot["errors"]
+    snapshot = {**snapshot, "status": "safe-to-migrate"}
+
+    output_dir = tmp_path / "reports"
+    output_dir.mkdir()
+    safe_path = output_dir / "drift-family.json"
+    safe_path.write_text(
+        json.dumps(snapshot, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    summary = {
+        "manifests": [
+            {
+                "manifest": "drift-family",
+                "status": "safe-to-migrate",
+                "snapshot_token": snapshot["snapshot_token"],
+                "output": str(safe_path),
+            }
+        ]
+    }
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    # Drift a selected dependency fact after the exact dry-run snapshot was sealed.
+    reader_order.note = "mutated after dry-run"
+    await async_db.flush()
+    await async_db.commit()
+
+    class _SessionFactory:
+        async def __aenter__(self) -> AsyncSession:
+            return async_db
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    monkeypatch.setattr(cli, "EXPLICIT_MANIFESTS", {"drift-family": spec})
+    monkeypatch.setattr(cli, "SOURCE_MANIFESTS", {})
+    monkeypatch.setattr(cli, "ALL_MANIFESTS", {"drift-family"})
+    monkeypatch.setattr(cli, "AsyncSessionLocal", lambda: _SessionFactory())
+    monkeypatch.setattr(async_db, "commit", async_db.flush)
+    monkeypatch.setattr(async_db, "rollback", async_db.flush)
+
+    with pytest.raises(MigrationInvariantError, match="live state changed since dry-run"):
+        await cli._batch_apply(summary_path, tmp_path / "receipt.json", cli.CONFIRMATION)
+
+    assert await async_db.get(Dependency, reader_order.id) is not None
+
+
+@pytest.mark.asyncio
+async def test_batch_apply_refuses_group_membership_drift_before_mutation(
+    async_db: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Batch apply refuses when sequence_order appears after the sealed dry-run."""
+    user = await get_or_create_user_async(async_db)
+    rows = [
+        await _thread_issue(
+            async_db,
+            user_id=user.id,
+            title=title,
+            queue_position=i,
+            status=status,
+        )
+        for i, (title, status) in enumerate(
+            (("A", "unread"), ("B", "read"), ("C", "unread")),
+            start=1,
+        )
+    ]
+    issues = [row[1] for row in rows]
+    group = DependencyGroup(
+        user_id=user.id,
+        name="Membership Drift Family",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(group)
+    await async_db.flush()
+    memberships = [
+        DependencyGroupMembership(group_id=group.id, issue_id=issue.id)
+        for issue in issues
+    ]
+    async_db.add_all(memberships)
+    reader_order = Dependency(
+        source_issue_id=issues[0].id,
+        target_issue_id=issues[2].id,
+        note="classified reader order",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(reader_order)
+    await async_db.flush()
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+
+    spec = ExplicitReaderOrderSpec(
+        user_id=user.id,
+        dependency_group_ids=(group.id,),
+        expected_group_names=(group.name,),
+        plan_name="Membership Drift Family",
+        reader_order_dependency_ids=(reader_order.id,),
+    )
+    snapshot = await build_explicit_reader_order_dry_run(async_db, spec)
+    assert snapshot["ok"] is True, snapshot["errors"]
+    snapshot = {**snapshot, "status": "safe-to-migrate"}
+
+    output_dir = tmp_path / "reports"
+    output_dir.mkdir()
+    safe_path = output_dir / "membership-drift-family.json"
+    safe_path.write_text(
+        json.dumps(snapshot, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text(
+        json.dumps(
+            {
+                "manifests": [
+                    {
+                        "manifest": "membership-drift-family",
+                        "status": "safe-to-migrate",
+                        "snapshot_token": snapshot["snapshot_token"],
+                        "output": str(safe_path),
+                    }
+                ]
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    memberships[0].sequence_order = 1
+    await async_db.flush()
+    await async_db.commit()
+
+    class _SessionFactory:
+        async def __aenter__(self) -> AsyncSession:
+            return async_db
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    monkeypatch.setattr(
+        cli, "EXPLICIT_MANIFESTS", {"membership-drift-family": spec}
+    )
+    monkeypatch.setattr(cli, "SOURCE_MANIFESTS", {})
+    monkeypatch.setattr(cli, "ALL_MANIFESTS", {"membership-drift-family"})
+    monkeypatch.setattr(cli, "AsyncSessionLocal", lambda: _SessionFactory())
+    monkeypatch.setattr(async_db, "commit", async_db.flush)
+    monkeypatch.setattr(async_db, "rollback", async_db.flush)
+
+    with pytest.raises(MigrationInvariantError, match="live state changed since dry-run"):
+        await cli._batch_apply(summary_path, tmp_path / "receipt.json", cli.CONFIRMATION)
+
+    assert await async_db.get(Dependency, reader_order.id) is not None
+
+
+@pytest.mark.asyncio
 async def test_batch_dry_run_summary_buckets_non_safe_manifests(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -825,12 +1052,102 @@ async def test_batch_apply_real_overlap_sets_reach_zero_reader_order_debt(
     monkeypatch.setattr(cli, "apply_explicit_reader_order_overlay", _apply_overlay)
     monkeypatch.setattr(cli, "build_reader_order_cutover_audit", _cutover)
 
+    async def _verify(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(cli, "_verify_clean_batch_snapshots", _verify)
+
     receipt_path = tmp_path / "receipt.json"
     exit_code = await cli._batch_apply(summary_path, receipt_path, cli.CONFIRMATION)
     assert exit_code == 0
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     assert receipt["cutover_audit"]["remaining_reading_plan_order_dependency_ids"] == []
     assert receipt["cutover_audit"]["runtime_cutover_safe"] is True
+
+
+@pytest.mark.asyncio
+async def test_batch_apply_commits_safe_subset_when_cutover_remains_blocked(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Clean manifests commit even when unrelated needs_review debt remains."""
+    output_dir = tmp_path / "reports"
+    output_dir.mkdir()
+    safe_report = {
+        "status": "safe-to-migrate",
+        "ok": True,
+        "errors": [],
+        "snapshot_token": "safe-token",
+    }
+    safe_path = output_dir / "safe-family.json"
+    safe_path.write_text(json.dumps(safe_report), encoding="utf-8")
+    summary = {
+        "manifests": [
+            {
+                "manifest": "safe-family",
+                "status": "safe-to-migrate",
+                "snapshot_token": "safe-token",
+                "output": str(safe_path),
+            },
+            {
+                "manifest": "blocked-family",
+                "status": "blocked-by-needs-review",
+                "snapshot_token": "blocked-token",
+                "output": str(output_dir / "blocked-family.json"),
+            },
+        ]
+    }
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+    class _Session:
+        async def commit(self) -> None:
+            return None
+
+        async def rollback(self) -> None:
+            return None
+
+    class _SessionFactory:
+        async def __aenter__(self) -> _Session:
+            return _Session()
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    async def _apply_explicit(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"ok": True, "plan_id": 11}
+
+    async def _cutover(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {
+            "remaining_reading_plan_order_dependency_ids": [999],
+            "runtime_cutover_safe": False,
+        }
+
+    async def _verify(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(cli, "AsyncSessionLocal", lambda: _SessionFactory())
+    monkeypatch.setattr(cli, "SOURCE_MANIFESTS", {})
+    monkeypatch.setattr(
+        cli,
+        "EXPLICIT_MANIFESTS",
+        {"safe-family": PRODUCTION_EXPLICIT_READER_ORDER_SPECS["doctor-strange-epic-vol-10"]},
+    )
+    monkeypatch.setattr(cli, "ALL_MANIFESTS", {"safe-family", "blocked-family"})
+    monkeypatch.setattr(cli, "apply_explicit_reader_order_migration", _apply_explicit)
+    monkeypatch.setattr(cli, "build_reader_order_cutover_audit", _cutover)
+    monkeypatch.setattr(cli, "_verify_clean_batch_snapshots", _verify)
+
+    receipt_path = tmp_path / "receipt.json"
+    exit_code = await cli._batch_apply(summary_path, receipt_path, cli.CONFIRMATION)
+    assert exit_code == 0
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert [row["manifest"] for row in receipt["applied"]] == ["safe-family"]
+    assert receipt["skipped"] == [
+        {"manifest": "blocked-family", "status": "blocked-by-needs-review"}
+    ]
+    assert receipt["cutover_audit"]["runtime_cutover_safe"] is False
+    assert receipt["cutover_audit"]["remaining_reading_plan_order_dependency_ids"] == [999]
 
 
 def test_stage_durable_json_writes_pending_before_publish(tmp_path: Path) -> None:
