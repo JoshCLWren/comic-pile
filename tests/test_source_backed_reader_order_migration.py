@@ -17,12 +17,24 @@ from app.models.issue import Issue
 from app.models.thread import Thread
 from app.services.source_backed_reader_order_migration import (
     SourceBackedReaderOrderSpec,
+    _dependency_id_batches,
     apply_source_backed_reader_order_migration,
     build_source_backed_reader_order_dry_run,
 )
 from app.services.ultimate_universe_production_migration import MigrationInvariantError
 from comic_pile.dependencies import refresh_user_blocked_status
 from tests.conftest import get_or_create_user_async
+
+
+def test_dependency_id_batches_stay_below_asyncpg_parameter_limit() -> None:
+    """Production-sized source migrations never build one oversized IN clause."""
+    dependency_ids = list(range(1, 41_331))
+
+    batches = _dependency_id_batches(dependency_ids)
+
+    assert len(batches) == 5
+    assert max(map(len, batches)) == 10_000
+    assert [dependency_id for batch in batches for dependency_id in batch] == dependency_ids
 
 
 async def _thread_issue(
