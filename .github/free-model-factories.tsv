@@ -1,13 +1,8 @@
 # worker	source	model	minute	scheduler	display_name
 # control-plane probe: completion funnel telemetry v1
 9	nvidia	stepfun-ai/step-3.7-flash	5	dispatcher	Step 3.7 Flash
-10	nvidia	nvidia/nemotron-3-ultra-550b-a55b	10	dispatcher	Nemotron 3 Ultra
 11	nvidia	poolside/laguna-xs-2.1	15	dispatcher	Laguna XS 2.1
 14	nvidia	minimaxai/minimax-m3	20	dispatcher	MiniMax M3
-16	nvidia	nvidia/nemotron-3-super-120b-a12b	25	dispatcher	Nemotron 3 Super
-17	nvidia	nvidia/nemotron-3-nano-omni-30b-a3b-reasoning	30	dispatcher	Nemotron 3 Omni
-18	nvidia	nvidia/llama-3.3-nemotron-super-49b-v1.5	35	dispatcher	Llama 3.3 Nemotron Super 49B
-19	nvidia	nvidia/nemotron-3-nano-30b-a3b	40	dispatcher	Nemotron Nano 30B
 20	nvidia	openai/gpt-oss-20b	45	dispatcher	GPT OSS 20B
 21	nvidia	google/gemma-4-31b-it	50	dispatcher	Gemma 4 31B
 23	opencode-free	big-pickle	55	dispatcher	Catalog Free Slot 23
@@ -33,12 +28,9 @@
 60	openrouter-free	cohere/north-mini-code:free	50	dispatcher	OpenRouter Cohere North Mini Code Free
 61	openrouter-free	google/gemma-4-31b-it:free	55	dispatcher	OpenRouter Gemma 4 31B Free
 62	openrouter-free	google/gemma-4-26b-a4b-it:free	0	dispatcher	OpenRouter Gemma 4 26B Free
-63	openrouter-free	nvidia/nemotron-3-super-120b-a12b:free	5	dispatcher	OpenRouter Nemotron 3 Super Free
+63	openrouter-free	nvidia/nemotron-3-super-120b-a12b:free	10	dispatcher	OpenRouter Nemotron 3 Super Free
 64	openrouter-free	nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free	10	dispatcher	OpenRouter Nemotron 3 Omni Free
-65	openrouter-free	nvidia/nemotron-3.5-lightning:free	15	dispatcher	OpenRouter Nemotron 3.5 Lightning Free
-66	openrouter-free	minimax/minimax-m2.7:free	20	dispatcher	OpenRouter MiniMax M2.7 Free
-67	openrouter-free	minimax/minimax-m3:free	25	dispatcher	OpenRouter MiniMax M3 Free
+65	openrouter-free	nvidia/nemotron-3.5-lightning:free	25	dispatcher	OpenRouter Nemotron 3.5 Lightning Free
 68	openrouter-free	poolside/laguna-s-2.1:free	30	dispatcher	OpenRouter Laguna S 2.1 Free
 69	openrouter-free	poolside/laguna-xs-2.1:free	35	dispatcher	OpenRouter Laguna XS 2.1 Free
-70	openrouter-free	openrouter/free	40	dispatcher	OpenRouter Free Router
-71	openrouter-free	inclusionai/ling-3.0-flash-fin:free	45	dispatcher	OpenRouter Ling 3.0 Flash Free
+71	openrouter-free	inclusionai/ling-3.0-flash-fin:free	30	dispatcher	OpenRouter Ling 3.0 Flash Free
