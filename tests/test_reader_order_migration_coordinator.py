@@ -12,10 +12,12 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_plan import ContinuityPlan
+from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.issue import Issue
 from app.models.thread import Thread
+from app.services.continuity_plan_writer import plan_rule_marker
 from app.services.explicit_reader_order_migration import (
     PRODUCTION_EXPLICIT_READER_ORDER_SPECS,
     ExplicitReaderOrderSpec,
@@ -37,6 +39,7 @@ from app.services.legacy_reading_order_production_migration import (
     apply_legacy_reading_order_migration,
     build_legacy_reading_order_dry_run,
     load_reviewed_step23a_contract,
+    reviewed_reading_plan_order_rows,
 )
 from app.services.ultimate_universe_production_migration import MigrationInvariantError
 from comic_pile.dependencies import refresh_user_blocked_status
@@ -1193,7 +1196,13 @@ def test_stage_durable_json_writes_pending_before_publish(tmp_path: Path) -> Non
 async def test_post_step23b_rebuild_schedules_residual_starman_overlays(
     async_db: AsyncSession,
 ) -> None:
-    """Seed → apply Step 23B → rebuild reports schedules residual Starman overlays."""
+    """Seed → apply Step 23B → rebuild reports keeps full classified hard gates.
+
+    Residual Starman overlays remain schedulable when Roll-equivalent. Doctor Strange
+    / JSA may report behavior-mismatch after informational Step 23B (covered gates
+    were dropped without hard replacements); they must still plan the full covered
+    edge set rather than silently compiling zero gates.
+    """
     await _apply_step23b_with_starman_residuals(async_db)
 
     reports: dict[str, dict[str, object]] = {}
@@ -1218,15 +1227,32 @@ async def test_post_step23b_rebuild_schedules_residual_starman_overlays(
         )
 
     assert reports[LEGACY_READING_ORDERS_MANIFEST]["status"] == "already-migrated"
-    # Raw explicit dry-runs would be blocked; coordinator recovery must make them safe.
     assert reports["starman-compendiums"]["status"] == "safe-to-migrate"
     assert reports["starman-compendiums"].get("recovered_after_step23b") is True
     sealed = reports["starman-compendiums"].get("existing_canonical_plan")
     assert isinstance(sealed, dict)
     assert isinstance(sealed.get("plan_fingerprint"), str)
     assert sealed.get("name") == "Starman Compendiums 1-2"
-    assert reports["starman-jsa-bridge"]["status"] == "safe-to-migrate"
     assert reports["starman-jsa-bridge"].get("recovered_after_step23b") is True
+    assert reports["doctor-strange-epic-vol-10"].get("recovered_after_step23b") is True
+
+    # Full classified gates — never residual-only — even when Roll refuses apply.
+    assert _planned_edge_set(reports["doctor-strange-epic-vol-10"]) == set(
+        PRODUCTION_EXPLICIT_READER_ORDER_SPECS["doctor-strange-epic-vol-10"].expected_edges
+    )
+    assert _planned_edge_set(reports["starman-jsa-bridge"]) == {(26360, 101817)}
+    starman_edges = _planned_edge_set(reports["starman-compendiums"])
+    assert len(starman_edges) >= 8  # 3 covered + 5 residual
+
+    for key in ("doctor-strange-epic-vol-10", "starman-jsa-bridge"):
+        status = reports[key]["status"]
+        assert status in {"safe-to-migrate", "behavior-mismatch"}, (key, status)
+        if status == "behavior-mismatch":
+            errors = reports[key].get("errors", [])
+            assert isinstance(errors, list)
+            assert any(
+                "Roll eligibility would change" in str(error) for error in errors
+            ), errors
 
     reconciled = reconcile_batch_manifest_reports(reports)
     starman = reconciled["starman-compendiums"]
@@ -1235,29 +1261,24 @@ async def test_post_step23b_rebuild_schedules_residual_starman_overlays(
     assert starman["remaining_dependency_ids"] == [32, 955, 1355, 1551, 1552]
 
     jsa = reconciled["starman-jsa-bridge"]
-    assert jsa["apply_mode"] == "existing-plan-overlay"
-    assert jsa["covered_dependency_ids"] == [1833]
-    assert jsa["remaining_dependency_ids"] == []
-    assert jsa["overlay_added_issue_ids"] == [26360]
-
     doctor = reconciled["doctor-strange-epic-vol-10"]
-    assert doctor["apply_mode"] == "existing-plan-overlay"
-    assert doctor["covered_dependency_ids"] == [1806, 1807, 1808, 1810, 1811]
-    assert doctor["remaining_dependency_ids"] == []
+    if jsa["status"] == "safe-to-migrate":
+        assert jsa["apply_mode"] == "existing-plan-overlay"
+        assert jsa["covered_dependency_ids"] == [1833]
+        assert jsa["remaining_dependency_ids"] == []
+        assert jsa["overlay_added_issue_ids"] == [26360]
+    else:
+        assert "apply_mode" not in jsa
+    if doctor["status"] == "safe-to-migrate":
+        assert doctor["apply_mode"] == "existing-plan-overlay"
+        assert doctor["covered_dependency_ids"] == [1806, 1807, 1808, 1810, 1811]
+        assert doctor["remaining_dependency_ids"] == []
+    else:
+        assert "apply_mode" not in doctor
 
 
-async def _apply_step23b_with_starman_residuals(async_db: AsyncSession) -> None:
-    """Seed Step 23A shape, apply Step 23B, and reintroduce Starman residual deps."""
-    await seed_step23a_shape(async_db)
-    pre_apply = await build_legacy_reading_order_dry_run(async_db)
-    assert pre_apply["ok"] is True, pre_apply["errors"]
-    await apply_legacy_reading_order_migration(
-        async_db,
-        accepted_snapshot_token=str(pre_apply["snapshot_token"]),
-        require_reviewed_token=False,
-    )
-    await async_db.commit()
-
+async def _seed_starman_residual_dependencies(async_db: AsyncSession) -> None:
+    """Insert the five production Starman residual reader-order dependency rows."""
     evidence = load_reviewed_step23a_contract()
     legacy_orders = evidence.get("legacy_reading_orders")
     if not isinstance(legacy_orders, list):
@@ -1304,6 +1325,182 @@ async def _apply_step23b_with_starman_residuals(async_db: AsyncSession) -> None:
     )
     await refresh_user_blocked_status(1, async_db)
     await async_db.commit()
+
+
+async def _apply_step23b_with_starman_residuals(async_db: AsyncSession) -> None:
+    """Seed Step 23A shape, apply Step 23B, and reintroduce Starman residual deps."""
+    await seed_step23a_shape(async_db)
+    pre_apply = await build_legacy_reading_order_dry_run(async_db)
+    assert pre_apply["ok"] is True, pre_apply["errors"]
+    await apply_legacy_reading_order_migration(
+        async_db,
+        accepted_snapshot_token=str(pre_apply["snapshot_token"]),
+        require_reviewed_token=False,
+    )
+    await async_db.commit()
+    await _seed_starman_residual_dependencies(async_db)
+
+
+def _planned_edge_set(snapshot: dict[str, object]) -> set[tuple[int, int]]:
+    """Project (source, target) edges from a dry-run planned rule list."""
+    planned = snapshot.get("planned")
+    if not isinstance(planned, dict):
+        return set()
+    rules = planned.get("rules")
+    if not isinstance(rules, list):
+        return set()
+    edges: set[tuple[int, int]] = set()
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        target_id = rule.get("source_id")
+        if not isinstance(target_id, int):
+            continue
+        for item in rule.get("convergence_targets") or []:
+            if isinstance(item, dict) and isinstance(item.get("id"), int):
+                edges.add((int(item["id"]), target_id))
+    return edges
+
+
+@pytest.mark.asyncio
+async def test_step23b_resume_plans_same_hard_gates_as_oneshot(
+    async_db: AsyncSession,
+) -> None:
+    """Resume after Step 23B must compile the same covered gates as one-shot."""
+    await seed_step23a_shape(async_db)
+
+    covered_keys = (
+        "doctor-strange-epic-vol-10",
+        "starman-jsa-bridge",
+    )
+    oneshot: dict[str, dict[str, object]] = {}
+    for key in covered_keys:
+        snapshot = await build_explicit_reader_order_dry_run(
+            async_db,
+            PRODUCTION_EXPLICIT_READER_ORDER_SPECS[key],
+        )
+        assert snapshot["ok"] is True, (key, snapshot["errors"])
+        oneshot[key] = snapshot
+
+    starman_oneshot_before_residuals = await build_explicit_reader_order_dry_run(
+        async_db,
+        PRODUCTION_EXPLICIT_READER_ORDER_SPECS["starman-compendiums"],
+    )
+    # Residuals 32/955/… are classified on the Starman families but seeded only
+    # after Step 23B in this fixture, matching the resume path.
+    assert starman_oneshot_before_residuals["ok"] is not True
+    assert any(
+        "classified reader-order dependencies missing" in str(error)
+        for error in starman_oneshot_before_residuals["errors"]
+    )
+
+    pre_apply = await build_legacy_reading_order_dry_run(async_db)
+    assert pre_apply["ok"] is True, pre_apply["errors"]
+    await apply_legacy_reading_order_migration(
+        async_db,
+        accepted_snapshot_token=str(pre_apply["snapshot_token"]),
+        require_reviewed_token=False,
+    )
+    await async_db.commit()
+    await _seed_starman_residual_dependencies(async_db)
+
+    # Doctor Strange / JSA are covered-only: planned gates must match one-shot even
+    # when restoring them after informational Step 23B is a Roll behavior-mismatch.
+    for key in ("doctor-strange-epic-vol-10", "starman-jsa-bridge"):
+        snapshot = await build_explicit_reader_order_dry_run(
+            async_db,
+            PRODUCTION_EXPLICIT_READER_ORDER_SPECS[key],
+            tolerate_step23b_covered_absence=True,
+        )
+        oneshot_planned = oneshot[key]["planned"]
+        recovered_planned = snapshot["planned"]
+        assert isinstance(oneshot_planned, dict)
+        assert isinstance(recovered_planned, dict)
+        assert recovered_planned["rules"] == oneshot_planned["rules"], key
+        assert _planned_edge_set(snapshot) == _planned_edge_set(oneshot[key]), key
+        assert (26360, 101817) in _planned_edge_set(snapshot) or key != "starman-jsa-bridge"
+        if snapshot.get("ok") is not True:
+            assert migration_report_status(snapshot) == "behavior-mismatch", (
+                key,
+                snapshot.get("errors"),
+            )
+
+    # Starman resume reconstructs the three Step 23B-covered edges plus five residuals.
+    starman_recovered = await build_explicit_reader_order_dry_run(
+        async_db,
+        PRODUCTION_EXPLICIT_READER_ORDER_SPECS["starman-compendiums"],
+        tolerate_step23b_covered_absence=True,
+    )
+    assert starman_recovered["ok"] is True, starman_recovered["errors"]
+    starman_edges = _planned_edge_set(starman_recovered)
+    assert len(starman_edges) >= 8
+    reviewed_covered = {
+        (
+            int(row["source_issue_id"]),
+            int(row["target_issue_id"]),
+        )
+        for row in reviewed_reading_plan_order_rows(load_reviewed_step23a_contract())
+        if int(row["dependency_id"]) in {1832, 1846, 1847}
+    }
+    assert reviewed_covered <= starman_edges
+
+    await apply_explicit_reader_order_overlay(
+        async_db,
+        snapshot=starman_recovered,
+        spec=PRODUCTION_EXPLICIT_READER_ORDER_SPECS["starman-compendiums"],
+        covered_dependency_ids={1832, 1846, 1847},
+    )
+    await async_db.flush()
+
+    # When JSA remains Roll-safe, overlay must compile dependency 1833; otherwise the
+    # planned rule set above already proved the gate was not dropped.
+    jsa_recovered = await build_explicit_reader_order_dry_run(
+        async_db,
+        PRODUCTION_EXPLICIT_READER_ORDER_SPECS["starman-jsa-bridge"],
+        tolerate_step23b_covered_absence=True,
+    )
+    assert _planned_edge_set(jsa_recovered) == {(26360, 101817)}
+    if jsa_recovered.get("ok") is True:
+        await apply_explicit_reader_order_overlay(
+            async_db,
+            snapshot=jsa_recovered,
+            spec=PRODUCTION_EXPLICIT_READER_ORDER_SPECS["starman-jsa-bridge"],
+            covered_dependency_ids={1833},
+        )
+        await async_db.flush()
+        jsa_plan = (
+            await async_db.execute(
+                select(ContinuityPlan).where(
+                    ContinuityPlan.user_id == 1,
+                    ContinuityPlan.name == "JSA: Robinson / Goyer / Johns",
+                )
+            )
+        ).scalar_one()
+        jsa_rules = list(
+            (
+                await async_db.execute(
+                    select(ContinuityRule).where(
+                        ContinuityRule.user_id == 1,
+                        ContinuityRule.note == plan_rule_marker(jsa_plan.id),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert any(
+            rule.source_id == 101817
+            and rule.satisfaction_type == "converged"
+            and any(
+                isinstance(target, dict)
+                and target.get("type") == "issue"
+                and target.get("id") == 26360
+                for target in (rule.convergence_targets or [])
+            )
+            for rule in jsa_rules
+        ), "resume must compile the covered JSA dependency 1833 gate"
+    else:
+        assert migration_report_status(jsa_recovered) == "behavior-mismatch"
 
 
 @pytest.mark.asyncio

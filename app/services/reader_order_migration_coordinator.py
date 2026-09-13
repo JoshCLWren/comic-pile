@@ -999,20 +999,22 @@ async def build_manifest_report(
             and report.get("ok") is not True
             and await _step23b_retire_set_applied(db)
         ):
-            # Step 23B already retired the overlapping IDs. Rebuild a residual
-            # overlay snapshot that keeps residual live deps and reconstructs
-            # covered rows from the reviewed contract.
+            # Step 23B already retired the overlapping IDs. Rebuild an overlay
+            # snapshot that reconstructs covered rows from the reviewed contract
+            # and still plans the full classified hard-gate set (same as one-shot).
+            # Keep the recovered report even when Roll equivalence fails so the
+            # operator sees behavior-mismatch instead of a false "missing deps"
+            # identity block after covered gates were planned.
             recovered = await build_explicit_reader_order_dry_run(
                 db,
                 spec,
                 tolerate_step23b_covered_absence=True,
             )
-            if recovered.get("ok") is True:
-                report = {
-                    **recovered,
-                    "recovered_after_step23b": True,
-                }
-                already_migrated = await _explicit_already_migrated(db, spec)
+            report = {
+                **recovered,
+                "recovered_after_step23b": True,
+            }
+            already_migrated = await _explicit_already_migrated(db, spec)
     if already_migrated:
         report = {**report, "already_migrated": True, "ok": True}
     return {"status": migration_report_status(report), **report}

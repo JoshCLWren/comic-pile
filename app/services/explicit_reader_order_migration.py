@@ -424,8 +424,10 @@ async def build_explicit_reader_order_dry_run(
     by Step 23B are reconstructed from the reviewed Step 23A contract. The matching
     Step 23B target plan must still fingerprint-match the reviewed writer payload
     and is sealed into the snapshot; other Step 23B plans may overlap without
-    blocking. Residual live dependencies must still be present. Roll equivalence
-    remains required.
+    blocking. Residual live dependencies must still be present. Recovered snapshots
+    still compile every classified edge as a hard convergence gate (identical to
+    one-shot); informational Step 23B node positions are not Roll authority. If
+    restoring those gates would change eligibility, report a Roll mismatch.
     """
     _invalidate_continuity_snapshot(spec.user_id, db)
     errors: list[str] = []
@@ -769,16 +771,11 @@ async def build_explicit_reader_order_dry_run(
     )
     removed_rule_ids = {rule.id for rule in removed_rules}
 
-    # Full edge_set drives plan membership/topology (including Step 23B-covered
-    # reconstructed edges). Hard convergence gates and Roll simulation use only
-    # residual live edges after Step 23B: covered edges already live on the
-    # sealed informational plan without hard constraints.
-    live_edge_set = {
-        (dependency.source_issue_id, dependency.target_issue_id) for dependency in selected
-    }
-    rule_edge_set = live_edge_set if tolerate_step23b_covered_absence else edge_set
+    # Resume after Step 23B must compile the same hard convergence gates as the
+    # normal one-shot path. Step 23B plans are informational with empty gates, so
+    # node position is not a Roll authority for covered edges — reconstruct them.
     predecessors: dict[int, list[int]] = {}
-    for source_id, target_id in sorted(rule_edge_set):
+    for source_id, target_id in sorted(edge_set):
         predecessors.setdefault(target_id, []).append(source_id)
     for values in predecessors.values():
         values.sort()
@@ -818,12 +815,7 @@ async def build_explicit_reader_order_dry_run(
         for target_id, source_ids in predecessors.items()
         for source_id in source_ids
     }
-    if tolerate_step23b_covered_absence:
-        if not live_edge_set <= planned_edges:
-            errors.append(
-                "proposed Reading Plan does not exactly reproduce residual reader-order edges"
-            )
-    elif planned_edges != edge_set:
+    if planned_edges != edge_set:
         errors.append("proposed Reading Plan does not exactly reproduce classified reader-order edges")
 
     target_ids = set(predecessors)
