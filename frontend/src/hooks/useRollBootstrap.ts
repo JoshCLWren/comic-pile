@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { RollBootstrapApi } from '../services/apiTypes'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import { useToast } from '../contexts/useToast'
 import { queryClient } from '../query/queryClient'
@@ -18,7 +19,8 @@ export function resolveBrowserTimezone(): string | undefined {
   }
 }
 
-export function useRollBootstrap() {
+export function useRollBootstrap(api?: RollBootstrapApi) {
+  const bootstrapApi = api ?? rollBootstrapApi
   const { showToast } = useToast()
   const lastNotifiedSessionIdRef = useRef<number | null>(null)
   const justReconciledRef = useRef<RollBootstrapResponse | null>(null)
@@ -33,7 +35,7 @@ export function useRollBootstrap() {
     queryFn: async (): Promise<RollBootstrapResponse | null> => {
       const generation = ++requestGenerationRef.current
       try {
-        const result = await rollBootstrapApi.get(resolveBrowserTimezone())
+        const result = await bootstrapApi.get(resolveBrowserTimezone())
         // A reconciliation (or newer fetch) superseded this request before it
         // settled. Keep the authoritative cache instead of applying stale data.
         if (generation !== requestGenerationRef.current) {

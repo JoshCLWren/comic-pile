@@ -88,6 +88,9 @@ importers:
       '@eslint/js':
         specifier: ^9.39.3
         version: 9.39.5
+      '@oxlint/plugins':
+        specifier: ^1.82.0
+        version: 1.82.0
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1

@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import type { CacheEffectsApi, ProtectedRollMutationApi, RollBootstrapApi, RollMutationDeps, SnoozeApi } from '../services/apiTypes'
 import { invalidateCurrentSessionAfterSnooze } from '../query/cacheEffects'
 import { snoozeApi } from '../services/api'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
@@ -16,7 +17,11 @@ type SnoozeResult = Awaited<ReturnType<typeof protectedRollMutationApi.snooze>> 
 
 const SNOOZE_REFRESH_ATTEMPTS = 2
 
-export function useSnooze() {
+export function useSnooze(deps: RollMutationDeps = {}) {
+  const { protectedApi, bootstrapApi, cacheEffects } = deps
+  const protectedRollApi = protectedApi ?? protectedRollMutationApi
+  const rollBootstrap = bootstrapApi
+  const invalidateSessionCache = cacheEffects?.invalidateCurrentSessionAfterSnooze ?? invalidateCurrentSessionAfterSnooze
   const queryClient = useQueryClient()
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
@@ -30,7 +35,7 @@ export function useSnooze() {
     const request = (async () => {
       for (let attempt = 1; attempt <= SNOOZE_REFRESH_ATTEMPTS; attempt += 1) {
         try {
-          await fetchAndPublishRollBootstrap()
+          await fetchAndPublishRollBootstrap(rollBootstrap)
           setRefreshError(null)
           return true
         } catch (error: unknown) {
@@ -53,7 +58,7 @@ export function useSnooze() {
     } finally {
       refreshRequest.current = null
     }
-  }, [])
+  }, [rollBootstrap])
 
   const retryRefresh = useCallback(async (): Promise<boolean> => {
     setIsPending(true)
@@ -77,8 +82,8 @@ export function useSnooze() {
 
     const request: Promise<SnoozeResult> = (async () => {
       try {
-        const result = await protectedRollMutationApi.snooze()
-        await invalidateCurrentSessionAfterSnooze(queryClient)
+        const result = await protectedRollApi.snooze()
+        await invalidateSessionCache(queryClient)
         await refreshAuthoritativeState()
         return result
       } catch (error: unknown) {
@@ -89,10 +94,12 @@ export function useSnooze() {
           try {
             const recovery = await recoverProtectedRollMutation(
               expectedPendingThreadId,
-              () => protectedRollMutationApi.snooze(),
+              () => protectedRollApi.snooze(),
+              undefined,
+              protectedRollApi,
             )
             if (recovery.status === 'retried') {
-              await invalidateCurrentSessionAfterSnooze(queryClient)
+              await invalidateSessionCache(queryClient)
               await refreshAuthoritativeState()
               return recovery.value
             }
@@ -106,7 +113,10 @@ export function useSnooze() {
 
         if (isAmbiguousNetworkFailure(error)) {
           try {
-            const committed = await reconcileAmbiguousRollMutation(expectedPendingThreadId)
+            const committed = await reconcileAmbiguousRollMutation(
+              expectedPendingThreadId,
+              rollBootstrap,
+            )
             if (committed) return undefined
           } catch (reconciliationError: unknown) {
             console.error(
@@ -142,12 +152,14 @@ export function useSnooze() {
   }
 }
 
-export function useUnsnooze() {
+export function useUnsnooze(deps: RollMutationDeps = {}) {
+  const snooze = deps.snoozeApi ?? snoozeApi
+  const invalidateSessionCache = deps.cacheEffects?.invalidateCurrentSessionAfterSnooze ?? invalidateCurrentSessionAfterSnooze
   const queryClient = useQueryClient()
   const mutation = useMutation({
-    mutationFn: (threadId: number) => snoozeApi.unsnooze(threadId),
+    mutationFn: (threadId: number) => snooze.unsnooze(threadId),
     onSuccess: async () => {
-      await invalidateCurrentSessionAfterSnooze(queryClient)
+      await invalidateSessionCache(queryClient)
     },
   })
 

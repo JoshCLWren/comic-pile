@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import type { RollMutationDeps } from '../services/apiTypes'
 import { invalidateCurrentSessionAfterSnooze } from '../query/cacheEffects'
 import { skipApi } from '../services/api'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
@@ -16,7 +17,11 @@ type SkipResult = Awaited<ReturnType<typeof protectedRollMutationApi.skip>> | un
 
 const SKIP_REFRESH_ATTEMPTS = 2
 
-export function useSkip() {
+export function useSkip(deps: RollMutationDeps = {}) {
+  const { protectedApi, bootstrapApi, cacheEffects } = deps
+  const protectedRollApi = protectedApi ?? protectedRollMutationApi
+  const rollBootstrap = bootstrapApi
+  const invalidateSessionCache = cacheEffects?.invalidateCurrentSessionAfterSnooze ?? invalidateCurrentSessionAfterSnooze
   const queryClient = useQueryClient()
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
@@ -31,7 +36,7 @@ export function useSkip() {
       let result = false
       for (let attempt = 1; attempt <= SKIP_REFRESH_ATTEMPTS; attempt += 1) {
         try {
-          await fetchAndPublishRollBootstrap()
+          await fetchAndPublishRollBootstrap(rollBootstrap)
           setRefreshError(null)
           result = true
           return result
@@ -55,7 +60,7 @@ export function useSkip() {
     } finally {
       refreshRequest.current = null
     }
-  }, [])
+  }, [rollBootstrap])
 
   const retryRefresh = useCallback(async (): Promise<boolean> => {
     setIsPending(true)
@@ -79,8 +84,8 @@ export function useSkip() {
 
     const request: Promise<SkipResult> = (async () => {
       try {
-        const result = await protectedRollMutationApi.skip()
-        await invalidateCurrentSessionAfterSnooze(queryClient)
+        const result = await protectedRollApi.skip()
+        await invalidateSessionCache(queryClient)
         await refreshAuthoritativeState()
         return result
       } catch (error: unknown) {
@@ -91,10 +96,12 @@ export function useSkip() {
           try {
             const recovery = await recoverProtectedRollMutation(
               expectedPendingThreadId,
-              () => protectedRollMutationApi.skip(),
+              () => protectedRollApi.skip(),
+              undefined,
+              protectedRollApi,
             )
             if (recovery.status === 'retried') {
-              await invalidateCurrentSessionAfterSnooze(queryClient)
+              await invalidateSessionCache(queryClient)
               await refreshAuthoritativeState()
               return recovery.value
             }
@@ -108,7 +115,10 @@ export function useSkip() {
 
         if (isAmbiguousNetworkFailure(error)) {
           try {
-            const committed = await reconcileAmbiguousRollMutation(expectedPendingThreadId)
+            const committed = await reconcileAmbiguousRollMutation(
+              expectedPendingThreadId,
+              rollBootstrap,
+            )
             if (committed) return undefined
           } catch (reconciliationError: unknown) {
             console.error(
@@ -144,12 +154,14 @@ export function useSkip() {
   }
 }
 
-export function useUnskip() {
+export function useUnskip(deps: RollMutationDeps = {}) {
+  const skip = deps.skipApi ?? skipApi
+  const invalidateSessionCache = deps.cacheEffects?.invalidateCurrentSessionAfterSnooze ?? invalidateCurrentSessionAfterSnooze
   const queryClient = useQueryClient()
   const mutation = useMutation({
-    mutationFn: (threadId: number) => skipApi.unskip(threadId),
+    mutationFn: (threadId: number) => skip.unskip(threadId),
     onSuccess: async () => {
-      await invalidateCurrentSessionAfterSnooze(queryClient)
+      await invalidateSessionCache(queryClient)
     },
   })
 
