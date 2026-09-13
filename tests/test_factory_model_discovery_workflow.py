@@ -1,5 +1,6 @@
 """Contract tests for the factory model discovery workflow."""
 
+import re
 from pathlib import Path
 
 
@@ -9,6 +10,14 @@ WORKFLOW = (
     / "workflows"
     / "factory-model-discovery.yml"
 )
+FACTORY_RUN = (
+    Path(__file__).resolve().parents[1]
+    / ".github"
+    / "workflows"
+    / "free-model-factory-run.yml"
+)
+PINNED_OPENCODE_VERSION = "1.18.29"
+PINNED_OPENCODE_SHA256 = "ea800b7ff56226b70952126c9fc1e2517ca4c4b5682fd9d3f9e87449697a1194"
 
 
 def test_discovery_workflow_is_scheduled_and_dispatchable() -> None:
@@ -35,3 +44,25 @@ def test_discovery_uses_opencode_cli_not_omniroute_or_integrate_api() -> None:
     assert "OPENCODE_ZEN_API_KEY" in workflow
     assert "NVIDIA_API_KEY" in workflow
     assert "catalog_fixture" in workflow
+
+
+def _opencode_pin(text: str) -> tuple[str, str]:
+    """Extract the pinned OpenCode version and linux-x64 sha256."""
+    version = re.search(r"OPENCODE_VERSION: '([^']+)'", text)
+    sha = re.search(r"OPENCODE_LINUX_X64_SHA256: '([^']+)'", text)
+    assert version is not None
+    assert sha is not None
+    return version.group(1), sha.group(1)
+
+
+def test_discovery_and_factory_run_pin_the_same_opencode_release() -> None:
+    """Discovery and factory-run must share the live-audit OpenCode CLI pin."""
+    discovery_version, discovery_sha = _opencode_pin(WORKFLOW.read_text(encoding="utf-8"))
+    run_version, run_sha = _opencode_pin(FACTORY_RUN.read_text(encoding="utf-8"))
+
+    assert discovery_version == PINNED_OPENCODE_VERSION
+    assert run_version == PINNED_OPENCODE_VERSION
+    assert discovery_sha == PINNED_OPENCODE_SHA256
+    assert run_sha == PINNED_OPENCODE_SHA256
+    assert discovery_version == run_version
+    assert discovery_sha == run_sha

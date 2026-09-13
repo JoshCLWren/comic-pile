@@ -180,6 +180,21 @@ def main() -> None:
         assert required in model_discovery, f'model discovery invariant missing: {required}'
     assert 'omniroute/auto' not in model_discovery
     assert 'auto/best-free' not in model_discovery
+    discovery_version = re.search(r"OPENCODE_VERSION: '([^']+)'", model_discovery)
+    runner_version = re.search(r"OPENCODE_VERSION: '([^']+)'", runner)
+    discovery_sha = re.search(r"OPENCODE_LINUX_X64_SHA256: '([^']+)'", model_discovery)
+    runner_sha = re.search(r"OPENCODE_LINUX_X64_SHA256: '([^']+)'", runner)
+    assert discovery_version and runner_version, 'OpenCode version pin missing'
+    assert discovery_sha and runner_sha, 'OpenCode sha256 pin missing'
+    assert discovery_version.group(1) == runner_version.group(1), (
+        'factory-model-discovery and free-model-factory-run must pin the same OpenCode version'
+    )
+    assert discovery_sha.group(1) == runner_sha.group(1), (
+        'factory-model-discovery and free-model-factory-run must pin the same OpenCode sha256'
+    )
+    assert re.fullmatch(r'[0-9a-f]{64}', discovery_sha.group(1)), (
+        'OpenCode sha256 pin must be a 64-char lowercase hex digest'
+    )
 
     kilo_text = KILO_HELPER.read_text(encoding='utf-8')
     for required in (

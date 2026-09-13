@@ -35,6 +35,7 @@ from factory_roster import (
     load_roster_rows,
     opencode_model_is_free,
     openrouter_model_is_free,
+    rebalance_schedule_minutes,
     sync_roster_lock,
     write_roster_rows,
 )
@@ -283,9 +284,19 @@ def apply_plan(
     rows: Sequence[RosterRow],
     plan: RetirementPlan,
 ) -> list[RosterRow]:
-    """Return roster rows with retired pins removed."""
+    """Return roster rows with retired pins removed and minutes rebalanced.
+
+    Args:
+        rows: Current factory roster.
+        plan: Retirement plan whose retire workers are dropped.
+
+    Returns:
+        Remaining rows with dispatcher minutes balanced to the validator
+        ±1 invariant. Worker ids are unchanged.
+    """
     retired_workers = {item.worker for item in plan.retirements}
-    return [row for row in rows if row["worker"] not in retired_workers]
+    remaining = [row for row in rows if row["worker"] not in retired_workers]
+    return rebalance_schedule_minutes(remaining)
 
 
 def required_providers(rows: Sequence[RosterRow]) -> tuple[str, ...]:
@@ -413,7 +424,11 @@ def run(argv: Sequence[str] | None = None) -> int:
         write_github_output(args.github_output, plan)
 
     if args.command == "apply" and plan.retirements:
+        before_minutes = {row["worker"]: row["minute"] for row in rows}
         remaining = apply_plan(rows, plan)
+        moved = sum(
+            1 for row in remaining if row["minute"] != before_minutes[row["worker"]]
+        )
         write_roster_rows(roster_path, remaining, load_roster_comments(roster_path))
         sync_roster_lock(
             remaining,
@@ -423,7 +438,8 @@ def run(argv: Sequence[str] | None = None) -> int:
         )
         print(
             f"Retired {len(plan.retirements)} pin(s); "
-            f"{len(remaining)} roster slot(s) remain.",
+            f"{len(remaining)} roster slot(s) remain; "
+            f"reassigned {moved} dispatcher minute(s).",
             file=sys.stderr,
         )
 
