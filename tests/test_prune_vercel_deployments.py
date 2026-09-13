@@ -9,6 +9,7 @@ import pytest
 
 from scripts.prune_vercel_deployments import (
     DELETE_BATCH_SIZE,
+    KEEP_N,
     DeleteOutcome,
     Deployment,
     PruneError,
@@ -25,7 +26,6 @@ from scripts.prune_vercel_deployments import (
     run_prune,
     select_keepers,
     select_prune_candidates,
-    select_rollback_id,
     verify_project,
 )
 
@@ -160,8 +160,8 @@ def test_verify_project_rejects_name_or_id_mismatch() -> None:
         verify_project(project, project_id="prj_expected", project_name="other")
 
 
-def test_select_keepers_keeps_live_and_previous_ready_production() -> None:
-    """Keep-N=2 is the live alias plus the newest previous READY production."""
+def test_select_keepers_keeps_only_live_production_alias() -> None:
+    """Keep-N=1 is the live alias only; previous READY production is deleted."""
     live = _deployment("dpl_live", created=300)
     previous = _deployment("dpl_prev", created=200)
     older = _deployment("dpl_old", created=100)
@@ -172,10 +172,15 @@ def test_select_keepers_keeps_live_and_previous_ready_production() -> None:
     deployments = [older, failed, previous, preview, live, building]
     keepers = select_keepers("dpl_live", deployments)
 
-    assert keepers == {"dpl_live", "dpl_prev", "dpl_building"}
-    assert select_rollback_id("dpl_live", deployments) == "dpl_prev"
+    assert KEEP_N == 1
+    assert keepers == {"dpl_live", "dpl_building"}
     candidates = select_prune_candidates(deployments, keepers)
-    assert [item.uid for item in candidates] == ["dpl_old", "dpl_fail", "dpl_preview"]
+    assert [item.uid for item in candidates] == [
+        "dpl_old",
+        "dpl_fail",
+        "dpl_prev",
+        "dpl_preview",
+    ]
 
 
 def test_select_keepers_keeps_live_alias_even_when_not_ready() -> None:
@@ -187,18 +192,17 @@ def test_select_keepers_keeps_live_alias_even_when_not_ready() -> None:
     keepers = select_keepers("dpl_live", [live, ready, older])
 
     assert "dpl_live" in keepers
-    assert keepers == {"dpl_live", "dpl_ready"}
+    assert keepers == {"dpl_live"}
 
 
-def test_select_keepers_keeps_only_live_when_no_rollback_exists() -> None:
-    """A first production deploy has no previous READY rollback candidate."""
+def test_select_keepers_keeps_only_live_on_first_production_deploy() -> None:
+    """A first production deploy still keeps only the live alias."""
     live = _deployment("dpl_live", created=100)
     canceled = _deployment("dpl_canceled", created=50, state="CANCELED")
 
     keepers = select_keepers("dpl_live", [live, canceled])
 
     assert keepers == {"dpl_live"}
-    assert select_rollback_id("dpl_live", [live, canceled]) is None
 
 
 def test_iter_batches_honors_cli_200_limit() -> None:
@@ -257,10 +261,9 @@ def test_run_prune_deletes_non_keepers_and_never_the_live_alias() -> None:
     )
 
     assert result.live_id == "dpl_live"
-    assert result.rollback_id == "dpl_prev"
-    assert set(result.deleted) == {"dpl_old", "dpl_error"}
+    assert set(result.deleted) == {"dpl_old", "dpl_prev", "dpl_error"}
     assert "dpl_live" not in client.deleted
-    assert "dpl_prev" not in client.deleted
+    assert "dpl_prev" in client.deleted
     assert "dpl_building" not in client.deleted
     assert result.failed == ()
 
@@ -339,6 +342,8 @@ def test_main_fail_soft_returns_zero_when_credentials_are_missing(
 
     assert main(["--fail-soft"]) == 0
     assert main([]) == 1
+    assert main(["--keep-n", "2", "--fail-soft"]) == 0
+    assert main(["--keep-n", "2"]) == 1
 
 
 def test_script_never_invokes_project_level_vercel_remove() -> None:
@@ -349,7 +354,9 @@ def test_script_never_invokes_project_level_vercel_remove() -> None:
     assert "os.system" not in source
     assert "vercel remove comic-pile" not in source
     assert "DELETE_BATCH_SIZE = 200" in source
-    assert "keep-N=2" in source
+    assert "KEEP_N = 1" in source
+    assert "keep-N=1" in source
+    assert "keep-N=2" not in source
 
 
 def test_deploy_production_prunes_after_smoke_and_on_skipped_sha() -> None:
@@ -357,7 +364,10 @@ def test_deploy_production_prunes_after_smoke_and_on_skipped_sha() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "scripts/prune_vercel_deployments.py" in workflow
+    assert "--keep-n 1" in workflow
     assert "--fail-soft" in workflow
+    assert "Keep only the live production alias" in workflow
+    assert "previous Ready production" not in workflow
     assert "needs.deploy.result == 'success'" in workflow
     assert "needs.deploy.result == 'skipped'" in workflow
     assert "vercel remove comic-pile" not in workflow
@@ -368,12 +378,13 @@ def test_deploy_production_prunes_after_smoke_and_on_skipped_sha() -> None:
     assert "ref: ${{ needs.preflight.outputs.deploy_sha }}" in workflow
 
 
-def test_deployment_docs_describe_keep_two_ready_policy() -> None:
+def test_deployment_docs_describe_keep_one_live_alias_policy() -> None:
     """The keep policy must be documented next to the deploy contract."""
     docs = DOCS.read_text(encoding="utf-8")
 
     assert "current production" in docs
-    assert "previous READY production" in docs
-    assert "keep-N=2" in docs
+    assert "keep-N=1" in docs
+    assert "keep-N=2" not in docs
+    assert "no rollback candidate" in docs
     assert "scripts/prune_vercel_deployments.py" in docs
     assert "--fail-soft" in docs

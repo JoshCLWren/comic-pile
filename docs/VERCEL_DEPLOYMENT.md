@@ -27,13 +27,13 @@ production deploy and `/health` smoke — and also when the exact-SHA preflight
 skips a duplicate deploy — Deploy Production runs
 `scripts/prune_vercel_deployments.py`.
 
-Keep policy (keep-N=2 production Ready):
+Keep policy (keep-N=1 production Ready):
 
 1. Never delete the live production alias target (`targets.production`).
-2. Keep the previous READY production deployment as the single rollback candidate.
-3. Delete every other terminal deployment (older Ready production, leftover
-   preview rows, and ERROR/CANCELED/FAILED records).
-4. Leave in-progress deployments untouched.
+2. Delete every other terminal deployment, including the previous READY
+   production, leftover preview rows, and ERROR/CANCELED/FAILED records.
+   There is no rollback candidate.
+3. Leave in-progress deployments untouched.
 
 Deletes use `DELETE /v13/deployments/{dpl_...}` only, in batches of at most 200
 with backoff on rate limits. The script never calls `vercel remove comic-pile`
@@ -52,9 +52,9 @@ Manual emergency cleanup, if the automated path cannot run, must keep `--safe`:
 vercel remove comic-pile --safe --yes --scope joshclwrens-projects
 ```
 
-That CLI form keeps only the current production alias, so it is stricter than
-the automated keep-N=2 policy. Prefer the script when a rollback candidate
-must remain.
+That CLI form also keeps only the current production alias. Prefer the script
+so cleanup stays on `DELETE /v13/deployments/{dpl_...}` and never invokes
+`vercel remove comic-pile`.
 
 ## Live-project verification
 
@@ -68,6 +68,6 @@ After this change is merged:
    create another deployment for the same SHA.
 4. Confirm the production alias still points to the successful `main` deployment.
 5. Confirm older deployments were pruned down to the current production alias
-   plus one previous READY production rollback candidate.
+   only (`targets.production`). The previous READY production must be gone.
 
 Do not add Preview credentials, Preview databases, Preview Redis instances, or Preview-specific runtime branches. Disposable service instances used by local development or GitHub Actions are separate from Vercel Preview and remain supported.
