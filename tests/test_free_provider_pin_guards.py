@@ -31,7 +31,7 @@ def validate():
 def test_opencode_free_pins_accept_free_roster_ids(validate) -> None:
     """OpenCode free lanes accept big-pickle, *-free, and muse-spark ids."""
     assert validate.opencode_model_is_free('big-pickle')
-    assert validate.opencode_model_is_free('deepseek-v4-flash-free')
+    assert validate.opencode_model_is_free('mimo-v2.5-free')
     assert validate.opencode_model_is_free('muse-spark-1.2-contributor-free')
     assert not validate.opencode_model_is_free('paid-frontier')
     assert not validate.opencode_model_is_free('openrouter/foo:free')
