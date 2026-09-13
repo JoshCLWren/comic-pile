@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query'
 import type { InfiniteData } from '@tanstack/react-query'
 import type { Thread, ThreadListResponse } from '../types'
+import type { ContinuityPlan } from '../services/api-continuity-plans'
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
 
@@ -163,6 +164,24 @@ export async function invalidateAfterQueueMutation(
   client: QueryClient,
 ): Promise<void> {
   return invalidateAfterQueueMovement(client)
+}
+
+export async function invalidateReadingPlans(client: QueryClient): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.readingPlans.all })
+  // Plan create/update/delete recompiles eligibility rules that Roll/Queue/session consume.
+  await invalidateAfterQueueMovement(client)
+}
+
+export async function applyCommittedReadingPlan(
+  client: QueryClient,
+  plan: ContinuityPlan,
+): Promise<void> {
+  client.setQueryData(queryKeys.readingPlans.detail(plan.id), plan)
+  await client.invalidateQueries({
+    queryKey: queryKeys.readingPlans.list(),
+    exact: true,
+  })
+  await invalidateAfterQueueMovement(client)
 }
 
 /**

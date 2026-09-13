@@ -505,6 +505,16 @@ def issue_readiness(issue_id: int, snapshot: GraphSnapshot) -> list[ContinuityBl
     )
 
 
+def issue_rule_readiness(issue_id: int, snapshot: GraphSnapshot) -> list[ContinuityBlocker]:
+    """Return blockers from compiled ContinuityRule rows only.
+
+    Excludes ``DependencyGroupMembership.sequence_order`` crossover ordering so
+    callers that audit canonical rule coverage cannot mistake sequence-order
+    authority for ContinuityRule coverage.
+    """
+    return _direct_blockers("issue", issue_id, snapshot)
+
+
 def crossover_readiness(group_id: int, snapshot: GraphSnapshot) -> list[ContinuityBlocker]:
     """Return direct crossover blockers plus blockers on unread member issues.
 

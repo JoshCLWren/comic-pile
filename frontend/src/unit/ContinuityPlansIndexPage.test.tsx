@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -15,6 +15,15 @@ vi.mock('../services/api-continuity-plans', () => ({
 
 const mockList = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.list)
 const mockDelete = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.delete)
+const plan = {
+  id: 1,
+  name: 'My Plan',
+  ordering_mode: 'informational',
+  lane_count: 1,
+  step_count: 3,
+  source_paths: [] as string[],
+  updated_at: '2026-08-28T00:00:00Z',
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -44,8 +53,8 @@ describe('ContinuityPlansIndexPage', () => {
     expect(screen.getByText(/saved arrangement of issues, series, and crossovers/)).toBeInTheDocument()
     const glossaryLink = screen.getByRole('link', { name: 'What is a continuity plan?' })
     expect(glossaryLink).toHaveAttribute('href', '/glossary#continuity-plan')
-    expect(screen.getByText('Create your first plan from the sequential planner.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Create a plan' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'New Reading Plan' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add from CBL' })).toBeInTheDocument()
   })
 
   it('renders error state when load fails', async () => {
@@ -62,14 +71,7 @@ describe('ContinuityPlansIndexPage', () => {
 
   it('renders plan cards when plans exist', async () => {
     mockList.mockResolvedValue([
-      {
-        id: 1,
-        name: 'My Plan',
-        ordering_mode: 'informational',
-        lane_count: 2,
-        step_count: 5,
-        updated_at: '2026-08-28T00:00:00Z',
-      },
+      { ...plan, lane_count: 2, step_count: 5 },
     ])
     render(
       <MemoryRouter>
@@ -80,18 +82,46 @@ describe('ContinuityPlansIndexPage', () => {
       expect(screen.getByText('My Plan')).toBeInTheDocument()
     })
     expect(screen.getByText('2 lanes · 5 steps')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'New Reading Plan' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add from CBL' })).toBeInTheDocument()
+  })
+
+  it('asks which plan should receive CBL material instead of targeting the first plan', async () => {
+    mockList.mockResolvedValue([
+      plan,
+      { ...plan, id: 2, name: 'Second Plan' },
+    ])
+    render(
+      <MemoryRouter>
+        <ContinuityPlansIndexPage />
+      </MemoryRouter>
+    )
+    await waitFor(() => {
+      expect(screen.getByText('My Plan')).toBeInTheDocument()
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'Add from CBL' }))
+    const dialog = screen.getByRole('dialog', { name: 'Choose a Reading Plan' })
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: /My Plan/ })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: /Second Plan/ })).toBeInTheDocument()
+  })
+
+  it('identifies CBL-backed plans and their source', async () => {
+    mockList.mockResolvedValue([
+      { ...plan, source_paths: ['Dark Horse/BPRD/Plague of Frogs.cbl'] },
+    ])
+    render(
+      <MemoryRouter>
+        <ContinuityPlansIndexPage />
+      </MemoryRouter>
+    )
+    expect(await screen.findByText('CBL-backed')).toBeInTheDocument()
+    expect(screen.getByText('Source: Dark Horse/BPRD/Plague of Frogs.cbl')).toBeInTheDocument()
   })
 
   it('shows delete confirmation when delete is clicked', async () => {
     mockList.mockResolvedValue([
-      {
-        id: 1,
-        name: 'My Plan',
-        ordering_mode: 'informational',
-        lane_count: 1,
-        step_count: 3,
-        updated_at: '2026-08-28T00:00:00Z',
-      },
+      plan,
     ])
     render(
       <MemoryRouter>
@@ -108,14 +138,7 @@ describe('ContinuityPlansIndexPage', () => {
 
   it('cancels delete when keep is clicked', async () => {
     mockList.mockResolvedValue([
-      {
-        id: 1,
-        name: 'My Plan',
-        ordering_mode: 'informational',
-        lane_count: 1,
-        step_count: 3,
-        updated_at: '2026-08-28T00:00:00Z',
-      },
+      plan,
     ])
     render(
       <MemoryRouter>
@@ -132,14 +155,7 @@ describe('ContinuityPlansIndexPage', () => {
 
   it('deletes plan when confirm is clicked', async () => {
     mockList.mockResolvedValue([
-      {
-        id: 1,
-        name: 'My Plan',
-        ordering_mode: 'informational',
-        lane_count: 1,
-        step_count: 3,
-        updated_at: '2026-08-28T00:00:00Z',
-      },
+      plan,
     ])
     mockDelete.mockResolvedValue(undefined)
     render(
@@ -153,20 +169,13 @@ describe('ContinuityPlansIndexPage', () => {
     await userEvent.click(screen.getByText('Delete'))
     await userEvent.click(screen.getByText('Delete', { selector: 'button:last-child' }))
     await waitFor(() => {
-      expect(mockDelete).toHaveBeenCalledWith(1)
+      expect(mockDelete).toHaveBeenCalledWith(1, expect.anything())
     })
   })
 
   it('shows error when delete fails', async () => {
     mockList.mockResolvedValue([
-      {
-        id: 1,
-        name: 'My Plan',
-        ordering_mode: 'informational',
-        lane_count: 1,
-        step_count: 3,
-        updated_at: '2026-08-28T00:00:00Z',
-      },
+      plan,
     ])
     mockDelete.mockRejectedValue(new Error('Delete failed'))
     render(

@@ -14,7 +14,6 @@ from app.database import get_db
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.user import User
-from app.repositories.continuity_repository import plans_for_user
 from app.schemas.continuity_plan import (
     ContinuityPlanListItem,
     ContinuityPlanResponse,
@@ -22,8 +21,11 @@ from app.schemas.continuity_plan import (
 )
 from app.schemas.reading_order import ReadingOrderAdoptRequest
 from app.services.continuity_plan_writer import (
+    list_continuity_plan_items,
     plan_rule_marker,
+    preserve_server_lane_metadata,
     replace_compiled_rules,
+    serialize_new_plan_lanes,
     validate_node_ownership,
 )
 
@@ -74,19 +76,7 @@ async def list_continuity_plans(
     Plans are returned in descending ``updated_at`` order so the most
     recently modified plan appears first.
     """
-    rows = await plans_for_user(db, user_id=current_user.id)
-    ordered = sorted(rows, key=lambda plan: plan.updated_at, reverse=True)
-    return [
-        ContinuityPlanListItem(
-            id=plan.id,
-            name=plan.name,
-            ordering_mode=plan.ordering_mode,
-            lane_count=len(plan.lanes_json),
-            step_count=len(plan.nodes_json),
-            updated_at=plan.updated_at,
-        )
-        for plan in ordered
-    ]
+    return await list_continuity_plan_items(db, user_id=current_user.id)
 
 
 @router.post("/continuity-plans/", response_model=ContinuityPlanResponse, status_code=201)
@@ -101,7 +91,7 @@ async def create_continuity_plan(
         user_id=current_user.id,
         name=payload.name,
         ordering_mode=payload.ordering_mode,
-        lanes_json=[lane.model_dump() for lane in payload.lanes],
+        lanes_json=serialize_new_plan_lanes(payload.lanes),
         nodes_json=[node.model_dump() for node in payload.nodes],
     )
     db.add(plan)
@@ -147,7 +137,10 @@ async def update_continuity_plan(
     await validate_node_ownership(db, user_id=current_user.id, nodes=payload.nodes)
     plan.name = payload.name
     plan.ordering_mode = payload.ordering_mode
-    plan.lanes_json = [lane.model_dump() for lane in payload.lanes]
+    plan.lanes_json = preserve_server_lane_metadata(
+        list(plan.lanes_json or []),
+        payload.lanes,
+    )
     plan.nodes_json = [node.model_dump() for node in payload.nodes]
     try:
         await replace_compiled_rules(

@@ -81,9 +81,9 @@ describe('cblSourcesApi.commit', () => {
     })
   })
 
-  it('targets the selected Reading Plan and maps reviewed missing entries', async () => {
+  it('targets the selected Reading Plan and maps series choices plus entry overrides', async () => {
     const result = await cblSourcesApi.commit(42, 77, reviewedPreview, {
-      series_decisions: {},
+      series_decisions: { bprd: false },
       entry_decisions: { '102': true, '103': false },
     })
 
@@ -97,12 +97,53 @@ describe('cblSourcesApi.commit', () => {
     expect(api.post).toHaveBeenCalledWith(
       '/v1/cbl/42/reading-plans/77/adoption-commit',
       {
-        entry_decisions: { 2: 'include', 3: 'exclude' },
+        entry_decisions: {},
         series_decisions: [],
-        series_overrides: [],
+        series_overrides: [
+          { cbl_position: 1, decision: 'exclude' },
+          { cbl_position: 2, decision: 'include' },
+          { cbl_position: 3, decision: 'exclude' },
+          { cbl_position: 4, decision: 'exclude' },
+        ],
         content_hash: 'hash-42',
         revision_sha: 'abcdef1234567890',
       },
+    )
+  })
+
+  it('expands colliding series_name groups into distinct position overrides', async () => {
+    const collidingPreview = {
+      ...reviewedPreview,
+      entries: [
+        entry({
+          cbl_position: 1,
+          cbl_entry_id: 201,
+          series_name: 'Shared Title',
+          series_group_id: 'shared-2001',
+        }),
+        entry({
+          cbl_position: 2,
+          cbl_entry_id: 202,
+          series_name: 'Shared Title',
+          series_group_id: 'shared-2010',
+        }),
+      ],
+    } as CBLAdoptionPreview
+
+    await cblSourcesApi.commit(42, 77, collidingPreview, {
+      series_decisions: { 'shared-2001': true, 'shared-2010': false },
+      entry_decisions: {},
+    })
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/v1/cbl/42/reading-plans/77/adoption-commit',
+      expect.objectContaining({
+        series_decisions: [],
+        series_overrides: [
+          { cbl_position: 1, decision: 'include' },
+          { cbl_position: 2, decision: 'exclude' },
+        ],
+      }),
     )
   })
 })

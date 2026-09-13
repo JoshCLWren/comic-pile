@@ -4876,6 +4876,7 @@ export interface components {
         ContinuityPlanLane: {
             /** Id */
             id: string;
+            migration_contract?: components["schemas"]["ExplicitReaderOrderMigrationContract"] | null;
             /** Name */
             name: string;
             /** Order */
@@ -4897,6 +4898,8 @@ export interface components {
              * @enum {string}
              */
             ordering_mode: "informational" | "strict_sequential";
+            /** Source Paths */
+            source_paths?: string[];
             /** Step Count */
             step_count: number;
             /**
@@ -5889,6 +5892,32 @@ export interface components {
             detail?: string | null;
             /** Label */
             label: string;
+        };
+        /**
+         * ExplicitReaderOrderMigrationContract
+         * @description Server-owned proof that a plan replaced classified reader-order edges.
+         */
+        ExplicitReaderOrderMigrationContract: {
+            /** Classification Family Keys */
+            classification_family_keys: string[];
+            /** Edge Fingerprint */
+            edge_fingerprint: string;
+            /** Edges */
+            edges: [
+                number,
+                number
+            ][];
+            /** Issue Fingerprint */
+            issue_fingerprint: string;
+            /** Issue Ids */
+            issue_ids: number[];
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "explicit_reader_order";
+            /** Selected Dependency Ids */
+            selected_dependency_ids: number[];
         };
         /**
          * ExternalIdentityResponse
@@ -7550,6 +7579,11 @@ export interface components {
          * @description One currently readable prerequisite recommended for a blocked active roll.
          */
         RollRecoveryPrerequisite: {
+            /**
+             * Is Readable
+             * @default true
+             */
+            is_readable: boolean;
             /** Label */
             label: string;
             /** Node Id */

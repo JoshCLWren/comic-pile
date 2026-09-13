@@ -1,4 +1,5 @@
 import api from './api'
+import type { ContinuityPlan } from './api-continuity-plans'
 
 export interface CBLSourceListDiscoveryItem {
   id: number
@@ -65,15 +66,14 @@ export interface CBLAdoptionPreview {
   }
 }
 
-export interface CBLAdoptionCommitResult {
-  id: number
+export interface CBLAdoptionCommitResult extends ContinuityPlan {
   reused_positions: number[]
   created_positions: number[]
   excluded_positions: number[]
   unresolved_positions: number[]
 }
 
-interface CBLAdoptionPlanChoices {
+export interface CBLAdoptionPlanChoices {
   series_decisions: Record<string, boolean>
   entry_decisions: Record<string, boolean>
 }
@@ -91,19 +91,37 @@ export const cblSourcesApi = {
     listId: number,
     planId: number,
     preview: CBLAdoptionPreview,
-    _choices: CBLAdoptionPlanChoices,
+    choices: CBLAdoptionPlanChoices,
   ) => {
-    const entryDecisions = Object.fromEntries(
-      preview.entries
-        .filter((entry) => entry.adoption_class === 'missing_importable')
-        .map((entry) => [entry.cbl_position, entry.adopted ? 'include' : 'exclude']),
+    const entriesById = new Map(
+      preview.entries.map((entry) => [String(entry.cbl_entry_id), entry]),
     )
+    // Expand identity-aware group decisions into per-position overrides so two
+    // runs that share a series_name cannot collapse on the backend.
+    const overridesByPosition = new Map<number, 'include' | 'exclude'>()
+    for (const [groupId, include] of Object.entries(choices.series_decisions)) {
+      const decision = include ? 'include' : 'exclude'
+      for (const entry of preview.entries) {
+        if (entry.series_group_id === groupId) {
+          overridesByPosition.set(entry.cbl_position, decision)
+        }
+      }
+    }
+    for (const [entryId, include] of Object.entries(choices.entry_decisions)) {
+      const entry = entriesById.get(entryId)
+      if (entry) {
+        overridesByPosition.set(entry.cbl_position, include ? 'include' : 'exclude')
+      }
+    }
+    const seriesOverrides = [...overridesByPosition.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([cbl_position, decision]) => ({ cbl_position, decision }))
     return api.post<CBLAdoptionCommitResult>(
       `/v1/cbl/${listId}/reading-plans/${planId}/adoption-commit`,
       {
-        entry_decisions: entryDecisions,
+        entry_decisions: {},
         series_decisions: [],
-        series_overrides: [],
+        series_overrides: seriesOverrides,
         content_hash: preview.source.content_hash,
         revision_sha: preview.source.revision_sha,
       },

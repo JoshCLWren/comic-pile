@@ -25,11 +25,44 @@ from app.continuity_rules import _would_create_cycle, ensure_owned_continuity_no
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.thread import Thread
-from app.schemas.continuity_plan import ContinuityPlanNode, PlanOrderingMode
+from app.schemas.continuity_plan import (
+    ContinuityPlanLane,
+    ContinuityPlanListItem,
+    ContinuityPlanNode,
+    PlanOrderingMode,
+)
 from app.schemas.continuity_rule import ContinuityNodeType
+from app.repositories.continuity_repository import plans_for_user
 
 
 PLAN_RULE_MARKER_PREFIX = "continuity-plan"
+
+
+def serialize_new_plan_lanes(
+    lanes: list[ContinuityPlanLane],
+) -> list[dict[str, object]]:
+    """Serialize lanes without accepting client-authored migration proof."""
+    return [lane.model_dump(exclude={"migration_contract"}) for lane in lanes]
+
+
+def preserve_server_lane_metadata(
+    existing_lanes: list[dict[str, object]],
+    lanes: list[ContinuityPlanLane],
+) -> list[dict[str, object]]:
+    """Preserve server-owned migration proof across ordinary lane replacement."""
+    contracts = {
+        str(lane.get("id")): lane["migration_contract"]
+        for lane in existing_lanes
+        if lane.get("migration_contract") is not None
+    }
+    serialized: list[dict[str, object]] = []
+    for lane in lanes:
+        row = lane.model_dump(exclude={"migration_contract"})
+        contract = contracts.get(lane.id)
+        if contract is not None:
+            row["migration_contract"] = contract
+        serialized.append(row)
+    return serialized
 
 
 def plan_rule_marker(plan_id: int) -> str:
@@ -365,3 +398,45 @@ async def replace_compiled_rules(
         db.add(ContinuityRule(**rule_kwargs))
         await db.flush()
     return True
+
+
+def plan_source_paths(plan: ContinuityPlan) -> list[str]:
+    """Return unique CBL source paths retained by plan nodes in source order."""
+    paths: list[str] = []
+    for node in plan.nodes_json or []:
+        placements = node.get("source_cbl_placements")
+        if isinstance(placements, list):
+            for placement in placements:
+                if not isinstance(placement, dict):
+                    continue
+                path = placement.get("source_path")
+                if isinstance(path, str) and path not in paths:
+                    paths.append(path)
+        source_paths = node.get("source_paths")
+        if isinstance(source_paths, list | tuple):
+            for path in source_paths:
+                if isinstance(path, str) and path not in paths:
+                    paths.append(path)
+    return paths
+
+
+async def list_continuity_plan_items(
+    db: AsyncSession,
+    *,
+    user_id: int,
+) -> list[ContinuityPlanListItem]:
+    """Return typed Reading Plan list items for one user, newest first."""
+    rows = await plans_for_user(db, user_id=user_id)
+    ordered = sorted(rows, key=lambda plan: plan.updated_at, reverse=True)
+    return [
+        ContinuityPlanListItem(
+            id=plan.id,
+            name=plan.name,
+            ordering_mode=plan.ordering_mode,
+            lane_count=len(plan.lanes_json),
+            step_count=len(plan.nodes_json),
+            source_paths=plan_source_paths(plan),
+            updated_at=plan.updated_at,
+        )
+        for plan in ordered
+    ]

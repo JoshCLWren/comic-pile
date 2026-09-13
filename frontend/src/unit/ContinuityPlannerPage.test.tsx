@@ -11,6 +11,22 @@ import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api'
 import ContinuityPlannerPage from '../pages/ContinuityPlannerPage'
 
+interface AddMaterialProbeProps {
+  commitDisabled?: boolean
+  onCommitPendingChange?: (isPending: boolean) => void
+}
+
+const addMaterialProbe = vi.hoisted(() => ({
+  current: null as AddMaterialProbeProps | null,
+}))
+
+vi.mock('../components/ReadingPlanAddMaterial', () => ({
+  default: (props: AddMaterialProbeProps) => {
+    addMaterialProbe.current = props
+    return <div data-testid="add-material-probe" />
+  },
+}))
+
 const mocks = {
   create: vi.fn(),
   list: vi.fn(),
@@ -89,6 +105,7 @@ const secondIssue = {
 }
 
 beforeEach(() => {
+  addMaterialProbe.current = null
   if (typeof window !== "undefined") {
       window.localStorage.clear();
     }
@@ -192,14 +209,11 @@ describe('ContinuityPlannerPage', () => {
     expect(informational).toBeChecked()
     expect(strict).not.toBeChecked()
 
-    expect(screen.getByText(/separate from issue-level/i)).toBeVisible()
-    expect(screen.getByText(/Informational plans create no blocking rules/i)).toBeVisible()
-    expect(screen.getByText(/Strict sequential plans compile one blocking rule per step/i)).toBeVisible()
+    expect(screen.getByText(/Informational plans are a reading reference only/i)).toBeVisible()
+    expect(screen.getByText(/Strict sequential plans keep each later step out of Roll/i)).toBeVisible()
 
     const glossaryLink = screen.getByRole('link', { name: 'What is an ordering mode?' })
     expect(glossaryLink).toHaveAttribute('href', '/glossary#ordering-mode')
-    const dependencyBuilderLink = screen.getByRole('link', { name: 'Dependency Builder' })
-    expect(dependencyBuilderLink).toHaveAttribute('href', '/glossary#dependency-builder')
   })
 
   it('defaults a new plan to informational order so no blocking rules are compiled', async () => {
@@ -300,6 +314,52 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel changes' }))
     expect(screen.getByRole('button', { name: 'Remove Fourth World' })).toBeVisible()
     expect(mocks.update).not.toHaveBeenCalled()
+  })
+
+  it('mutually excludes planner saves and CBL commits', async () => {
+    mocks.get.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Saved lane',
+      ordering_mode: 'strict_sequential',
+      lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
+      nodes: [
+        {
+          id: 'crossover-8',
+          node_type: 'crossover',
+          ref_id: 8,
+          lane_id: 'main',
+          position: 0,
+          label: 'Fourth World',
+        },
+      ],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/12']}>
+        <Routes>
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+      { wrapper: queryWrapper },
+    )
+
+    await screen.findByTestId('add-material-probe')
+    expect(addMaterialProbe.current?.commitDisabled).toBe(false)
+    await user.click(await screen.findByRole('button', { name: 'Remove Fourth World' }))
+    expect(addMaterialProbe.current?.commitDisabled).toBe(true)
+
+    const saveButton = screen.getByRole('button', { name: 'Save plan' })
+    expect(saveButton).toBeEnabled()
+    act(() => addMaterialProbe.current?.onCommitPendingChange?.(true))
+    expect(saveButton).toBeDisabled()
+    act(() => addMaterialProbe.current?.onCommitPendingChange?.(false))
+    expect(saveButton).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Cancel changes' }))
+    expect(addMaterialProbe.current?.commitDisabled).toBe(false)
   })
 
   it('moves a node up and down using the lane reorder controls', async () => {
@@ -1860,7 +1920,7 @@ describe('ContinuityPlannerPage', () => {
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeVisible())
     // Modal content is portaled to document.body
-    expect(await screen.findByText(/Projection plan/)).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Projection plan', level: 1 })).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: 'Close modal' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

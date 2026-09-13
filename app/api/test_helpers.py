@@ -16,6 +16,8 @@ from app.models.external_identity import (
     IssueExternalIdentityMapping,
 )
 from app.models.reading_order import ReadingOrder, ReadingOrderItem
+from app.schemas.test_fixtures import TestCblSourceCreate, TestCblSourceResponse
+from app.services.test_cbl_source_seed import create_test_cbl_source as seed_test_cbl_source
 
 router = APIRouter(prefix="/test", tags=["test"])
 
@@ -234,6 +236,22 @@ async def create_test_issue_identity(
         "series_name": series_name,
         "series_id": series_id,
     }
+
+
+@router.post("/cbl-source", response_model=TestCblSourceResponse)
+async def create_test_cbl_source(
+    payload: TestCblSourceCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TestCblSourceResponse:
+    """Seed one discoverable CBL source list for browser golden-path coverage.
+
+    Entries may reference owned issues (existing) or ComicVine identities that are
+    not mapped to any owned issue (missing_importable). This endpoint never creates
+    production migration state.
+    """
+    await _require_test_environment()
+    return await seed_test_cbl_source(db, user_id=current_user.id, payload=payload)
 
 
 @router.post("/sessions/expire")

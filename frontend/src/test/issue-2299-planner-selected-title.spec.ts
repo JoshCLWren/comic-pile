@@ -58,7 +58,7 @@ test.describe('Continuity Planner selected series title (#2299)', () => {
 
       await page.setViewportSize(viewport)
       await page.goto('/continuity-plans/new', { waitUntil: 'domcontentloaded' })
-      await expect(page.getByRole('heading', { name: 'Sequential planner' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'New Reading Plan' })).toBeVisible()
 
       const search = page.getByRole('searchbox', { name: 'Comic series' })
       await expect(search).toBeVisible()
@@ -113,7 +113,7 @@ test.describe('Continuity Planner selected series title (#2299)', () => {
 
     await page.setViewportSize(TABLET_PORTRAIT)
     await page.goto('/continuity-plans/new', { waitUntil: 'domcontentloaded' })
-    await expect(page.getByRole('heading', { name: 'Sequential planner' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'New Reading Plan' })).toBeVisible()
 
     const search = page.getByRole('searchbox', { name: 'Comic series' })
     await search.fill('B.P.R.D.')

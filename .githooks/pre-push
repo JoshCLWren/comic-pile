@@ -11,6 +11,27 @@ if [ ! -f "pyproject.toml" ]; then
     exit 1
 fi
 
+HEAD_SHA="$(git rev-parse HEAD)"
+VERIFY_STAMP="$(git rev-parse --git-path comic-pile-prepush-verified)"
+
+_file_mtime() {
+    # Portable mtime: GNU stat uses -c %Y; BSD/macOS uses -f %m.
+    if stat -c %Y "$1" >/dev/null 2>&1; then
+        stat -c %Y "$1"
+    else
+        stat -f %m "$1"
+    fi
+}
+
+if [ -f "$VERIFY_STAMP" ]; then
+    stamped="$(tr -d '[:space:]' < "$VERIFY_STAMP" || true)"
+    stamp_age="$(( $(date +%s) - $(_file_mtime "$VERIFY_STAMP") ))"
+    if [ "$stamped" = "$HEAD_SHA" ] && [ "$stamp_age" -lt 3600 ]; then
+        echo "Pre-push already verified for ${HEAD_SHA:0:12} (${stamp_age}s ago); proceeding to push."
+        exit 0
+    fi
+fi
+
 # Activate venv if not already active (worktree-aware)
 if [ -z "${VIRTUAL_ENV:-}" ]; then
     VENV_PATH=".venv/bin/activate"
@@ -45,27 +66,25 @@ if [ ! -d "frontend/node_modules" ]; then
 fi
 
 echo ""
-echo "1/5 Running lint (scripts/lint.sh)..."
+echo "1/4 Running lint (scripts/lint.sh)..."
 bash scripts/lint.sh
 
 echo ""
-echo "2/5 Running backend tests with coverage..."
+echo "2/4 Running backend tests with coverage..."
 python -m pytest tests/ --cov=comic_pile --cov-report=xml
 
 echo ""
-echo "3/5 Running E2E API workflow tests..."
-python -m pytest tests_e2e/test_api_workflows.py -v --no-cov
-
-echo ""
-echo "4/5 Running E2E dice ladder tests..."
-python -m pytest tests_e2e/test_dice_ladder_e2e.py --no-cov -v
-
-echo ""
-echo "5/5 Running frontend Playwright E2E (build + test)..."
+echo "3/4 Running frontend unit tests..."
 (
     cd frontend
-    pnpm run test:e2e
+    pnpm test
 )
 
 echo ""
+echo "4/4 Running rendered UI audit (CI parity)..."
+pnpm run audit:ui
+
+echo ""
 echo "All pre-push checks passed."
+echo "Note: full Playwright product E2E is not part of default CI; run make verify-e2e when needed."
+printf '%s\n' "$HEAD_SHA" > "$VERIFY_STAMP"

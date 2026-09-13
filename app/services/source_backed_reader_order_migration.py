@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, cast
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSourceList
@@ -21,6 +21,10 @@ from app.schemas.continuity_plan import (
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
 from app.services.continuity_graph import issue_readiness, load_snapshot
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
+from app.services.explicit_reader_order_migration import (
+    _explicit_classifications,
+    _load_step14_index,
+)
 from app.services.ultimate_universe_production_migration import (
     MigrationInvariantError,
     _build_plan,
@@ -38,6 +42,7 @@ from app.services.ultimate_universe_production_migration import (
 )
 from comic_pile.dependencies import (
     _get_blocked_thread_ids_uncached,
+    _invalidate_continuity_snapshot,
     refresh_user_blocked_status,
 )
 from comic_pile.queue import get_roll_pool
@@ -48,13 +53,14 @@ class SourceBackedReaderOrderSpec:
     """Frozen manifest describing one source-backed reader-order migration."""
 
     user_id: int
-    source_list_id: int
-    dependency_group_id: int
     expected_content_hash: str
     expected_positions: int
     plan_name: str
+    source_list_id: int | None = None
+    dependency_group_id: int | None = None
     expected_source_path: str | None = None
     reader_order_dependency_ids: tuple[int, ...] = ()
+    classification_family_keys: tuple[str, ...] = ()
 
 
 PRODUCTION_ABSOLUTE_UNIVERSE_SPEC = SourceBackedReaderOrderSpec(
@@ -67,24 +73,92 @@ PRODUCTION_ABSOLUTE_UNIVERSE_SPEC = SourceBackedReaderOrderSpec(
     expected_positions=76,
     plan_name="Absolute Universe",
     expected_source_path="DC/Events/CBH/Absolute Universe Reading Order.cbl",
-    reader_order_dependency_ids=(
-        1296,
-        1297,
-        1301,
-        1588,
-        1607,
-        1608,
-        1834,
-        1836,
-        1837,
-        1839,
-        1840,
-        1841,
-        1843,
-        1844,
-        1845,
-    ),
+    classification_family_keys=("absolute_universe_reader_order",),
 )
+
+
+PRODUCTION_SOURCE_BACKED_SPECS: dict[str, SourceBackedReaderOrderSpec] = {
+    "absolute-universe": PRODUCTION_ABSOLUTE_UNIVERSE_SPEC,
+    "fantastic-four-early-years": SourceBackedReaderOrderSpec(
+        user_id=1,
+        expected_content_hash="d3f597e1027d4924d0b0f698c54bc78fa155e0f0a4921f85d6ceadedb204a327",
+        expected_positions=288,
+        plan_name="Fantastic Four 001 - Early Years",
+        classification_family_keys=("lee_kirby_fantastic_four",),
+    ),
+    "ultimate-universe": SourceBackedReaderOrderSpec(
+        user_id=1,
+        source_list_id=12,
+        dependency_group_id=15,
+        expected_content_hash="d8944942bb6115ea9607ac6be0ac53e59368b90a929d44412900b3b9cae8b66a",
+        expected_positions=130,
+        plan_name="Ultimate Universe",
+        classification_family_keys=("ultimate_universe_reader_order",),
+    ),
+    "x-men-era-ten": SourceBackedReaderOrderSpec(
+        user_id=1,
+        expected_content_hash="5a221581571c7d55083b15641e23d90112c0875d09c875065a78fbb77f117ec2",
+        expected_positions=210,
+        plan_name="Late-90s X-Men Reading Order",
+        dependency_group_id=4,
+        classification_family_keys=(
+            "xmen_chronology_reader_order",
+            "xmen_hunt_setup_reader_order",
+        ),
+    ),
+    "wolverine": SourceBackedReaderOrderSpec(
+        user_id=1,
+        expected_content_hash="1e6b55e99d9317ba68782678710a3e621786c9f57afb1203f44154714acef9b8",
+        expected_positions=599,
+        plan_name="Wolverine no Events",
+    ),
+    "alpha-flight": SourceBackedReaderOrderSpec(
+        user_id=1,
+        expected_content_hash="be842ff688b9c8c5407308b9b9af82b59ed92df14d1c9cd1a83530a8549c4a32",
+        expected_positions=228,
+        plan_name="Alpha Flight",
+    ),
+    "new-gods": SourceBackedReaderOrderSpec(
+        user_id=1,
+        expected_content_hash="a028059e278535136625ffd4cc6c3a309e96c3473cd583598bed1183145c87f4",
+        expected_positions=262,
+        plan_name="The New Gods 001",
+    ),
+    "americas-best-comics": SourceBackedReaderOrderSpec(
+        user_id=1,
+        expected_content_hash="8fc8087894488c1899712d0fdb4195ab403747a57903b30d3cecf100fa906084",
+        expected_positions=129,
+        plan_name="America's Best Comics",
+    ),
+    "doom-patrol": SourceBackedReaderOrderSpec(
+        user_id=1,
+        expected_content_hash="3c28f4701b5f8d19e6c100253e97099c42088fc9412b83893551daace246c1c4",
+        expected_positions=273,
+        plan_name="Doom Patrol 1",
+    ),
+    "teen-titans": SourceBackedReaderOrderSpec(
+        user_id=1,
+        expected_content_hash="134c0f89208795c8af81a99baaf63dbe9e53bb6105c52c469200823b15325af6",
+        expected_positions=389,
+        plan_name="Teen Titans With Events",
+    ),
+    "supreme": SourceBackedReaderOrderSpec(
+        user_id=1,
+        expected_content_hash="ba6aea4858b09f3688e9fc864107c9be3f634c021fa53ea15dbfa119e8042aac",
+        expected_positions=94,
+        plan_name="Supreme Reading Order",
+        classification_family_keys=("supreme_reader_order",),
+    ),
+    "unnamed-universe": SourceBackedReaderOrderSpec(
+        user_id=1,
+        expected_content_hash="bb54dfc094a2a7c469b6baa77f6751a8d30ea034ede24d686ba1ab4a968ae0ca",
+        expected_positions=71,
+        plan_name="The Unnamed Universe",
+        dependency_group_id=16,
+        expected_source_path="Image/Events/CBH/The Unnamed Universe Reading Order.cbl",
+        classification_family_keys=("unnamed_universe_reader_order",),
+    ),
+}
 
 
 def _dep(dep: Dependency) -> dict[str, object]:
@@ -109,8 +183,32 @@ async def build_source_backed_reader_order_dry_run(
     spec: SourceBackedReaderOrderSpec,
 ) -> dict[str, Any]:
     """Build a deterministic read-only migration snapshot for one manifest."""
+    _invalidate_continuity_snapshot(spec.user_id, db)
     errors: list[str] = []
-    source = await db.get(CBLSourceList, spec.source_list_id)
+    if spec.source_list_id is None:
+        matching_sources = list(
+            (
+                await db.execute(
+                    select(CBLSourceList)
+                    .where(CBLSourceList.content_hash == spec.expected_content_hash)
+                    .order_by(CBLSourceList.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if len(matching_sources) != 1:
+            return {
+                "ok": False,
+                "errors": [
+                    "expected exactly one source with the manifest content hash; "
+                    f"found {len(matching_sources)}"
+                ],
+                "snapshot_token": None,
+            }
+        source = matching_sources[0]
+    else:
+        source = await db.get(CBLSourceList, spec.source_list_id)
     if source is None or not source.active:
         return {
             "ok": False,
@@ -122,29 +220,35 @@ async def build_source_backed_reader_order_dry_run(
     if spec.expected_source_path and source.source_path != spec.expected_source_path:
         errors.append("source path changed")
 
-    group = await db.scalar(
-        select(DependencyGroup).where(
-            DependencyGroup.id == spec.dependency_group_id,
-            DependencyGroup.user_id == spec.user_id,
-        )
-    )
-    if group is None:
-        return {
-            "ok": False,
-            "errors": ["dependency group missing"],
-            "snapshot_token": None,
-        }
-
-    memberships = list(
-        (
-            await db.execute(
-                select(DependencyGroupMembership).where(
-                    DependencyGroupMembership.group_id == group.id
-                )
+    group = None
+    if spec.dependency_group_id is not None:
+        group = await db.scalar(
+            select(DependencyGroup).where(
+                DependencyGroup.id == spec.dependency_group_id,
+                DependencyGroup.user_id == spec.user_id,
             )
         )
-        .scalars()
-        .all()
+        if group is None:
+            return {
+                "ok": False,
+                "errors": ["dependency group missing"],
+                "snapshot_token": None,
+            }
+
+    memberships = (
+        list(
+            (
+                await db.execute(
+                    select(DependencyGroupMembership).where(
+                        DependencyGroupMembership.group_id == group.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if group is not None
+        else []
     )
     member_issue_ids = {
         membership.issue_id
@@ -164,7 +268,7 @@ async def build_source_backed_reader_order_dry_run(
     report = await reconcile_cbl_source_list(
         db,
         user_id=spec.user_id,
-        list_id=spec.source_list_id,
+        list_id=source.id,
         baseline_member_issue_ids=tuple(sorted(member_issue_ids)),
     )
     entries = _resolved_entries(report.entries)
@@ -185,8 +289,30 @@ async def build_source_backed_reader_order_dry_run(
     ):
         errors.append("source reconciliation is unresolved, ambiguous, or duplicate")
     missing_group = sorted(issue_set - member_issue_ids)
-    if missing_group:
+    if group is not None and missing_group:
         errors.append(f"source issues missing from dependency group: {missing_group}")
+
+    if group is None and issue_set:
+        memberships = list(
+            (
+                await db.execute(
+                    select(DependencyGroupMembership)
+                    .where(DependencyGroupMembership.issue_id.in_(issue_set))
+                    .order_by(DependencyGroupMembership.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        ordered_membership_ids = [
+            membership.id
+            for membership in memberships
+            if membership.sequence_order is not None
+        ]
+        if ordered_membership_ids:
+            errors.append(
+                f"sequence_order unexpectedly populated: {ordered_membership_ids}"
+            )
 
     overlaps: list[dict[str, object]] = []
     user_plans = (
@@ -211,12 +337,20 @@ async def build_source_backed_reader_order_dry_run(
     if overlaps:
         errors.append(f"existing Reading Plan overlap: {overlaps}")
 
-    prefix = _legacy_prefix(source.content_hash)
+    prefixes = [_legacy_prefix(source.content_hash)]
+    if spec.dependency_group_id is not None:
+        prefixes.append(
+            f"cbl-order:group-{spec.dependency_group_id}:{source.content_hash}:"
+        )
     source_deps = list(
         (
             await db.execute(
                 select(Dependency)
-                .where(Dependency.note.like(f"{prefix}%"))
+                .where(
+                    or_(
+                        *(Dependency.note.like(f"{prefix}%") for prefix in prefixes)
+                    )
+                )
                 .order_by(Dependency.id)
             )
         )
@@ -232,13 +366,27 @@ async def build_source_backed_reader_order_dry_run(
     if escaping:
         errors.append(f"source dependencies escape source set: {escaping}")
 
+    selected_explicit_ids = set(spec.reader_order_dependency_ids)
+    if spec.classification_family_keys:
+        _, families = _explicit_classifications(_load_step14_index())
+        for family_key in spec.classification_family_keys:
+            matches = families.get(family_key, [])
+            if not matches:
+                errors.append(f"Step 14 family is missing: {family_key}")
+                continue
+            for family in matches:
+                if family["classification"] != "reading_plan_order":
+                    errors.append(f"Step 14 family is not reading_plan_order: {family_key}")
+                    continue
+                selected_explicit_ids.update(int(value) for value in family["ids"])
+
     explicit_deps: list[Dependency] = []
-    if spec.reader_order_dependency_ids:
+    if selected_explicit_ids:
         explicit_deps = list(
             (
                 await db.execute(
                     select(Dependency)
-                    .where(Dependency.id.in_(spec.reader_order_dependency_ids))
+                    .where(Dependency.id.in_(selected_explicit_ids))
                     .order_by(Dependency.id)
                 )
             )
@@ -246,7 +394,7 @@ async def build_source_backed_reader_order_dry_run(
             .all()
         )
         missing = sorted(
-            set(spec.reader_order_dependency_ids)
+            selected_explicit_ids
             - {dependency.id for dependency in explicit_deps}
         )
         if missing:
@@ -321,6 +469,43 @@ async def build_source_backed_reader_order_dry_run(
             }
         )
 
+    classifications, _ = _explicit_classifications(_load_step14_index())
+    touching_dependencies = (
+        list(
+            (
+                await db.execute(
+                    select(Dependency)
+                    .where(
+                        or_(
+                            Dependency.source_issue_id.in_(issue_set),
+                            Dependency.target_issue_id.in_(issue_set),
+                        )
+                    )
+                    .order_by(Dependency.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if issue_set
+        else []
+    )
+    needs_review = [
+        dependency
+        for dependency in touching_dependencies
+        if classifications.get(dependency.id) == "needs_review"
+    ]
+    preserved_standalone = [
+        dependency
+        for dependency in touching_dependencies
+        if classifications.get(dependency.id) == "standalone_prerequisite"
+    ]
+    if needs_review:
+        errors.append(
+            "needs_review dependencies touch this plan: "
+            f"{[dependency.id for dependency in needs_review]}"
+        )
+
     bridges = _derive_gap_bridges(entries)
     lanes, nodes = _build_plan(
         entries,
@@ -367,7 +552,7 @@ async def build_source_backed_reader_order_dry_run(
             f"planned edges conflict with rules: {[rule.id for rule in conflicts]}"
         )
 
-    factual = await _factual_snapshot(  # type: ignore[arg-type]
+    factual = await _factual_snapshot(
         db,
         spec=spec,
         ordered_issue_ids=issue_ids,
@@ -484,12 +669,13 @@ async def build_source_backed_reader_order_dry_run(
     state: dict[str, object] = {
         "manifest": {
             "user_id": spec.user_id,
-            "source_list_id": spec.source_list_id,
+            "source_list_id": source.id,
             "dependency_group_id": spec.dependency_group_id,
             "content_hash": spec.expected_content_hash,
             "expected_positions": spec.expected_positions,
             "plan_name": spec.plan_name,
             "reader_order_dependency_ids": list(spec.reader_order_dependency_ids),
+            "classification_family_keys": list(spec.classification_family_keys),
         },
         "source": {
             "list_id": source.id,
@@ -504,7 +690,8 @@ async def build_source_backed_reader_order_dry_run(
             "first_unread_issue_id": report.first_unread_issue_id,
         },
         "dependency_group": {
-            "id": group.id,
+            "id": None if group is None else group.id,
+            "membership_ids": [membership.id for membership in memberships],
             "membership_count": len(memberships),
             "ordered_membership_count": len(ordered_membership_ids),
             "extra_issue_ids": sorted(member_issue_ids - issue_set),
@@ -513,6 +700,10 @@ async def build_source_backed_reader_order_dry_run(
         "overlapping_plans": overlaps,
         "source_legacy_dependencies": [_dep(dependency) for dependency in source_deps],
         "explicit_reader_order_dependencies": explicit_semantics,
+        "preserved_standalone_dependencies": [
+            _dep(dependency) for dependency in preserved_standalone
+        ],
+        "needs_review_dependencies": [_dep(dependency) for dependency in needs_review],
         "removed_linked_continuity_rules": [
             _rule_snapshot(rule) for rule in removed_rules
         ],
@@ -673,13 +864,20 @@ async def apply_source_backed_reader_order_migration(
             "persisted Reading Plan diverges from reviewed snapshot"
         )
 
-    ordered_membership = await db.scalar(
-        select(DependencyGroupMembership.id)
-        .where(
-            DependencyGroupMembership.group_id == spec.dependency_group_id,
-            DependencyGroupMembership.sequence_order.is_not(None),
+    membership_ids = [
+        int(value) for value in snapshot["dependency_group"]["membership_ids"]
+    ]
+    ordered_membership = (
+        await db.scalar(
+            select(DependencyGroupMembership.id)
+            .where(
+                DependencyGroupMembership.id.in_(membership_ids),
+                DependencyGroupMembership.sequence_order.is_not(None),
+            )
+            .limit(1)
         )
-        .limit(1)
+        if membership_ids
+        else None
     )
     if ordered_membership is not None:
         raise MigrationInvariantError("sequence_order changed during migration")
@@ -689,10 +887,17 @@ async def apply_source_backed_reader_order_migration(
         if rule is None or _rule_snapshot(rule) != row:
             raise MigrationInvariantError(f"standalone rule {row['id']} changed")
 
+    for row in snapshot["preserved_standalone_dependencies"]:
+        dependency = await db.get(Dependency, int(row["id"]))
+        if dependency is None or _dep(dependency) != row:
+            raise MigrationInvariantError(
+                f"standalone prerequisite {row['id']} changed"
+            )
+
     issue_ids = [
         int(cast(int, node["ref_id"])) for node in payload["nodes"]
     ]
-    factual = await _factual_snapshot(  # type: ignore[arg-type]
+    factual = await _factual_snapshot(
         db,
         spec=spec,
         ordered_issue_ids=issue_ids,
@@ -736,6 +941,9 @@ async def apply_source_backed_reader_order_migration(
             "removed_linked_continuity_rules"
         ],
         "reused_standalone_rule_count": len(snapshot["reused_standalone_rules"]),
+        "preserved_standalone_dependency_count": len(
+            snapshot["preserved_standalone_dependencies"]
+        ),
         "affected_roll_eligible_thread_ids": eligible,
         "issue_state_hash": factual["issue_state_hash"],
         "thread_state_hash": factual["thread_state_hash"],

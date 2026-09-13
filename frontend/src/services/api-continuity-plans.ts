@@ -4,10 +4,21 @@ export type ContinuityPlanNodeType = 'issue' | 'crossover' | 'thread'
 
 export type ContinuityPlanOrderingMode = 'strict_sequential' | 'informational'
 
+export interface ExplicitReaderOrderMigrationContract {
+  kind: 'explicit_reader_order'
+  classification_family_keys: string[]
+  selected_dependency_ids: number[]
+  issue_ids: number[]
+  edges: Array<[number, number]>
+  issue_fingerprint: string
+  edge_fingerprint: string
+}
+
 export interface ContinuityPlanLane {
   id: string
   name: string
   order: number
+  migration_contract?: ExplicitReaderOrderMigrationContract | null
 }
 
 export interface ConvergenceGateTarget {
@@ -24,6 +35,15 @@ export interface ContinuityPlanNode {
   label?: string | null
   is_checkpoint?: boolean
   convergence_gate?: ConvergenceGateTarget[]
+  source_paths?: string[] | null
+  source_cbl_placements?: Array<{ source_path: string; position: number }> | null
+  source_role?: 'core' | 'context/prelude' | 'epilogue' | 'unknown' | null
+  source_confidence?: 'high' | 'medium' | 'low' | null
+  source_explanation?: string | null
+  source_story_arc_ids?: string[] | null
+  source_target_story_arc_id?: string | null
+  reader_role?: 'required/core' | 'recommended' | 'optional' | 'context/prelude' | 'aftermath/epilogue' | 'skipped/excluded' | null
+  reader_optional?: boolean | null
 }
 
 export interface ContinuityPlanWrite {
@@ -46,6 +66,7 @@ export interface ContinuityPlanListItem {
   ordering_mode: ContinuityPlanOrderingMode
   lane_count: number
   step_count: number
+  source_paths: string[]
   updated_at: string
 }
 
