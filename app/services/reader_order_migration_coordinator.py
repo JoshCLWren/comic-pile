@@ -482,18 +482,14 @@ async def _explicit_already_migrated(
         }
         if not membership_issue_ids or membership_issue_ids != node_issue_ids:
             return False
-        # Grouped manifests still need the stamped/frozen issue+edge contract so
-        # a coincidental membership set cannot skip a partially edited plan.
-        if node_issue_ids != expected_issues or edges != expected_edges:
+
+    if stamped is not None:
+        if stamped != expected:
             return False
-    else:
-        if stamped is not None:
-            if stamped != expected:
-                return False
-            if not expected_issues <= node_issue_ids or not expected_edges <= edges:
-                return False
-        elif node_issue_ids != expected_issues or edges != expected_edges:
+        if not expected_issues <= node_issue_ids or not expected_edges <= edges:
             return False
+    elif node_issue_ids != expected_issues or edges != expected_edges:
+        return False
 
     expected_rules = _expected_rules_from_plan_nodes(cast(list[dict[str, Any]], nodes))
     actual = await _plan_owned_rule_hashes(
