@@ -27,7 +27,7 @@ export const READING_CONTEXT_TYPE = {
   bodyCopy: 13,
   /** Secondary metadata: star ratings, "starts at" positions, counts. */
   metaLabel: 12,
-  /** Buttons inside the pillar ("Explain route", "Correct continuity"). */
+  /** Buttons inside the pillar ("Explain path", "Correct continuity"). */
   actionLabel: 12,
 } as const
 

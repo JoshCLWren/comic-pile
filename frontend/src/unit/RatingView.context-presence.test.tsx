@@ -202,7 +202,7 @@ describe('Reading Context content-driven presence (#1942)', () => {
     expect(screen.getByText('Reading Context')).toBeInTheDocument()
     expect(screen.getByText('Your Place in the Story')).toBeInTheDocument()
     expect(screen.getByText('Where you are in Ultimate Black Panther')).toBeInTheDocument()
-    expect(screen.getByText('Dependency & Continuity Edges')).toBeInTheDocument()
+    expect(screen.getByText('Your Reading Boundaries')).toBeInTheDocument()
     expect(screen.getByText('Rolled 5 on d6')).toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     expect(grid!.className).toContain('xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]')
@@ -215,7 +215,7 @@ describe('Reading Context content-driven presence (#1942)', () => {
       ],
     })
     expect(screen.getByText('Reading Context')).toBeInTheDocument()
-    expect(screen.getByText('Reading Routes')).toBeInTheDocument()
+    expect(screen.getByText('Your Reading Paths')).toBeInTheDocument()
     expect(screen.getByText('Main route')).toBeInTheDocument()
   })
 
@@ -244,7 +244,7 @@ describe('Your Context content-driven presence (#1942)', () => {
     renderRatingView({ readerContext: populatedContext, readingOrders: [{ id: 7, name: 'Main route', description: null, total_items: 2, completed_items: 1, items: [] }] })
     expect(screen.getByText('Ultimate Black Panther history')).toBeInTheDocument()
     expect(screen.getByText('Your rating')).toBeInTheDocument()
-    expect(screen.getByText('Reading Routes')).toBeInTheDocument()
+    expect(screen.getByText('Your Reading Paths')).toBeInTheDocument()
   })
 })
 

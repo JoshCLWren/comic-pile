@@ -28,7 +28,7 @@ const REGION_NAMES = [
   'Crossovers',
   'Your rating',
   'Continuity Correction',
-  'Dependency & Continuity Edges',
+  'Your Reading Boundaries',
 ] as const;
 
 async function getCsrfToken(request: APIRequestContext, token: string): Promise<string> {

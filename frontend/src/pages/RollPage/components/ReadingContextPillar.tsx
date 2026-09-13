@@ -218,7 +218,7 @@ export function ReadingContextPillar({
               className="font-bold text-[var(--theme-text-primary)]"
               style={readingContextType('sectionHeading')}
             >
-              Your Reading Flow
+              Where you are in {seriesName}
             </h3>
           </div>
 
@@ -508,7 +508,7 @@ export function ReadingContextPillar({
               className="font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"
               style={readingContextType('statLabel')}
             >
-              Your Reading Progress
+              Continuity Correction
             </h3>
             <button
               type="button"
@@ -520,7 +520,7 @@ export function ReadingContextPillar({
                 backgroundColor: 'rgba(6, 182, 212, 0.09)',
               }}
             >
-              Adjust reading progress
+              Correct continuity
             </button>
           </div>
         </section>

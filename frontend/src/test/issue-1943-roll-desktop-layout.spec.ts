@@ -177,7 +177,7 @@ const RATING_STATES = {
     comicvine: null,
     identity: noIdentity(),
     groups: [],
-    settleText: 'Reading Routes',
+    settleText: 'Your Reading Paths',
   },
   noContext: {
     readingOrders: [],

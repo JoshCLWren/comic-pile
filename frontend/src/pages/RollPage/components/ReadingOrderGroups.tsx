@@ -93,9 +93,9 @@ export function ReadingOrderGroups({ threadId, className }: ReadingOrderGroupsPr
             className="font-bold uppercase tracking-[0.14em] text-[var(--theme-text-muted)]"
             style={readingContextType('statLabel')}
           >
-            Connections
+            Crossovers
           </h3>
-          <CrossoverTags groups={groups} align="center" label="Connection memberships" />
+          <CrossoverTags groups={groups} align="center" label="Crossover memberships" />
         </section>
       </>
     </div>
