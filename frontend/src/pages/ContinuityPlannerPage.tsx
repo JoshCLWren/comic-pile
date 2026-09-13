@@ -630,6 +630,7 @@ export default function ContinuityPlannerPage() {
           planId={planId}
           planName={savedName || name}
           defaultOpen={addFromCblRequested}
+          commitDisabled={isDirty || savePlan.isPending}
           onCommitted={acceptCommittedPlan}
           onCommitPendingChange={setCblCommitPending}
         />

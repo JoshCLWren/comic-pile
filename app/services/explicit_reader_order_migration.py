@@ -343,6 +343,40 @@ def _planned_rule_descriptor(
     }
 
 
+def _migration_contract(
+    spec: ExplicitReaderOrderSpec,
+    selected_rows: list[dict[str, object]],
+) -> dict[str, object]:
+    """Build the durable server-owned proof for one explicit migration."""
+    edge_pairs = sorted(
+        {
+            (
+                int(cast(int, row["source_issue_id"])),
+                int(cast(int, row["target_issue_id"])),
+            )
+            for row in selected_rows
+        }
+    )
+    issue_ids = sorted(
+        {
+            issue_id
+            for source_id, target_id in edge_pairs
+            for issue_id in (source_id, target_id)
+        }
+    )
+    return {
+        "kind": "explicit_reader_order",
+        "classification_family_keys": list(spec.classification_family_keys),
+        "selected_dependency_ids": [
+            int(cast(int, row["id"])) for row in selected_rows
+        ],
+        "issue_ids": issue_ids,
+        "edges": [list(edge) for edge in edge_pairs],
+        "issue_fingerprint": _stable_hash(issue_ids),
+        "edge_fingerprint": _stable_hash(edge_pairs),
+    }
+
+
 def _require_clean(snapshot: dict[str, Any]) -> None:
     if snapshot.get("ok") is not True or not snapshot.get("snapshot_token"):
         raise MigrationInvariantError(
@@ -966,37 +1000,11 @@ async def apply_explicit_reader_order_migration(
         list[dict[str, object]],
         snapshot["selected_reader_order_dependencies"],
     )
-    edge_pairs = sorted(
-        {
-            (
-                int(cast(int, row["source_issue_id"])),
-                int(cast(int, row["target_issue_id"])),
-            )
-            for row in selected_rows
-        }
-    )
-    issue_ids = sorted(
-        {
-            issue_id
-            for source_id, target_id in edge_pairs
-            for issue_id in (source_id, target_id)
-        }
-    )
     stamped_lanes = [dict(lane) for lane in (plan.lanes_json or [])]
     if stamped_lanes:
         stamped_lanes[0] = {
             **stamped_lanes[0],
-            "migration_contract": {
-                "kind": "explicit_reader_order",
-                "classification_family_keys": list(spec.classification_family_keys),
-                "selected_dependency_ids": [
-                    int(cast(int, row["id"])) for row in selected_rows
-                ],
-                "issue_ids": issue_ids,
-                "edges": [list(edge) for edge in edge_pairs],
-                "issue_fingerprint": _stable_hash(issue_ids),
-                "edge_fingerprint": _stable_hash(edge_pairs),
-            },
+            "migration_contract": _migration_contract(spec, selected_rows),
         }
         plan.lanes_json = stamped_lanes
         await db.flush()

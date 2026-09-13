@@ -30,6 +30,7 @@ def _load_application_symbols():
     )
     from app.services.reader_order_migration_coordinator import (
         LEGACY_READING_ORDERS_MANIFEST,
+        apply_explicit_reader_order_overlay,
         build_manifest_report,
         reconcile_batch_manifest_reports,
     )
@@ -48,6 +49,7 @@ def _load_application_symbols():
         apply_legacy_reading_order_migration,
         build_reader_order_cutover_audit,
         LEGACY_READING_ORDERS_MANIFEST,
+        apply_explicit_reader_order_overlay,
         build_manifest_report,
         reconcile_batch_manifest_reports,
         PRODUCTION_SOURCE_BACKED_SPECS,
@@ -63,6 +65,7 @@ def _load_application_symbols():
     apply_legacy_reading_order_migration,
     build_reader_order_cutover_audit,
     LEGACY_READING_ORDERS_MANIFEST,
+    apply_explicit_reader_order_overlay,
     build_manifest_report,
     reconcile_batch_manifest_reports,
     PRODUCTION_SOURCE_BACKED_SPECS,
@@ -169,6 +172,9 @@ async def _batch_dry_run(
                     report.get("preserved_standalone_dependencies", [])
                 ),
                 "covered_by": report.get("covered_by"),
+                "apply_mode": report.get("apply_mode"),
+                "covered_dependency_ids": report.get("covered_dependency_ids", []),
+                "remaining_dependency_ids": report.get("remaining_dependency_ids", []),
                 "output": str(output),
             }
         )
@@ -332,6 +338,21 @@ async def _batch_apply(
                         snapshot=snapshot,
                         spec=SOURCE_MANIFESTS[manifest],
                     )
+                elif raw_row.get("apply_mode") == "existing-plan-overlay":
+                    raw_covered = raw_row.get("covered_dependency_ids")
+                    if not isinstance(raw_covered, list) or not all(
+                        isinstance(value, int) and not isinstance(value, bool)
+                        for value in raw_covered
+                    ):
+                        raise MigrationInvariantError(
+                            f"overlay manifest {manifest} has invalid coverage metadata"
+                        )
+                    result = await apply_explicit_reader_order_overlay(
+                        db,
+                        snapshot=snapshot,
+                        spec=EXPLICIT_MANIFESTS[manifest],
+                        covered_dependency_ids=set(raw_covered),
+                    )
                 else:
                     result = await apply_explicit_reader_order_migration(
                         db,
@@ -341,6 +362,12 @@ async def _batch_apply(
                 applied.append({"manifest": manifest, **result})
 
             cutover = await build_reader_order_cutover_audit(db, user_id=1)
+            remaining_debt = cutover.get("remaining_reading_plan_order_dependency_ids")
+            if remaining_debt != [] or cutover.get("runtime_cutover_safe") is not True:
+                raise MigrationInvariantError(
+                    "batch apply did not reach a clean reader-order cutover audit: "
+                    f"remaining={remaining_debt!r}"
+                )
             batch_receipt = {
                 "source_summary": str(summary_path),
                 "applied": applied,

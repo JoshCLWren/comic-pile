@@ -26,6 +26,7 @@ from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.thread import Thread
 from app.schemas.continuity_plan import (
+    ContinuityPlanLane,
     ContinuityPlanListItem,
     ContinuityPlanNode,
     PlanOrderingMode,
@@ -35,6 +36,33 @@ from app.repositories.continuity_repository import plans_for_user
 
 
 PLAN_RULE_MARKER_PREFIX = "continuity-plan"
+
+
+def serialize_new_plan_lanes(
+    lanes: list[ContinuityPlanLane],
+) -> list[dict[str, object]]:
+    """Serialize lanes without accepting client-authored migration proof."""
+    return [lane.model_dump(exclude={"migration_contract"}) for lane in lanes]
+
+
+def preserve_server_lane_metadata(
+    existing_lanes: list[dict[str, object]],
+    lanes: list[ContinuityPlanLane],
+) -> list[dict[str, object]]:
+    """Preserve server-owned migration proof across ordinary lane replacement."""
+    contracts = {
+        str(lane.get("id")): lane["migration_contract"]
+        for lane in existing_lanes
+        if lane.get("migration_contract") is not None
+    }
+    serialized: list[dict[str, object]] = []
+    for lane in lanes:
+        row = lane.model_dump(exclude={"migration_contract"})
+        contract = contracts.get(lane.id)
+        if contract is not None:
+            row["migration_contract"] = contract
+        serialized.append(row)
+    return serialized
 
 
 def plan_rule_marker(plan_id: int) -> str:

@@ -16,6 +16,7 @@ interface ReadingPlanAddMaterialProps {
   planId: number
   planName: string
   defaultOpen?: boolean
+  commitDisabled?: boolean
   onCommitted?: (plan: CBLAdoptionCommitResult) => void
   onCommitPendingChange?: (isPending: boolean) => void
 }
@@ -57,6 +58,7 @@ export default function ReadingPlanAddMaterial({
   planId,
   planName,
   defaultOpen = false,
+  commitDisabled = false,
   onCommitted,
   onCommitPendingChange,
 }: ReadingPlanAddMaterialProps) {
@@ -162,7 +164,7 @@ export default function ReadingPlanAddMaterial({
   }
 
   const commit = () => {
-    if (!selectedSource || !preview) return
+    if (!selectedSource || !preview || commitDisabled) return
     commitMutation.mutate({ source: selectedSource, reviewed: preview })
   }
 
@@ -181,6 +183,7 @@ export default function ReadingPlanAddMaterial({
     preview.summary.awaiting_opt_in_count > 0 ||
     preview.summary.final_adopted_count === 0 ||
     staleReview ||
+    commitDisabled ||
     isCommitting ||
     isPreviewing
   const seriesGroups = preview
@@ -352,6 +355,11 @@ export default function ReadingPlanAddMaterial({
               )}
               {preview.summary.awaiting_opt_in_count > 0 && (
                 <p className="text-xs text-[var(--theme-text-muted)]">Choose whether to include each missing comic before committing.</p>
+              )}
+              {commitDisabled && (
+                <p className="text-xs text-[var(--theme-text-muted)]">
+                  Save or cancel planner changes before adding CBL material.
+                </p>
               )}
 
               <button

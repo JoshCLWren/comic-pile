@@ -11,6 +11,22 @@ import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api'
 import ContinuityPlannerPage from '../pages/ContinuityPlannerPage'
 
+interface AddMaterialProbeProps {
+  commitDisabled?: boolean
+  onCommitPendingChange?: (isPending: boolean) => void
+}
+
+const addMaterialProbe = vi.hoisted(() => ({
+  current: null as AddMaterialProbeProps | null,
+}))
+
+vi.mock('../components/ReadingPlanAddMaterial', () => ({
+  default: (props: AddMaterialProbeProps) => {
+    addMaterialProbe.current = props
+    return <div data-testid="add-material-probe" />
+  },
+}))
+
 const mocks = {
   create: vi.fn(),
   list: vi.fn(),
@@ -89,6 +105,7 @@ const secondIssue = {
 }
 
 beforeEach(() => {
+  addMaterialProbe.current = null
   if (typeof window !== "undefined") {
       window.localStorage.clear();
     }
@@ -297,6 +314,52 @@ describe('ContinuityPlannerPage', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel changes' }))
     expect(screen.getByRole('button', { name: 'Remove Fourth World' })).toBeVisible()
     expect(mocks.update).not.toHaveBeenCalled()
+  })
+
+  it('mutually excludes planner saves and CBL commits', async () => {
+    mocks.get.mockResolvedValue({
+      id: 12,
+      user_id: 1,
+      name: 'Saved lane',
+      ordering_mode: 'strict_sequential',
+      lanes: [{ id: 'main', name: 'Reading order', order: 0 }],
+      nodes: [
+        {
+          id: 'crossover-8',
+          node_type: 'crossover',
+          ref_id: 8,
+          lane_id: 'main',
+          position: 0,
+          label: 'Fourth World',
+        },
+      ],
+      created_at: '2026-08-12T00:00:00Z',
+      updated_at: '2026-08-12T00:00:00Z',
+    })
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/continuity-plans/12']}>
+        <Routes>
+          <Route path="/continuity-plans/:id" element={<ContinuityPlannerPage />} />
+        </Routes>
+      </MemoryRouter>,
+      { wrapper: queryWrapper },
+    )
+
+    await screen.findByTestId('add-material-probe')
+    expect(addMaterialProbe.current?.commitDisabled).toBe(false)
+    await user.click(await screen.findByRole('button', { name: 'Remove Fourth World' }))
+    expect(addMaterialProbe.current?.commitDisabled).toBe(true)
+
+    const saveButton = screen.getByRole('button', { name: 'Save plan' })
+    expect(saveButton).toBeEnabled()
+    act(() => addMaterialProbe.current?.onCommitPendingChange?.(true))
+    expect(saveButton).toBeDisabled()
+    act(() => addMaterialProbe.current?.onCommitPendingChange?.(false))
+    expect(saveButton).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Cancel changes' }))
+    expect(addMaterialProbe.current?.commitDisabled).toBe(false)
   })
 
   it('moves a node up and down using the lane reorder controls', async () => {

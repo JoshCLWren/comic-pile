@@ -23,7 +23,9 @@ from app.schemas.reading_order import ReadingOrderAdoptRequest
 from app.services.continuity_plan_writer import (
     list_continuity_plan_items,
     plan_rule_marker,
+    preserve_server_lane_metadata,
     replace_compiled_rules,
+    serialize_new_plan_lanes,
     validate_node_ownership,
 )
 
@@ -89,7 +91,7 @@ async def create_continuity_plan(
         user_id=current_user.id,
         name=payload.name,
         ordering_mode=payload.ordering_mode,
-        lanes_json=[lane.model_dump() for lane in payload.lanes],
+        lanes_json=serialize_new_plan_lanes(payload.lanes),
         nodes_json=[node.model_dump() for node in payload.nodes],
     )
     db.add(plan)
@@ -135,7 +137,10 @@ async def update_continuity_plan(
     await validate_node_ownership(db, user_id=current_user.id, nodes=payload.nodes)
     plan.name = payload.name
     plan.ordering_mode = payload.ordering_mode
-    plan.lanes_json = [lane.model_dump() for lane in payload.lanes]
+    plan.lanes_json = preserve_server_lane_metadata(
+        list(plan.lanes_json or []),
+        payload.lanes,
+    )
     plan.nodes_json = [node.model_dump() for node in payload.nodes]
     try:
         await replace_compiled_rules(

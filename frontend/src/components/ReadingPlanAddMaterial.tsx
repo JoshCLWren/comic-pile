@@ -5,6 +5,7 @@ interface ReadingPlanAddMaterialProps {
   planId: number
   planName: string
   defaultOpen?: boolean
+  commitDisabled?: boolean
   onCommitted?: (plan: CBLAdoptionCommitResult) => void
   onCommitPendingChange?: (isPending: boolean) => void
 }
@@ -13,6 +14,7 @@ export default function ReadingPlanAddMaterial({
   planId,
   planName,
   defaultOpen = false,
+  commitDisabled = false,
   onCommitted,
   onCommitPendingChange,
 }: ReadingPlanAddMaterialProps) {
@@ -21,6 +23,7 @@ export default function ReadingPlanAddMaterial({
       planId={planId}
       planName={planName}
       defaultOpen={defaultOpen}
+      commitDisabled={commitDisabled}
       onCommitted={onCommitted}
       onCommitPendingChange={onCommitPendingChange}
     />

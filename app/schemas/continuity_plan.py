@@ -20,12 +20,28 @@ def _reject_boolean_item_id(value: object) -> object:
 TemplateSourceListId = Annotated[int, BeforeValidator(_reject_boolean_item_id)]
 
 
+class ExplicitReaderOrderMigrationContract(BaseModel):
+    """Server-owned proof that a plan replaced classified reader-order edges."""
+
+    kind: Literal["explicit_reader_order"]
+    classification_family_keys: list[str]
+    selected_dependency_ids: list[int]
+    issue_ids: list[int]
+    edges: list[tuple[int, int]]
+    issue_fingerprint: str
+    edge_fingerprint: str
+
+
 class ContinuityPlanLane(BaseModel):
     """One visual lane in a continuity plan."""
 
     id: str = Field(min_length=1, max_length=80)
     name: str = Field(min_length=1, max_length=120)
     order: int = Field(ge=0)
+    migration_contract: ExplicitReaderOrderMigrationContract | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
 
 SourceRole = Literal["core", "context/prelude", "epilogue", "unknown"]

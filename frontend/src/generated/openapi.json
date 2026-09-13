@@ -1981,6 +1981,16 @@
             "title": "Id",
             "type": "string"
           },
+          "migration_contract": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExplicitReaderOrderMigrationContract"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "name": {
             "maxLength": 120,
             "minLength": 1,
@@ -2023,6 +2033,13 @@
             ],
             "title": "Ordering Mode",
             "type": "string"
+          },
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Paths",
+            "type": "array"
           },
           "step_count": {
             "title": "Step Count",
@@ -4290,6 +4307,73 @@
           "label"
         ],
         "title": "ExplainableFactorResponse",
+        "type": "object"
+      },
+      "ExplicitReaderOrderMigrationContract": {
+        "description": "Server-owned proof that a plan replaced classified reader-order edges.",
+        "properties": {
+          "classification_family_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Classification Family Keys",
+            "type": "array"
+          },
+          "edge_fingerprint": {
+            "title": "Edge Fingerprint",
+            "type": "string"
+          },
+          "edges": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "issue_fingerprint": {
+            "title": "Issue Fingerprint",
+            "type": "string"
+          },
+          "issue_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Issue Ids",
+            "type": "array"
+          },
+          "kind": {
+            "const": "explicit_reader_order",
+            "title": "Kind",
+            "type": "string"
+          },
+          "selected_dependency_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Selected Dependency Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "classification_family_keys",
+          "selected_dependency_ids",
+          "issue_ids",
+          "edges",
+          "issue_fingerprint",
+          "edge_fingerprint"
+        ],
+        "title": "ExplicitReaderOrderMigrationContract",
         "type": "object"
       },
       "ExternalIdentityResponse": {
@@ -8085,6 +8169,11 @@
       "RollRecoveryPrerequisite": {
         "description": "One currently readable prerequisite recommended for a blocked active roll.",
         "properties": {
+          "is_readable": {
+            "default": true,
+            "title": "Is Readable",
+            "type": "boolean"
+          },
           "label": {
             "title": "Label",
             "type": "string"

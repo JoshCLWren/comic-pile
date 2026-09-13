@@ -7,23 +7,34 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from httpx import AsyncClient
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.continuity_plan import ContinuityPlan
 from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.services.explicit_reader_order_migration import (
+    PRODUCTION_EXPLICIT_READER_ORDER_SPECS,
     ExplicitReaderOrderSpec,
+    _explicit_classifications,
+    _load_step14_index,
+    _resolve_selected_dependency_ids,
     apply_explicit_reader_order_migration,
     build_explicit_reader_order_dry_run,
 )
 from app.services.reader_order_migration_coordinator import (
-    LEGACY_COVERED_EXPLICIT_MANIFESTS,
     LEGACY_READING_ORDERS_MANIFEST,
+    apply_explicit_reader_order_overlay,
     build_manifest_report,
+    manifest_reader_order_dependency_ids,
     migration_report_status,
     reconcile_batch_manifest_reports,
+)
+from app.services.legacy_reading_order_production_migration import (
+    load_reviewed_step23a_contract,
 )
 from app.services.ultimate_universe_production_migration import MigrationInvariantError
 from comic_pile.dependencies import refresh_user_blocked_status
@@ -91,48 +102,104 @@ def test_migration_report_status_buckets() -> None:
     )
 
 
-def test_reconcile_batch_prefers_legacy_over_overlapping_explicit() -> None:
-    """Unmigrated Step 23B + Doctor Strange/Starman must not both stay safe."""
-    reports = {
+def _real_overlap_reports() -> dict[str, dict[str, object]]:
+    """Build report-shaped fixtures from the checked-in production contracts."""
+    evidence = load_reviewed_step23a_contract()
+    targets = evidence["proposed_canonical_targets"]
+    assert isinstance(targets, list)
+    target_by_name: dict[str, object] = {}
+    for target in targets:
+        assert isinstance(target, dict)
+        payload = target["writer_payload"]
+        assert isinstance(payload, dict)
+        target_by_name[str(payload["name"])] = payload
+    _, families = _explicit_classifications(_load_step14_index())
+    reports: dict[str, dict[str, object]] = {
         LEGACY_READING_ORDERS_MANIFEST: {
             "status": "safe-to-migrate",
             "ok": True,
             "errors": [],
             "snapshot_token": "legacy-token",
-        },
-        "doctor-strange-epic-vol-10": {
-            "status": "safe-to-migrate",
-            "ok": True,
-            "errors": [],
-            "snapshot_token": "strange-token",
-        },
-        "starman-compendiums": {
-            "status": "safe-to-migrate",
-            "ok": True,
-            "errors": [],
-            "snapshot_token": "starman-token",
-        },
-        "starman-jsa-bridge": {
-            "status": "safe-to-migrate",
-            "ok": True,
-            "errors": [],
-            "snapshot_token": "jsa-token",
-        },
-        "dc-ko": {
-            "status": "safe-to-migrate",
-            "ok": True,
-            "errors": [],
-            "snapshot_token": "dc-token",
-        },
+            "dependency_overlap": evidence["dependency_overlap"],
+            "proposed_canonical_targets": targets,
+        }
     }
+    for manifest in (
+        "doctor-strange-epic-vol-10",
+        "starman-compendiums",
+        "starman-jsa-bridge",
+    ):
+        spec = PRODUCTION_EXPLICIT_READER_ORDER_SPECS[manifest]
+        dependency_ids = _resolve_selected_dependency_ids(spec, by_family=families)
+        plan_payload = target_by_name[spec.plan_name]
+        assert isinstance(plan_payload, dict)
+        if spec.expected_issue_ids:
+            plan_payload = {
+                **plan_payload,
+                "nodes": [
+                    {
+                        "id": f"issue-{issue_id}",
+                        "node_type": "issue",
+                        "ref_id": issue_id,
+                    }
+                    for issue_id in spec.expected_issue_ids
+                ],
+            }
+        reports[manifest] = {
+            "status": "safe-to-migrate",
+            "ok": True,
+            "errors": [],
+            "snapshot_token": f"{manifest}-token",
+            "manifest": {"resolved_reader_order_dependency_ids": list(dependency_ids)},
+            "planned": {"plan": plan_payload, "rules": []},
+            "selected_reader_order_dependencies": [
+                {"id": dependency_id} for dependency_id in dependency_ids
+            ],
+            "runtime_behavior": {
+                "affected_thread_ids": [],
+                "current_affected_roll_eligible_thread_ids": [],
+            },
+        }
+    return reports
+
+
+def test_reconcile_batch_uses_exact_real_overlap_sets() -> None:
+    """Step 23B overlays only its exact subset of each production manifest."""
+    reports = _real_overlap_reports()
     reconciled = reconcile_batch_manifest_reports(reports)
     assert reconciled[LEGACY_READING_ORDERS_MANIFEST]["status"] == "safe-to-migrate"
-    for manifest in LEGACY_COVERED_EXPLICIT_MANIFESTS:
-        assert reconciled[manifest]["status"] == "already-migrated"
+    expected = {
+        "doctor-strange-epic-vol-10": ([1806, 1807, 1808, 1810, 1811], [], []),
+        "starman-compendiums": (
+            [1832, 1846, 1847],
+            [32, 955, 1355, 1551, 1552],
+            [],
+        ),
+        "starman-jsa-bridge": ([1833], [], [26360]),
+    }
+    for manifest, (covered, remaining, added) in expected.items():
+        assert reconciled[manifest]["status"] == "safe-to-migrate"
+        assert reconciled[manifest]["apply_mode"] == "existing-plan-overlay"
         assert reconciled[manifest]["covered_by"] == LEGACY_READING_ORDERS_MANIFEST
-        assert reconciled[manifest]["ok"] is True
-        assert reconciled[manifest]["errors"] == []
-    assert reconciled["dc-ko"]["status"] == "safe-to-migrate"
+        assert reconciled[manifest]["covered_dependency_ids"] == covered
+        assert reconciled[manifest]["remaining_dependency_ids"] == remaining
+        assert reconciled[manifest]["overlay_added_issue_ids"] == added
+
+    blocked_reports = _real_overlap_reports()
+    blocked_reports["starman-compendiums"]["status"] = "blocked-by-identity-or-source"
+    blocked_reports["starman-compendiums"]["ok"] = False
+    blocked_reports["starman-compendiums"]["errors"] = ["identity mismatch"]
+    blocked = reconcile_batch_manifest_reports(blocked_reports)["starman-compendiums"]
+    assert blocked["status"] == "blocked-by-identity-or-source"
+    assert blocked["ok"] is False
+    assert "apply_mode" not in blocked
+
+    resumed_reports = _real_overlap_reports()
+    resumed_reports[LEGACY_READING_ORDERS_MANIFEST]["status"] = "already-migrated"
+    resumed_reports[LEGACY_READING_ORDERS_MANIFEST]["already_migrated"] = True
+    resumed = reconcile_batch_manifest_reports(resumed_reports)["starman-compendiums"]
+    assert resumed["apply_mode"] == "existing-plan-overlay"
+    assert resumed["remaining_dependency_ids"] == [32, 955, 1355, 1551, 1552]
 
 
 @pytest.mark.asyncio
@@ -295,8 +362,9 @@ async def test_build_manifest_report_marks_already_migrated_explicit(
 @pytest.mark.asyncio
 async def test_build_manifest_report_marks_already_migrated_groupless_explicit(
     async_db: AsyncSession,
+    auth_client: AsyncClient,
 ) -> None:
-    """Group-less explicit migrations prove membership via stamped edge contracts."""
+    """GET/PUT preserves proof so a group-less migration remains replay-safe."""
     user = await get_or_create_user_async(async_db)
     rows = [
         await _thread_issue(
@@ -343,6 +411,34 @@ async def test_build_manifest_report_marks_already_migrated_groupless_explicit(
     await apply_explicit_reader_order_migration(async_db, snapshot=snapshot, spec=spec)
     await async_db.commit()
 
+    plan = await async_db.scalar(
+        select(ContinuityPlan).where(ContinuityPlan.name == spec.plan_name)
+    )
+    assert plan is not None
+    fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan.id}")
+    assert fetched.status_code == 200, fetched.text
+    fetched_body = fetched.json()
+    contract = fetched_body["lanes"][0]["migration_contract"]
+    assert contract["selected_dependency_ids"] == [
+        dependency.id for dependency in reader_order
+    ]
+
+    ordinary_payload = {
+        "name": fetched_body["name"],
+        "ordering_mode": fetched_body["ordering_mode"],
+        "lanes": [
+            {key: value for key, value in lane.items() if key != "migration_contract"}
+            for lane in fetched_body["lanes"]
+        ],
+        "nodes": fetched_body["nodes"],
+    }
+    updated = await auth_client.put(
+        f"/api/v1/continuity-plans/{plan.id}",
+        json=ordinary_payload,
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["lanes"][0]["migration_contract"] == contract
+
     report = await build_manifest_report(
         async_db,
         manifest="groupless-already-migrated",
@@ -351,6 +447,112 @@ async def test_build_manifest_report_marks_already_migrated_groupless_explicit(
     )
     assert report["status"] == "already-migrated"
     assert report["already_migrated"] is True
+
+
+@pytest.mark.asyncio
+async def test_partial_overlap_overlays_explicit_gates_on_existing_plan(
+    async_db: AsyncSession,
+) -> None:
+    """A Step 23B plan absorbs residual exact edges without losing its full order."""
+    user = await get_or_create_user_async(async_db)
+    rows = [
+        await _thread_issue(
+            async_db,
+            user_id=user.id,
+            title=title,
+            queue_position=position,
+            status=status,
+        )
+        for position, (title, status) in enumerate(
+            (("A", "unread"), ("B", "read"), ("C", "unread"), ("Extra", "unread")),
+            start=1,
+        )
+    ]
+    issues = [row[1] for row in rows]
+    dependencies = [
+        Dependency(
+            source_issue_id=issues[0].id,
+            target_issue_id=issues[2].id,
+            note="covered by Step 23B",
+            created_at=datetime.now(UTC),
+        ),
+        Dependency(
+            source_issue_id=issues[1].id,
+            target_issue_id=issues[2].id,
+            note="residual explicit edge",
+            created_at=datetime.now(UTC),
+        ),
+    ]
+    async_db.add_all(dependencies)
+    await async_db.flush()
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+
+    spec = ExplicitReaderOrderSpec(
+        user_id=user.id,
+        dependency_group_ids=(),
+        expected_group_names=(),
+        plan_name="Legacy order projection",
+        reader_order_dependency_ids=tuple(row.id for row in dependencies),
+    )
+    snapshot = await build_explicit_reader_order_dry_run(async_db, spec)
+    assert snapshot["ok"] is True, snapshot["errors"]
+
+    await async_db.execute(delete(Dependency).where(Dependency.id == dependencies[0].id))
+    legacy_plan = ContinuityPlan(
+        user_id=user.id,
+        name=spec.plan_name,
+        ordering_mode="informational",
+        lanes_json=[{"id": "main", "name": "Full legacy order", "order": 0}],
+        nodes_json=[
+            {
+                "id": f"legacy-position-{position}",
+                "node_type": "issue",
+                "ref_id": issue.id,
+                "lane_id": "main",
+                "position": position,
+                "convergence_gate": [],
+            }
+            for position, issue in enumerate(issues[1:])
+        ],
+    )
+    async_db.add(legacy_plan)
+    await async_db.flush()
+
+    receipt = await apply_explicit_reader_order_overlay(
+        async_db,
+        snapshot=snapshot,
+        spec=spec,
+        covered_dependency_ids={dependencies[0].id},
+    )
+    assert receipt["covered_dependency_ids"] == [dependencies[0].id]
+    assert receipt["overlay_added_issue_ids"] == [issues[0].id]
+    assert receipt["removed_reader_order_dependency_count"] == 1
+    assert await async_db.get(Dependency, dependencies[1].id) is None
+    assert len(legacy_plan.nodes_json) == 4
+    target_node = next(node for node in legacy_plan.nodes_json if node["ref_id"] == issues[2].id)
+    convergence_gate = target_node["convergence_gate"]
+    assert isinstance(convergence_gate, list)
+    assert {
+        target["node_id"] for target in convergence_gate if isinstance(target, dict)
+    } == {
+        f"issue-{issues[0].id}",
+        "legacy-position-0",
+    }
+    contract = legacy_plan.lanes_json[0]["migration_contract"]
+    assert isinstance(contract, dict)
+    assert contract["selected_dependency_ids"] == [
+        dependency.id for dependency in dependencies
+    ]
+    await async_db.commit()
+
+    report = await build_manifest_report(
+        async_db,
+        manifest="partial-overlay",
+        source_manifests={},
+        explicit_manifests={"partial-overlay": spec},
+    )
+    assert report["status"] == "already-migrated"
 
 
 @pytest.mark.asyncio
@@ -505,20 +707,15 @@ async def test_batch_dry_run_summary_buckets_non_safe_manifests(
 
 
 @pytest.mark.asyncio
-async def test_batch_dry_run_covers_overlapping_explicit_when_legacy_is_safe(
+async def test_batch_dry_run_preserves_partial_overlap_for_overlay(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """All-unmigrated batch prefers Step 23B over Doctor Strange / Starman."""
+    """All-unmigrated planning retains Starman's five-row residual migration."""
+    reports = _real_overlap_reports()
 
     async def _fake_build_report(manifest: str) -> dict[str, object]:
-        return {
-            "status": "safe-to-migrate",
-            "ok": True,
-            "errors": [],
-            "snapshot_token": f"{manifest}-token",
-            "preserved_standalone_dependencies": [],
-        }
+        return reports[manifest]
 
     monkeypatch.setattr(cli, "_build_report", _fake_build_report)
     summary_path = tmp_path / "summary.json"
@@ -527,23 +724,113 @@ async def test_batch_dry_run_covers_overlapping_explicit_when_legacy_is_safe(
         LEGACY_READING_ORDERS_MANIFEST,
         "starman-compendiums",
         "starman-jsa-bridge",
-        "dc-ko",
     ]
     exit_code = await cli._batch_dry_run(manifests, tmp_path / "reports", summary_path)
     assert exit_code == 0
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
-    assert summary["safe_to_migrate"] == [LEGACY_READING_ORDERS_MANIFEST, "dc-ko"]
-    assert summary["already_migrated"] == sorted(LEGACY_COVERED_EXPLICIT_MANIFESTS)
-    assert summary["manifests"][0]["manifest"] == LEGACY_READING_ORDERS_MANIFEST
-    covered = {
-        row["manifest"]: row.get("covered_by")
-        for row in summary["manifests"]
-        if row["manifest"] in LEGACY_COVERED_EXPLICIT_MANIFESTS
-    }
-    assert covered == dict.fromkeys(
-        LEGACY_COVERED_EXPLICIT_MANIFESTS,
+    assert summary["safe_to_migrate"] == [
         LEGACY_READING_ORDERS_MANIFEST,
+        "doctor-strange-epic-vol-10",
+        "starman-compendiums",
+        "starman-jsa-bridge",
+    ]
+    assert summary["already_migrated"] == []
+    assert summary["manifests"][0]["manifest"] == LEGACY_READING_ORDERS_MANIFEST
+    starman = next(
+        row for row in summary["manifests"] if row["manifest"] == "starman-compendiums"
     )
+    assert starman["covered_dependency_ids"] == [1832, 1846, 1847]
+    assert starman["remaining_dependency_ids"] == [32, 955, 1355, 1551, 1552]
+
+
+@pytest.mark.asyncio
+async def test_batch_apply_real_overlap_sets_reach_zero_reader_order_debt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The real Step 23B/explicit sets leave the final cutover audit debt-free."""
+    reports = reconcile_batch_manifest_reports(_real_overlap_reports())
+    output_dir = tmp_path / "reports"
+    output_dir.mkdir()
+    rows: list[dict[str, object]] = []
+    for manifest, report in reports.items():
+        output = output_dir / f"{manifest}.json"
+        output.write_text(json.dumps(report), encoding="utf-8")
+        rows.append(
+            {
+                "manifest": manifest,
+                "status": report["status"],
+                "snapshot_token": report["snapshot_token"],
+                "output": str(output),
+                "apply_mode": report.get("apply_mode"),
+                "covered_dependency_ids": report.get("covered_dependency_ids", []),
+            }
+        )
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text(json.dumps({"manifests": rows}), encoding="utf-8")
+
+    debt = set().union(
+        *(manifest_reader_order_dependency_ids(report) for report in reports.values())
+    )
+
+    class _Session:
+        async def commit(self) -> None:
+            return None
+
+        async def rollback(self) -> None:
+            return None
+
+    class _SessionFactory:
+        async def __aenter__(self) -> _Session:
+            return _Session()
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    async def _apply_legacy(*_args: object, **_kwargs: object) -> dict[str, object]:
+        debt.difference_update(
+            manifest_reader_order_dependency_ids(reports[LEGACY_READING_ORDERS_MANIFEST])
+        )
+        return {"ok": True}
+
+    async def _apply_overlay(
+        *_args: object,
+        spec: ExplicitReaderOrderSpec,
+        **_kwargs: object,
+    ) -> dict[str, object]:
+        manifest = next(
+            key for key, candidate in PRODUCTION_EXPLICIT_READER_ORDER_SPECS.items()
+            if candidate is spec
+        )
+        debt.difference_update(manifest_reader_order_dependency_ids(reports[manifest]))
+        return {"ok": True}
+
+    async def _cutover(*_args: object, **_kwargs: object) -> dict[str, object]:
+        remaining = sorted(debt)
+        return {
+            "remaining_reading_plan_order_dependency_ids": remaining,
+            "runtime_cutover_safe": not remaining,
+        }
+
+    overlap_manifests = set(reports) - {LEGACY_READING_ORDERS_MANIFEST}
+    monkeypatch.setattr(cli, "AsyncSessionLocal", lambda: _SessionFactory())
+    monkeypatch.setattr(cli, "SOURCE_MANIFESTS", {})
+    monkeypatch.setattr(
+        cli,
+        "EXPLICIT_MANIFESTS",
+        {key: PRODUCTION_EXPLICIT_READER_ORDER_SPECS[key] for key in overlap_manifests},
+    )
+    monkeypatch.setattr(cli, "ALL_MANIFESTS", set(reports))
+    monkeypatch.setattr(cli, "apply_legacy_reading_order_migration", _apply_legacy)
+    monkeypatch.setattr(cli, "apply_explicit_reader_order_overlay", _apply_overlay)
+    monkeypatch.setattr(cli, "build_reader_order_cutover_audit", _cutover)
+
+    receipt_path = tmp_path / "receipt.json"
+    exit_code = await cli._batch_apply(summary_path, receipt_path, cli.CONFIRMATION)
+    assert exit_code == 0
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert receipt["cutover_audit"]["remaining_reading_plan_order_dependency_ids"] == []
+    assert receipt["cutover_audit"]["runtime_cutover_safe"] is True
 
 
 def test_stage_durable_json_writes_pending_before_publish(tmp_path: Path) -> None:

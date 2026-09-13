@@ -4,10 +4,21 @@ export type ContinuityPlanNodeType = 'issue' | 'crossover' | 'thread'
 
 export type ContinuityPlanOrderingMode = 'strict_sequential' | 'informational'
 
+export interface ExplicitReaderOrderMigrationContract {
+  kind: 'explicit_reader_order'
+  classification_family_keys: string[]
+  selected_dependency_ids: number[]
+  issue_ids: number[]
+  edges: Array<[number, number]>
+  issue_fingerprint: string
+  edge_fingerprint: string
+}
+
 export interface ContinuityPlanLane {
   id: string
   name: string
   order: number
+  migration_contract?: ExplicitReaderOrderMigrationContract | null
 }
 
 export interface ConvergenceGateTarget {

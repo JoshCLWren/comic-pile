@@ -150,6 +150,26 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     expect(screen.getByRole('button', { name: 'Add selected material' })).toBeDisabled()
   })
 
+  it('requires planner changes to be saved or canceled before committing', async () => {
+    mocks.preview.mockResolvedValue(preview([existingEntry]))
+    render(
+      <ReadingPlanAddMaterialImpl
+        planId={77}
+        planName="B.P.R.D."
+        commitDisabled
+      />,
+    )
+    await openSource()
+
+    const commitButton = await screen.findByRole('button', { name: 'Add selected material' })
+    expect(commitButton).toBeDisabled()
+    expect(
+      screen.getByText('Save or cancel planner changes before adding CBL material.'),
+    ).toBeVisible()
+    fireEvent.click(commitButton)
+    expect(mocks.commit).not.toHaveBeenCalled()
+  })
+
   it('surfaces discovery, preview, selection, and generic commit failures', async () => {
     render(<ReadingPlanAddMaterialImpl planId={77} planName="B.P.R.D." />)
     mocks.discover.mockRejectedValueOnce(new Error('search boom'))
