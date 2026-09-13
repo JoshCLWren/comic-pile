@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_plan import ContinuityPlan
@@ -31,6 +31,7 @@ from app.services.source_backed_reader_order_migration import (
     build_source_backed_reader_order_dry_run,
 )
 from app.services.ultimate_universe_production_migration import (
+    _legacy_prefix,
     _plan_fingerprint,
     _plan_fingerprint_from_payload,
     _planned_rule_descriptor,
@@ -138,6 +139,67 @@ async def _plan_owned_rule_hashes(
     return hashes
 
 
+def _edges_from_plan_nodes(nodes: list[dict[str, Any]]) -> set[tuple[int, int]]:
+    """Return directed issue edges encoded by persisted convergence gates."""
+    edges: set[tuple[int, int]] = set()
+    for node in nodes:
+        if not isinstance(node, dict) or node.get("node_type") != "issue":
+            continue
+        raw_ref = node.get("ref_id")
+        if not isinstance(raw_ref, int):
+            continue
+        gate = node.get("convergence_gate") or []
+        if not isinstance(gate, list):
+            continue
+        for target in gate:
+            if not isinstance(target, dict):
+                continue
+            node_id = target.get("node_id")
+            if not isinstance(node_id, str) or not node_id.startswith("issue-"):
+                continue
+            try:
+                source_id = int(node_id.removeprefix("issue-"))
+            except ValueError:
+                continue
+            edges.add((source_id, raw_ref))
+    return edges
+
+
+def _groupless_expected_contract(
+    spec: ExplicitReaderOrderSpec,
+    plan: ContinuityPlan,
+) -> tuple[set[int], set[tuple[int, int]]] | None:
+    """Return expected issue/edge sets for a group-less explicit migration."""
+    if spec.expected_issue_ids and spec.expected_edges:
+        return set(spec.expected_issue_ids), set(spec.expected_edges)
+
+    for lane in plan.lanes_json or []:
+        if not isinstance(lane, dict):
+            continue
+        contract = lane.get("migration_contract")
+        if not isinstance(contract, dict):
+            continue
+        if contract.get("kind") != "explicit_reader_order":
+            continue
+        raw_issues = contract.get("issue_ids")
+        raw_edges = contract.get("edges")
+        if not isinstance(raw_issues, list) or not isinstance(raw_edges, list):
+            continue
+        issue_ids = {int(issue_id) for issue_id in raw_issues if isinstance(issue_id, int)}
+        edges: set[tuple[int, int]] = set()
+        for edge in raw_edges:
+            if (
+                isinstance(edge, list | tuple)
+                and len(edge) == 2
+                and isinstance(edge[0], int)
+                and isinstance(edge[1], int)
+            ):
+                edges.add((int(edge[0]), int(edge[1])))
+        if issue_ids and edges:
+            return issue_ids, edges
+    return None
+
+
 async def _explicit_already_migrated(
     db: AsyncSession,
     spec: ExplicitReaderOrderSpec,
@@ -145,6 +207,8 @@ async def _explicit_already_migrated(
     index = _load_step14_index()
     _, families = _explicit_classifications(index)
     selected_ids = _resolve_selected_dependency_ids(spec, by_family=families)
+    if not selected_ids:
+        return False
     remaining = await db.scalar(
         select(func.count()).select_from(Dependency).where(Dependency.id.in_(selected_ids))
     )
@@ -168,18 +232,7 @@ async def _explicit_already_migrated(
     nodes = list(plan.nodes_json or [])
     if not nodes or plan.ordering_mode != "informational":
         return False
-    membership_issue_ids = {
-        int(issue_id)
-        for issue_id in (
-            await db.execute(
-                select(DependencyGroupMembership.issue_id).where(
-                    DependencyGroupMembership.group_id.in_(spec.dependency_group_ids),
-                    DependencyGroupMembership.issue_id.is_not(None),
-                )
-            )
-        ).scalars().all()
-        if issue_id is not None
-    }
+
     node_issue_ids = {
         int(cast(int, node["ref_id"]))
         for node in nodes
@@ -187,16 +240,39 @@ async def _explicit_already_migrated(
         and node.get("node_type") == "issue"
         and isinstance(node.get("ref_id"), int)
     }
-    if not membership_issue_ids or membership_issue_ids != node_issue_ids:
-        return False
-    expected = _expected_rules_from_plan_nodes(cast(list[dict[str, Any]], nodes))
+    edges = _edges_from_plan_nodes(cast(list[dict[str, Any]], nodes))
+
+    if spec.dependency_group_ids:
+        membership_issue_ids = {
+            int(issue_id)
+            for issue_id in (
+                await db.execute(
+                    select(DependencyGroupMembership.issue_id).where(
+                        DependencyGroupMembership.group_id.in_(spec.dependency_group_ids),
+                        DependencyGroupMembership.issue_id.is_not(None),
+                    )
+                )
+            ).scalars().all()
+            if issue_id is not None
+        }
+        if not membership_issue_ids or membership_issue_ids != node_issue_ids:
+            return False
+    else:
+        expected = _groupless_expected_contract(spec, plan)
+        if expected is None:
+            return False
+        expected_issues, expected_edges = expected
+        if node_issue_ids != expected_issues or edges != expected_edges:
+            return False
+
+    expected_rules = _expected_rules_from_plan_nodes(cast(list[dict[str, Any]], nodes))
     actual = await _plan_owned_rule_hashes(
         db,
         user_id=spec.user_id,
         plan_id=plan.id,
         sort_convergence_targets=True,
     )
-    return expected == actual
+    return expected_rules == actual
 
 
 
@@ -213,6 +289,43 @@ def _source_placement_count(plan: ContinuityPlan, source_path: str) -> int:
             and placement.get("source_path") == source_path
         )
     return count
+
+
+async def _source_legacy_debt_cleared(
+    db: AsyncSession,
+    spec: SourceBackedReaderOrderSpec,
+) -> bool:
+    """Prove source-note and classified reader-order removal sets are empty."""
+    prefixes = [_legacy_prefix(spec.expected_content_hash)]
+    if spec.dependency_group_id is not None:
+        prefixes.append(
+            f"cbl-order:group-{spec.dependency_group_id}:{spec.expected_content_hash}:"
+        )
+    remaining_source = await db.scalar(
+        select(func.count())
+        .select_from(Dependency)
+        .where(or_(*(Dependency.note.like(f"{prefix}%") for prefix in prefixes)))
+    )
+    if remaining_source != 0:
+        return False
+
+    selected_explicit_ids = set(spec.reader_order_dependency_ids)
+    if spec.classification_family_keys:
+        _, families = _explicit_classifications(_load_step14_index())
+        for family_key in spec.classification_family_keys:
+            matches = families.get(family_key, [])
+            for family in matches:
+                if family["classification"] != "reading_plan_order":
+                    continue
+                selected_explicit_ids.update(int(value) for value in family["ids"])
+    if not selected_explicit_ids:
+        return True
+    remaining_explicit = await db.scalar(
+        select(func.count())
+        .select_from(Dependency)
+        .where(Dependency.id.in_(selected_explicit_ids))
+    )
+    return remaining_explicit == 0
 
 
 async def _source_already_migrated(
@@ -232,6 +345,8 @@ async def _source_already_migrated(
         or not isinstance(plan_payload, dict)
         or not isinstance(planned_rules, list)
     ):
+        return False
+    if not await _source_legacy_debt_cleared(db, spec):
         return False
     plans = list(
         (

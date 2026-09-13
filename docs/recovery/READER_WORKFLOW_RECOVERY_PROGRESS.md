@@ -13,7 +13,9 @@
 - Production was **not** mutated during this work.
 - This checkpoint is progress, not a claim that the feature is shipped.
 - Runtime switch `LEGACY_DEPENDENCY_BLOCKING_ENABLED` remains enabled until the cutover
-  audit proves: no active reader project requires a legacy `reading_plan_order` Dependency.
+  audit proves every remaining `reading_plan_order` Dependency is gone (including dormant
+  edges), every `needs_review`/unclassified row is cleared, and surviving standalones are
+  canonically mirrored — not merely that today's `next_unread_issue_id` is unaffected.
 
 ## Frozen architecture
 
@@ -75,7 +77,9 @@
 - [ ] Run the batch dry-run against the real production snapshot using read-only access.
 - [ ] Do not apply the production batch without explicit user authorization.
 - [ ] Prove the release condition before disabling legacy runtime blocking globally:
-      no active reader project requires a legacy `reading_plan_order` Dependency.
+      every remaining `reading_plan_order` Dependency is gone or canonically represented,
+      every `needs_review`/unclassified row is a hard stop, and surviving standalones have
+      continuity mirrors (dormant debt still blocks; point-in-time Roll equality is extra).
 - [x] Reconcile issue/PR factory labels after push and report exact production blockers.
 - [ ] Delete this temporary file after the feature and production cutover are verified.
 

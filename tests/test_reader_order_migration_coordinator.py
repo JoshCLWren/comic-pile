@@ -246,6 +246,67 @@ async def test_build_manifest_report_marks_already_migrated_explicit(
 
 
 @pytest.mark.asyncio
+async def test_build_manifest_report_marks_already_migrated_groupless_explicit(
+    async_db: AsyncSession,
+) -> None:
+    """Group-less explicit migrations prove membership via stamped edge contracts."""
+    user = await get_or_create_user_async(async_db)
+    rows = [
+        await _thread_issue(
+            async_db,
+            user_id=user.id,
+            title=title,
+            queue_position=i,
+            status=status,
+        )
+        for i, (title, status) in enumerate(
+            (("A", "unread"), ("B", "read"), ("C", "unread")),
+            start=1,
+        )
+    ]
+    issues = [row[1] for row in rows]
+    reader_order = [
+        Dependency(
+            source_issue_id=issues[0].id,
+            target_issue_id=issues[2].id,
+            note="classified reader order A->C",
+            created_at=datetime.now(UTC),
+        ),
+        Dependency(
+            source_issue_id=issues[1].id,
+            target_issue_id=issues[2].id,
+            note="classified reader order B->C",
+            created_at=datetime.now(UTC),
+        ),
+    ]
+    async_db.add_all(reader_order)
+    await async_db.flush()
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+
+    spec = ExplicitReaderOrderSpec(
+        user_id=user.id,
+        dependency_group_ids=(),
+        expected_group_names=(),
+        plan_name="Groupless Already Migrated",
+        reader_order_dependency_ids=tuple(dependency.id for dependency in reader_order),
+    )
+    snapshot = await build_explicit_reader_order_dry_run(async_db, spec)
+    assert snapshot["ok"] is True, snapshot["errors"]
+    await apply_explicit_reader_order_migration(async_db, snapshot=snapshot, spec=spec)
+    await async_db.commit()
+
+    report = await build_manifest_report(
+        async_db,
+        manifest="groupless-already-migrated",
+        source_manifests={},
+        explicit_manifests={"groupless-already-migrated": spec},
+    )
+    assert report["status"] == "already-migrated"
+    assert report["already_migrated"] is True
+
+
+@pytest.mark.asyncio
 async def test_batch_apply_refuses_token_mismatch(
     async_db: AsyncSession,
     tmp_path: Path,

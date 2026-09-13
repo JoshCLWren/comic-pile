@@ -60,6 +60,7 @@ async def _thread_issue(
 @pytest.mark.asyncio
 async def test_explicit_reader_order_migration_preserves_partial_order_without_linearizing(
     async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Replace classified edges exactly while preserving a standalone prerequisite."""
     user = await get_or_create_user_async(async_db)
@@ -135,6 +136,27 @@ async def test_explicit_reader_order_migration_preserves_partial_order_without_l
     await async_db.flush()
     await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()
+
+    # Isolate from production Step 14 ID buckets so autoincrement collisions
+    # cannot reclassify these fixture rows as standalone/needs_review.
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._load_step14_index",
+        lambda: {},
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._explicit_classifications",
+        lambda _index: (
+            {
+                **{dependency.id: "reading_plan_order" for dependency in reader_order},
+                standalone.id: "standalone_prerequisite",
+            },
+            {},
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
+        lambda _index: (),
+    )
 
     spec = ExplicitReaderOrderSpec(
         user_id=user.id,

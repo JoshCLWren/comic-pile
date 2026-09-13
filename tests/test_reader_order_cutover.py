@@ -133,10 +133,24 @@ async def test_cutover_audit_requires_reader_order_migration_but_preserves_stand
     assert blocked["release_condition_met"] is False
     assert blocked["runtime_cutover_safe"] is False
     assert blocked["active_reading_plan_order_dependency_ids"] == [reader_order.id]
+    assert blocked["remaining_reading_plan_order_dependency_ids"] == [reader_order.id]
     assert blocked["active_standalone_prerequisite_dependency_ids"] == [standalone.id]
 
+    # Marking the source read only dormants the edge; semantic cutover still fails.
     issues[0].status = "read"
     issues[0].read_at = datetime.now(UTC)
+    await async_db.commit()
+    dormant = await reader_order_cutover.build_reader_order_cutover_audit(
+        async_db,
+        user_id=user_id,
+    )
+    assert dormant["release_condition_met"] is False
+    assert dormant["runtime_cutover_safe"] is False
+    assert dormant["active_reading_plan_order_dependency_ids"] == []
+    assert dormant["remaining_reading_plan_order_dependency_ids"] == [reader_order.id]
+    assert dormant["active_standalone_prerequisite_dependency_ids"] == [standalone.id]
+
+    await async_db.execute(delete(Dependency).where(Dependency.id == reader_order.id))
     await async_db.commit()
     clean = await reader_order_cutover.build_reader_order_cutover_audit(
         async_db,
@@ -144,7 +158,9 @@ async def test_cutover_audit_requires_reader_order_migration_but_preserves_stand
     )
     assert clean["release_condition_met"] is True
     assert clean["runtime_cutover_safe"] is True
+    assert clean["remaining_reading_plan_order_dependency_ids"] == []
     assert clean["active_standalone_prerequisite_dependency_ids"] == [standalone.id]
+    assert clean["remaining_standalone_prerequisite_dependency_ids"] == [standalone.id]
     assert clean["legacy_only_blocked_thread_ids"] == []
 
 

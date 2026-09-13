@@ -387,3 +387,141 @@ async def test_source_backed_migration_refuses_needs_review_intersection(
     assert snapshot["ok"] is False
     assert any("needs_review dependencies touch this plan" in error for error in snapshot["errors"])
     assert [row["id"] for row in snapshot["needs_review_dependencies"]] == [needs_review.id]
+
+
+@pytest.mark.asyncio
+async def test_source_already_migrated_requires_legacy_debt_cleared(
+    async_db: AsyncSession,
+) -> None:
+    """Canonical plan alone is not already-migrated while source-note debt remains."""
+    from app.services.reader_order_migration_coordinator import (
+        _source_already_migrated,
+        _source_legacy_debt_cleared,
+        build_manifest_report,
+    )
+
+    user = await get_or_create_user_async(async_db)
+    rows = [
+        await _thread_issue(
+            async_db,
+            user_id=user.id,
+            title=title,
+            queue_position=i,
+            status=status,
+        )
+        for i, (title, status) in enumerate(
+            (("A", "read"), ("B", "unread")),
+            start=1,
+        )
+    ]
+    issues = [row[1] for row in rows]
+
+    source = CBLSource(
+        repository="test/step27-debt",
+        revision_sha="b" * 40,
+        synced_at=datetime.now(UTC),
+    )
+    async_db.add(source)
+    await async_db.flush()
+    source_list = CBLSourceList(
+        source_id=source.id,
+        source_path="DC/Test/Debt.cbl",
+        name="Debt Test",
+        declared_issue_count=2,
+        content_hash="c" * 64,
+        revision_sha="b" * 40,
+        active=True,
+    )
+    async_db.add(source_list)
+    await async_db.flush()
+
+    for position, issue in enumerate(issues, start=1):
+        identity = ExternalIdentity(
+            provider="comicvine",
+            entity_type="issue",
+            external_id=f"debt-step27-{position}",
+            metadata_json={},
+        )
+        async_db.add(identity)
+        await async_db.flush()
+        async_db.add(
+            IssueExternalIdentityMapping(
+                issue_id=issue.id,
+                external_identity_id=identity.id,
+                status="confirmed",
+                evidence_source="step27-debt-test",
+                confidence=1.0,
+            )
+        )
+        async_db.add(
+            CBLSourceEntry(
+                list_id=source_list.id,
+                position=position,
+                series_name=f"Debt {position}",
+                issue_number="1",
+                external_issue_identity_id=identity.id,
+            )
+        )
+
+    group = DependencyGroup(
+        user_id=user.id,
+        name="Debt Test",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(group)
+    await async_db.flush()
+    for issue in issues:
+        async_db.add(DependencyGroupMembership(group_id=group.id, issue_id=issue.id))
+
+    source_dependency = Dependency(
+        source_issue_id=issues[0].id,
+        target_issue_id=issues[1].id,
+        note=f"cbl-order:source:{source_list.content_hash}:1->2",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(source_dependency)
+    await async_db.flush()
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+
+    spec = SourceBackedReaderOrderSpec(
+        user_id=user.id,
+        source_list_id=source_list.id,
+        dependency_group_id=group.id,
+        expected_content_hash=source_list.content_hash,
+        expected_positions=2,
+        plan_name="Debt Test Plan",
+        expected_source_path=source_list.source_path,
+    )
+    snapshot = await build_source_backed_reader_order_dry_run(async_db, spec)
+    assert snapshot["ok"] is True, snapshot["errors"]
+    await apply_source_backed_reader_order_migration(
+        async_db,
+        snapshot=snapshot,
+        spec=spec,
+    )
+    await async_db.commit()
+    assert await _source_legacy_debt_cleared(async_db, spec) is True
+
+    # Reintroduce legacy debt while leaving the canonical plan in place.
+    async_db.add(
+        Dependency(
+            source_issue_id=issues[0].id,
+            target_issue_id=issues[1].id,
+            note=f"cbl-order:source:{source_list.content_hash}:1->2",
+            created_at=datetime.now(UTC),
+        )
+    )
+    await async_db.commit()
+    assert await _source_legacy_debt_cleared(async_db, spec) is False
+
+    dry_run = await build_source_backed_reader_order_dry_run(async_db, spec)
+    assert await _source_already_migrated(async_db, spec, dry_run) is False
+    report = await build_manifest_report(
+        async_db,
+        manifest="debt-source",
+        source_manifests={"debt-source": spec},
+        explicit_manifests={},
+    )
+    assert report.get("already_migrated") is not True
+    assert report["status"] != "already-migrated"

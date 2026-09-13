@@ -64,6 +64,11 @@ class ExplicitReaderOrderSpec:
     # canonical Step 14 artifact remains the source of classification truth.
     reader_order_dependency_ids: tuple[int, ...] = ()
     preserved_dependency_ids: tuple[int, ...] = ()
+    # Durable membership/edge contract for group-less manifests. Required for
+    # already-migrated detection when dependency_group_ids is empty and the
+    # applied plan does not yet carry a stamped migration_contract.
+    expected_issue_ids: tuple[int, ...] = ()
+    expected_edges: tuple[tuple[int, int], ...] = ()
 
 
 PRODUCTION_EXPLICIT_READER_ORDER_SPECS: dict[str, ExplicitReaderOrderSpec] = {
@@ -170,6 +175,15 @@ PRODUCTION_EXPLICIT_READER_ORDER_SPECS: dict[str, ExplicitReaderOrderSpec] = {
         expected_group_names=(),
         plan_name="Doctor Strange Epic Collection Vol. 10: Infinity War",
         classification_family_keys=("doctor_strange_epic_vol_10",),
+        # Frozen from docs/recovery/step23a-legacy-reading-order-preflight-evidence.json
+        expected_issue_ids=(2243, 2244, 2245, 2249, 2250, 2251, 2252),
+        expected_edges=(
+            (2243, 2250),
+            (2244, 2251),
+            (2249, 2252),
+            (2250, 2244),
+            (2251, 2245),
+        ),
     ),
     "starman-compendiums": ExplicitReaderOrderSpec(
         user_id=1,
@@ -188,6 +202,8 @@ PRODUCTION_EXPLICIT_READER_ORDER_SPECS: dict[str, ExplicitReaderOrderSpec] = {
         expected_group_names=(),
         plan_name="JSA: Robinson / Goyer / Johns",
         classification_family_keys=("starman_jsa_bridge",),
+        expected_issue_ids=(26360, 101817),
+        expected_edges=((26360, 101817),),
     ),
     "majestic-recovery": ExplicitReaderOrderSpec(
         user_id=1,
@@ -942,6 +958,48 @@ async def apply_explicit_reader_order_migration(
         raise MigrationInvariantError(
             "persisted Reading Plan diverges from reviewed snapshot"
         )
+
+    # Stamp durable membership/edge contract after fingerprint equality so
+    # group-less already-migrated checks have an independent proof even when
+    # Dependency Groups were never part of the manifest.
+    selected_rows = cast(
+        list[dict[str, object]],
+        snapshot["selected_reader_order_dependencies"],
+    )
+    edge_pairs = sorted(
+        {
+            (
+                int(cast(int, row["source_issue_id"])),
+                int(cast(int, row["target_issue_id"])),
+            )
+            for row in selected_rows
+        }
+    )
+    issue_ids = sorted(
+        {
+            issue_id
+            for source_id, target_id in edge_pairs
+            for issue_id in (source_id, target_id)
+        }
+    )
+    stamped_lanes = [dict(lane) for lane in (plan.lanes_json or [])]
+    if stamped_lanes:
+        stamped_lanes[0] = {
+            **stamped_lanes[0],
+            "migration_contract": {
+                "kind": "explicit_reader_order",
+                "classification_family_keys": list(spec.classification_family_keys),
+                "selected_dependency_ids": [
+                    int(cast(int, row["id"])) for row in selected_rows
+                ],
+                "issue_ids": issue_ids,
+                "edges": [list(edge) for edge in edge_pairs],
+                "issue_fingerprint": _stable_hash(issue_ids),
+                "edge_fingerprint": _stable_hash(edge_pairs),
+            },
+        }
+        plan.lanes_json = stamped_lanes
+        await db.flush()
 
     ordered_membership = await db.scalar(
         select(DependencyGroupMembership.id)

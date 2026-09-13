@@ -46,10 +46,13 @@ async def build_reader_order_cutover_audit(
 ) -> dict[str, object]:
     """Prove whether production may stop consulting raw Dependency rows.
 
-    The audit uses the canonical Step 14 classifications. It separately reports
-    reader-order debris, genuine prerequisites, review-only state, and unknown
-    rows. The runtime gate passes only when no active reader-order edge remains
-    and every raw blocker is already represented by a continuity rule.
+    The audit uses the canonical Step 14 classifications. Cutover is semantic:
+    every remaining ``reading_plan_order`` row blocks release (including dormant
+    edges that would reactivate if a reader marked an earlier issue unread),
+    every ``needs_review`` / unclassified row is a hard stop, and every
+    surviving standalone prerequisite must have a continuity-rule mirror
+    regardless of current read state. Point-in-time Roll equality is reported
+    as an additional check, not as the definition of equivalence.
     """
     _invalidate_continuity_snapshot(user_id, db)
     index = _load_step14_index()
@@ -78,6 +81,7 @@ async def build_reader_order_cutover_audit(
     totals: Counter[str] = Counter()
     active: Counter[str] = Counter()
     active_ids: dict[str, list[int]] = {}
+    remaining_ids: dict[str, list[int]] = {}
     for dependency, source_status, next_unread_issue_id in rows:
         kind = _classification(
             dependency,
@@ -86,6 +90,7 @@ async def build_reader_order_cutover_audit(
         )
         classifications[dependency.id] = kind
         totals[kind] += 1
+        remaining_ids.setdefault(kind, []).append(dependency.id)
         if (
             source_status != "read"
             and dependency.target_issue_id == next_unread_issue_id
@@ -114,17 +119,22 @@ async def build_reader_order_cutover_audit(
         for rule in linked_rules
         if rule.legacy_dependency_id is not None
     }
+    remaining_standalone_ids = set(remaining_ids.get("standalone_prerequisite", []))
+    missing_standalone_mirrors = sorted(remaining_standalone_ids - mirrored_ids)
+    remaining_reader_order_ids = sorted(remaining_ids.get("reading_plan_order", []))
+    remaining_needs_review_ids = sorted(remaining_ids.get("needs_review", []))
+    remaining_unclassified_ids = sorted(remaining_ids.get("unclassified", []))
     active_standalone_ids = set(active_ids.get("standalone_prerequisite", []))
-    missing_standalone_mirrors = sorted(active_standalone_ids - mirrored_ids)
     active_reader_order_ids = sorted(active_ids.get("reading_plan_order", []))
     active_needs_review_ids = sorted(active_ids.get("needs_review", []))
     active_unclassified_ids = sorted(active_ids.get("unclassified", []))
 
-    release_condition_met = not active_reader_order_ids
+    # Semantic release: dormant reader-order debt still blocks cutover.
+    release_condition_met = not remaining_reader_order_ids
     runtime_cutover_safe = (
         release_condition_met
-        and not active_needs_review_ids
-        and not active_unclassified_ids
+        and not remaining_needs_review_ids
+        and not remaining_unclassified_ids
         and not missing_standalone_mirrors
         and not legacy_only
     )
@@ -132,10 +142,18 @@ async def build_reader_order_cutover_audit(
         "user_id": user_id,
         "classification_totals": dict(sorted(totals.items())),
         "active_blocking_totals": dict(sorted(active.items())),
+        "remaining_reading_plan_order_dependency_ids": remaining_reader_order_ids,
+        "remaining_standalone_prerequisite_dependency_ids": sorted(
+            remaining_standalone_ids
+        ),
+        "remaining_needs_review_dependency_ids": remaining_needs_review_ids,
+        "remaining_unclassified_dependency_ids": remaining_unclassified_ids,
         "active_reading_plan_order_dependency_ids": active_reader_order_ids,
         "active_standalone_prerequisite_dependency_ids": sorted(active_standalone_ids),
         "active_needs_review_dependency_ids": active_needs_review_ids,
         "active_unclassified_dependency_ids": active_unclassified_ids,
+        "standalone_dependencies_missing_continuity_mirror": missing_standalone_mirrors,
+        # Compatibility alias used by older receipts/tests.
         "active_standalone_dependencies_missing_continuity_mirror": (
             missing_standalone_mirrors
         ),

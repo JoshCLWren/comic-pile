@@ -13,9 +13,19 @@ fi
 
 HEAD_SHA="$(git rev-parse HEAD)"
 VERIFY_STAMP=".git/comic-pile-prepush-verified"
+
+_file_mtime() {
+    # Portable mtime: GNU stat uses -c %Y; BSD/macOS uses -f %m.
+    if stat -c %Y "$1" >/dev/null 2>&1; then
+        stat -c %Y "$1"
+    else
+        stat -f %m "$1"
+    fi
+}
+
 if [ -f "$VERIFY_STAMP" ]; then
     stamped="$(tr -d '[:space:]' < "$VERIFY_STAMP" || true)"
-    stamp_age="$(( $(date +%s) - $(stat -c %Y "$VERIFY_STAMP") ))"
+    stamp_age="$(( $(date +%s) - $(_file_mtime "$VERIFY_STAMP") ))"
     if [ "$stamped" = "$HEAD_SHA" ] && [ "$stamp_age" -lt 3600 ]; then
         echo "Pre-push already verified for ${HEAD_SHA:0:12} (${stamp_age}s ago); proceeding to push."
         exit 0
