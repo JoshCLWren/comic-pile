@@ -31,6 +31,7 @@ import { useRollDependencies } from './useRollDependencies'
 import { useRollActions } from './useRollActions'
 import { useRollModals } from './useRollModals'
 import { useRollViewport } from './useRollViewport'
+import { hasReadingContextContent } from './readingContextContent'
 import { RatingView } from './components/RatingView'
 import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
 import { ThreadPool } from './components/ThreadPool'
@@ -55,10 +56,6 @@ import CorrectionSheet, { type CorrectionChoiceId } from '../../components/Corre
 export default function RollPage() {
   const state = useRollPageState()
   const navigate = useNavigate()
-
-  const { mainDieRef, ratingViewTopRef } = useRollViewport({
-    isRatingView: state.isRatingView,
-  })
 
   const {
     data: bootstrap,
@@ -149,6 +146,15 @@ export default function RollPage() {
     rateMutation,
     dismissPendingMutation,
     refetchBootstrap,
+  })
+
+  const { mainDieRef, ratingViewTopRef } = useRollViewport({
+    isRatingView: state.isRatingView,
+    hasReadingContext: hasReadingContextContent(
+      rating.readingOrders,
+      rating.connectedThreads,
+      readerContext,
+    ),
   })
 
   const snooze = useRollSnooze({

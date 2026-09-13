@@ -17,6 +17,7 @@ function scrollBehavior(): 'auto' | 'smooth' {
 
 interface UseRollViewportParams {
   isRatingView: boolean
+  hasReadingContext: boolean
 }
 
 /**
@@ -36,18 +37,28 @@ interface UseRollViewportParams {
  * last navigation type would be both ineffective (a POP arrival can never
  * activate the rating view itself) and harmful: after a reload or back/forward
  * arrival the stale pre-roll offset would be retained again on the next roll.
+ *
+ * Reading-boundaries content (reading orders, continuity edges, paths, connected
+ * threads) loads asynchronously after a roll and mounts inside the rating
+ * surface, growing the page while the enter transition is still settling. That
+ * async growth can carry the viewport partway through the newly mounted
+ * "reading boundaries" region instead of leaving it at the rating start. When
+ * that content becomes available during an active rating view, the hook snaps
+ * the viewport back to the rating start so focus stays on the cover art and the
+ * decisions with the reading boundaries as optional supporting detail below.
  */
-export function useRollViewport({ isRatingView }: UseRollViewportParams) {
+export function useRollViewport({ isRatingView, hasReadingContext }: UseRollViewportParams) {
   const mainDieRef = useRef<HTMLDivElement>(null)
   const ratingViewTopRef = useRef<HTMLDivElement>(null)
   const prevIsRatingViewRef = useRef(isRatingView)
+  const prevHasReadingContextRef = useRef(hasReadingContext)
 
   const scrollToDice = useCallback(() => {
     mainDieRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
   }, [])
 
-  const scrollToRatingStart = useCallback(() => {
-    ratingViewTopRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
+  const scrollToRatingStart = useCallback((behavior: 'auto' | 'smooth' = scrollBehavior()) => {
+    ratingViewTopRef.current?.scrollIntoView({ behavior, block: 'start' })
   }, [])
 
   useEffect(() => {
@@ -63,6 +74,15 @@ export function useRollViewport({ isRatingView }: UseRollViewportParams) {
       scrollToRatingStart()
     }
   }, [isRatingView, scrollToDice, scrollToRatingStart])
+
+  useEffect(() => {
+    const readingContextArrived = isRatingView && hasReadingContext && !prevHasReadingContextRef.current
+    prevHasReadingContextRef.current = hasReadingContext
+
+    if (readingContextArrived) {
+      scrollToRatingStart('auto')
+    }
+  }, [isRatingView, hasReadingContext, scrollToRatingStart])
 
   return { mainDieRef, ratingViewTopRef, scrollToDice, scrollToRatingStart }
 }
