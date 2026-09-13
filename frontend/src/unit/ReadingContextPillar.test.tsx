@@ -124,7 +124,7 @@ describe('ReadingContextPillar dependency and continuity edges', () => {
     renderPillar(context)
 
     await waitFor(() =>
-      expect(screen.getByText('Dependency & Continuity Edges')).toBeInTheDocument(),
+      expect(screen.getByText('Your Reading Boundaries')).toBeInTheDocument(),
     )
     expect(screen.getByText('Blocked by Animal Man')).toBeVisible()
   })
@@ -132,7 +132,7 @@ describe('ReadingContextPillar dependency and continuity edges', () => {
   it('suppresses empty panels when no edges exist', async () => {
     renderPillar(baseContext)
 
-    expect(screen.queryByText('Dependency & Continuity Edges')).not.toBeInTheDocument()
+    expect(screen.queryByText('Your Reading Boundaries')).not.toBeInTheDocument()
   })
 
   it('labels mixed-direction dependency edges as Dependency edges', async () => {
@@ -209,7 +209,7 @@ describe('ReadingContextPillar dependency and continuity edges', () => {
     renderPillar(context)
 
     await waitFor(() =>
-      expect(screen.getByText('Dependency & Continuity Edges')).toBeInTheDocument(),
+      expect(screen.getByText('Your Reading Boundaries')).toBeInTheDocument(),
     )
     expect(screen.getByText('Orphan A')).toBeVisible()
     expect(screen.getByText('Orphan B')).toBeVisible()

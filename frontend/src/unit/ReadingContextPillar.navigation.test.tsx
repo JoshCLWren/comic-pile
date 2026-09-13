@@ -214,7 +214,7 @@ describe('ReadingContextPillar navigation (issue #1877)', () => {
       }),
     )
 
-    await screen.findByText('Dependency & Continuity Edges')
+    await screen.findByText('Your Reading Boundaries')
     await userEvent.setup().click(screen.getByRole('button', { name: 'Open series for Saga #3' }))
     expect(navigateSpy).toHaveBeenCalledWith('/thread/42')
 

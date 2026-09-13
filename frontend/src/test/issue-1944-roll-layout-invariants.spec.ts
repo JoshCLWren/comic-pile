@@ -469,7 +469,7 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
 
     await expect(page.getByText('Reading Context', { exact: true })).toBeVisible()
     await expect(page.getByText('Where you are in Fixtureverse')).toBeVisible()
-    await expect(page.getByText('Dependency & Continuity Edges')).toBeVisible()
+    await expect(page.getByText('Your Reading Boundaries')).toBeVisible()
     // Crossover membership renders after expanding the current issue's context.
     await page.getByRole('button', { name: 'Show context for Fixtureverse issue 1' }).click()
     await expect(page.getByRole('button', { name: 'Open Crisis on Fixture Pile crossover' })).toBeVisible()
