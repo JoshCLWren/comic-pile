@@ -95,10 +95,19 @@ function buildListResponse(
   }
 }
 
-function renderBuilder() {
+function renderBuilder(props: Partial<{
+  dependenciesApi: any
+  threadsApi: any
+  issuesApi: any
+}> = {}) {
   return render(
     <ToastProvider>
-      <DependencyBuilder thread={TARGET_THREAD} isOpen onClose={() => {}} />
+      <DependencyBuilder
+        thread={TARGET_THREAD}
+        isOpen
+        onClose={() => {}}
+        {...props}
+      />
     </ToastProvider>
   )
 }
@@ -136,16 +145,16 @@ describe('DependencyBuilder issue selection', () => {
   })
 
   it('fetches source and target issues with status=unread filter', async () => {
-    mockedIssuesApi.list.mockResolvedValue(buildListResponse([]))
-    renderBuilder()
+    const issuesService = { list: vi.fn().mockResolvedValue(buildListResponse([])) }
+    renderBuilder({ issuesApi: issuesService })
 
     await selectPrerequisiteThread()
 
     await waitFor(() => {
-      expect(mockedIssuesApi.list).toHaveBeenCalled()
+      expect(issuesService.list).toHaveBeenCalled()
     })
 
-    for (const call of mockedIssuesApi.list.mock.calls) {
+    for (const call of issuesService.list.mock.calls) {
       const params = call[1]
       expect(params).toMatchObject({ status: 'unread', page_size: 100 })
     }
@@ -163,18 +172,20 @@ describe('DependencyBuilder issue selection', () => {
       makeIssue({ id: 101, thread_id: TARGET_THREAD.id, issue_number: '1' }),
     ]
 
-    mockedIssuesApi.list.mockImplementation(
-      async (threadId: number, params?: { page_token?: string }) => {
-        if (threadId === PREREQ_THREAD.id) {
-          return params?.page_token
-            ? buildListResponse(prereqPage2)
-            : buildListResponse(prereqPage1, 'page-2')
-        }
-        return buildListResponse(targetIssues)
-      }
-    )
+    const issuesService = {
+      list: vi.fn().mockImplementation(
+        async (threadId: number, params?: { page_token?: string }) => {
+          if (threadId === PREREQ_THREAD.id) {
+            return params?.page_token
+              ? buildListResponse(prereqPage2)
+              : buildListResponse(prereqPage1, 'page-2')
+          }
+          return buildListResponse(targetIssues)
+        },
+      ),
+    }
 
-    renderBuilder()
+    renderBuilder({ issuesApi: issuesService })
     await selectPrerequisiteThread()
 
     const sourceSelect = await screen.findByLabelText(/Prerequisite issue/i)
@@ -183,7 +194,7 @@ describe('DependencyBuilder issue selection', () => {
       expect(sourceSelect.querySelectorAll('option').length).toBe(4)
     })
 
-    const prereqCalls = mockedIssuesApi.list.mock.calls.filter((c) => c[0] === PREREQ_THREAD.id)
+    const prereqCalls = issuesService.list.mock.calls.filter((c) => c[0] === PREREQ_THREAD.id)
     expect(prereqCalls).toHaveLength(2)
     expect(prereqCalls[1][1]).toMatchObject({ page_token: 'page-2' })
   })
@@ -195,16 +206,18 @@ describe('DependencyBuilder issue selection', () => {
       issue_number: '1',
     })
 
-    mockedIssuesApi.list.mockImplementation(async (threadId: number) => {
-      if (threadId === PREREQ_THREAD.id) {
-        return buildListResponse([unreadIssue])
-      }
-      return buildListResponse([
-        makeIssue({ id: 101, thread_id: TARGET_THREAD.id, issue_number: '1' }),
-      ])
-    })
+    const issuesService = {
+      list: vi.fn().mockImplementation(async (threadId: number) => {
+        if (threadId === PREREQ_THREAD.id) {
+          return buildListResponse([unreadIssue])
+        }
+        return buildListResponse([
+          makeIssue({ id: 101, thread_id: TARGET_THREAD.id, issue_number: '1' }),
+        ])
+      }),
+    }
 
-    renderBuilder()
+    renderBuilder({ issuesApi: issuesService })
     await selectPrerequisiteThread()
 
     const sourceSelect = await screen.findByLabelText(/Prerequisite issue/i)
@@ -218,7 +231,7 @@ describe('DependencyBuilder issue selection', () => {
     expect(optionLabels.some((label) => label.includes('#1'))).toBe(true)
     expect(optionLabels.every((label) => !label.includes('✅'))).toBe(true)
 
-    const readCalls = mockedIssuesApi.list.mock.calls.filter((c) => c[1]?.status === 'read')
+    const readCalls = issuesService.list.mock.calls.filter((c) => c[1]?.status === 'read')
     expect(readCalls).toHaveLength(0)
   })
 })

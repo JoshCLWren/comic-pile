@@ -154,14 +154,14 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     setIsLoadingDeps(true)
     setError('')
     try {
-      const data = await dependenciesApi.listThreadDependencies(currentThreadId!)
+      const data = await dependenciesService.listThreadDependencies(currentThreadId!)
       setDependencies(data)
     } catch (loadError: unknown) {
       setError(getApiErrorDetail(loadError))
     } finally {
       setIsLoadingDeps(false)
     }
-  }, [thread?.id])
+  }, [thread?.id, dependenciesService])
 
   /**
    * Build the full graph of threads and dependencies for the flowchart.
@@ -172,8 +172,8 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     const currentThreadId = thread?.id
     try {
       const [depsData, allBlockedIds] = await Promise.all([
-        dependenciesApi.listThreadDependencies(currentThreadId!),
-        dependenciesApi.listBlockedThreadIds(),
+        dependenciesService.listThreadDependencies(currentThreadId!),
+        dependenciesService.listBlockedThreadIds(),
       ])
 
       const relatedIds = new Set([currentThreadId!])
@@ -255,7 +255,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
       const allEdges = [...threadDeps, ...issueEdges]
 
-    const allThreads = await threadsApi.list()
+    const allThreads = await threadsService.list()
     const relatedThreads = allThreads.threads.filter((t) => relatedIds.has(t.id))
 
       
@@ -426,44 +426,44 @@ const [isSavingNote, setIsSavingNote] = useState(false)
      )
    }
 
-   async function handleInlineMigration(e: FormEvent) {
-    e.preventDefault()
-    if (!migrationLastRead.trim() || !migrationTotal.trim()) {
-      setError('Both fields are required for migration.')
-      return
-    }
-    const lastRead = Number(migrationLastRead)
-    const total = Number(migrationTotal)
-    if (
-      Number.isNaN(lastRead) ||
-      Number.isNaN(total) ||
-      !Number.isInteger(lastRead) ||
-      !Number.isInteger(total) ||
-      total < 1 ||
-      lastRead < 0 ||
-      lastRead > total
-    ) {
-      setError('Invalid migration values. Both must be whole numbers and last read must be 0-total.')
-      return
-    }
+    async function handleInlineMigration(e: FormEvent) {
+      e.preventDefault()
+      if (!migrationLastRead.trim() || !migrationTotal.trim()) {
+        setError('Both fields are required for migration.')
+        return
+      }
+      const lastRead = Number(migrationLastRead)
+      const total = Number(migrationTotal)
+      if (
+        Number.isNaN(lastRead) ||
+        Number.isNaN(total) ||
+        !Number.isInteger(lastRead) ||
+        !Number.isInteger(total) ||
+        total < 1 ||
+        lastRead < 0 ||
+        lastRead > total
+      ) {
+        setError('Invalid migration values. Both must be whole numbers and last read must be 0-total.')
+        return
+      }
 
-    setIsMigrating(true)
-    setError('')
-    try {
-      const updatedThread = await issuesApi.migrateThread(selectedThreadId!, lastRead, total)
-      // Refresh search results with updated thread data
-      setSearchResults((prev) =>
-        prev.map((t) => (t.id === selectedThreadId ? updatedThread : t))
-      )
-      setShowInlineMigration(false)
-      setMigrationLastRead('')
-      setMigrationTotal('')
-    } catch (migrationError: unknown) {
-      setError(getApiErrorDetail(migrationError))
-    } finally {
-      setIsMigrating(false)
+      setIsMigrating(true)
+      setError('')
+      try {
+        const updatedThread = await issuesService.migrateThread(selectedThreadId!, lastRead, total)
+        // Refresh search results with updated thread data
+        setSearchResults((prev) =>
+          prev.map((t) => (t.id === selectedThreadId ? updatedThread : t))
+        )
+        setShowInlineMigration(false)
+        setMigrationLastRead('')
+        setMigrationTotal('')
+      } catch (migrationError: unknown) {
+        setError(getApiErrorDetail(migrationError))
+      } finally {
+        setIsMigrating(false)
+      }
     }
-  }
 
   async function handleCreateDependency() {
     if (!thread?.id || !selectedThreadId) return
@@ -482,7 +482,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     setIsSaving(true)
     setError('')
     try {
-      const result = await dependenciesApi.createDependency({
+      const result = await dependenciesService.createDependency({
         sourceType: 'issue',
         sourceId: sourceIssueId,
         targetType: 'issue',
@@ -531,14 +531,14 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
       const timeoutId = setTimeout(async () => {
         try {
-          await dependenciesApi.deleteDependency(dependencyId)
+          await dependenciesService.deleteDependency(dependencyId)
           setPendingDeletion(null)
           await loadDependencies()
           await refreshGraphIfVisible()
           onChanged?.()
         } catch (deleteError: unknown) {
           setError(getApiErrorDetail(deleteError))
-          // Restore the dependency if deletion fails
+          // Restore the dependency
           await loadDependencies()
         }
       }, 5000)
@@ -576,24 +576,24 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     }
   }
 
-  async function handleSaveNote(dependencyId: number) {
-    setIsSavingNote(true)
-    setError('')
-    try {
-      const updated = await dependenciesApi.updateDependency(dependencyId, noteText.trim() || null)
-      setDependencies((prev) => ({
-        ...prev,
-        blocking: prev.blocking.map((d) => (d.id === dependencyId ? updated : d)),
-        blocked_by: prev.blocked_by.map((d) => (d.id === dependencyId ? updated : d)),
-      }))
-      setEditingNoteId(null)
-      setNoteText('')
-    } catch (saveError: unknown) {
-      setError(getApiErrorDetail(saveError))
-    } finally {
-      setIsSavingNote(false)
+    async function handleSaveNote(dependencyId: number) {
+      setIsSavingNote(true)
+      setError('')
+      try {
+        const updated = await dependenciesService.updateDependency(dependencyId, noteText.trim() || null)
+        setDependencies((prev) => ({
+          ...prev,
+          blocking: prev.blocking.map((d) => (d.id === dependencyId ? updated : d)),
+          blocked_by: prev.blocked_by.map((d) => (d.id === dependencyId ? updated : d)),
+        }))
+        setEditingNoteId(null)
+        setNoteText('')
+      } catch (saveError: unknown) {
+        setError(getApiErrorDetail(saveError))
+      } finally {
+        setIsSavingNote(false)
+      }
     }
-  }
 
   function handleStartEditNote(dep: Dependency) {
     setEditingNoteId(dep.id)
