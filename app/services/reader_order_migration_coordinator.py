@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
-from app.models.dependency_group import DependencyGroupMembership
 from app.schemas.continuity_plan import (
     ContinuityPlanNode,
     ContinuityPlanWrite,
@@ -465,34 +464,22 @@ async def _explicit_already_migrated(
     expected_issues, expected_edges = expected
     stamped = _stamped_migration_contract(plan)
 
-    if spec.dependency_group_ids:
-        membership_issue_ids = {
-            int(issue_id)
-            for issue_id in (
-                await db.execute(
-                    select(DependencyGroupMembership.issue_id).where(
-                        DependencyGroupMembership.group_id.in_(spec.dependency_group_ids),
-                        DependencyGroupMembership.issue_id.is_not(None),
-                    )
-                )
-            ).scalars().all()
-            if issue_id is not None
-        }
-        if not membership_issue_ids or membership_issue_ids != node_issue_ids:
-            return False
-
     if stamped is not None:
         if stamped != expected:
             return False
-        if not expected_issues <= node_issue_ids:
-            return False
         if spec.dependency_group_ids:
+            # DependencyGroup membership is preserved compatibility state, not
+            # canonical Reading Plan membership. Production groups can contain
+            # unrelated members or omit cross-group edge endpoints, so replay
+            # must validate the server-owned migration contract instead.
+            if node_issue_ids != expected_issues:
+                return False
             # Grouped plans must match the stamped edge set exactly. A superset
             # of classified edges would make Roll stricter than the Step 14
             # contract while still looking self-consistent after recompile.
             if edges != expected_edges:
                 return False
-        elif not expected_edges <= edges:
+        elif not expected_issues <= node_issue_ids or not expected_edges <= edges:
             # Step 23B overlay onto a larger reviewed baseline may retain
             # additional reviewed edges outside the explicit family contract.
             return False
