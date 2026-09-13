@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import type { KeyboardEvent } from 'react'
 import Modal from './Modal'
 import { issuesApi } from '../services/api-issues'
-import type { IssueListParams, IssueListResponse } from '../services/api-issues'
-import type { Issue } from '../types'
+import type { IssueListParams } from '../services/api-issues'
+import type { Issue, IssueListResponse } from '../types'
 
 export interface IssueCorrectionIssuesApi {
   list: (threadId: number, params?: IssueListParams) => Promise<IssueListResponse>

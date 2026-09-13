@@ -22,7 +22,7 @@ describe('useCrossoverGroups', () => {
 
   it('deduplicates and sorts ids while filling missing groups with empty arrays', async () => {
     listForThreads.mockResolvedValueOnce({
-      2: [{ id: 7, name: 'Cosmic', membership_count: 1 }],
+      2: [{ id: 7, name: 'Cosmic' }],
     })
 
     const { result } = renderHook(() => useCrossoverGroups([3, 2, 3], groupsApi))

@@ -6,8 +6,8 @@ import ReadingOrderTimeline from './ReadingOrderTimeline'
 import DependencyCrossoverControls from './DependencyCrossoverControls'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
-import type { IssueListParams, IssueListResponse } from '../services/api-issues'
-import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse, ThreadListResponse } from '../types'
+import type { IssueListParams } from '../services/api-issues'
+import type { Dependency, FlowchartDependency, FlowchartNode, Issue, IssueListResponse, Thread, ThreadDependenciesResponse, ThreadListResponse } from '../types'
 import { getApiErrorDetail } from '../utils/apiError'
 import { useToast } from '../contexts/useToast'
 
@@ -270,14 +270,14 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       setFlowchartDependencies([])
       setFlowchartIssueNodes([])
     }
-  }, [thread?.id])
+  }, [thread?.id, dependenciesService, threadsService])
 
   useEffect(() => {
     // Clean up any pending deletion when modal closes
     if (pendingDeletion) {
       clearTimeout(pendingDeletion.timeoutId)
       // Fire DELETE immediately (commit the deletion)
-      dependenciesApi.deleteDependency(pendingDeletion.dependencyId)
+      dependenciesService.deleteDependency(pendingDeletion.dependencyId)
         .then(() => {
           // Deletion succeeded, reload dependencies
           onChanged?.()
@@ -328,7 +328,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       setIsSearching(true)
       setError('')
       try {
-    const candidates = await threadsApi.list({ search: query })
+    const candidates = await threadsService.list({ search: query })
     if (!isCurrent) return
     const currentThreadId = thread?.id
     const filtered =  currentThreadId == null
@@ -350,7 +350,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       isCurrent = false
       clearTimeout(timeout)
     }
-  }, [searchQuery, isOpen, thread?.id])
+  }, [searchQuery, isOpen, thread?.id, threadsService])
 
   // Check if selected thread needs migration when in issue mode
   const selectedThreadNeedsMigration = useMemo(() => {
@@ -383,8 +383,8 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       setError('')
       try {
         const [sourceIssuesList, targetIssuesList] = await Promise.all([
-          fetchAllUnreadIssues(selectedThreadId),
-          fetchAllUnreadIssues(thread.id),
+          fetchAllUnreadIssues(issuesService, selectedThreadId),
+          fetchAllUnreadIssues(issuesService, thread.id),
         ])
         if (!isCurrent) return
         setSourceIssues(sourceIssuesList)
@@ -411,7 +411,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     return () => {
       isCurrent = false
     }
-  }, [selectedThreadId, isOpen, thread?.id, selectedThreadNeedsMigration])
+  }, [selectedThreadId, isOpen, thread?.id, selectedThreadNeedsMigration, issuesService])
 
    function isDuplicateDependency(): boolean {
      if (!thread?.id || !selectedThreadId) return false
