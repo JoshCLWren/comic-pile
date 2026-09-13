@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -84,6 +84,26 @@ describe('ContinuityPlansIndexPage', () => {
     expect(screen.getByText('2 lanes · 5 steps')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'New Reading Plan' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add from CBL' })).toBeInTheDocument()
+  })
+
+  it('asks which plan should receive CBL material instead of targeting the first plan', async () => {
+    mockList.mockResolvedValue([
+      plan,
+      { ...plan, id: 2, name: 'Second Plan' },
+    ])
+    render(
+      <MemoryRouter>
+        <ContinuityPlansIndexPage />
+      </MemoryRouter>
+    )
+    await waitFor(() => {
+      expect(screen.getByText('My Plan')).toBeInTheDocument()
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'Add from CBL' }))
+    const dialog = screen.getByRole('dialog', { name: 'Choose a Reading Plan' })
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: /My Plan/ })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: /Second Plan/ })).toBeInTheDocument()
   })
 
   it('identifies CBL-backed plans and their source', async () => {

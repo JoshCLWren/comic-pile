@@ -46,14 +46,17 @@
 - [x] Replaced frontend implementation-first copy with Reading Plan product language.
 - [x] Coordinator/batch status and receipt edge-case tests.
 - [x] Explicit + source-backed `needs_review` intersection refusal regressions.
-- [x] Confirmed legacy Reading Order import remains on Step 23B / `from-reading-order`, not the
-      Step 27 Dependency-debris batch path.
+- [x] Integrated Step 23B legacy Reading Orders into the Step 27 batch as
+      already-migrated / safe-to-migrate / blocked status (not a permanent exclusion).
+- [x] Strengthened already-migrated proof (node set + compiled-rule / fingerprint checks).
 - [x] Audited and fixed `get_blocking_explanations` / batch / `:getBlockingInfo` to use continuity
       blockers when the legacy switch is disabled (legacy rows only while the switch stays on).
 - [x] Integrated backend golden path for missing-comic materialization, replay/idempotency,
       canonical reload/provenance, Roll eligibility, and no dependency-group execution state.
-- [x] Focused Chromium Playwright coverage for index → create plan → CBL discovery → series
-      choice → individual override → commit → canonical result (plus `/api/test/cbl-source` seed).
+- [x] Focused Chromium Playwright coverage for strict CBL commit + Roll eligibility until earlier
+      issue is read (plus `/api/test/cbl-source` seed).
+- [x] CBL commit expands `series_group_id` decisions into per-position overrides.
+- [x] Plan mutations invalidate Roll/Queue/session caches; index Add-from-CBL uses an explicit chooser.
 
 ## Validation completed for this checkpoint
 

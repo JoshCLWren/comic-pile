@@ -96,30 +96,31 @@ export const cblSourcesApi = {
     const entriesById = new Map(
       preview.entries.map((entry) => [String(entry.cbl_entry_id), entry]),
     )
-    const seriesByGroup = new Map(
-      preview.entries.map((entry) => [entry.series_group_id, entry.series_name]),
-    )
-    const seriesDecisions = Object.entries(choices.series_decisions).flatMap(
-      ([groupId, include]) => {
-        const seriesName = seriesByGroup.get(groupId)
-        return seriesName
-          ? [{ series_name: seriesName, decision: include ? 'include' : 'exclude' }]
-          : []
-      },
-    )
-    const seriesOverrides = Object.entries(choices.entry_decisions).flatMap(
-      ([entryId, include]) => {
-        const entry = entriesById.get(entryId)
-        return entry
-          ? [{ cbl_position: entry.cbl_position, decision: include ? 'include' : 'exclude' }]
-          : []
-      },
-    )
+    // Expand identity-aware group decisions into per-position overrides so two
+    // runs that share a series_name cannot collapse on the backend.
+    const overridesByPosition = new Map<number, 'include' | 'exclude'>()
+    for (const [groupId, include] of Object.entries(choices.series_decisions)) {
+      const decision = include ? 'include' : 'exclude'
+      for (const entry of preview.entries) {
+        if (entry.series_group_id === groupId) {
+          overridesByPosition.set(entry.cbl_position, decision)
+        }
+      }
+    }
+    for (const [entryId, include] of Object.entries(choices.entry_decisions)) {
+      const entry = entriesById.get(entryId)
+      if (entry) {
+        overridesByPosition.set(entry.cbl_position, include ? 'include' : 'exclude')
+      }
+    }
+    const seriesOverrides = [...overridesByPosition.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([cbl_position, decision]) => ({ cbl_position, decision }))
     return api.post<CBLAdoptionCommitResult>(
       `/v1/cbl/${listId}/reading-plans/${planId}/adoption-commit`,
       {
         entry_decisions: {},
-        series_decisions: seriesDecisions,
+        series_decisions: [],
         series_overrides: seriesOverrides,
         content_hash: preview.source.content_hash,
         revision_sha: preview.source.revision_sha,

@@ -25,7 +25,13 @@ def _load_application_symbols():
         apply_explicit_reader_order_migration,
     )
     from app.services.reader_order_cutover import build_reader_order_cutover_audit
-    from app.services.reader_order_migration_coordinator import build_manifest_report
+    from app.services.legacy_reading_order_production_migration import (
+        apply_legacy_reading_order_migration,
+    )
+    from app.services.reader_order_migration_coordinator import (
+        LEGACY_READING_ORDERS_MANIFEST,
+        build_manifest_report,
+    )
     from app.services.source_backed_reader_order_migration import (
         PRODUCTION_SOURCE_BACKED_SPECS,
         apply_source_backed_reader_order_migration,
@@ -38,7 +44,9 @@ def _load_application_symbols():
         AsyncSessionLocal,
         PRODUCTION_EXPLICIT_READER_ORDER_SPECS,
         apply_explicit_reader_order_migration,
+        apply_legacy_reading_order_migration,
         build_reader_order_cutover_audit,
+        LEGACY_READING_ORDERS_MANIFEST,
         build_manifest_report,
         PRODUCTION_SOURCE_BACKED_SPECS,
         apply_source_backed_reader_order_migration,
@@ -50,7 +58,9 @@ def _load_application_symbols():
     AsyncSessionLocal,
     PRODUCTION_EXPLICIT_READER_ORDER_SPECS,
     apply_explicit_reader_order_migration,
+    apply_legacy_reading_order_migration,
     build_reader_order_cutover_audit,
+    LEGACY_READING_ORDERS_MANIFEST,
     build_manifest_report,
     PRODUCTION_SOURCE_BACKED_SPECS,
     apply_source_backed_reader_order_migration,
@@ -60,7 +70,9 @@ def _load_application_symbols():
 CONFIRMATION = "STEP27-READER-ORDER"
 SOURCE_MANIFESTS = PRODUCTION_SOURCE_BACKED_SPECS
 EXPLICIT_MANIFESTS = PRODUCTION_EXPLICIT_READER_ORDER_SPECS
-ALL_MANIFESTS = sorted({*SOURCE_MANIFESTS, *EXPLICIT_MANIFESTS})
+ALL_MANIFESTS = sorted(
+    {*SOURCE_MANIFESTS, *EXPLICIT_MANIFESTS, LEGACY_READING_ORDERS_MANIFEST}
+)
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -196,7 +208,13 @@ async def _apply(
     pending_receipt: Path | None = None
     async with AsyncSessionLocal() as db:
         try:
-            if manifest in SOURCE_MANIFESTS:
+            if manifest == LEGACY_READING_ORDERS_MANIFEST:
+                receipt = await apply_legacy_reading_order_migration(
+                    db,
+                    accepted_snapshot_token=str(snapshot["snapshot_token"]),
+                    require_reviewed_token=True,
+                )
+            elif manifest in SOURCE_MANIFESTS:
                 receipt = await apply_source_backed_reader_order_migration(
                     db,
                     snapshot=snapshot,
@@ -272,7 +290,13 @@ async def _batch_apply(
                     raise MigrationInvariantError(
                         f"batch snapshot metadata changed for {manifest}"
                     )
-                if manifest in SOURCE_MANIFESTS:
+                if manifest == LEGACY_READING_ORDERS_MANIFEST:
+                    result = await apply_legacy_reading_order_migration(
+                        db,
+                        accepted_snapshot_token=str(snapshot["snapshot_token"]),
+                        require_reviewed_token=True,
+                    )
+                elif manifest in SOURCE_MANIFESTS:
                     result = await apply_source_backed_reader_order_migration(
                         db,
                         snapshot=snapshot,

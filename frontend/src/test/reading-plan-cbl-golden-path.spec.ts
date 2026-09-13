@@ -2,29 +2,29 @@ import { test, expect } from './fixtures'
 import type { Page } from '@playwright/test'
 import { createThread, getAuthToken } from './helpers'
 
+type EligibilityExpectation = {
+  eligible: boolean
+}
+
 async function getCsrf(page: Page, token: string | null): Promise<string> {
-  const headers: Record<string, string> = {}
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
-  const response = await page.request.get('/api/auth/csrf', { headers })
+  const response = await page.request.get('/api/auth/csrf', {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
   expect(response.ok()).toBeTruthy()
   const data = await response.json() as { csrf_token?: string }
   expect(data.csrf_token).toBeDefined()
   return data.csrf_token!
 }
 
-async function authHeaders(page: Page): Promise<Record<string, string>> {
+async function authHeaders(page: Page) {
   const token = await getAuthToken(page)
+  expect(token).toBeTruthy()
   const csrf = await getCsrf(page, token)
-  const headers: Record<string, string> = {
+  return {
     'Content-Type': 'application/json',
     'X-CSRF-Token': csrf,
+    Authorization: `Bearer ${token}`,
   }
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
-  return headers
 }
 
 async function getFirstIssueId(page: Page, threadId: number): Promise<number> {
@@ -38,21 +38,56 @@ async function getFirstIssueId(page: Page, threadId: number): Promise<number> {
   return data.issues[0].id
 }
 
+async function assertRollEligibility(
+  page: Page,
+  threadId: number,
+  expectation: EligibilityExpectation,
+): Promise<void> {
+  const headers = await authHeaders(page)
+  const response = await page.request.post(
+    `/api/v1/threads/${threadId}:getBlockingInfo`,
+    { headers },
+  )
+  expect(response.ok(), await response.text()).toBeTruthy()
+  const payload = await response.json() as { is_blocked: boolean }
+  expect(payload.is_blocked).toBe(!expectation.eligible)
+
+  const bootstrap = await page.request.get('/api/v1/roll/bootstrap', { headers })
+  expect(bootstrap.ok(), await bootstrap.text()).toBeTruthy()
+  const roll = await bootstrap.json() as {
+    roll_pool: Array<{ id: number }>
+    blocked_threads: Array<{ id: number }>
+  }
+  const inPool = roll.roll_pool.some((thread) => thread.id === threadId)
+  const inBlocked = roll.blocked_threads.some((thread) => thread.id === threadId)
+  expect(inPool).toBe(expectation.eligible)
+  if (!expectation.eligible) {
+    expect(inBlocked || payload.is_blocked).toBe(true)
+  }
+}
+
 test.describe('Reading Plan CBL golden path', () => {
-  test('index → create plan → CBL discovery → series/override → commit → canonical result', async ({
+  test('index → create strict plan → CBL → commit → Roll eligibility', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
     const headers = await authHeaders(page)
 
-    const owned = await createThread(page, {
-      title: 'Golden Path Owned Series',
+    const earlier = await createThread(page, {
+      title: 'Golden Path Earlier Series',
       format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
-    const ownedIssueId = await getFirstIssueId(page, owned.id)
-    const fixtureSuffix = `${owned.id}-${Date.now()}`
+    const later = await createThread(page, {
+      title: 'Golden Path Later Series',
+      format: 'Comics',
+      issues_remaining: 1,
+      total_issues: 1,
+    })
+    const earlierIssueId = await getFirstIssueId(page, earlier.id)
+    const laterIssueId = await getFirstIssueId(page, later.id)
+    const fixtureSuffix = `${earlier.id}-${Date.now()}`
     const sourceName = `Golden Path Browser Source ${fixtureSuffix}`
     const sourcePath = `Fixtures/Golden Path Browser ${fixtureSuffix}.cbl`
 
@@ -67,12 +102,18 @@ test.describe('Reading Plan CBL golden path', () => {
         entries: [
           {
             position: 1,
-            series_name: 'Golden Path Owned Series',
+            series_name: 'Golden Path Earlier Series',
             issue_number: '1',
-            issue_id: ownedIssueId,
+            issue_id: earlierIssueId,
           },
           {
             position: 2,
+            series_name: 'Golden Path Later Series',
+            issue_number: '1',
+            issue_id: laterIssueId,
+          },
+          {
+            position: 3,
             series_name: 'Golden Path Missing Series',
             issue_number: '1',
             volume_year: 2002,
@@ -92,6 +133,7 @@ test.describe('Reading Plan CBL golden path', () => {
     await expect(page.getByRole('heading', { name: 'New Reading Plan' })).toBeVisible()
 
     await page.getByLabel('Plan name').fill(`Golden Path Browser Plan ${fixtureSuffix}`)
+    await page.getByRole('radio', { name: /Strict sequential/i }).check()
     await page.getByRole('button', { name: 'Save plan' }).click()
     await expect(page).toHaveURL(/\/continuity-plans\/\d+/)
 
@@ -100,7 +142,7 @@ test.describe('Reading Plan CBL golden path', () => {
     await page.getByRole('button', { name: 'Search' }).click()
     await page.getByRole('button', { name: new RegExp(sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).click()
 
-    await expect(page.getByText('Already in ComicPile')).toBeVisible()
+    await expect(page.getByText('Already in ComicPile')).toHaveCount(2)
     await expect(page.getByText(/Missing · choose whether to add/i)).toBeVisible()
 
     const missingSeriesChoice = page.getByRole('group', {
@@ -124,7 +166,7 @@ test.describe('Reading Plan CBL golden path', () => {
     await page.getByRole('button', { name: 'Add selected material' }).click()
     await expect(
       page.getByRole('status').filter({ hasText: 'Added material to this Reading Plan' }),
-    ).toContainText(/created 1 · reused 1/i)
+    ).toContainText(/created 1 · reused 2/i)
 
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(page.getByText('CBL-backed')).toBeVisible()
@@ -137,17 +179,29 @@ test.describe('Reading Plan CBL golden path', () => {
     })
     expect(planResponse.ok(), await planResponse.text()).toBeTruthy()
     const plan = await planResponse.json() as {
+      ordering_mode: string
       nodes: Array<{
         ref_id: number
         source_cbl_placements?: Array<{ source_path: string }>
       }>
     }
-    expect(plan.nodes.length).toBe(2)
-    expect(plan.nodes[0]?.ref_id).toBe(ownedIssueId)
+    expect(plan.ordering_mode).toBe('strict_sequential')
+    expect(plan.nodes.length).toBe(3)
+    expect(plan.nodes[0]?.ref_id).toBe(earlierIssueId)
+    expect(plan.nodes[1]?.ref_id).toBe(laterIssueId)
     expect(
       plan.nodes.flatMap((node) =>
         (node.source_cbl_placements ?? []).map((placement) => placement.source_path),
       ),
-    ).toEqual([sourcePath, sourcePath])
+    ).toEqual([sourcePath, sourcePath, sourcePath])
+
+    await assertRollEligibility(page, later.id, { eligible: false })
+
+    const markRead = await page.request.post(
+      `/api/v1/issues/${earlierIssueId}:markRead`,
+      { headers },
+    )
+    expect(markRead.ok(), await markRead.text()).toBeTruthy()
+    await assertRollEligibility(page, later.id, { eligible: true })
   })
 })

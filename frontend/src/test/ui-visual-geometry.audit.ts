@@ -139,7 +139,7 @@ const SCENARIOS: Scenario[] = [
     route: '/continuity-plans/new',
     checkBlankRegions: true,
     prepare: async (page) => {
-      await expect(page.getByRole('heading', { name: 'Sequential planner' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'New Reading Plan' })).toBeVisible()
     },
   },
   {

@@ -168,6 +168,8 @@ export async function invalidateAfterQueueMutation(
 
 export async function invalidateReadingPlans(client: QueryClient): Promise<void> {
   await client.invalidateQueries({ queryKey: queryKeys.readingPlans.all })
+  // Plan create/update/delete recompiles eligibility rules that Roll/Queue/session consume.
+  await invalidateAfterQueueMovement(client)
 }
 
 export async function applyCommittedReadingPlan(
@@ -179,6 +181,7 @@ export async function applyCommittedReadingPlan(
     queryKey: queryKeys.readingPlans.list(),
     exact: true,
   })
+  await invalidateAfterQueueMovement(client)
 }
 
 /**

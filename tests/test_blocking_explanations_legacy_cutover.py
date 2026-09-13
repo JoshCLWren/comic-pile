@@ -104,7 +104,10 @@ async def test_blocking_explanations_use_continuity_when_legacy_switch_disabled(
         thread_id: [format_blocking_reason(dep) for dep in deps]
         for thread_id, deps in batched.items()
     } == {target_thread.id: [expected]}
-    assert all(str(source_thread.id) not in reason for reason in [expected])
+    assert expected == "Blocked by Continuity Source: #1"
+    assert "Continuity Source" in expected
+    # Copy uses the issue number, not a bare thread primary-key subject.
+    assert expected.endswith("#1")
 
     response = await auth_client.post(
         f"/api/v1/threads/{target_thread.id}:getBlockingInfo"
