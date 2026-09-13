@@ -406,6 +406,116 @@ async def test_build_manifest_report_marks_already_migrated_explicit(
 
 
 @pytest.mark.asyncio
+async def test_grouped_already_migrated_rejects_extra_convergence_edge(
+    async_db: AsyncSession,
+) -> None:
+    """Extra gates on a grouped plan must not still report already-migrated."""
+    from app.schemas.continuity_plan import ContinuityPlanNode
+    from app.services.continuity_plan_writer import replace_compiled_rules
+
+    user = await get_or_create_user_async(async_db)
+    rows = [
+        await _thread_issue(
+            async_db,
+            user_id=user.id,
+            title=title,
+            queue_position=i,
+            status=status,
+        )
+        for i, (title, status) in enumerate(
+            (("A", "unread"), ("B", "read"), ("C", "unread")),
+            start=1,
+        )
+    ]
+    issues = [row[1] for row in rows]
+    group = DependencyGroup(
+        user_id=user.id,
+        name="Extra Edge Family",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(group)
+    await async_db.flush()
+    for issue in issues:
+        async_db.add(DependencyGroupMembership(group_id=group.id, issue_id=issue.id))
+    reader_order = [
+        Dependency(
+            source_issue_id=issues[0].id,
+            target_issue_id=issues[2].id,
+            note="classified reader order A->C",
+            created_at=datetime.now(UTC),
+        ),
+        Dependency(
+            source_issue_id=issues[1].id,
+            target_issue_id=issues[2].id,
+            note="classified reader order B->C",
+            created_at=datetime.now(UTC),
+        ),
+    ]
+    async_db.add_all(reader_order)
+    await async_db.flush()
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+
+    spec = ExplicitReaderOrderSpec(
+        user_id=user.id,
+        dependency_group_ids=(group.id,),
+        expected_group_names=(group.name,),
+        plan_name="Extra Edge Family",
+        reader_order_dependency_ids=tuple(dependency.id for dependency in reader_order),
+    )
+    snapshot = await build_explicit_reader_order_dry_run(async_db, spec)
+    assert snapshot["ok"] is True, snapshot["errors"]
+    await apply_explicit_reader_order_migration(async_db, snapshot=snapshot, spec=spec)
+    await async_db.commit()
+
+    clean = await build_manifest_report(
+        async_db,
+        manifest="extra-edge-family",
+        source_manifests={},
+        explicit_manifests={"extra-edge-family": spec},
+    )
+    assert clean["status"] == "already-migrated"
+
+    plan = (
+        await async_db.execute(
+            select(ContinuityPlan).where(
+                ContinuityPlan.user_id == user.id,
+                ContinuityPlan.name == spec.plan_name,
+            )
+        )
+    ).scalar_one()
+    nodes = list(plan.nodes_json or [])
+    # Add an extra A→B convergence edge among the same classified nodes.
+    for index, node in enumerate(nodes):
+        if node.get("ref_id") == issues[1].id:
+            nodes[index] = {
+                **node,
+                "convergence_gate": [
+                    {"node_type": "issue", "node_id": f"issue-{issues[0].id}"}
+                ],
+            }
+            break
+    plan.nodes_json = nodes
+    await replace_compiled_rules(
+        async_db,
+        user_id=user.id,
+        plan=plan,
+        nodes=[ContinuityPlanNode.model_validate(node) for node in nodes],
+        ordering_mode="informational",
+    )
+    await async_db.commit()
+
+    drifted = await build_manifest_report(
+        async_db,
+        manifest="extra-edge-family",
+        source_manifests={},
+        explicit_manifests={"extra-edge-family": spec},
+    )
+    assert drifted["status"] != "already-migrated"
+    assert drifted.get("already_migrated") is not True
+
+
+@pytest.mark.asyncio
 async def test_build_manifest_report_marks_already_migrated_groupless_explicit(
     async_db: AsyncSession,
     auth_client: AsyncClient,

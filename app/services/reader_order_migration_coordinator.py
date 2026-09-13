@@ -484,7 +484,17 @@ async def _explicit_already_migrated(
     if stamped is not None:
         if stamped != expected:
             return False
-        if not expected_issues <= node_issue_ids or not expected_edges <= edges:
+        if not expected_issues <= node_issue_ids:
+            return False
+        if spec.dependency_group_ids:
+            # Grouped plans must match the stamped edge set exactly. A superset
+            # of classified edges would make Roll stricter than the Step 14
+            # contract while still looking self-consistent after recompile.
+            if edges != expected_edges:
+                return False
+        elif not expected_edges <= edges:
+            # Step 23B overlay onto a larger reviewed baseline may retain
+            # additional reviewed edges outside the explicit family contract.
             return False
     elif node_issue_ids != expected_issues or edges != expected_edges:
         return False

@@ -42,6 +42,18 @@ def _classification(
     return "unclassified"
 
 
+def _standalone_mirror_matches(dependency: Dependency, rule: ContinuityRule) -> bool:
+    """Return True when a ContinuityRule exactly mirrors one Dependency edge."""
+    return (
+        rule.legacy_dependency_id == dependency.id
+        and rule.source_type == "issue"
+        and rule.source_id == dependency.source_issue_id
+        and rule.target_type == "issue"
+        and rule.target_id == dependency.target_issue_id
+        and rule.satisfaction_type == "item_read"
+    )
+
+
 async def build_reader_order_cutover_audit(
     db: AsyncSession,
     *,
@@ -53,12 +65,12 @@ async def build_reader_order_cutover_audit(
     every remaining ``reading_plan_order`` row blocks release (including dormant
     edges that would reactivate if a reader marked an earlier issue unread),
     every ``needs_review`` / unclassified row is a hard stop, and every
-    surviving standalone prerequisite must have a continuity-rule mirror
-    regardless of current read state. Continuity coverage is measured from
-    compiled ``ContinuityRule`` rows only — active
-    ``DependencyGroupMembership.sequence_order`` blockers fail the gate rather
-    than counting as canonical coverage. Point-in-time Roll equality is reported
-    as an additional check, not as the definition of equivalence.
+    surviving standalone prerequisite must have a continuity-rule mirror with
+    identical source/target/`item_read` semantics regardless of current read
+    state. Continuity coverage is measured from compiled ``ContinuityRule`` rows
+    only — active ``DependencyGroupMembership.sequence_order`` blockers fail the
+    gate rather than counting as canonical coverage. Point-in-time Roll equality
+    is reported as an additional check, not as the definition of equivalence.
     """
     _invalidate_continuity_snapshot(user_id, db)
     index = _load_step14_index()
@@ -88,7 +100,9 @@ async def build_reader_order_cutover_audit(
     active: Counter[str] = Counter()
     active_ids: dict[str, list[int]] = {}
     remaining_ids: dict[str, list[int]] = {}
+    dependencies_by_id: dict[int, Dependency] = {}
     for dependency, source_status, next_unread_issue_id in rows:
+        dependencies_by_id[dependency.id] = dependency
         kind = _classification(
             dependency,
             explicit=explicit,
@@ -123,13 +137,27 @@ async def build_reader_order_cutover_audit(
         .scalars()
         .all()
     )
-    mirrored_ids = {
-        rule.legacy_dependency_id
-        for rule in linked_rules
-        if rule.legacy_dependency_id is not None
-    }
+    rules_by_legacy_id: dict[int, list[ContinuityRule]] = {}
+    for rule in linked_rules:
+        legacy_id = rule.legacy_dependency_id
+        if legacy_id is None:
+            continue
+        rules_by_legacy_id.setdefault(legacy_id, []).append(rule)
+
     remaining_standalone_ids = set(remaining_ids.get("standalone_prerequisite", []))
-    missing_standalone_mirrors = sorted(remaining_standalone_ids - mirrored_ids)
+    missing_standalone_mirrors: list[int] = []
+    mismatched_standalone_mirrors: list[int] = []
+    for dependency_id in sorted(remaining_standalone_ids):
+        dependency = dependencies_by_id[dependency_id]
+        linked = rules_by_legacy_id.get(dependency_id, [])
+        if not linked:
+            missing_standalone_mirrors.append(dependency_id)
+            continue
+        if not any(_standalone_mirror_matches(dependency, rule) for rule in linked):
+            mismatched_standalone_mirrors.append(dependency_id)
+    incomplete_standalone_mirrors = sorted(
+        set(missing_standalone_mirrors) | set(mismatched_standalone_mirrors)
+    )
     remaining_reader_order_ids = sorted(remaining_ids.get("reading_plan_order", []))
     remaining_needs_review_ids = sorted(remaining_ids.get("needs_review", []))
     remaining_unclassified_ids = sorted(remaining_ids.get("unclassified", []))
@@ -145,7 +173,7 @@ async def build_reader_order_cutover_audit(
         release_condition_met
         and not remaining_needs_review_ids
         and not remaining_unclassified_ids
-        and not missing_standalone_mirrors
+        and not incomplete_standalone_mirrors
         and not legacy_only
         and not sequence_order_blocked_ids
     )
@@ -164,9 +192,12 @@ async def build_reader_order_cutover_audit(
         "active_needs_review_dependency_ids": active_needs_review_ids,
         "active_unclassified_dependency_ids": active_unclassified_ids,
         "standalone_dependencies_missing_continuity_mirror": missing_standalone_mirrors,
-        # Compatibility alias used by older receipts/tests.
+        "standalone_dependencies_with_mismatched_continuity_mirror": (
+            mismatched_standalone_mirrors
+        ),
+        # Compatibility alias used by older receipts/tests: any incomplete mirror.
         "active_standalone_dependencies_missing_continuity_mirror": (
-            missing_standalone_mirrors
+            incomplete_standalone_mirrors
         ),
         "legacy_blocked_thread_ids": sorted(legacy_blocked),
         "continuity_rule_blocked_thread_ids": sorted(continuity_rule_blocked),

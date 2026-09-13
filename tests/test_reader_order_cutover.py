@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from sqlalchemy import delete, select
@@ -162,6 +163,66 @@ async def test_cutover_audit_requires_reader_order_migration_but_preserves_stand
     assert clean["active_standalone_prerequisite_dependency_ids"] == [standalone.id]
     assert clean["remaining_standalone_prerequisite_dependency_ids"] == [standalone.id]
     assert clean["legacy_only_blocked_thread_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_cutover_rejects_dormant_standalone_with_drifted_mirror(
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A linked rule with wrong source/target/item_read semantics fails cutover."""
+    user_id, _threads, issues, reader_order, standalone = await _two_dependency_families(
+        async_db
+    )
+    monkeypatch.setattr(reader_order_cutover, "_load_step14_index", lambda: {})
+    monkeypatch.setattr(
+        reader_order_cutover,
+        "_explicit_classifications",
+        lambda _index: (
+            {
+                reader_order.id: "reading_plan_order",
+                standalone.id: "standalone_prerequisite",
+            },
+            {},
+        ),
+    )
+    monkeypatch.setattr(
+        reader_order_cutover,
+        "_generated_reader_order_patterns",
+        lambda _index: (),
+    )
+
+    await async_db.execute(delete(Dependency).where(Dependency.id == reader_order.id))
+    # Dormant the standalone source so point-in-time Roll looks fine.
+    issues[2].status = "read"
+    issues[2].read_at = datetime.now(UTC)
+    drifted = await async_db.scalar(
+        select(ContinuityRule).where(
+            ContinuityRule.legacy_dependency_id == standalone.id
+        )
+    )
+    assert drifted is not None
+    # Keep the linkage ID but break the mirrored edge semantics.
+    drifted.source_id = issues[0].id
+    drifted.target_id = issues[1].id
+    drifted.satisfaction_type = "converged"
+    drifted.convergence_targets = [{"type": "issue", "id": issues[0].id}]
+    await async_db.commit()
+
+    audit = await reader_order_cutover.build_reader_order_cutover_audit(
+        async_db,
+        user_id=user_id,
+    )
+    assert audit["release_condition_met"] is True
+    assert audit["runtime_cutover_safe"] is False
+    assert audit["standalone_dependencies_missing_continuity_mirror"] == []
+    assert audit["standalone_dependencies_with_mismatched_continuity_mirror"] == [
+        standalone.id
+    ]
+    assert standalone.id in cast(
+        list[int],
+        audit["active_standalone_dependencies_missing_continuity_mirror"],
+    )
 
 
 @pytest.mark.asyncio
