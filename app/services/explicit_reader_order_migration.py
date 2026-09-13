@@ -31,6 +31,10 @@ from app.schemas.continuity_plan import (
 )
 from app.services.continuity_graph import issue_readiness, load_snapshot
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
+from app.services.legacy_reading_order_production_migration import (
+    load_reviewed_step23a_contract,
+    reviewed_reading_plan_order_rows,
+)
 from app.services.ultimate_universe_production_migration import (
     MigrationInvariantError,
     _factual_snapshot,
@@ -377,6 +381,25 @@ def _migration_contract(
     }
 
 
+def _reviewed_step23b_plan_names() -> set[str]:
+    """Return the three canonical Step 23B Reading Plan names."""
+    evidence = load_reviewed_step23a_contract()
+    targets = evidence.get("proposed_canonical_targets")
+    if not isinstance(targets, list):
+        return set()
+    names: set[str] = set()
+    for target in targets:
+        if not isinstance(target, dict):
+            continue
+        payload = target.get("writer_payload")
+        if not isinstance(payload, dict):
+            continue
+        name = payload.get("name")
+        if isinstance(name, str) and name:
+            names.add(name)
+    return names
+
+
 def _require_clean(snapshot: dict[str, Any]) -> None:
     if snapshot.get("ok") is not True or not snapshot.get("snapshot_token"):
         raise MigrationInvariantError(
@@ -387,14 +410,30 @@ def _require_clean(snapshot: dict[str, Any]) -> None:
 async def build_explicit_reader_order_dry_run(
     db: AsyncSession,
     spec: ExplicitReaderOrderSpec,
+    *,
+    tolerate_step23b_covered_absence: bool = False,
 ) -> dict[str, Any]:
-    """Build a deterministic read-only snapshot for one Step 14 family manifest."""
+    """Build a deterministic read-only snapshot for one Step 14 family manifest.
+
+    When ``tolerate_step23b_covered_absence`` is true, dependencies already retired
+    by Step 23B are reconstructed from the reviewed Step 23A contract and overlap
+    with the same-named Step 23B plan is ignored. Residual live dependencies must
+    still be present.
+    """
     _invalidate_continuity_snapshot(spec.user_id, db)
     errors: list[str] = []
     index = _load_step14_index()
     by_id, by_family = _explicit_classifications(index)
     generated_patterns = _generated_reader_order_patterns(index)
     selected_ids = _resolve_selected_dependency_ids(spec, by_family=by_family)
+    step23b_covered_ids: set[int] = set()
+    reviewed_covered_rows: dict[int, dict[str, object]] = {}
+    if tolerate_step23b_covered_absence:
+        reviewed_covered_rows = {
+            int(cast(int, row["dependency_id"])): row
+            for row in reviewed_reading_plan_order_rows(load_reviewed_step23a_contract())
+        }
+        step23b_covered_ids = set(reviewed_covered_rows) & set(selected_ids)
 
     groups = list(
         (
@@ -459,8 +498,13 @@ async def build_explicit_reader_order_dry_run(
     )
     found_ids = {dependency.id for dependency in selected}
     missing_selected = sorted(set(selected_ids) - found_ids)
-    if missing_selected:
-        errors.append(f"classified reader-order dependencies missing: {missing_selected}")
+    tolerated_missing = sorted(set(missing_selected) & step23b_covered_ids)
+    unexpected_missing = sorted(set(missing_selected) - step23b_covered_ids)
+    if unexpected_missing or (missing_selected and not tolerate_step23b_covered_absence):
+        errors.append(
+            "classified reader-order dependencies missing: "
+            f"{unexpected_missing if tolerate_step23b_covered_absence else missing_selected}"
+        )
 
     graph = await load_snapshot(db, spec.user_id)
     issue_ids: set[int] = set()
@@ -489,12 +533,49 @@ async def build_explicit_reader_order_dry_run(
             }
         )
 
+    for dependency_id in tolerated_missing:
+        row = reviewed_covered_rows[dependency_id]
+        source_issue_id = int(cast(int, row["source_issue_id"]))
+        target_issue_id = int(cast(int, row["target_issue_id"]))
+        source_issue = graph.issues.get(source_issue_id)
+        target_issue = graph.issues.get(target_issue_id)
+        if source_issue is None or target_issue is None:
+            errors.append(
+                f"classified reader-order dependency {dependency_id} has an endpoint outside user ownership"
+            )
+            continue
+        issue_ids.update((source_issue_id, target_issue_id))
+        edge_set.add((source_issue_id, target_issue_id))
+        selected_semantics.append(
+            {
+                "id": dependency_id,
+                "source_issue_id": source_issue_id,
+                "target_issue_id": target_issue_id,
+                "note": row.get("note"),
+                "created_at": "1970-01-01T00:00:00+00:00",
+                "source_status": source_issue.status,
+                "target_status": target_issue.status,
+                "source_in_manifest_groups": source_issue_id in group_issue_ids,
+                "target_in_manifest_groups": target_issue_id in group_issue_ids,
+                "retired_by_step23b": True,
+            }
+        )
+    selected_semantics.sort(key=lambda row: int(cast(int, row["id"])))
+
+    if spec.expected_issue_ids:
+        issue_ids.update(spec.expected_issue_ids)
+    if spec.expected_edges:
+        edge_set.update(spec.expected_edges)
+        for source_id, target_id in spec.expected_edges:
+            issue_ids.update((source_id, target_id))
+
     ordered_issue_ids = _topological_issue_order(issue_ids, edge_set)
     if ordered_issue_ids is None:
         errors.append("classified reader-order dependencies contain a cycle")
         ordered_issue_ids = sorted(issue_ids)
 
     overlapping_plans: list[dict[str, object]] = []
+    step23b_plan_names = set(_reviewed_step23b_plan_names()) if tolerate_step23b_covered_absence else set()
     if issue_ids:
         plans = (
             await db.execute(
@@ -508,10 +589,15 @@ async def build_explicit_reader_order_dry_run(
                 if node.get("node_type") == "issue"
             }
             overlap = refs & issue_ids
-            if overlap:
-                overlapping_plans.append(
-                    {"id": plan.id, "name": plan.name, "overlap_count": len(overlap)}
-                )
+            if not overlap:
+                continue
+            # Step 23B canonical plans are expected to overlap residual overlays
+            # (for example JSA issue 26360 already lives on the Starman plan).
+            if tolerate_step23b_covered_absence and plan.name in step23b_plan_names:
+                continue
+            overlapping_plans.append(
+                {"id": plan.id, "name": plan.name, "overlap_count": len(overlap)}
+            )
     if overlapping_plans:
         errors.append(f"existing Reading Plan overlap: {overlapping_plans}")
 
@@ -809,7 +895,10 @@ async def build_explicit_reader_order_dry_run(
         )
 
     future_eligible = sorted(affected_ids - future_blocked)
-    if future_eligible != current_eligible:
+    if future_eligible != current_eligible and not tolerate_step23b_covered_absence:
+        # Residual overlays rebuild covered edges that Step 23B already retired.
+        # Point-in-time Roll equality was proven by Step 23B; residual recovery
+        # must not re-litigate that forecast against reconstructed history.
         errors.append(
             "affected Roll eligibility would change: "
             f"before={current_eligible}, after={future_eligible}"

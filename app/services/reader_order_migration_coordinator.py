@@ -181,13 +181,10 @@ def reconcile_batch_manifest_reports(
     legacy_dependency_ids = manifest_reader_order_dependency_ids(legacy)
     legacy_targets = _legacy_target_issue_ids(legacy)
     # After Step 23B applies, live dependency_overlap no longer contains the
-    # deleted reading_plan_order rows. Recover the reviewed contract so residual
-    # explicit overlays can still be scheduled on a resume.
-    if legacy_status == "already-migrated" and (
-        not legacy_dependency_ids or not legacy_targets
-    ):
-        if not legacy_dependency_ids:
-            legacy_dependency_ids = _reviewed_step23b_dependency_ids()
+    # deleted reading_plan_order rows (and may contain unrelated residual rows).
+    # Always recover the reviewed retire set for already-migrated resumes.
+    if legacy_status == "already-migrated":
+        legacy_dependency_ids = _reviewed_step23b_dependency_ids()
         if not legacy_targets:
             legacy_targets = _reviewed_step23b_target_issue_ids()
     if not legacy_dependency_ids or not legacy_targets:
@@ -922,6 +919,37 @@ def _normalize_legacy_report(report: dict[str, Any]) -> dict[str, Any]:
     return report
 
 
+async def _step23b_retire_set_applied(db: AsyncSession) -> bool:
+    """Return True when the nine Step 23B reading_plan_order deps are gone."""
+    retired_ids = sorted(_reviewed_step23b_dependency_ids())
+    remaining = await db.scalar(
+        select(func.count()).select_from(Dependency).where(Dependency.id.in_(retired_ids))
+    )
+    if remaining != 0:
+        return False
+    targets = _reviewed_step23b_target_issue_ids()
+    if len(targets) != 3:
+        return False
+    user_id = int(_load_step23a_module().USER_ID)
+    for plan_name in targets:
+        plans = list(
+            (
+                await db.execute(
+                    select(ContinuityPlan).where(
+                        ContinuityPlan.user_id == user_id,
+                        ContinuityPlan.name == plan_name,
+                        ContinuityPlan.ordering_mode == "informational",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if len(plans) != 1:
+            return False
+    return True
+
+
 async def build_manifest_report(
     db: AsyncSession,
     *,
@@ -941,6 +969,25 @@ async def build_manifest_report(
         spec = explicit_manifests[manifest]
         report = await build_explicit_reader_order_dry_run(db, spec)
         already_migrated = await _explicit_already_migrated(db, spec)
+        if (
+            not already_migrated
+            and report.get("ok") is not True
+            and await _step23b_retire_set_applied(db)
+        ):
+            # Step 23B already retired the overlapping IDs. Rebuild a residual
+            # overlay snapshot that keeps residual live deps and reconstructs
+            # covered rows from the reviewed contract.
+            recovered = await build_explicit_reader_order_dry_run(
+                db,
+                spec,
+                tolerate_step23b_covered_absence=True,
+            )
+            if recovered.get("ok") is True:
+                report = {
+                    **recovered,
+                    "recovered_after_step23b": True,
+                }
+                already_migrated = await _explicit_already_migrated(db, spec)
     if already_migrated:
         report = {**report, "already_migrated": True, "ok": True}
     return {"status": migration_report_status(report), **report}

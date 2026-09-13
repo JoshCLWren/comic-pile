@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.continuity_plan import ContinuityPlan
@@ -34,12 +34,17 @@ from app.services.reader_order_migration_coordinator import (
     reconcile_batch_manifest_reports,
 )
 from app.services.legacy_reading_order_production_migration import (
+    apply_legacy_reading_order_migration,
+    build_legacy_reading_order_dry_run,
     load_reviewed_step23a_contract,
 )
 from app.services.ultimate_universe_production_migration import MigrationInvariantError
 from comic_pile.dependencies import refresh_user_blocked_status
 from scripts import reader_order_migration as cli
 from tests.conftest import get_or_create_user_async
+from tests.test_legacy_reading_order_production_migration import (
+    seed_step23a_shape,
+)
 
 
 async def _thread_issue(
@@ -213,10 +218,31 @@ def test_reconcile_batch_uses_exact_real_overlap_sets() -> None:
         )
         == set()
     )
+    # After Step 23B, raw explicit dry-runs are blocked (missing covered IDs).
+    # Reconcile must not promote those; build_manifest_report recovers them first.
+    blocked_resume = {
+        key: dict(value) for key, value in resumed_reports.items()
+    }
+    for manifest in ("doctor-strange-epic-vol-10", "starman-compendiums", "starman-jsa-bridge"):
+        covered = set(reconcile_batch_manifest_reports(_real_overlap_reports())[manifest][
+            "covered_dependency_ids"
+        ])
+        blocked_resume[manifest]["status"] = "blocked-by-identity-or-source"
+        blocked_resume[manifest]["ok"] = False
+        blocked_resume[manifest]["errors"] = [
+            f"classified reader-order dependencies missing: {sorted(covered)}"
+        ]
+    blocked_reconciled = reconcile_batch_manifest_reports(blocked_resume)
+    assert "apply_mode" not in blocked_reconciled["starman-compendiums"]
+    assert "apply_mode" not in blocked_reconciled["starman-jsa-bridge"]
+
+    # Recovered residual-safe reports (status safe again) still schedule overlays.
     resumed = reconcile_batch_manifest_reports(resumed_reports)["starman-compendiums"]
     assert resumed["apply_mode"] == "existing-plan-overlay"
     assert resumed["covered_dependency_ids"] == [1832, 1846, 1847]
     assert resumed["remaining_dependency_ids"] == [32, 955, 1355, 1551, 1552]
+    resumed_jsa = reconcile_batch_manifest_reports(resumed_reports)["starman-jsa-bridge"]
+    assert resumed_jsa["overlay_added_issue_ids"] == [26360]
 
 
 @pytest.mark.asyncio
@@ -1161,3 +1187,112 @@ def test_stage_durable_json_writes_pending_before_publish(tmp_path: Path) -> Non
     assert payload == {"ok": True, "applied": []}
     pending.replace(target)
     assert target.exists()
+
+
+@pytest.mark.asyncio
+async def test_post_step23b_rebuild_schedules_residual_starman_overlays(
+    async_db: AsyncSession,
+) -> None:
+    """Seed → apply Step 23B → rebuild reports schedules residual Starman overlays."""
+    await seed_step23a_shape(async_db)
+    pre_apply = await build_legacy_reading_order_dry_run(async_db)
+    assert pre_apply["ok"] is True, pre_apply["errors"]
+    token = str(pre_apply["snapshot_token"])
+    await apply_legacy_reading_order_migration(
+        async_db,
+        accepted_snapshot_token=token,
+        require_reviewed_token=False,
+    )
+    await async_db.commit()
+
+    evidence = load_reviewed_step23a_contract()
+    legacy_orders = evidence.get("legacy_reading_orders")
+    if not isinstance(legacy_orders, list):
+        raise AssertionError("Step 23A evidence is missing legacy_reading_orders")
+    starman_order = next(
+        order
+        for order in legacy_orders
+        if isinstance(order, dict) and order.get("title") == "Starman Compendiums 1-2"
+    )
+    if not isinstance(starman_order, dict):
+        raise AssertionError("Starman legacy reading order missing from Step 23A evidence")
+    starman_items = starman_order.get("items")
+    if not isinstance(starman_items, list):
+        raise AssertionError("Starman legacy reading order has no items")
+    starman_issue_ids = [
+        int(item["resolved_canonical_issue_id"])
+        for item in starman_items
+        if isinstance(item, dict) and isinstance(item.get("resolved_canonical_issue_id"), int)
+    ]
+    residual_pairs = [
+        (starman_issue_ids[0], starman_issue_ids[1]),
+        (starman_issue_ids[1], starman_issue_ids[2]),
+        (starman_issue_ids[3], starman_issue_ids[4]),
+        (starman_issue_ids[4], starman_issue_ids[5]),
+        (starman_issue_ids[6], starman_issue_ids[7]),
+    ]
+    residual_ids = (32, 955, 1355, 1551, 1552)
+    for dependency_id, (source_id, target_id) in zip(residual_ids, residual_pairs, strict=True):
+        async_db.add(
+            Dependency(
+                id=dependency_id,
+                source_issue_id=source_id,
+                target_issue_id=target_id,
+                note=f"starman residual {dependency_id}",
+                created_at=datetime.now(UTC),
+            )
+        )
+    await async_db.flush()
+    await async_db.execute(
+        text(
+            "SELECT setval(pg_get_serial_sequence('dependencies', 'id'), "
+            "COALESCE((SELECT MAX(id) FROM dependencies), 1), true)"
+        )
+    )
+    await refresh_user_blocked_status(1, async_db)
+    await async_db.commit()
+
+    reports: dict[str, dict[str, object]] = {}
+    for manifest in (
+        LEGACY_READING_ORDERS_MANIFEST,
+        "doctor-strange-epic-vol-10",
+        "starman-compendiums",
+        "starman-jsa-bridge",
+    ):
+        reports[manifest] = await build_manifest_report(
+            async_db,
+            manifest=manifest,
+            source_manifests={},
+            explicit_manifests={
+                key: PRODUCTION_EXPLICIT_READER_ORDER_SPECS[key]
+                for key in (
+                    "doctor-strange-epic-vol-10",
+                    "starman-compendiums",
+                    "starman-jsa-bridge",
+                )
+            },
+        )
+
+    assert reports[LEGACY_READING_ORDERS_MANIFEST]["status"] == "already-migrated"
+    # Raw explicit dry-runs would be blocked; coordinator recovery must make them safe.
+    assert reports["starman-compendiums"]["status"] == "safe-to-migrate"
+    assert reports["starman-compendiums"].get("recovered_after_step23b") is True
+    assert reports["starman-jsa-bridge"]["status"] == "safe-to-migrate"
+    assert reports["starman-jsa-bridge"].get("recovered_after_step23b") is True
+
+    reconciled = reconcile_batch_manifest_reports(reports)
+    starman = reconciled["starman-compendiums"]
+    assert starman["apply_mode"] == "existing-plan-overlay"
+    assert starman["covered_dependency_ids"] == [1832, 1846, 1847]
+    assert starman["remaining_dependency_ids"] == [32, 955, 1355, 1551, 1552]
+
+    jsa = reconciled["starman-jsa-bridge"]
+    assert jsa["apply_mode"] == "existing-plan-overlay"
+    assert jsa["covered_dependency_ids"] == [1833]
+    assert jsa["remaining_dependency_ids"] == []
+    assert jsa["overlay_added_issue_ids"] == [26360]
+
+    doctor = reconciled["doctor-strange-epic-vol-10"]
+    assert doctor["apply_mode"] == "existing-plan-overlay"
+    assert doctor["covered_dependency_ids"] == [1806, 1807, 1808, 1810, 1811]
+    assert doctor["remaining_dependency_ids"] == []

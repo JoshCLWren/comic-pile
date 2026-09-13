@@ -295,9 +295,13 @@ async def _live_batch_snapshot(db: AsyncSession, manifest: str) -> dict[str, Any
             db,
             SOURCE_MANIFESTS[manifest],
         )
-    return await build_explicit_reader_order_dry_run(
+    # Use the coordinator report path so post-Step-23B residual recovery matches
+    # the sealed batch dry-run snapshots.
+    return await build_manifest_report(
         db,
-        EXPLICIT_MANIFESTS[manifest],
+        manifest=manifest,
+        source_manifests=SOURCE_MANIFESTS,
+        explicit_manifests=EXPLICIT_MANIFESTS,
     )
 
 
