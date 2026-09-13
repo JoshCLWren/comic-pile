@@ -1,7 +1,7 @@
 import ReadingPlanAddMaterialImpl from './ReadingPlanAddMaterialImpl'
 import type { CBLAdoptionCommitResult } from '../services/api-cbl-sources'
 
-interface ReadingPlanAddMaterialProps {
+export interface ReadingPlanAddMaterialProps {
   planId: number
   planName: string
   defaultOpen?: boolean

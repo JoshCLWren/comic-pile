@@ -2,35 +2,25 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
-import { dependencyGroupsApi } from '../services/api-dependency-groups'
 
-vi.mock('../services/api-dependency-groups', () => ({
-  dependencyGroupsApi: {
-    list: vi.fn(),
-    get: vi.fn(),
-    create: vi.fn(),
-    rename: vi.fn(),
-    delete: vi.fn(),
-    addMember: vi.fn(),
-    addIssueRange: vi.fn(),
-    removeMember: vi.fn(),
-  },
-}))
+const groupsApi = {
+  list: vi.fn(),
+  get: vi.fn(),
+  create: vi.fn(),
+  rename: vi.fn(),
+  delete: vi.fn(),
+  addMember: vi.fn(),
+  addIssueRange: vi.fn(),
+  removeMember: vi.fn(),
+}
 
-vi.mock('../services/api', () => ({
-  threadsApi: {
-    list: vi.fn(),
-    get: vi.fn(),
-  },
-}))
+const threadsApi = {
+  list: vi.fn(),
+}
 
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    list: vi.fn(),
-  },
-}))
-
-const api = vi.mocked(dependencyGroupsApi)
+const issuesApi = {
+  list: vi.fn(),
+}
 
 const annihilation = {
   id: 7,
@@ -52,14 +42,16 @@ const secretWars = {
 function renderPage(entry: string) {
   return render(
     <MemoryRouter initialEntries={[entry]}>
-      <CrossoversPage />
+      <CrossoversPage dependencyGroupsApi={groupsApi} threadsApi={threadsApi} issuesApi={issuesApi} />
     </MemoryRouter>,
   )
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  api.list.mockResolvedValue([annihilation, secretWars])
+  groupsApi.list.mockResolvedValue([annihilation, secretWars])
+  threadsApi.list.mockResolvedValue({ threads: [], next_page_token: null })
+  issuesApi.list.mockResolvedValue({ issues: [], total_count: 0, page_size: 20, next_page_token: null })
 })
 
 describe('CrossoversPage deep links (issue #1877)', () => {

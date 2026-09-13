@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useRef, useState, type ComponentType } from 'react'
 import axios from 'axios'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
@@ -11,7 +11,7 @@ import { issuesApi } from '../services/api-issues'
 import type { IssueListParams } from '../services/api-issues'
 import { threadsApi } from '../services/api'
 import PlanProjectionDialog from '../components/PlanProjectionDialog'
-import ReadingPlanAddMaterial from '../components/ReadingPlanAddMaterial'
+import ReadingPlanAddMaterial, { type ReadingPlanAddMaterialProps } from '../components/ReadingPlanAddMaterial'
 import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
 import { isObject, isString } from '../utils/runtimeChecks'
@@ -174,7 +174,14 @@ function laneNodeCount(nodes: PlannerNode[], laneId: string): number {
   return nodes.filter((node) => node.lane_id === laneId).length
 }
 
-export default function ContinuityPlannerPage() {
+interface ContinuityPlannerPageProps {
+  /** Injectable component used to render the "Add from CBL" material source; defaults to the production {@link ReadingPlanAddMaterial}. */
+  renderAddMaterial?: ComponentType<ReadingPlanAddMaterialProps>
+}
+
+export default function ContinuityPlannerPage({
+  renderAddMaterial: AddMaterialComponent = ReadingPlanAddMaterial,
+}: ContinuityPlannerPageProps = {}) {
   const { id } = useParams()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -626,7 +633,7 @@ export default function ContinuityPlannerPage() {
       </fieldset>
 
       {planId ? (
-        <ReadingPlanAddMaterial
+        <AddMaterialComponent
           planId={planId}
           planName={savedName || name}
           defaultOpen={addFromCblRequested}

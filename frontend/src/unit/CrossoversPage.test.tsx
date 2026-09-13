@@ -2,35 +2,30 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
-import { dependencyGroupsApi } from '../services/api-dependency-groups'
-import { issuesApi } from '../services/api-issues'
 
-vi.mock('../services/api-dependency-groups', () => ({
-  dependencyGroupsApi: {
-    list: vi.fn(),
-    get: vi.fn(),
-    create: vi.fn(),
-    rename: vi.fn(),
-    delete: vi.fn(),
-    addMember: vi.fn(),
-    addIssueRange: vi.fn(),
-    removeMember: vi.fn(),
-  },
-}))
+const groupsApi = {
+  list: vi.fn(),
+  get: vi.fn(),
+  create: vi.fn(),
+  rename: vi.fn(),
+  delete: vi.fn(),
+  addMember: vi.fn(),
+  addIssueRange: vi.fn(),
+  removeMember: vi.fn(),
+}
 
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    list: vi.fn(),
-  },
-}))
+const threadsApi = {
+  list: vi.fn(),
+}
 
-const api = vi.mocked(dependencyGroupsApi)
-const issueApi = vi.mocked(issuesApi)
+const issuesApi = {
+  list: vi.fn(),
+}
 
 function renderPage() {
   return render(
     <MemoryRouter>
-      <CrossoversPage />
+      <CrossoversPage dependencyGroupsApi={groupsApi} threadsApi={threadsApi} issuesApi={issuesApi} />
     </MemoryRouter>,
   )
 }
@@ -47,18 +42,19 @@ const annihilation = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  api.list.mockResolvedValue([])
-  api.get.mockResolvedValue({ id: 7, name: 'Annihilation', created_at: '2026-08-06T00:00:00Z', memberships: [] })
-  api.addMember.mockResolvedValue({ id: 99, thread_id: null, issue_id: null })
-  api.addIssueRange.mockResolvedValue({ thread_id: 1, start_position: 1, end_position: 5, added_issue_ids: [], already_present_issue_ids: [] })
-  issueApi.list.mockResolvedValue({ issues: [], total_count: 0, page_size: 20, next_page_token: null })
+  groupsApi.list.mockResolvedValue([])
+  groupsApi.get.mockResolvedValue({ id: 7, name: 'Annihilation', created_at: '2026-08-06T00:00:00Z', memberships: [] })
+  groupsApi.addMember.mockResolvedValue({ id: 99, thread_id: null, issue_id: null })
+  groupsApi.addIssueRange.mockResolvedValue({ thread_id: 1, start_position: 1, end_position: 5, added_issue_ids: [], already_present_issue_ids: [] })
+  threadsApi.list.mockResolvedValue({ threads: [], next_page_token: null })
+  issuesApi.list.mockResolvedValue({ issues: [], total_count: 0, page_size: 20, next_page_token: null })
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
 describe('CrossoversPage', () => {
   it('shows loading and then the empty state', async () => {
     let resolveList: ((groups: []) => void) | undefined
-    api.list.mockImplementation(() => new Promise((resolve) => { resolveList = resolve }))
+    groupsApi.list.mockImplementation(() => new Promise((resolve) => { resolveList = resolve }))
 
     renderPage()
     expect(screen.getByRole('status')).toHaveTextContent('Loading crossovers')
@@ -69,8 +65,8 @@ describe('CrossoversPage', () => {
 
   it('blocks creation until the current list request settles', async () => {
     let resolveList: ((groups: []) => void) | undefined
-    api.list.mockImplementation(() => new Promise((resolve) => { resolveList = resolve }))
-    api.create.mockResolvedValue(annihilation)
+    groupsApi.list.mockImplementation(() => new Promise((resolve) => { resolveList = resolve }))
+    groupsApi.create.mockResolvedValue(annihilation)
 
     renderPage()
     const nameInput = screen.getByLabelText('New crossover')
@@ -86,11 +82,11 @@ describe('CrossoversPage', () => {
     fireEvent.change(nameInput, { target: { value: 'Annihilation' } })
     fireEvent.click(createButton)
     expect(await screen.findByText('Annihilation')).toBeInTheDocument()
-    expect(api.create).toHaveBeenCalledWith('Annihilation')
+    expect(groupsApi.create).toHaveBeenCalledWith('Annihilation')
   })
 
   it('creates a trimmed crossover and displays it', async () => {
-    api.create.mockResolvedValue(annihilation)
+    groupsApi.create.mockResolvedValue(annihilation)
     renderPage()
     await screen.findByText(/No crossovers yet/)
 
@@ -98,14 +94,14 @@ describe('CrossoversPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create crossover' }))
 
     expect(await screen.findByText('Annihilation')).toBeInTheDocument()
-    expect(api.create).toHaveBeenCalledWith('Annihilation')
+    expect(groupsApi.create).toHaveBeenCalledWith('Annihilation')
     expect(screen.getByText('2 members')).toBeInTheDocument()
   })
 
   it('renames and deletes an existing crossover', async () => {
-    api.list.mockResolvedValue([annihilation])
-    api.rename.mockResolvedValue({ ...annihilation, name: 'Annihilation Conquest' })
-    api.delete.mockResolvedValue()
+    groupsApi.list.mockResolvedValue([annihilation])
+    groupsApi.rename.mockResolvedValue({ ...annihilation, name: 'Annihilation Conquest' })
+    groupsApi.delete.mockResolvedValue()
     renderPage()
 
     await screen.findByText('Annihilation')
@@ -114,19 +110,19 @@ describe('CrossoversPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByText('Annihilation Conquest')).toBeInTheDocument()
-    expect(api.rename).toHaveBeenCalledWith(7, 'Annihilation Conquest')
+    expect(groupsApi.rename).toHaveBeenCalledWith(7, 'Annihilation Conquest')
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(screen.queryByText('Annihilation Conquest')).not.toBeInTheDocument())
     expect(window.confirm).toHaveBeenCalled()
-    expect(api.delete).toHaveBeenCalledWith(7)
+    expect(groupsApi.delete).toHaveBeenCalledWith(7)
   })
 
   it('blocks competing mutations while a rename is pending', async () => {
     const secretWars = { ...annihilation, id: 8, name: 'Secret Wars' }
     let resolveRename: ((group: typeof annihilation) => void) | undefined
-    api.list.mockResolvedValue([annihilation, secretWars])
-    api.rename.mockImplementation(() => new Promise((resolve) => { resolveRename = resolve }))
+    groupsApi.list.mockResolvedValue([annihilation, secretWars])
+    groupsApi.rename.mockImplementation(() => new Promise((resolve) => { resolveRename = resolve }))
     renderPage()
 
     await screen.findByText('Annihilation')
@@ -146,7 +142,7 @@ describe('CrossoversPage', () => {
   })
 
   it('opens crossover detail with member count', async () => {
-    api.list.mockResolvedValue([annihilation])
+    groupsApi.list.mockResolvedValue([annihilation])
     renderPage()
 
     const groupButton = await screen.findByRole('button', { name: /Annihilation.*2 members/ })
@@ -158,7 +154,7 @@ describe('CrossoversPage', () => {
   })
 
   it('shows singular and empty membership states and collapses details', async () => {
-    api.list.mockResolvedValue([
+    groupsApi.list.mockResolvedValue([
       { ...annihilation, id: 8, name: 'Secret Wars', memberships: [{ id: 3, issue_id: 12, thread_id: null, series_title: 'Mighty Avengers', issue_number: '12' }] },
       { ...annihilation, id: 9, name: 'House of M', memberships: [] },
     ])
@@ -175,8 +171,8 @@ describe('CrossoversPage', () => {
   })
 
   it('validates rename, cancels editing, and reports rename failures', async () => {
-    api.list.mockResolvedValue([annihilation])
-    api.rename.mockRejectedValue(new Error('Rename unavailable'))
+    groupsApi.list.mockResolvedValue([annihilation])
+    groupsApi.rename.mockRejectedValue(new Error('Rename unavailable'))
     renderPage()
 
     await screen.findByText('Annihilation')
@@ -184,7 +180,7 @@ describe('CrossoversPage', () => {
     fireEvent.change(screen.getByLabelText('Rename Annihilation'), { target: { value: '   ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(screen.getByRole('alert')).toHaveTextContent('Enter a crossover name.')
-    expect(api.rename).not.toHaveBeenCalled()
+    expect(groupsApi.rename).not.toHaveBeenCalled()
 
     fireEvent.change(screen.getByLabelText('Rename Annihilation'), { target: { value: 'Annihilation Wave' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -195,14 +191,14 @@ describe('CrossoversPage', () => {
   })
 
   it('keeps a crossover when deletion is cancelled and reports delete failures', async () => {
-    api.list.mockResolvedValue([annihilation])
+    groupsApi.list.mockResolvedValue([annihilation])
     vi.mocked(window.confirm).mockReturnValueOnce(false).mockReturnValueOnce(true)
-    api.delete.mockRejectedValue(new Error('Delete unavailable'))
+    groupsApi.delete.mockRejectedValue(new Error('Delete unavailable'))
     renderPage()
 
     await screen.findByText('Annihilation')
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
-    expect(api.delete).not.toHaveBeenCalled()
+    expect(groupsApi.delete).not.toHaveBeenCalled()
     expect(screen.getByText('Annihilation')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
@@ -211,7 +207,7 @@ describe('CrossoversPage', () => {
   })
 
   it('presents validation and server failures clearly', async () => {
-    api.create.mockRejectedValue(new Error('Duplicate crossover name'))
+    groupsApi.create.mockRejectedValue(new Error('Duplicate crossover name'))
     renderPage()
     await screen.findByText(/No crossovers yet/)
 
@@ -224,7 +220,7 @@ describe('CrossoversPage', () => {
   })
 
   it('uses API detail messages and safe fallbacks for non-Error failures', async () => {
-    api.list
+    groupsApi.list
       .mockRejectedValueOnce({ isAxiosError: true, response: { data: { detail: 'Crossover service unavailable' } } })
       .mockRejectedValueOnce({ isAxiosError: true, response: { data: { detail: '   ' } } })
       .mockRejectedValueOnce('offline')
@@ -240,13 +236,13 @@ describe('CrossoversPage', () => {
   })
 
   it('allows a failed initial load to be retried', async () => {
-    api.list.mockRejectedValueOnce(new Error('Network unavailable')).mockResolvedValueOnce([annihilation])
+    groupsApi.list.mockRejectedValueOnce(new Error('Network unavailable')).mockResolvedValueOnce([annihilation])
     renderPage()
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Network unavailable')
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
 
     expect(await screen.findByText('Annihilation')).toBeInTheDocument()
-    expect(api.list).toHaveBeenCalledTimes(2)
+    expect(groupsApi.list).toHaveBeenCalledTimes(2)
   })
 })
