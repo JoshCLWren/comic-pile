@@ -6,12 +6,47 @@ import ReadingOrderTimeline from './ReadingOrderTimeline'
 import DependencyCrossoverControls from './DependencyCrossoverControls'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
-import type { IssueListParams } from '../services/api-issues'
-import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse } from '../types'
+import type { IssueListParams, IssueListResponse } from '../services/api-issues'
+import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse, ThreadListResponse } from '../types'
 import { getApiErrorDetail } from '../utils/apiError'
 import { useToast } from '../contexts/useToast'
 
-async function fetchAllUnreadIssues(threadId: number): Promise<Issue[]> {
+export interface DependencyBuilderDependenciesApi {
+  listThreadDependencies: (threadId: number) => Promise<ThreadDependenciesResponse>
+  listBlockedThreadIds: () => Promise<number[]>
+  createDependency: (payload: {
+    sourceType?: 'thread' | 'issue'
+    sourceId: number
+    targetType?: 'thread' | 'issue'
+    targetId: number
+  }) => Promise<Dependency>
+  deleteDependency: (dependencyId: number) => Promise<void>
+  updateDependency: (dependencyId: number, note: string | null) => Promise<Dependency>
+}
+
+export interface DependencyBuilderThreadsApi {
+  list: (
+    params?: { search?: string },
+    pageToken?: string | null,
+  ) => Promise<ThreadListResponse>
+}
+
+export interface DependencyBuilderIssuesApi {
+  list: (
+    threadId: number,
+    params?: IssueListParams,
+  ) => Promise<IssueListResponse>
+  migrateThread: (
+    threadId: number,
+    lastIssueRead: number,
+    totalIssues: number,
+  ) => Promise<Thread>
+}
+
+async function fetchAllUnreadIssues(
+  issuesService: DependencyBuilderIssuesApi,
+  threadId: number,
+): Promise<Issue[]> {
   const allIssues: Issue[] = []
   const seenPageTokens = new Set<string>()
   let nextPageToken: string | null = null
@@ -24,7 +59,7 @@ async function fetchAllUnreadIssues(threadId: number): Promise<Issue[]> {
     if (nextPageToken) {
       params.page_token = nextPageToken
     }
-    const data = await issuesApi.list(threadId, params)
+    const data = await issuesService.list(threadId, params)
     allIssues.push(...data.issues)
 
     if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
@@ -53,9 +88,23 @@ interface DependencyBuilderProps {
   isOpen: boolean
   onClose: () => void
   onChanged?: () => void
+  /** Injectable dependencies API; defaults to the production {@link dependenciesApi}. */
+  dependenciesApi?: DependencyBuilderDependenciesApi
+  /** Injectable threads API; defaults to the production {@link threadsApi}. */
+  threadsApi?: DependencyBuilderThreadsApi
+  /** Injectable issues API; defaults to the production {@link issuesApi}. */
+  issuesApi?: DependencyBuilderIssuesApi
 }
 
-export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }: DependencyBuilderProps) {
+export default function DependencyBuilder({
+  thread,
+  isOpen,
+  onClose,
+  onChanged,
+  dependenciesApi: dependenciesService = dependenciesApi,
+  threadsApi: threadsService = threadsApi,
+  issuesApi: issuesService = issuesApi,
+}: DependencyBuilderProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Thread[]>([])
   const [selectedThreadId, setSelectedThreadId] = useState<number | null>(null)

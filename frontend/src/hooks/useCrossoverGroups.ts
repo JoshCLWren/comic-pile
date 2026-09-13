@@ -23,10 +23,17 @@ function chunkThreadIds(threadIds: number[]): number[][] {
   return chunks
 }
 
-async function fetchCrossoverGroups(threadIds: number[]): Promise<Record<number, DependencyGroupSummary[]>> {
+export interface CrossoverGroupsApi {
+  listForThreads: (threadIds: number[]) => Promise<Record<number, DependencyGroupSummary[]>>
+}
+
+async function fetchCrossoverGroups(
+  api: CrossoverGroupsApi,
+  threadIds: number[],
+): Promise<Record<number, DependencyGroupSummary[]>> {
   const chunks = chunkThreadIds(threadIds)
   const responses = await Promise.all(
-    chunks.map((threadIdChunk) => dependencyGroupsApi.listForThreads(threadIdChunk)),
+    chunks.map((threadIdChunk) => api.listForThreads(threadIdChunk)),
   )
   // SAFETY: Object.assign over the grouped responses produces the thread-id keyed map contract.
   const merged = Object.assign({}, ...responses) as Record<number, DependencyGroupSummary[]>
@@ -38,7 +45,10 @@ async function fetchCrossoverGroups(threadIds: number[]): Promise<Record<number,
   return result
 }
 
-export function useCrossoverGroups(threadIds: number[]): CrossoverGroupsState {
+export function useCrossoverGroups(
+  threadIds: number[],
+  api: CrossoverGroupsApi = dependencyGroupsApi,
+): CrossoverGroupsState {
   const requestedThreadIds = useMemo(
     () => [...new Set(threadIds)].sort((a, b) => a - b),
     [threadIds],
@@ -48,7 +58,7 @@ export function useCrossoverGroups(threadIds: number[]): CrossoverGroupsState {
     queryKey: requestedThreadIds.length > 0 ? queryKeys.crossover.groups(requestedThreadIds) : [],
     queryFn: async () => {
       try {
-        return await fetchCrossoverGroups(requestedThreadIds)
+        return await fetchCrossoverGroups(api, requestedThreadIds)
       } catch (err) {
         throw err instanceof Error ? err : new Error('Failed to load crossovers')
       }

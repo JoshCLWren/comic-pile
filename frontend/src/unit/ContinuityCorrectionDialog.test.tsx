@@ -3,30 +3,22 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ContinuityCorrectionDialog, {
   type ContinuityCorrectionDialogProps,
+  type ContinuityCorrectionGroupsApi,
+  type ContinuityCorrectionThreadsApi,
 } from '../components/ContinuityCorrectionDialog'
-import { dependencyGroupsApi } from '../services/api-dependency-groups'
-import { threadsApi } from '../services/api'
 import type { ConnectedThreadInfo } from '../types'
 
-vi.mock('../services/api-dependency-groups', () => ({
-  dependencyGroupsApi: {
-    list: vi.fn(),
-    create: vi.fn(),
-    addMember: vi.fn(),
-  },
-}))
-
-vi.mock('../services/api', () => ({
-  threadsApi: {
-    get: vi.fn(),
-    list: vi.fn(),
-  },
-}))
-
-const listGroups = vi.mocked(dependencyGroupsApi.list)
-const createGroup = vi.mocked(dependencyGroupsApi.create)
-const addMember = vi.mocked(dependencyGroupsApi.addMember)
-const getThread = vi.mocked(threadsApi.get)
+// Injectable fakes passed through the real component props — no module mocking of the API.
+const listGroups = vi.fn<ContinuityCorrectionGroupsApi['list']>()
+const createGroup = vi.fn<ContinuityCorrectionGroupsApi['create']>()
+const addMember = vi.fn<ContinuityCorrectionGroupsApi['addMember']>()
+const getThread = vi.fn<ContinuityCorrectionThreadsApi['get']>()
+const groupsApi: ContinuityCorrectionGroupsApi = {
+  list: listGroups,
+  create: createGroup,
+  addMember,
+}
+const threadsApi: ContinuityCorrectionThreadsApi = { get: getThread }
 
 const existingGroup = {
   id: 7,
@@ -43,7 +35,6 @@ const connectedThread = (overrides: Partial<ConnectedThreadInfo>): ConnectedThre
   ...overrides,
 })
 
-// SAFETY: test prop supplies only the fields the component reads
 const baseProps: ContinuityCorrectionDialogProps = {
   isOpen: true,
   threadId: 1,
@@ -53,6 +44,8 @@ const baseProps: ContinuityCorrectionDialogProps = {
   connectedThreads: [] as ConnectedThreadInfo[],
   onClose: vi.fn(),
   onSuccess: vi.fn(),
+  groupsApi,
+  threadsApi,
 }
 
 const renderDialog = (props: Partial<ContinuityCorrectionDialogProps> = {}) => {

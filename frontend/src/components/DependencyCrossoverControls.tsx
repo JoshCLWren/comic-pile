@@ -2,14 +2,27 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   dependencyGroupsApi,
   type DependencyGroup,
+  type DependencyGroupMember,
+  type DependencyGroupMemberTarget,
 } from '../services/api-dependency-groups'
 import { getApiErrorDetail } from '../utils/apiError'
+
+export interface DependencyCrossoverGroupsApi {
+  list: () => Promise<DependencyGroup[]>
+  create: (name: string) => Promise<DependencyGroup>
+  addMember: (
+    groupId: number,
+    target: DependencyGroupMemberTarget,
+  ) => Promise<DependencyGroupMember>
+}
 
 interface DependencyCrossoverControlsProps {
   sourceIssueId: number | null
   targetIssueId: number | null
   disabled?: boolean
   onMembershipChanged?: () => void
+  /** Injectable reading-order groups API; defaults to the production dependency groups service. */
+  groupsApi?: DependencyCrossoverGroupsApi
 }
 
 type CrossoverMode = 'none' | 'existing' | 'new'
@@ -19,6 +32,7 @@ export default function DependencyCrossoverControls({
   targetIssueId,
   disabled = false,
   onMembershipChanged,
+  groupsApi = dependencyGroupsApi,
 }: DependencyCrossoverControlsProps) {
   const [mode, setMode] = useState<CrossoverMode>('none')
   const [groups, setGroups] = useState<DependencyGroup[]>([])
@@ -38,7 +52,7 @@ export default function DependencyCrossoverControls({
     let isCurrent = true
     setIsLoading(true)
     setError('')
-    dependencyGroupsApi
+    groupsApi
       .list()
       .then((loadedGroups) => {
         if (!isCurrent) return
@@ -60,7 +74,7 @@ export default function DependencyCrossoverControls({
     return () => {
       isCurrent = false
     }
-  }, [mode, selectedGroupId])
+  }, [mode, selectedGroupId, groupsApi])
 
   useEffect(() => {
     setResult('')
@@ -101,7 +115,7 @@ export default function DependencyCrossoverControls({
     try {
       group =
         mode === 'new'
-          ? await dependencyGroupsApi.create(normalizedName)
+          ? await groupsApi.create(normalizedName)
           : groups.find((candidate) => candidate.id === selectedGroupId) ?? null
 
       if (!group) {
@@ -109,11 +123,11 @@ export default function DependencyCrossoverControls({
       }
 
       if (includeSource && sourceIssueId != null) {
-        await dependencyGroupsApi.addMember(group.id, { issue_id: sourceIssueId })
+        await groupsApi.addMember(group.id, { issue_id: sourceIssueId })
         completedLabels.push('prerequisite issue')
       }
       if (includeTarget && targetIssueId != null && targetIssueId !== sourceIssueId) {
-        await dependencyGroupsApi.addMember(group.id, { issue_id: targetIssueId })
+        await groupsApi.addMember(group.id, { issue_id: targetIssueId })
         completedLabels.push('blocked issue')
       }
 

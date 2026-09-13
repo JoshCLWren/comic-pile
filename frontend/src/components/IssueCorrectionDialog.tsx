@@ -2,8 +2,20 @@ import { useState, useEffect, useCallback } from 'react'
 import type { KeyboardEvent } from 'react'
 import Modal from './Modal'
 import { issuesApi } from '../services/api-issues'
-import type { IssueListParams } from '../services/api-issues'
+import type { IssueListParams, IssueListResponse } from '../services/api-issues'
 import type { Issue } from '../types'
+
+export interface IssueCorrectionIssuesApi {
+  list: (threadId: number, params?: IssueListParams) => Promise<IssueListResponse>
+  create: (
+    threadId: number,
+    issueRange: string,
+    options?: { insert_after_issue_id?: number | null },
+  ) => Promise<IssueListResponse>
+  markRead: (issueId: number) => Promise<void>
+  markUnread: (issueId: number) => Promise<void>
+  move: (issueId: number, afterIssueId: number | null) => Promise<void>
+}
 
 interface IssueCorrectionDialogProps {
   isOpen: boolean
@@ -13,6 +25,8 @@ interface IssueCorrectionDialogProps {
   threadTitle: string
   onClose: () => void
   onSuccess: () => void
+  /** Injectable issue-tracking API; defaults to the production issues service. */
+  issuesApi?: IssueCorrectionIssuesApi
 }
 
 export default function IssueCorrectionDialog({
@@ -23,6 +37,7 @@ export default function IssueCorrectionDialog({
   threadTitle,
   onClose,
   onSuccess,
+  issuesApi: issuesService = issuesApi,
 }: IssueCorrectionDialogProps) {
   const [selectedIssueNumber, setSelectedIssueNumber] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
@@ -44,7 +59,7 @@ export default function IssueCorrectionDialog({
       if (nextPageToken) {
         params.page_token = nextPageToken
       }
-      const data = await issuesApi.list(threadId, params)
+      const data = await issuesService.list(threadId, params)
 
       if (!data.issues || data.issues.length === 0) {
         break
@@ -61,7 +76,7 @@ export default function IssueCorrectionDialog({
     }
 
     return loadedIssues
-  }, [threadId])
+  }, [threadId, issuesService])
 
   const fetchIssues = useCallback(async (retryAttempt = 0) => {
     setIsLoadingIssues(true)
@@ -110,7 +125,7 @@ export default function IssueCorrectionDialog({
       if (!targetIssue) {
         const insertAfterIssueId =
           insertPosition !== 'start' && insertPosition !== 'end' ? Number(insertPosition) : null
-        const createdIssues = await issuesApi.create(threadId, targetNumber, {
+        const createdIssues = await issuesService.create(threadId, targetNumber, {
           insert_after_issue_id: insertAfterIssueId,
         })
         targetIssue = createdIssues.issues.find((issue) => issue.issue_number === targetNumber)
@@ -120,7 +135,7 @@ export default function IssueCorrectionDialog({
         }
 
         if (insertPosition === 'start') {
-          await issuesApi.move(targetIssue.id, null)
+          await issuesService.move(targetIssue.id, null)
         }
       }
 
@@ -133,10 +148,10 @@ export default function IssueCorrectionDialog({
 
       const issuesBeforeTarget = orderedIssues.slice(0, targetIndex)
       const unreadBeforeTarget = issuesBeforeTarget.filter((issue) => issue.status !== 'read')
-      await Promise.all(unreadBeforeTarget.map((issue) => issuesApi.markRead(issue.id)))
+      await Promise.all(unreadBeforeTarget.map((issue) => issuesService.markRead(issue.id)))
 
       if (targetIssue.status === 'read') {
-        await issuesApi.markUnread(targetIssue.id)
+        await issuesService.markUnread(targetIssue.id)
       }
 
       onSuccess()
@@ -147,7 +162,7 @@ export default function IssueCorrectionDialog({
     } finally {
       setIsLoading(false)
     }
-  }, [selectedIssueNumber, allIssues, insertPosition, threadId, loadAllIssues, onSuccess, onClose])
+  }, [selectedIssueNumber, allIssues, insertPosition, threadId, loadAllIssues, issuesService, onSuccess, onClose])
 
   const adjustIssue = useCallback((delta: number) => {
     const currentValue = selectedIssueNumber
