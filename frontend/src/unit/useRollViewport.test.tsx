@@ -6,14 +6,18 @@ import { cast } from '../utils/cast'
 
 function Harness() {
   const [isRatingView, setIsRatingView] = useState(false)
+  const [hasReadingContext, setHasReadingContext] = useState(false)
   const [pulse, setPulse] = useState(0)
-  const { mainDieRef, ratingViewTopRef } = useRollViewport({ isRatingView })
+  const { mainDieRef, ratingViewTopRef } = useRollViewport({ isRatingView, hasReadingContext })
   return (
     <div>
       <div data-testid="die-anchor" ref={mainDieRef} />
       <div data-testid="rating-top-anchor" ref={ratingViewTopRef} />
       <button type="button" onClick={() => setIsRatingView((value) => !value)}>
         toggle rating
+      </button>
+      <button type="button" onClick={() => setHasReadingContext((value) => !value)}>
+        toggle reading context
       </button>
       <button type="button" onClick={() => setPulse((value) => value + 1)}>
         pulse
@@ -95,6 +99,44 @@ describe('useRollViewport (issue #2286)', () => {
 
     fireEvent.click(getByRole('button', { name: 'pulse' }))
     expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+
+  it('keeps the standard anchor when reading-boundaries content was already present at entry', () => {
+    const { getByRole, getByTestId } = render(<Harness />)
+    fireEvent.click(getByRole('button', { name: 'toggle reading context' }))
+    fireEvent.click(getByRole('button', { name: 'toggle rating' }))
+
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(scrollIntoView.mock.instances[0]).toBe(getByTestId('rating-top-anchor'))
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })
+  })
+
+  it('snaps back to the rating surface start when reading-boundaries content arrives during a rating view', () => {
+    const { getByRole, getByTestId } = render(<Harness />)
+    fireEvent.click(getByRole('button', { name: 'toggle rating' }))
+    scrollIntoView.mockClear()
+
+    fireEvent.click(getByRole('button', { name: 'toggle reading context' }))
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(scrollIntoView.mock.instances[0]).toBe(getByTestId('rating-top-anchor'))
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' })
+  })
+
+  it('does not snap when reading-boundaries content arrives while the die view is active', () => {
+    const { getByRole } = render(<Harness />)
+    fireEvent.click(getByRole('button', { name: 'toggle reading context' }))
+    expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+
+  it('does not snap repeatedly as async content updates keep the region present', () => {
+    const { getByRole } = render(<Harness />)
+    fireEvent.click(getByRole('button', { name: 'toggle rating' }))
+    scrollIntoView.mockClear()
+
+    fireEvent.click(getByRole('button', { name: 'toggle reading context' }))
+    fireEvent.click(getByRole('button', { name: 'pulse' }))
+    fireEvent.click(getByRole('button', { name: 'pulse' }))
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
   })
 
   it('uses an instant anchor when the reader prefers reduced motion', () => {
