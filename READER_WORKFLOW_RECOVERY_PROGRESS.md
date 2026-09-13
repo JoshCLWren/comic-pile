@@ -73,7 +73,7 @@
 - [ ] Do not apply the production batch without explicit user authorization.
 - [ ] Prove the release condition before disabling legacy runtime blocking globally:
       no active reader project requires a legacy `reading_plan_order` Dependency.
-- [ ] Reconcile issue/PR factory labels after push and report exact production blockers.
+- [x] Reconcile issue/PR factory labels after push and report exact production blockers.
 - [ ] Delete this temporary file after the feature and production cutover are verified.
 
 ## Useful commands
