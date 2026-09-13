@@ -42,6 +42,17 @@ from app.services.ultimate_universe_production_migration import (
 
 LEGACY_READING_ORDERS_MANIFEST = "legacy-reading-orders"
 
+# Explicit Step 14 families whose reader-order debt is owned by the reviewed
+# Step 23B legacy Reading Order adoption. Prefer the legacy manifest in a
+# combined batch so both paths never apply against the same dependency IDs.
+LEGACY_COVERED_EXPLICIT_MANIFESTS = frozenset(
+    {
+        "doctor-strange-epic-vol-10",
+        "starman-compendiums",
+        "starman-jsa-bridge",
+    }
+)
+
 
 def migration_report_status(report: dict[str, Any]) -> str:
     """Return the operator-facing classification for one manifest report."""
@@ -63,6 +74,46 @@ def migration_report_status(report: dict[str, Any]) -> str:
     ):
         return "behavior-mismatch"
     return "blocked-by-identity-or-source"
+
+
+def reconcile_batch_manifest_reports(
+    reports: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Prefer Step 23B over overlapping explicit manifests in one batch plan.
+
+    On an unmigrated snapshot both ``legacy-reading-orders`` and the Doctor
+    Strange / Starman explicit families can independently report
+    ``safe-to-migrate``. Alphabetical apply would mutate the shared dependency
+    IDs before Step 23B's exact token check, rolling back the one-shot
+    transaction. When the legacy manifest is safe or already migrated, treat
+    the overlapping explicit families as covered by that path instead.
+    """
+    legacy = reports.get(LEGACY_READING_ORDERS_MANIFEST)
+    if legacy is None:
+        return reports
+    legacy_status = str(legacy.get("status") or "")
+    if legacy_status not in {"safe-to-migrate", "already-migrated"}:
+        return reports
+
+    reconciled = dict(reports)
+    for manifest in LEGACY_COVERED_EXPLICIT_MANIFESTS:
+        report = reconciled.get(manifest)
+        if report is None:
+            continue
+        if report.get("covered_by") == LEGACY_READING_ORDERS_MANIFEST:
+            continue
+        status = str(report.get("status") or "")
+        if status not in {"safe-to-migrate", "blocked-by-identity-or-source"}:
+            continue
+        reconciled[manifest] = {
+            **report,
+            "status": "already-migrated",
+            "already_migrated": True,
+            "ok": True,
+            "covered_by": LEGACY_READING_ORDERS_MANIFEST,
+            "errors": [],
+        }
+    return reconciled
 
 
 def _expected_rules_from_plan_nodes(nodes: list[dict[str, Any]]) -> set[str]:

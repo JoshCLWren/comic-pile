@@ -8,7 +8,10 @@ from re import Pattern
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.continuity_blocking import get_continuity_blocked_thread_ids
+from app.continuity_blocking import (
+    get_continuity_rule_blocked_thread_ids,
+    get_sequence_order_blocked_thread_ids,
+)
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
 from app.models.issue import Issue
@@ -51,7 +54,10 @@ async def build_reader_order_cutover_audit(
     edges that would reactivate if a reader marked an earlier issue unread),
     every ``needs_review`` / unclassified row is a hard stop, and every
     surviving standalone prerequisite must have a continuity-rule mirror
-    regardless of current read state. Point-in-time Roll equality is reported
+    regardless of current read state. Continuity coverage is measured from
+    compiled ``ContinuityRule`` rows only — active
+    ``DependencyGroupMembership.sequence_order`` blockers fail the gate rather
+    than counting as canonical coverage. Point-in-time Roll equality is reported
     as an additional check, not as the definition of equivalence.
     """
     _invalidate_continuity_snapshot(user_id, db)
@@ -99,8 +105,11 @@ async def build_reader_order_cutover_audit(
             active_ids.setdefault(kind, []).append(dependency.id)
 
     legacy_blocked = await _get_legacy_blocked_thread_ids_uncached(user_id, db)
-    continuity_blocked = await get_continuity_blocked_thread_ids(user_id, db)
-    legacy_only = sorted(legacy_blocked - continuity_blocked)
+    # Cutover must prove ContinuityRule coverage only. sequence_order is not a
+    # Roll authority under the frozen architecture, so it cannot clear legacy_only.
+    continuity_rule_blocked = await get_continuity_rule_blocked_thread_ids(user_id, db)
+    sequence_order_blocked = await get_sequence_order_blocked_thread_ids(user_id, db)
+    legacy_only = sorted(legacy_blocked - continuity_rule_blocked)
 
     linked_rules = list(
         (
@@ -128,6 +137,7 @@ async def build_reader_order_cutover_audit(
     active_reader_order_ids = sorted(active_ids.get("reading_plan_order", []))
     active_needs_review_ids = sorted(active_ids.get("needs_review", []))
     active_unclassified_ids = sorted(active_ids.get("unclassified", []))
+    sequence_order_blocked_ids = sorted(sequence_order_blocked)
 
     # Semantic release: dormant reader-order debt still blocks cutover.
     release_condition_met = not remaining_reader_order_ids
@@ -137,6 +147,7 @@ async def build_reader_order_cutover_audit(
         and not remaining_unclassified_ids
         and not missing_standalone_mirrors
         and not legacy_only
+        and not sequence_order_blocked_ids
     )
     return {
         "user_id": user_id,
@@ -158,7 +169,10 @@ async def build_reader_order_cutover_audit(
             missing_standalone_mirrors
         ),
         "legacy_blocked_thread_ids": sorted(legacy_blocked),
-        "continuity_blocked_thread_ids": sorted(continuity_blocked),
+        "continuity_rule_blocked_thread_ids": sorted(continuity_rule_blocked),
+        # Compatibility alias: previously mixed rules + sequence_order.
+        "continuity_blocked_thread_ids": sorted(continuity_rule_blocked),
+        "sequence_order_blocked_thread_ids": sequence_order_blocked_ids,
         "legacy_only_blocked_thread_ids": legacy_only,
         "release_condition_met": release_condition_met,
         "runtime_cutover_safe": runtime_cutover_safe,

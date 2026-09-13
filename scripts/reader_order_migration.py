@@ -31,6 +31,7 @@ def _load_application_symbols():
     from app.services.reader_order_migration_coordinator import (
         LEGACY_READING_ORDERS_MANIFEST,
         build_manifest_report,
+        reconcile_batch_manifest_reports,
     )
     from app.services.source_backed_reader_order_migration import (
         PRODUCTION_SOURCE_BACKED_SPECS,
@@ -48,6 +49,7 @@ def _load_application_symbols():
         build_reader_order_cutover_audit,
         LEGACY_READING_ORDERS_MANIFEST,
         build_manifest_report,
+        reconcile_batch_manifest_reports,
         PRODUCTION_SOURCE_BACKED_SPECS,
         apply_source_backed_reader_order_migration,
         MigrationInvariantError,
@@ -62,6 +64,7 @@ def _load_application_symbols():
     build_reader_order_cutover_audit,
     LEGACY_READING_ORDERS_MANIFEST,
     build_manifest_report,
+    reconcile_batch_manifest_reports,
     PRODUCTION_SOURCE_BACKED_SPECS,
     apply_source_backed_reader_order_migration,
     MigrationInvariantError,
@@ -142,9 +145,15 @@ async def _batch_dry_run(
     summary_path: Path,
 ) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
+    reports: dict[str, dict[str, Any]] = {}
+    for manifest in manifests:
+        reports[manifest] = await _build_report(manifest)
+
+    reports = reconcile_batch_manifest_reports(reports)
+
     rows: list[dict[str, Any]] = []
     for manifest in manifests:
-        report = await _build_report(manifest)
+        report = reports[manifest]
         status = str(report["status"])
         payload = report
         output = output_dir / f"{manifest}.json"
@@ -159,9 +168,20 @@ async def _batch_dry_run(
                 "standalone_prerequisite_count": len(
                     report.get("preserved_standalone_dependencies", [])
                 ),
+                "covered_by": report.get("covered_by"),
                 "output": str(output),
             }
         )
+
+    # Prefer applying Step 23B before any remaining safe manifests so overlapping
+    # explicit families never mutate shared dependency IDs first.
+    def _apply_rank(row: dict[str, Any]) -> tuple[int, str]:
+        manifest = str(row["manifest"])
+        if manifest == LEGACY_READING_ORDERS_MANIFEST:
+            return (0, manifest)
+        return (1, manifest)
+
+    rows.sort(key=_apply_rank)
     summary = {
         "manifests": rows,
         "safe_to_migrate": [
@@ -266,7 +286,17 @@ async def _batch_apply(
         try:
             applied: list[dict[str, Any]] = []
             skipped: list[dict[str, str]] = []
-            for raw_row in raw_rows:
+            ordered_rows = sorted(
+                raw_rows,
+                key=lambda row: (
+                    0
+                    if isinstance(row, dict)
+                    and str(row.get("manifest") or "") == LEGACY_READING_ORDERS_MANIFEST
+                    else 1,
+                    str(row.get("manifest") or "") if isinstance(row, dict) else "",
+                ),
+            )
+            for raw_row in ordered_rows:
                 if not isinstance(raw_row, dict):
                     raise MigrationInvariantError("batch summary contains a malformed row")
                 manifest = str(raw_row.get("manifest") or "")

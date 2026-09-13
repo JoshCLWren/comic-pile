@@ -19,8 +19,11 @@ from app.services.explicit_reader_order_migration import (
     build_explicit_reader_order_dry_run,
 )
 from app.services.reader_order_migration_coordinator import (
+    LEGACY_COVERED_EXPLICIT_MANIFESTS,
+    LEGACY_READING_ORDERS_MANIFEST,
     build_manifest_report,
     migration_report_status,
+    reconcile_batch_manifest_reports,
 )
 from app.services.ultimate_universe_production_migration import MigrationInvariantError
 from comic_pile.dependencies import refresh_user_blocked_status
@@ -86,6 +89,50 @@ def test_migration_report_status_buckets() -> None:
         )
         == "blocked-by-identity-or-source"
     )
+
+
+def test_reconcile_batch_prefers_legacy_over_overlapping_explicit() -> None:
+    """Unmigrated Step 23B + Doctor Strange/Starman must not both stay safe."""
+    reports = {
+        LEGACY_READING_ORDERS_MANIFEST: {
+            "status": "safe-to-migrate",
+            "ok": True,
+            "errors": [],
+            "snapshot_token": "legacy-token",
+        },
+        "doctor-strange-epic-vol-10": {
+            "status": "safe-to-migrate",
+            "ok": True,
+            "errors": [],
+            "snapshot_token": "strange-token",
+        },
+        "starman-compendiums": {
+            "status": "safe-to-migrate",
+            "ok": True,
+            "errors": [],
+            "snapshot_token": "starman-token",
+        },
+        "starman-jsa-bridge": {
+            "status": "safe-to-migrate",
+            "ok": True,
+            "errors": [],
+            "snapshot_token": "jsa-token",
+        },
+        "dc-ko": {
+            "status": "safe-to-migrate",
+            "ok": True,
+            "errors": [],
+            "snapshot_token": "dc-token",
+        },
+    }
+    reconciled = reconcile_batch_manifest_reports(reports)
+    assert reconciled[LEGACY_READING_ORDERS_MANIFEST]["status"] == "safe-to-migrate"
+    for manifest in LEGACY_COVERED_EXPLICIT_MANIFESTS:
+        assert reconciled[manifest]["status"] == "already-migrated"
+        assert reconciled[manifest]["covered_by"] == LEGACY_READING_ORDERS_MANIFEST
+        assert reconciled[manifest]["ok"] is True
+        assert reconciled[manifest]["errors"] == []
+    assert reconciled["dc-ko"]["status"] == "safe-to-migrate"
 
 
 @pytest.mark.asyncio
@@ -455,6 +502,48 @@ async def test_batch_dry_run_summary_buckets_non_safe_manifests(
     assert summary["already_migrated"] == ["done-family"]
     assert summary["blocked"] == ["review-family"]
     assert summary["standalone_prerequisite_state"]["safe-family"] == 1
+
+
+@pytest.mark.asyncio
+async def test_batch_dry_run_covers_overlapping_explicit_when_legacy_is_safe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """All-unmigrated batch prefers Step 23B over Doctor Strange / Starman."""
+
+    async def _fake_build_report(manifest: str) -> dict[str, object]:
+        return {
+            "status": "safe-to-migrate",
+            "ok": True,
+            "errors": [],
+            "snapshot_token": f"{manifest}-token",
+            "preserved_standalone_dependencies": [],
+        }
+
+    monkeypatch.setattr(cli, "_build_report", _fake_build_report)
+    summary_path = tmp_path / "summary.json"
+    manifests = [
+        "doctor-strange-epic-vol-10",
+        LEGACY_READING_ORDERS_MANIFEST,
+        "starman-compendiums",
+        "starman-jsa-bridge",
+        "dc-ko",
+    ]
+    exit_code = await cli._batch_dry_run(manifests, tmp_path / "reports", summary_path)
+    assert exit_code == 0
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary["safe_to_migrate"] == [LEGACY_READING_ORDERS_MANIFEST, "dc-ko"]
+    assert summary["already_migrated"] == sorted(LEGACY_COVERED_EXPLICIT_MANIFESTS)
+    assert summary["manifests"][0]["manifest"] == LEGACY_READING_ORDERS_MANIFEST
+    covered = {
+        row["manifest"]: row.get("covered_by")
+        for row in summary["manifests"]
+        if row["manifest"] in LEGACY_COVERED_EXPLICIT_MANIFESTS
+    }
+    assert covered == dict.fromkeys(
+        LEGACY_COVERED_EXPLICIT_MANIFESTS,
+        LEGACY_READING_ORDERS_MANIFEST,
+    )
 
 
 def test_stage_durable_json_writes_pending_before_publish(tmp_path: Path) -> None:

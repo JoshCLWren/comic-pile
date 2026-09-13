@@ -165,6 +165,63 @@ async def test_cutover_audit_requires_reader_order_migration_but_preserves_stand
 
 
 @pytest.mark.asyncio
+async def test_cutover_fails_when_sequence_order_contributes_to_eligibility(
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """sequence_order blockers cannot clear legacy_only or green the cutover."""
+    from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
+
+    user_id, threads, issues, reader_order, standalone = await _two_dependency_families(
+        async_db
+    )
+    await async_db.execute(delete(Dependency).where(Dependency.id == reader_order.id))
+    group = DependencyGroup(user_id=user_id, name="Forbidden sequence order")
+    async_db.add(group)
+    await async_db.flush()
+    async_db.add_all(
+        [
+            DependencyGroupMembership(
+                group_id=group.id,
+                issue_id=issues[2].id,
+                sequence_order=1,
+            ),
+            DependencyGroupMembership(
+                group_id=group.id,
+                issue_id=issues[3].id,
+                sequence_order=2,
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    monkeypatch.setattr(reader_order_cutover, "_load_step14_index", lambda: {})
+    monkeypatch.setattr(
+        reader_order_cutover,
+        "_explicit_classifications",
+        lambda _index: (
+            {standalone.id: "standalone_prerequisite"},
+            {},
+        ),
+    )
+    monkeypatch.setattr(
+        reader_order_cutover,
+        "_generated_reader_order_patterns",
+        lambda _index: (),
+    )
+
+    audit = await reader_order_cutover.build_reader_order_cutover_audit(
+        async_db,
+        user_id=user_id,
+    )
+    assert audit["release_condition_met"] is True
+    sequence_blocked = audit["sequence_order_blocked_thread_ids"]
+    assert isinstance(sequence_blocked, list)
+    assert threads[3].id in sequence_blocked
+    assert audit["runtime_cutover_safe"] is False
+
+
+@pytest.mark.asyncio
 async def test_runtime_switch_uses_only_canonical_rules_for_roll_eligibility(
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
