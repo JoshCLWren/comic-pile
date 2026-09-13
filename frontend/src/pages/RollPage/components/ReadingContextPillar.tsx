@@ -218,7 +218,7 @@ export function ReadingContextPillar({
               className="font-bold text-[var(--theme-text-primary)]"
               style={readingContextType('sectionHeading')}
             >
-              Where you are in {seriesName}
+              Your Reading Flow
             </h3>
           </div>
 
@@ -355,7 +355,7 @@ export function ReadingContextPillar({
               className="font-bold text-[var(--theme-text-primary)]"
               style={readingContextType('sectionHeading')}
             >
-              Dependency & Continuity Edges
+              Your Reading Boundaries
             </h3>
           </div>
 
@@ -453,11 +453,8 @@ export function ReadingContextPillar({
               className="font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"
               style={readingContextType('statLabel')}
             >
-              Reading Routes
+              Your Reading Paths
             </h3>
-            <span className="font-bold text-[var(--theme-text-muted)]" style={readingContextType('metaLabel')}>
-              {readingOrders.length} active
-            </span>
           </div>
           <div className="grid gap-2 md:grid-cols-2">
             {readingOrders.map((order) => {
@@ -493,7 +490,7 @@ export function ReadingContextPillar({
                       }}
                       aria-label={`Explain why ${threadTitle} ${issueNumber != null ? `#${issueNumber}` : ''} is next in ${order.name}`}
                     >
-                      Explain route
+                      Explain path
                     </button>
                   </div>
                 </article>
@@ -505,13 +502,13 @@ export function ReadingContextPillar({
 
       {connectedThreads.length > 0 && activeRatingThread ? (
         <section aria-labelledby="correction-heading" className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
+          <div className="mb-3 flex items-center justify-between gap-2">
             <h3
               id="correction-heading"
               className="font-bold uppercase tracking-wider text-[var(--theme-text-muted)]"
               style={readingContextType('statLabel')}
             >
-              Continuity Correction
+              Your Reading Progress
             </h3>
             <button
               type="button"
@@ -523,7 +520,7 @@ export function ReadingContextPillar({
                 backgroundColor: 'rgba(6, 182, 212, 0.09)',
               }}
             >
-              Correct continuity
+              Adjust reading progress
             </button>
           </div>
         </section>
