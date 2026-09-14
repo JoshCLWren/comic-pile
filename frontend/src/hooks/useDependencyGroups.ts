@@ -17,12 +17,19 @@ const EMPTY_STATE: DependencyGroupsState = {
   error: null,
 }
 
-export function useDependencyGroups(threadId: number | null | undefined): DependencyGroupsState {
+export interface DependencyGroupsApi {
+  listForThread: (threadId: number) => Promise<DependencyGroupSummary[]>
+}
+
+export function useDependencyGroups(
+  threadId: number | null | undefined,
+  api: DependencyGroupsApi = dependencyGroupsApi,
+): DependencyGroupsState {
   const { data, isPending, error } = useQuery({
     queryKey: threadId != null ? queryKeys.dependencies.forThread(threadId) : [],
     queryFn: async () => {
       try {
-        return await dependencyGroupsApi.listForThread(threadId!)
+        return await api.listForThread(threadId!)
       } catch (reason) {
         throw reason instanceof Error ? reason : new Error('Unable to load reading-order groups')
       }

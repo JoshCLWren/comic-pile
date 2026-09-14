@@ -1,17 +1,10 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClient } from '../query/queryClient'
+import { useCrossoverGroups, type CrossoverGroupsApi } from '../hooks/useCrossoverGroups'
 
-const { listForThreads } = vi.hoisted(() => ({
-  listForThreads: vi.fn(),
-}))
-
-vi.mock('../services/api-dependency-groups', () => ({
-  dependencyGroupsApi: { listForThreads },
-}))
-
-import { useCrossoverGroups } from '../hooks/useCrossoverGroups'
+// Injectable fake passed through the real hook arg — no module mocking of the API.
+const listForThreads = vi.fn<CrossoverGroupsApi['listForThreads']>()
+const groupsApi: CrossoverGroupsApi = { listForThreads }
 
 describe('useCrossoverGroups', () => {
   beforeEach(() => {
@@ -19,7 +12,7 @@ describe('useCrossoverGroups', () => {
   })
 
   it('returns an immediate empty state when no thread ids are requested', async () => {
-    const { result } = renderHook(() => useCrossoverGroups([]))
+    const { result } = renderHook(() => useCrossoverGroups([], groupsApi))
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
     expect(result.current.groupsByThreadId).toEqual({})
@@ -29,10 +22,10 @@ describe('useCrossoverGroups', () => {
 
   it('deduplicates and sorts ids while filling missing groups with empty arrays', async () => {
     listForThreads.mockResolvedValueOnce({
-      2: [{ id: 7, name: 'Cosmic', membership_count: 1 }],
+      2: [{ id: 7, name: 'Cosmic' }],
     })
 
-    const { result } = renderHook(() => useCrossoverGroups([3, 2, 3]))
+    const { result } = renderHook(() => useCrossoverGroups([3, 2, 3], groupsApi))
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
     expect(listForThreads).toHaveBeenCalledWith([2, 3])
@@ -43,16 +36,8 @@ describe('useCrossoverGroups', () => {
   it('fires independent requests for different thread id sets', async () => {
     listForThreads.mockResolvedValue({})
 
-    const first = renderHook(() => useCrossoverGroups([1]), {
-      wrapper: ({ children }: { children: React.ReactNode }) => (
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-      ),
-    })
-    const second = renderHook(() => useCrossoverGroups([2]), {
-      wrapper: ({ children }: { children: React.ReactNode }) => (
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-      ),
-    })
+    const first = renderHook(() => useCrossoverGroups([1], groupsApi))
+    const second = renderHook(() => useCrossoverGroups([2], groupsApi))
 
     await waitFor(() => expect(first.result.current.isPending).toBe(false))
     await waitFor(() => expect(second.result.current.isPending).toBe(false))
@@ -65,7 +50,7 @@ describe('useCrossoverGroups', () => {
     listForThreads.mockResolvedValue({})
     const ids = Array.from({ length: 201 }, (_, index) => index + 1)
 
-    const { result } = renderHook(() => useCrossoverGroups(ids))
+    const { result } = renderHook(() => useCrossoverGroups(ids, groupsApi))
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
     expect(listForThreads).toHaveBeenCalledTimes(2)
@@ -76,7 +61,7 @@ describe('useCrossoverGroups', () => {
   it('normalizes non-Error failures', async () => {
     listForThreads.mockRejectedValueOnce('offline')
 
-    const { result } = renderHook(() => useCrossoverGroups([9]))
+    const { result } = renderHook(() => useCrossoverGroups([9], groupsApi))
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
     expect(result.current.error).toEqual(new Error('Failed to load crossovers'))
@@ -87,7 +72,7 @@ describe('useCrossoverGroups', () => {
     const failure = new Error('boom')
     listForThreads.mockRejectedValueOnce(failure)
 
-    const { result } = renderHook(() => useCrossoverGroups([9]))
+    const { result } = renderHook(() => useCrossoverGroups([9], groupsApi))
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
     expect(result.current.error).toBe(failure)
@@ -100,7 +85,7 @@ describe('useCrossoverGroups', () => {
       .mockResolvedValueOnce({ 2: [] })
 
     const { result, rerender } = renderHook(
-      ({ ids }) => useCrossoverGroups(ids),
+      ({ ids }) => useCrossoverGroups(ids, groupsApi),
       { initialProps: { ids: [1] } },
     )
 

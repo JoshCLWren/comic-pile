@@ -7,11 +7,46 @@ import DependencyCrossoverControls from './DependencyCrossoverControls'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { IssueListParams } from '../services/api-issues'
-import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse } from '../types'
+import type { Dependency, FlowchartDependency, FlowchartNode, Issue, IssueListResponse, Thread, ThreadDependenciesResponse, ThreadListResponse } from '../types'
 import { getApiErrorDetail } from '../utils/apiError'
 import { useToast } from '../contexts/useToast'
 
-async function fetchAllUnreadIssues(threadId: number): Promise<Issue[]> {
+export interface DependencyBuilderDependenciesApi {
+  listThreadDependencies: (threadId: number) => Promise<ThreadDependenciesResponse>
+  listBlockedThreadIds: () => Promise<number[]>
+  createDependency: (payload: {
+    sourceType?: 'thread' | 'issue'
+    sourceId: number
+    targetType?: 'thread' | 'issue'
+    targetId: number
+  }) => Promise<Dependency>
+  deleteDependency: (dependencyId: number) => Promise<void>
+  updateDependency: (dependencyId: number, note: string | null) => Promise<Dependency>
+}
+
+export interface DependencyBuilderThreadsApi {
+  list: (
+    params?: { search?: string },
+    pageToken?: string | null,
+  ) => Promise<ThreadListResponse>
+}
+
+export interface DependencyBuilderIssuesApi {
+  list: (
+    threadId: number,
+    params?: IssueListParams,
+  ) => Promise<IssueListResponse>
+  migrateThread: (
+    threadId: number,
+    lastIssueRead: number,
+    totalIssues: number,
+  ) => Promise<Thread>
+}
+
+async function fetchAllUnreadIssues(
+  issuesService: DependencyBuilderIssuesApi,
+  threadId: number,
+): Promise<Issue[]> {
   const allIssues: Issue[] = []
   const seenPageTokens = new Set<string>()
   let nextPageToken: string | null = null
@@ -24,7 +59,7 @@ async function fetchAllUnreadIssues(threadId: number): Promise<Issue[]> {
     if (nextPageToken) {
       params.page_token = nextPageToken
     }
-    const data = await issuesApi.list(threadId, params)
+    const data = await issuesService.list(threadId, params)
     allIssues.push(...data.issues)
 
     if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
@@ -53,9 +88,23 @@ interface DependencyBuilderProps {
   isOpen: boolean
   onClose: () => void
   onChanged?: () => void
+  /** Injectable dependencies API; defaults to the production {@link dependenciesApi}. */
+  dependenciesApi?: DependencyBuilderDependenciesApi
+  /** Injectable threads API; defaults to the production {@link threadsApi}. */
+  threadsApi?: DependencyBuilderThreadsApi
+  /** Injectable issues API; defaults to the production {@link issuesApi}. */
+  issuesApi?: DependencyBuilderIssuesApi
 }
 
-export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }: DependencyBuilderProps) {
+export default function DependencyBuilder({
+  thread,
+  isOpen,
+  onClose,
+  onChanged,
+  dependenciesApi: dependenciesService = dependenciesApi,
+  threadsApi: threadsService = threadsApi,
+  issuesApi: issuesService = issuesApi,
+}: DependencyBuilderProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Thread[]>([])
   const [selectedThreadId, setSelectedThreadId] = useState<number | null>(null)
@@ -105,14 +154,14 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     setIsLoadingDeps(true)
     setError('')
     try {
-      const data = await dependenciesApi.listThreadDependencies(currentThreadId!)
+      const data = await dependenciesService.listThreadDependencies(currentThreadId!)
       setDependencies(data)
     } catch (loadError: unknown) {
       setError(getApiErrorDetail(loadError))
     } finally {
       setIsLoadingDeps(false)
     }
-  }, [thread?.id])
+  }, [thread?.id, dependenciesService])
 
   /**
    * Build the full graph of threads and dependencies for the flowchart.
@@ -123,8 +172,8 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     const currentThreadId = thread?.id
     try {
       const [depsData, allBlockedIds] = await Promise.all([
-        dependenciesApi.listThreadDependencies(currentThreadId!),
-        dependenciesApi.listBlockedThreadIds(),
+        dependenciesService.listThreadDependencies(currentThreadId!),
+        dependenciesService.listBlockedThreadIds(),
       ])
 
       const relatedIds = new Set([currentThreadId!])
@@ -206,7 +255,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
       const allEdges = [...threadDeps, ...issueEdges]
 
-    const allThreads = await threadsApi.list()
+    const allThreads = await threadsService.list()
     const relatedThreads = allThreads.threads.filter((t) => relatedIds.has(t.id))
 
       
@@ -221,14 +270,14 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       setFlowchartDependencies([])
       setFlowchartIssueNodes([])
     }
-  }, [thread?.id])
+  }, [thread?.id, dependenciesService, threadsService])
 
   useEffect(() => {
     // Clean up any pending deletion when modal closes
     if (pendingDeletion) {
       clearTimeout(pendingDeletion.timeoutId)
       // Fire DELETE immediately (commit the deletion)
-      dependenciesApi.deleteDependency(pendingDeletion.dependencyId)
+      dependenciesService.deleteDependency(pendingDeletion.dependencyId)
         .then(() => {
           // Deletion succeeded, reload dependencies
           onChanged?.()
@@ -279,7 +328,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       setIsSearching(true)
       setError('')
       try {
-    const candidates = await threadsApi.list({ search: query })
+    const candidates = await threadsService.list({ search: query })
     if (!isCurrent) return
     const currentThreadId = thread?.id
     const filtered =  currentThreadId == null
@@ -301,7 +350,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       isCurrent = false
       clearTimeout(timeout)
     }
-  }, [searchQuery, isOpen, thread?.id])
+  }, [searchQuery, isOpen, thread?.id, threadsService])
 
   // Check if selected thread needs migration when in issue mode
   const selectedThreadNeedsMigration = useMemo(() => {
@@ -334,8 +383,8 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       setError('')
       try {
         const [sourceIssuesList, targetIssuesList] = await Promise.all([
-          fetchAllUnreadIssues(selectedThreadId),
-          fetchAllUnreadIssues(thread.id),
+          fetchAllUnreadIssues(issuesService, selectedThreadId),
+          fetchAllUnreadIssues(issuesService, thread.id),
         ])
         if (!isCurrent) return
         setSourceIssues(sourceIssuesList)
@@ -362,7 +411,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     return () => {
       isCurrent = false
     }
-  }, [selectedThreadId, isOpen, thread?.id, selectedThreadNeedsMigration])
+  }, [selectedThreadId, isOpen, thread?.id, selectedThreadNeedsMigration, issuesService])
 
    function isDuplicateDependency(): boolean {
      if (!thread?.id || !selectedThreadId) return false
@@ -377,44 +426,44 @@ const [isSavingNote, setIsSavingNote] = useState(false)
      )
    }
 
-   async function handleInlineMigration(e: FormEvent) {
-    e.preventDefault()
-    if (!migrationLastRead.trim() || !migrationTotal.trim()) {
-      setError('Both fields are required for migration.')
-      return
-    }
-    const lastRead = Number(migrationLastRead)
-    const total = Number(migrationTotal)
-    if (
-      Number.isNaN(lastRead) ||
-      Number.isNaN(total) ||
-      !Number.isInteger(lastRead) ||
-      !Number.isInteger(total) ||
-      total < 1 ||
-      lastRead < 0 ||
-      lastRead > total
-    ) {
-      setError('Invalid migration values. Both must be whole numbers and last read must be 0-total.')
-      return
-    }
+    async function handleInlineMigration(e: FormEvent) {
+      e.preventDefault()
+      if (!migrationLastRead.trim() || !migrationTotal.trim()) {
+        setError('Both fields are required for migration.')
+        return
+      }
+      const lastRead = Number(migrationLastRead)
+      const total = Number(migrationTotal)
+      if (
+        Number.isNaN(lastRead) ||
+        Number.isNaN(total) ||
+        !Number.isInteger(lastRead) ||
+        !Number.isInteger(total) ||
+        total < 1 ||
+        lastRead < 0 ||
+        lastRead > total
+      ) {
+        setError('Invalid migration values. Both must be whole numbers and last read must be 0-total.')
+        return
+      }
 
-    setIsMigrating(true)
-    setError('')
-    try {
-      const updatedThread = await issuesApi.migrateThread(selectedThreadId!, lastRead, total)
-      // Refresh search results with updated thread data
-      setSearchResults((prev) =>
-        prev.map((t) => (t.id === selectedThreadId ? updatedThread : t))
-      )
-      setShowInlineMigration(false)
-      setMigrationLastRead('')
-      setMigrationTotal('')
-    } catch (migrationError: unknown) {
-      setError(getApiErrorDetail(migrationError))
-    } finally {
-      setIsMigrating(false)
+      setIsMigrating(true)
+      setError('')
+      try {
+        const updatedThread = await issuesService.migrateThread(selectedThreadId!, lastRead, total)
+        // Refresh search results with updated thread data
+        setSearchResults((prev) =>
+          prev.map((t) => (t.id === selectedThreadId ? updatedThread : t))
+        )
+        setShowInlineMigration(false)
+        setMigrationLastRead('')
+        setMigrationTotal('')
+      } catch (migrationError: unknown) {
+        setError(getApiErrorDetail(migrationError))
+      } finally {
+        setIsMigrating(false)
+      }
     }
-  }
 
   async function handleCreateDependency() {
     if (!thread?.id || !selectedThreadId) return
@@ -433,7 +482,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     setIsSaving(true)
     setError('')
     try {
-      const result = await dependenciesApi.createDependency({
+      const result = await dependenciesService.createDependency({
         sourceType: 'issue',
         sourceId: sourceIssueId,
         targetType: 'issue',
@@ -482,14 +531,14 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
       const timeoutId = setTimeout(async () => {
         try {
-          await dependenciesApi.deleteDependency(dependencyId)
+          await dependenciesService.deleteDependency(dependencyId)
           setPendingDeletion(null)
           await loadDependencies()
           await refreshGraphIfVisible()
           onChanged?.()
         } catch (deleteError: unknown) {
           setError(getApiErrorDetail(deleteError))
-          // Restore the dependency if deletion fails
+          // Restore the dependency
           await loadDependencies()
         }
       }, 5000)
@@ -527,24 +576,24 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     }
   }
 
-  async function handleSaveNote(dependencyId: number) {
-    setIsSavingNote(true)
-    setError('')
-    try {
-      const updated = await dependenciesApi.updateDependency(dependencyId, noteText.trim() || null)
-      setDependencies((prev) => ({
-        ...prev,
-        blocking: prev.blocking.map((d) => (d.id === dependencyId ? updated : d)),
-        blocked_by: prev.blocked_by.map((d) => (d.id === dependencyId ? updated : d)),
-      }))
-      setEditingNoteId(null)
-      setNoteText('')
-    } catch (saveError: unknown) {
-      setError(getApiErrorDetail(saveError))
-    } finally {
-      setIsSavingNote(false)
+    async function handleSaveNote(dependencyId: number) {
+      setIsSavingNote(true)
+      setError('')
+      try {
+        const updated = await dependenciesService.updateDependency(dependencyId, noteText.trim() || null)
+        setDependencies((prev) => ({
+          ...prev,
+          blocking: prev.blocking.map((d) => (d.id === dependencyId ? updated : d)),
+          blocked_by: prev.blocked_by.map((d) => (d.id === dependencyId ? updated : d)),
+        }))
+        setEditingNoteId(null)
+        setNoteText('')
+      } catch (saveError: unknown) {
+        setError(getApiErrorDetail(saveError))
+      } finally {
+        setIsSavingNote(false)
+      }
     }
-  }
 
   function handleStartEditNote(dep: Dependency) {
     setEditingNoteId(dep.id)

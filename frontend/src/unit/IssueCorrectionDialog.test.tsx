@@ -1,21 +1,24 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import IssueCorrectionDialog from '../components/IssueCorrectionDialog'
-import { issuesApi } from '../services/api-issues'
+import IssueCorrectionDialog, {
+  type IssueCorrectionIssuesApi,
+} from '../components/IssueCorrectionDialog'
 import type { Issue, IssueListResponse } from '../types'
 
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    list: vi.fn(),
-    create: vi.fn(),
-    markRead: vi.fn(),
-    markUnread: vi.fn(),
-    move: vi.fn(),
-  },
-}))
-
-const mockedIssuesApi = vi.mocked(issuesApi, { deep: true })
+// Injectable fakes passed through the real component props — no module mocking of the API.
+const list = vi.fn<IssueCorrectionIssuesApi['list']>()
+const create = vi.fn<IssueCorrectionIssuesApi['create']>()
+const markRead = vi.fn<IssueCorrectionIssuesApi['markRead']>()
+const markUnread = vi.fn<IssueCorrectionIssuesApi['markUnread']>()
+const move = vi.fn<IssueCorrectionIssuesApi['move']>()
+const issuesApi: IssueCorrectionIssuesApi = {
+  list,
+  create,
+  markRead,
+  markUnread,
+  move,
+}
 
 const issue = (overrides: Partial<Issue> & Pick<Issue, 'id' | 'issue_number'>): Issue => ({
   thread_id: 42,
@@ -45,6 +48,7 @@ const renderDialog = (props: Partial<Parameters<typeof IssueCorrectionDialog>[0]
       threadTitle="Test Comic"
       onClose={onClose}
       onSuccess={onSuccess}
+      issuesApi={issuesApi}
       {...props}
     />
   )
@@ -55,9 +59,9 @@ const renderDialog = (props: Partial<Parameters<typeof IssueCorrectionDialog>[0]
 describe('IssueCorrectionDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockedIssuesApi.markRead.mockResolvedValue(undefined)
-    mockedIssuesApi.markUnread.mockResolvedValue(undefined)
-    mockedIssuesApi.move.mockResolvedValue(undefined)
+    markRead.mockResolvedValue(undefined)
+    markUnread.mockResolvedValue(undefined)
+    move.mockResolvedValue(undefined)
   })
 
   it('accepts an existing non-numeric issue identifier', async () => {
@@ -66,7 +70,7 @@ describe('IssueCorrectionDialog', () => {
       issue({ id: 2, issue_number: 'Annual 1', status: 'read' }),
       issue({ id: 3, issue_number: '2' }),
     ]
-    mockedIssuesApi.list
+    list
       .mockResolvedValueOnce(listResponse(issues))
       .mockResolvedValueOnce(listResponse(issues))
 
@@ -78,10 +82,10 @@ describe('IssueCorrectionDialog', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Update' }))
 
     await waitFor(() => {
-      expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(1)
+      expect(markRead).toHaveBeenCalledWith(1)
     })
-    expect(mockedIssuesApi.markUnread).toHaveBeenCalledWith(2)
-    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+    expect(markUnread).toHaveBeenCalledWith(2)
+    expect(create).not.toHaveBeenCalled()
     expect(onSuccess).toHaveBeenCalledOnce()
     expect(onClose).toHaveBeenCalledOnce()
   })
@@ -94,10 +98,10 @@ describe('IssueCorrectionDialog', () => {
     const createdIssue = issue({ id: 3, issue_number: 'Annual 1' })
     const updatedIssues = [initialIssues[0], createdIssue, initialIssues[1]]
 
-    mockedIssuesApi.list
+    list
       .mockResolvedValueOnce(listResponse(initialIssues))
       .mockResolvedValueOnce(listResponse(updatedIssues))
-    mockedIssuesApi.create.mockResolvedValueOnce(listResponse([createdIssue]))
+    create.mockResolvedValueOnce(listResponse([createdIssue]))
 
     const { onSuccess } = renderDialog()
 
@@ -108,28 +112,28 @@ describe('IssueCorrectionDialog', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Update' }))
 
     await waitFor(() => {
-      expect(mockedIssuesApi.create).toHaveBeenCalledWith(42, 'Annual 1', {
+      expect(create).toHaveBeenCalledWith(42, 'Annual 1', {
         insert_after_issue_id: 1,
       })
     })
-    expect(mockedIssuesApi.move).not.toHaveBeenCalled()
+    expect(move).not.toHaveBeenCalled()
     expect(onSuccess).toHaveBeenCalledOnce()
   })
 
   it('retries failed loads and reports update failures', async () => {
-    mockedIssuesApi.list.mockRejectedValue(new Error('load failed'))
+    list.mockRejectedValue(new Error('load failed'))
     const { onClose } = renderDialog({ currentIssueNumber: null })
     await waitFor(() => expect(screen.getByText(/multiple attempts/i)).toBeInTheDocument())
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
-    expect(mockedIssuesApi.list).toHaveBeenCalled()
+    expect(list).toHaveBeenCalled()
     await userEvent.click(screen.getByRole('button', { name: 'Close modal' }))
     expect(onClose).toHaveBeenCalled()
   })
 
   it('inserts a numeric issue at the beginning and handles missing API results', async () => {
     const existing = [issue({ id: 1, issue_number: '1', status: 'read' })]
-    mockedIssuesApi.list.mockResolvedValueOnce(listResponse(existing)).mockResolvedValueOnce(listResponse(existing))
-    mockedIssuesApi.create.mockResolvedValueOnce(listResponse([]))
+    list.mockResolvedValueOnce(listResponse(existing)).mockResolvedValueOnce(listResponse(existing))
+    create.mockResolvedValueOnce(listResponse([]))
     const { onSuccess } = renderDialog()
     const input = await screen.findByLabelText(/what issue are you currently on/i)
     await userEvent.clear(input)
@@ -144,11 +148,11 @@ describe('IssueCorrectionDialog', () => {
     const existing = [issue({ id: 1, issue_number: '1', status: 'unread' })]
     const created = issue({ id: 2, issue_number: '2', status: 'unread' })
     let listCalls = 0
-    mockedIssuesApi.list.mockImplementation(async () => {
+    list.mockImplementation(async () => {
       listCalls += 1
       return listResponse(listCalls === 1 ? existing : [existing[0]!, created])
     })
-    mockedIssuesApi.create.mockResolvedValueOnce(listResponse([created]))
+    create.mockResolvedValueOnce(listResponse([created]))
 
     renderDialog()
     const input = await screen.findByLabelText(/what issue are you currently on/i)
@@ -157,12 +161,12 @@ describe('IssueCorrectionDialog', () => {
     await userEvent.selectOptions(screen.getByLabelText(/place new issue/i), 'start')
     await userEvent.click(screen.getByRole('button', { name: 'Update' }))
 
-    await waitFor(() => expect(mockedIssuesApi.move).toHaveBeenCalledWith(2, null))
+    await waitFor(() => expect(move).toHaveBeenCalledWith(2, null))
     expect(screen.getByText(/failed to update issue/i)).toBeInTheDocument()
   })
 
   it('supports the numeric stepper boundaries and rejects blank submissions', async () => {
-    mockedIssuesApi.list.mockResolvedValue(listResponse([issue({ id: 1, issue_number: '1' })]))
+    list.mockResolvedValue(listResponse([issue({ id: 1, issue_number: '1' })]))
     renderDialog({ currentIssueNumber: null, totalIssues: 1 })
     const input = await screen.findByLabelText(/what issue are you currently on/i)
     await userEvent.clear(input)
@@ -177,12 +181,12 @@ describe('IssueCorrectionDialog', () => {
   })
 
   it('paginates issue loading and leaves annual identifiers to text entry', async () => {
-    mockedIssuesApi.list
+    list
       .mockResolvedValueOnce({ ...listResponse([issue({ id: 1, issue_number: '1' })]), next_page_token: 'next' })
       .mockResolvedValueOnce(listResponse([issue({ id: 2, issue_number: 'Annual 1' })]))
     renderDialog({ currentIssueNumber: null, totalIssues: null })
     await screen.findByLabelText(/what issue are you currently on/i)
-    expect(mockedIssuesApi.list).toHaveBeenCalledTimes(2)
+    expect(list).toHaveBeenCalledTimes(2)
     const input = screen.getByLabelText(/what issue are you currently on/i)
     await userEvent.clear(input)
     await userEvent.type(input, 'Annual 1')
@@ -192,8 +196,8 @@ describe('IssueCorrectionDialog', () => {
 
   it('reports a missing target after a successful create and stops propagation inside the dialog', async () => {
     const existing = [issue({ id: 1, issue_number: '1' })]
-    mockedIssuesApi.list.mockResolvedValue(listResponse(existing))
-    mockedIssuesApi.create.mockResolvedValue(listResponse([issue({ id: 2, issue_number: 'Other' })]))
+    list.mockResolvedValue(listResponse(existing))
+    create.mockResolvedValue(listResponse([issue({ id: 2, issue_number: 'Other' })]))
     const { onClose } = renderDialog()
     const input = await screen.findByLabelText(/what issue are you currently on/i)
     await userEvent.clear(input)

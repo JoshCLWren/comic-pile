@@ -3,10 +3,25 @@ import Modal from './Modal'
 import {
   dependencyGroupsApi,
   type DependencyGroup,
+  type DependencyGroupMember,
+  type DependencyGroupMemberTarget,
 } from '../services/api-dependency-groups'
 import { threadsApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ConnectedThreadInfo, Thread } from '../types'
+
+export interface ContinuityCorrectionGroupsApi {
+  list: () => Promise<DependencyGroup[]>
+  create: (name: string) => Promise<DependencyGroup>
+  addMember: (
+    groupId: number,
+    target: DependencyGroupMemberTarget,
+  ) => Promise<DependencyGroupMember>
+}
+
+export interface ContinuityCorrectionThreadsApi {
+  get: (id: number) => Promise<Thread>
+}
 
 interface ContinuityCorrectionDialogProps {
   isOpen: boolean
@@ -17,6 +32,10 @@ interface ContinuityCorrectionDialogProps {
   connectedThreads: ConnectedThreadInfo[]
   onClose: () => void
   onSuccess: () => void
+  /** Injectable reading-order groups API; defaults to the production dependency groups service. */
+  groupsApi?: ContinuityCorrectionGroupsApi
+  /** Injectable thread API; defaults to the production threads service. */
+  threadsApi?: ContinuityCorrectionThreadsApi
 }
 
 type CrossoverMode = 'none' | 'existing' | 'new'
@@ -35,6 +54,8 @@ export default function ContinuityCorrectionDialog({
   connectedThreads,
   onClose,
   onSuccess,
+  groupsApi = dependencyGroupsApi,
+  threadsApi: threadsService = threadsApi,
 }: ContinuityCorrectionDialogProps) {
   const [mode, setMode] = useState<CrossoverMode>('none')
   const [groups, setGroups] = useState<DependencyGroup[]>([])
@@ -60,7 +81,7 @@ export default function ContinuityCorrectionDialog({
     async function loadGroups() {
       setIsLoadingGroups(true)
       try {
-        const loadedGroups = await dependencyGroupsApi.list()
+        const loadedGroups = await groupsApi.list()
         if (!isCurrent) return
         setGroups(loadedGroups)
       } catch (loadError: unknown) {
@@ -78,7 +99,7 @@ export default function ContinuityCorrectionDialog({
       const resolved = await Promise.all(
         connectedThreads.map(async (connected): Promise<ResolvedThread | null> => {
           try {
-            const thread: Thread = await threadsApi.get(connected.thread_id)
+            const thread: Thread = await threadsService.get(connected.thread_id)
             return { id: thread.id, title: thread.title }
           } catch {
             return { id: connected.thread_id, title: connected.title }
@@ -96,7 +117,7 @@ export default function ContinuityCorrectionDialog({
     return () => {
       isCurrent = false
     }
-  }, [isOpen, connectedThreads, threadId])
+  }, [isOpen, connectedThreads, threadId, groupsApi, threadsService])
 
   const canSaveCurrentIssue = issueId != null
   const canSaveConnected = resolvedConnected.length > 0
@@ -125,7 +146,7 @@ export default function ContinuityCorrectionDialog({
     try {
       let targetGroup: DependencyGroup
       if (mode === 'new') {
-        targetGroup = await dependencyGroupsApi.create(normalizedName)
+        targetGroup = await groupsApi.create(normalizedName)
         createdGroup = targetGroup
       } else {
         // SAFETY: selectedGroupId is non-null in existing mode and the group was chosen from the loaded groups list.
@@ -135,11 +156,11 @@ export default function ContinuityCorrectionDialog({
 
       if (canSaveCurrentIssue) {
         // SAFETY: canSaveCurrentIssue is derived from issueId != null, so issueId is a number in this branch.
-        await dependencyGroupsApi.addMember(targetGroup.id, { issue_id: issueId as number })
+        await groupsApi.addMember(targetGroup.id, { issue_id: issueId as number })
         addedLabels.push(`issue ${issueNumber ?? '?'}`)
       }
       for (const connected of resolvedConnected) {
-        await dependencyGroupsApi.addMember(targetGroup.id, { thread_id: connected.id })
+        await groupsApi.addMember(targetGroup.id, { thread_id: connected.id })
         addedLabels.push(connected.title)
       }
 

@@ -6,21 +6,62 @@ import {
   ContinuityThreadSelector,
   type SelectedIssueRange,
 } from '../components/continuity'
-import { threadsApi } from '../services/api'
+import { threadsApi as defaultThreadsApi } from '../services/api'
 import {
-  dependencyGroupsApi,
+  dependencyGroupsApi as defaultDependencyGroupsApi,
   type DependencyGroup,
+  type DependencyGroupIssueRangeResult,
   type DependencyGroupMember,
+  type DependencyGroupMemberTarget,
 } from '../services/api-dependency-groups'
-import { issuesApi } from '../services/api-issues'
-import type { IssueListParams } from '../services/api-issues'
+import { issuesApi as defaultIssuesApi } from '../services/api-issues'
+import type { IssueListParams, IssueListResponse } from '../services/api-issues'
 import GlossaryLink from '../components/GlossaryLink'
-import type { Issue, Thread } from '../types'
+import type { Issue, Thread, ThreadListResponse, ThreadQueryParams } from '../types'
 import { isString } from '../utils/runtimeChecks'
 
 type PositionedIssue = Issue & { position: number }
 
-async function fetchAllIssues(threadId: number): Promise<PositionedIssue[]> {
+export interface CrossoversPageGroupsApi {
+  list: () => Promise<DependencyGroup[]>
+  get: (groupId: number) => Promise<DependencyGroup>
+  create: (name: string) => Promise<DependencyGroup>
+  rename: (groupId: number, name: string) => Promise<DependencyGroup>
+  delete: (groupId: number) => Promise<void>
+  addMember: (
+    groupId: number,
+    target: DependencyGroupMemberTarget,
+  ) => Promise<DependencyGroupMember>
+  addIssueRange: (
+    groupId: number,
+    threadId: number,
+    startPosition: number,
+    endPosition: number,
+  ) => Promise<DependencyGroupIssueRangeResult>
+  removeMember: (groupId: number, memberId: number) => Promise<void>
+}
+
+export interface CrossoversPageThreadsApi {
+  list: (
+    params?: ThreadQueryParams,
+    pageToken?: string | null,
+  ) => Promise<ThreadListResponse>
+}
+
+export interface CrossoversPageIssuesApi {
+  list: (threadId: number, params?: IssueListParams) => Promise<IssueListResponse>
+}
+
+interface CrossoversPageProps {
+  dependencyGroupsApi?: CrossoversPageGroupsApi
+  threadsApi?: CrossoversPageThreadsApi
+  issuesApi?: CrossoversPageIssuesApi
+}
+
+async function fetchAllIssues(
+  issuesService: CrossoversPageIssuesApi,
+  threadId: number,
+): Promise<PositionedIssue[]> {
   const issues: PositionedIssue[] = []
   const seenPageTokens = new Set<string>()
   let nextPageToken: string | null = null
@@ -30,7 +71,7 @@ async function fetchAllIssues(threadId: number): Promise<PositionedIssue[]> {
     if (nextPageToken) {
       params.page_token = nextPageToken
     }
-    const data = await issuesApi.list(threadId, params)
+    const data = await issuesService.list(threadId, params)
     // SAFETY: the issues endpoint returns position-ordered issues; the integer-position check below enforces the contract.
     const pageIssues = data.issues as PositionedIssue[]
     if (pageIssues.some((issue) => !Number.isInteger(issue.position) || issue.position < 1)) {
@@ -43,13 +84,13 @@ async function fetchAllIssues(threadId: number): Promise<PositionedIssue[]> {
   }
 }
 
-async function fetchAllThreads(): Promise<Thread[]> {
+async function fetchAllThreads(threadsService: CrossoversPageThreadsApi): Promise<Thread[]> {
   const threads: Thread[] = []
   const seenPageTokens = new Set<string>()
   let nextPageToken: string | null = null
 
   while (true) {
-    const data = await threadsApi.list({ page_size: 100 }, nextPageToken)
+    const data = await threadsService.list({ page_size: 100 }, nextPageToken)
     threads.push(...data.threads)
     if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) return threads
     seenPageTokens.add(data.next_page_token)
@@ -77,7 +118,11 @@ function memberLabel(member: DependencyGroupMember): string {
   return 'Unavailable comic'
 }
 
-export default function CrossoversPage() {
+export default function CrossoversPage({
+  dependencyGroupsApi = defaultDependencyGroupsApi,
+  threadsApi = defaultThreadsApi,
+  issuesApi = defaultIssuesApi,
+}: CrossoversPageProps = {}) {
   const [groups, setGroups] = useState<DependencyGroup[]>([])
   const [threads, setThreads] = useState<Thread[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -113,17 +158,17 @@ export default function CrossoversPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [dependencyGroupsApi])
 
   const loadThreads = useCallback(async () => {
     setThreadLoadError(null)
     try {
-      setThreads(await fetchAllThreads())
+      setThreads(await fetchAllThreads(threadsApi))
     } catch (error) {
       setThreads([])
       setThreadLoadError(errorMessage(error, 'Unable to load comics for selection.'))
     }
-  }, [])
+  }, [threadsApi])
 
   useEffect(() => {
     void loadGroups()
@@ -246,7 +291,7 @@ export default function CrossoversPage() {
     if (!thread) return
     setIsLoadingRangeIssues(true)
     try {
-      const issues = await fetchAllIssues(thread.id)
+      const issues = await fetchAllIssues(issuesApi, thread.id)
       setRangeIssues(issues)
       if (issues.length === 0) setRangeLoadError(`${thread.title} has no issues to add.`)
     } catch (error) {

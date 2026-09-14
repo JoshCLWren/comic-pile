@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { type PropsWithChildren } from 'react'
+import { type ComponentProps, type PropsWithChildren } from 'react'
 import { render, screen, waitFor, act, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -9,7 +9,7 @@ import { continuityPlansApi } from '../services/api-continuity-plans'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api'
-import ContinuityPlannerPage from '../pages/ContinuityPlannerPage'
+import ContinuityPlannerPageImpl from '../pages/ContinuityPlannerPage'
 
 interface AddMaterialProbeProps {
   commitDisabled?: boolean
@@ -20,12 +20,14 @@ const addMaterialProbe = vi.hoisted(() => ({
   current: null as AddMaterialProbeProps | null,
 }))
 
-vi.mock('../components/ReadingPlanAddMaterial', () => ({
-  default: (props: AddMaterialProbeProps) => {
-    addMaterialProbe.current = props
-    return <div data-testid="add-material-probe" />
-  },
-}))
+function AddMaterialProbe(props: AddMaterialProbeProps) {
+  addMaterialProbe.current = props
+  return <div data-testid="add-material-probe" />
+}
+
+const ContinuityPlannerPage = (props: ComponentProps<typeof ContinuityPlannerPageImpl>) => (
+  <ContinuityPlannerPageImpl renderAddMaterial={AddMaterialProbe} {...props} />
+)
 
 const mocks = {
   create: vi.fn(),

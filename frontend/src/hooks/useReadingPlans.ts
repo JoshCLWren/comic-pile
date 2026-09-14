@@ -3,8 +3,19 @@ import { invalidateReadingPlans } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import {
   continuityPlansApi,
+  type ContinuityPlan,
   type ContinuityPlanWrite,
 } from '../services/api-continuity-plans'
+
+export interface SaveReadingPlanApi {
+  create: (payload: ContinuityPlanWrite) => Promise<ContinuityPlan>
+  update: (planId: number, payload: ContinuityPlanWrite) => Promise<ContinuityPlan>
+}
+
+export interface SaveReadingPlanDeps {
+  /** Injectable create/update API; defaults to the production continuity plans service. */
+  api?: SaveReadingPlanApi
+}
 
 export function useReadingPlans() {
   return useQuery({
@@ -21,13 +32,14 @@ export function useDeleteReadingPlan() {
   })
 }
 
-export function useSaveReadingPlan(planId: number | null) {
+export function useSaveReadingPlan(planId: number | null, deps: SaveReadingPlanDeps = {}) {
+  const { api = continuityPlansApi } = deps
   const client = useQueryClient()
   return useMutation({
     mutationFn: (payload: ContinuityPlanWrite) =>
       planId
-        ? continuityPlansApi.update(planId, payload)
-        : continuityPlansApi.create(payload),
+        ? api.update(planId, payload)
+        : api.create(payload),
     onSuccess: async (plan) => {
       client.setQueryData(queryKeys.readingPlans.detail(plan.id), plan)
       await invalidateReadingPlans(client)
