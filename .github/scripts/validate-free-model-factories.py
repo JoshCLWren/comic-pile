@@ -179,6 +179,11 @@ def main() -> None:
         '--retirement-comments',
         'issues/1093/comments',
         'factory-model-retired-410:v1',
+        'add_unused_free',
+        '--no-add-unused-free',
+        '.github/free-model-factories.tsv',
+        'unused free OpenCode models',
+        'steps.plan.outputs.add',
     ):
         assert required in model_discovery, f'model discovery invariant missing: {required}'
     assert 'omniroute/auto' not in model_discovery

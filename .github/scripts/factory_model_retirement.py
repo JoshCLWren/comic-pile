@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Discover live OpenCode catalogs and retire dead factory roster pins.
+"""Discover live OpenCode catalogs and sync the factory TSV both ways.
 
-The scheduled workflow opens a PR that only removes catalog-absent pins
-and NVIDIA pins with a sticky #1093 HTTP 410 retirement marker. Unused
-free OpenCode models are reported, not auto-added. Paid Zen models are
-never proposed for ``opencode-free`` lanes. NVIDIA catalog presence is
-``opencode models nvidia``, never integrate.api.nvidia.com. A
-``factory-model-retired-410:v1`` comment on #1093 with ``Source: nvidia``
-retires matching bare model ids even when that catalog still lists them.
+The scheduled workflow opens a PR that retires catalog-absent pins and
+NVIDIA pins with a sticky #1093 HTTP 410 retirement marker, **and** pins
+unused free OpenCode models (cost==0 / free-roster name, not paid Zen)
+onto ``.github/free-model-factories.tsv``. Surplus ``big-pickle``
+duplicate slots convert first so unique free models do not grow the
+roster without bound. Models in the retirement lock or a 410 marker are
+never silently re-pinned. NVIDIA catalog adds are out of scope. NVIDIA
+catalog presence is ``opencode models nvidia``, never
+integrate.api.nvidia.com.
 """
 
 from __future__ import annotations
@@ -36,9 +38,13 @@ from factory_roster import (
     load_roster_comments,
     load_roster_lock,
     load_roster_rows,
+    next_available_worker_ids,
+    opencode_free_display_name,
     opencode_model_is_free,
     openrouter_model_is_free,
     rebalance_schedule_minutes,
+    roster_worker_ids,
+    surplus_big_pickle_rows,
     sync_roster_lock,
     write_roster_rows,
 )
@@ -78,6 +84,18 @@ class UnusedFreeModel:
 
 
 @dataclass(frozen=True)
+class PinAddition:
+    """Add or convert one unused free OpenCode model onto the TSV."""
+
+    worker: str
+    source: str
+    model: str
+    action: str
+    previous_model: str | None
+    reason: str
+
+
+@dataclass(frozen=True)
 class RetirementPlan:
     """Diff between the factory roster and live OpenCode catalogs."""
 
@@ -86,6 +104,8 @@ class RetirementPlan:
     unused_free: tuple[UnusedFreeModel, ...]
     paid_rejected: tuple[str, ...]
     catalog_sources: dict[str, str]
+    additions: tuple[PinAddition, ...] = ()
+    locked_unused: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, object]:
         """Return a JSON-serializable report."""
@@ -93,6 +113,8 @@ class RetirementPlan:
             "retirements": [asdict(item) for item in self.retirements],
             "kept": [asdict(item) for item in self.kept],
             "unused_free": [asdict(item) for item in self.unused_free],
+            "additions": [asdict(item) for item in self.additions],
+            "locked_unused": list(self.locked_unused),
             "paid_rejected": list(self.paid_rejected),
             "catalog_sources": dict(self.catalog_sources),
         }
@@ -338,12 +360,128 @@ def unused_free_opencode_models(
     return tuple(unused), tuple(paid)
 
 
+def plan_additions(
+    remaining_rows: Sequence[RosterRow],
+    unused: Sequence[UnusedFreeModel],
+    *,
+    lock: RosterLock | None = None,
+) -> tuple[PinAddition, ...]:
+    """Choose TSV conversions/adds for unused free OpenCode models.
+
+    Surplus ``big-pickle`` duplicates convert first (highest worker id).
+    New worker ids are allocated only when no surplus slot remains.
+    Models in ``retired_models`` are never re-pinned.
+
+    Args:
+        remaining_rows: Roster rows after planned retirements.
+        unused: Live free OpenCode models missing from the incoming TSV.
+        lock: Optional retirement lock.
+
+    Returns:
+        Ordered pin additions apply will write to the TSV.
+    """
+    retired_models = set(lock["retired_models"]) if lock is not None else set()
+    eligible = [
+        item
+        for item in unused
+        if item.model not in retired_models
+    ]
+    eligible.sort(key=lambda item: item.model)
+    convertible = surplus_big_pickle_rows(remaining_rows)
+    occupied = roster_worker_ids(remaining_rows)
+    if lock is not None:
+        occupied |= {int(item) for item in lock["retired_workers"]}
+        occupied |= {int(item) for item in lock["expected_workers"]}
+
+    additions: list[PinAddition] = []
+    grow: list[UnusedFreeModel] = []
+    convert_index = 0
+    for item in eligible:
+        if convert_index < len(convertible):
+            slot = convertible[convert_index]
+            convert_index += 1
+            additions.append(
+                PinAddition(
+                    worker=slot["worker"],
+                    source="opencode-free",
+                    model=item.model,
+                    action="convert",
+                    previous_model=slot["model"],
+                    reason=(
+                        "convert surplus big-pickle slot to unused free "
+                        "OpenCode model"
+                    ),
+                )
+            )
+            continue
+        grow.append(item)
+
+    if grow:
+        new_ids = next_available_worker_ids(occupied, len(grow))
+        for worker_id, item in zip(new_ids, grow, strict=True):
+            additions.append(
+                PinAddition(
+                    worker=str(worker_id),
+                    source="opencode-free",
+                    model=item.model,
+                    action="add",
+                    previous_model=None,
+                    reason=(
+                        "add unused free OpenCode model "
+                        "(no surplus big-pickle slot)"
+                    ),
+                )
+            )
+    return tuple(additions)
+
+
+def _apply_additions(
+    rows: Sequence[RosterRow],
+    additions: Sequence[PinAddition],
+) -> list[RosterRow]:
+    """Convert surplus slots and append grown unused-free pins."""
+    by_worker = {item.worker: item for item in additions}
+    updated: list[RosterRow] = []
+    seen: set[str] = set()
+    for row in rows:
+        addition = by_worker.get(row["worker"])
+        if addition is not None and addition.action == "convert":
+            updated.append(
+                RosterRow(
+                    worker=row["worker"],
+                    source="opencode-free",
+                    model=addition.model,
+                    minute=row["minute"],
+                    scheduler=row["scheduler"],
+                    display_name=opencode_free_display_name(addition.model),
+                )
+            )
+        else:
+            updated.append(row)
+        seen.add(row["worker"])
+    for addition in additions:
+        if addition.action != "add" or addition.worker in seen:
+            continue
+        updated.append(
+            RosterRow(
+                worker=addition.worker,
+                source="opencode-free",
+                model=addition.model,
+                minute="",
+                scheduler="dispatcher",
+                display_name=opencode_free_display_name(addition.model),
+            )
+        )
+    return updated
+
+
 def plan_retirement(
     rows: Sequence[RosterRow],
     catalogs: Mapping[str, ProviderCatalog],
     *,
     lock: RosterLock | None = None,
     retired_410_models: Iterable[str] | None = None,
+    add_unused_free: bool = True,
 ) -> RetirementPlan:
     """Diff roster pins against OpenCode catalogs and NVIDIA 410 markers.
 
@@ -352,9 +490,11 @@ def plan_retirement(
         catalogs: Live or fixture catalogs.
         lock: Optional retirement lock for permanent retirements.
         retired_410_models: Bare NVIDIA model ids with a #1093 410 marker.
+        add_unused_free: When True (default), unused free OpenCode models
+            become TSV additions. Paid Zen is never added.
 
     Returns:
-        Retirement plan and unused-free discovery report.
+        Retirement-and-add plan plus unused-free discovery report.
     """
     retired_models = set(lock["retired_models"]) if lock is not None else set()
     retired_410 = {
@@ -363,20 +503,32 @@ def plan_retirement(
     decisions = [
         decide_pin(row, catalogs, retired_models, retired_410) for row in rows
     ]
+    retirements = tuple(item for item in decisions if item.action == "retire")
+    kept = tuple(item for item in decisions if item.action == "keep")
     roster_free = {
         strip_provider_prefix(row["model"], "opencode")
         for row in rows
         if row["source"] == "opencode-free"
     }
     unused, paid = unused_free_opencode_models(catalogs.get("opencode"), roster_free)
+    retired_workers = {item.worker for item in retirements}
+    remaining = [row for row in rows if row["worker"] not in retired_workers]
+    locked_unused = tuple(
+        item.model for item in unused if item.model in retired_models
+    )
+    additions = (
+        plan_additions(remaining, unused, lock=lock) if add_unused_free else ()
+    )
     return RetirementPlan(
-        retirements=tuple(item for item in decisions if item.action == "retire"),
-        kept=tuple(item for item in decisions if item.action == "keep"),
+        retirements=retirements,
+        kept=kept,
         unused_free=unused,
         paid_rejected=paid,
         catalog_sources={
             provider: catalog.source for provider, catalog in catalogs.items()
         },
+        additions=additions,
+        locked_unused=locked_unused,
     )
 
 
@@ -384,18 +536,21 @@ def apply_plan(
     rows: Sequence[RosterRow],
     plan: RetirementPlan,
 ) -> list[RosterRow]:
-    """Return roster rows with retired pins removed and minutes rebalanced.
+    """Return roster rows after mixed retire+add, with minutes rebalanced.
 
     Args:
         rows: Current factory roster.
-        plan: Retirement plan whose retire workers are dropped.
+        plan: Plan whose retire workers drop and whose additions pin unused
+            free OpenCode models (convert surplus big-pickle first).
 
     Returns:
         Remaining rows with dispatcher minutes balanced to the validator
-        ±1 invariant. Worker ids are unchanged.
+        ±1 invariant. Converted workers keep their ids; grown pins receive
+        new ids after the highest occupied/retired worker.
     """
     retired_workers = {item.worker for item in plan.retirements}
     remaining = [row for row in rows if row["worker"] not in retired_workers]
+    remaining = _apply_additions(remaining, plan.additions)
     return rebalance_schedule_minutes(remaining)
 
 
@@ -436,8 +591,11 @@ def write_github_output(path: Path, plan: RetirementPlan) -> None:
     """Write workflow ``GITHUB_OUTPUT`` keys for the discovery job."""
     lines = [
         f"retire={'true' if plan.retirements else 'false'}",
+        f"add={'true' if plan.additions else 'false'}",
         f"retirement_count={len(plan.retirements)}",
+        f"add_count={len(plan.additions)}",
         f"unused_free_count={len(plan.unused_free)}",
+        f"locked_unused_count={len(plan.locked_unused)}",
         f"paid_rejected_count={len(plan.paid_rejected)}",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -446,7 +604,10 @@ def write_github_output(path: Path, plan: RetirementPlan) -> None:
 def _build_parser() -> argparse.ArgumentParser:
     """Return the retirement CLI parser."""
     parser = argparse.ArgumentParser(
-        description="Discover OpenCode catalogs and retire dead factory pins.",
+        description=(
+            "Discover OpenCode catalogs, retire dead factory pins, and add "
+            "unused free OpenCode models to the TSV."
+        ),
     )
     parser.add_argument("command", choices=("plan", "apply", "discover"))
     parser.add_argument("--catalog-json", type=Path)
@@ -477,6 +638,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "--fail-on-retirement",
         action="store_true",
         help="Exit 1 when dead pins exist (CI fail-closed without applying).",
+    )
+    parser.add_argument(
+        "--add-unused-free",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Pin unused free OpenCode models onto the TSV (default: on). "
+            "Paid Zen and retired_models / 410-locked ids are never added."
+        ),
     )
     return parser
 
@@ -535,6 +705,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         catalogs,
         lock=lock,
         retired_410_models=retired_410,
+        add_unused_free=bool(args.add_unused_free),
     )
     report = json.dumps(plan.as_dict(), indent=2, sort_keys=True)
     if args.report is not None:
@@ -544,11 +715,17 @@ def run(argv: Sequence[str] | None = None) -> int:
     if args.github_output is not None:
         write_github_output(args.github_output, plan)
 
-    if args.command == "apply" and plan.retirements:
+    should_apply = args.command == "apply" and (
+        plan.retirements or plan.additions
+    )
+    if should_apply:
         before_minutes = {row["worker"]: row["minute"] for row in rows}
         remaining = apply_plan(rows, plan)
         moved = sum(
-            1 for row in remaining if row["minute"] != before_minutes[row["worker"]]
+            1
+            for row in remaining
+            if row["worker"] in before_minutes
+            and row["minute"] != before_minutes[row["worker"]]
         )
         write_roster_rows(roster_path, remaining, load_roster_comments(roster_path))
         sync_roster_lock(
@@ -557,8 +734,12 @@ def run(argv: Sequence[str] | None = None) -> int:
             extra_retired_workers=(int(item.worker) for item in plan.retirements),
             extra_retired_models=(item.model for item in plan.retirements),
         )
+        converted = sum(1 for item in plan.additions if item.action == "convert")
+        grown = sum(1 for item in plan.additions if item.action == "add")
         print(
             f"Retired {len(plan.retirements)} pin(s); "
+            f"added {len(plan.additions)} unused free pin(s) "
+            f"({converted} converted, {grown} grown); "
             f"{len(remaining)} roster slot(s) remain; "
             f"reassigned {moved} dispatcher minute(s).",
             file=sys.stderr,
