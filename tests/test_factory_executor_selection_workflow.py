@@ -43,6 +43,13 @@ def test_omniroute_catalog_discovery_requires_explicit_enable() -> None:
     assert "vars.FACTORY_OMNIROUTE_ENABLED == 'on'" in configure
 
 
+def _nvidia_probe_step(workflow: str) -> str:
+    """Return the NVIDIA pre-smoke probe step body."""
+    return workflow.split(
+        "- name: Probe pinned NVIDIA model before OpenCode smoke", maxsplit=1
+    )[1].split("- name: Smoke exact pinned model through OpenCode", maxsplit=1)[0]
+
+
 def test_runtime_provider_probes_remain_authoritative() -> None:
     """Pinned NVIDIA and catalog free slots keep real probe/smoke authority."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -51,6 +58,31 @@ def test_runtime_provider_probes_remain_authoritative() -> None:
     assert "Smoke exact pinned model through OpenCode" in workflow
     assert "Smoke Kilo Auto Free through Kilo CLI" in workflow
     assert "integrate.api.nvidia.com" in workflow
+
+
+def test_nvidia_probe_retries_http_000_and_curl_transport_timeouts() -> None:
+    """Empty curl responses must retry like 429, then soft-exit instead of hard-fail."""
+    probe = _nvidia_probe_step(WORKFLOW.read_text(encoding="utf-8"))
+
+    assert "--max-time 45" in probe
+    assert "--max-time 120" not in probe
+    assert "chat/completions || true" not in probe
+    assert "|| curl_exit=$?" in probe
+    assert "curl_exit" in probe
+    assert 'code="${code:-000}"' in probe
+    assert '"$code" == "000"' in probe
+    assert '"$curl_exit" =~ ^(6|7|28|35|52|56)$' in probe
+    assert "allowing worker to proceed with built-in retry handling" in probe
+    assert "factory-model-retired-410:v1" in probe
+    assert "model_retired_410" in probe
+    assert "provider_failure\\tNVIDIA probe HTTP" in probe
+    assert "model_unavailable\\tNVIDIA probe HTTP 404" in probe
+    assert "max_attempts=3" in probe
+    # Transport exhaustion must not sticky-retire or write 410.
+    assert probe.index('"$code" == "000"') < probe.index("allowing worker to proceed")
+    assert probe.index("allowing worker to proceed") < probe.index(
+        "provider_failure\\tNVIDIA probe HTTP"
+    )
 
 
 def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:

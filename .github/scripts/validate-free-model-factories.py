@@ -159,6 +159,9 @@ def main() -> None:
     assert 'factory_omniroute_smoke.sh' not in runner
     assert 'Select execution candidate at dispatch time' in runner
     assert 'Probe pinned NVIDIA model before OpenCode smoke' in runner
+    assert '"$code" == "000"' in runner
+    assert '"$curl_exit" =~ ^(6|7|28|35|52|56)$' in runner
+    assert 'provider_failure\\tNVIDIA probe HTTP' in runner
     assert 'Smoke exact pinned model through OpenCode' in runner
     assert "KILO_VERSION: '7.4.22'" in runner
     assert 'Smoke Kilo Auto Free through Kilo CLI' in runner
