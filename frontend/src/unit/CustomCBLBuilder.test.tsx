@@ -247,4 +247,31 @@ describe('CustomCBLBuilder', () => {
     confirm.mockRestore()
     anchorClick.mockRestore()
   })
+
+  it('shows export failures and revokes a created object URL', async () => {
+    mocks.exportXml.mockResolvedValue('<ReadingList />')
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
+      throw new Error('Download blocked')
+    })
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn(() => 'blob:failed-custom-cbl'),
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: vi.fn(),
+    })
+
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    expect(await screen.findByText('Starman #55')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export .cbl' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Download blocked')
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:failed-custom-cbl')
+
+    anchorClick.mockRestore()
+  })
 })
