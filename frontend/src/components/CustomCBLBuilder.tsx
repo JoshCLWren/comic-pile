@@ -53,6 +53,7 @@ export default function CustomCBLBuilder({
   const [issueQuery, setIssueQuery] = useState('')
   const [submittedIssueQuery, setSubmittedIssueQuery] = useState('')
   const [message, setMessage] = useState<string | null>(null)
+  const [exportError, setExportError] = useState<Error | null>(null)
 
   const listsQuery = useQuery({
     queryKey: queryKeys.customCBLs.list(),
@@ -80,6 +81,7 @@ export default function CustomCBLBuilder({
     setDescription(list.description ?? '')
     setEntries(normalizePositions(list.entries))
     setMessage(null)
+    setExportError(null)
   }, [detailQuery.data])
 
   const createMutation = useMutation({
@@ -186,19 +188,26 @@ export default function CustomCBLBuilder({
   }
   const exportList = async () => {
     if (!selectedId || !persisted || dirty || disabled || isPending) return
-    const xml = await customCBLApi.exportXml(selectedId)
-    const blob = new Blob([xml], { type: 'application/xml' })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = `${persisted.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'custom-reading-list'}.cbl`
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
-    URL.revokeObjectURL(url)
+    setExportError(null)
+    let url: string | null = null
+    try {
+      const xml = await customCBLApi.exportXml(selectedId)
+      const blob = new Blob([xml], { type: 'application/xml' })
+      url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `${persisted.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'custom-reading-list'}.cbl`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+    } catch (caught) {
+      setExportError(caught instanceof Error ? caught : new Error('Custom CBL export failed.'))
+    } finally {
+      if (url) URL.revokeObjectURL(url)
+    }
   }
 
-  const error = createMutation.error ?? saveMutation.error ?? deleteMutation.error ?? applyMutation.error ?? detailQuery.error ?? listsQuery.error
+  const error = exportError ?? createMutation.error ?? saveMutation.error ?? deleteMutation.error ?? applyMutation.error ?? detailQuery.error ?? listsQuery.error
 
   return (
     <section className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-card)] p-3" aria-labelledby="custom-cbl-heading">
