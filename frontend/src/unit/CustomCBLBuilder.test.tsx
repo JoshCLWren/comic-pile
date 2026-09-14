@@ -168,6 +168,7 @@ describe('CustomCBLBuilder', () => {
       entries: [],
     }
     mocks.create.mockResolvedValue(created)
+    mocks.get.mockResolvedValue(created)
     renderBuilder()
 
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
