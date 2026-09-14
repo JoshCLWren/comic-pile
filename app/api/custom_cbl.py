@@ -33,7 +33,7 @@ from app.services.custom_cbl import (
     search_owned_issues,
 )
 
-router = APIRouter(prefix="/api/v1/custom-cbls", tags=["custom-cbls"])
+router = APIRouter(prefix="/custom-cbls", tags=["custom-cbls"])
 
 
 def _plan_response(plan) -> ContinuityPlanResponse:
