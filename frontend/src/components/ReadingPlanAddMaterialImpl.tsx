@@ -43,7 +43,7 @@ function statusClass(entry: CBLAdoptionPreviewEntry): string {
   return 'text-[var(--theme-text-muted)]'
 }
 
-function errorMessage(error: unknown, fallback: string): string {
+function errorMessage(error: Error, fallback: string): string {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail
     if (isString(detail) && detail.trim()) return detail

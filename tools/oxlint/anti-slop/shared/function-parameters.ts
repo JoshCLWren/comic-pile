@@ -47,3 +47,37 @@ export function functionParameterBindingName(
 		? sourceText
 		: sourceText.slice(0, annotationStart - parameter.start).trimEnd();
 }
+
+/** Check if a node is directly inside a catch clause by walking the parent chain. */
+export function isInsideCatchClause(node: ESTree.Node): boolean {
+	let current: ESTree.Node | undefined = node as ESTree.Node & { parent?: ESTree.Node };
+	while (current) {
+		if (current.type === "CatchClause") return true;
+		current = (current as ESTree.Node & { parent?: ESTree.Node }).parent;
+	}
+	return false;
+}
+
+/** Check if the function node is in a test/unit directory. */
+export function isTestFile(filename: string): boolean {
+	return /[/\\](test|unit)[/\\]/.test(filename);
+}
+
+/** Check if the return type annotation is boolean. */
+export function isReturnTypeBoolean(returnType: ESTree.TSTypeAnnotation | null | undefined): boolean {
+	if (!returnType) return false;
+	return returnType.typeAnnotation.type === "TSBooleanKeyword";
+}
+
+/** Check if any type parameter has a default of unknown. */
+export function hasGenericUnknownDefault(
+	typeParameters: ESTree.TSTypeParameterDeclaration | null | undefined,
+): boolean {
+	if (!typeParameters) return false;
+	return typeParameters.params.some((param) => {
+		if (param.type === "TSTypeParameter") {
+			return param.default?.type === "TSUnknownKeyword";
+		}
+		return false;
+	});
+}
