@@ -549,7 +549,7 @@ async def test_list_reading_orders_is_user_scoped_and_sorted(
 async def test_get_thread_reading_orders_lists_containing_orders(
     projection_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """The thread-scoped endpoint reports matching orders with read state."""
+    """The thread-scoped endpoint reports matching orders with per-issue read state."""
     from app.models.issue import Issue
 
     user = (await async_db.execute(select(User).limit(1))).scalar_one()
@@ -558,12 +558,12 @@ async def test_get_thread_reading_orders_lists_containing_orders(
     order = await _make_reading_order(async_db, user_id=user.id, name="Combined")
     async_db.add(
         ReadingOrderItem(
-            reading_order_id=order.id, thread_id=thread_a.id, position=1, issue_number=None
+            reading_order_id=order.id, thread_id=thread_a.id, position=1, issue_number="1"
         )
     )
     async_db.add(
         ReadingOrderItem(
-            reading_order_id=order.id, thread_id=thread_b.id, position=2, issue_number=None
+            reading_order_id=order.id, thread_id=thread_b.id, position=2, issue_number="1"
         )
     )
     async_db.add(
@@ -582,6 +582,122 @@ async def test_get_thread_reading_orders_lists_containing_orders(
     items = {item["thread_title"]: item for item in order_body["items"]}
     assert items["Alpha"]["is_read"] is True
     assert items["Beta"]["is_read"] is False
+
+
+async def test_reading_path_zero_progress_when_no_issues_read(
+    projection_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A reading order with no read issues reports 0% progress."""
+    from app.models.issue import Issue
+
+    user = (await async_db.execute(select(User).limit(1))).scalar_one()
+    thread = await _make_thread(async_db, user_id=user.id, title="Unread")
+    order = await _make_reading_order(async_db, user_id=user.id, name="Zero Progress")
+    async_db.add(
+        ReadingOrderItem(
+            reading_order_id=order.id, thread_id=thread.id, position=1, issue_number="1"
+        )
+    )
+    async_db.add(
+        Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
+    )
+    await async_db.commit()
+
+    response = await projection_client.get(f"/api/v1/threads/{thread.id}/reading-orders")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert len(body["reading_orders"]) == 1
+    order_body = body["reading_orders"][0]
+    assert order_body["total_items"] == 1
+    assert order_body["completed_items"] == 0
+    assert order_body["items"][0]["is_read"] is False
+
+
+async def test_reading_path_partial_progress(
+    projection_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A reading order with some read issues reports partial progress (issue #2503 regression)."""
+    from app.models.issue import Issue
+
+    user = (await async_db.execute(select(User).limit(1))).scalar_one()
+    threads = []
+    for i in range(10):
+        t = await _make_thread(async_db, user_id=user.id, title=f"Issue {i + 1}")
+        threads.append(t)
+    order = await _make_reading_order(async_db, user_id=user.id, name="Starman Compendiums")
+    for i, thread in enumerate(threads):
+        async_db.add(
+            ReadingOrderItem(
+                reading_order_id=order.id,
+                thread_id=thread.id,
+                position=i + 1,
+                issue_number=str(i + 1),
+            )
+        )
+    for i in range(9):
+        async_db.add(
+            Issue(
+                thread_id=threads[i].id,
+                issue_number=str(i + 1),
+                position=1,
+                status="read",
+                read_at=datetime.now(UTC),
+            )
+        )
+    for i in range(9, 10):
+        async_db.add(
+            Issue(thread_id=threads[i].id, issue_number=str(i + 1), position=1, status="unread")
+        )
+    await async_db.commit()
+
+    response = await projection_client.get(f"/api/v1/threads/{threads[0].id}/reading-orders")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    order_body = body["reading_orders"][0]
+    assert order_body["total_items"] == 10
+    assert order_body["completed_items"] == 9
+
+
+async def test_reading_path_full_progress_when_all_issues_read(
+    projection_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A reading order where all referenced issues are read reports 100% progress."""
+    from app.models.issue import Issue
+
+    user = (await async_db.execute(select(User).limit(1))).scalar_one()
+    threads = []
+    for i in range(5):
+        t = await _make_thread(async_db, user_id=user.id, title=f"Read {i + 1}")
+        threads.append(t)
+    order = await _make_reading_order(async_db, user_id=user.id, name="Full Progress")
+    for i, thread in enumerate(threads):
+        async_db.add(
+            ReadingOrderItem(
+                reading_order_id=order.id,
+                thread_id=thread.id,
+                position=i + 1,
+                issue_number=str(i + 1),
+            )
+        )
+    for i in range(5):
+        async_db.add(
+            Issue(
+                thread_id=threads[i].id,
+                issue_number=str(i + 1),
+                position=1,
+                status="read",
+                read_at=datetime.now(UTC),
+            )
+        )
+    await async_db.commit()
+
+    response = await projection_client.get(f"/api/v1/threads/{threads[0].id}/reading-orders")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    order_body = body["reading_orders"][0]
+    assert order_body["total_items"] == 5
+    assert order_body["completed_items"] == 5
+    assert all(item["is_read"] for item in order_body["items"])
 
 
 async def test_projection_with_unowned_reading_order_is_not_found(
