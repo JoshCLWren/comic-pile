@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.continuity_rule import _refresh_blocked_state
 from app.auth import get_current_user
 from app.database import get_db
+from app.models.continuity_plan import ContinuityPlan
 from app.models.custom_cbl import CustomCBLList
 from app.models.user import User
 from app.schemas.continuity_plan import ContinuityPlanResponse
@@ -36,7 +37,7 @@ from app.services.custom_cbl import (
 router = APIRouter(prefix="/custom-cbls", tags=["custom-cbls"])
 
 
-def _plan_response(plan) -> ContinuityPlanResponse:
+def _plan_response(plan: ContinuityPlan) -> ContinuityPlanResponse:
     """Serialize one persisted Reading Plan."""
     return ContinuityPlanResponse(
         id=plan.id,
@@ -216,7 +217,7 @@ async def apply_custom_cbl(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CustomCBLApplyResponse:
-    """Explicitly append one custom CBL to an existing canonical Reading Plan."""
+    """Explicitly merge one custom CBL into an existing canonical Reading Plan."""
     row = await get_owned_custom_cbl(db, user_id=current_user.id, list_id=list_id)
     result = await apply_custom_cbl_to_plan(
         db,
@@ -227,7 +228,7 @@ async def apply_custom_cbl(
     )
     await db.commit()
     await db.refresh(result.plan)
-    if result.added_issue_ids:
+    if result.plan.ordering_mode == "strict_sequential":
         await _refresh_blocked_state(current_user.id, db)
     plan = _plan_response(result.plan)
     return CustomCBLApplyResponse(
