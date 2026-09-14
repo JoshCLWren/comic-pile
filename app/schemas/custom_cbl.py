@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.continuity_plan import ContinuityPlanResponse
 
@@ -16,10 +16,20 @@ class CustomCBLWrite(BaseModel):
     description: str | None = Field(default=None, max_length=2000)
     issue_ids: list[int] = Field(default_factory=list, max_length=1000)
 
+    @field_validator("issue_ids", mode="before")
+    @classmethod
+    def reject_boolean_issue_ids(cls, value: object) -> object:
+        """Reject JSON booleans before Pydantic can coerce them to integers."""
+        if isinstance(value, (list, tuple)) and any(isinstance(item, bool) for item in value):
+            raise ValueError("issue_ids must contain positive integers")
+        return value
+
     @model_validator(mode="after")
-    def validate_issue_ids(self) -> CustomCBLWrite:
-        """Reject duplicate or non-positive issue references."""
-        if any(isinstance(issue_id, bool) or issue_id <= 0 for issue_id in self.issue_ids):
+    def validate_write(self) -> CustomCBLWrite:
+        """Reject blank names, duplicates, and non-positive issue references."""
+        if not self.name.strip():
+            raise ValueError("name must not be blank")
+        if any(issue_id <= 0 for issue_id in self.issue_ids):
             raise ValueError("issue_ids must contain positive integers")
         if len(set(self.issue_ids)) != len(self.issue_ids):
             raise ValueError("issue_ids must not contain duplicates")
@@ -73,7 +83,7 @@ class CustomCBLApplyRequest(BaseModel):
 
 
 class CustomCBLApplyResponse(ContinuityPlanResponse):
-    """Updated Reading Plan after custom CBL material is appended."""
+    """Updated Reading Plan after custom CBL material is merged into it."""
 
     added_issue_ids: list[int]
     skipped_existing_issue_ids: list[int]
