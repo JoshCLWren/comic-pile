@@ -1,5 +1,6 @@
 """End-to-end API coverage for user-authored CBL lists."""
 
+from copy import deepcopy
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
@@ -8,11 +9,12 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api import custom_cbl as custom_cbl_api
+from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.models.user import User
+from app.services import custom_cbl as custom_cbl_service
 from tests.conftest import get_or_create_user_async
 
 
@@ -72,10 +74,8 @@ def _plan_payload(issue_ids: list[int], *, mode: str = "informational") -> dict[
 async def test_custom_cbl_create_edit_export_and_apply_without_synthetic_threads(
     auth_client: AsyncClient,
     async_db: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A custom CBL anchors source order at an existing real issue without fake threads."""
-    monkeypatch.setattr(custom_cbl_api, "_refresh_blocked_state", AsyncMock())
     user = await get_or_create_user_async(async_db)
     starman = await _issue(
         async_db,
@@ -205,10 +205,8 @@ async def test_custom_cbl_rejects_issue_owned_by_another_user(
 async def test_custom_cbl_strict_plan_application_uses_canonical_rule_compiler(
     auth_client: AsyncClient,
     async_db: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Applying custom material to a strict plan recompiles adjacent hard gates."""
-    monkeypatch.setattr(custom_cbl_api, "_refresh_blocked_state", AsyncMock())
     user = await get_or_create_user_async(async_db)
     first = await _issue(
         async_db,
@@ -262,3 +260,146 @@ async def test_custom_cbl_strict_plan_application_uses_canonical_rule_compiler(
         (first.id, second.id),
         (second.id, third.id),
     ]
+
+
+@pytest.mark.asyncio
+async def test_custom_cbl_skips_existing_issue_in_another_lane(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Applying a list never moves or duplicates an issue that already lives in another lane."""
+    user = await get_or_create_user_async(async_db)
+    anchor = await _issue(
+        async_db,
+        user_id=user.id,
+        title="Starman",
+        issue_number="55",
+        queue_position=1,
+    )
+    existing_other_lane = await _issue(
+        async_db,
+        user_id=user.id,
+        title="All-Star Comics",
+        issue_number="1",
+        queue_position=2,
+    )
+    new_issue = await _issue(
+        async_db,
+        user_id=user.id,
+        title="JSA",
+        issue_number="1",
+        queue_position=3,
+    )
+    await async_db.commit()
+
+    custom = await auth_client.post(
+        "/api/v1/custom-cbls",
+        json={
+            "name": "Cross-lane bridge",
+            "issue_ids": [anchor.id, existing_other_lane.id, new_issue.id],
+        },
+    )
+    assert custom.status_code == 201, custom.text
+
+    plan = await auth_client.post(
+        "/api/v1/continuity-plans/",
+        json={
+            "name": "Two-lane plan",
+            "ordering_mode": "informational",
+            "lanes": [
+                {"id": "main", "name": "Main", "order": 0},
+                {"id": "side", "name": "Side", "order": 1},
+            ],
+            "nodes": [
+                {
+                    "id": "anchor",
+                    "node_type": "issue",
+                    "ref_id": anchor.id,
+                    "lane_id": "main",
+                    "position": 0,
+                },
+                {
+                    "id": "existing-side",
+                    "node_type": "issue",
+                    "ref_id": existing_other_lane.id,
+                    "lane_id": "side",
+                    "position": 0,
+                },
+            ],
+        },
+    )
+    assert plan.status_code == 201, plan.text
+
+    applied = await auth_client.post(
+        f"/api/v1/custom-cbls/{custom.json()['id']}/reading-plans/{plan.json()['id']}:apply",
+        json={"lane_id": "main"},
+    )
+    assert applied.status_code == 200, applied.text
+    body = applied.json()
+    assert body["added_issue_ids"] == [new_issue.id]
+    assert body["skipped_existing_issue_ids"] == [anchor.id, existing_other_lane.id]
+
+    matching = [node for node in body["nodes"] if node["ref_id"] == existing_other_lane.id]
+    assert len(matching) == 1
+    assert matching[0]["lane_id"] == "side"
+
+
+@pytest.mark.asyncio
+async def test_custom_cbl_strict_apply_rolls_back_when_blocked_refresh_fails(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A strict apply cannot persist plan changes without its blocked-state projection."""
+    user = await get_or_create_user_async(async_db)
+    first = await _issue(
+        async_db,
+        user_id=user.id,
+        title="Starman",
+        issue_number="55",
+        queue_position=1,
+    )
+    second = await _issue(
+        async_db,
+        user_id=user.id,
+        title="JSA",
+        issue_number="1",
+        queue_position=2,
+    )
+    await async_db.commit()
+
+    custom = await auth_client.post(
+        "/api/v1/custom-cbls",
+        json={"name": "Atomic bridge", "issue_ids": [first.id, second.id]},
+    )
+    assert custom.status_code == 201, custom.text
+    plan = await auth_client.post(
+        "/api/v1/continuity-plans/",
+        json=_plan_payload([first.id], mode="strict_sequential"),
+    )
+    assert plan.status_code == 201, plan.text
+    plan_id = plan.json()["id"]
+
+    persisted = await async_db.get(ContinuityPlan, plan_id)
+    assert persisted is not None
+    before_nodes = deepcopy(persisted.nodes_json)
+
+    monkeypatch.setattr(
+        custom_cbl_service,
+        "refresh_user_blocked_status",
+        AsyncMock(side_effect=RuntimeError("projection failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="projection failed"):
+        await custom_cbl_service.apply_custom_cbl_for_user(
+            async_db,
+            user_id=user.id,
+            list_id=custom.json()["id"],
+            plan_id=plan_id,
+            lane_id=None,
+        )
+
+    restored = await async_db.get(ContinuityPlan, plan_id)
+    assert restored is not None
+    await async_db.refresh(restored)
+    assert restored.nodes_json == before_nodes
