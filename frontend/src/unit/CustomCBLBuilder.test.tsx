@@ -155,4 +155,96 @@ describe('CustomCBLBuilder', () => {
     await waitFor(() => expect(mocks.apply).toHaveBeenCalledWith(9, 18))
     await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1))
   })
+
+  it('creates an empty custom CBL and exposes it for editing', async () => {
+    const created = {
+      id: 10,
+      user_id: 1,
+      name: 'Cosmic detour',
+      description: null,
+      issue_count: 0,
+      created_at: '2026-09-14T03:10:00Z',
+      updated_at: '2026-09-14T03:10:00Z',
+      entries: [],
+    }
+    mocks.create.mockResolvedValue(created)
+    renderBuilder()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(screen.getByLabelText('New custom CBL name'), {
+      target: { value: '  Cosmic detour  ' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    await waitFor(() => {
+      expect(mocks.create).toHaveBeenCalledWith({ name: 'Cosmic detour', issue_ids: [] })
+    })
+    expect(await screen.findByText('This custom CBL is empty. Search for issues above to build it.')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Custom CBL created.')
+  })
+
+  it('reorders, removes, saves, exports, and deletes an existing custom CBL', async () => {
+    const onlyAllStar = {
+      ...existingList,
+      description: null,
+      issue_count: 1,
+      entries: [
+        {
+          ...existingList.entries[1],
+          position: 0,
+        },
+      ],
+    }
+    mocks.update.mockResolvedValue(onlyAllStar)
+    mocks.exportXml.mockResolvedValue('<ReadingList><Name>Starman into JSA</Name></ReadingList>')
+    mocks.delete.mockResolvedValue(undefined)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn(() => 'blob:custom-cbl'),
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: vi.fn(),
+    })
+
+    renderBuilder()
+    fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
+    expect(await screen.findByText('Starman #55')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move All-Star Comics #1 earlier' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Starman #55' }))
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: '   ' } })
+
+    expect(screen.getByText('Save this custom CBL before applying or exporting it.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
+
+    await waitFor(() => {
+      expect(mocks.update).toHaveBeenCalledWith(9, {
+        name: 'Starman into JSA',
+        description: null,
+        issue_ids: [30001],
+      })
+    })
+
+    const exportButton = await screen.findByRole('button', { name: 'Export .cbl' })
+    await waitFor(() => expect(exportButton).not.toBeDisabled())
+    fireEvent.click(exportButton)
+    await waitFor(() => expect(mocks.exportXml).toHaveBeenCalledWith(9))
+    expect(URL.createObjectURL).toHaveBeenCalled()
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:custom-cbl')
+    expect(anchorClick).toHaveBeenCalled()
+
+    const deleteButton = screen.getByRole('button', { name: 'Delete' })
+    fireEvent.click(deleteButton)
+    expect(mocks.delete).not.toHaveBeenCalled()
+    fireEvent.click(deleteButton)
+    await waitFor(() => expect(mocks.delete).toHaveBeenCalledWith(9))
+    expect(await screen.findByRole('status')).toHaveTextContent('Custom CBL deleted.')
+
+    confirm.mockRestore()
+    anchorClick.mockRestore()
+  })
 })
