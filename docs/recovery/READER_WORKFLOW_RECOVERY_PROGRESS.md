@@ -3,19 +3,42 @@
 > Temporary handoff file created on 2026-09-12. Delete this file when the reader-workflow
 > recovery is complete and the production cutover has been verified.
 
-## Working state
+## Current production state (2026-09-13)
 
 - Repository: `JoshCLWren/comic-pile`
-- Branch: `manual/2482-explicit-reader-order-migration`
-- Pull request: #2485
 - Tracking issue: #2482
-- Starting `main`: `ade255f207d816f30ddd25da9ce32c8c91ac7328`
-- Production was **not** mutated during this work.
+- Migration implementation: PR #2485, merged as `d74fbc43433de9a5469e8cea5b573ea0fa3386fb`.
+- Production-query chunking fix: PR #2498, merged as
+  `caf2fed2a81e18aa0ada331faab58f767549daf0`.
+- Replay-classification fix: PR #2499, merged as
+  `c4d4f0655078a91d23e7bb2c36664e61a9abd0d5`.
+- The guarded production batch **was applied** with explicit authorization. Eleven clean
+  manifests created Reading Plans 21–31 and retired 119 `reading_plan_order` Dependencies.
+- The receipt and verification artifacts are local at
+  `/mnt/extra/josh/code/comic-pile-step27-operations/20260913T202907Z/`.
+- The corrected post-apply replay reports 13 already migrated, 13 blocked by identity/source,
+  3 behavior mismatches, and zero safe migrations left unapplied.
 - This checkpoint is progress, not a claim that the feature is shipped.
 - Runtime switch `LEGACY_DEPENDENCY_BLOCKING_ENABLED` remains enabled until the cutover
   audit proves every remaining `reading_plan_order` Dependency is gone (including dormant
   edges), every `needs_review`/unclassified row is cleared, and surviving standalones are
   canonically mirrored — not merely that today's `next_unread_issue_id` is unaffected.
+
+### Applied production manifests
+
+| Manifest | Plan ID | Dependencies retired |
+| --- | ---: | ---: |
+| Astro City | 21 | 10 |
+| Black Panther: Priest | 22 | 1 |
+| ClanDestine | 23 | 2 |
+| Daredevil Crossovers | 24 | 4 |
+| Hickman Stage 1 | 25 | 19 |
+| JLI / Breakdowns | 26 | 52 |
+| Majestic Recovery | 27 | 1 |
+| Nova Annual | 28 | 2 |
+| Planetary / Authority | 29 | 7 |
+| Starlin Cosmic | 30 | 18 |
+| WildC.A.T.s Satellite | 31 | 3 |
 
 ## Frozen architecture
 
@@ -74,8 +97,17 @@
 
 ## Remaining production cutover (operator-gated)
 
-- [ ] Run the batch dry-run against the real production snapshot using read-only access.
-- [ ] Do not apply the production batch without explicit user authorization.
+- [x] Run the batch dry-run against the real production snapshot using read-only access.
+- [x] Apply all 11 clean manifests from their exact verified snapshots and save the receipt.
+- [x] Replay the batch after apply and verify all 11 are idempotently `already-migrated`.
+- [ ] Reconcile the 13 identity/source-blocked manifests without guessing:
+      Alpha Flight, America's Best Comics, DC K.O., Doom Patrol, Fantastic Four Early Years,
+      Fourth World, New Gods, Supreme, Teen Titans, Ultimate Universe, Unnamed Universe,
+      Wolverine, and X-Men Era Ten.
+- [ ] Resolve the three behavior mismatches before migration: Doctor Strange Epic Vol. 10,
+      Starman Compendiums, and Starman/JSA Bridge.
+- [ ] Classify or reconcile active `needs_review` Dependency 1929.
+- [ ] Re-run dry-run/apply for newly clean manifests using exact snapshots and a new receipt.
 - [ ] Prove the release condition before disabling legacy runtime blocking globally:
       every remaining `reading_plan_order` Dependency is gone or canonically represented,
       every `needs_review`/unclassified row is a hard stop, and surviving standalones have
@@ -109,8 +141,13 @@ cd frontend && pnpm exec playwright test src/test/reading-plan-cbl-golden-path.s
 - Do not run PostgreSQL-backed pytest processes concurrently; they share test database state.
 - A focused Vitest projection test currently prints a harmless `Network Error` to stderr while
   passing; investigate before calling the full UI verification clean.
-- The historical audit found active legacy reader-order state and `needs_review` rows, but that is
-  not a current production observation. The production batch dry-run is the source of truth.
+- The post-apply production cutover audit is current: 2,229 active `reading_plan_order`, 54 active
+  `standalone_prerequisite`, and one active `needs_review` Dependency remain. There are no
+  unclassified rows, no `sequence_order` blockers, and no missing/mismatched standalone mirrors.
+- The current identity/source blockers are intentionally untouched. Most have unresolved CBL
+  identity; DC K.O. and Ultimate Universe overlap existing plans/rules; Fantastic Four has source
+  edges outside its source set; Fourth World still has generated reader-order rows inside the
+  proposed plan. Consult the saved per-manifest snapshots for exact IDs and counts.
+- The behavior mismatches are fail-closed: Doctor Strange and Starman/JSA would change Roll
+  eligibility; Starman Compendiums does not exactly match the reviewed Step 23B issue set.
 - The runtime switch must remain enabled until the cutover audit proves the release condition.
-- Prior push of `fa2235f4f` was interrupted mid pre-push suite; remote may still lag local HEAD
-  until a complete hook-backed push succeeds.
