@@ -339,7 +339,7 @@ async def test_explicit_migration_refuses_needs_review_intersection(
 async def test_build_manifest_report_marks_already_migrated_explicit(
     async_db: AsyncSession,
 ) -> None:
-    """Re-running a clean explicit migration reports already-migrated."""
+    """Replay trusts the stamped plan contract, not legacy group membership."""
     user = await get_or_create_user_async(async_db)
     rows = [
         await _thread_issue(
@@ -355,6 +355,13 @@ async def test_build_manifest_report_marks_already_migrated_explicit(
         )
     ]
     issues = [row[1] for row in rows]
+    unrelated_row = await _thread_issue(
+        async_db,
+        user_id=user.id,
+        title="Unrelated compatibility member",
+        queue_position=4,
+        status="unread",
+    )
     group = DependencyGroup(
         user_id=user.id,
         name="Already Migrated Family",
@@ -364,6 +371,11 @@ async def test_build_manifest_report_marks_already_migrated_explicit(
     await async_db.flush()
     for issue in issues:
         async_db.add(DependencyGroupMembership(group_id=group.id, issue_id=issue.id))
+    # Legacy groups are broader than some classified reader-order families in
+    # production. Their preserved membership must not become plan authority.
+    async_db.add(
+        DependencyGroupMembership(group_id=group.id, issue_id=unrelated_row[1].id)
+    )
     reader_order = [
         Dependency(
             source_issue_id=issues[0].id,
