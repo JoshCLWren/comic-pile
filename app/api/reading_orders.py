@@ -81,14 +81,17 @@ async def get_thread_reading_orders(
         item_responses = []
         completed = 0
         for item in items_sorted:
-            issue_result = await db.execute(
-                select(Issue).where(
-                    Issue.thread_id == item.thread_id,
-                    Issue.status == "read",
+            # Determine if the specific issue referenced in this order item has been read
+            is_read = False
+            if item.issue_number is not None:
+                issue_result = await db.execute(
+                    select(Issue).where(
+                        Issue.thread_id == item.thread_id,
+                        Issue.issue_number == item.issue_number,
+                        Issue.status == "read",
+                    )
                 )
-            )
-            read_issues = issue_result.scalars().all()
-            is_read = len(read_issues) > 0
+                is_read = issue_result.scalar_one_or_none() is not None
 
             thread_result = await db.execute(
                 select(Thread).where(Thread.id == item.thread_id)
