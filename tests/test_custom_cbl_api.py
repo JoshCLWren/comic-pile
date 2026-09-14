@@ -49,7 +49,7 @@ async def _issue(
     return issue
 
 
-def _plan_payload(issue_id: int, *, mode: str = "informational") -> dict[str, object]:
+def _plan_payload(issue_ids: list[int], *, mode: str = "informational") -> dict[str, object]:
     """Build a minimal one-lane Reading Plan payload."""
     return {
         "name": "Starman into JSA",
@@ -61,8 +61,9 @@ def _plan_payload(issue_id: int, *, mode: str = "informational") -> dict[str, ob
                 "node_type": "issue",
                 "ref_id": issue_id,
                 "lane_id": "main",
-                "position": 0,
+                "position": position,
             }
+            for position, issue_id in enumerate(issue_ids)
         ],
     }
 
@@ -73,7 +74,7 @@ async def test_custom_cbl_create_edit_export_and_apply_without_synthetic_threads
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A custom CBL orders real issues and applies them to a Reading Plan."""
+    """A custom CBL anchors source order at an existing real issue without fake threads."""
     monkeypatch.setattr(custom_cbl_api, "_refresh_blocked_state", AsyncMock())
     user = await get_or_create_user_async(async_db)
     starman = await _issue(
@@ -83,6 +84,14 @@ async def test_custom_cbl_create_edit_export_and_apply_without_synthetic_threads
         issue_number="55",
         queue_position=1,
     )
+    starman_next = Issue(
+        thread_id=starman.thread_id,
+        issue_number="56",
+        position=2,
+        status="unread",
+    )
+    async_db.add(starman_next)
+    await async_db.flush()
     all_star = await _issue(
         async_db,
         user_id=user.id,
@@ -138,7 +147,7 @@ async def test_custom_cbl_create_edit_export_and_apply_without_synthetic_threads
 
     plan = await auth_client.post(
         "/api/v1/continuity-plans/",
-        json=_plan_payload(starman.id),
+        json=_plan_payload([starman.id, starman_next.id]),
     )
     assert plan.status_code == 201, plan.text
 
@@ -154,7 +163,9 @@ async def test_custom_cbl_create_edit_export_and_apply_without_synthetic_threads
         starman.id,
         jsa.id,
         all_star.id,
+        starman_next.id,
     ]
+    assert body["nodes"][0]["source_paths"] == [f"custom-cbl:{custom['id']}"]
     assert body["nodes"][1]["source_paths"] == [f"custom-cbl:{custom['id']}"]
 
     threads = (
@@ -224,12 +235,12 @@ async def test_custom_cbl_strict_plan_application_uses_canonical_rule_compiler(
 
     custom = await auth_client.post(
         "/api/v1/custom-cbls",
-        json={"name": "Strict bridge", "issue_ids": [second.id, third.id]},
+        json={"name": "Strict bridge", "issue_ids": [first.id, second.id, third.id]},
     )
     assert custom.status_code == 201, custom.text
     plan = await auth_client.post(
         "/api/v1/continuity-plans/",
-        json=_plan_payload(first.id, mode="strict_sequential"),
+        json=_plan_payload([first.id], mode="strict_sequential"),
     )
     assert plan.status_code == 201, plan.text
 
@@ -238,6 +249,7 @@ async def test_custom_cbl_strict_plan_application_uses_canonical_rule_compiler(
         json={},
     )
     assert applied.status_code == 200, applied.text
+    assert applied.json()["skipped_existing_issue_ids"] == [first.id]
 
     rules = (
         await async_db.execute(
