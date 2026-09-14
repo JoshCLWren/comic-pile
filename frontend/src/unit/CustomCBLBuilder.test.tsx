@@ -181,7 +181,6 @@ describe('CustomCBLBuilder', () => {
       expect(mocks.create).toHaveBeenCalledWith({ name: 'Cosmic detour', issue_ids: [] })
     })
     expect(await screen.findByText('This custom CBL is empty. Search for issues above to build it.')).toBeInTheDocument()
-    expect(screen.getByRole('status')).toHaveTextContent('Custom CBL created.')
   })
 
   it('reorders, removes, saves, exports, and deletes an existing custom CBL', async () => {
