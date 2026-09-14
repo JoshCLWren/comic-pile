@@ -81,7 +81,6 @@ async def get_thread_reading_orders(
         item_responses = []
         completed = 0
         for item in items_sorted:
-            # Determine if the specific issue referenced in this order item has been read
             is_read = False
             if item.issue_number is not None:
                 issue_result = await db.execute(
