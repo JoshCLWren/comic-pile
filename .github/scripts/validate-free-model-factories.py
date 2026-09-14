@@ -176,6 +176,9 @@ def main() -> None:
         'NVIDIA_API_KEY',
         'factory/model-retirement',
         'integrate.api.nvidia.com',
+        '--retirement-comments',
+        'issues/1093/comments',
+        'factory-model-retired-410:v1',
     ):
         assert required in model_discovery, f'model discovery invariant missing: {required}'
     assert 'omniroute/auto' not in model_discovery

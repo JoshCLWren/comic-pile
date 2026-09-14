@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Discover live OpenCode catalogs and retire dead factory roster pins.
 
-The scheduled workflow opens a PR that only removes catalog-absent pins.
-Unused free OpenCode models are reported, not auto-added. Paid Zen models
-are never proposed for ``opencode-free`` lanes. NVIDIA pins are judged only
-by ``opencode models nvidia``, never by integrate.api.nvidia.com.
+The scheduled workflow opens a PR that only removes catalog-absent pins
+and NVIDIA pins with a sticky #1093 HTTP 410 retirement marker. Unused
+free OpenCode models are reported, not auto-added. Paid Zen models are
+never proposed for ``opencode-free`` lanes. NVIDIA catalog presence is
+``opencode models nvidia``, never integrate.api.nvidia.com. A
+``factory-model-retired-410:v1`` comment on #1093 with ``Source: nvidia``
+retires matching bare model ids even when that catalog still lists them.
 """
 
 from __future__ import annotations
@@ -12,7 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -46,6 +49,10 @@ PROVIDER_BY_SOURCE = {
     "nvidia": "nvidia",
     "openrouter-free": "openrouter",
 }
+# Matches the NVIDIA probe in ``free-model-factory-run.yml``.
+RETIREMENT_MARKER = "<!-- factory-model-retired-410:v1 -->"
+NVIDIA_SOURCE_LINE = "Source: nvidia"
+NVIDIA_410_REASON = "NVIDIA HTTP 410 retirement marker on #1093"
 
 
 @dataclass(frozen=True)
@@ -125,17 +132,94 @@ def _catalog_for_source(
     return catalogs.get(provider)
 
 
+def flatten_github_comments(payload: object) -> tuple[Mapping[str, object], ...]:
+    """Flatten one GitHub comments page or a slurped list of pages.
+
+    Args:
+        payload: Parsed JSON from ``gh api --paginate`` (one array) or
+            ``gh api --paginate --slurp`` (array of page arrays).
+
+    Returns:
+        Comment objects in document order.
+    """
+    if not isinstance(payload, list):
+        return ()
+    flattened: list[Mapping[str, object]] = []
+    for item in payload:
+        if isinstance(item, Mapping):
+            flattened.append(item)
+        elif isinstance(item, list):
+            flattened.extend(value for value in item if isinstance(value, Mapping))
+    return tuple(flattened)
+
+
+def nvidia_models_retired_by_410_comments(payload: object) -> frozenset[str]:
+    """Return bare NVIDIA model ids marked retired by #1093 410 comments.
+
+    Matching follows the NVIDIA probe in ``free-model-factory-run.yml``:
+    the ``factory-model-retired-410:v1`` marker line, ``Source: nvidia``,
+    and ``Model: <id>``. Discovery uses the same evidence the probe uses to
+    skip a pin, then drops that pin from the roster instead of leaving a
+    skip-loop zombie.
+
+    Args:
+        payload: GitHub issue-comment JSON (one page or slurped pages).
+
+    Returns:
+        Bare model ids the probe would skip as permanently retired.
+    """
+    models: set[str] = set()
+    for comment in flatten_github_comments(payload):
+        body = str(comment.get("body") or "")
+        lines = body.splitlines()
+        if RETIREMENT_MARKER not in lines:
+            continue
+        if NVIDIA_SOURCE_LINE not in lines:
+            continue
+        for line in lines:
+            if line.startswith("Model: "):
+                model = line.removeprefix("Model: ").strip()
+                if model:
+                    models.add(model)
+                break
+    return frozenset(models)
+
+
+def load_nvidia_410_models(path: Path | None) -> set[str]:
+    """Load NVIDIA 410-retired model ids from a GitHub comments dump.
+
+    Args:
+        path: Optional JSON path produced by the same ``gh api --paginate``
+            call the NVIDIA probe uses against issue #1093.
+
+    Returns:
+        Bare NVIDIA model ids with a sticky 410 marker.
+
+    Raises:
+        OSError: When the comments file cannot be read.
+        json.JSONDecodeError: When the comments file is not valid JSON.
+    """
+    if path is None:
+        return set()
+    payload: object = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        raise ValueError("retirement comments JSON must be a GitHub comments array")
+    return set(nvidia_models_retired_by_410_comments(payload))
+
+
 def decide_pin(
     row: RosterRow,
     catalogs: Mapping[str, ProviderCatalog],
     retired_models: set[str],
+    retired_410_models: set[str] | None = None,
 ) -> PinDecision:
-    """Classify one roster pin against live catalogs and the retirement lock.
+    """Classify one roster pin against catalogs, lock, and 410 markers.
 
     Args:
         row: Factory TSV row.
         catalogs: Loaded OpenCode provider catalogs.
-        retired_models: Permanently retired model ids.
+        retired_models: Permanently retired model ids from the roster lock.
+        retired_410_models: Bare NVIDIA model ids with a #1093 410 marker.
 
     Returns:
         Keep or retire decision.
@@ -143,6 +227,7 @@ def decide_pin(
     worker = row["worker"]
     source = row["source"]
     model = row["model"]
+    retired_410 = retired_410_models or set()
     if model in retired_models:
         return PinDecision(
             worker=worker,
@@ -150,6 +235,14 @@ def decide_pin(
             model=model,
             action="retire",
             reason="permanently retired",
+        )
+    if source == "nvidia" and model in retired_410:
+        return PinDecision(
+            worker=worker,
+            source=source,
+            model=model,
+            action="retire",
+            reason=NVIDIA_410_REASON,
         )
     if source in PROTECTED_SOURCES:
         return PinDecision(
@@ -250,19 +343,26 @@ def plan_retirement(
     catalogs: Mapping[str, ProviderCatalog],
     *,
     lock: RosterLock | None = None,
+    retired_410_models: Iterable[str] | None = None,
 ) -> RetirementPlan:
-    """Diff roster pins against OpenCode catalogs.
+    """Diff roster pins against OpenCode catalogs and NVIDIA 410 markers.
 
     Args:
         rows: Current factory roster.
         catalogs: Live or fixture catalogs.
         lock: Optional retirement lock for permanent retirements.
+        retired_410_models: Bare NVIDIA model ids with a #1093 410 marker.
 
     Returns:
         Retirement plan and unused-free discovery report.
     """
     retired_models = set(lock["retired_models"]) if lock is not None else set()
-    decisions = [decide_pin(row, catalogs, retired_models) for row in rows]
+    retired_410 = {
+        str(item).strip() for item in (retired_410_models or ()) if str(item).strip()
+    }
+    decisions = [
+        decide_pin(row, catalogs, retired_models, retired_410) for row in rows
+    ]
     roster_free = {
         strip_provider_prefix(row["model"], "opencode")
         for row in rows
@@ -357,6 +457,16 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lock", type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--github-output", type=Path)
+    parser.add_argument(
+        "--retirement-comments",
+        type=Path,
+        help=(
+            "Issue #1093 comments JSON from the same gh api --paginate call "
+            "the NVIDIA probe uses. Sticky factory-model-retired-410:v1 "
+            "nvidia comments retire matching pins even when OpenCode still "
+            "lists them."
+        ),
+    )
     parser.add_argument("--opencode-bin", default="")
     parser.add_argument(
         "--require-cli",
@@ -414,7 +524,18 @@ def run(argv: Sequence[str] | None = None) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
-    plan = plan_retirement(rows, catalogs, lock=lock)
+    try:
+        retired_410 = load_nvidia_410_models(args.retirement_comments)
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        print(f"ERROR: cannot read retirement comments: {exc}", file=sys.stderr)
+        return 2
+
+    plan = plan_retirement(
+        rows,
+        catalogs,
+        lock=lock,
+        retired_410_models=retired_410,
+    )
     report = json.dumps(plan.as_dict(), indent=2, sort_keys=True)
     if args.report is not None:
         args.report.write_text(report + "\n", encoding="utf-8")

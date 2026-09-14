@@ -443,7 +443,7 @@ make migrate  # Run migrations (or: alembic upgrade head)
 
 Fixed-model factories read `.github/free-model-factories.tsv`. Model presence is **OpenCode CLI** (`opencode models <provider>`), not OmniRoute and not integrate.api.nvidia.com alone.
 
-Scheduled workflow: `.github/workflows/factory-model-discovery.yml` (also `workflow_dispatch`). It opens `factory/model-retirement` when pins disappear from the live CLI catalog, rebalances remaining dispatcher minutes to the validator ±1 invariant, and writes unused free models to a report artifact. It does not auto-add paid Zen models. `EXPECTED_WORKERS` is generated in `.github/factory-expected-workers.json` by the retirement apply path. Discovery and `free-model-factory-run.yml` pin the same OpenCode CLI release.
+Scheduled workflow: `.github/workflows/factory-model-discovery.yml` (also `workflow_dispatch`). It opens `factory/model-retirement` when pins disappear from the live CLI catalog or when sticky `#1093` NVIDIA `factory-model-retired-410:v1` markers match a pin, rebalances remaining dispatcher minutes to the validator ±1 invariant, and writes unused free models to a report artifact. It does not auto-add paid Zen models. `EXPECTED_WORKERS` is generated in `.github/factory-expected-workers.json` by the retirement apply path. Discovery and `free-model-factory-run.yml` pin the same OpenCode CLI release.
 
 Local plan against a recorded catalog:
 
