@@ -18,6 +18,7 @@ class FakeSnapshot:
     """Small in-memory ComicVine snapshot for deterministic expansion tests."""
 
     def __init__(self) -> None:
+        """Initialize empty fake issue and volume stores."""
         self.issues: dict[int, LocalComicVineResult] = {}
         self.volumes: dict[int, LocalComicVineResult] = {}
         self.volume_issues: dict[int, list[LocalComicVineResult]] = {}
