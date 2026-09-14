@@ -506,18 +506,25 @@ jobs:
           attempt=0
           max_attempts=3
           code=""
+          curl_exit=0
           while (( attempt < max_attempts )); do
             attempt=$((attempt + 1))
+            curl_exit=0
+            # Capture curl's transport status. `|| true` would discard exit 28
+            # (HTTP 000 / 0-byte timeout) and skip the transient retry path.
             code="$(curl --silent --show-error --dump-header "$headers" --output "$response" --write-out '%{http_code}' \
-              --connect-timeout 5 --max-time 120 \
+              --connect-timeout 5 --max-time 45 \
               --header "Authorization: Bearer ${NVIDIA_API_KEY}" \
               --header 'Content-Type: application/json' \
               --data "$request" \
-              https://integrate.api.nvidia.com/v1/chat/completions || true)"
+              https://integrate.api.nvidia.com/v1/chat/completions)" || curl_exit=$?
+            code="${code:-000}"
+            echo "NVIDIA probe curl exit ${curl_exit} HTTP ${code} (attempt ${attempt}/${max_attempts})" >&2
             if [[ "$code" == "404" ]]; then
               echo "Pinned NVIDIA model is not currently invokable for this account: ${MODEL}" >&2
               echo 'No fallback is allowed for a fixed-model lane.' >&2
               cat "$response" >&2 || true
+              printf 'model_unavailable\tNVIDIA probe HTTP 404 for %s\n' "$MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
               exit 1
             fi
             if [[ "$code" == "410" ]]; then
@@ -530,7 +537,19 @@ jobs:
               exit 1
             fi
             [[ "$code" =~ ^2 ]] && break
-            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$response" 2>/dev/null || [[ "$code" == "429" ]]; then
+            transient=0
+            # HTTP 000 is curl's empty-response sentinel (typically exit 28).
+            # Treat it like 429: retry, then soft-exit 0. Never write 410.
+            if [[ "$code" == "000" || "$code" == "429" || "$code" == "502" || "$code" == "503" || "$code" == "504" ]]; then
+              transient=1
+            fi
+            if [[ "$curl_exit" =~ ^(6|7|28|35|52|56)$ ]]; then
+              transient=1
+            fi
+            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$response" 2>/dev/null; then
+              transient=1
+            fi
+            if (( transient )); then
               if (( attempt < max_attempts )); then
                 retry_after="$(grep -i '^retry-after:' "$headers" 2>/dev/null | tail -n1 | sed -E 's/^[^:]+:[[:space:]]*//I' | tr -d '\r' | grep -E '^[0-9]+' || true)"
                 if [[ "$retry_after" =~ ^[0-9]+$ ]]; then
@@ -538,12 +557,12 @@ jobs:
                 else
                   delay=$(( 5 * attempt ))
                 fi
-                echo "NVIDIA probe transient HTTP ${code} (attempt ${attempt}/${max_attempts}); retrying after ${delay}s" >&2
+                echo "NVIDIA probe transient HTTP ${code} curl_exit ${curl_exit} (attempt ${attempt}/${max_attempts}); retrying after ${delay}s" >&2
                 cat "$response" >&2 || true
                 sleep "$delay"
                 continue
               fi
-              echo "Transient NVIDIA probe failure HTTP ${code} after ${attempt} attempts; allowing worker to proceed with built-in retry handling" >&2
+              echo "Transient NVIDIA probe failure HTTP ${code} curl_exit ${curl_exit} after ${attempt} attempts; allowing worker to proceed with built-in retry handling" >&2
               cat "$response" >&2 || true
               exit 0
             fi
@@ -552,6 +571,7 @@ jobs:
           [[ "$code" =~ ^2 ]] || {
             echo "Pinned NVIDIA model probe failed HTTP ${code}" >&2
             cat "$response" >&2 || true
+            printf 'provider_failure\tNVIDIA probe HTTP %s curl_exit %s\n' "$code" "$curl_exit" > "$RUNNER_TEMP/factory-discovery-outcome"
             exit 1
           }
           echo "NVIDIA probe succeeded for ${MODEL}"

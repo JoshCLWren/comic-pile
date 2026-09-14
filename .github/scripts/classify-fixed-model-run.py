@@ -34,8 +34,10 @@ LOCK_RE = re.compile(
 )
 TARGET_RE = re.compile(r"checked out (?P<kind>issue|pr) #(?P<number>\d+) on ")
 RATE_LIMIT_RE = re.compile(
-    r"429|too many requests|rate.?limit|quota|throttl|capacity|"
-    r"(?:http(?: status)?|status(?: code)?)[ :]+413\b|\b413\b|"
+    r"(?:^|[^0-9.])429(?!\d)|too many requests|rate.?limit|\bquota\b|throttl|"
+    r"(?:at|out of|no|insufficient|exceeded)\s+capacity|"
+    r"capacity\s+(?:exceeded|exhausted|unavailable)|"
+    r"(?:http(?: status)?|status(?: code)?)[ :]+413\b|(?:^|[^0-9.])413(?!\d)|"
     r"request too large|tokens per minute|\btpm\b",
     re.I,
 )
@@ -53,6 +55,11 @@ BACKING_UNAVAILABLE_RE = re.compile(
     re.I,
 )
 TIMEOUT_RE = re.compile(r"timed? out|timeout|exit status 124|process completed with exit code 124", re.I)
+SESSION_TIMEOUT_RE = re.compile(
+    r"exit status 124|process completed with exit code 124",
+    re.I,
+)
+NVIDIA_PROBE_FAILED_RE = re.compile(r"pinned nvidia model probe failed", re.I)
 CANCEL_RE = re.compile(
     r"operation was canceled|operation was cancelled|cancellation requested|job was canceled|job was cancelled",
     re.I,
@@ -280,7 +287,15 @@ def classify(log: str) -> Result:
             detail="the factory job was cancelled before useful persistence",
         )
 
-    if MODEL_INTERRUPTION_RE.search(log) or (TIMEOUT_RE.search(log) and exact_proven):
+    if NVIDIA_PROBE_FAILED_RE.search(log):
+        return Result(
+            **common,
+            outcome="PROVIDER FAILURE",
+            outcome_class="provider_failure",
+            detail="NVIDIA probe did not receive a successful HTTP response",
+        )
+
+    if MODEL_INTERRUPTION_RE.search(log) or (SESSION_TIMEOUT_RE.search(log) and exact_proven):
         return Result(
             **common,
             outcome="PROVIDER FAILURE",
@@ -288,7 +303,7 @@ def classify(log: str) -> Result:
             detail="the model invocation started but its provider response was interrupted or timed out",
         )
 
-    if TIMEOUT_RE.search(log):
+    if TIMEOUT_RE.search(log) and not exact_proven:
         return Result(
             **common,
             outcome="NOT YET PROVEN",
@@ -546,6 +561,82 @@ class ClassifierTests(unittest.TestCase):
         )
         self.assertEqual(result.outcome, "PROVIDER FAILURE")
         self.assertEqual(result.outcome_class, "provider_failure")
+
+    def test_gha_timestamp_milliseconds_are_not_rate_limits(self) -> None:
+        """Bare 429 inside GitHub Actions timestamps must not throttle a model."""
+        nvidia = (
+            "Factory 21 locked: source=nvidia model=google/gemma-4-31b-it "
+            "runtime=nvidia/google/gemma-4-31b-it minute=:50 scheduler=dispatcher "
+            "configured=true\n"
+        )
+        result = classify(
+            nvidia
+            + "2026-09-14T04:55:12.4291234Z Probe pinned NVIDIA model before OpenCode smoke\n"
+            + "Pinned NVIDIA model probe failed HTTP 401\n"
+        )
+        self.assertNotEqual(result.outcome_class, "provider_throttle")
+        self.assertEqual(result.outcome_class, "provider_failure")
+
+    def test_capacity_script_echo_is_not_rate_limit(self) -> None:
+        """Factory capacity wording in runner logs is not provider throttle evidence."""
+        result = classify(
+            self.BASE
+            + "Configure selected OmniRoute capacity\n"
+            + 'OmniRoute free-entry capacity: {"remaining": 2}\n'
+            + "Smoke exact pinned model through OpenCode\n"
+            + "Error: unexpected provider response\n"
+        )
+        self.assertNotEqual(result.outcome_class, "provider_throttle")
+        self.assertEqual(result.outcome_class, "provider_failure")
+
+    def test_model_at_capacity_is_provider_throttle(self) -> None:
+        """Explicit provider capacity exhaustion remains provider_throttle."""
+        result = classify(self.BASE + "ComicPile fixed-model smoke\nThe model is at capacity\n")
+        self.assertEqual(result.outcome, "PROVIDER THROTTLE")
+        self.assertEqual(result.outcome_class, "provider_throttle")
+
+    def test_nvidia_probe_hard_fail_is_provider_failure(self) -> None:
+        """Non-transient NVIDIA probe hard-fail is opaque without this class."""
+        nvidia = (
+            "Factory 21 locked: source=nvidia model=google/gemma-4-31b-it "
+            "runtime=nvidia/google/gemma-4-31b-it minute=:50 scheduler=dispatcher "
+            "configured=true\n"
+        )
+        result = classify(nvidia + "Pinned NVIDIA model probe failed HTTP 401\n")
+        self.assertEqual(result.outcome, "PROVIDER FAILURE")
+        self.assertEqual(result.outcome_class, "provider_failure")
+
+    def test_legacy_http_000_probe_hard_fail_is_provider_failure(self) -> None:
+        """HTTP 000 hard-fail plus curl timeout must not stay unknown_failure."""
+        nvidia = (
+            "Factory 21 locked: source=nvidia model=google/gemma-4-31b-it "
+            "runtime=nvidia/google/gemma-4-31b-it minute=:50 scheduler=dispatcher "
+            "configured=true\n"
+        )
+        result = classify(
+            nvidia
+            + "curl: (28) Operation timed out after 120000 ms with 0 bytes received\n"
+            + "Pinned NVIDIA model probe failed HTTP 000\n"
+        )
+        self.assertEqual(result.outcome_class, "provider_failure")
+        self.assertNotEqual(result.outcome_class, "unknown_failure")
+
+    def test_probe_curl_timeout_then_smoke_proof_is_idle(self) -> None:
+        """Retried HTTP 000 probe timeouts must not poison a later proof token."""
+        nvidia = (
+            "Factory 21 locked: source=nvidia model=google/gemma-4-31b-it "
+            "runtime=nvidia/google/gemma-4-31b-it minute=:50 scheduler=dispatcher "
+            "configured=true\n"
+        )
+        result = classify(
+            nvidia
+            + "curl: (28) Operation timed out after 45000 ms with 0 bytes received\n"
+            + "NVIDIA probe transient HTTP 000 curl_exit 28 (attempt 1/3); retrying after 5s\n"
+            + "NVIDIA probe succeeded for google/gemma-4-31b-it\n"
+            + "FIXED_MODEL_OPENCODE_OK\n"
+        )
+        self.assertEqual(result.outcome, "HEALTHY / IDLE")
+        self.assertEqual(result.outcome_class, "no_work")
 
     def test_all_representative_results_use_canonical_taxonomy(self) -> None:
         """Regression guard forbids legacy runtime outcome classes."""
