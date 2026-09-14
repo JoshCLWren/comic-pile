@@ -1,12 +1,12 @@
 import ReadingPlanAddMaterialImpl from './ReadingPlanAddMaterialImpl'
-import type { CBLAdoptionCommitResult } from '../services/api-cbl-sources'
+import type { ContinuityPlan } from '../services/api-continuity-plans'
 
 export interface ReadingPlanAddMaterialProps {
   planId: number
   planName: string
   defaultOpen?: boolean
   commitDisabled?: boolean
-  onCommitted?: (plan: CBLAdoptionCommitResult) => void
+  onCommitted?: (plan: ContinuityPlan) => void
   onCommitPendingChange?: (isPending: boolean) => void
 }
 
