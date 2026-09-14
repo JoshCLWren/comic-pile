@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from html import escape
-from typing import Sequence
+from typing import Sequence, cast
 
 from fastapi import HTTPException
 from sqlalchemy import delete, func, or_, select
@@ -14,7 +14,12 @@ from app.models.continuity_plan import ContinuityPlan
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
 from app.models.issue import Issue
 from app.models.thread import Thread
-from app.schemas.continuity_plan import CBLPlacement, ContinuityPlanLane, ContinuityPlanNode
+from app.schemas.continuity_plan import (
+    CBLPlacement,
+    ContinuityPlanLane,
+    ContinuityPlanNode,
+    PlanOrderingMode,
+)
 from app.services.continuity_plan_writer import (
     preserve_server_lane_metadata,
     replace_compiled_rules,
@@ -176,6 +181,164 @@ def export_custom_cbl_xml(name: str, entries: Sequence[CustomCBLEntryView]) -> s
     )
 
 
+def _without_source_provenance(
+    node: ContinuityPlanNode,
+    *,
+    source_path: str,
+) -> ContinuityPlanNode:
+    """Remove stale provenance for this custom CBL while preserving every other source."""
+    paths = tuple(path for path in (node.source_paths or ()) if path != source_path)
+    placements = tuple(
+        placement
+        for placement in (node.source_cbl_placements or ())
+        if placement.source_path != source_path
+    )
+    explanation = node.source_explanation
+    if explanation and explanation.startswith("Added from custom CBL '"):
+        explanation = None
+    return node.model_copy(
+        update={
+            "source_paths": paths or None,
+            "source_cbl_placements": placements or None,
+            "source_explanation": explanation,
+        }
+    )
+
+
+def _with_source_provenance(
+    node: ContinuityPlanNode,
+    *,
+    source_path: str,
+    source_position: int,
+    list_name: str,
+) -> ContinuityPlanNode:
+    """Attach current custom-CBL provenance to a reused or newly created plan node."""
+    paths = tuple(dict.fromkeys([*(node.source_paths or ()), source_path]))
+    placements = [
+        placement
+        for placement in (node.source_cbl_placements or ())
+        if placement.source_path != source_path
+    ]
+    placements.append(CBLPlacement(source_path=source_path, position=source_position))
+    return node.model_copy(
+        update={
+            "source_paths": paths,
+            "source_cbl_placements": tuple(placements),
+            "source_explanation": node.source_explanation
+            or f"Added from custom CBL '{list_name}'.",
+        }
+    )
+
+
+def _renumber_lane(nodes: Sequence[ContinuityPlanNode]) -> list[ContinuityPlanNode]:
+    """Return one lane with contiguous positions while preserving node identities."""
+    return [node.model_copy(update={"position": position}) for position, node in enumerate(nodes)]
+
+
+def _merge_custom_cbl_into_lane(
+    *,
+    all_nodes: Sequence[ContinuityPlanNode],
+    target_lane_id: str,
+    entries: Sequence[CustomCBLEntryView],
+    list_row: CustomCBLList,
+) -> tuple[list[ContinuityPlanNode], list[int], list[int]]:
+    """Merge one custom list into a lane, anchored by its earliest existing issue.
+
+    Existing source issues are reused. When at least one custom-list issue is
+    already in the target lane, the entire source sequence is inserted at the
+    earliest such position. This makes an existing issue a stable anchor rather
+    than appending new material to the end of the plan.
+    """
+    source_path = f"custom-cbl:{list_row.id}"
+    source_issue_ids = [entry.issue_id for entry in entries]
+    source_issue_set = set(source_issue_ids)
+
+    cleaned_nodes = [
+        _without_source_provenance(node, source_path=source_path) for node in all_nodes
+    ]
+    existing_by_issue: dict[int, ContinuityPlanNode] = {}
+    for node in cleaned_nodes:
+        if node.node_type != "issue" or node.ref_id not in source_issue_set:
+            continue
+        if node.ref_id in existing_by_issue:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "custom_cbl_duplicate_plan_issue",
+                    "issue_id": node.ref_id,
+                },
+            )
+        existing_by_issue[node.ref_id] = node
+
+    cross_lane = [
+        issue_id
+        for issue_id, node in existing_by_issue.items()
+        if node.lane_id != target_lane_id
+    ]
+    if cross_lane:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "custom_cbl_cross_lane_conflict",
+                "issue_ids": sorted(cross_lane),
+                "target_lane_id": target_lane_id,
+            },
+        )
+
+    target_nodes = sorted(
+        (node for node in cleaned_nodes if node.lane_id == target_lane_id),
+        key=lambda node: node.position,
+    )
+    source_indexes = [
+        index
+        for index, node in enumerate(target_nodes)
+        if node.node_type == "issue" and node.ref_id in source_issue_set
+    ]
+    anchor_index = min(source_indexes) if source_indexes else len(target_nodes)
+    target_without_source = [
+        node
+        for node in target_nodes
+        if not (node.node_type == "issue" and node.ref_id in source_issue_set)
+    ]
+
+    ordered_source_nodes: list[ContinuityPlanNode] = []
+    added: list[int] = []
+    reused: list[int] = []
+    for entry in entries:
+        existing = existing_by_issue.get(entry.issue_id)
+        if existing is None:
+            node = ContinuityPlanNode(
+                id=f"custom-cbl-{list_row.id}-{entry.id}",
+                node_type="issue",
+                ref_id=entry.issue_id,
+                lane_id=target_lane_id,
+                position=0,
+                label=f"{entry.series_name} #{entry.issue_number}",
+            )
+            added.append(entry.issue_id)
+        else:
+            node = existing.model_copy(update={"lane_id": target_lane_id})
+            reused.append(entry.issue_id)
+        ordered_source_nodes.append(
+            _with_source_provenance(
+                node,
+                source_path=source_path,
+                source_position=entry.position,
+                list_name=list_row.name,
+            )
+        )
+
+    merged_target = [
+        *target_without_source[:anchor_index],
+        *ordered_source_nodes,
+        *target_without_source[anchor_index:],
+    ]
+    renumbered_target = _renumber_lane(merged_target)
+
+    other_nodes = [node for node in cleaned_nodes if node.lane_id != target_lane_id]
+    return [*other_nodes, *renumbered_target], added, reused
+
+
 async def apply_custom_cbl_to_plan(
     db: AsyncSession,
     *,
@@ -184,7 +347,7 @@ async def apply_custom_cbl_to_plan(
     plan_id: int,
     lane_id: str | None,
 ) -> CustomCBLApplyResult:
-    """Append custom CBL issues to one owned Reading Plan through its canonical writer."""
+    """Merge custom CBL order into one owned Reading Plan through its canonical writer."""
     plan = (
         await db.execute(
             select(ContinuityPlan).where(
@@ -218,51 +381,27 @@ async def apply_custom_cbl_to_plan(
             )
 
     nodes = [ContinuityPlanNode.model_validate(value) for value in (plan.nodes_json or [])]
-    existing_issue_ids = {node.ref_id for node in nodes if node.node_type == "issue"}
-    lane_positions = [node.position for node in nodes if node.lane_id == target_lane.id]
-    next_position = max(lane_positions, default=-1) + 1
-    source_path = f"custom-cbl:{list_row.id}"
-    added: list[int] = []
-    skipped: list[int] = []
+    merged_nodes, added, reused = _merge_custom_cbl_into_lane(
+        all_nodes=nodes,
+        target_lane_id=target_lane.id,
+        entries=entries,
+        list_row=list_row,
+    )
 
-    for entry in entries:
-        if entry.issue_id in existing_issue_ids:
-            skipped.append(entry.issue_id)
-            continue
-        nodes.append(
-            ContinuityPlanNode(
-                id=f"custom-cbl-{list_row.id}-{entry.id}",
-                node_type="issue",
-                ref_id=entry.issue_id,
-                lane_id=target_lane.id,
-                position=next_position,
-                label=f"{entry.series_name} #{entry.issue_number}",
-                source_explanation=f"Added from custom CBL '{list_row.name}'.",
-                source_paths=(source_path,),
-                source_cbl_placements=(
-                    CBLPlacement(source_path=source_path, position=entry.position),
-                ),
-            )
-        )
-        existing_issue_ids.add(entry.issue_id)
-        added.append(entry.issue_id)
-        next_position += 1
-
-    if added:
-        await validate_node_ownership(db, user_id=user_id, nodes=nodes)
-        plan.lanes_json = preserve_server_lane_metadata(list(plan.lanes_json or []), lanes)
-        plan.nodes_json = [node.model_dump() for node in nodes]
-        await replace_compiled_rules(
-            db,
-            user_id=user_id,
-            plan=plan,
-            nodes=nodes,
-            ordering_mode=plan.ordering_mode,
-        )
-        await db.flush()
+    await validate_node_ownership(db, user_id=user_id, nodes=merged_nodes)
+    plan.lanes_json = preserve_server_lane_metadata(list(plan.lanes_json or []), lanes)
+    plan.nodes_json = [node.model_dump() for node in merged_nodes]
+    await replace_compiled_rules(
+        db,
+        user_id=user_id,
+        plan=plan,
+        nodes=merged_nodes,
+        ordering_mode=cast(PlanOrderingMode, plan.ordering_mode),
+    )
+    await db.flush()
 
     return CustomCBLApplyResult(
         plan=plan,
         added_issue_ids=tuple(added),
-        skipped_existing_issue_ids=tuple(skipped),
+        skipped_existing_issue_ids=tuple(reused),
     )
