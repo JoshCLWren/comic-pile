@@ -1,8 +1,11 @@
 name: Factory Model Discovery
 
-# Detect dead fixed-model pins from OpenCode CLI catalogs and open a
-# retirement PR. This is not OmniRoute routing. NVIDIA presence is
+# Detect dead fixed-model pins from OpenCode CLI catalogs and sticky #1093
+# NVIDIA factory-model-retired-410:v1 markers, then open a retirement PR.
+# This is not OmniRoute routing. NVIDIA catalog presence is
 # `opencode models nvidia`, never integrate.api.nvidia.com alone.
+# A #1093 410 marker with Source: nvidia is the durable "turned off"
+# signal; discovery consumes it and drops matching pins from the roster.
 # Catalog fetch wraps scripts/opencode-model-catalog.sh when present.
 
 on:
@@ -92,6 +95,21 @@ jobs:
             }' > "$HOME/.config/opencode/opencode.json"
           chmod 600 "$HOME/.config/opencode/opencode.json"
 
+      - name: Fetch NVIDIA 410 retirement markers
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/factory-model-discovery"
+          comments="$RUNNER_TEMP/factory-model-discovery/issue-1093-comments.json"
+          if ! gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+            > "$comments"; then
+            echo '::error::Could not read #1093 factory-model-retired-410:v1 markers'
+            exit 1
+          fi
+
       - name: Discover catalogs and plan retirements
         id: plan
         shell: bash
@@ -104,10 +122,12 @@ jobs:
           set -Eeuo pipefail
           mkdir -p "$RUNNER_TEMP/factory-model-discovery"
           report="$RUNNER_TEMP/factory-model-discovery/report.json"
+          comments="$RUNNER_TEMP/factory-model-discovery/issue-1093-comments.json"
           args=(
             python3 .github/scripts/factory_model_retirement.py plan
             --report "$report"
             --github-output "$GITHUB_OUTPUT"
+            --retirement-comments "$comments"
           )
           if [[ -n "${CATALOG_FIXTURE:-}" ]]; then
             args+=(--catalog-json "$CATALOG_FIXTURE")
@@ -156,9 +176,11 @@ jobs:
           branch='factory/model-retirement'
           git checkout -B "$branch"
           report="$RUNNER_TEMP/factory-model-discovery/report.json"
+          comments="$RUNNER_TEMP/factory-model-discovery/issue-1093-comments.json"
           args=(
             python3 .github/scripts/factory_model_retirement.py apply
             --report "$report"
+            --retirement-comments "$comments"
           )
           if [[ -n "${CATALOG_FIXTURE:-}" ]]; then
             args+=(--catalog-json "$CATALOG_FIXTURE")
@@ -174,7 +196,7 @@ jobs:
             echo 'Apply produced no roster diff'
             exit 0
           fi
-          git commit -m "Retire factory pins missing from OpenCode CLI catalogs"
+          git commit -m "Retire factory pins missing from OpenCode catalogs or marked NVIDIA 410"
           if [[ -n "${PR_REBASE_TOKEN:-}" ]]; then
             git remote set-url origin "https://x-access-token:${PR_REBASE_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           fi
@@ -187,7 +209,8 @@ jobs:
           lines = [
               "## Factory model retirement",
               "",
-              "OpenCode CLI catalogs (`opencode models <provider>`) no longer list these fixed-model pins.",
+              "OpenCode CLI catalogs (`opencode models <provider>`) no longer list these fixed-model pins,",
+              "or sticky #1093 `factory-model-retired-410:v1` NVIDIA markers turned them off.",
               "This PR only removes dead pins. Unused free models are listed for operators; they are not auto-added.",
               "",
               "### Retired pins",
@@ -210,10 +233,13 @@ jobs:
                   "### Operator flow",
                   "",
                   "1. Dispatch **Factory Model Discovery** (or wait for the six-hour schedule).",
-                  "2. When pins disappear from `opencode models`, this bot PR updates the roster lock.",
+                  "2. When pins disappear from `opencode models` or a NVIDIA 410 marker lands on #1093,",
+                  "   this bot PR updates the roster lock.",
                   "3. Merge after `validate-free-model-factories.py` and CI are green.",
                   "",
-                  "Closes nothing automatically. NVIDIA pins are judged only by `opencode models nvidia`.",
+                  "Closes nothing automatically. NVIDIA catalog presence is `opencode models nvidia`,",
+                  "never integrate.api.nvidia.com. Sticky #1093 `factory-model-retired-410:v1`",
+                  "comments with `Source: nvidia` retire matching bare model ids.",
               ]
           )
           print("\n".join(lines))

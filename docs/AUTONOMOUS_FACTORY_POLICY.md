@@ -87,7 +87,7 @@ Factory ownership is a connection-pool lock around the next action, not a perman
 
 The factory roster `.github/free-model-factories.tsv` is a fixed-model pin list. It is not OmniRoute routing. Do not restore OmniRoute as the factory model router from this path.
 
-`.github/workflows/factory-model-discovery.yml` runs on a six-hour schedule and on `workflow_dispatch`. It discovers live models with OpenCode CLI semantics (`opencode models opencode`, `opencode models nvidia`, and `opencode models openrouter` when OpenRouter pins exist), wrapping `scripts/opencode-model-catalog.sh` when present. NVIDIA pins are judged only by that OpenCode nvidia list — never prune a NVIDIA pin solely because integrate.api.nvidia.com omitted it.
+`.github/workflows/factory-model-discovery.yml` runs on a six-hour schedule and on `workflow_dispatch`. It discovers live models with OpenCode CLI semantics (`opencode models opencode`, `opencode models nvidia`, and `opencode models openrouter` when OpenRouter pins exist), wrapping `scripts/opencode-model-catalog.sh` when present. NVIDIA catalog presence is judged only by that OpenCode nvidia list — never prune a NVIDIA pin solely because integrate.api.nvidia.com omitted it. Sticky `#1093` `factory-model-retired-410:v1` comments with `Source: nvidia` are the durable "turned off" signal the NVIDIA probe already fail-closes on. Discovery consumes those markers and retires matching bare model ids from the roster even when `opencode models nvidia` still lists them.
 
 `opencode-free` eligibility matches `validate-free-model-factories.py` (`big-pickle`, `*-free`, muse-spark free/contributor-free) and/or explicit cost `0/0` from a verbose catalog. Paid Zen models are never proposed for `opencode-free` lanes. `kilo-auto` and healthy `big-pickle` slots stay unless the OpenCode catalog itself drops them.
 
@@ -95,7 +95,7 @@ When pins are catalog-absent or permanently retired, the workflow opens or updat
 
 Discovery and the free-model factory runner pin the same OpenCode CLI release (`OPENCODE_VERSION` plus `OPENCODE_LINUX_X64_SHA256`) so catalog listing and worker smoke use one binary. The current pin is `1.18.29`, matching recent live factory audits. Do not leave discovery on an older CLI than the runner.
 
-Operator flow: dispatch **Factory Model Discovery** (or wait for the schedule) → review the bot PR if dead pins were removed → merge after `python3 .github/scripts/validate-free-model-factories.py` and CI are green. Local/CI fixtures: `python3 .github/scripts/factory_model_retirement.py plan --catalog-json tests/fixtures/opencode-catalog/keep-present.json`.
+Operator flow: dispatch **Factory Model Discovery** (or wait for the schedule) → review the bot PR if dead pins were removed → merge after `python3 .github/scripts/validate-free-model-factories.py` and CI are green. Local/CI fixtures: `python3 .github/scripts/factory_model_retirement.py plan --catalog-json tests/fixtures/opencode-catalog/keep-present.json --retirement-comments tests/fixtures/opencode-catalog/nvidia-410-comments.json`.
 
 Required secrets on the runner: `OPENCODE_ZEN_API_KEY` (exported as `OPENCODE_API_KEY` for Zen list auth), `NVIDIA_API_KEY` when NVIDIA pins must be listed, `OPENROUTER_API_KEY` when OpenRouter pins exist, and `PR_REBASE_TOKEN` so the retirement PR triggers pull-request workflows. A recorded `--catalog-json` fixture is the CI substitute when the `opencode` binary is unavailable.
 

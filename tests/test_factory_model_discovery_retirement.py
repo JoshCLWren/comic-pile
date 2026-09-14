@@ -127,6 +127,170 @@ def test_nvidia_kept_when_opencode_lists_even_if_integrate_api_omits() -> None:
     assert "opencode models nvidia" in plan.kept[0].reason
 
 
+def _410_comment(model: str, source: str = "nvidia") -> dict[str, str]:
+    """Build one #1093 NVIDIA-probe-shaped 410 retirement comment."""
+    return {
+        "body": (
+            f"{RETIRE.RETIREMENT_MARKER}\n"
+            f"Source: {source}\n"
+            f"Model: {model}\n"
+            "Reason: provider returned HTTP 410 Gone\n"
+            "Updated: 2026-09-14T00:00:00Z\n"
+        )
+    }
+
+
+def _nvidia_410_zombie_rows() -> list[dict[str, str]]:
+    """Return a balanced roster with two catalog-present NVIDIA 410 zombies.
+
+    Twelve keepers occupy every dispatcher minute. Workers 9 and 14 sit on
+    :05 and :20 with models still listed by ``opencode models nvidia``.
+    Only 410 comments should retire them.
+    """
+    keepers = [str(worker) for worker in range(101, 113)]
+    rows = [
+        _row(worker, "nvidia", "poolside/laguna-xs-2.1", minute=str(minute))
+        for worker, minute in zip(keepers, ROSTER.SCHEDULE_MINUTES, strict=True)
+    ]
+    rows.append(_row("9", "nvidia", "stepfun-ai/step-3.7-flash", minute="5"))
+    rows.append(_row("14", "nvidia", "minimaxai/minimax-m3", minute="20"))
+    assert ROSTER.schedule_is_balanced(rows)
+    return rows
+
+
+def test_retirement_marker_matches_probe_and_health_selector() -> None:
+    """Planner, probe, and health selector share the same 410 marker string."""
+    health = (SCRIPTS / "factory_candidate_health.py").read_text(encoding="utf-8")
+    runner = (
+        ROOT / ".github" / "workflows" / "free-model-factory-run.yml"
+    ).read_text(encoding="utf-8")
+    assert f'RETIREMENT_MARKER = "{RETIRE.RETIREMENT_MARKER}"' in health
+    assert f"retirement_marker='{RETIRE.RETIREMENT_MARKER}'" in runner
+
+
+def test_nvidia_410_comments_extract_bare_model_ids() -> None:
+    """Parser follows the NVIDIA probe: marker line, Source nvidia, Model id."""
+    payload = json.loads(
+        (FIXTURES / "nvidia-410-comments.json").read_text(encoding="utf-8")
+    )
+    models = RETIRE.nvidia_models_retired_by_410_comments(payload)
+    assert models == {
+        "stepfun-ai/step-3.7-flash",
+        "nvidia/nemotron-3-nano-30b-a3b",
+        "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+        "minimaxai/minimax-m3",
+    }
+    slurped = RETIRE.nvidia_models_retired_by_410_comments([payload[:2], payload[2:]])
+    assert slurped == models
+    ignored = RETIRE.nvidia_models_retired_by_410_comments(
+        [_410_comment("stepfun-ai/step-3.7-flash", source="openrouter-free")]
+    )
+    assert ignored == frozenset()
+
+
+def test_plan_retires_nvidia_410_markers_even_when_opencode_lists_them() -> None:
+    """A sticky #1093 410 comment retires a pin still in the nvidia catalog."""
+    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
+    rows = _nvidia_410_zombie_rows()
+    payload = json.loads(
+        (FIXTURES / "nvidia-410-comments.json").read_text(encoding="utf-8")
+    )
+    retired_410 = RETIRE.nvidia_models_retired_by_410_comments(payload)
+
+    plan = RETIRE.plan_retirement(
+        rows,
+        catalogs,
+        retired_410_models=retired_410,
+    )
+
+    retired = {item.worker: item for item in plan.retirements}
+    assert set(retired) == {"9", "14"}
+    assert retired["9"].model == "stepfun-ai/step-3.7-flash"
+    assert retired["14"].model == "minimaxai/minimax-m3"
+    assert all(item.reason == RETIRE.NVIDIA_410_REASON for item in plan.retirements)
+    kept_models = {item.model for item in plan.kept}
+    assert "poolside/laguna-xs-2.1" in kept_models
+    assert "stepfun-ai/step-3.7-flash" not in kept_models
+    assert "minimaxai/minimax-m3" not in kept_models
+
+
+def test_apply_rebalances_after_nvidia_410_zombie_pins(tmp_path: Path) -> None:
+    """Apply drops 410-zombie pins, rebalances minutes, and syncs the lock.
+
+    This is the catalog-absent retirement operator path with 410 comments as
+    the turned-off store. It is not a hand-edit of workers 9 and 14.
+    """
+    rows = _nvidia_410_zombie_rows()
+    roster = tmp_path / "free-model-factories.tsv"
+    lock_path = tmp_path / "factory-expected-workers.json"
+    comments = tmp_path / "issue-1093-comments.json"
+    ROSTER.write_roster_rows(
+        roster,
+        rows,
+        comments=("# worker\tsource\tmodel\tminute\tscheduler\tdisplay_name",),
+    )
+    ROSTER.sync_roster_lock(rows, lock_path=lock_path)
+    comments.write_text(
+        (FIXTURES / "nvidia-410-comments.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    status = RETIRE.run(
+        [
+            "apply",
+            "--roster",
+            str(roster),
+            "--lock",
+            str(lock_path),
+            "--catalog-json",
+            str(FIXTURES / "keep-present.json"),
+            "--retirement-comments",
+            str(comments),
+        ]
+    )
+    remaining = ROSTER.load_roster_rows(roster)
+    lock = ROSTER.load_roster_lock(lock_path)
+    remaining_ids = {row["worker"] for row in remaining}
+
+    assert status == 0
+    assert remaining_ids.isdisjoint({"9", "14"})
+    assert "101" in remaining_ids
+    assert ROSTER.schedule_is_balanced(remaining)
+    counts = ROSTER.schedule_counts(remaining)
+    assert max(counts.values()) - min(counts.values()) <= 1
+    assert set(lock["expected_workers"]) == ROSTER.roster_worker_ids(remaining)
+    assert {9, 14}.issubset(set(lock["retired_workers"]))
+    assert {
+        "stepfun-ai/step-3.7-flash",
+        "minimaxai/minimax-m3",
+    }.issubset(set(lock["retired_models"]))
+
+
+def test_cli_plan_fails_closed_on_invalid_retirement_comments(tmp_path: Path) -> None:
+    """A malformed #1093 comments dump must not silently skip 410 evidence."""
+    roster = tmp_path / "roster.tsv"
+    comments = tmp_path / "comments.json"
+    roster.write_text(
+        "9\tnvidia\tstepfun-ai/step-3.7-flash\t5\tdispatcher\tStep\n",
+        encoding="utf-8",
+    )
+    comments.write_text("{not-json", encoding="utf-8")
+
+    status = RETIRE.run(
+        [
+            "plan",
+            "--roster",
+            str(roster),
+            "--catalog-json",
+            str(FIXTURES / "keep-present.json"),
+            "--retirement-comments",
+            str(comments),
+        ]
+    )
+
+    assert status == 2
+
+
 def test_kilo_auto_and_big_pickle_stay_unless_catalog_absent() -> None:
     """kilo-auto is never catalog-retired; big-pickle stays while listed."""
     catalogs = CATALOG.load_catalog_fixture(FIXTURES / "catalog-miss.json")

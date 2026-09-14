@@ -66,3 +66,15 @@ def test_discovery_and_factory_run_pin_the_same_opencode_release() -> None:
     assert run_sha == PINNED_OPENCODE_SHA256
     assert discovery_version == run_version
     assert discovery_sha == run_sha
+
+
+def test_discovery_consumes_nvidia_410_markers_from_issue_1093() -> None:
+    """Discovery fetches the same #1093 comments the NVIDIA probe uses."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    runner = FACTORY_RUN.read_text(encoding="utf-8")
+
+    assert "issues/1093/comments" in workflow
+    assert "--retirement-comments" in workflow
+    assert "factory-model-retired-410:v1" in workflow
+    assert "retirement_marker='<!-- factory-model-retired-410:v1 -->'" in runner
+    assert 'gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100"' in runner
