@@ -4,6 +4,7 @@ from app.models.cache import CacheEntry, CacheGeneration, CacheUsage
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
+from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
 from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 from app.models.event import Event
@@ -36,6 +37,8 @@ __all__ = [
     "ContinuityPlan",
     "ContinuityRule",
     "ContinuityRuleSelectedMember",
+    "CustomCBLEntry",
+    "CustomCBLList",
     "Dependency",
     "DependencyGroup",
     "DependencyGroupMembership",

@@ -122,6 +122,13 @@ export const queryKeys = {
       Object.entries(entryDecisions).sort(([a], [b]) => a.localeCompare(b)),
     ] as const,
   },
+  customCBLs: {
+    all: ['customCBLs'] as const,
+    list: () => ['customCBLs', 'list'] as const,
+    detail: (listId: number) => ['customCBLs', 'detail', listId] as const,
+    issueSearch: (query: string) =>
+      ['customCBLs', 'issueSearch', normalizedSearch(query)] as const,
+  },
   taste: {
     all: ['taste'] as const,
     discoveries: () => ['taste', 'discoveries'] as const,
