@@ -1,7 +1,7 @@
 """add custom CBL lists
 
 Revision ID: d901cba10001
-Revises: 37a821bf4182
+Revises: c86100000001
 Create Date: 2026-09-14
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 revision: str = "d901cba10001"
-down_revision: str | Sequence[str] | None = "37a821bf4182"
+down_revision: str | Sequence[str] | None = "c86100000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
