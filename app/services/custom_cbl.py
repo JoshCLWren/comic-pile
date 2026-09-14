@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from html import escape
-from typing import Sequence, cast
+from typing import cast
 
 from fastapi import HTTPException
 from sqlalchemy import delete, func, or_, select
@@ -314,6 +315,7 @@ def _merge_custom_cbl_into_lane(
                 lane_id=target_lane_id,
                 position=0,
                 label=f"{entry.series_name} #{entry.issue_number}",
+                convergence_gate=[],
             )
             added.append(entry.issue_id)
         else:
