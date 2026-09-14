@@ -1,6 +1,6 @@
 # ComicPile Autonomous Factory Policy
 
-Version: 24
+Version: 25
 
 This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, fixed-model external factories, and interactive factory repair sessions.
 
@@ -91,11 +91,11 @@ The factory roster `.github/free-model-factories.tsv` is a fixed-model pin list.
 
 `opencode-free` eligibility matches `validate-free-model-factories.py` (`big-pickle`, `*-free`, muse-spark free/contributor-free) and/or explicit cost `0/0` from a verbose catalog. Paid Zen models are never proposed for `opencode-free` lanes. `kilo-auto` and healthy `big-pickle` slots stay unless the OpenCode catalog itself drops them.
 
-When pins are catalog-absent or permanently retired, the workflow opens or updates `factory/model-retirement` with only those removals, reassigns remaining `minute` fields so every dispatcher bucket stays within ±1 worker, and rewrites `.github/factory-expected-workers.json` so `EXPECTED_WORKERS` stays generated from the TSV lock. Worker ids are not rewritten. Unused free OpenCode models are uploaded as a discovery report; they are not auto-added.
+When pins are catalog-absent, permanently retired, or marked NVIDIA 410, the workflow opens or updates `factory/model-retirement` with those removals. The same apply path **adds** unused free OpenCode models (`cost==0` or free-roster name, never paid Zen) onto `.github/free-model-factories.tsv`. Surplus `big-pickle` duplicate slots convert first (lowest-numbered healthy `big-pickle` pin is reserved; highest-numbered surplus converts first) so unique free models do not grow the roster without bound. New worker ids are allocated only when no surplus slot remains. Models in `retired_models` or the #1093 410 lock are never silently re-pinned. NVIDIA catalog adds are out of scope. Remaining `minute` fields are reassigned so every dispatcher bucket stays within ±1 worker, and `.github/factory-expected-workers.json` is rewritten so `EXPECTED_WORKERS` stays generated from the TSV lock. Converted workers keep their ids. Scheduled discovery includes adds by default (`add_unused_free` defaults on; `--no-add-unused-free` is an explicit opt-out).
 
 Discovery and the free-model factory runner pin the same OpenCode CLI release (`OPENCODE_VERSION` plus `OPENCODE_LINUX_X64_SHA256`) so catalog listing and worker smoke use one binary. The current pin is `1.18.29`, matching recent live factory audits. Do not leave discovery on an older CLI than the runner.
 
-Operator flow: dispatch **Factory Model Discovery** (or wait for the schedule) → review the bot PR if dead pins were removed → merge after `python3 .github/scripts/validate-free-model-factories.py` and CI are green. Local/CI fixtures: `python3 .github/scripts/factory_model_retirement.py plan --catalog-json tests/fixtures/opencode-catalog/keep-present.json --retirement-comments tests/fixtures/opencode-catalog/nvidia-410-comments.json`.
+Operator flow: dispatch **Factory Model Discovery** (or wait for the schedule) → review the bot PR if the TSV retired dead/410 pins or added unused free OpenCode models → merge after `python3 .github/scripts/validate-free-model-factories.py` and CI are green. Local/CI fixtures: `python3 .github/scripts/factory_model_retirement.py plan --catalog-json tests/fixtures/opencode-catalog/keep-present.json --retirement-comments tests/fixtures/opencode-catalog/nvidia-410-comments.json`. Apply the same fixture to write the TSV: `python3 .github/scripts/factory_model_retirement.py apply --catalog-json tests/fixtures/opencode-catalog/keep-present.json --retirement-comments tests/fixtures/opencode-catalog/nvidia-410-comments.json`.
 
 Required secrets on the runner: `OPENCODE_ZEN_API_KEY` (exported as `OPENCODE_API_KEY` for Zen list auth), `NVIDIA_API_KEY` when NVIDIA pins must be listed, `OPENROUTER_API_KEY` when OpenRouter pins exist, and `PR_REBASE_TOKEN` so the retirement PR triggers pull-request workflows. A recorded `--catalog-json` fixture is the CI substitute when the `opencode` binary is unavailable.
 

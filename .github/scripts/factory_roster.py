@@ -27,7 +27,15 @@ ROSTER_FIELDNAMES = (
 )
 SCHEDULE_MINUTES = tuple(range(0, 60, 5))
 OPENCODE_ALWAYS_FREE = frozenset({"big-pickle"})
+BIG_PICKLE_MODEL = "big-pickle"
+# Keep this many healthy big-pickle pins when converting surplus duplicates
+# into newly discovered unique free OpenCode models. Extra big-pickle slots
+# are the preferred add capacity so unused free models do not grow the
+# roster without bound.
+MIN_BIG_PICKLE_RESERVE = 1
+OPENCODE_DISPLAY_TOKEN_OVERRIDES = {"mimo": "MiMo"}
 OPENCODE_MUSE_SPARK_RE = re.compile(r"muse-spark", re.IGNORECASE)
+_VERSIONISH_TOKEN_RE = re.compile(r"^v?\d+(?:\.\d+)*$", re.IGNORECASE)
 CATALOG_SOURCES = frozenset({"opencode-free", "nvidia", "openrouter-free"})
 PROTECTED_SOURCES = frozenset({"kilo-auto"})
 LOCK_SCHEMA_VERSION = 1
@@ -108,6 +116,99 @@ def openrouter_model_is_free(model: str) -> bool:
     return bool(name) and name.endswith(":free") and "/" in name
 
 
+def is_big_pickle(model: str) -> bool:
+    """Return whether a roster pin is the reserved OpenCode big-pickle fallback."""
+    return model.strip().lower() == BIG_PICKLE_MODEL
+
+
+def opencode_free_display_name(model: str) -> str:
+    """Return a TSV display name for an OpenCode free pin.
+
+    Args:
+        model: Bare OpenCode model id (no ``opencode/`` prefix).
+
+    Returns:
+        Human-readable ``OpenCode …`` label matching existing roster style.
+    """
+    parts: list[str] = []
+    for token in model.replace("_", "-").split("-"):
+        if not token:
+            continue
+        key = token.lower()
+        override = OPENCODE_DISPLAY_TOKEN_OVERRIDES.get(key)
+        if override is not None:
+            parts.append(override)
+            continue
+        if _VERSIONISH_TOKEN_RE.fullmatch(token):
+            if key.startswith("v"):
+                parts.append("V" + token[1:])
+            else:
+                parts.append(token)
+            continue
+        parts.append(token[:1].upper() + token[1:] if token else token)
+    return "OpenCode " + " ".join(parts)
+
+
+def next_available_worker_ids(occupied: Iterable[int], count: int) -> list[int]:
+    """Allocate unused worker ids after the highest occupied or retired id.
+
+    Args:
+        occupied: Worker ids already on the roster or in the retirement lock.
+        count: How many new ids to allocate.
+
+    Returns:
+        Increasing worker ids that do not collide with ``occupied``.
+    """
+    used = {int(item) for item in occupied}
+    nxt = (max(used) + 1) if used else 1
+    allocated: list[int] = []
+    while len(allocated) < count:
+        if nxt not in used:
+            allocated.append(nxt)
+        nxt += 1
+    return allocated
+
+
+def surplus_big_pickle_rows(
+    rows: Sequence[Mapping[str, str]],
+    *,
+    reserve: int = MIN_BIG_PICKLE_RESERVE,
+) -> list[RosterRow]:
+    """Return extra big-pickle slots that unused free models may convert.
+
+    Lowest-numbered healthy big-pickle pins stay as the reserved fallback.
+    Highest-numbered surplus slots convert first so historical low worker
+    ids keep the catalog-free backup.
+
+    Args:
+        rows: Roster rows after retirements have already been dropped.
+        reserve: Minimum big-pickle pins to keep when the catalog still
+            lists the model.
+
+    Returns:
+        Convertible surplus rows, highest worker id first.
+    """
+    pickle_rows = [
+        RosterRow(
+            worker=str(row["worker"]),
+            source=str(row["source"]),
+            model=str(row["model"]),
+            minute=str(row["minute"]),
+            scheduler=str(row["scheduler"]),
+            display_name=str(row["display_name"]),
+        )
+        for row in rows
+        if str(row.get("source") or "") == "opencode-free"
+        and is_big_pickle(str(row.get("model") or ""))
+    ]
+    pickle_rows.sort(key=lambda row: int(row["worker"]))
+    if reserve < 0:
+        reserve = 0
+    convertible = pickle_rows[reserve:]
+    convertible.reverse()
+    return convertible
+
+
 def load_roster_rows(path: Path | None = None) -> list[RosterRow]:
     """Load non-comment roster rows from the factory TSV.
 
@@ -182,10 +283,16 @@ def roster_worker_ids(rows: Sequence[Mapping[str, str]]) -> set[int]:
 
 
 def schedule_counts(rows: Sequence[Mapping[str, str]]) -> Counter[int]:
-    """Count roster rows per dispatcher minute."""
+    """Count roster rows per dispatcher minute.
+
+    Unscheduled rows (empty or invalid ``minute``) are omitted so newly
+    grown unused-free pins can be assigned during rebalance.
+    """
     counts: Counter[int] = Counter()
     for row in rows:
-        counts[int(row["minute"])] += 1
+        minute = _row_schedule_minute(row)
+        if minute is not None:
+            counts[minute] += 1
     return counts
 
 
@@ -232,7 +339,7 @@ def rebalance_schedule_minutes(rows: Sequence[RosterRow]) -> list[RosterRow]:
     under-filled buckets in dispatcher order. Worker ids are not rewritten.
 
     Args:
-        rows: Roster rows after pin removal.
+        rows: Roster rows after pin removal or unused-free addition.
 
     Returns:
         Rows with balanced ``minute`` values.

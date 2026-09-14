@@ -68,6 +68,22 @@ def test_discovery_and_factory_run_pin_the_same_opencode_release() -> None:
     assert discovery_sha == run_sha
 
 
+def test_discovery_adds_unused_free_by_default() -> None:
+    """Scheduled discovery pins unused free OpenCode models; adds are not opt-in."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "add_unused_free" in workflow
+    assert "default: true" in workflow
+    assert "--no-add-unused-free" in workflow
+    assert "steps.plan.outputs.add" in workflow
+    assert ".github/free-model-factories.tsv" in workflow
+    assert "they are not auto-added" not in workflow
+    assert "Unused free models are listed for operators" not in workflow
+    assert "Added to the TSV" in workflow
+    assert "Surplus `big-pickle`" in workflow
+    assert "ADD_UNUSED_FREE" in workflow
+
+
 def test_discovery_consumes_nvidia_410_markers_from_issue_1093() -> None:
     """Discovery fetches the same #1093 comments the NVIDIA probe uses."""
     workflow = WORKFLOW.read_text(encoding="utf-8")

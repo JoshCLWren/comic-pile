@@ -107,6 +107,10 @@ def test_paid_model_is_not_proposed_for_opencode_free() -> None:
     assert "deepseek-v4-flash" in plan.paid_rejected
     assert "ling-3.0-flash-fin-free" in unused
     assert "muse-spark-1.3-contributor-free" in unused
+    added = {item.model for item in plan.additions}
+    assert "deepseek-v4-flash" not in added
+    assert "ling-3.0-flash-fin-free" in added
+    assert "muse-spark-1.3-contributor-free" in added
     assert RETIRE.classify_opencode_free_eligibility(
         "deepseek-v4-flash",
         catalogs["opencode"].get("deepseek-v4-flash"),
@@ -246,6 +250,7 @@ def test_apply_rebalances_after_nvidia_410_zombie_pins(tmp_path: Path) -> None:
             str(FIXTURES / "keep-present.json"),
             "--retirement-comments",
             str(comments),
+            "--no-add-unused-free",
         ]
     )
     remaining = ROSTER.load_roster_rows(roster)
@@ -511,6 +516,7 @@ def test_apply_cli_rewrites_balanced_minutes_and_lock(tmp_path: Path) -> None:
             str(lock_path),
             "--catalog-json",
             str(catalog),
+            "--no-add-unused-free",
         ]
     )
     remaining = ROSTER.load_roster_rows(roster)
@@ -543,7 +549,7 @@ def test_apply_removes_dead_pins_and_syncs_expected_workers(tmp_path: Path) -> N
     )
     catalogs = CATALOG.load_catalog_fixture(FIXTURES / "catalog-miss.json")
     rows = ROSTER.load_roster_rows(roster)
-    plan = RETIRE.plan_retirement(rows, catalogs)
+    plan = RETIRE.plan_retirement(rows, catalogs, add_unused_free=False)
     remaining = RETIRE.apply_plan(rows, plan)
     ROSTER.write_roster_rows(roster, remaining, ROSTER.load_roster_comments(roster))
     lock = ROSTER.sync_roster_lock(
@@ -625,3 +631,237 @@ def test_cli_plan_fails_closed_without_catalog(tmp_path: Path) -> None:
     )
 
     assert status == 2
+
+
+def test_opencode_free_display_name_matches_roster_style() -> None:
+    """Converted unused-free pins get the existing OpenCode display-name shape."""
+    assert ROSTER.opencode_free_display_name("mimo-v2.5-free") == (
+        "OpenCode MiMo V2.5 Free"
+    )
+    assert ROSTER.opencode_free_display_name("ling-3.0-flash-fin-free") == (
+        "OpenCode Ling 3.0 Flash Fin Free"
+    )
+    assert ROSTER.opencode_free_display_name("muse-spark-1.3-contributor-free") == (
+        "OpenCode Muse Spark 1.3 Contributor Free"
+    )
+    assert ROSTER.opencode_free_display_name("nemotron-3.5-lightning-free") == (
+        "OpenCode Nemotron 3.5 Lightning Free"
+    )
+
+
+def test_surplus_big_pickle_converts_highest_worker_first() -> None:
+    """Lowest-numbered big-pickle stays reserved; highest surplus converts."""
+    rows = [
+        _row("23", "opencode-free", "big-pickle", minute="0"),
+        _row("39", "opencode-free", "big-pickle", minute="5"),
+        _row("59", "opencode-free", "big-pickle", minute="10"),
+    ]
+
+    surplus = ROSTER.surplus_big_pickle_rows(rows)
+
+    assert [row["worker"] for row in surplus] == ["59", "39"]
+
+
+def test_unused_free_converts_surplus_big_pickle_instead_of_growing() -> None:
+    """Apply pins unused free models onto surplus big-pickle slots."""
+    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
+    rows = [
+        _row("23", "opencode-free", "big-pickle", minute="0"),
+        _row("39", "opencode-free", "big-pickle", minute="5"),
+        _row("41", "opencode-free", "mimo-v2.5-free", minute="10"),
+        _row("42", "opencode-free", "nemotron-3-ultra-free", minute="15"),
+        _row("45", "opencode-free", "nemotron-3.5-lightning-free", minute="20"),
+        _row("47", "opencode-free", "muse-spark-1.2-contributor-free", minute="25"),
+        _row("58", "opencode-free", "big-pickle", minute="30"),
+        _row("59", "opencode-free", "big-pickle", minute="35"),
+        *[
+            _row(
+                str(101 + index),
+                "nvidia",
+                "poolside/laguna-xs-2.1",
+                minute=str(minute),
+            )
+            for index, minute in enumerate((40, 45, 50, 55))
+        ],
+    ]
+
+    plan = RETIRE.plan_retirement(rows, catalogs)
+    added = {item.model: item for item in plan.additions}
+
+    assert "ling-3.0-flash-fin-free" in added
+    assert "muse-spark-1.3-contributor-free" in added
+    assert "deepseek-v4-flash" not in added
+    assert added["ling-3.0-flash-fin-free"].action == "convert"
+    assert added["muse-spark-1.3-contributor-free"].action == "convert"
+    assert {item.worker for item in plan.additions} <= {"58", "59"}
+    assert all(item.previous_model == "big-pickle" for item in plan.additions)
+
+    remaining = RETIRE.apply_plan(rows, plan)
+    models = {row["model"] for row in remaining}
+    workers = {row["worker"] for row in remaining}
+
+    assert "ling-3.0-flash-fin-free" in models
+    assert "muse-spark-1.3-contributor-free" in models
+    assert workers == {row["worker"] for row in rows}
+    assert sum(1 for row in remaining if row["model"] == "big-pickle") >= 1
+    assert ROSTER.schedule_is_balanced(remaining)
+
+
+def test_retired_lock_model_is_not_silently_re_pinned() -> None:
+    """A live unused free model in retired_models stays off the TSV."""
+    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
+    rows = [
+        _row("23", "opencode-free", "big-pickle", minute="0"),
+        _row("39", "opencode-free", "big-pickle", minute="5"),
+        _row("41", "opencode-free", "mimo-v2.5-free", minute="10"),
+    ]
+    lock = ROSTER.RosterLock(
+        schema_version=1,
+        expected_workers=[23, 39, 41],
+        retired_workers=[],
+        retired_models=["ling-3.0-flash-fin-free"],
+    )
+
+    plan = RETIRE.plan_retirement(rows, catalogs, lock=lock)
+    added = {item.model for item in plan.additions}
+
+    assert "ling-3.0-flash-fin-free" in {item.model for item in plan.unused_free}
+    assert "ling-3.0-flash-fin-free" in plan.locked_unused
+    assert "ling-3.0-flash-fin-free" not in added
+    assert "muse-spark-1.3-contributor-free" in added
+
+
+def test_mixed_retire_and_add_rebalances_in_one_plan() -> None:
+    """One apply can drop a dead pin and convert unused free onto surplus."""
+    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
+    rows = [
+        _row("23", "opencode-free", "big-pickle", minute="0"),
+        _row("39", "opencode-free", "big-pickle", minute="5"),
+        _row("41", "opencode-free", "mimo-v2.5-free", minute="10"),
+        _row("59", "opencode-free", "big-pickle", minute="15"),
+        _row("80", "opencode-free", "absent-free-model", minute="20"),
+        *[
+            _row(
+                str(201 + index),
+                "nvidia",
+                "poolside/laguna-xs-2.1",
+                minute=str(minute),
+            )
+            for index, minute in enumerate((25, 30, 35, 40, 45, 50, 55))
+        ],
+    ]
+
+    plan = RETIRE.plan_retirement(rows, catalogs)
+    retired = {item.model for item in plan.retirements}
+    added = {item.model: item for item in plan.additions}
+
+    assert "absent-free-model" in retired
+    assert "ling-3.0-flash-fin-free" in added
+    assert added["ling-3.0-flash-fin-free"].action == "convert"
+
+    remaining = RETIRE.apply_plan(rows, plan)
+    models = {row["model"] for row in remaining}
+    workers = {row["worker"] for row in remaining}
+
+    assert "absent-free-model" not in models
+    assert "80" not in workers
+    assert "ling-3.0-flash-fin-free" in models
+    assert "muse-spark-1.3-contributor-free" in models
+    assert ROSTER.schedule_is_balanced(remaining)
+
+
+def test_apply_grows_when_no_surplus_big_pickle_remains() -> None:
+    """Without surplus big-pickle, unused free allocate a new worker id."""
+    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
+    rows = [
+        _row("39", "opencode-free", "big-pickle", minute="5"),
+        _row("41", "opencode-free", "mimo-v2.5-free", minute="10"),
+    ]
+
+    plan = RETIRE.plan_retirement(rows, catalogs)
+    grow = [item for item in plan.additions if item.action == "add"]
+
+    assert grow
+    assert all(int(item.worker) > 41 for item in grow)
+    assert "ling-3.0-flash-fin-free" in {item.model for item in grow}
+
+    remaining = RETIRE.apply_plan(rows, plan)
+    models = {row["model"] for row in remaining}
+
+    assert "ling-3.0-flash-fin-free" in models
+    assert "muse-spark-1.3-contributor-free" in models
+    assert any(
+        row["worker"] == "39" and row["model"] == "big-pickle" for row in remaining
+    )
+
+
+def test_apply_cli_converts_production_shaped_tsv_via_add_path(tmp_path: Path) -> None:
+    """CLI apply pins missing live free models on a production-shaped TSV.
+
+    Copies the committed roster, forces the two target models off it (back
+    to big-pickle), then applies so the proof is the add path rather than a
+    hand-edit. Safe after the committed TSV already contains those pins.
+    """
+    target = {"ling-3.0-flash-fin-free", "muse-spark-1.3-contributor-free"}
+    rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
+    rewritten = []
+    for row in rows:
+        if row["model"] in target:
+            rewritten.append(
+                {
+                    **row,
+                    "model": "big-pickle",
+                    "display_name": "OpenCode Big Pickle",
+                }
+            )
+        else:
+            rewritten.append(row)
+    roster = tmp_path / "free-model-factories.tsv"
+    lock_path = tmp_path / "factory-expected-workers.json"
+    ROSTER.write_roster_rows(
+        roster,
+        rewritten,
+        comments=ROSTER.load_roster_comments(
+            ROOT / ".github" / "free-model-factories.tsv"
+        ),
+    )
+    ROSTER.sync_roster_lock(rewritten, lock_path=lock_path)
+    before = {row["model"] for row in ROSTER.load_roster_rows(roster)}
+    assert before.isdisjoint(target)
+
+    status = RETIRE.run(
+        [
+            "apply",
+            "--roster",
+            str(roster),
+            "--lock",
+            str(lock_path),
+            "--catalog-json",
+            str(FIXTURES / "keep-present.json"),
+            "--retirement-comments",
+            str(FIXTURES / "nvidia-410-comments.json"),
+        ]
+    )
+    remaining = ROSTER.load_roster_rows(roster)
+    models = {row["model"] for row in remaining}
+    lock = ROSTER.load_roster_lock(lock_path)
+
+    assert status == 0
+    assert "ling-3.0-flash-fin-free" in models
+    assert "muse-spark-1.3-contributor-free" in models
+    assert "deepseek-v4-flash" not in models
+    assert ROSTER.schedule_is_balanced(remaining)
+    assert set(lock["expected_workers"]) == ROSTER.roster_worker_ids(remaining)
+    assert sum(1 for row in remaining if row["model"] == "big-pickle") >= 1
+
+
+def test_committed_tsv_pins_ling_and_muse_spark_13_via_add_path() -> None:
+    """The factory TSV must pin the live unused free models this change adds."""
+    rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
+    models = {row["model"] for row in rows}
+
+    assert "ling-3.0-flash-fin-free" in models
+    assert "muse-spark-1.3-contributor-free" in models
+    assert "deepseek-v4-flash" not in models
+    assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
+    assert ROSTER.schedule_is_balanced(rows)
