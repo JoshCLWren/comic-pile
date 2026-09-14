@@ -27,6 +27,7 @@ def _iter_revisions() -> list[tuple[str, list[str]]]:
 
     Merge migrations use a tuple down_revision, so each parent is expanded into the
     down-revision list. The real Alembic head set is derived from these lists.
+    Both annotated and unannotated Alembic assignment styles are accepted.
     """
     found: list[tuple[str, list[str]]] = []
     for path in sorted(VERSIONS_DIR.glob("*.py")):
@@ -37,9 +38,13 @@ def _iter_revisions() -> list[tuple[str, list[str]]]:
         down: list[str] = []
         for line in file_text.splitlines():
             stripped = line.strip()
-            if stripped.startswith("revision:") and rev is None:
+            if (
+                stripped.startswith(("revision:", "revision ="))
+                and rev is None
+                and "=" in stripped
+            ):
                 rev = stripped.split("=", 1)[1].strip().strip('"').strip("'")
-            if stripped.startswith("down_revision:") and not down:
+            if stripped.startswith(("down_revision:", "down_revision =")) and "=" in stripped:
                 rhs = stripped.split("=", 1)[1].strip()
                 if rhs == "None":
                     down = []
