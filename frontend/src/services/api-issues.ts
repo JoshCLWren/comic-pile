@@ -1,5 +1,13 @@
 import api from './api'
-import type { Issue, IssueListResponse, ReaderContextResponse, Thread } from '../types'
+import type { Issue, ReaderContextResponse, Thread } from '../types'
+
+export type IssueListResponse = {
+  issues: Issue[]
+  total_count: number
+  page_size: number
+  next_page_token: string | null
+}
+
 
 /** HTTP client contract required by the issue service. */
 export interface IssuesApiHttpClient {

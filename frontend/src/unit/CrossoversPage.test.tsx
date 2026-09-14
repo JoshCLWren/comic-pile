@@ -101,7 +101,8 @@ describe('CrossoversPage', () => {
   it('renames and deletes an existing crossover', async () => {
     groupsApi.list.mockResolvedValue([annihilation])
     groupsApi.rename.mockResolvedValue({ ...annihilation, name: 'Annihilation Conquest' })
-    groupsApi.delete.mockResolvedValue()
+    groupsApi.delete.mockResolvedValue(undefined)
+
     renderPage()
 
     await screen.findByText('Annihilation')
