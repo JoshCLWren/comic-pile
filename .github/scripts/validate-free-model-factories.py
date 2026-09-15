@@ -47,6 +47,8 @@ SCHEDULE_MINUTES: tuple[int, ...] = _ROSTER.SCHEDULE_MINUTES
 EXPECTED_WORKERS: set[int] = _ROSTER.expected_workers()
 opencode_model_is_free: Callable[[str], bool] = _ROSTER.opencode_model_is_free
 openrouter_model_is_free: Callable[[str], bool] = _ROSTER.openrouter_model_is_free
+z_ai_model_is_free: Callable[[str], bool] = _ROSTER.z_ai_model_is_free
+ollama_cloud_model_is_free: Callable[[str], bool] = _ROSTER.ollama_cloud_model_is_free
 load_roster_rows = _ROSTER.load_roster_rows
 
 
@@ -65,6 +67,15 @@ def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
             assert openrouter_model_is_free(model), (
                 f'worker {worker} openrouter-free pin must be an OpenRouter :free '
                 f'model id, got {model!r}'
+            )
+        elif source == 'z-ai':
+            assert z_ai_model_is_free(model), (
+                f'worker {worker} z-ai pin must be glm-4.5-flash, got {model!r}'
+            )
+        elif source == 'ollama-cloud':
+            assert ollama_cloud_model_is_free(model), (
+                f'worker {worker} ollama-cloud pin must be a documented free '
+                f'starter model, got {model!r}'
             )
 
 
@@ -144,9 +155,16 @@ def main() -> None:
     # INCIDENT restore: multi-provider Entry is live; OmniRoute stays dark.
     assert 'NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}' in runner
     assert 'OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}' in runner
+    assert 'Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}' in runner
+    assert 'OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}' in runner
     assert 'nvidia)' in runner
     assert 'opencode-free|openrouter-free)' in runner
     assert 'kilo-auto)' in runner
+    assert 'z-ai|ollama-cloud)' in runner
+    assert 'nvidia|kilo-auto|z-ai|ollama-cloud)' in runner
+    assert 'Configure OpenAI-compatible factory provider' in runner
+    assert 'https://api.z.ai/api/paas/v4' in runner
+    assert 'https://ollama.com/v1' in runner
     assert 'omniroute-disabled-incident' in runner
     assert 'FACTORY_OMNIROUTE_ENABLED' in runner
     # INCIDENT: catalog free-code lanes keep lane pins while OmniRoute is dark.

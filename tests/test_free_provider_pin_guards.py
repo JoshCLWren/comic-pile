@@ -65,3 +65,22 @@ def test_manifest_openrouter_pins_are_all_free(validate) -> None:
     assert opencode
     for row in opencode:
         assert validate.opencode_model_is_free(row['model']), row
+    z_ai = [row for row in rows if row['source'] == 'z-ai']
+    assert z_ai
+    for row in z_ai:
+        assert validate.z_ai_model_is_free(row['model']), row
+    ollama = [row for row in rows if row['source'] == 'ollama-cloud']
+    assert ollama
+    for row in ollama:
+        assert validate.ollama_cloud_model_is_free(row['model']), row
+
+
+def test_z_ai_and_ollama_cloud_pin_guards_reject_paid_ids(validate) -> None:
+    """Paid GLMs and unpublished Ollama Cloud ids cannot occupy these lanes."""
+    assert validate.z_ai_model_is_free('glm-4.5-flash')
+    assert validate.z_ai_model_is_free('z-ai/glm-4.5-flash')
+    assert not validate.z_ai_model_is_free('glm-5')
+    assert not validate.z_ai_model_is_free('glm-4.6')
+    assert validate.ollama_cloud_model_is_free('nemotron-3-nano:30b')
+    assert validate.ollama_cloud_model_is_free('gpt-oss:20b')
+    assert not validate.ollama_cloud_model_is_free('llama3')

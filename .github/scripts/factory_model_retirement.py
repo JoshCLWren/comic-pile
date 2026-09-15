@@ -272,7 +272,7 @@ def decide_pin(
             source=source,
             model=model,
             action="keep",
-            reason="kilo-auto is not enumerated by OpenCode CLI",
+            reason=f"{source} is not enumerated by OpenCode CLI",
         )
     catalog = _catalog_for_source(source, catalogs)
     if catalog is None:

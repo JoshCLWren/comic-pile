@@ -320,6 +320,10 @@ ADAPTERS: dict[str, ProviderAdapter] = {
     # selection, but no reliable non-interactive enumeration contract. Keep that
     # limitation here and require actual attempt evidence before counting it.
     "kilo-auto": RuntimeOnlyAdapter("kilo-auto"),
+    # Z.AI and Ollama Cloud are fixed free OpenAI-compatible pins. They are not
+    # enumerated by OpenCode CLI catalogs; runtime smoke is the evidence.
+    "z-ai": RuntimeOnlyAdapter("z-ai"),
+    "ollama-cloud": RuntimeOnlyAdapter("ollama-cloud"),
 }
 
 

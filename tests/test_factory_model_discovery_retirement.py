@@ -954,3 +954,59 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_nemotron_ultra_and_
     assert ROSTER.openrouter_model_is_free(by_worker["53"]["model"])
     assert ROSTER.schedule_is_balanced(rows)
     assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
+
+
+def test_committed_tsv_converts_surplus_pickle_to_z_ai_and_ollama_cloud() -> None:
+    """Workers 54-55 stay expected and pin Harvy-smoked OpenAI-compat free models."""
+    rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
+    lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
+    by_worker = {row["worker"]: row for row in rows}
+
+    assert {54, 55}.issubset(set(lock["expected_workers"]))
+    assert {54, 55}.isdisjoint(set(lock["retired_workers"]))
+    assert by_worker["46"]["source"] == "kilo-auto"
+    assert by_worker["46"]["model"] == "kilo-auto/free"
+    assert by_worker["53"]["source"] == "openrouter-free"
+    assert by_worker["54"] == {
+        "worker": "54",
+        "source": "z-ai",
+        "model": "glm-4.5-flash",
+        "minute": "20",
+        "scheduler": "dispatcher",
+        "display_name": "Z.AI GLM 4.5 Flash",
+    }
+    assert by_worker["55"] == {
+        "worker": "55",
+        "source": "ollama-cloud",
+        "model": "nemotron-3-nano:30b",
+        "minute": "25",
+        "scheduler": "dispatcher",
+        "display_name": "Ollama Cloud Nemotron 3 Nano 30B",
+    }
+    assert by_worker["54"]["model"] not in lock["retired_models"]
+    assert by_worker["55"]["model"] not in lock["retired_models"]
+    assert "z-ai/glm-4.5-flash" not in lock["retired_models"]
+    assert "ollama-cloud/nemotron-3-nano:30b" not in lock["retired_models"]
+    assert ROSTER.z_ai_model_is_free(by_worker["54"]["model"])
+    assert ROSTER.ollama_cloud_model_is_free(by_worker["55"]["model"])
+    assert not ROSTER.z_ai_model_is_free("glm-5")
+    assert ROSTER.schedule_is_balanced(rows)
+    assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
+
+
+def test_protected_openai_compat_pins_are_not_catalog_retired() -> None:
+    """Z.AI and Ollama Cloud stay when OpenCode CLI catalogs omit them."""
+    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "catalog-miss.json")
+    rows = [
+        _row("54", "z-ai", "glm-4.5-flash"),
+        _row("55", "ollama-cloud", "nemotron-3-nano:30b"),
+        _row("46", "kilo-auto", "kilo-auto/free"),
+    ]
+
+    plan = RETIRE.plan_retirement(rows, catalogs)
+
+    assert plan.retirements == ()
+    by_model = {item.model: item for item in plan.kept}
+    assert "not enumerated" in by_model["glm-4.5-flash"].reason
+    assert "not enumerated" in by_model["nemotron-3-nano:30b"].reason
+    assert "not enumerated" in by_model["kilo-auto/free"].reason

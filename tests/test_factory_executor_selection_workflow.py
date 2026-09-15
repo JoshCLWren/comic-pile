@@ -22,6 +22,8 @@ def test_multi_provider_entry_is_restored_while_omniroute_stays_dark() -> None:
     assert "nvidia)" in workflow
     assert "opencode-free|openrouter-free)" in workflow
     assert "kilo-auto)" in workflow
+    assert "z-ai|ollama-cloud)" in workflow
+    assert "nvidia|kilo-auto|z-ai|ollama-cloud)" in workflow
     assert "omniroute-disabled-incident" in workflow
     assert "FACTORY_OMNIROUTE_ENABLED" in workflow
     assert "factory_provider_candidates.py" in selector
@@ -48,6 +50,18 @@ def _nvidia_probe_step(workflow: str) -> str:
     return workflow.split(
         "- name: Probe pinned NVIDIA model before OpenCode smoke", maxsplit=1
     )[1].split("- name: Smoke exact pinned model through OpenCode", maxsplit=1)[0]
+
+
+def test_openai_compatible_factory_providers_inject_opencode_config() -> None:
+    """Z.AI and Ollama Cloud lanes write OmniRoute-shaped openai-compat config."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "Configure OpenAI-compatible factory provider" in workflow
+    assert "https://api.z.ai/api/paas/v4" in workflow
+    assert "https://ollama.com/v1" in workflow
+    assert "Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}" in workflow
+    assert "OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}" in workflow
+    assert 'npm: "@ai-sdk/openai-compatible"' in workflow
 
 
 def test_runtime_provider_probes_remain_authoritative() -> None:

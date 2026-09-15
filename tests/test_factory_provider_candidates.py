@@ -210,6 +210,22 @@ def test_kilo_auto_encapsulates_non_enumerating_route() -> None:
     assert result.candidates == ()
 
 
+def test_z_ai_and_ollama_cloud_require_runtime_evidence() -> None:
+    """Fixed OpenAI-compatible free pins are not guessed from catalogs."""
+    z_ai = CANDIDATES.discover("z-ai", json.dumps({"data": [{"id": "glm-4.5-flash"}]}))
+    ollama = CANDIDATES.discover(
+        "ollama-cloud",
+        json.dumps({"data": [{"id": "nemotron-3-nano:30b"}]}),
+    )
+
+    assert z_ai.mode == "runtime_only"
+    assert z_ai.status == "indeterminate"
+    assert z_ai.candidates == ()
+    assert ollama.mode == "runtime_only"
+    assert ollama.status == "indeterminate"
+    assert ollama.candidates == ()
+
+
 def test_unknown_provider_is_rejected() -> None:
     """Unregistered providers cannot silently become executable capacity."""
     try:
