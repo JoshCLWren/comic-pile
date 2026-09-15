@@ -37,7 +37,9 @@ OPENCODE_DISPLAY_TOKEN_OVERRIDES = {"mimo": "MiMo"}
 OPENCODE_MUSE_SPARK_RE = re.compile(r"muse-spark", re.IGNORECASE)
 _VERSIONISH_TOKEN_RE = re.compile(r"^v?\d+(?:\.\d+)*$", re.IGNORECASE)
 CATALOG_SOURCES = frozenset({"opencode-free", "nvidia", "openrouter-free"})
-PROTECTED_SOURCES = frozenset({"kilo-auto"})
+PROTECTED_SOURCES = frozenset({"kilo-auto", "z-ai", "ollama-cloud"})
+Z_AI_FREE_MODELS = frozenset({"glm-4.5-flash"})
+OLLAMA_CLOUD_FREE_MODELS = frozenset({"nemotron-3-nano:30b", "gpt-oss:20b"})
 LOCK_SCHEMA_VERSION = 1
 
 
@@ -114,6 +116,39 @@ def openrouter_model_is_free(model: str) -> bool:
     if name == "openrouter/free":
         return True
     return bool(name) and name.endswith(":free") and "/" in name
+
+
+def _bare_source_model(model: str, source: str) -> str:
+    """Return a lane pin without an optional ``{source}/`` prefix."""
+    name = model.strip()
+    prefix = f"{source}/"
+    if name.startswith(prefix):
+        return name[len(prefix) :]
+    return name
+
+
+def z_ai_model_is_free(model: str) -> bool:
+    """Return whether a Z.AI lane pin is the permanently free GLM Flash id.
+
+    Args:
+        model: Bare or ``z-ai/``-prefixed Z.AI model id.
+
+    Returns:
+        True only for ``glm-4.5-flash``. Paid GLMs are rejected.
+    """
+    return _bare_source_model(model, "z-ai") in Z_AI_FREE_MODELS
+
+
+def ollama_cloud_model_is_free(model: str) -> bool:
+    """Return whether an Ollama Cloud lane pin is a documented free starter id.
+
+    Args:
+        model: Bare or ``ollama-cloud/``-prefixed Ollama Cloud model id.
+
+    Returns:
+        True for ``nemotron-3-nano:30b`` or the documented alt ``gpt-oss:20b``.
+    """
+    return _bare_source_model(model, "ollama-cloud") in OLLAMA_CLOUD_FREE_MODELS
 
 
 def is_big_pickle(model: str) -> bool:

@@ -17,8 +17,8 @@
 51	openrouter-free	nvidia/nemotron-3-ultra-550b-a55b:free	5	dispatcher	OpenRouter Nemotron 3 Ultra Free
 52	openrouter-free	thinkingmachines/inkling:free	10	dispatcher	OpenRouter Inkling Free
 53	openrouter-free	thinkingmachines/inkling-small:free	15	dispatcher	OpenRouter Inkling Small Free
-54	opencode-free	big-pickle	20	dispatcher	OpenCode Big Pickle
-55	opencode-free	big-pickle	25	dispatcher	OpenCode Big Pickle
+54	z-ai	glm-4.5-flash	20	dispatcher	Z.AI GLM 4.5 Flash
+55	ollama-cloud	nemotron-3-nano:30b	25	dispatcher	Ollama Cloud Nemotron 3 Nano 30B
 56	opencode-free	big-pickle	30	dispatcher	OpenCode Big Pickle
 57	opencode-free	big-pickle	35	dispatcher	OpenCode Big Pickle
 58	opencode-free	muse-spark-1.3-contributor-free	40	dispatcher	OpenCode Muse Spark 1.3 Contributor Free
