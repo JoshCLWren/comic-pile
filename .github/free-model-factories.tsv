@@ -14,9 +14,9 @@
 48	openrouter-free	nex-agi/nex-n2.5-pro:free	50	dispatcher	OpenRouter Nex N2.5 Pro Free
 49	openrouter-free	nex-agi/nex-n2.5-mini:free	55	dispatcher	OpenRouter Nex N2.5 Mini Free
 50	openrouter-free	inclusionai/ling-3.0-flash-vl:free	0	dispatcher	OpenRouter Ling 3.0 Flash VL Free
-51	opencode-free	big-pickle	5	dispatcher	OpenCode Big Pickle
-52	opencode-free	big-pickle	10	dispatcher	OpenCode Big Pickle
-53	opencode-free	big-pickle	15	dispatcher	OpenCode Big Pickle
+51	openrouter-free	nvidia/nemotron-3-ultra-550b-a55b:free	5	dispatcher	OpenRouter Nemotron 3 Ultra Free
+52	openrouter-free	thinkingmachines/inkling:free	10	dispatcher	OpenRouter Inkling Free
+53	openrouter-free	thinkingmachines/inkling-small:free	15	dispatcher	OpenRouter Inkling Small Free
 54	opencode-free	big-pickle	20	dispatcher	OpenCode Big Pickle
 55	opencode-free	big-pickle	25	dispatcher	OpenCode Big Pickle
 56	opencode-free	big-pickle	30	dispatcher	OpenCode Big Pickle
