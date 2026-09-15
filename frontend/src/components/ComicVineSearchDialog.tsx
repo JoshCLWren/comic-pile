@@ -128,7 +128,7 @@ export default function ComicVineSearchDialog({
       if (issueNumber) {
         const normalizedIssueNumber = issueNumber.trim()
         const match = response.issues.find(
-          (issue) => issue.issue_number.trim() === normalizedIssueNumber,
+          (issue) => issue.issue_number?.trim() === normalizedIssueNumber,
         )
         if (match) {
           setSelectedIssue(match)
