@@ -994,6 +994,35 @@ def test_committed_tsv_converts_surplus_pickle_to_z_ai_and_ollama_cloud() -> Non
     assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
 
 
+def test_committed_tsv_converts_surplus_pickle_to_openrouter_dots_note() -> None:
+    """Worker 56 stays expected and pins Harvy-smoked OpenRouter Dots 3 Note Preview Free."""
+    rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
+    lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
+    by_worker = {row["worker"]: row for row in rows}
+
+    assert 56 in lock["expected_workers"]
+    assert 56 not in lock["retired_workers"]
+    assert by_worker["46"]["source"] == "kilo-auto"
+    assert by_worker["46"]["model"] == "kilo-auto/free"
+    assert by_worker["54"]["source"] == "z-ai"
+    assert by_worker["54"]["model"] == "glm-4.5-flash"
+    assert by_worker["55"]["source"] == "ollama-cloud"
+    assert by_worker["55"]["model"] == "nemotron-3-nano:30b"
+    assert by_worker["56"] == {
+        "worker": "56",
+        "source": "openrouter-free",
+        "model": "dots-studio/dots-3-note-preview:free",
+        "minute": "30",
+        "scheduler": "dispatcher",
+        "display_name": "OpenRouter Dots 3 Note Preview Free",
+    }
+    assert by_worker["56"]["model"] not in lock["retired_models"]
+    assert "dots-studio/dots-3-note-preview:free" not in lock["retired_models"]
+    assert ROSTER.openrouter_model_is_free(by_worker["56"]["model"])
+    assert ROSTER.schedule_is_balanced(rows)
+    assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
+
+
 def test_protected_openai_compat_pins_are_not_catalog_retired() -> None:
     """Z.AI and Ollama Cloud stay when OpenCode CLI catalogs omit them."""
     catalogs = CATALOG.load_catalog_fixture(FIXTURES / "catalog-miss.json")

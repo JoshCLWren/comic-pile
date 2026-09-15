@@ -41,7 +41,8 @@
       {"id": "inclusionai/ling-3.0-flash-vl:free"},
       {"id": "nvidia/nemotron-3-ultra-550b-a55b:free"},
       {"id": "thinkingmachines/inkling:free"},
-      {"id": "thinkingmachines/inkling-small:free"}
+      {"id": "thinkingmachines/inkling-small:free"},
+      {"id": "dots-studio/dots-3-note-preview:free"}
     ]
   }
 }
