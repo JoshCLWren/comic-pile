@@ -281,6 +281,74 @@ describe('ComicVineSearchDialog issue #1695 fixes', () => {
     })
   })
 
+  it('skips auto-map when issueNumber is null and shows plain issue list', async () => {
+    getSeriesIssuesSpy.mockResolvedValue({
+      comicvine_volume_id: 42,
+      series_name: 'Stormwatch',
+      issues: [mockIssue],
+    })
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: null })} />)
+
+    const input = screen.getByPlaceholderText('Search series title...')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    expect(screen.queryByTestId('rematch-issue-context')).not.toBeInTheDocument()
+    expect(screen.queryByText('Confirm Identity')).not.toBeInTheDocument()
+  })
+
+  it('shows "No issues found" when issueNumber is null and results are empty', async () => {
+    getSeriesIssuesSpy.mockResolvedValue({
+      comicvine_volume_id: 42,
+      series_name: 'Stormwatch',
+      issues: [],
+    })
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: null })} />)
+
+    const input = screen.getByPlaceholderText('Search series title...')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+
+    await waitFor(() =>
+      expect(screen.getByText('No issues found in this series.')).toBeInTheDocument(),
+    )
+  })
+
+  it('shows no-match message when issueNumber is provided but the series has no issues', async () => {
+    getSeriesIssuesSpy.mockResolvedValue({
+      comicvine_volume_id: 42,
+      series_name: 'Stormwatch',
+      issues: [],
+    })
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: '99' })} />)
+
+    const input = screen.getByPlaceholderText('Search series title...')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+
+    await waitFor(() =>
+      expect(screen.getByText('No match for #99 in this series.')).toBeInTheDocument(),
+    )
+  })
+
+  it('shows error when loading series issues fails', async () => {
+    getSeriesIssuesSpy.mockRejectedValue(new Error('Network error'))
+    render(<ComicVineSearchDialog {...defaultProps()} />)
+
+    const input = screen.getByPlaceholderText('Search series title...')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Failed to load issues. Please try again.'),
+    )
+  })
+
   it('renders series name and metadata without truncating the year', async () => {
     searchSeriesSpy.mockResolvedValue({
       query: 'Test',
