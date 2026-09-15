@@ -906,3 +906,51 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_nex_and_ling() -> N
     assert ROSTER.openrouter_model_is_free(by_worker["50"]["model"])
     assert ROSTER.schedule_is_balanced(rows)
     assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
+
+
+def test_committed_tsv_converts_surplus_pickle_to_openrouter_nemotron_ultra_and_inkling() -> None:
+    """Workers 51-53 stay expected and pin Harvy-smoked OpenRouter free models."""
+    rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
+    lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
+    by_worker = {row["worker"]: row for row in rows}
+
+    assert {51, 52, 53}.issubset(set(lock["expected_workers"]))
+    assert {51, 52, 53}.isdisjoint(set(lock["retired_workers"]))
+    assert by_worker["46"]["source"] == "kilo-auto"
+    assert by_worker["46"]["model"] == "kilo-auto/free"
+    assert by_worker["48"]["source"] == "openrouter-free"
+    assert by_worker["48"]["model"] == "nex-agi/nex-n2.5-pro:free"
+    assert by_worker["51"] == {
+        "worker": "51",
+        "source": "openrouter-free",
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "minute": "5",
+        "scheduler": "dispatcher",
+        "display_name": "OpenRouter Nemotron 3 Ultra Free",
+    }
+    assert by_worker["52"] == {
+        "worker": "52",
+        "source": "openrouter-free",
+        "model": "thinkingmachines/inkling:free",
+        "minute": "10",
+        "scheduler": "dispatcher",
+        "display_name": "OpenRouter Inkling Free",
+    }
+    assert by_worker["53"] == {
+        "worker": "53",
+        "source": "openrouter-free",
+        "model": "thinkingmachines/inkling-small:free",
+        "minute": "15",
+        "scheduler": "dispatcher",
+        "display_name": "OpenRouter Inkling Small Free",
+    }
+    assert by_worker["51"]["model"] not in lock["retired_models"]
+    assert by_worker["52"]["model"] not in lock["retired_models"]
+    assert by_worker["53"]["model"] not in lock["retired_models"]
+    assert "nvidia/nemotron-3-ultra-550b-a55b" in lock["retired_models"]
+    assert "thinkingmachines/inkling" in lock["retired_models"]
+    assert ROSTER.openrouter_model_is_free(by_worker["51"]["model"])
+    assert ROSTER.openrouter_model_is_free(by_worker["52"]["model"])
+    assert ROSTER.openrouter_model_is_free(by_worker["53"]["model"])
+    assert ROSTER.schedule_is_balanced(rows)
+    assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1

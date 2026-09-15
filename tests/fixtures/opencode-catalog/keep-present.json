@@ -38,7 +38,10 @@
       {"id": "inclusionai/ling-3.0-flash-fin:free"},
       {"id": "nex-agi/nex-n2.5-pro:free"},
       {"id": "nex-agi/nex-n2.5-mini:free"},
-      {"id": "inclusionai/ling-3.0-flash-vl:free"}
+      {"id": "inclusionai/ling-3.0-flash-vl:free"},
+      {"id": "nvidia/nemotron-3-ultra-550b-a55b:free"},
+      {"id": "thinkingmachines/inkling:free"},
+      {"id": "thinkingmachines/inkling-small:free"}
     ]
   }
 }
