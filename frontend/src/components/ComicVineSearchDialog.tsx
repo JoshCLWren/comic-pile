@@ -125,13 +125,23 @@ export default function ComicVineSearchDialog({
     try {
       const response = await comicVineApi.getSeriesIssues(series.comicvine_volume_id, series.name)
       setIssueCandidates(response.issues)
+      if (issueNumber) {
+        const normalizedIssueNumber = issueNumber.trim()
+        const match = response.issues.find(
+          (issue) => issue.issue_number?.trim() === normalizedIssueNumber,
+        )
+        if (match) {
+          setSelectedIssue(match)
+          setStep('confirm')
+        }
+      }
     } catch {
       setError('Failed to load issues. Please try again.')
       setIssueCandidates([])
     } finally {
       setIsSearching(false)
     }
-  }, [])
+  }, [issueNumber])
 
   const handleSelectIssue = useCallback((issue: ComicVineIssueCandidate) => {
     setSelectedIssue(issue)
@@ -181,7 +191,11 @@ export default function ComicVineSearchDialog({
         {step === 'search' && (
           <>
             <p className="text-sm text-stone-400">
-              Search for the correct ComicVine series for <span className="font-bold text-stone-200">{threadTitle}</span>
+              Search for the correct ComicVine series for{' '}
+              <span className="font-bold text-stone-200">
+                {threadTitle}
+                {issueNumber ? ` #${issueNumber}` : ''}
+              </span>
             </p>
             <div className="relative">
               <input
@@ -270,6 +284,15 @@ export default function ComicVineSearchDialog({
                 {seriesMetaText(selectedSeries) && ` (${seriesMetaText(selectedSeries)})`}
               </span>
             </div>
+            {issueNumber && (
+              <p
+                className="text-sm text-stone-300 bg-stone-800/40 border border-stone-700/40 rounded-lg px-3 py-2"
+                data-testid="rematch-issue-context"
+              >
+                Looking for <span className="font-bold text-stone-100">#{issueNumber}</span> — select the
+                matching issue below to confirm.
+              </p>
+            )}
             {isSearching ? (
               <div className="flex justify-center py-8">
                 <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
@@ -308,7 +331,9 @@ export default function ComicVineSearchDialog({
               </div>
             ) : (
               <p className="text-sm text-stone-400 text-center py-4">
-                No issues found in this series.
+                {issueNumber
+                  ? `No match for #${issueNumber} in this series.`
+                  : 'No issues found in this series.'}
               </p>
             )}
           </>
