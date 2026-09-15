@@ -76,9 +76,8 @@ describe('ComicVineSearchDialog mode branching', () => {
     fireEvent.change(input, { target: { value: 'Stormwatch' } })
     await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
     fireEvent.click(screen.getByText('Stormwatch'))
-    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument())
 
-    fireEvent.click(screen.getByText('#1'))
     fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
 
     await waitFor(() => expect(confirmIdentitySpy).toHaveBeenCalledWith(43, 36956))
@@ -92,9 +91,8 @@ describe('ComicVineSearchDialog mode branching', () => {
     fireEvent.change(input, { target: { value: 'Stormwatch' } })
     await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
     fireEvent.click(screen.getByText('Stormwatch'))
-    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument())
 
-    fireEvent.click(screen.getByText('#1'))
     fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
 
     await waitFor(() => expect(replaceIdentitySpy).toHaveBeenCalledWith(43, 36956))

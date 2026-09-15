@@ -125,13 +125,20 @@ export default function ComicVineSearchDialog({
     try {
       const response = await comicVineApi.getSeriesIssues(series.comicvine_volume_id, series.name)
       setIssueCandidates(response.issues)
+      if (issueNumber) {
+        const match = response.issues.find(issue => issue.issue_number === issueNumber)
+        if (match) {
+          setSelectedIssue(match)
+          setStep('confirm')
+        }
+      }
     } catch {
       setError('Failed to load issues. Please try again.')
       setIssueCandidates([])
     } finally {
       setIsSearching(false)
     }
-  }, [])
+  }, [issueNumber])
 
   const handleSelectIssue = useCallback((issue: ComicVineIssueCandidate) => {
     setSelectedIssue(issue)
