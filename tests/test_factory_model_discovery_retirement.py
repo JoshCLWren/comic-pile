@@ -865,3 +865,44 @@ def test_committed_tsv_pins_ling_and_muse_spark_13_via_add_path() -> None:
     assert "deepseek-v4-flash" not in models
     assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
     assert ROSTER.schedule_is_balanced(rows)
+
+
+def test_committed_tsv_converts_surplus_pickle_to_openrouter_nex_and_ling() -> None:
+    """Workers 48-50 stay expected and pin procurement OpenRouter free models."""
+    rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
+    lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
+    by_worker = {row["worker"]: row for row in rows}
+
+    assert {48, 49, 50}.issubset(set(lock["expected_workers"]))
+    assert {48, 49, 50}.isdisjoint(set(lock["retired_workers"]))
+    assert by_worker["46"]["source"] == "kilo-auto"
+    assert by_worker["46"]["model"] == "kilo-auto/free"
+    assert by_worker["48"] == {
+        "worker": "48",
+        "source": "openrouter-free",
+        "model": "nex-agi/nex-n2.5-pro:free",
+        "minute": "50",
+        "scheduler": "dispatcher",
+        "display_name": "OpenRouter Nex N2.5 Pro Free",
+    }
+    assert by_worker["49"] == {
+        "worker": "49",
+        "source": "openrouter-free",
+        "model": "nex-agi/nex-n2.5-mini:free",
+        "minute": "55",
+        "scheduler": "dispatcher",
+        "display_name": "OpenRouter Nex N2.5 Mini Free",
+    }
+    assert by_worker["50"] == {
+        "worker": "50",
+        "source": "openrouter-free",
+        "model": "inclusionai/ling-3.0-flash-vl:free",
+        "minute": "0",
+        "scheduler": "dispatcher",
+        "display_name": "OpenRouter Ling 3.0 Flash VL Free",
+    }
+    assert ROSTER.openrouter_model_is_free(by_worker["48"]["model"])
+    assert ROSTER.openrouter_model_is_free(by_worker["49"]["model"])
+    assert ROSTER.openrouter_model_is_free(by_worker["50"]["model"])
+    assert ROSTER.schedule_is_balanced(rows)
+    assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
