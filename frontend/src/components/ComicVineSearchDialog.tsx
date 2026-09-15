@@ -169,6 +169,7 @@ export default function ComicVineSearchDialog({
       isOpen={isOpen}
       title={step === 'search' ? 'Find ComicVine Match' : step === 'select-issue' ? 'Select Issue' : 'Confirm Match'}
       onClose={onClose}
+      size="large"
     >
       <div className="space-y-4">
         {error && (
@@ -179,7 +180,7 @@ export default function ComicVineSearchDialog({
 
         {step === 'search' && (
           <>
-            <p className="text-xs text-stone-400">
+            <p className="text-sm text-stone-400">
               Search for the correct ComicVine series for <span className="font-bold text-stone-200">{threadTitle}</span>
             </p>
             <div className="relative">
@@ -199,7 +200,7 @@ export default function ComicVineSearchDialog({
               )}
             </div>
             {seriesResults.length > 0 && (
-              <div className="space-y-1.5 max-h-72 overflow-y-auto overscroll-contain">
+              <div className="space-y-2 max-h-96 overflow-y-auto overscroll-contain">
                 {seriesResults.map((series) => (
                   <button
                     key={series.comicvine_volume_id}
@@ -209,20 +210,20 @@ export default function ComicVineSearchDialog({
                     className="w-full text-left p-3 rounded-xl bg-stone-800/50 border border-stone-700/50 hover:border-amber-500/50 hover:bg-stone-800 transition group"
                   >
                     <div className="flex items-start gap-3">
-{series.image_url && (
-          <ImageWithLoading
-            src={optimizedImageUrl(series.image_url, 240) ?? series.image_url}
-            srcSet={optimizedImageSrcSet(series.image_url, [96, 240]) ?? undefined}
-            sizes="40px"
-            alt=""
-            className="w-10 h-14 object-cover rounded-lg shrink-0"
-          />
-        )}
-                      <div className="min-w-0">
+                      {series.image_url && (
+                        <ImageWithLoading
+                          src={optimizedImageUrl(series.image_url, 240) ?? series.image_url}
+                          srcSet={optimizedImageSrcSet(series.image_url, [96, 240]) ?? undefined}
+                          sizes="40px"
+                          alt=""
+                          className="w-10 h-14 object-cover rounded-lg shrink-0"
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
                         <p className="text-sm font-bold text-stone-100 group-hover:text-amber-300 transition truncate">
                           {series.name}
                         </p>
-                        <p className="text-[11px] text-stone-500">
+                        <p className="text-sm font-medium text-stone-300">
                           {seriesMetaText(series)}
                         </p>
                       </div>
@@ -232,17 +233,17 @@ export default function ComicVineSearchDialog({
               </div>
             )}
             {!isSearching && !query.trim() && (
-              <p className="text-xs text-stone-500 text-center py-4">
+              <p className="text-sm text-stone-400 text-center py-4">
                 Type a series name to search ComicVine
               </p>
             )}
             {!isSearching && query.trim() && seriesResults.length === 0 && !hasSearched && (
-              <p className="text-xs text-stone-500 text-center py-4">
+              <p className="text-sm text-stone-400 text-center py-4">
                 Search ComicVine for the correct series
               </p>
             )}
             {!isSearching && query.trim() && seriesResults.length === 0 && hasSearched && !error && (
-              <p className="text-xs text-stone-400 text-center py-4">
+              <p className="text-sm text-stone-300 text-center py-4">
                 No series found. Try a different search term.
               </p>
             )}
@@ -259,12 +260,12 @@ export default function ComicVineSearchDialog({
                   setSelectedSeries(null)
                   setIssueCandidates([])
                 }}
-                className="text-xs text-amber-500 hover:text-amber-400 font-bold"
+                className="text-sm text-amber-500 hover:text-amber-400 font-bold"
               >
                 ← Back to search
               </button>
               <span className="text-xs text-stone-500">·</span>
-              <span className="text-xs text-stone-400 truncate">
+              <span className="text-sm text-stone-300 truncate">
                 {selectedSeries.name}
                 {seriesMetaText(selectedSeries) && ` (${seriesMetaText(selectedSeries)})`}
               </span>
@@ -274,7 +275,7 @@ export default function ComicVineSearchDialog({
                 <div className="w-5 h-5 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
               </div>
             ) : issueCandidates.length > 0 ? (
-              <div className="space-y-1.5 max-h-80 overflow-y-auto overscroll-contain">
+              <div className="space-y-2 max-h-96 overflow-y-auto overscroll-contain">
                 {issueCandidates.map((issue) => (
                   <button
                     key={issue.comicvine_issue_id}
@@ -283,22 +284,22 @@ export default function ComicVineSearchDialog({
                     className="w-full text-left p-3 rounded-xl bg-stone-800/50 border border-stone-700/50 hover:border-amber-500/50 hover:bg-stone-800 transition group"
                   >
                     <div className="flex items-center gap-3">
-{issue.image_url && (
-          <ImageWithLoading
-            src={optimizedImageUrl(issue.image_url, 240) ?? issue.image_url}
-            srcSet={optimizedImageSrcSet(issue.image_url, [96, 240]) ?? undefined}
-            sizes="32px"
-            alt=""
-            className="w-8 h-11 object-cover rounded shrink-0"
-          />
-        )}
+                      {issue.image_url && (
+                        <ImageWithLoading
+                          src={optimizedImageUrl(issue.image_url, 240) ?? issue.image_url}
+                          srcSet={optimizedImageSrcSet(issue.image_url, [96, 240]) ?? undefined}
+                          sizes="32px"
+                          alt=""
+                          className="w-8 h-11 object-cover rounded shrink-0"
+                        />
+                      )}
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-bold text-stone-100 group-hover:text-amber-300 transition">
                           {issue.issue_number ? `#${issue.issue_number}` : 'Unknown'}
-                          {issue.name && <span className="font-normal text-stone-400 ml-2">{issue.name}</span>}
+                          {issue.name && <span className="font-normal text-stone-300 ml-2">{issue.name}</span>}
                         </p>
                         {issue.cover_date && (
-                          <p className="text-[10px] text-stone-500">{issue.cover_date}</p>
+                          <p className="text-xs text-stone-400">{issue.cover_date}</p>
                         )}
                       </div>
                     </div>
@@ -306,7 +307,7 @@ export default function ComicVineSearchDialog({
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-stone-500 text-center py-4">
+              <p className="text-sm text-stone-400 text-center py-4">
                 No issues found in this series.
               </p>
             )}
@@ -321,34 +322,34 @@ export default function ComicVineSearchDialog({
                 setStep('select-issue')
                 setSelectedIssue(null)
               }}
-              className="text-xs text-amber-500 hover:text-amber-400 font-bold"
+              className="text-sm text-amber-500 hover:text-amber-400 font-bold"
             >
               ← Back to issues
             </button>
             <div className="p-4 rounded-xl bg-stone-800/50 border border-stone-700/50 space-y-3">
-              <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">Selected match</p>
+              <p className="text-xs font-black uppercase tracking-wider text-stone-400">Selected match</p>
               <div className="flex items-start gap-3">
-{selectedIssue.image_url && (
-          <ImageWithLoading
-            src={optimizedImageUrl(selectedIssue.image_url, 240) ?? selectedIssue.image_url}
-            srcSet={optimizedImageSrcSet(selectedIssue.image_url, [96, 240]) ?? undefined}
-            sizes="64px"
-            alt=""
-            className="w-16 h-22 object-cover rounded-lg shrink-0"
-          />
-        )}
+                {selectedIssue.image_url && (
+                  <ImageWithLoading
+                    src={optimizedImageUrl(selectedIssue.image_url, 240) ?? selectedIssue.image_url}
+                    srcSet={optimizedImageSrcSet(selectedIssue.image_url, [96, 240]) ?? undefined}
+                    sizes="64px"
+                    alt=""
+                    className="w-16 h-22 object-cover rounded-lg shrink-0"
+                  />
+                )}
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-stone-100">{selectedSeries.name}</p>
-                  <p className="text-xs text-stone-300">
+                  <p className="text-sm text-stone-300">
                     {selectedIssue.issue_number ? `#${selectedIssue.issue_number}` : ''}
                     {selectedIssue.name && ` — ${selectedIssue.name}`}
                   </p>
                   {selectedIssue.cover_date && (
-                    <p className="text-[10px] text-stone-500 mt-1">{selectedIssue.cover_date}</p>
+                    <p className="text-xs text-stone-400 mt-1">{selectedIssue.cover_date}</p>
                   )}
                 </div>
               </div>
-              <p className="text-[10px] text-stone-500">
+              <p className="text-xs text-stone-400">
                 This will confirm <span className="text-stone-300">{threadTitle} #{issueNumber}</span> maps to this ComicVine issue.
               </p>
             </div>
