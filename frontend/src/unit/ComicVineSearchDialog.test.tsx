@@ -25,8 +25,8 @@ vi.mock('../services/api', () => ({
 }))
 
 vi.mock('../components/Modal', () => ({
-  default: ({ isOpen, title, children }: { isOpen: boolean; title: string; children: ReactNode }) =>
-    isOpen ? <div role="dialog"><h2>{title}</h2>{children}</div> : null,
+  default: ({ isOpen, title, children, size }: { isOpen: boolean; title: string; children: ReactNode; size?: string }) =>
+    isOpen ? <div role="dialog" data-modal-size={size}><h2>{title}</h2>{children}</div> : null,
 }))
 
 import ComicVineSearchDialog from '../components/ComicVineSearchDialog'
@@ -247,16 +247,60 @@ describe('ComicVineSearchDialog issue #1695 fixes', () => {
   it('shows neutral hint when query is cleared', async () => {
     render(<ComicVineSearchDialog {...defaultProps({ threadTitle: 'Stormwatch' })} />)
 
-    await waitFor(() =>
-      expect(searchSeriesSpy).toHaveBeenCalled(),
-    )
+    await waitFor(() => {
+      expect(searchSeriesSpy).toHaveBeenCalled()
+    })
 
     const input = screen.getByPlaceholderText('Search series title...')
     fireEvent.change(input, { target: { value: '' } })
 
-    await waitFor(() =>
-      expect(screen.getByText('Type a series name to search ComicVine')).toBeInTheDocument(),
-    )
+    await waitFor(() => {
+      expect(screen.getByText('Type a series name to search ComicVine')).toBeInTheDocument()
+    })
     expect(screen.queryByText('No series found. Try a different search term.')).not.toBeInTheDocument()
   })
+
+  it('opens a large modal on desktop', async () => {
+    render(<ComicVineSearchDialog {...defaultProps()} />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toHaveAttribute('data-modal-size', 'large')
+    })
+  })
+
+  it('renders series metadata at readable size with high contrast', async () => {
+    render(<ComicVineSearchDialog {...defaultProps()} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Stormwatch')).toBeInTheDocument()
+    })
+
+    const metadataElements = screen.getAllByText(/WildStorm · 1993 · 12 issues/)
+    expect(metadataElements.length).toBeGreaterThan(0)
+    metadataElements.forEach((el) => {
+      expect(el.className).toMatch(/text-sm/)
+      expect(el.className).toMatch(/text-stone-300/)
+    })
+  })
+
+  it('renders series name and metadata without truncating the year', async () => {
+    searchSeriesSpy.mockResolvedValue({
+      query: 'Test',
+      results: [{
+        ...mockSeries,
+        name: 'A Very Long Series Name That Could Potentially Be Truncated',
+      }],
+      total_available: 1,
+    })
+
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: 'A Very Long Series Name That Could Potentially Be Truncated' })} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/A Very Long Series Name/)).toBeInTheDocument()
+    })
+
+    const metaText = screen.getByText(/WildStorm · 1993 · 12 issues/)
+    expect(metaText).toBeInTheDocument()
+  })
+
 })
