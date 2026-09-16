@@ -121,6 +121,13 @@ export function useRollRating({
       if (result !== null) setRolledResult(result)
       setActiveRatingThread(ratingThread)
 
+      // A fresh rating session starts with no reading details: reader context,
+      // reading orders, and connected threads are user-triggered and never
+      // carried over (or re-fetched) from a previous thread.
+      setReadingOrders([])
+      setConnectedThreads([])
+      setReadingDetailsRequested(false)
+
       setRating(3.0)
       setErrorMessage('')
       setPredictedDie(computePredictedDie(currentDie, 3.0))

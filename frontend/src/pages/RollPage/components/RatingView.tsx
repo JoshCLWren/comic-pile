@@ -6,7 +6,7 @@ import { ComicPillar } from './ComicPillar'
 import { ReadingContextPillar } from './ReadingContextPillar'
 import { ReadingContextStatusCard } from './ReadingContextStatusCard'
 import { YourContextPillar } from './YourContextPillar'
-import { hasReadingContextContent, hasReadingContextInformation } from '../readingContextContent'
+import { hasReadingContextContent } from '../readingContextContent'
 import { RatingActionPanel } from './RatingActionPanel'
 import { WhyThisRoll } from './WhyThisRoll'
 import { readingContextType } from '../readingContextTypography'
@@ -211,8 +211,6 @@ export function RatingView({
     else onFetchReadingDetails?.(threadId)
   }, [activeRatingThread?.id, onFetchReadingBoundaries, onFetchReadingDetails])
 
-  const hasContextInformation = hasReadingContextInformation(readerContext)
-  const hasContextContent = hasContextInformation || readingOrders.length > 0 || connectedThreads.length > 0
   const hasBoundariesContent = useMemo(
     () => (readerContext?.local_chain.edges.length ?? 0) > 0,
     [readerContext],
@@ -227,6 +225,7 @@ export function RatingView({
       },
     }
   }, [readerContext])
+  const hasContextContent = hasReadingContextContent(readingOrders, connectedThreads, contextReaderContext)
 
   return (
     <div ref={ratingViewTopRef} data-testid="rating-view-top" className="relative z-10 space-y-4 p-3 md:p-4">
