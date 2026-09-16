@@ -57,7 +57,31 @@ export function useRollRating({
   const [connectedThreads, setConnectedThreads] = useState<ConnectedThreadInfo[]>([])
   const [lastRated, setLastRated] = useState<PostRateReference | null>(null)
 
-  const clearLastRated = useCallback(() => setLastRated(null), [])
+  const clearLastRated = useCallback(() => setLastRated(null    ),
+
+    // Fetch reading orders and connected threads for the current rating thread on user request.
+    async function fetchReadingDetails(threadId: number | null) {
+      if (!threadId) {
+        setReadingOrders([]);
+        setConnectedThreads([]);
+        return;
+      }
+      try {
+        const ordersResponse = await readingOrdersApi.getForThread(threadId);
+        setReadingOrders(ordersResponse.reading_orders);
+      } catch (error) {
+        console.error('Failed to fetch reading orders:', error);
+        setReadingOrders([]);
+      }
+      try {
+        const connectedResponse = await dependenciesApi.getConnectedThreads(threadId);
+        setConnectedThreads(connectedResponse.connected_threads);
+      } catch (error) {
+        console.error('Failed to fetch connected threads:', error);
+        setConnectedThreads([]);
+      }
+    }
+     [])
 
   const enterRatingView = useCallback(
     async (
@@ -88,25 +112,7 @@ export function useRollRating({
       setIsRatingView(true)
       suppressPendingAutoOpenRef.current = false
 
-      if (threadId) {
-        try {
-          const ordersResponse = await readingOrdersApi.getForThread(threadId)
-          setReadingOrders(ordersResponse.reading_orders)
-        } catch (error) {
-          console.error('Failed to fetch reading orders:', error)
-          setReadingOrders([])
-        }
-        try {
-          const connectedResponse = await dependenciesApi.getConnectedThreads(threadId)
-          setConnectedThreads(connectedResponse.connected_threads)
-        } catch (error) {
-          console.error('Failed to fetch connected threads:', error)
-          setConnectedThreads([])
-        }
-      } else {
-        setReadingOrders([])
-        setConnectedThreads([])
-      }
+/* Reading details are now fetched on user action via fetchReadingDetails() */
     },
     [
       bootstrap,
