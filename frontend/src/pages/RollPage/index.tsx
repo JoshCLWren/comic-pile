@@ -31,7 +31,6 @@ import { useRollDependencies } from './useRollDependencies'
 import { useRollActions } from './useRollActions'
 import { useRollModals } from './useRollModals'
 import { useRollViewport } from './useRollViewport'
-import { hasReadingContextContent } from './readingContextContent'
 import { RatingView } from './components/RatingView'
 import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
 import { ThreadPool } from './components/ThreadPool'
@@ -153,11 +152,6 @@ export default function RollPage() {
 
   const { mainDieRef, ratingViewTopRef } = useRollViewport({
     isRatingView: state.isRatingView,
-    hasReadingContext: hasReadingContextContent(
-      rating.readingOrders,
-      rating.connectedThreads,
-      readerContext,
-    ),
   })
 
   const snooze = useRollSnooze({
@@ -392,7 +386,8 @@ export default function RollPage() {
                 skipIsPending={skipMutation.isPending}
                 readingOrders={rating.readingOrders}
                 connectedThreads={rating.connectedThreads}
-                onFetchReadingDetails={rating.fetchReadingDetails}
+                onFetchReadingContext={rating.fetchReadingContext}
+                onFetchReadingBoundaries={rating.fetchReadingBoundaries}
                 onUpdateRating={rating.updateRatingUI}
                 onSubmitRating={rating.handleSubmitRating}
                 onSnooze={snooze.handleSnooze}

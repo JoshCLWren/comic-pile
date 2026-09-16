@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
@@ -216,7 +217,7 @@ const layoutCases: LayoutStateCase[] = [
 ]
 
 describe('RatingView desktop layout respects state instead of reserving fixed coordinates (issue #1943)', () => {
-  it.each(layoutCases)('packs regions without fixed coordinates in $name', (state) => {
+  it.each(layoutCases)('packs regions without fixed coordinates in $name', async (state) => {
     const { container } = render(
       ratingView({
         readingOrders: readingOrders(state.readingOrders),
@@ -224,6 +225,9 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
         readerContext: state.readerContext,
       }),
     )
+    if (state.expectReadingContextRegion) {
+      await userEvent.setup().click(screen.getByTestId('reading-context-button'))
+    }
     const { grid, cells } = gridChildren(container)
     expect(grid).not.toBeNull()
     expect(grid!.className).toContain('grid')
@@ -231,16 +235,12 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     expect(grid!.className).toContain('xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]')
     expect(grid!.className).not.toMatch(/minmax\(0,\d+fr\)/)
 
-    const expectedRegionCount = state.expectReadingContextRegion ? 3 : 2
+    const expectedRegionCount = 3
     expect(cells.length).toBe(expectedRegionCount)
 
     expect(cells[0].dataset.testid).toBe('rating-region-comic')
-    if (state.expectReadingContextRegion) {
-      expect(cells[1].dataset.testid).toBe('rating-region-reading-context')
-      expect(cells[2].dataset.testid).toBe('rating-region-your-context')
-    } else {
-      expect(cells[1].dataset.testid).toBe('rating-region-your-context')
-    }
+    expect(cells[1].dataset.testid).toBe('rating-region-reading-optional')
+    expect(cells[2].dataset.testid).toBe('rating-region-your-context')
 
     for (const cell of cells) {
       expect(cell.className).not.toMatch(/\b(?:md:|xl:)?(?:col-start|row-start|col-end|row-end|row-span)-\d+\b/)
@@ -248,7 +248,7 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     }
   })
 
-  it.each(layoutCases)('gives every region a min-w-0 wrapper so content packs without overflow in $name', (state) => {
+  it.each(layoutCases)('gives every region a min-w-0 wrapper so content packs without overflow in $name', async (state) => {
     const { container } = render(
       ratingView({
         readingOrders: readingOrders(state.readingOrders),
@@ -256,8 +256,14 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
         readerContext: state.readerContext,
       }),
     )
-    for (const region of ['rating-region-comic', 'rating-region-your-context', ...(state.expectReadingContextRegion ? ['rating-region-reading-context'] : [])]) {
-      const wrapper = container.querySelector(`[data-testid="${region}"]`)
+    if (state.expectReadingContextRegion) {
+      await userEvent.setup().click(screen.getByTestId('reading-context-button'))
+    }
+    expect(container.querySelector('[data-testid="rating-region-comic"]')!.className).toContain('min-w-0')
+    expect(container.querySelector('[data-testid="rating-region-your-context"]')!.className).toContain('min-w-0')
+    expect(container.querySelector('[data-testid="rating-region-reading-optional"]')!.className).toContain('min-w-0')
+    if (state.expectReadingContextRegion) {
+      const wrapper = container.querySelector('[data-testid="rating-region-reading-context"]')
       expect(wrapper).not.toBeNull()
       expect(wrapper!.className).toContain('min-w-0')
     }
@@ -326,18 +332,21 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
 })
 
 describe('RatingView reading-context presence contract (issue #1943 prerequisite)', () => {
-  it('omits the Reading Context region entirely when there is no meaningful continuity content', () => {
+  it('shows lazy controls even when no meaningful continuity content, but hides pillar until expanded', async () => {
     render(ratingView())
-    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.queryByTestId('rating-region-reading-context')).not.toBeInTheDocument()
   })
 
-  it('renders the Reading Context region when reading orders exist', () => {
+  it('renders the Reading Context region when reading orders exist after expansion', async () => {
     render(ratingView({ readingOrders: readingOrders(1) }))
+    await userEvent.setup().click(screen.getByTestId('reading-context-button'))
     expect(screen.getByText('Reading Context')).toBeInTheDocument()
   })
 
-  it('renders the Reading Context region when connected threads exist even with no reading orders', () => {
+  it('renders the Reading Context region when connected threads exist even with no reading orders after expansion', async () => {
     render(ratingView({ connectedThreads: connectedThreads(1) }))
+    await userEvent.setup().click(screen.getByTestId('reading-context-button'))
     expect(screen.getByText('Reading Context')).toBeInTheDocument()
   })
 })

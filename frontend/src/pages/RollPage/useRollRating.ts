@@ -60,6 +60,10 @@ export function useRollRating({
 
   const clearLastRated = useCallback(() => setLastRated(null), [])
 
+  const requestReaderContext = useCallback(() => {
+    setReadingDetailsRequested(true)
+  }, [])
+
   const fetchReadingDetails = useCallback(async (threadId: number | null) => {
     setReadingDetailsRequested(true)
     if (!threadId) {
@@ -82,6 +86,17 @@ export function useRollRating({
       setConnectedThreads([])
     }
   }, [])
+
+  const fetchReadingContext = useCallback(
+    async (threadId: number | null) => {
+      await fetchReadingDetails(threadId)
+    },
+    [fetchReadingDetails],
+  )
+
+  const fetchReadingBoundaries = useCallback(() => {
+    requestReaderContext()
+  }, [requestReaderContext])
 
   const enterRatingView = useCallback(
     async (
@@ -335,6 +350,9 @@ export function useRollRating({
     clearLastRated,
     readingDetailsRequested,
     fetchReadingDetails,
+    fetchReadingContext,
+    fetchReadingBoundaries,
+    requestReaderContext,
     enterRatingView,
     handleMigrationComplete,
     handleMigrationSkip,

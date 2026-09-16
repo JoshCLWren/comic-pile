@@ -98,15 +98,19 @@ afterEach(() => {
 })
 
 describe('RatingView continuity correction', () => {
-  it('renders the Correct continuity button when connected threads exist', () => {
+  it('renders the Correct continuity button when connected threads exist after expanding reading context', async () => {
+    const user = userEvent.setup()
     renderRatingView()
+    await user.click(screen.getByTestId('reading-context-button'))
     expect(
       screen.getByRole('button', { name: /correct continuity/i }),
     ).toBeInTheDocument()
   })
 
-  it('does not render the Correct continuity button without connected threads', () => {
+  it('does not render the Correct continuity button without connected threads even after expansion', async () => {
+    const user = userEvent.setup()
     renderRatingView({ connectedThreads: [] })
+    await user.click(screen.getByTestId('reading-context-button'))
     expect(
       screen.queryByRole('button', { name: /correct continuity/i }),
     ).not.toBeInTheDocument()
@@ -115,6 +119,7 @@ describe('RatingView continuity correction', () => {
   it('opens the continuity correction dialog when the button is clicked', async () => {
     const user = userEvent.setup()
     renderRatingView()
+    await user.click(screen.getByTestId('reading-context-button'))
     expect(screen.queryByTestId('continuity-correction-dialog')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /correct continuity/i }))
@@ -125,6 +130,7 @@ describe('RatingView continuity correction', () => {
   it('closes the continuity correction dialog via the close callback', async () => {
     const user = userEvent.setup()
     renderRatingView()
+    await user.click(screen.getByTestId('reading-context-button'))
     await user.click(screen.getByRole('button', { name: /correct continuity/i }))
 
     await user.click(screen.getByRole('button', { name: 'Close continuity' }))
@@ -135,6 +141,7 @@ describe('RatingView continuity correction', () => {
   it('refreshes the thread and closes the dialog when the save callback fires', async () => {
     const user = userEvent.setup()
     renderRatingView()
+    await user.click(screen.getByTestId('reading-context-button'))
     await user.click(screen.getByRole('button', { name: /correct continuity/i }))
 
     await user.click(screen.getByRole('button', { name: 'Save continuity' }))
@@ -148,5 +155,6 @@ describe('RatingView continuity correction', () => {
     expect(
       screen.queryByRole('button', { name: /correct continuity/i }),
     ).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
   })
 })

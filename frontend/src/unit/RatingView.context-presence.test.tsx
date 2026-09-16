@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
@@ -171,57 +172,67 @@ const minimalContext: ReaderContextResponse = {
 }
 
 describe('Reading Context content-driven presence (#1942)', () => {
-  it('omits the region entirely for successful-empty reading context', () => {
+  it('shows lazy controls even for empty context and requires explicit expansion to reveal pillar', async () => {
+    const user = userEvent.setup()
     const { container } = renderRatingView()
-    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
-    expect(screen.queryByText('Your Place in the Story')).not.toBeInTheDocument()
-    expect(screen.queryByText('Checking reading context…')).not.toBeInTheDocument()
-    expect(screen.queryByText('Local reading context unavailable')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
+    expect(screen.queryByTestId('rating-region-reading-context')).not.toBeInTheDocument()
+    await user.click(screen.getByTestId('reading-context-button'))
+    expect(screen.getByText('No reading context available.')).toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
-    expect(grid!.textContent ?? '').not.toContain('Reading Context')
+    expect(grid!.textContent ?? '').toContain('Reading Context')
   })
 
-  it('renders a bounded status card while reading context loads, distinct from empty', () => {
+  it('renders a bounded status card while reading context loads after expansion, distinct from empty', async () => {
+    const user = userEvent.setup()
     const { container } = renderRatingView({ isReaderContextLoading: true })
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    await user.click(screen.getByTestId('reading-context-button'))
     expect(screen.getByText('Checking reading context…')).toBeInTheDocument()
-    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
-    expect(screen.queryByText('Local reading context unavailable')).not.toBeInTheDocument()
     expect(container.querySelector('.animate-pulse')).not.toBeNull()
   })
 
-  it('renders a bounded failure card when reading context is unavailable, distinct from empty', () => {
+  it('renders a bounded failure card when reading context is unavailable after expansion, distinct from empty', async () => {
+    const user = userEvent.setup()
     renderRatingView({ readerContextError: 'Reader context service offline' })
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    await user.click(screen.getByTestId('reading-context-button'))
     expect(screen.getByText('Local reading context unavailable')).toBeInTheDocument()
     expect(screen.getByText('Reader context service offline')).toBeInTheDocument()
-    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
-    expect(screen.queryByText('Checking reading context…')).not.toBeInTheDocument()
   })
 
-  it('exposes all continuity information when a reader context alone populates the region', () => {
+  it('exposes all continuity information when a reader context alone populates the region after expansion', async () => {
+    const user = userEvent.setup()
     const { container } = renderRatingView({ readerContext: populatedContext })
+    await user.click(screen.getByTestId('reading-context-button'))
     expect(screen.getByText('Reading Context')).toBeInTheDocument()
-    expect(screen.getByText('Your Place in the Story')).toBeInTheDocument()
     expect(screen.getByText('Where you are in Ultimate Black Panther')).toBeInTheDocument()
+    await user.click(screen.getByTestId('reading-boundaries-button'))
     expect(screen.getByText('Your Reading Boundaries')).toBeInTheDocument()
     expect(screen.getByText('Rolled 5 on d6')).toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     expect(grid!.className).toContain('xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]')
   })
 
-  it('renders reading routes when reading orders populate the region', () => {
+  it('renders reading routes when reading orders populate the region after expansion', async () => {
+    const user = userEvent.setup()
     renderRatingView({
       readingOrders: [
         { id: 7, name: 'Main route', description: null, total_items: 2, completed_items: 1, items: [] },
       ],
     })
+    await user.click(screen.getByTestId('reading-context-button'))
     expect(screen.getByText('Reading Context')).toBeInTheDocument()
     expect(screen.getByText('Your Reading Paths')).toBeInTheDocument()
     expect(screen.getByText('Main route')).toBeInTheDocument()
   })
 
-  it('does not reserve the region for a loaded but continuity-free context', () => {
+  it('does not render pillar content for a loaded but continuity-free context even after expansion', async () => {
+    const user = userEvent.setup()
     renderRatingView({ readerContext: minimalContext })
-    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
+    await user.click(screen.getByTestId('reading-context-button'))
+    expect(screen.getByText('No reading context available.')).toBeInTheDocument()
     expect(screen.queryByText('Your Place in the Story')).not.toBeInTheDocument()
   })
 })
