@@ -35,7 +35,7 @@ function context(issueId: number): ReaderContextResponse {
     },
     crossovers: [],
     local_chain: {
-      issues: [{ issue_id, issue_number: '3', position: 1, status: 'unread', relation: 'current', rating: null, crossover_memberships: [] }],
+      issues: [{ issue_id: issueId, issue_number: '3', position: 1, status: 'unread', relation: 'current', rating: null, crossover_memberships: [] }],
       edges: [],
     },
   }
@@ -92,12 +92,12 @@ it('normalizes non-Error failures and preserves Error failures', async () => {
   mockedGet.mockRejectedValueOnce('string failure')
   const stringWrapper = createWrapper()
   const stringResult = renderHook(() => useReaderContext(7), { wrapper: stringWrapper })
-  await waitFor(() => expect(stringResult.current.error).toBeInstanceOf(Error))
-  expect(stringResult.current.error?.message).toBe('Unable to load reader context')
+  await waitFor(() => expect(stringResult.result.current.error).toBeInstanceOf(Error))
+  expect(stringResult.result.current.error?.message).toBe('Unable to load reader context')
 
   mockedGet.mockRejectedValueOnce(new Error('boom'))
   const errorWrapper = createWrapper()
   const errorResult = renderHook(() => useReaderContext(7), { wrapper: errorWrapper })
-  await waitFor(() => expect(errorResult.current.error).toBeInstanceOf(Error))
-  expect(errorResult.current.error?.message).toBe('boom')
+  await waitFor(() => expect(errorResult.result.current.error).toBeInstanceOf(Error))
+  expect(errorResult.result.current.error?.message).toBe('boom')
 })
