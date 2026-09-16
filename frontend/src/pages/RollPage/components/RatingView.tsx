@@ -257,7 +257,7 @@ export function RatingView({
               </button>
             ) : null
           ) : (
-            <div data-testid="rating-region-reading-context">
+            <div className="min-w-0" data-testid="rating-region-reading-context">
               {readerContextLoading ? (
                 <ReadingContextStatusCard isLoading error={readerContextError} />
               ) : readerContextFailure ? (
@@ -302,7 +302,7 @@ export function RatingView({
               </button>
             ) : null
           ) : (
-            <div data-testid="rating-region-reading-boundaries">
+            <div className="min-w-0" data-testid="rating-region-reading-boundaries">
               {readerContextLoading ? (
                 <ReadingContextStatusCard isLoading error={readerContextError} />
               ) : readerContextFailure ? (

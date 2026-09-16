@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
@@ -68,7 +69,7 @@ function renderRatingView(
 }
 
 describe('RatingView crossovers', () => {
-  it('shows crossover names owned by the active rating thread', () => {
+  it('shows crossover names owned by the active rating thread', async () => {
     renderRatingView(
       {
         id: 42,
@@ -93,6 +94,7 @@ describe('RatingView crossovers', () => {
       },
     )
 
+    await userEvent.setup().click(screen.getByTestId('reading-context-button'))
     expect(screen.getByRole('heading', { name: 'Crossovers' })).toBeInTheDocument()
     expect(screen.getByText('Cosmic bridge')).toBeInTheDocument()
   })

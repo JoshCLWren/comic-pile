@@ -181,7 +181,7 @@ describe('Reading Context content-driven presence (#1942)', () => {
     await user.click(screen.getByTestId('reading-context-button'))
     expect(screen.getByText('No reading context available.')).toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
-    expect(grid!.textContent ?? '').toContain('Reading Context')
+    expect(grid!.contains(screen.getByTestId('rating-region-reading-context'))).toBe(true)
   })
 
   it('renders a bounded status card while reading context loads after expansion, distinct from empty', async () => {
@@ -251,10 +251,12 @@ describe('Your Context content-driven presence (#1942)', () => {
     expect(screen.getByText('Ultimate Black Panther history')).toBeInTheDocument()
   })
 
-  it('keeps series history and rating content in a populated roll state', () => {
+  it('keeps series history and rating content in a populated roll state', async () => {
+    const user = userEvent.setup()
     renderRatingView({ readerContext: populatedContext, readingOrders: [{ id: 7, name: 'Main route', description: null, total_items: 2, completed_items: 1, items: [] }] })
     expect(screen.getByText('Ultimate Black Panther history')).toBeInTheDocument()
     expect(screen.getByText('Your rating')).toBeInTheDocument()
+    await user.click(screen.getByTestId('reading-context-button'))
     expect(screen.getByText('Your Reading Paths')).toBeInTheDocument()
   })
 })
