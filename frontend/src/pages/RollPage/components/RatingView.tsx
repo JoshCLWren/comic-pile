@@ -1,4 +1,4 @@
-import type { Ref } from 'react'
+import { type Ref, useState, useCallback } from 'react'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
 import type { ConnectedThreadInfo, ReaderContextResponse } from '../../../types'
 import type { RatingThread } from '../types'
@@ -25,6 +25,7 @@ interface RatingViewProps {
   skipIsPending?: boolean
   readingOrders: ReadingOrder[]
   connectedThreads: ConnectedThreadInfo[]
+  onFetchReadingDetails?: (threadId: number | null) => void
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze: () => void
@@ -50,6 +51,7 @@ export function RatingView({
   skipIsPending = false,
   readingOrders,
   connectedThreads,
+  onFetchReadingDetails,
   onUpdateRating,
   onSubmitRating,
   onSnooze,
@@ -66,6 +68,19 @@ export function RatingView({
   const readerContextLoading = isReaderContextLoading && !readerContext
   const readerContextFailure = !!readerContextError && !readerContext
   const showReadingContextStatus = !hasReadingContextContentValue && (readerContextLoading || readerContextFailure)
+
+  const [readingContextExpanded, setReadingContextExpanded] = useState(false)
+  const [readingBoundariesExpanded, setReadingBoundariesExpanded] = useState(false)
+
+  const handleFetchReadingContext = useCallback(() => {
+    setReadingContextExpanded(true)
+    onFetchReadingDetails?.(activeRatingThread?.id ?? null)
+  }, [activeRatingThread?.id, onFetchReadingDetails])
+
+  const handleFetchReadingBoundaries = useCallback(() => {
+    setReadingBoundariesExpanded(true)
+    onFetchReadingDetails?.(activeRatingThread?.id ?? null)
+  }, [activeRatingThread?.id, onFetchReadingDetails])
 
   return (
     <div
@@ -85,7 +100,7 @@ export function RatingView({
           />
         </div>
 
-        {hasReadingContextContentValue && (
+        {hasReadingContextContentValue && readingContextExpanded && (
           <div className="min-w-0 order-2 lg:order-none" data-testid="rating-region-reading-context">
             <ReadingContextPillar
               activeRatingThread={activeRatingThread}
@@ -98,6 +113,39 @@ export function RatingView({
               isReaderContextLoading={isReaderContextLoading}
               readerContextError={readerContextError}
             />
+          </div>
+        )}
+
+        {!readingContextExpanded && activeRatingThread && (
+          <div className="min-w-0 order-2 lg:order-none" data-testid="rating-region-reading-context-buttons">
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleFetchReadingContext}
+                className="w-full px-3 py-2 text-left text-sm rounded-lg border transition-colors"
+                style={{
+                  borderColor: 'var(--theme-continuity-accent)',
+                  color: 'var(--theme-text-primary)',
+                  backgroundColor: 'var(--theme-bg-panel)',
+                }}
+                data-testid="reading-context-button"
+              >
+                Reading Context
+              </button>
+              <button
+                type="button"
+                onClick={handleFetchReadingBoundaries}
+                className="w-full px-3 py-2 text-left text-sm rounded-lg border transition-colors"
+                style={{
+                  borderColor: 'var(--theme-continuity-accent)',
+                  color: 'var(--theme-text-primary)',
+                  backgroundColor: 'var(--theme-bg-panel)',
+                }}
+                data-testid="reading-boundaries-button"
+              >
+                Reading Boundaries
+              </button>
+            </div>
           </div>
         )}
 

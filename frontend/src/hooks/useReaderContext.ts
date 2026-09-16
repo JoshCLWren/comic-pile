@@ -19,7 +19,10 @@ const EMPTY_STATE: ReaderContextState = {
   refetch: () => undefined,
 }
 
-export function useReaderContext(issueId: number | null | undefined): ReaderContextState {
+export function useReaderContext(
+  issueId: number | null | undefined,
+  enabled = true,
+): ReaderContextState {
   const { data, isPending, error, refetch } = useQuery({
     queryKey: issueId ? queryKeys.readerContext.detail(issueId) : [],
     queryFn: async () => {
@@ -29,10 +32,10 @@ export function useReaderContext(issueId: number | null | undefined): ReaderCont
         throw reason instanceof Error ? reason : new Error('Unable to load reader context')
       }
     },
-    enabled: issueId != null,
+    enabled: issueId != null && enabled,
   })
 
-  if (issueId == null) return EMPTY_STATE
+  if (issueId == null || !enabled) return EMPTY_STATE
 
   return {
     context: data ?? null,

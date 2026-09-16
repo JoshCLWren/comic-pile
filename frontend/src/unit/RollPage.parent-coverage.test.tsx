@@ -1048,7 +1048,7 @@ describe('RollPage parent handlers', () => {
     vi.useRealTimers()
   })
 
-  it('handles related-thread request failures while entering rating', async () => {
+  it('handles related-thread request failures while fetching reading details', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     relatedApi.readingOrders.mockRejectedValueOnce(new Error('orders failed'))
     relatedApi.connectedThreads.mockRejectedValueOnce(new Error('connected failed'))
@@ -1057,7 +1057,8 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
-    expect(errorSpy).toHaveBeenCalledWith('Failed to fetch reading orders:', expect.any(Error))
+    await user.click(screen.getByTestId('reading-context-button'))
+    await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('Failed to fetch reading orders:', expect.any(Error)))
     expect(errorSpy).toHaveBeenCalledWith('Failed to fetch connected threads:', expect.any(Error))
     errorSpy.mockRestore()
   })

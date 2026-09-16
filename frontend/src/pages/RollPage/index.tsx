@@ -135,9 +135,6 @@ export default function RollPage() {
 
   const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
 
-  const ratingIssueId = state.activeRatingThread?.issue_id ?? state.activeRatingThread?.next_issue_id ?? null
-  const { context: readerContext, isLoading: isReaderContextLoading, error: readerContextError } = useReaderContext(ratingIssueId)
-
   useRollPendingSession({ state, bootstrap, rollPool })
 
   const rating = useRollRating({
@@ -147,6 +144,12 @@ export default function RollPage() {
     dismissPendingMutation,
     refetchBootstrap,
   })
+
+  const ratingIssueId = state.activeRatingThread?.issue_id ?? state.activeRatingThread?.next_issue_id ?? null
+  const { context: readerContext, isLoading: isReaderContextLoading, error: readerContextError } = useReaderContext(
+    ratingIssueId,
+    rating.readingDetailsRequested,
+  )
 
   const { mainDieRef, ratingViewTopRef } = useRollViewport({
     isRatingView: state.isRatingView,
@@ -389,6 +392,7 @@ export default function RollPage() {
                 skipIsPending={skipMutation.isPending}
                 readingOrders={rating.readingOrders}
                 connectedThreads={rating.connectedThreads}
+                onFetchReadingDetails={rating.fetchReadingDetails}
                 onUpdateRating={rating.updateRatingUI}
                 onSubmitRating={rating.handleSubmitRating}
                 onSnooze={snooze.handleSnooze}
