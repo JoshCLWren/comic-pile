@@ -1,10 +1,21 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import type { ReaderContextResponse } from '../types'
 import type { RatingThread } from '../pages/RollPage/types'
+
+const navigateSpy = vi.fn()
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  return { ...actual, useNavigate: () => navigateSpy }
+})
+
+beforeEach(() => {
+  navigateSpy.mockClear()
+})
 
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -328,6 +339,54 @@ describe('RatingView Reading Boundaries lazy control (issue #2519)', () => {
       readerContextError: 'Reader context failed',
     }))
     expect(screen.getByText('Local reading context unavailable')).toBeInTheDocument()
+  })
+
+  it('navigates to dependency endpoint threads when source and target have thread ids', async () => {
+    render(ratingView({
+      readerContext: makeContext([edge({ source_thread_id: 42, target_thread_id: 43 })]),
+    }))
+    const user = userEvent.setup()
+    await user.click(screen.getByTestId('reading-boundaries-button'))
+    const section = screen.getByText('Your Reading Boundaries').closest('section')!
+    await user.click(within(section).getByRole('button', { name: 'Open series for #2' }))
+    expect(navigateSpy).toHaveBeenCalledWith('/thread/42')
+    await user.click(within(section).getByRole('button', { name: 'Open series for #3' }))
+    expect(navigateSpy).toHaveBeenCalledWith('/thread/43')
+  })
+
+  it('navigates to continuity endpoint threads when source and target have thread ids', async () => {
+    render(ratingView({
+      readerContext: makeContext([
+        edge({
+          kind: 'continuity',
+          source_issue_id: 99,
+          source_label: null,
+          target_issue_id: 100,
+          target_label: null,
+          source_thread_id: 52,
+          target_thread_id: 53,
+          note: 'Crossover order',
+        }),
+      ]),
+    }))
+    const user = userEvent.setup()
+    await user.click(screen.getByTestId('reading-boundaries-button'))
+    const section = screen.getByText('Your Reading Boundaries').closest('section')!
+    await user.click(within(section).getByRole('button', { name: 'Open series for #99' }))
+    expect(navigateSpy).toHaveBeenCalledWith('/thread/52')
+    await user.click(within(section).getByRole('button', { name: 'Open series for #100' }))
+    expect(navigateSpy).toHaveBeenCalledWith('/thread/53')
+  })
+
+  it('leaves boundary endpoints without a thread id as inert text instead of navigation buttons', async () => {
+    render(ratingView({
+      readerContext: makeContext([edge()]),
+    }))
+    await userEvent.setup().click(screen.getByTestId('reading-boundaries-button'))
+    const section = screen.getByText('Your Reading Boundaries').closest('section')!
+    expect(section.querySelector('button[aria-label^="Open series for"]')).toBeNull()
+    expect(within(section).getByText('#2')).toBeInTheDocument()
+    expect(within(section).getByText('#3')).toBeInTheDocument()
   })
 })
 

@@ -1,4 +1,5 @@
 import { type Ref, useState, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
 import type { ConnectedThreadInfo, ReaderContextResponse } from '../../../types'
 import type { RatingThread } from '../types'
@@ -41,7 +42,40 @@ interface RatingViewProps {
   ratingViewTopRef?: Ref<HTMLDivElement> | null
 }
 
+function EdgeEndpoint({
+  label,
+  fallbackLabel,
+  threadId,
+  onOpen,
+}: {
+  label: string | null
+  fallbackLabel: string
+  threadId: number | null
+  onOpen: (threadId: number) => void
+}) {
+  const endpointStyle = readingContextType('primaryValue')
+  if (threadId === null) {
+    return (
+      <span className="min-w-0 break-words font-mono text-[var(--theme-text-primary)]" style={endpointStyle}>
+        {label ?? fallbackLabel}
+      </span>
+    )
+  }
+  return (
+    <button
+      type="button"
+      className="inline-flex min-h-6 items-center break-words text-left font-mono underline decoration-dotted underline-offset-2 text-[var(--theme-text-primary)]"
+      style={endpointStyle}
+      onClick={() => onOpen(threadId)}
+      aria-label={`Open series for ${label ?? fallbackLabel}`}
+    >
+      {label ?? fallbackLabel}
+    </button>
+  )
+}
+
 function ReadingBoundariesSection({ readerContext }: { readerContext: ReaderContextResponse | null }) {
+  const navigate = useNavigate()
   const dependencyEdges = useMemo(
     () => readerContext?.local_chain.edges.filter((e) => e.kind === 'dependency') ?? [],
     [readerContext],
@@ -57,6 +91,8 @@ function ReadingBoundariesSection({ readerContext }: { readerContext: ReaderCont
     if (dependencyEdges.every((e) => e.source_issue_id === currentIssueId)) return 'Blocks:'
     return 'Dependency edges:'
   }, [dependencyEdges, currentIssueId])
+
+  const openThread = (threadId: number) => navigate(`/thread/${threadId}`)
 
   if (dependencyEdges.length === 0 && continuityEdges.length === 0) return null
 
@@ -96,15 +132,21 @@ function ReadingBoundariesSection({ readerContext }: { readerContext: ReaderCont
                 <div className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: 'rgb(250, 204, 139)' }} />
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="min-w-0 break-words font-mono text-[var(--theme-text-primary)]" style={readingContextType('primaryValue')}>
-                      {edge.source_label ?? `#${edge.source_issue_id}`}
-                    </span>
+                    <EdgeEndpoint
+                      label={edge.source_label}
+                      fallbackLabel={`#${edge.source_issue_id}`}
+                      threadId={edge.source_thread_id}
+                      onOpen={openThread}
+                    />
                     <span className="text-[var(--theme-text-muted)]" aria-hidden="true">
                       →
                     </span>
-                    <span className="min-w-0 break-words font-mono text-[var(--theme-text-primary)]" style={readingContextType('primaryValue')}>
-                      {edge.target_label ?? `#${edge.target_issue_id}`}
-                    </span>
+                    <EdgeEndpoint
+                      label={edge.target_label}
+                      fallbackLabel={`#${edge.target_issue_id}`}
+                      threadId={edge.target_thread_id}
+                      onOpen={openThread}
+                    />
                   </div>
                   {(edge.explanation ?? edge.note) && (
                     <div className="break-words italic text-[var(--theme-text-muted)]" style={readingContextType('bodyCopy')}>
@@ -136,15 +178,21 @@ function ReadingBoundariesSection({ readerContext }: { readerContext: ReaderCont
                 <div className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: 'rgb(165, 243, 252)' }} />
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="min-w-0 break-words font-mono text-[var(--theme-text-primary)]" style={readingContextType('primaryValue')}>
-                      {edge.source_label ?? `#${edge.source_issue_id}`}
-                    </span>
+                    <EdgeEndpoint
+                      label={edge.source_label}
+                      fallbackLabel={`#${edge.source_issue_id}`}
+                      threadId={edge.source_thread_id}
+                      onOpen={openThread}
+                    />
                     <span className="text-[var(--theme-text-muted)]" aria-hidden="true">
                       ↝
                     </span>
-                    <span className="min-w-0 break-words font-mono text-[var(--theme-text-primary)]" style={readingContextType('primaryValue')}>
-                      {edge.target_label ?? `#${edge.target_issue_id}`}
-                    </span>
+                    <EdgeEndpoint
+                      label={edge.target_label}
+                      fallbackLabel={`#${edge.target_issue_id}`}
+                      threadId={edge.target_thread_id}
+                      onOpen={openThread}
+                    />
                   </div>
                   {(edge.explanation ?? edge.note) && (
                     <div className="break-words italic text-[var(--theme-text-muted)]" style={readingContextType('bodyCopy')}>
