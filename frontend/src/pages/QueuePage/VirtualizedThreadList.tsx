@@ -46,7 +46,6 @@ interface VirtualizedThreadListProps<T> {
    */
   explicitColumnCount?: number
   sentinelRef?: React.Ref<HTMLDivElement>
-  scrollRootRef?: React.RefObject<HTMLDivElement | null>
   hasNextPage?: boolean
   /**
    * Injectable window-virtualizer hook. Production uses the real
@@ -85,7 +84,6 @@ export default function VirtualizedThreadList<T>({
   renderItem,
   explicitColumnCount,
   sentinelRef,
-  scrollRootRef: _scrollRootRef,
   hasNextPage,
   useVirtualizer,
 }: VirtualizedThreadListProps<T>) {
@@ -97,6 +95,16 @@ export default function VirtualizedThreadList<T>({
 
   // Read the initial wrapper offset synchronously to avoid a 0 → measured
   // layout jump. Production stays single-column regardless of wrapper width.
+  // @tanstack/react-virtual's window virtualizer reads the raw window.scrollY
+  // as its scroll offset and lays virtual items out starting at scrollMargin,
+  // so scrollMargin must be the distance from the start of the window scroll
+  // content (the document top) to the wrapper top — a stable document-space
+  // offset. `rect.top` is viewport-relative, so the current scroll is added
+  // back: `rect.top + window.scrollY`. Because virtual item `start` values
+  // already include scrollMargin, items must be rendered at
+  // `start - scrollMargin` (see the render below); a bare `start` shifts every
+  // virtual row down by the page-chrome offset above the list and blanks the
+  // viewport once the queue crosses the virtualization threshold.
   useLayoutEffect(() => {
     if (wrapperRef.current) {
       const rect = wrapperRef.current.getBoundingClientRect()
@@ -242,7 +250,7 @@ export default function VirtualizedThreadList<T>({
                   top: 0,
                   left: 0,
                   width: '100%',
-                  transform: `translateY(${virtualItem.start}px)`,
+                  transform: `translateY(${virtualItem.start - scrollMargin}px)`,
                 }}
               >
                 {renderItem(threads[rowIndex], rowIndex)}
@@ -258,7 +266,7 @@ export default function VirtualizedThreadList<T>({
                   left: 0,
                   width: '100%',
                   paddingBottom: `${ROW_GAP}px`,
-                  transform: `translateY(${virtualItem.start}px)`,
+                  transform: `translateY(${virtualItem.start - scrollMargin}px)`,
                 }}
               >
                 <div

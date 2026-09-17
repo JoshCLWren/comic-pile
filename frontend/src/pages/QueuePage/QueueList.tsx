@@ -13,7 +13,6 @@ interface QueueListProps {
   renderItem: (thread: Thread, index: number) => ReactNode
   isSearching: boolean
   sentinelRef: React.Ref<HTMLDivElement>
-  scrollRootRef: React.RefObject<HTMLDivElement | null>
   hasNextPage: boolean
   /**
    * Injectable window-virtualizer hook forwarded to VirtualizedThreadList.
@@ -37,7 +36,6 @@ export function QueueList({
   renderItem,
   isSearching,
   sentinelRef,
-  scrollRootRef,
   hasNextPage,
   useVirtualizer,
 }: QueueListProps) {
@@ -68,11 +66,10 @@ export function QueueList({
         </div>
       )}
       {filteredThreads.length > VIRTUALIZATION_THRESHOLD ? (
-        <VirtualizedThreadList 
-          threads={filteredThreads} 
-          renderItem={renderItem} 
+        <VirtualizedThreadList
+          threads={filteredThreads}
+          renderItem={renderItem}
           sentinelRef={sentinelRef}
-          scrollRootRef={scrollRootRef}
           hasNextPage={hasNextPage}
           useVirtualizer={useVirtualizer}
         />
