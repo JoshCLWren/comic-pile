@@ -66,9 +66,9 @@ export function QueueList({
         </div>
       )}
       {filteredThreads.length > VIRTUALIZATION_THRESHOLD ? (
-        <VirtualizedThreadList 
-          threads={filteredThreads} 
-          renderItem={renderItem} 
+        <VirtualizedThreadList
+          threads={filteredThreads}
+          renderItem={renderItem}
           sentinelRef={sentinelRef}
           hasNextPage={hasNextPage}
           useVirtualizer={useVirtualizer}

@@ -226,8 +226,8 @@ export default function QueuePage() {
           reorderError={actions.reorderError}
           renderItem={renderThreadCard}
           isSearching={isSearching}
-           sentinelRef={sentinelRef}
-           hasNextPage={!!nextPageToken}
+          sentinelRef={sentinelRef}
+          hasNextPage={!!nextPageToken}
          />
 
         <CompletedThreadsSection
