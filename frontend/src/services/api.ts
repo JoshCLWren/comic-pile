@@ -704,13 +704,19 @@ export interface CreatorDetailPageParams {
 }
 
 export const creatorsApi = {
-  getDetail: (creatorKey: string, params: CreatorDetailPageParams = {}) =>
-    api.get<CreatorDetailResponse>(`/v1/creators/${encodeURIComponent(creatorKey)}`, {
-      params: {
-        ...(params.limit !== undefined ? { limit: params.limit } : {}),
-        ...(params.offset !== undefined && params.offset > 0 ? { offset: params.offset } : {}),
-      },
-    }),
+  getDetail: (creatorKey: string, params: CreatorDetailPageParams = {}) => {
+    const queryParams: Record<string, string | number> = {}
+    if (params.limit !== undefined) {
+      queryParams.limit = params.limit
+    }
+    if (params.offset !== undefined && params.offset > 0) {
+      queryParams.offset = params.offset
+    }
+    return api.get<CreatorDetailResponse>(
+      `/v1/creators/${encodeURIComponent(creatorKey)}`,
+      { params: queryParams },
+    )
+  },
 }
 
 export const snoozeApi = {

@@ -39,7 +39,7 @@ interface CreatorIdentity {
  */
 export function creatorKeyFor(creator: CreatorIdentity | null | undefined): string | null {
   const id = creator?.creator_id
-  if (typeof id !== 'number' || !Number.isInteger(id)) return null
+  if (id == null || !Number.isInteger(id)) return null
   return buildCreatorKey(id)
 }
 
