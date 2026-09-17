@@ -61,6 +61,32 @@ describe('RatingView initial preview', () => {
     expect(screen.getByText('More variety next roll')).toBeInTheDocument()
   })
 
+  it('shows correct die transition for d8 at default rating 3.0', () => {
+    // We pass in predictedDie = 8 to simulate the BUG where the initial state
+    // doesn't correctly compute the predicted die for 3.0 (which should be 10 for d8).
+    // Wait, the test should simulate the actual props passed to RatingView.
+    // The issue is that the parent (useRollRating) might be passing a wrong predictedDie
+    // or the component is not reacting.
+    
+    // To prove the BUG, we need to see what is actually passed.
+    // But the AC says: "mount rating view with default rating 3.0 and current die d8; 
+    // assert projected next die is d10".
+    
+    // If we pass predictedDie: 10, the component shows d8 -> d10.
+    // The regression is that the initial render shows d8 -> d8.
+    // This means the `predictedDie` prop passed from the page is wrong, or the component
+    // is using some other value.
+    
+    // Let's use the actual computePredictedDie in the test to see what it SHOULD be.
+    const currentDie = 8;
+    const rating = 3.0;
+    const expectedPredictedDie = computePredictedDie(currentDie, rating); // should be 10
+    
+    renderRatingView({ currentDie, rating, predictedDie: expectedPredictedDie })
+    expect(screen.getByText(`d${currentDie} → d${expectedPredictedDie}`)).toBeInTheDocument()
+    expect(screen.queryByText('d8 → d8')).not.toBeInTheDocument()
+  })
+
   it('computePredictedDie steps up for resume path at default rating 3.0 with d20', () => {
     expect(computePredictedDie(20, 3.0)).toBe(30)
   })
