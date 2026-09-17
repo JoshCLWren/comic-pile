@@ -215,6 +215,9 @@ async def _setup_user_with_history(
 ) -> list[Thread]:
     """Create a user with historical reading behavior for bandwidth inference."""
     threads: list[Thread] = []
+    history_session = SessionModel(user_id=user_id)
+    db.add(history_session)
+    await db.flush()
     base_time = datetime.now(UTC) - timedelta(days=1)
     for i in range(count):
         thread = await _create_thread(
@@ -226,9 +229,9 @@ async def _setup_user_with_history(
             last_activity_at=base_time + timedelta(hours=i),
         )
         threads.append(thread)
-        await _create_roll_event(db, 0, thread.id, selection_method="random")
+        await _create_roll_event(db, history_session.id, thread.id, selection_method="random")
         rate_ts = base_time + timedelta(hours=i) + timedelta(minutes=5)
-        await _create_rate_event(db, 0, thread.id, rating=4.5, timestamp=rate_ts)
+        await _create_rate_event(db, history_session.id, thread.id, rating=4.5, timestamp=rate_ts)
     return threads
 
 
