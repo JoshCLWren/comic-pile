@@ -663,7 +663,7 @@ async def test_read_unread_issues_in_multiple_threads(
     """Unread credited issues can appear across multiple threads, all counted toward upcoming."""
     # Create two separate threads each with one unread issue credited to same creator
     thread_a, issues_a = await _make_thread(
-        async_db, default_user, title="Thread A", issue_count=1, queue_position=1, read_through=0
+        async_db, default_user, title="Thread A", issue_count=1, queue_position=1, read_through=1
     )
     thread_b, issues_b = await _make_thread(
         async_db, default_user, title="Thread B", issue_count=1, queue_position=2, read_through=0
@@ -674,7 +674,7 @@ async def test_read_unread_issues_in_multiple_threads(
     await _confirm_identity(
         async_db, issues_b[0], creators=[{"id": 555, "name": "Cross-Thread Creator", "role": "writer"}]
     )
-    await _rate(async_db, issues_a[0], rating=4.0, timestamp=D1)  # rated so not unread
+    await _rate(async_db, issues_a[0], rating=4.0, timestamp=D1)
     # issues_b[0] remains unread
 
     response = await auth_client.get("/api/v1/creators/summaries?keys=creator:555")
