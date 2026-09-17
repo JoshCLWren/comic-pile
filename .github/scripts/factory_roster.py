@@ -40,6 +40,8 @@ CATALOG_SOURCES = frozenset({"opencode-free", "nvidia", "openrouter-free"})
 PROTECTED_SOURCES = frozenset({"kilo-auto", "z-ai", "ollama-cloud"})
 Z_AI_FREE_MODELS = frozenset({"glm-4.5-flash"})
 OLLAMA_CLOUD_FREE_MODELS = frozenset({"nemotron-3-nano:30b", "gpt-oss:20b"})
+# Time-boxed $0 OpenRouter promo catalog ids that omit the ``:free`` suffix.
+OPENROUTER_FREE_PROMO_IDS = frozenset({"stealth/union-alpha"})
 LOCK_SCHEMA_VERSION = 1
 
 
@@ -110,10 +112,11 @@ def openrouter_model_is_free(model: str) -> bool:
         model: OpenRouter model id.
 
     Returns:
-        True for ``*:free`` ids or the ``openrouter/free`` auto-router.
+        True for ``*:free`` ids, the ``openrouter/free`` auto-router, or a
+        time-boxed $0 promo catalog id that omits the ``:free`` suffix.
     """
     name = model.strip()
-    if name == "openrouter/free":
+    if name == "openrouter/free" or name in OPENROUTER_FREE_PROMO_IDS:
         return True
     return bool(name) and name.endswith(":free") and "/" in name
 
