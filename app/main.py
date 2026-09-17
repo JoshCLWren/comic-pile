@@ -222,12 +222,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     # Performance metrics collection and query (issue #834).
     # Records and exposes production startup and page-load timing data
-    # so regressions can be tied to deployments.
-    app.include_router(
-        performance_metric.router,
-        prefix="/api/performance-metrics",
-        tags=["performance-metrics"],
-    )
+    # so regressions can be tied to deployments. Versioned-surface only:
+    # new client resources must not introduce bare /api/* routes.
     app.include_router(
         performance_metric.router,
         prefix="/api/v1/performance-metrics",
