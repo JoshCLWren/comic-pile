@@ -5,7 +5,9 @@ import type {
   UseWindowVirtualizerOptions,
 } from '../pages/QueuePage/VirtualizedThreadList'
 import VirtualizedThreadList from '../pages/QueuePage/VirtualizedThreadList'
+import { ROW_HEIGHT_WITH_GAP } from '../pages/QueuePage/VirtualizedThreadList.helpers'
 import { QueueList } from '../pages/QueuePage/QueueList'
+import { cast } from '../utils/cast'
 import type { Thread } from '../types'
 
 interface MockThread {
@@ -200,17 +202,25 @@ it('keeps a single scroll surface when the queue crosses the virtualization thre
 /**
  * Regression test for #2523: Queue infinite scroll blanks after ~50 items.
  *
- * Root cause: scrollMargin was computed as rect.top + window.scrollY,
- * which double-counted the scroll offset because @tanstack/react-virtual's
- * internal scrollOffset already accounts for window.scrollY. This shifted
- * items out of view when the wrapper was not at the top of the viewport,
- * causing a blank viewport after crossing the virtualization threshold.
+ * The window virtualizer reads raw `window.scrollY` as its scroll offset and
+ * lays virtual items out starting at `scrollMargin`, so `scrollMargin` must be
+ * the stable document-space distance from the start of the window scroll
+ * content to the top of the virtual list (`rect.top + window.scrollY`), and
+ * each virtual item must be rendered at `start - scrollMargin` to land at its
+ * natural document position. Bare `translateY(start)` shifts every virtual row
+ * down by the page-chrome offset above the Queue list, so once the plain list
+ * crosses the virtualization threshold the painted rows no longer line up with
+ * the scroll positions the virtualizer computes and the viewport blanks /
+ * load-more sticks.
  *
- * Fix: scrollMargin must be just rect.top (the distance from viewport top
- * to wrapper top), because the virtualizer's own scrollOffset handles
- * window.scrollY independently.
+ * The virtualizer is a faithful deterministic double that derives virtual item
+ * `start` values from the `scrollMargin` it receives (as @tanstack/react-virtual
+ * does). The wrapper is given a non-zero chrome offset to model the queue
+ * sitting below the page header. This test fails on both the previous
+ * `rect.top + window.scrollY` + bare-`start` rendering and on the intermediate
+ * `rect.top`-only scrollMargin variant, because each shifts the virtual rows.
  */
-it('renders virtual items at correct absolute positions after threshold crossing', async () => {
+it('paints virtual rows at natural document offsets when the wrapper sits below the page top', async () => {
   const threads: Thread[] = Array.from({ length: 60 }, (_, i) => createMockThread(i + 1))
 
   const sentinelRef = { current: null }
@@ -220,33 +230,97 @@ it('renders virtual items at correct absolute positions after threshold crossing
     </div>
   )
 
-  const { container } = render(
-    <QueueList
-      activeThreads={threads}
-      filteredThreads={threads}
-      reorderError={null}
-      renderItem={renderItem}
-      isSearching={false}
-      sentinelRef={sentinelRef as React.RefObject<HTMLDivElement | null>}
-      hasNextPage
-      useVirtualizer={fakeUseVirtualizer}
-    />,
-  )
+  // Fake virtualizer that mirrors the library contract: item `start` values
+  // include the supplied scrollMargin and total size excludes it.
+  const scrollMargins: number[] = []
+  const scrollMarginAwareUseVirtualizer = (
+    options: UseWindowVirtualizerOptions,
+  ): QueueVirtualizer => {
+    const margin = options.scrollMargin ?? 0
+    scrollMargins.push(margin)
+    const count = options.count
+    const items = Array.from({ length: count }, (_, i) => {
+      const start = margin + i * ROW_HEIGHT_WITH_GAP
+      return {
+        key: i,
+        index: i,
+        start,
+        end: start + ROW_HEIGHT_WITH_GAP,
+        size: ROW_HEIGHT_WITH_GAP,
+        lane: 0,
+      }
+    })
+    return {
+      getVirtualItems: () => items,
+      getTotalSize: () => count * ROW_HEIGHT_WITH_GAP,
+      measureElement: vi.fn(),
+      scrollToIndex: vi.fn(),
+    }
+  }
 
-  act(() => {
-    resizeCallback?.([{ contentRect: { height: 600, width: 1400 } }])
-  })
+  const previousScrollY = window.scrollY
+  try {
+    Object.defineProperty(window, 'scrollY', { value: 300, writable: true, configurable: true })
 
-  await waitFor(() => {
-    expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
-  })
+    const { container } = render(
+      <QueueList
+        activeThreads={threads}
+        filteredThreads={threads}
+        reorderError={null}
+        renderItem={renderItem}
+        isSearching={false}
+        sentinelRef={sentinelRef as React.RefObject<HTMLDivElement | null>}
+        hasNextPage
+        useVirtualizer={scrollMarginAwareUseVirtualizer}
+      />,
+    )
 
-  // Verify the virtualized surface has the correct total height spacer.
-  const scrollEl = container.querySelector('#queue-container')
-  expect(scrollEl).toBeInTheDocument()
-  const spacer = (scrollEl as HTMLElement).firstElementChild as HTMLElement
-  expect(spacer.style.position).toBe('relative')
+    // Model the wrapper as sitting 120px down the initial viewport while the
+    // window is scrolled 300px: its document-space offset is 420px.
+    const wrapper = container.firstElementChild as HTMLElement
+    // SAFETY: wrapper is the VirtualizedThreadList root div handled by the component.
+    vi.spyOn(wrapper, 'getBoundingClientRect').mockReturnValue(cast<DOMRect>({ top: 120 }))
 
-  // Verify the sentinel exists and is properly positioned.
-  expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
+    act(() => {
+      resizeCallback?.([{ contentRect: { height: 600, width: 1400 } }])
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
+    })
+
+    // scrollMargin must be computed in document space (rect.top + scrollY).
+    // The intermediate `scrollMargin = rect.top` variant pins 120 here; the
+    // correct document-space value is 420.
+    expect(scrollMargins.at(-1)).toBe(420)
+
+    // Every virtual row must be painted at its container-relative offset so it
+    // lands at the same document position the plain list used. Rendering at
+    // bare `start` shifts each row down by the 420px scrollMargin and blanked
+    // the viewport past the threshold.
+    const rows = container.querySelectorAll('[data-index]')
+    expect(rows.length).toBeGreaterThan(50)
+    rows.forEach((row, index) => {
+      const style = (row as HTMLElement).style
+      expect(style.transform).toBe(`translateY(${index * ROW_HEIGHT_WITH_GAP}px)`)
+    })
+
+    // Spacer height (total size + sentinel padding) and sentinel placement
+    // stay consistent so infinite scroll keeps firing past the threshold.
+    const scrollEl = container.querySelector('#queue-container')
+    expect(scrollEl).toBeInTheDocument()
+    const spacer = (scrollEl as HTMLElement).firstElementChild as HTMLElement
+    expect(spacer.style.position).toBe('relative')
+    expect(spacer.style.height).toBe(
+      `${threads.length * ROW_HEIGHT_WITH_GAP + 16}px`,
+    )
+    const sentinel = screen.getByTestId('queue-infinite-scroll-sentinel')
+    expect(sentinel.style.top).toBe(`${threads.length * ROW_HEIGHT_WITH_GAP}px`)
+  } finally {
+    Object.defineProperty(window, 'scrollY', {
+      value: previousScrollY,
+      writable: true,
+      configurable: true,
+    })
+  }
 })

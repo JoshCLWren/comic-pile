@@ -95,15 +95,20 @@ export default function VirtualizedThreadList<T>({
 
   // Read the initial wrapper offset synchronously to avoid a 0 → measured
   // layout jump. Production stays single-column regardless of wrapper width.
-  // scrollMargin must be the distance from the viewport top to the wrapper
-  // top (wrapperRect.top), because @tanstack/react-virtual's scrollOffset
-  // already accounts for window.scrollY internally. Adding window.scrollY
-  // to scrollMargin would double-count the scroll offset and shift items
-  // out of view when the wrapper is not at the top of the viewport.
+  // @tanstack/react-virtual's window virtualizer reads the raw window.scrollY
+  // as its scroll offset and lays virtual items out starting at scrollMargin,
+  // so scrollMargin must be the distance from the start of the window scroll
+  // content (the document top) to the wrapper top — a stable document-space
+  // offset. `rect.top` is viewport-relative, so the current scroll is added
+  // back: `rect.top + window.scrollY`. Because virtual item `start` values
+  // already include scrollMargin, items must be rendered at
+  // `start - scrollMargin` (see the render below); a bare `start` shifts every
+  // virtual row down by the page-chrome offset above the list and blanks the
+  // viewport once the queue crosses the virtualization threshold.
   useLayoutEffect(() => {
     if (wrapperRef.current) {
       const rect = wrapperRef.current.getBoundingClientRect()
-      setScrollMargin(rect.top)
+      setScrollMargin(rect.top + window.scrollY)
     }
     setColumnCount(explicitColumnCount !== undefined ? Math.max(1, explicitColumnCount) : 1)
   }, [explicitColumnCount])
@@ -118,7 +123,7 @@ export default function VirtualizedThreadList<T>({
         rafId = null
         if (wrapperRef.current) {
           const rect = wrapperRef.current.getBoundingClientRect()
-          setScrollMargin(rect.top)
+          setScrollMargin(rect.top + window.scrollY)
         }
       })
     })
@@ -245,7 +250,7 @@ export default function VirtualizedThreadList<T>({
                   top: 0,
                   left: 0,
                   width: '100%',
-                  transform: `translateY(${virtualItem.start}px)`,
+                  transform: `translateY(${virtualItem.start - scrollMargin}px)`,
                 }}
               >
                 {renderItem(threads[rowIndex], rowIndex)}
@@ -261,7 +266,7 @@ export default function VirtualizedThreadList<T>({
                   left: 0,
                   width: '100%',
                   paddingBottom: `${ROW_GAP}px`,
-                  transform: `translateY(${virtualItem.start}px)`,
+                  transform: `translateY(${virtualItem.start - scrollMargin}px)`,
                 }}
               >
                 <div
