@@ -4,7 +4,6 @@ import { useCreatorDetail } from '../hooks/useCreatorDetail'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey } from '../utils/creatorKey'
 import type { CreatorIssueRow } from '../services/api'
-import { useState } from 'react'
 
 function formatRatingDate(value: string | null): string | null {
   if (!value) return null
@@ -62,9 +61,7 @@ function SectionHeading({ id, children }: { id: string; children: ReactNode }) {
 
 export default function CreatorDetailPage() {
   const { creatorKey } = useParams<{ creatorKey: string }>()
-  const decodedKey = creatorKey ? decodeURIComponent(creatorKey) : null
-  const isValidKey = parseCreatorKey(decodedKey) != null
-  const [loadError, setLoadError] = useState<unknown>(null)
+  const isValidKey = parseCreatorKey(creatorKey) != null
 
   const {
     summary,
@@ -80,7 +77,7 @@ export default function CreatorDetailPage() {
     hasMore,
     loadMore,
     refetch,
-  } = useCreatorDetail(isValidKey ? decodedKey : null)
+  } = useCreatorDetail(isValidKey ? creatorKey : null)
 
   if (!isValidKey) {
     return (
@@ -115,8 +112,8 @@ export default function CreatorDetailPage() {
     )
   }
 
-  if (isError || !summary || !coverage) {
-    const status = getApiErrorStatus(error ?? loadError)
+  if (!summary || !coverage) {
+    const status = getApiErrorStatus(error)
     const notFound = status === 404
     return (
       <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
@@ -134,10 +131,7 @@ export default function CreatorDetailPage() {
         {!notFound && (
           <button
             type="button"
-            onClick={() => {
-              setLoadError(null)
-              refetch()
-            }}
+            onClick={refetch}
             className="mt-4 min-h-11 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
             style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
           >
@@ -301,12 +295,15 @@ export default function CreatorDetailPage() {
         </section>
       )}
 
+      {isError && (
+        <p role="alert" className="mt-4 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
+          Could not load more creator details. Your loaded comics are still shown. Please try again.
+        </p>
+      )}
       {hasMore && (
         <button
           type="button"
-          onClick={() => {
-            loadMore().catch((error: unknown) => setLoadError(error))
-          }}
+          onClick={() => { void loadMore() }}
           disabled={isFetchingMore}
           className="mt-6 min-h-11 w-full rounded-xl border px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] disabled:opacity-60 sm:w-auto"
           style={{ borderColor: 'var(--theme-border)', color: 'var(--theme-text-primary)' }}

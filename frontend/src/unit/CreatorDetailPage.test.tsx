@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatorDetailPage from '../pages/CreatorDetailPage'
@@ -240,26 +240,28 @@ describe('CreatorDetailPage', () => {
     expect(screen.getByText(/Partial list: some read issues are still missing creator metadata/)).toBeInTheDocument()
   })
 
-  it('records a load-more failure and surfaces the recoverable error page', async () => {
-    let failed = false
-    const loadMore = vi.fn().mockImplementation(() => {
-      failed = true
-      return Promise.reject(new Error('next page failed'))
-    })
-    mockedHook.mockImplementation(() =>
-      baseState(
-        failed
-          ? { isError: true, error: new Error('next page failed'), summary: null, coverage: null, hasMore: true, loadMore }
-          : { hasMore: true, loadMore },
-      ),
-    )
+  it('retains loaded content and offers retry after a load-more failure', () => {
+    const loadMore = vi.fn().mockResolvedValue(undefined)
+    mockedHook.mockReturnValue(baseState({
+      isError: true,
+      error: new Error('next page failed'),
+      hasMore: true,
+      loadMore,
+    }))
     renderAt('creator:7')
 
+    expect(screen.getByRole('heading', { name: 'Test Creator' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Series A/ })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load more')
+    expect(screen.queryByRole('heading', { name: 'Could not load creator' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
-
-    await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Could not load creator' })).toBeInTheDocument(),
-    )
     expect(loadMore).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats a percent sign in an invalid key as not found rather than crashing', () => {
+    renderAt('creator:%')
+
+    expect(mockedHook).toHaveBeenCalledWith(null)
+    expect(screen.getByRole('heading', { name: 'Creator not found' })).toBeInTheDocument()
   })
 })

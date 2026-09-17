@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { creatorsApi, type CreatorDetailResponse, type CreatorIssueRow } from '../services/api'
 import { queryKeys } from '../query/queryKeys'
 
@@ -30,7 +30,6 @@ export function creatorDetailQueryOptions(
       lastPage.next_cursor != null && /^\d+$/.test(lastPage.next_cursor)
         ? Number(lastPage.next_cursor)
         : undefined,
-    placeholderData: keepPreviousData,
   }
 }
 

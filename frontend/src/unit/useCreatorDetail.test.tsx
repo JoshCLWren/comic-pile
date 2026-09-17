@@ -123,6 +123,46 @@ describe('useCreatorDetail (bounded incremental loader)', () => {
     expect(result.current.hasMore).toBe(false)
   })
 
+  it('retains the first page after pagination fails and retries the same cursor', async () => {
+    getDetail
+      .mockResolvedValueOnce(makePage({ next_cursor: '50' }))
+      .mockRejectedValueOnce(new Error('next page failed'))
+      .mockResolvedValueOnce(makePage({ rated_issues: [] }))
+    const { result } = renderHook(() => useCreatorDetail('creator:7', 50, detailApi), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.hasMore).toBe(true))
+    await result.current.loadMore()
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.summary?.display_name).toBe('Test Creator')
+    expect(result.current.ratedIssues.map((row) => row.issue_id)).toEqual([11])
+    expect(result.current.hasMore).toBe(true)
+
+    await result.current.loadMore()
+    await waitFor(() => expect(result.current.isError).toBe(false))
+    expect(getDetail).toHaveBeenNthCalledWith(3, 'creator:7', { limit: 50, offset: 50 })
+    expect(result.current.ratedIssues.map((row) => row.issue_id)).toEqual([11])
+  })
+
+  it('does not show another creator while a new identity loads', async () => {
+    getDetail
+      .mockResolvedValueOnce(makePage())
+      .mockImplementationOnce(() => new Promise<CreatorDetailResponse>(() => undefined))
+    const { result, rerender } = renderHook(
+      ({ key }) => useCreatorDetail(key, 50, detailApi),
+      { initialProps: { key: 'creator:7' }, wrapper: createWrapper() },
+    )
+    await waitFor(() => expect(result.current.summary?.display_name).toBe('Test Creator'))
+
+    rerender({ key: 'creator:8' })
+
+    expect(result.current.isPending).toBe(true)
+    expect(result.current.summary).toBeNull()
+    expect(result.current.ratedIssues).toEqual([])
+    await waitFor(() => expect(getDetail).toHaveBeenCalledWith('creator:8', { limit: 50 }))
+  })
+
   it('surfaces fetch errors', async () => {
     getDetail.mockRejectedValue(new Error('boom'))
     const wrapper = createWrapper()
