@@ -23,7 +23,7 @@ export function extractComicIdentity(issue: ComicVineRelatedIssue): ComicIdentit
   } else if (seriesName) {
     primary = seriesName
   } else if (issueNumber) {
-    primary = `#${issueNumber}`
+    primary = `${seriesName ? seriesName + ' ' : ''}#${issueNumber}`
   } else if (title) {
     primary = title
   } else if (issue.comicvine_issue_id) {
