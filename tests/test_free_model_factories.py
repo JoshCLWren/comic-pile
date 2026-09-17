@@ -1,4 +1,4 @@
-import os
+# import os  # unused import removed
 from pathlib import Path
 
 def test_model_present_in_free_model_factories():
