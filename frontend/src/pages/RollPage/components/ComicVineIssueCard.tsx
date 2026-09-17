@@ -4,6 +4,7 @@ import { type ComicVineRelatedIssue } from '../../../services/api'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import ImageWithLoading from '../../../components/ImageWithLoading'
+import { CreatorName } from './CreatorName'
 import { optimizedImageSrcSet, optimizedImageUrl } from '../../../services/imageDelivery'
 
 interface ComicVineIssueCardProps {
@@ -112,10 +113,7 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
             <h3 className="text-[10px] font-black uppercase tracking-wider text-stone-500 mb-1">Creators</h3>
             <div className="space-y-1">
               {metadata.creators.map((creator, index) => (
-                <p key={`${creator.name}-${index}`} className="text-xs text-stone-300">
-                  <span className="font-bold">{creator.name}</span>
-                  {creator.roles.length > 0 && <span className="text-stone-500"> · {creator.roles.join(', ')}</span>}
-                </p>
+                <CreatorName key={`${creator.name}-${index}`} creator={creator} />
               ))}
             </div>
           </section>

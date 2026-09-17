@@ -645,6 +645,80 @@ export const tasksApi = {
   getMetrics: () => api.get<AnalyticsMetrics>('/v1/analytics/metrics'),
 }
 
+/** Headline personal summary for one stable creator identity (issue #2028). */
+export interface CreatorSummaryItem {
+  canonical_creator_key: string
+  display_name: string
+  normalized_roles: string[]
+  average_rating: number | null
+  ratings_count: number
+  read_unrated_count: number
+  upcoming_count: number
+}
+
+/** Library-wide metadata coverage state distinguishing complete from lower-bound stats. */
+export interface CreatorSummaryCoverage {
+  rated_issues_total: number
+  rated_issues_with_creator_metadata: number
+  ratings_complete: boolean
+  read_unrated_issues_total: number
+  read_unrated_issues_with_creator_metadata: number
+  read_unrated_complete: boolean
+  unread_issues_total: number
+  unread_issues_with_creator_metadata: number
+  upcoming_complete: boolean
+}
+
+export interface CreatorRoleStat {
+  role: string
+  issue_count: number
+  average_rating: number | null
+}
+
+export interface CreatorIssueRow {
+  issue_id: number
+  issue_number: string
+  thread_id: number
+  thread_title: string
+  status: string
+  roles: string[]
+  effective_rating: number | null
+  rating_timestamp: string | null
+  sort_key: string
+}
+
+/** Full personal creator detail payload (issue #2037). */
+export interface CreatorDetailResponse {
+  summary: CreatorSummaryItem
+  coverage: CreatorSummaryCoverage
+  role_stats: CreatorRoleStat[]
+  rated_issues: CreatorIssueRow[]
+  read_unrated_issues: CreatorIssueRow[]
+  upcoming_issues: CreatorIssueRow[]
+  next_cursor: string | null
+}
+
+export interface CreatorDetailPageParams {
+  limit?: number
+  offset?: number
+}
+
+export const creatorsApi = {
+  getDetail: (creatorKey: string, params: CreatorDetailPageParams = {}) => {
+    const queryParams: Record<string, string | number> = {}
+    if (params.limit !== undefined) {
+      queryParams.limit = params.limit
+    }
+    if (params.offset !== undefined && params.offset > 0) {
+      queryParams.offset = params.offset
+    }
+    return api.get<CreatorDetailResponse>(
+      `/v1/creators/${encodeURIComponent(creatorKey)}`,
+      { params: queryParams },
+    )
+  },
+}
+
 export const snoozeApi = {
   snooze: () => api.post<void>('/v1/snooze/'),
   unsnooze: (threadId: number) => api.post<void>(`/v1/snooze/${threadId}/unsnooze`),

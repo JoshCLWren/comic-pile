@@ -60,6 +60,15 @@ export default function ComicVineSearchDialog({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+        debounceRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     if (isOpen && threadTitle) {
       setQuery(threadTitle)
     }
