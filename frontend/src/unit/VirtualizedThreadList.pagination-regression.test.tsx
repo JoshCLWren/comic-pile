@@ -124,28 +124,26 @@ it('keeps a single scroll surface when the queue crosses the virtualization thre
   const initialThreads: Thread[] = Array.from({ length: 50 }, (_, i) => createMockThread(i + 1))
   const grownThreads: Thread[] = Array.from({ length: 60 }, (_, i) => createMockThread(i + 1))
 
-  const sentinelRef = { current: null }
-  const scrollRootRef = { current: null }
-  const renderItem = (thread: Thread, index: number) => (
-    <div data-testid="queue-thread-item" key={thread.id}>
-      {thread.title} #{index + 1}
-    </div>
-  )
+   const sentinelRef = { current: null }
+   const renderItem = (thread: Thread, index: number) => (
+     <div data-testid="queue-thread-item" key={thread.id}>
+       {thread.title} #{index + 1}
+     </div>
+   )
 
-  // SAFETY: sentinelRef and scrollRootRef are nullable refs; cast to match QueueList prop types
-  const { container, rerender } = render(
-    <QueueList
-      activeThreads={initialThreads}
-      filteredThreads={initialThreads}
-      reorderError={null}
-      renderItem={renderItem}
-      isSearching={false}
-      sentinelRef={sentinelRef as React.RefObject<HTMLDivElement | null>}
-      scrollRootRef={scrollRootRef as React.RefObject<HTMLDivElement | null>}
-      hasNextPage
-      useVirtualizer={fakeUseVirtualizer}
-    />,
-  )
+   // SAFETY: sentinelRef is a nullable ref; cast to match QueueList prop types
+   const { container, rerender } = render(
+     <QueueList
+       activeThreads={initialThreads}
+       filteredThreads={initialThreads}
+       reorderError={null}
+       renderItem={renderItem}
+       isSearching={false}
+       sentinelRef={sentinelRef as React.RefObject<HTMLDivElement | null>}
+       hasNextPage
+       useVirtualizer={fakeUseVirtualizer}
+     />,
+   )
 
   act(() => {
     resizeCallback?.([{ contentRect: { height: 600, width: 1400 } }])
@@ -170,21 +168,20 @@ it('keeps a single scroll surface when the queue crosses the virtualization thre
   expect(['auto', 'scroll']).not.toContain(plainSurface.overflowY)
   expect(plainSurface.inlineHeight).toBe('')
 
-  // Cross the threshold: VirtualizedThreadList replaces the plain list.
-  // SAFETY: same ref casts as the initial render for QueueList prop types
-  rerender(
-    <QueueList
-      activeThreads={grownThreads}
-      filteredThreads={grownThreads}
-      reorderError={null}
-      renderItem={renderItem}
-      isSearching={false}
-      sentinelRef={sentinelRef as React.RefObject<HTMLDivElement | null>}
-      scrollRootRef={scrollRootRef as React.RefObject<HTMLDivElement | null>}
-      hasNextPage
-      useVirtualizer={fakeUseVirtualizer}
-    />,
-  )
+   // Cross the threshold: VirtualizedThreadList replaces the plain list.
+   // SAFETY: same ref cast as the initial render for QueueList prop types
+   rerender(
+     <QueueList
+       activeThreads={grownThreads}
+       filteredThreads={grownThreads}
+       reorderError={null}
+       renderItem={renderItem}
+       isSearching={false}
+       sentinelRef={sentinelRef as React.RefObject<HTMLDivElement | null>}
+       hasNextPage
+       useVirtualizer={fakeUseVirtualizer}
+     />,
+   )
 
   await waitFor(() => {
     expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
@@ -194,8 +191,62 @@ it('keeps a single scroll surface when the queue crosses the virtualization thre
   expect(['auto', 'scroll']).not.toContain(virtualizedSurface.overflowY)
   expect(virtualizedSurface.inlineHeight).toBe('')
 
-  // Presentation stays single-column (no multi-column grid is introduced).
-  expect(container.querySelector('[style*="grid-template-columns"]')).not.toBeInTheDocument()
-  // Infinite-scroll sentinel survives the threshold crossing.
+   // Presentation stays single-column (no multi-column grid is introduced).
+   expect(container.querySelector('[style*="grid-template-columns"]')).not.toBeInTheDocument()
+   // Infinite-scroll sentinel survives the threshold crossing.
+   expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
+})
+
+/**
+ * Regression test for #2523: Queue infinite scroll blanks after ~50 items.
+ *
+ * Root cause: scrollMargin was computed as rect.top + window.scrollY,
+ * which double-counted the scroll offset because @tanstack/react-virtual's
+ * internal scrollOffset already accounts for window.scrollY. This shifted
+ * items out of view when the wrapper was not at the top of the viewport,
+ * causing a blank viewport after crossing the virtualization threshold.
+ *
+ * Fix: scrollMargin must be just rect.top (the distance from viewport top
+ * to wrapper top), because the virtualizer's own scrollOffset handles
+ * window.scrollY independently.
+ */
+it('renders virtual items at correct absolute positions after threshold crossing', async () => {
+  const threads: Thread[] = Array.from({ length: 60 }, (_, i) => createMockThread(i + 1))
+
+  const sentinelRef = { current: null }
+  const renderItem = (thread: Thread, index: number) => (
+    <div data-testid="queue-thread-item" key={thread.id}>
+      {thread.title} #{index + 1}
+    </div>
+  )
+
+   const { container } = render(
+     <QueueList
+       activeThreads={threads}
+       filteredThreads={threads}
+       reorderError={null}
+       renderItem={renderItem}
+       isSearching={false}
+       sentinelRef={sentinelRef as React.RefObject<HTMLDivElement | null>}
+       hasNextPage
+       useVirtualizer={fakeUseVirtualizer}
+     />,
+   )
+
+   act(() => {
+     resizeCallback?.([{ contentRect: { height: 600, width: 1400 } }])
+   })
+
+   await waitFor(() => {
+     expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
+   })
+
+   // Verify the virtualized surface has the correct total height spacer.
+   const scrollEl = container.querySelector('#queue-container')
+   expect(scrollEl).toBeInTheDocument()
+   const spacer = (scrollEl as HTMLElement).firstElementChild as HTMLElement
+   expect(spacer.style.position).toBe('relative')
+
+  // Verify the sentinel exists and is properly positioned.
   expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
 })

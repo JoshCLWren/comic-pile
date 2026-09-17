@@ -44,10 +44,9 @@ interface VirtualizedThreadListProps<T> {
    * Production Queue rendering intentionally leaves this unset so the
    * virtualized and non-virtualized presentations are both one full-width row.
    */
-  explicitColumnCount?: number
-  sentinelRef?: React.Ref<HTMLDivElement>
-  scrollRootRef?: React.RefObject<HTMLDivElement | null>
-  hasNextPage?: boolean
+   explicitColumnCount?: number
+   sentinelRef?: React.Ref<HTMLDivElement>
+   hasNextPage?: boolean
   /**
    * Injectable window-virtualizer hook. Production uses the real
    * `@tanstack/react-virtual` hook; tests substitute a faithful deterministic
@@ -85,7 +84,6 @@ export default function VirtualizedThreadList<T>({
   renderItem,
   explicitColumnCount,
   sentinelRef,
-  scrollRootRef: _scrollRootRef,
   hasNextPage,
   useVirtualizer,
 }: VirtualizedThreadListProps<T>) {
@@ -97,10 +95,15 @@ export default function VirtualizedThreadList<T>({
 
   // Read the initial wrapper offset synchronously to avoid a 0 → measured
   // layout jump. Production stays single-column regardless of wrapper width.
+  // scrollMargin must be the distance from the viewport top to the wrapper
+  // top (wrapperRect.top), because @tanstack/react-virtual's scrollOffset
+  // already accounts for window.scrollY internally. Adding window.scrollY
+  // to scrollMargin would double-count the scroll offset and shift items
+  // out of view when the wrapper is not at the top of the viewport.
   useLayoutEffect(() => {
     if (wrapperRef.current) {
       const rect = wrapperRef.current.getBoundingClientRect()
-      setScrollMargin(rect.top + window.scrollY)
+      setScrollMargin(rect.top)
     }
     setColumnCount(explicitColumnCount !== undefined ? Math.max(1, explicitColumnCount) : 1)
   }, [explicitColumnCount])
@@ -115,7 +118,7 @@ export default function VirtualizedThreadList<T>({
         rafId = null
         if (wrapperRef.current) {
           const rect = wrapperRef.current.getBoundingClientRect()
-          setScrollMargin(rect.top + window.scrollY)
+          setScrollMargin(rect.top)
         }
       })
     })
