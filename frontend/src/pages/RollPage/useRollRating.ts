@@ -8,7 +8,7 @@ import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import type { PostRateReference } from './components/PostRateCopyPrompt'
-import { RATING_THRESHOLD, buildRatingThread, computePredictedDie, createExplosion } from './utils'
+import { RATING_THRESHOLD, buildRatingThread, createExplosion } from './utils'
 
 interface UseRollRatingParams {
   state: RollPageState & RollPageStateSetters
@@ -34,7 +34,6 @@ export function useRollRating({
   const {
     activeRatingThread,
     threadToMigrate,
-    currentDie,
     suppressPendingAutoOpenRef,
     rating,
     setActiveRatingThread,
@@ -44,7 +43,6 @@ export function useRollRating({
     setIsOverrideOpen,
     setIsRatingView,
     setIsRolling,
-    setPredictedDie,
     setRating,
     setRolledResult,
     setSelectedThreadId,
@@ -130,20 +128,17 @@ export function useRollRating({
 
       setRating(3.0)
       setErrorMessage('')
-      setPredictedDie(computePredictedDie(currentDie, 3.0))
       setIsRatingView(true)
       suppressPendingAutoOpenRef.current = false
     },
     [
       bootstrap,
-      currentDie,
       suppressPendingAutoOpenRef,
       setSelectedThreadId,
       setRolledResult,
       setActiveRatingThread,
       setRating,
       setErrorMessage,
-      setPredictedDie,
       setIsRatingView,
       setIsActionSheetOpen,
       setIsOverrideOpen,
@@ -237,7 +232,6 @@ export function useRollRating({
     const num = parseFloat(val)
     if (num === RATING_THRESHOLD) navigator.vibrate?.(8)
     setRating(num)
-    setPredictedDie(computePredictedDie(currentDie, num))
   }
 
   async function handleSubmitRating(finishSession = false) {
