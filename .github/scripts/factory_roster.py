@@ -27,6 +27,8 @@ ROSTER_FIELDNAMES = (
 )
 SCHEDULE_MINUTES = tuple(range(0, 60, 5))
 OPENCODE_ALWAYS_FREE = frozenset({"big-pickle"})
+# Time-boxed $0 OpenCode Zen promo catalog ids that omit a ``-free`` suffix.
+OPENCODE_FREE_PROMO_IDS = frozenset({"union-alpha"})
 BIG_PICKLE_MODEL = "big-pickle"
 # Keep this many healthy big-pickle pins when converting surplus duplicates
 # into newly discovered unique free OpenCode models. Extra big-pickle slots
@@ -93,13 +95,15 @@ def opencode_model_is_free(model: str) -> bool:
         model: Bare OpenCode model id (no ``opencode/`` prefix).
 
     Returns:
-        True for ``big-pickle``, ``*-free``, or muse-spark free/contributor ids.
+        True for ``big-pickle``, ``*-free``, muse-spark free/contributor ids,
+        or a time-boxed $0 Zen promo catalog id that omits ``-free``.
     """
     name = model.strip().lower()
     if not name or "/" in name:
         return False
     return (
         name in OPENCODE_ALWAYS_FREE
+        or name in OPENCODE_FREE_PROMO_IDS
         or name.endswith("-free")
         or bool(OPENCODE_MUSE_SPARK_RE.search(name))
     )
