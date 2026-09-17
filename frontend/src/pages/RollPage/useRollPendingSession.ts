@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { computePredictedDie } from './utils'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../../types/rollBootstrap'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { ThreadMetadata } from './types'
@@ -22,13 +21,11 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
     selectedThreadId,
     activeRatingThread,
     isRatingView,
-    currentDie,
     setSelectedThreadId,
     setRolledResult,
     setActiveRatingThread,
     setRating,
     setErrorMessage,
-    setPredictedDie,
     setIsRatingView,
     setIsActionSheetOpen,
     setIsOverrideOpen,
@@ -97,7 +94,6 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
     if (shouldInitializeRatingView) {
       setRating(3.0)
       setErrorMessage('')
-      setPredictedDie(computePredictedDie(currentDie, 3.0))
       setIsRatingView(true)
     }
     setIsActionSheetOpen(false)
@@ -109,7 +105,6 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
     bootstrap?.last_rolled_result,
     rollPool,
     activeRatingThread,
-    currentDie,
     isRatingView,
     selectedThreadId,
     suppressPendingAutoOpenRef,
@@ -118,7 +113,6 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
     setActiveRatingThread,
     setRating,
     setErrorMessage,
-    setPredictedDie,
     setIsRatingView,
     setIsActionSheetOpen,
     setIsOverrideOpen,

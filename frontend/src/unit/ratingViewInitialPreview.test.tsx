@@ -61,6 +61,21 @@ describe('RatingView initial preview', () => {
     expect(screen.getByText('More variety next roll')).toBeInTheDocument()
   })
 
+  it('shows the d8 → d10 projection for a d8 current die at default rating 3.0', () => {
+    renderRatingView({ currentDie: 8, rating: 3.0, predictedDie: computePredictedDie(8, 3.0) })
+    expect(screen.getByText('d8 → d10')).toBeInTheDocument()
+    expect(screen.queryByText('d8 → d8')).not.toBeInTheDocument()
+    expect(screen.queryByText('Die stays the same')).not.toBeInTheDocument()
+    expect(screen.getByText('More variety next roll')).toBeInTheDocument()
+  })
+
+  it('renders the d6 → d8 projection for a second die rung at default rating 3.0', () => {
+    renderRatingView({ currentDie: 6, rating: 3.0, predictedDie: computePredictedDie(6, 3.0) })
+    expect(screen.getByText('d6 → d8')).toBeInTheDocument()
+    expect(screen.queryByText('d6 → d6')).not.toBeInTheDocument()
+    expect(screen.getByText('More variety next roll')).toBeInTheDocument()
+  })
+
   it('computePredictedDie steps up for resume path at default rating 3.0 with d20', () => {
     expect(computePredictedDie(20, 3.0)).toBe(30)
   })
