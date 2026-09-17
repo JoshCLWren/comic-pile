@@ -31,7 +31,6 @@ import { useRollDependencies } from './useRollDependencies'
 import { useRollActions } from './useRollActions'
 import { useRollModals } from './useRollModals'
 import { useRollViewport } from './useRollViewport'
-import { hasReadingContextContent } from './readingContextContent'
 import { RatingView } from './components/RatingView'
 import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
 import { ThreadPool } from './components/ThreadPool'
@@ -135,9 +134,6 @@ export default function RollPage() {
 
   const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
 
-  const ratingIssueId = state.activeRatingThread?.issue_id ?? state.activeRatingThread?.next_issue_id ?? null
-  const { context: readerContext, isLoading: isReaderContextLoading, error: readerContextError } = useReaderContext(ratingIssueId)
-
   useRollPendingSession({ state, bootstrap, rollPool })
 
   const rating = useRollRating({
@@ -148,13 +144,14 @@ export default function RollPage() {
     refetchBootstrap,
   })
 
+  const ratingIssueId = state.activeRatingThread?.issue_id ?? state.activeRatingThread?.next_issue_id ?? null
+  const { context: readerContext, isLoading: isReaderContextLoading, error: readerContextError } = useReaderContext(
+    ratingIssueId,
+    rating.readingDetailsRequested,
+  )
+
   const { mainDieRef, ratingViewTopRef } = useRollViewport({
     isRatingView: state.isRatingView,
-    hasReadingContext: hasReadingContextContent(
-      rating.readingOrders,
-      rating.connectedThreads,
-      readerContext,
-    ),
   })
 
   const snooze = useRollSnooze({
@@ -389,6 +386,8 @@ export default function RollPage() {
                 skipIsPending={skipMutation.isPending}
                 readingOrders={rating.readingOrders}
                 connectedThreads={rating.connectedThreads}
+                onFetchReadingContext={rating.fetchReadingContext}
+                onFetchReadingBoundaries={rating.fetchReadingBoundaries}
                 onUpdateRating={rating.updateRatingUI}
                 onSubmitRating={rating.handleSubmitRating}
                 onSnooze={snooze.handleSnooze}

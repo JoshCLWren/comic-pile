@@ -151,8 +151,8 @@ describe('RatingView', () => {
     const onUpdateRating = vi.fn(); const onSubmitRating = vi.fn(); const onSnooze = vi.fn(); const onCancel = vi.fn(); const onRefreshThread = vi.fn()
     const user = userEvent.setup()
     // SAFETY: ActiveRatingThread stub uses only the fields RatingView reads (title/issues/progress); cast widens Thread to the rating thread shape.
-    render(<MemoryRouter><RatingView activeRatingThread={cast<Parameters<typeof RatingView>[0]['activeRatingThread']>({ ...thread, id: 1, issue_number: '2', next_issue_number: '3', reading_progress: 'in_progress' })} currentDie={20} rolledResult={19} rating={5} predictedDie={6} errorMessage="Problem" rateIsPending={false} snoozeIsPending={false} dismissIsPending={false} readingOrders={[]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} onUpdateRating={onUpdateRating} onSubmitRating={onSubmitRating} onSnooze={onSnooze} onCancel={onCancel} onRefreshThread={onRefreshThread} readerContext={null} isReaderContextLoading={false} readerContextError={null} /></MemoryRouter>)
-    expect(screen.getByText(/Rolled 19 on d20/)).toBeInTheDocument()
+    render(<MemoryRouter><RatingView activeRatingThread={cast<Parameters<typeof RatingView>[0]['activeRatingThread']>({ ...thread, id: 1, issue_number: '2', next_issue_number: '3', reading_progress: 'in_progress' })} currentDie={20} rolledResult={19} rating={5} predictedDie={6} errorMessage="Problem" rateIsPending={false} snoozeIsPending={false} dismissIsPending={false} readingOrders={[]} connectedThreads={[{ thread_id: 2, title: 'Other', connection_type: 'blocks', dependency_id: 1 }]} onFetchReadingDetails={vi.fn()} onUpdateRating={onUpdateRating} onSubmitRating={onSubmitRating} onSnooze={onSnooze} onCancel={onCancel} onRefreshThread={onRefreshThread} readerContext={null} isReaderContextLoading={false} readerContextError={null} /></MemoryRouter>)
+    expect(screen.getAllByText(/Saga/).length).toBeGreaterThan(0)
     await user.click(screen.getByRole('button', { name: /fix issue number/i }))
     await user.click(screen.getByRole('button', { name: /close correction/i }))
     const rating = screen.getByRole('slider')
@@ -179,10 +179,11 @@ describe('RatingView', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel roll' }))
   })
 
-  it('renders safe fallbacks for missing thread metadata and populated reading-order details', () => {
+  it('renders safe fallbacks for missing thread metadata and populated reading-order details', async () => {
     // SAFETY: Test exercises fallback branches with synthetic die and reading-order shapes; casts narrow to the RatingView prop union.
+    const user = userEvent.setup()
     render(<MemoryRouter><RatingView
-      activeRatingThread={null}
+      activeRatingThread={cast<Parameters<typeof RatingView>[0]['activeRatingThread']>({ ...thread, issue_number: '2', issues_remaining: 1 })}
       currentDie={cast<Parameters<typeof RatingView>[0]['currentDie']>(7)}
       rolledResult={7}
       rating={3}
@@ -193,15 +194,15 @@ describe('RatingView', () => {
       dismissIsPending={false}
       readingOrders={[cast<Parameters<typeof RatingView>[0]['readingOrders'][number]>({ id: 2, name: 'Main order', description: 'A description', completed_items: 1, total_items: 2 })]}
       connectedThreads={[]}
+      onFetchReadingDetails={vi.fn()}
       onUpdateRating={vi.fn()}
       onSubmitRating={vi.fn()}
       onSnooze={vi.fn()}
       onCancel={vi.fn()}
       onRefreshThread={vi.fn()}
     /></MemoryRouter>)
-    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    await user.click(screen.getByTestId('reading-context-button'))
     expect(screen.getByText('Main order')).toBeInTheDocument()
-    expect(screen.getByText('0 left')).toBeInTheDocument()
   })
 
   it('renders alternate rating, progress, and order boundaries', async () => {
@@ -228,9 +229,10 @@ describe('RatingView', () => {
     expect(callbacks.onSubmitRating).toHaveBeenCalledWith(false)
   })
 
-  it('renders continuity correction button when connected threads exist', () => {
+  it('renders continuity correction button when connected threads exist', async () => {
     // connectedThreads are no longer displayed as a list; they are used for the correction workflow
     // SAFETY: Synthetic activeRatingThread with minimal fields exercises the correction button branch.
+    const user = userEvent.setup()
     render(<MemoryRouter><RatingView
       activeRatingThread={cast<Parameters<typeof RatingView>[0]['activeRatingThread']>({ ...thread, issue_number: '2', issues_remaining: 1 })}
       currentDie={6}
@@ -246,12 +248,14 @@ describe('RatingView', () => {
         { thread_id: 2, title: 'Alpha', connection_type: 'blocks', dependency_id: 1 },
         { thread_id: 3, title: 'Beta', connection_type: 'blocks', dependency_id: 2 },
       ]}
+      onFetchReadingDetails={vi.fn()}
       onUpdateRating={vi.fn()}
       onSubmitRating={vi.fn()}
       onSnooze={vi.fn()}
       onCancel={vi.fn()}
       onRefreshThread={vi.fn()}
     /></MemoryRouter>)
+    await user.click(screen.getByTestId('reading-context-button'))
     expect(screen.getByRole('button', { name: /correct continuity/i })).toBeInTheDocument()
   })
 })

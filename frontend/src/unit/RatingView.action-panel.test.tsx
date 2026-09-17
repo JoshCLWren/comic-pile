@@ -275,7 +275,7 @@ describe('RatingView desktop layout contract (issue #1943)', () => {
     expect(grid!.className).not.toMatch(/minmax\(0,\d+fr\)/)
   })
 
-  it('keeps region cards content-sized instead of stretching to equal-height rows', () => {
+  it('keeps region cards content-sized instead of stretching to equal-height rows', async () => {
     const { container } = render(
       ratingView({
         readingOrders: [
@@ -290,6 +290,7 @@ describe('RatingView desktop layout contract (issue #1943)', () => {
         ],
       }),
     )
+    await userEvent.setup().click(screen.getByTestId('reading-context-button'))
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     expect(grid!.className).toContain('items-start')
     for (const testId of ['rating-region-comic', 'rating-region-reading-context', 'rating-region-your-context']) {
@@ -345,9 +346,10 @@ describe('RatingView desktop layout contract (issue #1943)', () => {
     expect(actions!.className).not.toContain('xl:col-span-full')
   })
 
-  it('does not render Reading Context or a YOUR CONTEXT heading when empty - rating form follows The Comic directly', () => {
+  it('does not render Reading Context pillar when empty but shows lazy controls - rating form follows The Comic directly', () => {
     const { container } = render(ratingView())
-    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.queryByTestId('rating-region-reading-context')).not.toBeInTheDocument()
     expect(screen.queryByText('Your Context')).not.toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     const text = grid!.textContent ?? ''
@@ -357,7 +359,7 @@ describe('RatingView desktop layout contract (issue #1943)', () => {
     expect(text).not.toMatch(/\b0[123]\b/)
   })
 
-  it('keeps the pillars in DOM order without decorative numeric prefixes when Reading Context has content', () => {
+  it('keeps the pillars in DOM order without decorative numeric prefixes when Reading Context has content after expansion', async () => {
     const { container } = render(
       ratingView({
         readingOrders: [
@@ -372,6 +374,7 @@ describe('RatingView desktop layout contract (issue #1943)', () => {
         ],
       }),
     )
+    await userEvent.setup().click(screen.getByTestId('reading-context-button'))
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     const text = grid!.textContent ?? ''
     expect(text.indexOf('The Comic')).toBeLessThan(text.indexOf('Reading Context'))

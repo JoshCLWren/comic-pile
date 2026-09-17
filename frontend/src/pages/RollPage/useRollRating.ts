@@ -56,8 +56,47 @@ export function useRollRating({
   const [readingOrders, setReadingOrders] = useState<ReadingOrder[]>([])
   const [connectedThreads, setConnectedThreads] = useState<ConnectedThreadInfo[]>([])
   const [lastRated, setLastRated] = useState<PostRateReference | null>(null)
+  const [readingDetailsRequested, setReadingDetailsRequested] = useState(false)
 
   const clearLastRated = useCallback(() => setLastRated(null), [])
+
+  const requestReaderContext = useCallback(() => {
+    setReadingDetailsRequested(true)
+  }, [])
+
+  const fetchReadingDetails = useCallback(async (threadId: number | null) => {
+    setReadingDetailsRequested(true)
+    if (!threadId) {
+      setReadingOrders([])
+      setConnectedThreads([])
+      return
+    }
+    try {
+      const ordersResponse = await readingOrdersApi.getForThread(threadId)
+      setReadingOrders(ordersResponse.reading_orders)
+    } catch (error) {
+      console.error('Failed to fetch reading orders:', error)
+      setReadingOrders([])
+    }
+    try {
+      const connectedResponse = await dependenciesApi.getConnectedThreads(threadId)
+      setConnectedThreads(connectedResponse.connected_threads)
+    } catch (error) {
+      console.error('Failed to fetch connected threads:', error)
+      setConnectedThreads([])
+    }
+  }, [])
+
+  const fetchReadingContext = useCallback(
+    async (threadId: number | null) => {
+      await fetchReadingDetails(threadId)
+    },
+    [fetchReadingDetails],
+  )
+
+  const fetchReadingBoundaries = useCallback(() => {
+    requestReaderContext()
+  }, [requestReaderContext])
 
   const enterRatingView = useCallback(
     async (
@@ -82,31 +121,18 @@ export function useRollRating({
       if (result !== null) setRolledResult(result)
       setActiveRatingThread(ratingThread)
 
+      // A fresh rating session starts with no reading details: reader context,
+      // reading orders, and connected threads are user-triggered and never
+      // carried over (or re-fetched) from a previous thread.
+      setReadingOrders([])
+      setConnectedThreads([])
+      setReadingDetailsRequested(false)
+
       setRating(3.0)
       setErrorMessage('')
       setPredictedDie(computePredictedDie(currentDie, 3.0))
       setIsRatingView(true)
       suppressPendingAutoOpenRef.current = false
-
-      if (threadId) {
-        try {
-          const ordersResponse = await readingOrdersApi.getForThread(threadId)
-          setReadingOrders(ordersResponse.reading_orders)
-        } catch (error) {
-          console.error('Failed to fetch reading orders:', error)
-          setReadingOrders([])
-        }
-        try {
-          const connectedResponse = await dependenciesApi.getConnectedThreads(threadId)
-          setConnectedThreads(connectedResponse.connected_threads)
-        } catch (error) {
-          console.error('Failed to fetch connected threads:', error)
-          setConnectedThreads([])
-        }
-      } else {
-        setReadingOrders([])
-        setConnectedThreads([])
-      }
     },
     [
       bootstrap,
@@ -329,6 +355,11 @@ export function useRollRating({
     connectedThreads,
     lastRated,
     clearLastRated,
+    readingDetailsRequested,
+    fetchReadingDetails,
+    fetchReadingContext,
+    fetchReadingBoundaries,
+    requestReaderContext,
     enterRatingView,
     handleMigrationComplete,
     handleMigrationSkip,
