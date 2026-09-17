@@ -43,6 +43,7 @@ vi.mock('../services/api-taste', () => ({
   },
 }))
 vi.mock('../services/api', () => ({
+  default: {},
   threadsApi: {
     list: spies.list,
     setPending: vi.fn(),
@@ -143,6 +144,8 @@ describe('RollPage initial rating preview (issue #2533 regression)', () => {
     expect(screen.queryByText('d8 → d8')).not.toBeInTheDocument()
     expect(screen.queryByText('Die stays the same')).not.toBeInTheDocument()
     expect(screen.getByText('More variety next roll')).toBeInTheDocument()
+    expect(screen.getByText('Moves this series beyond the next roll range.')).toBeInTheDocument()
+    expect(screen.getByRole('slider', { name: /rating from 0.5 to 5.0/i })).toHaveValue('3')
   })
 
   it('keeps the correct projection after the slider is nudged and returned to 3.0', () => {
@@ -151,13 +154,19 @@ describe('RollPage initial rating preview (issue #2533 regression)', () => {
     expect(screen.getByText('d8 → d10')).toBeInTheDocument()
 
     fireEvent.change(screen.getByRole('slider', { name: /rating from 0.5 to 5.0/i }), {
-      target: { value: '2.0' },
+      target: { value: '4.0' },
     })
+    expect(screen.getByText('d8 → d6')).toBeInTheDocument()
+    expect(screen.getByText('More focused next roll')).toBeInTheDocument()
+    expect(screen.getByText('Moves this series to the front of the queue.')).toBeInTheDocument()
+
     fireEvent.change(screen.getByRole('slider', { name: /rating from 0.5 to 5.0/i }), {
       target: { value: '3.0' },
     })
 
     expect(screen.getByText('d8 → d10')).toBeInTheDocument()
     expect(screen.queryByText('Die stays the same')).not.toBeInTheDocument()
+    expect(screen.getByText('More variety next roll')).toBeInTheDocument()
+    expect(screen.getByText('Moves this series beyond the next roll range.')).toBeInTheDocument()
   })
 })
