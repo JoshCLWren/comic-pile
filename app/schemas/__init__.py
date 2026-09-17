@@ -75,6 +75,14 @@ from app.schemas.thread import (
     ThreadResponse,
     ThreadUpdate,
 )
+from app.schemas.creator_detail import (
+    CreatorDetailCoverage,
+    CreatorDetailResponse,
+    CreatorRoleStats,
+    ReadUnratedIssue,
+    RatedIssue,
+    UpcomingIssue,
+)
 
 __all__ = [
     # Auth
@@ -149,4 +157,11 @@ __all__ = [
     "ControlModeGroup",
     "CoverageInfo",
     "EffortBandOutcome",
+    # Creator detail
+    "CreatorDetailResponse",
+    "CreatorDetailCoverage",
+    "CreatorRoleStats",
+    "RatedIssue",
+    "ReadUnratedIssue",
+    "UpcomingIssue",
 ]

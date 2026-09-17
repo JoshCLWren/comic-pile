@@ -19,7 +19,6 @@ from app.repositories.creator_summary import (
     load_creator_summary_inputs,
 )
 from app.schemas.creator_detail import (
-    CreatorDetailCoverage,
     CreatorDetailResponse,
     CreatorRoleStats,
     RatedIssue,
@@ -163,12 +162,6 @@ async def get_creator_detail(
                 upcoming_count=role_upcoming_count,
             )
         )
-
-    coverage = CreatorDetailCoverage(
-        rated_issues_total=len(rated_issue_ids),
-        upcoming_issues_total=len(upcoming_issue_ids),
-        read_unrated_issues_total=len(read_unrated_issue_ids),
-    )
 
     # Coverage completeness uses metadata presence like the summary service.
     rated_with = sum(1 for iid in rated_issue_ids if iid in inputs.issues_with_creator_metadata)
