@@ -4,8 +4,9 @@ This guide documents how to run the session-read benchmark against production to
 
 ## Prerequisites
 
-- Dedicated production E2E account (blocked by #832)
-- Production credentials stored in GitHub Actions secrets
+- Disposable per-run production account created and cleaned up by the rebuilt
+  browser-test suite (blocked by #1664; the obsolete dedicated-account path from
+  #832 is no longer a dependency). No long-lived production credentials.
 - `scripts/benchmark_session_reads.py` (already merged in PR #721)
 
 ## Benchmark Harness
@@ -21,12 +22,20 @@ The benchmark harness is a dependency-free Python script that records:
 
 ## Running the Benchmark
 
-### Against Production (when #832 is complete)
+### Against Production (after #1664)
 
 ```bash
 # Set up environment variables
 export PROD_BASE_URL=https://comic-pile.vercel.app
-export PROD_BEARER_TOKEN=<from GitHub Actions secrets>
+export PROD_BEARER_TOKEN=<token for the disposable per-run account created by the
+  #1664 suite helper; the account is deleted after the run, so never reuse a
+  token across runs or store it as a long-lived secret>
+
+# Record the deployment identifier for the evidence attachment (Vercel
+# deployment ID or the production SHA under test); the harness records base_url
+# but not the deployment, and issue #700 requires both cold/warm samples to be
+# tied to an explicit deployment.
+export PROD_DEPLOYMENT_ID=<vercel deployment id or production SHA>
 
 # Run cold-path measurements (fresh deployment, no prior requests)
 # Each endpoint in separate invocation for true first-request evidence
@@ -82,6 +91,15 @@ The benchmark output separates:
 - **steady_state**: Aggregate of subsequent requests (iterations 2-N)
 - **all_recorded**: Aggregate of all requests
 
+Attach each JSON report together with its `PROD_DEPLOYMENT_ID` so cold and warm
+samples stay tied to the deployment they measured.
+
+Note: `Server-Timing` is currently stripped somewhere on the Vercel deployment
+path (see `docs/PRODUCTION_PROFILE.md`); expect `server_timing: null` in
+production reports. That is an observed deployment-path limitation, not a
+harness failure — correlate application time via `X-Request-ID` against the
+structured `Slow HTTP request` warnings and Vercel runtime logs instead.
+
 ### Key Metrics to Record
 
 | Metric | Cold Budget Target | Warm Budget Target |
@@ -129,7 +147,7 @@ File focused regression issues for any independent failure or budget miss.
 - ✅ Query plan optimization merged (PR #730)
 - ✅ Structured diagnostics merged (PR #778)
 - ✅ Latest-session-action index merged (PR #801)
-- ⏳ Blocked by #832 (dedicated production E2E account)
+- ⏳ Blocked by #1664 (disposable per-run accounts via the rebuilt browser-test suite)
 - ⏳ Production cold/warm measurements pending
 - ⏳ Budget documentation pending
 - ⏳ Regression issue filing pending
