@@ -1,4 +1,5 @@
 """Performance telemetry middleware and utilities."""
+import os
 import time
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -8,6 +9,11 @@ _startup_monotonic = time.perf_counter()
 # Wall-clock epoch seconds captured at import, exposed as the app startup time.
 _startup_epoch = time.time()
 _startup_duration = None
+
+# Deployment identifier from environment, used to tag performance metrics.
+_DEPLOYMENT_ID: str | None = os.getenv("VERCEL_DEPLOYMENT_ID") or os.getenv(
+    "VERCEL_GIT_COMMIT_SHA",
+)
 
 
 class PerformanceMiddleware(BaseHTTPMiddleware):
@@ -28,6 +34,8 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
         """
         from app.startup_diagnostics import next_request_snapshot
         snapshot = getattr(request.state, "startup_snapshot", None) or next_request_snapshot()
+        # Expose deployment ID on the request state for downstream metric recording
+        request.state.deployment_id = _DEPLOYMENT_ID
         start_ts = time.perf_counter()
         response: Response = await call_next(request)
         end_ts = time.perf_counter()
