@@ -132,7 +132,7 @@ async def get_creator_detail_endpoint(
     offset: int | None = Query(None, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> CreatorDetailResponse:
-    \"\"\"Return full personal creator detail for the specified canonical key.
+    """Return full personal creator detail for the specified canonical key.
 
     Args:
         creator_key: Canonical creator key (e.g. ``creator:12345``).
@@ -147,7 +147,7 @@ async def get_creator_detail_endpoint(
     Raises:
         HTTPException: When the key is malformed or the creator is not found
         in the user's library.
-    \"\"\"
+    """
     try:
         return await get_creator_detail(
             db=db,
