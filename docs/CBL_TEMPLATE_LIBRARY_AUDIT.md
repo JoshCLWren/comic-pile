@@ -80,6 +80,30 @@ The current parser (`app/cbl_ingest.py`) handles:
 - Parseable files: ~90-95% (assuming mostly well-formed XML)
 - Unparseable files: ~5-10% (malformed XML, missing required fields)
 
+**Reproducible inventory commands:**
+
+To obtain the exact CBL inventory from the configured local clone at `/mnt/bigdata/CBL-ReadingLists`:
+
+```bash
+# Count total .cbl files
+find /mnt/bigdata/CBL-ReadingLists -type f -name "*.cbl" | wc -l
+
+# Count parseable vs unparseable files using the application parser
+cd /home/runner/work/comic-pile/comic-pile
+python3 -c "
+from app.cbl_ingest import parse_cbl_mirror
+from pathlib import Path
+parsed, failures = parse_cbl_mirror(Path('/mnt/bigdata/CBL-ReadingLists'))
+print(f'Total files: {len(parsed) + len(failures)}')
+print(f'Parseable: {len(parsed)}')
+print(f'Unparseable: {len(failures)}')
+for f in failures:
+    print(f'  FAIL: {f.source_path}: {f.message}')
+"
+```
+
+The `discover_cbl_files()` function (`app/cbl_ingest.py:43`) returns all `.cbl` files in deterministic order, and `parse_cbl_mirror()` (`app/cbl_ingest.py:91`) isolates parse failures per-file without stopping the full mirror scan. The sync script `scripts/sync_cbl_mirror.py` uses this same path and emits a JSON summary with `parsed_lists` and `parse_failures` counts.
+
 ### Current Ingestion/Discovery Path
 
 The current sync process follows this flow:
