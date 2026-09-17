@@ -38,6 +38,7 @@ async def record_request_metric(
         request_path: The request path being measured.
         deployment_id: Deployment or commit identifier.
         success: Whether the request succeeded.
+        user_id: Optional user ID associated with the request.
 
     Returns:
         The created PerformanceMetric instance.
@@ -62,8 +63,7 @@ async def record_request_metric(
     except Exception:
         await db.rollback()
         raise
-    await db.refresh(metric)
-    # Ensure id remains accessible after commit/refresh without MissingGreenlet
+    # Use extracted id after commit - safe from MissingGreenlet
     _ = metric_id
     return metric
 
