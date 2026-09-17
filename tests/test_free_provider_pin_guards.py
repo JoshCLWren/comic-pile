@@ -38,9 +38,10 @@ def test_opencode_free_pins_accept_free_roster_ids(validate) -> None:
 
 
 def test_openrouter_free_pins_require_free_tier_ids(validate) -> None:
-    """OpenRouter free lanes accept only :free ids or openrouter/free."""
+    """OpenRouter free lanes accept :free ids, openrouter/free, or $0 promo ids."""
     assert validate.openrouter_model_is_free('cohere/north-mini-code:free')
     assert validate.openrouter_model_is_free('openrouter/free')
+    assert validate.openrouter_model_is_free('stealth/union-alpha')
     assert not validate.openrouter_model_is_free('stealth/ox-alpha')
     assert not validate.openrouter_model_is_free('openai/gpt-4o')
 

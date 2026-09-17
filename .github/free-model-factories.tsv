@@ -3,7 +3,7 @@
 11	nvidia	poolside/laguna-xs-2.1	15	dispatcher	Laguna XS 2.1
 20	nvidia	openai/gpt-oss-20b	45	dispatcher	GPT OSS 20B
 21	nvidia	google/gemma-4-31b-it	50	dispatcher	Gemma 4 31B
-23	opencode-free	big-pickle	55	dispatcher	Catalog Free Slot 23
+23	openrouter-free	stealth/union-alpha	55	dispatcher	OpenRouter Stealth Union Alpha
 29	opencode-free	big-pickle	0	dispatcher	Catalog Free Slot 29
 39	opencode-free	big-pickle	5	dispatcher	OpenCode Big Pickle
 41	opencode-free	mimo-v2.5-free	15	dispatcher	OpenCode MiMo V2.5 Free
