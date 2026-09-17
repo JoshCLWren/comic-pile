@@ -9,9 +9,12 @@ ComicPile queue order for upcoming rows.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.event import Event
 from app.models.issue import Issue
 from app.models.thread import Thread
 
@@ -67,6 +70,42 @@ async def load_recent_creator_issue_rows(
         for issue_id, issue_number, thread_id, thread_title, status in result.all()
     ]
     return rows
+
+
+async def load_latest_rating_timestamps(
+    db: AsyncSession,
+    *,
+    issue_ids: list[int],
+) -> dict[int, datetime]:
+    """Load the latest effective ``rate`` event timestamp per local issue id.
+
+    Mirrors the effective-rating semantics of the creator summary aggregation:
+    for a fixed set of issue ids, returns the timestamp of the newest ``rate``
+    event by ``(timestamp, id)``. Issue ids are provided by the caller and are
+    already user-scoped, so no thread/ownership join is needed here.
+
+    Args:
+        db: Async database session.
+        issue_ids: Local issue ids attributed to the creator's current page.
+
+    Returns:
+        Mapping of issue id to its latest effective rate event timestamp.
+    """
+    if not issue_ids:
+        return {}
+    result = await db.execute(
+        select(Event.issue_id, Event.timestamp)
+        .where(Event.issue_id.in_(issue_ids))
+        .where(Event.type == "rate")
+        .where(Event.issue_id.is_not(None))
+        .where(Event.rating.is_not(None))
+        .order_by(Event.issue_id, Event.timestamp.desc(), Event.id.desc())
+    )
+    timestamps: dict[int, datetime] = {}
+    for event_issue_id, event_timestamp in result.all():
+        if event_issue_id is not None and event_issue_id not in timestamps:
+            timestamps[event_issue_id] = event_timestamp
+    return timestamps
 
 
 async def load_upcoming_creator_issue_rows(
@@ -128,6 +167,7 @@ async def load_upcoming_creator_issue_rows(
 __all__ = [
     "RecentCreatorIssueRow",
     "UpcomingCreatorIssueRow",
+    "load_latest_rating_timestamps",
     "load_recent_creator_issue_rows",
     "load_upcoming_creator_issue_rows",
 ]

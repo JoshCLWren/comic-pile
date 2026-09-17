@@ -19,11 +19,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.event import Event
 from app.repositories.creator_detail import (
+    load_latest_rating_timestamps,
     load_recent_creator_issue_rows,
     load_upcoming_creator_issue_rows,
 )
@@ -266,19 +265,10 @@ async def get_creator_detail(
         | {row[0] for row in read_unrated_rows}
         | {row[0] for row in upcoming_rows}
     )
-    latest_rating_timestamps: dict[int, datetime] = {}
-    if fetched_issue_ids:
-        timestamp_result = await db.execute(
-            select(Event.issue_id, Event.timestamp)
-            .where(Event.issue_id.in_(fetched_issue_ids))
-            .where(Event.type == "rate")
-            .where(Event.issue_id.is_not(None))
-            .where(Event.rating.is_not(None))
-            .order_by(Event.issue_id, Event.timestamp.desc(), Event.id.desc())
-        )
-        for event_issue_id, event_timestamp in timestamp_result.all():
-            if event_issue_id is not None and event_issue_id not in latest_rating_timestamps:
-                latest_rating_timestamps[event_issue_id] = event_timestamp
+    latest_rating_timestamps = await load_latest_rating_timestamps(
+        db,
+        issue_ids=fetched_issue_ids,
+    )
 
     rated_issues = [
         _build_issue_row(
