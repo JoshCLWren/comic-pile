@@ -34,14 +34,14 @@ class PerformanceMiddleware(BaseHTTPMiddleware):
         """
         from app.startup_diagnostics import next_request_snapshot
         snapshot = getattr(request.state, "startup_snapshot", None) or next_request_snapshot()
+        # Expose deployment ID on the request state for downstream metric recording
+        request.state.deployment_id = _DEPLOYMENT_ID
         start_ts = time.perf_counter()
         response: Response = await call_next(request)
         end_ts = time.perf_counter()
         duration_ms = (end_ts - start_ts) * 1000
         response.headers["X-Response-Time"] = str(round(duration_ms, 1))
         response.headers["X-Server-Cold-Start"] = "true" if snapshot.cold else "false"
-        # Expose deployment ID on the request state for downstream metric recording
-        request.state.deployment_id = _DEPLOYMENT_ID
         return response
 
 

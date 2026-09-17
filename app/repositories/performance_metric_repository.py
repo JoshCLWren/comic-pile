@@ -6,17 +6,16 @@ Functions return ORM models or plain values; services own transactions.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import Base
-from app.models import User
 from app.models.performance_metric import PerformanceMetric
 
 
 async def create_performance_metric(
-    db,
+    db: AsyncSession,
     *,
     metric_type: str,
     cold: bool,
@@ -56,7 +55,7 @@ async def create_performance_metric(
 
 
 async def get_performance_metrics(
-    db,
+    db: AsyncSession,
     *,
     metric_type: str | None = None,
     cold: bool | None = None,
@@ -102,7 +101,7 @@ async def get_performance_metrics(
 
 
 async def get_performance_metrics_summary(
-    db,
+    db: AsyncSession,
     *,
     metric_type: str | None = None,
     deployment_id: str | None = None,
@@ -121,8 +120,6 @@ async def get_performance_metrics_summary(
     Returns:
         Dict with count, min, max, median, p95 response times grouped by cold/warm.
     """
-    from sqlalchemy import func
-
     base_query = select(PerformanceMetric)
 
     if metric_type is not None:

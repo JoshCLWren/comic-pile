@@ -5,13 +5,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Float,
+    ForeignKey,
+    Index,
     Integer,
     String,
-    Text,
-    func,
-    select,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,9 +24,9 @@ class PerformanceMetric(Base):
     Stores timing measurements and cold/warm classification for representative
     flows so that regressions can be tied to deployments and distinguished from
     isolated provider delays.
+    """
 
     __tablename__ = "performance_metrics"
-    """
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     timestamp: Mapped[datetime] = mapped_column(

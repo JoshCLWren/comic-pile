@@ -17,6 +17,7 @@ from app.models.external_identity import (
 from app.models.failed_login_attempt import FailedLoginAttempt
 from app.models.issue import Issue
 from app.models.metadata_correction import IssueMetadataCorrection
+from app.models.performance_metric import PerformanceMetric
 from app.models.reading_order import ReadingOrder, ReadingOrderItem
 from app.models.release import Release
 from app.models.revoked_token import RevokedToken
@@ -49,6 +50,7 @@ __all__ = [
     "Issue",
     "IssueExternalIdentityMapping",
     "IssueMetadataCorrection",
+    "PerformanceMetric",
     "ReadingOrder",
     "ReadingOrderItem",
     "Release",

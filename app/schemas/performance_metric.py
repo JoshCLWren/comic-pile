@@ -55,6 +55,9 @@ class PerformanceMetricQuery(BaseModel):
     end_time: datetime | None = Field(
         None, description="Optional end time filter (ISO datetime)"
     )
+    days: int | None = Field(
+        None, ge=1, description="Only include metrics from the last N days"
+    )
     limit: int | None = Field(
         None, ge=1, le=1000, description="Optional maximum number of results"
     )
