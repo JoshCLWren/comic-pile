@@ -26,4 +26,16 @@ describe('CreatorName', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
     expect(screen.getByText('Mystery Hand')).toBeInTheDocument()
   })
+
+  it('renders a stable creator without a role suffix when roles are absent', () => {
+    render(
+      <MemoryRouter>
+        <CreatorName creator={{ creator_id: 42, name: 'Nameless Role', roles: [] }} />
+      </MemoryRouter>,
+    )
+
+    const link = screen.getByRole('link', { name: 'View creator Nameless Role' })
+    expect(link.getAttribute('href')).toBe('/creators/creator%3A42')
+    expect(screen.queryByText(/·/)).not.toBeInTheDocument()
+  })
 })

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatorDetailPage from '../pages/CreatorDetailPage'
@@ -169,6 +169,97 @@ describe('CreatorDetailPage', () => {
     renderAt('creator:7')
 
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    expect(loadMore).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the shell stable while the first page loads', () => {
+    mockedHook.mockReturnValue(baseState({ isPending: true }))
+    renderAt('creator:7')
+
+    expect(screen.getByLabelText('Loading creator details')).toBeInTheDocument()
+  })
+
+  it('shows the not-found copy for 404 responses without a retry', () => {
+    mockedHook.mockReturnValue(
+      baseState({ isError: true, error: { response: { status: 404 } }, summary: null, coverage: null }),
+    )
+    renderAt('creator:7')
+
+    expect(screen.getByRole('heading', { name: 'Creator not found' })).toBeInTheDocument()
+    expect(screen.getByText('This creator is not in your library.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
+  })
+
+  it('omits the read-not-rated section and counter when there is nothing to show', () => {
+    mockedHook.mockReturnValue(
+      baseState({ readUnratedIssues: [], summary: { ...baseState().summary!, read_unrated_count: 0 } }),
+    )
+    renderAt('creator:7')
+
+    expect(screen.queryByRole('heading', { name: /Read, not rated/ })).not.toBeInTheDocument()
+    expect(screen.queryByText('Read, not rated')).not.toBeInTheDocument()
+  })
+
+  it('renders issue rows without roles or dates when metadata is absent', () => {
+    mockedHook.mockReturnValue(
+      baseState({
+        upcomingIssues: [
+          {
+            issue_id: 14,
+            issue_number: '4',
+            thread_id: 3,
+            thread_title: 'Series C',
+            status: 'unread',
+            roles: [],
+            effective_rating: null,
+            rating_timestamp: null,
+            sort_key: '0000001:0000004:14',
+          },
+        ],
+      }),
+    )
+    renderAt('creator:7')
+
+    expect(screen.getByRole('link', { name: /Series C #4/ })).toBeInTheDocument()
+  })
+
+  it('hides the role breakdown when the backend reports no roles', () => {
+    mockedHook.mockReturnValue(baseState({ roleStats: [] }))
+    renderAt('creator:7')
+
+    expect(screen.queryByRole('heading', { name: 'Roles' })).not.toBeInTheDocument()
+  })
+
+  it('flags read-but-unrated coverage as partial when metadata is incomplete', () => {
+    mockedHook.mockReturnValue(
+      baseState({ coverage: { ...baseState().coverage!, read_unrated_complete: false } }),
+    )
+    renderAt('creator:7')
+
+    expect(screen.getByRole('note')).toHaveTextContent(/Read-but-unrated results are partial/)
+    expect(screen.getByText(/Partial list: some read issues are still missing creator metadata/)).toBeInTheDocument()
+  })
+
+  it('records a load-more failure and surfaces the recoverable error page', async () => {
+    let failed = false
+    const loadMore = vi.fn().mockImplementation(() => {
+      failed = true
+      return Promise.reject(new Error('next page failed'))
+    })
+    mockedHook.mockImplementation(() =>
+      baseState(
+        failed
+          ? { isError: true, error: new Error('next page failed'), summary: null, coverage: null, hasMore: true, loadMore }
+          : { hasMore: true, loadMore },
+      ),
+    )
+    renderAt('creator:7')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Could not load creator' })).toBeInTheDocument(),
+    )
     expect(loadMore).toHaveBeenCalledTimes(1)
   })
 })

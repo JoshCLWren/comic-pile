@@ -131,4 +131,22 @@ describe('useCreatorDetail (bounded incremental loader)', () => {
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(result.current.error).toBeInstanceOf(Error)
   })
+
+  it('no-ops loadMore when there is no next page', async () => {
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useCreatorDetail('creator:7', 50, detailApi), { wrapper })
+
+    await waitFor(() => expect(result.current.hasMore).toBe(false))
+    await expect(result.current.loadMore()).resolves.toBeUndefined()
+    expect(getDetail).toHaveBeenCalledTimes(1)
+  })
+
+  it('exposes a refetch that reloads the detail query', async () => {
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useCreatorDetail('creator:7', 50, detailApi), { wrapper })
+
+    await waitFor(() => expect(result.current.summary?.display_name).toBe('Test Creator'))
+    result.current.refetch()
+    await waitFor(() => expect(getDetail).toHaveBeenCalledTimes(2))
+  })
 })
