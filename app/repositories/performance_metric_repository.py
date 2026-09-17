@@ -107,7 +107,7 @@ async def get_performance_metrics_summary(
     deployment_id: str | None = None,
     start_time: datetime | None = None,
     end_time: datetime | None = None,
-) -> dict:
+) -> dict[str, object]:
     """Get a summary of performance metrics including percentiles.
 
     Args:

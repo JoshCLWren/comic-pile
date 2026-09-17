@@ -225,7 +225,12 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     # so regressions can be tied to deployments.
     app.include_router(
         performance_metric.router,
-        prefix="/api",
+        prefix="/api/performance-metrics",
+        tags=["performance-metrics"],
+    )
+    app.include_router(
+        performance_metric.router,
+        prefix="/api/v1/performance-metrics",
         tags=["performance-metrics"],
     )
 

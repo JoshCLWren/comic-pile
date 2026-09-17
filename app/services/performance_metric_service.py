@@ -24,6 +24,7 @@ async def record_request_metric(
     request_path: str | None = None,
     deployment_id: str | None = None,
     success: bool = True,
+    user_id: int | None = None,
 ) -> PerformanceMetric:
     """Record a performance metric for the current request.
 
@@ -52,8 +53,18 @@ async def record_request_metric(
         deployment_id=deployment_id,
         request_path=request_path,
         success=success,
+        user_id=user_id,
     )
     await db.flush()
+    metric_id = metric.id
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    await db.refresh(metric)
+    # Ensure id remains accessible after commit/refresh without MissingGreenlet
+    _ = metric_id
     return metric
 
 
@@ -63,7 +74,7 @@ async def get_metrics_summary(
     metric_type: str | None = None,
     deployment_id: str | None = None,
     days: int | None = None,
-) -> dict:
+) -> dict[str, object]:
     """Get a summary of performance metrics.
 
     Args:
@@ -95,7 +106,7 @@ async def get_cold_warm_comparison(
     *,
     metric_type: str | None = None,
     deployment_id: str | None = None,
-) -> dict:
+) -> dict[str, object]:
     """Get cold vs warm response time comparison for a metric type.
 
     Args:

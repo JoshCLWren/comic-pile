@@ -14,7 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
+from app.models.user import User
 from app.schemas import PerformanceMetricCreate, PerformanceMetricQuery, PerformanceMetricSummary
+from app.schemas.performance_metric import PerformanceMetricComparison
 from app.services import performance_metric_service
 
 
@@ -28,7 +30,7 @@ router = APIRouter(tags=["performance-metrics"])
 )
 async def record_metric(
     payload: PerformanceMetricCreate,
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     """Record a performance metric for the current request.
@@ -48,6 +50,7 @@ async def record_metric(
         request_path=payload.request_path,
         deployment_id=payload.deployment_id,
         success=payload.success,
+        user_id=current_user.id,
     )
     metric_id = metric.id
     return JSONResponse(
@@ -73,12 +76,13 @@ async def query_metrics(
     Returns:
         Summary of performance metrics matching the filters.
     """
-    return await performance_metric_service.get_metrics_summary(
+    data = await performance_metric_service.get_metrics_summary(
         db,
         metric_type=query.metric_type,
         deployment_id=query.deployment_id,
         days=query.days,
     )
+    return PerformanceMetricSummary.model_validate(data)
 
 
 @router.get(
@@ -91,7 +95,7 @@ async def cold_warm_comparison(
         None, description="Filter by deployment/commit identifier"
     ),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> PerformanceMetricComparison:
     """Get cold vs warm response time comparison.
 
     Args:
@@ -102,8 +106,9 @@ async def cold_warm_comparison(
     Returns:
         Cold and warm stats including count, min, max, median, p95.
     """
-    return await performance_metric_service.get_cold_warm_comparison(
+    data = await performance_metric_service.get_cold_warm_comparison(
         db,
         metric_type=metric_type,
         deployment_id=deployment_id,
     )
+    return PerformanceMetricComparison.model_validate(data)
