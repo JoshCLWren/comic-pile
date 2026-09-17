@@ -1,8 +1,22 @@
-import type { ComicVineRelatedIssue } from '../services/api'
+import type { ComicVineComicPileMatch, ComicVineRelatedIssue } from '../services/api'
 
 export interface ComicIdentity {
   primary: string
   secondary: string | null
+}
+
+/**
+ * Attempts to extract a series name from a ComicPile thread title.
+ *
+ * Thread titles follow the pattern "Series Name #N". This returns
+ * everything before the last ` #` segment, or null when the title
+ * doesn't match the expected pattern.
+ */
+function seriesNameFromThreadTitle(title: string): string | null {
+  const hashIndex = title.lastIndexOf(' #')
+  if (hashIndex <= 0) return null
+  const candidate = title.slice(0, hashIndex).trim()
+  return candidate.length > 0 ? candidate : null
 }
 
 /**
@@ -11,11 +25,22 @@ export interface ComicIdentity {
  * Secondary: Issue title (if available)
  * Falls back to ComicVine issue ID when no human-readable identity exists;
  * shows a neutral label only when even the provider ID is unavailable.
+ *
+ * When `series_name` is missing but comicpile matches exist, the series name
+ * is recovered from the thread title (e.g. "Annihilation: Nova #1" → "Annihilation: Nova").
  */
-export function extractComicIdentity(issue: ComicVineRelatedIssue): ComicIdentity {
-  const seriesName = issue.series_name?.trim() || ''
+export function extractComicIdentity(
+  issue: ComicVineRelatedIssue,
+  matches?: ComicVineComicPileMatch[],
+): ComicIdentity {
+  let seriesName = issue.series_name?.trim() || ''
   const issueNumber = issue.issue_number?.trim() || ''
   const title = issue.name?.trim() || null
+
+  if (!seriesName && issueNumber && matches && matches.length > 0) {
+    const fromThread = seriesNameFromThreadTitle(matches[0].thread_title)
+    if (fromThread) seriesName = fromThread
+  }
 
   let primary: string
   if (seriesName && issueNumber) {
@@ -23,7 +48,7 @@ export function extractComicIdentity(issue: ComicVineRelatedIssue): ComicIdentit
   } else if (seriesName) {
     primary = seriesName
   } else if (issueNumber) {
-    primary = `${seriesName ? seriesName + ' ' : ''}#${issueNumber}`
+    primary = `#${issueNumber}`
   } else if (title) {
     primary = title
   } else if (issue.comicvine_issue_id) {
