@@ -9,9 +9,8 @@ architecture hold #2363 is not lifted.
 **Production measurement date:** 2026-09-17, against the Neon production database via read-only
 `SELECT` statements. Every count below was re-measured for this revision; no count is inherited from
 an earlier audit. Where an earlier audit's finding was reproduced, that is stated explicitly.
-
-`docs/READING_GRAPH_PERSISTENCE_DESIGN.md` does not exist on this branch or on `main`, so this audit
-does not rely on it.
+The historical CBL safety-boundary counts in sections 1.4 and 5 were re-measured again when the
+inert-note predicate was corrected from `cbl-order:source:%` to `cbl-order:%`.
 
 ---
 
@@ -60,7 +59,7 @@ essential context for the cutover.
 
 | Origin | `satisfaction_type` | Note class | Rows |
 | :--- | :--- | :--- | ---: |
-| Mirrored from a Dependency row | `item_read` | `cbl-order*` | 1,228 |
+| Mirrored from a Dependency row | `item_read` | `cbl-order:group-16:*` | 1,228 |
 | Mirrored from a Dependency row | `item_read` | `(null)` | 808 |
 | Mirrored from a Dependency row | `item_read` | other semantic note | 344 |
 | Rule-native (no Dependency row) | `item_read` | `continuity-plan:*` | 806 |
@@ -69,7 +68,9 @@ essential context for the cutover.
 
 2,380 rules are mirrors of Dependency rows. 937 rules are rule-native, and 936 of those carry a
 `continuity-plan:*` note, so the Reading-Plan-owned population is effectively the rule-native
-population.
+population. The 1,228 `cbl-order:group-16:*` mirrors are trigger copies of historical group-16
+materialization (section 1.4 / 5); a ContinuityRule mirror is **not** by itself proof of reader
+hard intent.
 
 ### 1.3 DependencyGroup ordering
 
@@ -104,13 +105,22 @@ No edges may be invented from empty `sequence_order`. There is nothing to materi
 | Note class | Rows | Mirrored into a ContinuityRule |
 | :--- | ---: | ---: |
 | `cbl-order:source:*` | 90,520 | **0** |
-| `cbl-order*` (non-`source`) | 1,228 | 1,228 |
+| `cbl-order:group-16:*` | 1,228 | 1,228 |
 | `(null)` | 814 | 814 |
 | Semantic note | 338 | 338 |
 
-The 90,520 `cbl-order:source:*` rows were bulk-created on 2026-08-31 within a four-minute window
-(`11:44:11Z` to `11:48:33Z`), before the mirroring trigger existed, which is why none of them has a
-ContinuityRule. This bulk CBL population is 97.4% of the Dependency table and is the central safety
+All 91,748 `cbl-order:%` rows are historical CBL materialization unless a row is separately proven
+or promoted as reader hard intent. No such promotion is claimed here for either subclass:
+
+- The 90,520 `cbl-order:source:*` rows were bulk-created on 2026-08-31 within a four-minute window
+  (`11:44:11Z` to `11:48:33Z`), before the mirroring trigger existed, which is why none of them has
+  a ContinuityRule.
+- The 1,228 `cbl-order:group-16:*` rows are historical materialization for
+  **dependency group 16 / The Unnamed Universe** (59 memberships, zero `sequence_order`). They were
+  created with a group-16 note prefix and later mirrored into ContinuityRules by the trigger. That
+  mirror is automatic compatibility, not an independent reader-intent decision.
+
+Together the `cbl-order:%` population is 98.8% of the Dependency table and is the central safety
 concern for the cutover (section 5).
 
 ### 1.5 Thread and blocked-state totals
@@ -311,54 +321,63 @@ claim is narrower: every rule form **present in production** collapses, as shown
 
 ## 5. Historical Dependency safety boundary
 
-The cutover makes Dependency rows authoritative. 97.4% of that table is historical CBL bulk output,
-so "make Dependency authoritative" must not mean "make all 92,900 rows authoritative".
+The cutover makes Dependency rows authoritative. 98.8% of that table is historical `cbl-order:%`
+output, so "make Dependency authoritative" must not mean "make all 92,900 rows authoritative".
 
 | Class | Rows | Disposition at cutover |
 | :--- | ---: | :--- |
 | Canonical edges derived from proven hard rules (the 942 from section 4.3) | 942 | Persist; authoritative |
 | Legitimate standalone prerequisites: semantic-note and null-note rows, all mirrored into rules and already live | 1,152 | Keep; authoritative |
-| Adopted CBL order already promoted to rule authority (`cbl-order*`, non-`source`, all mirrored) | 1,228 | Keep; authoritative |
 | Historical CBL adjacency (`cbl-order:source:*`, never mirrored) | 90,520 | **Must remain inert** |
+| Historical CBL materialization for group 16 / The Unnamed Universe (`cbl-order:group-16:*`, trigger-mirrored) | 1,228 | **Must remain inert** unless separately proven/promoted as reader hard intent |
 
 The boundary is clean and machine-checkable: a row is canonical if and only if
-`note IS NULL OR note NOT LIKE 'cbl-order:source:%'`. The 90,520 excluded rows are exactly the rows
-with no ContinuityRule mirror, so "has a rule mirror or is newly persisted by section 4.3" is an
-equivalent and independently verifiable test.
+`note IS NULL OR note NOT LIKE 'cbl-order:%'`, unless that specific row has been separately proven or
+promoted as reader hard intent. Trigger mirroring into ContinuityRule is **not** such a promotion.
+Under that predicate, all 91,748 `cbl-order:%` rows stay inert; the 1,152 null/semantic rows plus
+the 942 newly persisted rule edges form the executable set.
+
+An earlier revision of this audit treated the 1,228 `cbl-order:group-16:*` rows as already
+"promoted" because they had ContinuityRule mirrors. That was wrong: they are historical
+materialization for **group 16 / The Unnamed Universe**, and must stay with the rest of
+`cbl-order:%` unless an explicit reader-intent promotion is recorded later.
 
 ### 5.1 The one measured behavior change
 
 These historical rows are not currently inert. Because the flag is `True`,
-`_get_legacy_blocked_thread_ids_uncached` joins the whole Dependency table, so CBL adjacency rows
-block threads today:
+`_get_legacy_blocked_thread_ids_uncached` joins the whole Dependency table, so CBL rows block
+threads today. Re-measured 2026-09-17 after widening the inert predicate to all `cbl-order:%`:
 
 | Set | Threads |
 | :--- | ---: |
 | Blocked by raw Dependency rows (all classes) | 411 |
-| Blocked by raw Dependency rows excluding `cbl-order:source:*` | 383 |
-| Blocked by `cbl-order:source:*` rows | 38 |
-| Blocked **only** by `cbl-order:source:*` rows | 28 |
+| Blocked by raw Dependency rows excluding all `cbl-order:%` | 382 |
+| Blocked by any `cbl-order:%` rows | 39 |
+| Blocked **only** by `cbl-order:%` rows | 29 |
 
-Excluding the historical class therefore unblocks 28 threads. Full comparison of the current
-evaluator against a Dependency-only evaluator over the canonical set:
+Excluding the historical class therefore unblocks 29 threads (28 from the prior
+`cbl-order:source:%`-only measurement, plus one additional frontier reached only through the broader
+`cbl-order:%` class). Full comparison of the current evaluator against a Dependency-only evaluator
+over the corrected canonical set:
 
 | Set | Threads |
 | :--- | ---: |
-| Current effective blocked set (rules ∪ raw Dependencies) | 645 |
-| Proposed canonical Dependency-only blocked set | 617 |
-| Threads that would unblock | 28 |
+| Current effective blocked set (rules ∪ raw Dependencies) | 658 |
+| Proposed canonical Dependency-only blocked set | 629 |
+| Threads that would unblock | 29 |
 | Threads that would newly block | **0** |
 
 Zero new blocks means the cutover cannot surprise the reader with a comic that suddenly becomes
-unavailable. The 28 unblocking threads are all annuals, one-shots, and first issues — `Marvel
-Two-in-One Annual (1976) #1`, `Giant-Size Fantastic Four (1974) #2`, `X-Men: Magneto War (1999) #1`,
-`Generation X Holiday Special (1998) #1`, and similar. These are CBL source adjacency artifacts, not
-reader-authored prerequisites, and unblocking them is the intended correction rather than a
-regression. ADR §8 is explicit that source CBL adjacency does not create hard dependency edges.
+unavailable. The 29 unblocking threads are annuals, one-shots, first issues, and similar CBL
+adjacency artifacts — `Marvel Two-in-One Annual (1976) #1`, `Giant-Size Fantastic Four (1974) #2`,
+`X-Men: Magneto War (1999) #1`, `Generation X Holiday Special (1998) #1`, `Geiger`, and related
+frontiers. These are not reader-authored hard prerequisites, and unblocking them is the intended
+correction rather than a regression. ADR §8 is explicit that source CBL adjacency does not create
+hard dependency edges.
 
-Deleting the 90,520 rows is **not** on the critical path. They become inert the moment the evaluator
-filters to the canonical set, which matches the ADR's direction to keep historical bulk CBL
-dependencies inert until safe deletion can be proven separately.
+Deleting the 91,748 historical `cbl-order:%` rows is **not** on the critical path. They become
+inert the moment the evaluator filters to the canonical set, which matches the ADR's direction to
+keep historical bulk CBL dependencies inert until safe deletion can be proven separately.
 
 ---
 
@@ -416,9 +435,10 @@ unread convergence target. This is section 4.3's measured contribution and is in
 No Dependency row is required for `Cable #63 -> #64 -> #65`. `get_roll_pool_rows` joins
 `Issue.id == Thread.next_unread_issue_id` with `Issue.status == "unread"`
 (`comic_pile/queue.py:497`), so ordinary advancement comes from `Issue.position` and
-`next_unread_issue_id` alone. Of 92,900 Dependency rows, the canonical set retains 2,380 plus 942
-new rows — 3,322 edges against 11,769 active frontiers — confirming that adjacency is not
-materialized and must not become so.
+`next_unread_issue_id` alone. Of 92,900 Dependency rows, the corrected canonical set retains the
+1,152 null/semantic rows plus 942 newly persisted rule edges (2,076 distinct edges after union)
+against 11,769 active frontiers — confirming that adjacency is not materialized and must not
+become so.
 
 ---
 
@@ -434,9 +454,10 @@ rule authority. No existing row is modified and no row is deleted.
 
 **Step 2 — Verify the Dependency-only calculation in shadow mode.** Compute the blocked set from
 Thread frontier plus incoming Dependency rows restricted to
-`note IS NULL OR note NOT LIKE 'cbl-order:source:%'`, and compare against the live evaluator. The
-expected result is already measured: 617 blocked, 0 newly blocked, 28 unblocked, all 28 being CBL
-adjacency artifacts as listed in section 5.1.
+`note IS NULL OR note NOT LIKE 'cbl-order:%'` (unless a specific row is separately proven/promoted as
+reader hard intent), and compare against the live evaluator. The expected result is already
+measured: 629 blocked, 0 newly blocked, 29 unblocked, all 29 being historical `cbl-order:%`
+artifacts as listed in section 5.1.
 
 **Step 3 — Switch the single blocking calculation.** Replace the body of
 `_get_blocked_thread_ids_uncached` with the canonical query and delete the
@@ -451,10 +472,10 @@ delete `app/continuity_blocking.py`'s blocked-set helpers, the `crossover_order_
 Retaining the `continuity_rules` and `dependency_group_memberships` tables for provenance is fine;
 the ADR requires only that they stop being Roll authorities.
 
-Not on the critical path: deleting the 90,520 historical rows (they are inert once Step 3 filters
-them), resolving the three non-production rule forms in section 4.4 (required only before the
-`continuity_rules` table is dropped), and any `sequence_order` migration (there is no data to
-migrate).
+Not on the critical path: deleting the 91,748 historical `cbl-order:%` rows (they are inert once
+Step 3 filters them), resolving the three non-production rule forms in section 4.4 (required only
+before the `continuity_rules` table is dropped), and any `sequence_order` migration (there is no
+data to migrate).
 
 The end state is the ADR runtime invariant:
 
