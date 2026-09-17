@@ -228,7 +228,7 @@ export default function QueuePage() {
           isSearching={isSearching}
           sentinelRef={sentinelRef}
           hasNextPage={!!nextPageToken}
-         />
+        />
 
         <CompletedThreadsSection
           threads={completedThreads}

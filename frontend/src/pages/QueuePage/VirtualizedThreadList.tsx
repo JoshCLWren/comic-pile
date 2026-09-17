@@ -44,9 +44,9 @@ interface VirtualizedThreadListProps<T> {
    * Production Queue rendering intentionally leaves this unset so the
    * virtualized and non-virtualized presentations are both one full-width row.
    */
-   explicitColumnCount?: number
-   sentinelRef?: React.Ref<HTMLDivElement>
-   hasNextPage?: boolean
+  explicitColumnCount?: number
+  sentinelRef?: React.Ref<HTMLDivElement>
+  hasNextPage?: boolean
   /**
    * Injectable window-virtualizer hook. Production uses the real
    * `@tanstack/react-virtual` hook; tests substitute a faithful deterministic
