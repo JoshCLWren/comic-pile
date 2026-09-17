@@ -67,11 +67,11 @@ class PerformanceMetricSummary(BaseModel):
     """Schema for performance metric summary response."""
 
     count: int = Field(..., description="Total number of metrics")
-    by_cold: dict = Field(
+    by_cold: dict[bool, int] = Field(
         ...,
         description="Count of metrics grouped by cold/warm classification",
     )
-    by_cold_stats: dict = Field(
+    by_cold_stats: dict[bool, dict[str, float | None]] = Field(
         ...,
         description="Response time stats (min, max, median, p95) grouped by cold/warm",
     )
@@ -80,11 +80,11 @@ class PerformanceMetricSummary(BaseModel):
 class PerformanceMetricComparison(BaseModel):
     """Schema for cold vs warm comparison response."""
 
-    cold: dict = Field(
+    cold: dict[str, object] = Field(
         ...,
         description="Cold statistics: count, min, max, median, p95",
     )
-    warm: dict = Field(
+    warm: dict[str, object] = Field(
         ...,
         description="Warm statistics: count, min, max, median, p95",
     )

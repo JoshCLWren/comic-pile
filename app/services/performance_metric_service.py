@@ -11,7 +11,6 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.performance_metric import PerformanceMetric
 from app.repositories import performance_metric_repository
 from app.startup_diagnostics import next_request_snapshot
 
@@ -25,7 +24,7 @@ async def record_request_metric(
     deployment_id: str | None = None,
     success: bool = True,
     user_id: int | None = None,
-) -> PerformanceMetric:
+) -> int:
     """Record a performance metric for the current request.
 
     Extracts cold/warm classification from the request snapshot and
@@ -41,7 +40,7 @@ async def record_request_metric(
         user_id: Optional user ID associated with the request.
 
     Returns:
-        The created PerformanceMetric instance.
+        The id of the created PerformanceMetric record.
     """
     snapshot = next_request_snapshot()
     cold = snapshot.cold
@@ -63,9 +62,7 @@ async def record_request_metric(
     except Exception:
         await db.rollback()
         raise
-    # Use extracted id after commit - safe from MissingGreenlet
-    _ = metric_id
-    return metric
+    return metric_id
 
 
 async def get_metrics_summary(
@@ -92,13 +89,18 @@ async def get_metrics_summary(
         end_time = datetime.now(UTC)
         start_time = datetime.now(UTC) - timedelta(days=days)
 
-    return await performance_metric_repository.get_performance_metrics_summary(
+    result = await performance_metric_repository.get_performance_metrics_summary(
         db,
         metric_type=metric_type,
         deployment_id=deployment_id,
         start_time=start_time,
         end_time=end_time,
     )
+    return {
+        "count": result["count"],
+        "by_cold": result["by_cold"],
+        "by_cold_stats": result["by_cold_stats"],
+    }
 
 
 async def get_cold_warm_comparison(
@@ -123,17 +125,19 @@ async def get_cold_warm_comparison(
         deployment_id=deployment_id,
     )
 
-    cold_stats = summary.get("by_cold_stats", {}).get(True, {})
-    warm_stats = summary.get("by_cold_stats", {}).get(False, {})
+    by_cold_stats: dict[bool, dict[str, float | None]] = summary["by_cold_stats"]
+    by_cold: dict[bool, int] = summary["by_cold"]
+    cold_stats: dict[str, float | None] = by_cold_stats.get(True, {})
+    warm_stats: dict[str, float | None] = by_cold_stats.get(False, {})
 
     return {
         "cold": {
-            "count": summary.get("by_cold", {}).get(True, 0),
+            "count": by_cold.get(True, 0),
             **{k: v for k, v in cold_stats.items() if v is not None},
         },
         "warm": {
-            "count": summary.get("by_cold", {}).get(False, 0),
+            "count": by_cold.get(False, 0),
             **{k: v for k, v in warm_stats.items() if v is not None},
         },
-        "total": summary.get("count", 0),
+        "total": summary["count"],
     }

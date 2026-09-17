@@ -43,7 +43,7 @@ async def record_metric(
     Returns:
         202 Accepted response.
     """
-    metric = await performance_metric_service.record_request_metric(
+    metric_id = await performance_metric_service.record_request_metric(
         db,
         metric_type=payload.metric_type,
         response_time_ms=payload.response_time_ms,
@@ -52,7 +52,6 @@ async def record_metric(
         success=payload.success,
         user_id=current_user.id,
     )
-    metric_id = metric.id
     return JSONResponse(
         content={"id": metric_id, "status": "recorded"},
         status_code=202,

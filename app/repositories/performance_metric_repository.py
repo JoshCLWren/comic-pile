@@ -138,7 +138,7 @@ async def get_performance_metrics_summary(
     ).select_from(base_query.subquery()).group_by(PerformanceMetric.cold)
 
     count_result = await db.execute(count_query)
-    by_cold = {row.cold: row.count for row in count_result.all()}
+    by_cold: dict[bool, int] = {row.cold: int(row.count) for row in count_result.all()}
 
     # Response time stats by cold/warm
     stats_query = select(
@@ -154,7 +154,7 @@ async def get_performance_metrics_summary(
     ).select_from(base_query.subquery()).group_by(PerformanceMetric.cold)
 
     stats_result = await db.execute(stats_query)
-    by_cold_stats = {
+    by_cold_stats: dict[bool, dict[str, float | None]] = {
         row.cold: {
             "min": float(row.min) if row.min is not None else None,
             "max": float(row.max) if row.max is not None else None,
