@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
-from app.schemas.creator_summary import CreatorSummaryItem, CreatorSummaryCoverage
+
+from app.schemas.creator_summary import CreatorSummaryCoverage, CreatorSummaryItem
 
 
 class CreatorRoleStat(BaseModel):
     """Statistics for a specific role for a creator."""
+
     role: str = Field(..., description="The normalized role name.")
-    issue_count: int = Field(..., ge=0, description="Number of issues the creator held this role on.")
+    issue_count: int = Field(
+        ...,
+        ge=0,
+        description="Number of issues the creator held this role on.",
+    )
     average_rating: float | None = Field(
         default=None,
         description="Average rating for issues where the creator held this specific role.",
@@ -18,8 +26,9 @@ class CreatorRoleStat(BaseModel):
 
 class CreatorIssueRow(BaseModel):
     """Detail for a specific issue attributed to the creator."""
+
     issue_id: int = Field(..., description="Local ComicPile issue ID.")
-    issue_number: int = Field(..., description="Issue number of the comic.")
+    issue_number: str = Field(..., description="Issue number of the comic.")
     thread_id: int = Field(..., description="Local ComicPile thread ID.")
     thread_title: str = Field(..., description="Title of the containing thread.")
     status: str = Field(..., description="Read/unread status.")
@@ -31,7 +40,7 @@ class CreatorIssueRow(BaseModel):
         default=None,
         description="The latest effective rating for this issue, if any.",
     )
-    rating_timestamp: int | None = Field(
+    rating_timestamp: datetime | None = Field(
         default=None,
         description="Timestamp of the effective rating event, if any.",
     )
@@ -43,6 +52,7 @@ class CreatorIssueRow(BaseModel):
 
 class CreatorDetailResponse(BaseModel):
     """Full detail response for a single creator identity."""
+
     summary: CreatorSummaryItem = Field(
         ...,
         description="The headline summary for the creator (from #2028).",

@@ -1,22 +1,33 @@
 """Service for the bounded personal creator detail API (issue #2037).
 
-This service coordinates the aggregation of a creator's personal detail page,
-reusing the summary and coverage semantics from #2028.
+This service coordinates the aggregation of one creator's personal detail page,
+reusing the rating, role, and coverage semantics from #2028 rather than
+reimplementing a competing definition. Every personal aggregate is scoped
+through the authenticated user's owned ComicPile issues and their confirmed
+local issue metadata.
+
+Ordering semantics:
+- Rated history and read-but-unrated rows are deterministic recent-first.
+- Upcoming rows follow ComicPile's existing thread queue order and in-thread
+  issue order, never an external bibliography order.
+
+Boundedness: each collection is a page (``limit``/``offset``) served by a fixed,
+small number of queries regardless of library size. No per-issue/role N+1 fan-out.
 """
 
 from __future__ import annotations
 
-from collections import defaultdict
+from datetime import datetime
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.creator_detail import load_creator_detail_data
-from app.repositories.creator_summary import (
-    CreatorCredit,
-    CreatorSummaryInputs,
-    extract_creator_credits,
-    load_creator_summary_inputs,
-    parse_creator_key,
+from app.models.event import Event
+from app.repositories.creator_detail import (
+    load_recent_creator_issue_rows,
+    load_upcoming_creator_issue_rows,
 )
+from app.repositories.creator_summary import CreatorSummaryInputs, load_creator_summary_inputs
 from app.schemas.creator_detail import (
     CreatorDetailResponse,
     CreatorIssueRow,
@@ -26,6 +37,54 @@ from app.schemas.creator_summary import (
     CreatorSummaryCoverage,
     CreatorSummaryItem,
 )
+from app.services.creator_summary import HEADLINE_ROLES, parse_creator_key
+
+
+def _build_issue_row(
+    inputs: CreatorSummaryInputs,
+    *,
+    creator_id: int,
+    issue_id: int,
+    issue_number: str,
+    thread_id: int,
+    thread_title: str,
+    status: str,
+    effective_rating: float | None,
+    rating_timestamp: datetime | None,
+    sort_key: str,
+) -> CreatorIssueRow:
+    """Build one detail row with roles resolved from the user-scoped inputs.
+
+    Args:
+        inputs: User-scoped creator summary inputs.
+        creator_id: Stable external person id for the creator.
+        issue_id: Local ComicPile issue ID.
+        issue_number: Issue number.
+        thread_id: Local ComicPile thread ID.
+        thread_title: Title of the containing thread.
+        status: Read/unread status.
+        effective_rating: Latest effective rating for the issue, if any.
+        rating_timestamp: Timestamp of the effective rating event, if any.
+        sort_key: Deterministic local ordering information for the UI.
+
+    Returns:
+        A serializable creator issue row.
+    """
+    roles: set[str] = set()
+    for credit in inputs.issue_creator_credits.get(issue_id, ()):
+        if credit.external_id == creator_id:
+            roles.update(credit.roles)
+    return CreatorIssueRow(
+        issue_id=issue_id,
+        issue_number=issue_number,
+        thread_id=thread_id,
+        thread_title=thread_title,
+        status=status,
+        roles=sorted(roles),
+        effective_rating=effective_rating,
+        rating_timestamp=rating_timestamp,
+        sort_key=sort_key,
+    )
 
 
 async def get_creator_detail(
@@ -41,103 +100,104 @@ async def get_creator_detail(
         db: Async database session.
         user_id: Authenticated user owning the library.
         creator_key: Canonical creator key (e.g. ``creator:12345``).
-        limit: Max number of issues per collection.
-        offset: Pagination offset.
+        limit: Max number of issues per collection page.
+        offset: Page offset shared by all collections.
 
     Returns:
         The full creator detail response.
+
+    Raises:
+        ValueError: When the creator key is not canonical.
+        KeyError: When the creator is not present in the user's own library.
     """
     creator_id = parse_creator_key(creator_key)
     if creator_id is None:
         raise ValueError("Invalid creator key format")
+    page_offset = offset if offset is not None else 0
 
-    # 1. Get headline summary and coverage from #2028 logic
-    # We use the existing summary service logic but only for this one creator.
-    # To avoid duplicating the complex summary logic, we'll load the inputs
-    # and filter manually.
     inputs = await load_creator_summary_inputs(db, user_id)
-    
-    # Find the creator's presence in the user's library
-    creator_issues_ids = set()
-    creator_roles_all = set()
-    display_name = None
-    
+
+    creator_issue_ids: set[int] = set()
+    creator_roles_all: set[str] = set()
+    display_name: str | None = None
     for issue_id, credits in inputs.issue_creator_credits.items():
         for credit in credits:
-            if credit.external_id == creator_id:
-                creator_issues_ids.add(issue_id)
-                creator_roles_all.update(credit.roles)
+            if credit.external_id != creator_id:
+                continue
+            creator_issue_ids.add(issue_id)
+            creator_roles_all.update(credit.roles)
+            if display_name is None:
                 display_name = credit.display_name
 
-    if not display_name:
-        # Creator not found in user's library
+    if display_name is None:
         raise KeyError(f"Creator {creator_key} not found in user's library")
 
-    # 2. Compute SummaryItem (Headline)
-    # Reusing #2028 logic: a creator's headline stats are based on a "headline" role
-    # we define that classification here or import it. 
-    # Let's use the same logic as get_creator_summaries.
-    from app.services.creator_summary import HEADLINE_ROLES
-    
-    headline_rated = [
-        inputs.effective_ratings[issue_id]
-        for issue_id in creator_issues_ids
-        if issue_id in inputs.effective_ratings
-        and any(
-            role in HEADLINE_ROLES 
-            for credit in inputs.issue_creator_credits[issue_id] 
-            if credit.external_id == creator_id 
+    creator_id_set = frozenset(creator_issue_ids)
+
+    # 1. Headline summary scoped to this creator, mirroring #2028 exactly:
+    #    latest effective rate event wins, one issue counts at most once even
+    #    for multi-role credits, and pure cover/editorial or unknown roles never
+    #    feed the headline average.
+    rated_ids = frozenset(
+        issue_id for issue_id in creator_id_set if issue_id in inputs.effective_ratings
+    )
+    read_unrated_ids = frozenset(
+        issue_id
+        for issue_id in creator_id_set
+        if inputs.owned_issues.get(issue_id) == "read" and issue_id not in inputs.effective_ratings
+    )
+    upcoming_ids = frozenset(
+        issue_id for issue_id in creator_id_set if inputs.owned_issues.get(issue_id) == "unread"
+    )
+
+    headline_rated: list[float] = []
+    for issue_id in creator_id_set:
+        if issue_id not in inputs.effective_ratings:
+            continue
+        credits = inputs.issue_creator_credits[issue_id]
+        if any(
+            role in HEADLINE_ROLES
+            for credit in credits
+            if credit.external_id == creator_id
             for role in credit.roles
-        )
-    ]
-    
+        ):
+            headline_rated.append(inputs.effective_ratings[issue_id])
     ratings_count = len(headline_rated)
     average_rating = (
         round(sum(headline_rated) / ratings_count, 2) if ratings_count else None
-    )
-    
-    read_unrated_count = sum(
-        1 for issue_id in creator_issues_ids 
-        if inputs.owned_issues.get(issue_id) == "read" 
-        and issue_id not in inputs.effective_ratings
-    )
-    
-    upcoming_count = sum(
-        1 for issue_id in creator_issues_ids 
-        if inputs.owned_issues.get(issue_id) == "unread"
     )
 
     summary = CreatorSummaryItem(
         canonical_creator_key=creator_key,
         display_name=display_name,
-        normalized_roles=sorted(list(creator_roles_all)),
+        normalized_roles=sorted(creator_roles_all),
         average_rating=average_rating,
         ratings_count=ratings_count,
-        read_unrated_count=read_unrated_count,
-        upcoming_count=upcoming_count,
+        read_unrated_count=len(read_unrated_ids),
+        upcoming_count=len(upcoming_ids),
     )
 
-    # 3. Compute Coverage (Reuse #2028 pattern)
-    # We need the full sets of owned issues to compute coverage
-    rated_issue_ids = frozenset(inputs.effective_ratings)
-    read_unrated_issue_ids = frozenset(
-        issue_id for issue_id, status in inputs.owned_issues.items()
+    # 2. Coverage block exactly as #2028 computes it over the owned library.
+    rated_owned = frozenset(inputs.effective_ratings)
+    read_unrated_owned = frozenset(
+        issue_id
+        for issue_id, status in inputs.owned_issues.items()
         if status == "read" and issue_id not in inputs.effective_ratings
     )
-    unread_issue_ids = frozenset(
+    unread_owned = frozenset(
         issue_id for issue_id, status in inputs.owned_issues.items() if status == "unread"
     )
-    
+
     def _with_metadata(issue_ids: frozenset[int]) -> int:
         return sum(1 for issue_id in issue_ids if issue_id in inputs.issues_with_creator_metadata)
 
-    rated_total = len(rated_issue_ids)
-    rated_with = _with_metadata(rated_issue_ids)
-    read_unrated_total = len(read_unrated_issue_ids)
-    read_unrated_with = _with_metadata(read_unrated_issue_ids)
-    unread_total = len(unread_issue_ids)
-    unread_with = _with_metadata(unread_issue_ids)
-    
+    rated_total = len(rated_owned)
+    rated_with = _with_metadata(rated_owned)
+    read_unrated_total = len(read_unrated_owned)
+    read_unrated_with = _with_metadata(read_unrated_owned)
+    unread_total = len(unread_owned)
+    unread_with = _with_metadata(unread_owned)
+
     coverage = CreatorSummaryCoverage(
         rated_issues_total=rated_total,
         rated_issues_with_creator_metadata=rated_with,
@@ -150,96 +210,131 @@ async def get_creator_detail(
         upcoming_complete=unread_with >= unread_total,
     )
 
-    # 4. Role-specific statistics
-    role_stats = []
-    for role in sorted(list(creator_roles_all)):
-        role_issues = [
-            inputs.effective_ratings[issue_id]
-            for issue_id in creator_issues_ids
-            if issue_id in inputs.effective_ratings
-            and any(
-                role in credit.roles 
-                for credit in inputs.issue_creator_credits[issue_id] 
+    # 3. Role-specific statistics. Every distinct role is preserved honestly,
+    #    including pure cover/editorial and unknown roles.
+    role_stats: list[CreatorRoleStat] = []
+    for role in sorted(creator_roles_all):
+        role_issue_ids = [
+            issue_id
+            for issue_id in creator_id_set
+            if any(
+                role in credit.roles
+                for credit in inputs.issue_creator_credits[issue_id]
                 if credit.external_id == creator_id
             )
         ]
-        count = sum(
-            1 for issue_id in creator_issues_ids
-            if any(
-                role in credit.roles 
-                for credit in inputs.issue_creator_credits[issue_id] 
-                if credit.external_id == creator_id
+        role_ratings = [
+            inputs.effective_ratings[issue_id]
+            for issue_id in role_issue_ids
+            if issue_id in inputs.effective_ratings
+        ]
+        role_stats.append(
+            CreatorRoleStat(
+                role=role,
+                issue_count=len(role_issue_ids),
+                average_rating=(
+                    round(sum(role_ratings) / len(role_ratings), 2) if role_ratings else None
+                ),
             )
         )
-        avg = round(sum(role_issues) / len(role_issues), 2) if role_issues else None
-        role_stats.append(CreatorRoleStat(role=role, issue_count=count, average_rating=avg))
 
-    # 5. Bounded Issue Collections
-    # Use the repository for the bounded lists to avoid loading everything
-    # Note: the repository returns (rows, total_count). 
-    # We need to resolve ratings for these specific issues.
-    rows, total_attributed = await load_creator_detail_data(
-        db, user_id, creator_id, limit=limit, offset=offset
+    # 4. Bounded collections with the ordering contract from the issue.
+    rated_rows = await load_recent_creator_issue_rows(
+        db,
+        user_id=user_id,
+        creator_issue_ids=rated_ids,
+        limit=limit,
+        offset=page_offset,
     )
-    
-    # Resolve ratings for the fetched issues
-    # Effective ratings are already in inputs.effective_ratings
-    # We also need the timestamp of the rating event.
-    # To avoid N+1, we'll fetch timestamps for these issue IDs in one go.
-    from sqlalchemy import select
-    from app.models.event import Event
-    
-    issue_ids = [row[0] for row in rows]
-    rating_events_result = await db.execute(
-        select(Event.issue_id, Event.timestamp, Event.rating)
-        .where(Event.issue_id.in_(issue_ids))
-        .where(Event.type == "rate")
-        .order_by(Event.issue_id, Event.timestamp.desc(), Event.id.desc())
+    read_unrated_rows = await load_recent_creator_issue_rows(
+        db,
+        user_id=user_id,
+        creator_issue_ids=read_unrated_ids,
+        limit=limit,
+        offset=page_offset,
     )
-    
-    latest_ratings = {}
-    for ev_issue_id, ts, rat in rating_events_result.all():
-        if ev_issue_id not in latest_ratings:
-            latest_ratings[ev_issue_id] = (rat, ts)
+    upcoming_rows = await load_upcoming_creator_issue_rows(
+        db,
+        user_id=user_id,
+        creator_issue_ids=upcoming_ids,
+        limit=limit,
+        offset=page_offset,
+    )
 
-    all_issue_rows = []
-    for row in rows:
-        issue_id, issue_num, thread_id, thread_title, status, metadata = row
-        
-        # Extract roles for this creator on this issue
-        credits = extract_creator_credits(metadata)
-        roles = []
-        for credit in credits:
-            if credit.external_id == creator_id:
-                roles.extend(credit.roles)
-        
-        rating_val, rating_ts = latest_ratings.get(issue_id, (None, None))
-        
-        all_issue_rows.append(CreatorIssueRow(
+    fetched_issue_ids = sorted(
+        {row[0] for row in rated_rows}
+        | {row[0] for row in read_unrated_rows}
+        | {row[0] for row in upcoming_rows}
+    )
+    latest_rating_timestamps: dict[int, datetime] = {}
+    if fetched_issue_ids:
+        timestamp_result = await db.execute(
+            select(Event.issue_id, Event.timestamp)
+            .where(Event.issue_id.in_(fetched_issue_ids))
+            .where(Event.type == "rate")
+            .where(Event.issue_id.is_not(None))
+            .where(Event.rating.is_not(None))
+            .order_by(Event.issue_id, Event.timestamp.desc(), Event.id.desc())
+        )
+        for event_issue_id, event_timestamp in timestamp_result.all():
+            if event_issue_id is not None and event_issue_id not in latest_rating_timestamps:
+                latest_rating_timestamps[event_issue_id] = event_timestamp
+
+    rated_issues = [
+        _build_issue_row(
+            inputs,
+            creator_id=creator_id,
             issue_id=issue_id,
-            issue_number=issue_num,
+            issue_number=issue_number,
             thread_id=thread_id,
             thread_title=thread_title,
             status=status,
-            roles=sorted(list(set(roles))),
-            effective_rating=rating_val,
-            rating_timestamp=rating_ts,
-            sort_key=str(issue_id), # deterministic tie-breaker
-        ))
+            effective_rating=inputs.effective_ratings.get(issue_id),
+            rating_timestamp=latest_rating_timestamps.get(issue_id),
+            sort_key=str(issue_id),
+        )
+        for issue_id, issue_number, thread_id, thread_title, status in rated_rows
+    ]
 
-    # Split into collections
-    rated_issues = [r for r in all_issue_rows if r.effective_rating is not None]
-    read_unrated_issues = [r for r in all_issue_rows if r.status == "read" and r.effective_rating is None]
-    upcoming_issues = [r for r in all_issue_rows if r.status == "unread"]
-    
-    # The request is for a detail page. Usually, we want these lists to be independently bounded.
-    # However, the repository `load_creator_detail_data` provides a general list of attributed issues.
-    # To strictly follow "bounded collections", we should probably call the repo 3 times
-    # (one for each category) or fetch a larger bounded set and filter.
-    # For now, we'll provide the filtered slices of the bounded fetched set.
-    # A more robust implementation would have specific repo methods for each collection.
-    
-    next_cursor = str(offset + limit) if len(rows) == limit else None
+    read_unrated_issues = [
+        _build_issue_row(
+            inputs,
+            creator_id=creator_id,
+            issue_id=issue_id,
+            issue_number=issue_number,
+            thread_id=thread_id,
+            thread_title=thread_title,
+            status=status,
+            effective_rating=inputs.effective_ratings.get(issue_id),
+            rating_timestamp=latest_rating_timestamps.get(issue_id),
+            sort_key=str(issue_id),
+        )
+        for issue_id, issue_number, thread_id, thread_title, status in read_unrated_rows
+    ]
+
+    upcoming_issues = [
+        _build_issue_row(
+            inputs,
+            creator_id=creator_id,
+            issue_id=issue_id,
+            issue_number=issue_number,
+            thread_id=thread_id,
+            thread_title=thread_title,
+            status=status,
+            effective_rating=inputs.effective_ratings.get(issue_id),
+            rating_timestamp=latest_rating_timestamps.get(issue_id),
+            sort_key=f"{queue_position:07d}:{issue_position:07d}:{issue_id}",
+        )
+        for issue_id, issue_number, thread_id, thread_title, status, queue_position, issue_position
+        in upcoming_rows
+    ]
+
+    has_next_page = (
+        len(rated_ids) > page_offset + len(rated_rows)
+        or len(read_unrated_ids) > page_offset + len(read_unrated_rows)
+        or len(upcoming_ids) > page_offset + len(upcoming_rows)
+    )
+    next_cursor = str(page_offset + limit) if has_next_page else None
 
     return CreatorDetailResponse(
         summary=summary,
@@ -250,3 +345,8 @@ async def get_creator_detail(
         upcoming_issues=upcoming_issues,
         next_cursor=next_cursor,
     )
+
+
+__all__ = [
+    "get_creator_detail",
+]

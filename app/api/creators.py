@@ -19,10 +19,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.creator_summary import CreatorSummariesResponse
 from app.schemas.creator_detail import CreatorDetailResponse
-from app.services.creator_summary import get_creator_summaries
+from app.schemas.creator_summary import CreatorSummariesResponse
 from app.services.creator_detail import get_creator_detail
+from app.services.creator_summary import get_creator_summaries
 
 router = APIRouter(prefix="/api/v1/creators", tags=["creators"])
 
@@ -160,12 +160,12 @@ async def get_creator_detail_endpoint(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
     except KeyError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Creator {creator_key} not found in your library",
-        )
+        ) from None
 
 
 __all__ = [
