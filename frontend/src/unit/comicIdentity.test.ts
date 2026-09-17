@@ -122,6 +122,46 @@ describe('extractComicIdentity', () => {
     expect(identity.primary).toBe('#12')
   })
 
+  it('recovers series name from match thread_title when series_name is missing', () => {
+    const identity = extractComicIdentity(
+      makeRelatedIssue({ issue_number: '1' }),
+      [{ issue_id: 1, thread_id: 1, thread_title: 'Annihilation: Nova #1', issue_number: '1', status: 'unread' }],
+    )
+    expect(identity.primary).toBe('Annihilation: Nova #1')
+  })
+
+  it('does not override existing series_name with thread_title', () => {
+    const identity = extractComicIdentity(
+      makeRelatedIssue({ series_name: 'Batman', issue_number: '1' }),
+      [{ issue_id: 1, thread_id: 1, thread_title: 'Annihilation: Nova #1', issue_number: '1', status: 'unread' }],
+    )
+    expect(identity.primary).toBe('Batman #1')
+  })
+
+  it('ignores thread_title when issue_number is also missing', () => {
+    const identity = extractComicIdentity(
+      makeRelatedIssue({}),
+      [{ issue_id: 1, thread_id: 1, thread_title: 'Annihilation: Nova #1', issue_number: '1', status: 'unread' }],
+    )
+    expect(identity.primary).toBe('ComicVine issue 36956')
+  })
+
+  it('ignores malformed thread_title without #N pattern', () => {
+    const identity = extractComicIdentity(
+      makeRelatedIssue({ issue_number: '1' }),
+      [{ issue_id: 1, thread_id: 1, thread_title: 'Just a title', issue_number: '1', status: 'unread' }],
+    )
+    expect(identity.primary).toBe('#1')
+  })
+
+  it('handles thread_title with space-hash at start', () => {
+    const identity = extractComicIdentity(
+      makeRelatedIssue({ issue_number: '5' }),
+      [{ issue_id: 1, thread_id: 1, thread_title: '#5', issue_number: '5', status: 'read' }],
+    )
+    expect(identity.primary).toBe('#5')
+  })
+
   it('falls back to the issue title when no series or number exists', () => {
     const identity = extractComicIdentity(makeRelatedIssue({ name: 'The Dark Side' }))
     expect(identity.primary).toBe('The Dark Side')

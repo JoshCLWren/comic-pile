@@ -141,7 +141,7 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
               <p className="text-[9px] text-stone-500 mb-2">Related by story-arc membership, not reading order.</p>
               <div className="space-y-1.5" data-testid="story-arc-issue-list">
                 {displayedIssues.map((issue) => {
-                  const identity = extractComicIdentity(issue)
+                  const identity = extractComicIdentity(issue, issue.comicpile_matches)
                   const state = getMemberState(issue)
                   const stateLabel = getStateLabel(state)
                   const stateColorClass = getStateColorClass(state)
