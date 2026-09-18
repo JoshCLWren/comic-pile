@@ -1,8 +1,11 @@
 """Provider-independent external identity mapping services."""
 
+from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,9 +20,176 @@ from app.models.thread import Thread
 MAPPING_STATUSES = frozenset({"unresolved", "candidate", "confirmed", "rejected", "deferred"})
 ENTITY_TYPES = frozenset({"issue", "series"})
 
+_EXTERNAL_IDENTITY_BATCH_CHUNK_SIZE = 500
+"""Max identities per batch statement.
+
+The measured full CBL mirror carries ~85k distinct identities. Chunking keeps
+bind parameters far below PostgreSQL's per-statement limit while still
+reducing hundreds of thousands of sequential round trips to a few hundred.
+"""
+
 
 class ExternalIdentityMappingError(ValueError):
     """Raised when external identity evidence cannot be linked safely."""
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalIdentitySpec:
+    """Specification for an external identity to upsert."""
+
+    provider: str
+    entity_type: str
+    external_id: str
+    external_url: str | None = None
+    metadata_json: dict[str, object] | None = None
+    provider_updated_at: datetime | None = None
+
+
+async def upsert_external_identities(
+    db: AsyncSession,
+    *,
+    specs: Iterable[ExternalIdentitySpec],
+) -> dict[tuple[str, str, str], ExternalIdentity]:
+    """Create or update multiple provider identities in a single batch.
+
+    Args:
+        db: Async database session.
+        specs: Iterable of identity specifications to upsert.
+
+    Returns:
+        Mapping from (provider, entity_type, external_id) to the created or existing
+        external identity. Keys are normalized (lowercase provider/entity_type, trimmed
+        external_id).
+
+    Raises:
+        ExternalIdentityMappingError: If any spec has empty provider/external_id or
+            unsupported entity_type.
+    """
+    normalized_specs: list[ExternalIdentitySpec] = []
+    for spec in specs:
+        normalized_provider = spec.provider.strip().lower()
+        normalized_entity_type = spec.entity_type.strip().lower()
+        normalized_external_id = spec.external_id.strip()
+        if not normalized_provider or not normalized_external_id:
+            raise ExternalIdentityMappingError("provider and external_id are required")
+        if normalized_entity_type not in ENTITY_TYPES:
+            raise ExternalIdentityMappingError(f"unsupported entity_type: {spec.entity_type}")
+        normalized_specs.append(
+            ExternalIdentitySpec(
+                provider=normalized_provider,
+                entity_type=normalized_entity_type,
+                external_id=normalized_external_id,
+                external_url=spec.external_url,
+                metadata_json=spec.metadata_json,
+                provider_updated_at=spec.provider_updated_at,
+            )
+        )
+
+    if not normalized_specs:
+        return {}
+
+    keys = [(s.provider, s.entity_type, s.external_id) for s in normalized_specs]
+    unique_keys = list(dict.fromkeys(keys))
+
+    existing_by_key: dict[tuple[str, str, str], ExternalIdentity] = {}
+    for index in range(0, len(unique_keys), _EXTERNAL_IDENTITY_BATCH_CHUNK_SIZE):
+        chunk = unique_keys[index : index + _EXTERNAL_IDENTITY_BATCH_CHUNK_SIZE]
+        conditions = [
+            (ExternalIdentity.provider == provider)
+            & (ExternalIdentity.entity_type == entity_type)
+            & (ExternalIdentity.external_id == external_id)
+            for provider, entity_type, external_id in chunk
+        ]
+        combined_condition = conditions[0]
+        for cond in conditions[1:]:
+            combined_condition = combined_condition | cond
+        rows = list(
+            (await db.execute(select(ExternalIdentity).where(combined_condition))).scalars().all()
+        )
+        for row in rows:
+            existing_by_key[(row.provider, row.entity_type, row.external_id)] = row
+
+    seen_keys = set(existing_by_key.keys())
+    unique_missing_specs: list[ExternalIdentitySpec] = []
+    for spec in normalized_specs:
+        key = (spec.provider, spec.entity_type, spec.external_id)
+        if key not in seen_keys:
+            seen_keys.add(key)
+            unique_missing_specs.append(spec)
+
+    if unique_missing_specs:
+        for index in range(0, len(unique_missing_specs), _EXTERNAL_IDENTITY_BATCH_CHUNK_SIZE):
+            chunk_specs = unique_missing_specs[index : index + _EXTERNAL_IDENTITY_BATCH_CHUNK_SIZE]
+            statement = (
+                pg_insert(ExternalIdentity)
+                .values(
+                    [
+                        {
+                            "provider": spec.provider,
+                            "entity_type": spec.entity_type,
+                            "external_id": spec.external_id,
+                            "external_url": spec.external_url,
+                            "metadata_json": spec.metadata_json or {},
+                            "provider_updated_at": spec.provider_updated_at,
+                        }
+                        for spec in chunk_specs
+                    ]
+                )
+                .on_conflict_do_nothing(
+                    index_elements=[
+                        ExternalIdentity.__table__.c.provider,
+                        ExternalIdentity.__table__.c.entity_type,
+                        ExternalIdentity.__table__.c.external_id,
+                    ]
+                )
+            )
+            try:
+                async with db.begin_nested():
+                    await db.execute(statement)
+            except IntegrityError:
+                # Roll back the savepoint only; the refresh below converges
+                # to whatever the concurrent writer committed.
+                pass
+
+        refreshed_by_key: dict[tuple[str, str, str], ExternalIdentity] = {}
+        for index in range(0, len(unique_keys), _EXTERNAL_IDENTITY_BATCH_CHUNK_SIZE):
+            chunk = unique_keys[index : index + _EXTERNAL_IDENTITY_BATCH_CHUNK_SIZE]
+            refresh_conditions = [
+                (ExternalIdentity.provider == provider)
+                & (ExternalIdentity.entity_type == entity_type)
+                & (ExternalIdentity.external_id == external_id)
+                for provider, entity_type, external_id in chunk
+            ]
+            combined_refresh = refresh_conditions[0]
+            for cond in refresh_conditions[1:]:
+                combined_refresh = combined_refresh | cond
+            refreshed = list(
+                (await db.execute(select(ExternalIdentity).where(combined_refresh)))
+                .scalars()
+                .all()
+            )
+            for row in refreshed:
+                refreshed_by_key[(row.provider, row.entity_type, row.external_id)] = row
+        existing_by_key = refreshed_by_key
+
+    for spec in normalized_specs:
+        key = (spec.provider, spec.entity_type, spec.external_id)
+        identity = existing_by_key[key]
+        if (
+            spec.provider_updated_at is not None
+            and identity.provider_updated_at is not None
+            and spec.provider_updated_at < identity.provider_updated_at
+        ):
+            continue
+        if spec.external_url is not None:
+            identity.external_url = spec.external_url
+        if spec.metadata_json is not None:
+            identity.metadata_json = spec.metadata_json
+        if spec.provider_updated_at is not None:
+            identity.provider_updated_at = spec.provider_updated_at
+
+    await db.flush()
+    return {key: existing_by_key[key] for key in unique_keys}
 
 
 async def upsert_external_identity(

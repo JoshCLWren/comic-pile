@@ -72,6 +72,7 @@ async def test_cbl_sync_cli_emits_machine_readable_partial_summary(
             deactivated_lists=1,
             unchanged_lists=4,
             entries_written=0,
+            identities_upserted=0,
             dry_run=True,
         )
     )
