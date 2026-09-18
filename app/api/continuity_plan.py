@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.continuity_rule import _refresh_blocked_state
+from app.services.continuity import _refresh_blocked_state, _to_plan_response as _to_response
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.continuity_plan import ContinuityPlan
@@ -35,20 +35,6 @@ router = APIRouter(tags=["continuity-plans"])
 def _marker(plan_id: int) -> str:
     """Return the durable ownership marker for rules compiled from one plan."""
     return plan_rule_marker(plan_id)
-
-
-def _to_response(plan: ContinuityPlan) -> ContinuityPlanResponse:
-    """Convert persisted JSON into the typed API contract."""
-    return ContinuityPlanResponse(
-        id=plan.id,
-        user_id=plan.user_id,
-        name=plan.name,
-        ordering_mode=plan.ordering_mode,
-        lanes=plan.lanes_json,
-        nodes=plan.nodes_json,
-        created_at=plan.created_at,
-        updated_at=plan.updated_at,
-    )
 
 
 async def _get_owned_plan(db: AsyncSession, user_id: int, plan_id: int) -> ContinuityPlan:

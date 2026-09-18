@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.continuity import _refresh_blocked_state, _to_plan_response as _to_response
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.issue import Issue
@@ -195,7 +196,6 @@ async def adopt_crossover_template(
             }
         )
 
-    from app.api.continuity_plan import _refresh_blocked_state, _to_response
     from app.models.continuity_plan import ContinuityPlan
     from app.services.continuity_plan_writer import (
         replace_compiled_rules,
