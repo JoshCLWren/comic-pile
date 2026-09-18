@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { KeyboardEvent } from 'react'
 import Modal from './Modal'
 import { issuesApi } from '../services/api-issues'
