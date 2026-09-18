@@ -14,7 +14,7 @@ from app.repositories.catalog_repository import (
 
 
 @pytest.mark.asyncio
-async def test_search_catalog_series_no_search(db: AsyncSession, sample_data):
+async def test_search_catalog_series_no_search(async_db: AsyncSession, sample_data):
     """Test searching catalog series without search term returns all series."""
     # Add test series data
     series1 = ExternalIdentity(
@@ -31,18 +31,18 @@ async def test_search_catalog_series_no_search(db: AsyncSession, sample_data):
         external_url="https://comicvine.com/2000-another-series",
         metadata_json={"name": "Test Series 2"},
     )
-    db.add_all([series1, series2])
-    await db.commit()
+    async_db.add_all([series1, series2])
+    await async_db.commit()
 
     # Search without query should return all series (up to limit)
-    result = await search_catalog_series(db, provider="comicvine", limit=10)
+    result = await search_catalog_series(async_db, provider="comicvine", limit=10)
     assert len(result) == 2
     assert all(r.entity_type == "series" for r in result)
     assert all(r.provider == "comicvine" for r in result)
 
 
 @pytest.mark.asyncio
-async def test_search_catalog_series_with_search(db: AsyncSession, sample_data):
+async def test_search_catalog_series_with_search(async_db: AsyncSession, sample_data):
     """Test searching catalog series with search term filters results."""
     # Add test series data
     series1 = ExternalIdentity(
@@ -59,21 +59,21 @@ async def test_search_catalog_series_with_search(db: AsyncSession, sample_data):
         external_url="https://comicvine.com/2000-another-series",
         metadata_json={"name": "Another Test Series"},
     )
-    db.add_all([series1, series2])
-    await db.commit()
+    async_db.add_all([series1, series2])
+    await async_db.commit()
 
     # Search with "test" should return only matching series
-    result = await search_catalog_series(db, search="test", provider="comicvine", limit=10)
+    result = await search_catalog_series(async_db, search="test", provider="comicvine", limit=10)
     assert len(result) == 2  # Both contain "test"
     
     # Search with "another" should return only one
-    result = await search_catalog_series(db, search="another", provider="comicvine", limit=10)
+    result = await search_catalog_series(async_db, search="another", provider="comicvine", limit=10)
     assert len(result) == 1
     assert result[0].external_id == "2000-another-series"
 
 
 @pytest.mark.asyncio
-async def test_search_catalog_series_respects_limit(db: AsyncSession, sample_data):
+async def test_search_catalog_series_respects_limit(async_db: AsyncSession, sample_data):
     """Test that catalog series search respects the hard limit."""
     # Add multiple series
     series_list = []
@@ -85,16 +85,16 @@ async def test_search_catalog_series_respects_limit(db: AsyncSession, sample_dat
             metadata_json={"name": f"Test Series {i}"},
         )
         series_list.append(series)
-    db.add_all(series_list)
-    await db.commit()
+    async_db.add_all(series_list)
+    await async_db.commit()
 
     # Search with limit should return at most that many results
-    result = await search_catalog_series(db, limit=3)
+    result = await search_catalog_series(async_db, limit=3)
     assert len(result) <= 3
 
 
 @pytest.mark.asyncio
-async def test_search_catalog_issues_with_series_filter(db: AsyncSession, sample_data):
+async def test_search_catalog_issues_with_series_filter(async_db: AsyncSession, sample_data):
     """Test searching catalog issues with series external ID filter."""
     # Add test series and issue data
     series = ExternalIdentity(
@@ -115,12 +115,12 @@ async def test_search_catalog_issues_with_series_filter(db: AsyncSession, sample
         external_id="1002-issue-2",
         metadata_json={"name": "Issue 2"},
     )
-    db.add_all([series, issue1, issue2])
-    await db.commit()
+    async_db.add_all([series, issue1, issue2])
+    await async_db.commit()
 
     # Search issues with series filter should return issues for that series
     result = await search_catalog_issues(
-        db, 
+        async_db, 
         series_external_id="1000-test-series", 
         provider="comicvine", 
         limit=10
@@ -128,16 +128,16 @@ async def test_search_catalog_issues_with_series_filter(db: AsyncSession, sample
     assert len(result) == 0  # No direct relationship in this test data
     
     # Search without series filter should return all issues
-    result = await search_catalog_issues(db, provider="comicvine", limit=10)
+    result = await search_catalog_issues(async_db, provider="comicvine", limit=10)
     assert len(result) == 2
 
 
 @pytest.mark.asyncio
-async def test_search_catalog_issues_nonexistent_series(db: AsyncSession, sample_data):
+async def test_search_catalog_issues_nonexistent_series(async_db: AsyncSession, sample_data):
     """Test searching catalog issues with non-existent series returns empty."""
     # Search with non-existent series should return empty list
     result = await search_catalog_issues(
-        db, 
+        async_db, 
         series_external_id="nonexistent-series", 
         provider="comicvine", 
         limit=10
@@ -146,100 +146,119 @@ async def test_search_catalog_issues_nonexistent_series(db: AsyncSession, sample
 
 
 @pytest.mark.asyncio
-async def test_list_series_mappings_with_filters(db: AsyncSession, sample_data):
+async def test_list_series_mappings_with_filters(async_db: AsyncSession, sample_data):
     """Test listing series mappings with optional filters."""
     from app.models.external_identity import ThreadExternalSeriesMapping
     
     # Add test mappings
+    identity1 = ExternalIdentity(provider="comicvine", entity_type="series", external_id="s1")
+    identity2 = ExternalIdentity(provider="comicvine", entity_type="series", external_id="s2")
+    async_db.add_all([identity1, identity2])
+    await async_db.flush()
+
     mapping1 = ThreadExternalSeriesMapping(
-        thread_id=1,
-        external_identity_id=1,
+        thread_id=sample_data["threads"][0].id,
+        external_identity_id=identity1.id,
         status="confirmed",
     )
     mapping2 = ThreadExternalSeriesMapping(
-        thread_id=2,
-        external_identity_id=2,
+        thread_id=sample_data["threads"][0].id,
+        external_identity_id=identity2.id,
         status="candidate",
     )
-    db.add_all([mapping1, mapping2])
-    await db.commit()
+    async_db.add_all([mapping1, mapping2])
+    await async_db.commit()
 
     # List all mappings
-    result = await list_series_mappings(db, limit=10)
+    result = await list_series_mappings(async_db, limit=10)
     assert len(result) >= 2
     
     # Filter by thread_id
-    result = await list_series_mappings(db, thread_id=1, limit=10)
+    result = await list_series_mappings(async_db, thread_id=1, limit=10)
     assert len(result) == 1
     assert result[0].thread_id == 1
     
     # Filter by status
-    result = await list_series_mappings(db, status="confirmed", limit=10)
+    result = await list_series_mappings(async_db, status="confirmed", limit=10)
     assert len(result) == 1
     assert result[0].status == "confirmed"
 
 
 @pytest.mark.asyncio
-async def test_list_issue_mappings_with_filters(db: AsyncSession, sample_data):
+async def test_list_issue_mappings_with_filters(async_db: AsyncSession, sample_data):
     """Test listing issue mappings with optional filters."""
     from app.models.external_identity import IssueExternalIdentityMapping
     
     # Add test mappings
+    identity1 = ExternalIdentity(provider="comicvine", entity_type="issue", external_id="i1")
+    identity2 = ExternalIdentity(provider="comicvine", entity_type="issue", external_id="i2")
+    async_db.add_all([identity1, identity2])
+    await async_db.flush()
+
     mapping1 = IssueExternalIdentityMapping(
-        issue_id=1,
-        external_identity_id=1,
+        issue_id=sample_data["issues"][0].id,
+        external_identity_id=identity1.id,
         status="confirmed",
     )
     mapping2 = IssueExternalIdentityMapping(
-        issue_id=2,
-        external_identity_id=2,
+        issue_id=sample_data["issues"][0].id,
+        external_identity_id=identity2.id,
         status="rejected",
     )
-    db.add_all([mapping1, mapping2])
-    await db.commit()
+    async_db.add_all([mapping1, mapping2])
+    await async_db.commit()
 
     # List all mappings
-    result = await list_issue_mappings(db, limit=10)
+    result = await list_issue_mappings(async_db, limit=10)
     assert len(result) >= 2
     
     # Filter by issue_id
-    result = await list_issue_mappings(db, issue_id=1, limit=10)
+    result = await list_issue_mappings(async_db, issue_id=1, limit=10)
     assert len(result) == 1
     assert result[0].issue_id == 1
     
     # Filter by status
-    result = await list_issue_mappings(db, status="confirmed", limit=10)
+    result = await list_issue_mappings(async_db, status="confirmed", limit=10)
     assert len(result) == 1
     assert result[0].status == "confirmed"
 
 
 @pytest.mark.asyncio
-async def test_list_mappings_respects_limit(db: AsyncSession, sample_data):
+async def test_list_mappings_respects_limit(async_db: AsyncSession, sample_data):
     """Test that list mappings functions respect the hard limit."""
     from app.models.external_identity import ThreadExternalSeriesMapping, IssueExternalIdentityMapping
     
     # Add multiple mappings
+    thread_id = sample_data["threads"][0].id
+    issue_id = sample_data["issues"][0].id
+
     for i in range(10):
+        identity = ExternalIdentity(provider="comicvine", entity_type="series", external_id=f"s{i}")
+        async_db.add(identity)
+        await async_db.flush()
         mapping = ThreadExternalSeriesMapping(
-            thread_id=i,
-            external_identity_id=i,
+            thread_id=thread_id,
+            external_identity_id=identity.id,
             status="confirmed",
         )
-        db.add(mapping)
+        async_db.add(mapping)
     
     for i in range(10):
+        identity = ExternalIdentity(provider="comicvine", entity_type="issue", external_id=f"i{i}")
+        async_db.add(identity)
+        await async_db.flush()
         mapping = IssueExternalIdentityMapping(
-            issue_id=i,
-            external_identity_id=i,
+            issue_id=issue_id,
+            external_identity_id=identity.id,
             status="confirmed",
         )
-        db.add(mapping)
+        async_db.add(mapping)
     
-    await db.commit()
+    await async_db.commit()
 
     # List should respect limit
-    result = await list_series_mappings(db, limit=3)
+    result = await list_series_mappings(async_db, limit=3)
     assert len(result) <= 3
-    
-    result = await list_issue_mappings(db, limit=3)
+
+    result = await list_issue_mappings(async_db, limit=3)
     assert len(result) <= 3
