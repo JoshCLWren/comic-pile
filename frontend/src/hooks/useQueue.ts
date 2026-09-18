@@ -110,16 +110,17 @@ export function useQueueThreads(
     selectPage: (page) => page.threads,
   })
 
-  const data = query.data?.pages.flatMap((page) => page.threads) ?? null
+  const hasData = query.pages.length > 0
+  const data = hasData ? query.items : null
   // Authoritative whole-queue total exposed by the first page (issue #2568).
   // Every page carries the same search-independent total; the first page is
   // the canonical source. Falls back to null so callers can decide how to
   // degrade when a cached/older response omits the field.
-  const activeCount = query.data?.pages[0]?.active_count ?? null
+  const activeCount = query.pages[0]?.active_count ?? null
   // Initial load OR an in-flight next-page append both keep already-rendered
   // rows visible: `isPending` drives the full-screen loader only before any
-  // data exists, while `isFetchingNextPage` drives the inline loading indicator.
-  const isPending = query.isPending || query.isFetchingNextPage
+  // data exists, while `isNextPageLoading` drives the inline loading indicator.
+  const isPending = query.isPending || query.isNextPageLoading
   const isError = query.isError
   const nextPageToken = query.nextPageToken
 
