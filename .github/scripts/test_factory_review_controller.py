@@ -773,7 +773,7 @@ def test_fixed_model_factory_schedules_are_active():
 
 
 def test_semantic_repair_heads_count_distinct_heads_once():
-    policy = load_policy()
+    policy = load_controller()._review_policy
     head_a = "a" * 40
     head_b = "b" * 40
     comments = [
