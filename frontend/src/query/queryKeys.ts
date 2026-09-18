@@ -193,6 +193,11 @@ export const queryKeys = {
     all: ['taste'] as const,
     discoveries: () => ['taste', 'discoveries'] as const,
   },
+  identityInbox: {
+    all: ['identityInbox'] as const,
+    list: ({ offset, limit }: { offset: number; limit: number }) =>
+      ['identityInbox', 'list', { offset, limit }] as const,
+  },
   crossover: {
     all: ['crossover'] as const,
     groups: (threadIds: number[]) =>
