@@ -19,6 +19,7 @@ from app.repositories.issue_repository import (
     first_unread,
     find_in_thread_by_number,
     get_issue,
+    issues_for_threads,
     issues_ordered,
 )
 from app.repositories.rate_repository import fetch_source_roll_event
@@ -61,12 +62,19 @@ async def _find_source_roll_event(
     return await fetch_source_roll_event(db, session_id, thread_id)
 
 
-async def _capture_thread_pre_state(thread: Thread, db: AsyncSession) -> dict:
+async def _capture_thread_pre_state(
+    thread: Thread,
+    db: AsyncSession,
+    issues: list[Issue] | None = None,
+) -> dict:
     """Extract a thread's full pre-rating state as a plain dictionary.
 
     Args:
         thread: Thread being rated.
         db: Database session.
+        issues: Already-loaded issues for the thread in canonical position
+            order. When None (and the thread uses issue tracking), the issues
+            are loaded with one query.
 
     Returns:
         Serializable pre-rating thread state.
@@ -91,7 +99,8 @@ async def _capture_thread_pre_state(thread: Thread, db: AsyncSession) -> dict:
     }
 
     if uses_issue_tracking:
-        issues = await issues_ordered(db, thread.id)
+        if issues is None:
+            issues = await issues_ordered(db, thread.id)
         state["issue_states"] = [
             {
                 "id": issue.id,
@@ -112,6 +121,41 @@ async def _capture_thread_pre_state(thread: Thread, db: AsyncSession) -> dict:
         state["reading_progress"] = None
 
     return state
+
+
+async def _capture_threads_pre_states(
+    db: AsyncSession,
+    threads: list[Thread],
+) -> dict[int, dict]:
+    """Capture pre-rating state for many threads with a single batched issue load.
+
+    Issue-tracking threads share one ``SELECT`` over every thread ID instead of
+    issuing one query per thread (issue #2611 N+1 elimination).
+
+    Args:
+        db: Database session.
+        threads: Threads to snapshot.
+
+    Returns:
+        Mapping of thread ID to serializable pre-rating thread state.
+    """
+    tracked_threads = [thread for thread in threads if thread.uses_issue_tracking()]
+    issues_by_thread: dict[int, list[Issue]] = {}
+    if tracked_threads:
+        issues_by_thread = await issues_for_threads(
+            db, {thread.id for thread in tracked_threads}
+        )
+
+    return {
+        thread.id: await _capture_thread_pre_state(
+            thread,
+            db,
+            issues_by_thread.get(thread.id, [])
+            if thread.uses_issue_tracking()
+            else None,
+        )
+        for thread in threads
+    }
 
 
 async def snapshot_thread_states(
@@ -179,9 +223,7 @@ async def snapshot_thread_states(
         return
 
     threads = await threads_for_user(db, user_id)
-    thread_states = {
-        thread.id: await _capture_thread_pre_state(thread, db) for thread in threads
-    }
+    thread_states = await _capture_threads_pre_states(db, threads)
 
     session = await get_session(db, session_id)
     session_state = None
