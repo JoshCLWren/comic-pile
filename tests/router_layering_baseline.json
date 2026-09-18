@@ -9,7 +9,6 @@
 
   "issue_dependency_batch": ["execute-call", "query-import"],
   "preferences": ["execute-call", "query-import"],
-  "reading_orders": ["execute-call", "query-import"],
   "roll": ["execute-call", "query-import"],
   "session": ["execute-call", "query-import"],
   "snooze": ["execute-call", "query-import"],
