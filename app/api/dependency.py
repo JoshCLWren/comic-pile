@@ -100,7 +100,11 @@ async def get_threads_blocking_info(
     threads_result = await dependency_service.get_threads_blocking_info(
         request.thread_ids, current_user.id, db
     )
-    
+    if not threads_result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="One or more threads not found",
+        )
     return BatchBlockingExplanationResponse(threads=threads_result)
 
 
@@ -140,16 +144,15 @@ async def create_dependency(
     )
     
     if not result:
-        if warning:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=warning,
-            )
-        else:
+        if warning == "Issue not found" or warning is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Issue not found",
             )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=warning,
+        )
     
     return result
 
@@ -204,7 +207,6 @@ async def delete_dependency(
             detail=f"Dependency {dependency_id} not found",
         )
     
-    await dependency_service.invalidate_dependency_caches(current_user.id)
     return {"message": "Dependency deleted"}
 
 
@@ -226,7 +228,12 @@ async def check_thread_dependency_order(
     raw_conflicts = await dependency_service.check_thread_dependency_order(
         thread_id, current_user.id, db
     )
-    
+    if raw_conflicts is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
     if not raw_conflicts:
         return ThreadDependencyOrderCheckResponse(thread_id=thread_id, conflicts=[])
 

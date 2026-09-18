@@ -8,6 +8,7 @@ status mapping lives in routers.
 
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache_invalidation import invalidate_user_view
@@ -255,8 +256,18 @@ async def get_thread_blocking_info(
 
 async def get_threads_blocking_info(
     thread_ids: list[int], user_id: int, db: AsyncSession
-) -> dict[int, BlockingExplanation]:
-    """Return blocked status and human-readable blocking reasons for multiple threads."""
+) -> dict[int, BlockingExplanation] | None:
+    """Return blocked status and human-readable blocking reasons for multiple threads.
+
+    Args:
+        thread_ids: Owned thread IDs to inspect.
+        user_id: Thread owner.
+        db: Database session.
+
+    Returns:
+        Mapping of thread ID to blocking explanation, or ``None`` when one or
+        more threads are missing or owned by another user.
+    """
     thread_count = await db.scalar(
         select(func.count()).select_from(Thread).where(
             Thread.id.in_(thread_ids),
@@ -264,7 +275,7 @@ async def get_threads_blocking_info(
         )
     )
     if thread_count != len(thread_ids):
-        return {}
+        return None
 
     blocked_ids = await get_blocked_thread_ids(user_id, db)
     reasons_map = await get_blocking_explanations_batch(
@@ -339,11 +350,23 @@ async def create_dependency(
                 f" {issues_ahead} {issue_word}."
             )
 
-    # Create the dependency
-    dependency = await dependency_repository.create_dependency(db, source_issue_id, target_issue_id)
+    try:
+        # Create the dependency
+        dependency = await dependency_repository.create_dependency(
+            db, source_issue_id, target_issue_id
+        )
 
-    # Refresh user blocked status
-    await refresh_user_blocked_status(user_id, db)
+        # Refresh user blocked status
+        await refresh_user_blocked_status(user_id, db)
+
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        if "uq_dependency_issue_edge" in str(error.orig):
+            return None, "Dependency already exists"
+        raise
+
+    await invalidate_dependency_caches(user_id)
 
     # Enrich the response
     enriched = await enrich_dependencies([dependency], db)
@@ -381,6 +404,8 @@ async def update_dependency_note(
         return None
 
     updated = await dependency_repository.update_dependency_note(db, dependency_id, note)
+    await db.commit()
+    await invalidate_dependency_caches(user_id)
     enriched = await enrich_dependencies([updated], db)
     return enriched[0]
 
@@ -397,18 +422,30 @@ async def delete_dependency(dependency_id: int, user_id: int, db: AsyncSession) 
 
     await dependency_repository.delete_dependency(db, dependency_id)
     await refresh_user_blocked_status(user_id, db)
+    await db.commit()
+    await invalidate_dependency_caches(user_id)
     return True
 
 
 async def check_thread_dependency_order(
     thread_id: int, user_id: int, db: AsyncSession
-) -> list[dict]:
-    """Check for conflicts between dependency order and issue position order."""
+) -> list[dict] | None:
+    """Check for conflicts between dependency order and issue position order.
+
+    Args:
+        thread_id: Thread to inspect.
+        user_id: Thread owner.
+        db: Database session.
+
+    Returns:
+        List of conflict dictionaries, or ``None`` when the thread is missing
+        or owned by another user.
+    """
     from app.repositories import thread_repository
     
     thread = await thread_repository.find_owned(db, user_id, thread_id)
     if not thread:
-        return []
+        return None
 
     raw_conflicts = await get_dependency_order_conflicts(thread_id, user_id, db)
     return raw_conflicts
