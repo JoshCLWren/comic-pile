@@ -23,6 +23,7 @@ _request_count = 0
 _application_import_complete_at: float | None = None
 _application_created_at: float | None = None
 _startup_complete_at: float | None = None
+_heavy_init_complete_at: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +38,8 @@ class StartupSnapshot:
     application_import_ms: float | None
     application_creation_ms: float | None
     lifespan_ms: float | None
+    heavy_initialized: bool
+    heavy_init_duration_ms: float | None
     deployment_id: str | None
     process_started_at_ns: int
 
@@ -97,6 +100,33 @@ def _duration_ms(start: float | None, end: float | None) -> float | None:
     return (end - start) * 1000
 
 
+def mark_heavy_init_complete() -> float:
+    """Record heavy initialization completion once.
+
+    Heavy init covers database connectivity, durable cache accounting, and
+    cache provider setup that the lightweight ping wake-up intentionally skips.
+
+    Returns:
+        Total heavy-init age in milliseconds since process start.
+    """
+    global _heavy_init_complete_at
+
+    with _lock:
+        if _heavy_init_complete_at is None:
+            _heavy_init_complete_at = time.perf_counter()
+        return (_heavy_init_complete_at - _PROCESS_STARTED_AT) * 1000
+
+
+def is_heavy_initialized() -> bool:
+    """Return whether heavy initialization has completed.
+
+    Returns:
+        True when heavy init has finished at least once.
+    """
+    with _lock:
+        return _heavy_init_complete_at is not None
+
+
 def _snapshot(*, invocation: int, cold: bool) -> StartupSnapshot:
     """Build a snapshot without mutating request state."""
     with _lock:
@@ -104,6 +134,7 @@ def _snapshot(*, invocation: int, cold: bool) -> StartupSnapshot:
         import_complete_at = _application_import_complete_at
         application_created_at = _application_created_at
         startup_complete_at = _startup_complete_at
+        heavy_init_complete_at = _heavy_init_complete_at
 
     return StartupSnapshot(
         invocation=invocation,
@@ -114,6 +145,8 @@ def _snapshot(*, invocation: int, cold: bool) -> StartupSnapshot:
         application_import_ms=_duration_ms(_PROCESS_STARTED_AT, import_complete_at),
         application_creation_ms=_duration_ms(import_complete_at, application_created_at),
         lifespan_ms=_duration_ms(application_created_at, startup_complete_at),
+        heavy_initialized=heavy_init_complete_at is not None,
+        heavy_init_duration_ms=_duration_ms(_PROCESS_STARTED_AT, heavy_init_complete_at),
         deployment_id=_DEPLOYMENT_ID,
         process_started_at_ns=_PROCESS_STARTED_AT_NS,
     )
@@ -159,10 +192,11 @@ def reset_startup_diagnostics_for_test() -> None:
         None.
     """
     global _request_count, _application_import_complete_at, _application_created_at
-    global _startup_complete_at
+    global _startup_complete_at, _heavy_init_complete_at
 
     with _lock:
         _request_count = 0
         _application_import_complete_at = None
         _application_created_at = None
         _startup_complete_at = None
+        _heavy_init_complete_at = None

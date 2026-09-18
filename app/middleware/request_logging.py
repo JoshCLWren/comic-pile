@@ -262,6 +262,7 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
             response.headers["X-App-Cache"] = diagnostics.cache_status
             response.headers["X-App-DB-Queries"] = str(diagnostics.database_queries)
             response.headers["X-App-Cold-Request"] = "1" if startup.cold else "0"
+            response.headers["X-Heavy-Init"] = "1" if startup.heavy_initialized else "0"
             response.headers["Server-Timing"] = _server_timing_header(process_time_ms)
 
             log_data = {
@@ -285,6 +286,8 @@ def add_request_logging_middleware(app: FastAPI, environment: str) -> None:
                 "application_import_ms": _rounded_optional(startup.application_import_ms),
                 "application_creation_ms": _rounded_optional(startup.application_creation_ms),
                 "lifespan_ms": _rounded_optional(startup.lifespan_ms),
+                "heavy_initialized": startup.heavy_initialized,
+                "heavy_init_duration_ms": _rounded_optional(startup.heavy_init_duration_ms),
                 "deployment_id": startup.deployment_id,
                 "process_started_at_ns": startup.process_started_at_ns,
                 "client_host": request.client.host if request.client else None,
