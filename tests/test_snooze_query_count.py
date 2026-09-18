@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Thread, User
 from app.models import Session as SessionModel
-from app.services.session_builders import build_session_response
+from app.services.session_response import build_session_response
 
 
 @pytest.mark.asyncio

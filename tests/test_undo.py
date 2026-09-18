@@ -32,7 +32,7 @@ async def test_list_snapshots_empty(
 
     response = await auth_client.get(f"/api/v1/undo/{session.id}/snapshots")
     assert response.status_code == 200
-    assert response.json() == []
+    assert response.json() == {"session_id": session.id, "snapshots": []}
 
 
 @pytest.mark.asyncio
@@ -80,7 +80,9 @@ async def test_list_snapshots_with_data(
 
     response = await auth_client.get(f"/api/v1/undo/{session.id}/snapshots")
     assert response.status_code == 200
-    snapshots = response.json()
+    payload = response.json()
+    assert payload["session_id"] == session.id
+    snapshots = payload["snapshots"]
     assert len(snapshots) == 1
     assert snapshots[0]["id"] == snapshot.id
     assert snapshots[0]["description"] == "Test snapshot"
@@ -354,7 +356,9 @@ async def test_multiple_snapshots_listed_in_order(
 
     response = await auth_client.get(f"/api/v1/undo/{session.id}/snapshots")
     assert response.status_code == 200
-    snapshots = response.json()
+    payload = response.json()
+    assert payload["session_id"] == session.id
+    snapshots = payload["snapshots"]
     assert len(snapshots) == 3
     assert snapshots[0]["description"] == "Snapshot 2"
     assert snapshots[1]["description"] == "Snapshot 1"

@@ -23,7 +23,7 @@ from app.repositories.session_repository import (
 from app.repositories.thread_repository import threads_by_ids
 from app.schemas import ActiveThreadInfo, SessionResponse
 from app.schemas.session import SnoozeCorrectionInfo, SnoozedThreadInfo
-from app.services.session_builders import (
+from app.services.session_response import (
     build_ladder_path,
     build_session_response,
 )

@@ -33,7 +33,7 @@ from app.schemas.session import (
     build_session_intent_state,
 )
 from app.services.ownership import get_owned_session_or_404
-from app.services.session_builders import build_ladder_path
+from app.services.session_response import build_ladder_path
 from app.services.session_service import get_session_service, SessionService
 from app.services.session_history_projection import project_session_history_events
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts

@@ -53,7 +53,7 @@ from comic_pile.recommendation_version import (
 )
 from comic_pile.session import get_current_die_for_session, get_or_create
 
-from app.api.session import _invalidate_session_caches
+from app.services.session_response import _invalidate_session_caches
 from app.config import get_recommendation_settings
 from app.schemas import RollResponse
 
