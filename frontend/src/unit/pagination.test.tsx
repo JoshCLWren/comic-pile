@@ -5,7 +5,7 @@ import {
   useInfiniteCollection, 
   collectAllPages, 
   COLLECT_ALL_DEFAULT_MAX_PAGES 
-} from './index'
+} from '../pagination'
 
 const createWrapper = () => {
   const queryClient = new QueryClient({
@@ -26,15 +26,15 @@ describe('collectAllPages', () => {
       { data: ['e'], next: null },
     ]
     let callCount = 0
-    const fetchPage = vi.fn((token) => {
+    const fetchPage = vi.fn((_token: string | null) => {
       const page = pages[callCount++]
       return Promise.resolve(page)
     })
 
     const result = await collectAllPages({
       fetchPage,
-      selectItems: (p) => p.data,
-      selectNextToken: (p) => p.next,
+      selectItems: (p: { data: string[]; next: string | null }) => p.data,
+      selectNextToken: (p: { data: string[]; next: string | null }) => p.next,
     })
 
     expect(result.items).toEqual(['a', 'b', 'c', 'd', 'e'])
@@ -51,15 +51,15 @@ describe('collectAllPages', () => {
       { data: ['c'], next: '3' },
     ]
     let callCount = 0
-    const fetchPage = vi.fn((token) => {
+    const fetchPage = vi.fn((_token: string | null) => {
       const page = pages[callCount++]
       return Promise.resolve(page)
     })
 
     const result = await collectAllPages({
       fetchPage,
-      selectItems: (p) => p.data,
-      selectNextToken: (p) => p.next,
+      selectItems: (p: { data: string[]; next: string }) => p.data,
+      selectNextToken: (p: { data: string[]; next: string }) => p.next,
       maxPages: 2,
     })
 
@@ -74,15 +74,15 @@ describe('collectAllPages', () => {
       { data: ['b'], next: 'token1' },
     ]
     let callCount = 0
-    const fetchPage = vi.fn((token) => {
+    const fetchPage = vi.fn((_token: string | null) => {
       const page = pages[callCount++]
       return Promise.resolve(page)
     })
 
     const result = await collectAllPages({
       fetchPage,
-      selectItems: (p) => p.data,
-      selectNextToken: (p) => p.next,
+      selectItems: (p: { data: string[]; next: string }) => p.data,
+      selectNextToken: (p: { data: string[]; next: string }) => p.next,
     })
 
     expect(result.stopReason).toBe('repeat-token')
@@ -109,8 +109,8 @@ describe('useInfiniteCollection', () => {
         queryKey: ['test'],
         queryFn,
         initialPageParam: null,
-        getNextPageParam: (p) => p.nextToken,
-        selectPage: (p) => p.items,
+        getNextPageParam: (p: { items: number[]; nextToken: string }) => p.nextToken,
+        selectPage: (p: { items: number[]; nextToken: string }) => p.items,
       }),
       { wrapper: createWrapper() }
     )
@@ -137,9 +137,9 @@ describe('useInfiniteCollection', () => {
         queryKey: ['test'],
         queryFn,
         initialPageParam: null,
-        getNextPageParam: (p) => p.next,
-        selectPage: (p) => p.items,
-        selectId: (item) => item.id,
+        getNextPageParam: (p: { items: { id: number; v: string }[]; next: string | null }) => p.next,
+        selectPage: (p: { items: { id: number; v: string }[]; next: string | null }) => p.items,
+        selectId: (item: { id: number; v: string }) => item.id,
       }),
       { wrapper: createWrapper() }
     )
@@ -162,8 +162,9 @@ describe('useInfiniteCollection', () => {
         queryKey: ['test'],
         queryFn,
         initialPageParam: null,
-        getNextPageParam: () => null,
-        selectPage: () => [],
+        getNextPageParam: (_p: { items: never[] }) => null,
+        selectPage: (_p: { items: never[] }) => [],
+        retry: false,
       }),
       { wrapper: createWrapper() }
     )
@@ -179,8 +180,8 @@ describe('useInfiniteCollection', () => {
         queryKey: ['test'],
         queryFn,
         initialPageParam: null,
-        getNextPageParam: () => null,
-        selectPage: () => [],
+        getNextPageParam: (_p: { items: never[] }) => null,
+        selectPage: (_p: { items: never[] }) => [],
         enabled: false,
       }),
       { wrapper: createWrapper() }
