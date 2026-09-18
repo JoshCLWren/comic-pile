@@ -361,16 +361,15 @@ async def delete_issue(
             by_lane: dict[str, list[dict[str, object]]] = {}
             for n in pruned:
                 by_lane.setdefault(str(n.get("lane_id", "")), []).append(n)
-            
+
             normalized: list[dict[str, object]] = []
             for lane_nodes in by_lane.values():
-                # Fix type ignore by ensuring we compare ints
                 lane_nodes.sort(key=lambda x: int(x.get("position", 0)))
                 for idx, n in enumerate(lane_nodes):
                     n["position"] = idx
                     normalized.append(n)
             plan.nodes_json = normalized
-            
+
             marker = f"continuity-plan:{plan.id}"
             await db.execute(
                 delete(ContinuityRule).where(
