@@ -250,11 +250,14 @@ export interface SessionEvent {
 
 export interface SessionSnapshot {
   id: number;
+  session_id?: number;
   description?: string | null;
   created_at: string;
+  event_id?: number | null;
 }
 
 export interface SessionSnapshotsResponse {
+  session_id?: number;
   snapshots: SessionSnapshot[];
 }
 
