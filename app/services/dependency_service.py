@@ -351,12 +351,10 @@ async def create_dependency(
             )
 
     try:
-        # Create the dependency
         dependency = await dependency_repository.create_dependency(
             db, source_issue_id, target_issue_id
         )
 
-        # Refresh user blocked status
         await refresh_user_blocked_status(user_id, db)
 
         await db.commit()
@@ -368,11 +366,10 @@ async def create_dependency(
 
     await invalidate_dependency_caches(user_id)
 
-    # Refresh the dependency object before enriching to avoid MissingGreenlet
-    # after session expiration from commit.
-    await db.refresh(dependency)
+    dependency = await dependency_repository.get_dependency_by_ids(
+        db, source_issue_id, target_issue_id
+    )
 
-    # Enrich the response
     enriched = await enrich_dependencies([dependency], db)
     response = enriched[0]
     response.warning = warning
@@ -407,11 +404,11 @@ async def update_dependency_note(
     if not is_owned:
         return None
 
-    updated = await dependency_repository.update_dependency_note(db, dependency_id, note)
+    await dependency_repository.update_dependency_note(db, dependency_id, note)
     await db.commit()
+    dependency = await dependency_repository.get_dependency(db, dependency_id)
     await invalidate_dependency_caches(user_id)
-    await db.refresh(updated)
-    enriched = await enrich_dependencies([updated], db)
+    enriched = await enrich_dependencies([dependency], db)
     return enriched[0]
 
 
