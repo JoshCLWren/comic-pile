@@ -266,6 +266,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
     app.include_router(thread.router, prefix="/api/v1/threads", tags=["threads"])
+    # New client resources (e.g. paginated completed threads for issue #2567)
+    # are versioned-only: no bare /api/* twin.
+    app.include_router(thread.v1_router, prefix="/api/v1/threads", tags=["threads"])
     if app_settings.environment != "production":
         app.include_router(debug.router, prefix="/api", tags=["debug"])
         app.include_router(debug.router, prefix="/api/v1", tags=["debug"])

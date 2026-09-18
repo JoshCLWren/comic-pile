@@ -85,6 +85,40 @@ describe('canonical query keys', () => {
     expect(queryKeys.roll.all).toEqual(['roll'])
     expect(queryKeys.roll.bootstrap()).toEqual(['roll', 'bootstrap'])
 
+    expect(queryKeys.completed.all).toEqual(['completed'])
+    expect(queryKeys.completed.pages()).toEqual(['completed', 'pages'])
+    expect(
+      queryKeys.completed.list({ sort: 'created', pageSize: 25 }),
+    ).toEqual(['completed', 'pages', { search: null, sort: 'created', pageSize: 25 }])
+    expect(
+      queryKeys.completed.page({
+        search: '   ',
+        sort: 'created',
+        pageSize: 25,
+      }),
+    ).toEqual([
+      'completed',
+      'pages',
+      { search: null, sort: 'created', pageToken: null, pageSize: 25 },
+    ])
+    expect(
+      queryKeys.completed.page({
+        search: '  Saga  ',
+        sort: 'created',
+        pageToken: 'page-2',
+        pageSize: 50,
+      }),
+    ).toEqual([
+      'completed',
+      'pages',
+      {
+        search: 'Saga',
+        sort: 'created',
+        pageToken: 'page-2',
+        pageSize: 50,
+      },
+    ])
+
     expect(queryKeys.thread.all).toEqual(['thread'])
     expect(queryKeys.thread.summaries()).toEqual(['thread', 'summary'])
     expect(queryKeys.thread.summary(7)).toEqual(['thread', 'summary', 7])

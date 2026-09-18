@@ -42,6 +42,11 @@ from app.services.errors import (
 
 router = APIRouter(tags=["threads"])
 
+#: Versioned-only router for new client resources. Mounted solely under
+#: ``/api/v1/threads`` so new endpoints never introduce bare ``/api/*``
+#: routes (see ``tests/test_route_versioning.py`` and docs/API.md).
+v1_router = APIRouter(tags=["threads"])
+
 _ERROR_STATUS: dict[type[ServiceError], int] = {
     NotFoundError: status.HTTP_404_NOT_FOUND,
     InvalidRequestError: status.HTTP_400_BAD_REQUEST,
@@ -149,7 +154,7 @@ async def list_threads(
         raise _map_service_error(exc) from exc
 
 
-@router.get("/completed/threads", response_model=QueueThreadListResponse)
+@v1_router.get("/completed/threads", response_model=QueueThreadListResponse)
 @limiter.limit("100/minute")
 @cached(ttl=TTL.SHORT)
 async def list_completed_threads(

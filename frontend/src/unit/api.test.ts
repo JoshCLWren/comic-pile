@@ -74,6 +74,18 @@ it('calls thread endpoints with expected paths', async () => {
   expect(get).toHaveBeenCalledWith('/v1/threads/9')
 })
 
+it('calls the finished-series endpoint with expected paths', async () => {
+  await threadsApi.listCompleted()
+  await threadsApi.listCompleted('saga', 'created', 'page-2', 25)
+
+  expect(get).toHaveBeenCalledWith('/v1/threads/completed/threads', {
+    params: undefined,
+  })
+  expect(get).toHaveBeenCalledWith('/v1/threads/completed/threads', {
+    params: { search: 'saga', sort: 'created', page_size: 25, page_token: 'page-2' },
+  })
+})
+
 it('calls queue endpoints with expected paths', async () => {
   await queueApi.moveToPosition(3, 2)
   await queueApi.moveToFront(4)

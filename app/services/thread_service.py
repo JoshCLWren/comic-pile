@@ -319,12 +319,18 @@ async def list_completed_threads(
         InvalidRequestError: When the page token is stale or malformed.
     """
     validated_sort: QueueSort = cast(QueueSort, sort)
+    # Completed threads hold no live queue positions, so ``position`` is an
+    # alias for ``created`` throughout this collection. Normalizing up front
+    # keeps the cursor contract, the ORDER BY columns, and the keyset filter
+    # on one consistent sort instead of minting ``position`` tokens that carry
+    # ``created`` values.
+    effective_sort: QueueSort = "created" if validated_sort == "position" else validated_sort
     normalized_search = normalize_queue_search(search)
 
     cursor = None
     if page_token:
         try:
-            cursor = decode_queue_cursor(page_token, sort=validated_sort, search=search)
+            cursor = decode_queue_cursor(page_token, sort=effective_sort, search=search)
         except ValueError as exc:
             raise InvalidRequestError(str(exc)) from exc
 
@@ -332,7 +338,7 @@ async def list_completed_threads(
         db,
         user_id,
         search=normalized_search,
-        sort=validated_sort,
+        sort=effective_sort,
         cursor=cursor,
         limit=page_size + 1,
     )
@@ -347,13 +353,10 @@ async def list_completed_threads(
     next_token = None
     if has_more and threads_to_return:
         last = threads_to_return[-1]
-        # For completed threads, "position" sort uses created_at ordering,
-        # so cursor values must match the actual sort columns.
-        cursor_sort = "created" if validated_sort == "position" else validated_sort
         page_cursor = QueueCursor(
-            sort=validated_sort,
+            sort=effective_sort,
             search=normalized_search,
-            values=build_cursor_values_from_row(cursor_sort, last),
+            values=build_cursor_values_from_row(effective_sort, last),
         )
         next_token = encode_queue_cursor(page_cursor)
 

@@ -192,6 +192,12 @@ async def fetch_completed_page(
 
     Returns:
         Completed threads in canonical page order, at most ``limit`` rows.
+
+    Note:
+        Callers normalize ``position`` to ``created`` before calling (completed
+        threads hold no live queue positions). The shared
+        :func:`build_sort_order` helper keeps the ORDER BY columns and the
+        keyset cursor filter on the same contract for every sort.
     """
     query = select(Thread).where(
         Thread.user_id == user_id,
@@ -201,18 +207,10 @@ async def fetch_completed_page(
     if search:
         query = query.where(Thread.title.ilike(f"%{search}%"))
 
-    # Apply deterministic sort order with tie-breakers
-    # For completed threads, "position" sort falls back to created_at desc
-    # since completed threads don't have queue positions.
-    if sort == "position":
-        for col in [Thread.created_at.desc(), Thread.id.desc()]:
-            query = query.order_by(col)
-    elif sort == "title":
-        for col in [Thread.title.asc(), Thread.id.asc()]:
-            query = query.order_by(col)
-    else:  # created
-        for col in [Thread.created_at.desc(), Thread.id.desc()]:
-            query = query.order_by(col)
+    # Apply deterministic sort order with tie-breakers (shared with the
+    # active-queue path so ordering and cursor filters cannot diverge).
+    for col in build_sort_order(sort):
+        query = query.order_by(col)
 
     # Apply opaque cursor-based pagination
     if cursor is not None:
