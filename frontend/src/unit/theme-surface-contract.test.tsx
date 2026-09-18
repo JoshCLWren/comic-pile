@@ -11,6 +11,7 @@ import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { ToastProvider } from '../contexts/ToastProvider'
+import { cast } from '../utils/cast'
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -306,10 +307,10 @@ describe('themed surfaces resolve through semantic tokens (#1646)', () => {
     const isTablet = width >= 768 && width < 1024
     const isDesktop = width >= 1024
     window.matchMedia = vi.fn((query: string) => {
-      if (query === '(max-width: 767px)') return { matches: isMobile, addListener: vi.fn(), removeListener: vi.fn() } as unknown as MediaQueryList
-      if (query.includes('min-width: 768px')) return { matches: isTablet, addListener: vi.fn(), removeListener: vi.fn() } as unknown as MediaQueryList
-      if (query.includes('min-width: 1024px')) return { matches: isDesktop, addListener: vi.fn(), removeListener: vi.fn() } as unknown as MediaQueryList
-      return { matches: false, addListener: vi.fn(), removeListener: vi.fn() } as unknown as MediaQueryList
+      if (query === '(max-width: 767px)') return cast<MediaQueryList>({ matches: isMobile, addListener: vi.fn(), removeListener: vi.fn() })
+      if (query.includes('min-width: 768px')) return cast<MediaQueryList>({ matches: isTablet, addListener: vi.fn(), removeListener: vi.fn() })
+      if (query.includes('min-width: 1024px')) return cast<MediaQueryList>({ matches: isDesktop, addListener: vi.fn(), removeListener: vi.fn() })
+      return cast<MediaQueryList>({ matches: false, addListener: vi.fn(), removeListener: vi.fn() })
     })
     window.dispatchEvent(new Event('resize'))
     return render(

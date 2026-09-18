@@ -7,6 +7,7 @@ import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { ToastProvider } from '../contexts/ToastProvider'
+import { cast } from '../utils/cast'
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -39,11 +40,11 @@ function setViewport(width: number) {
   const isMobile = width < 768
   const isTablet = width >= 768 && width < 1024
   const isDesktop = width >= 1024
-  const mql = {
+  const mql = cast<MediaQueryList>({
     matches: !isMobile,
     addListener: vi.fn(),
     removeListener: vi.fn(),
-  } as unknown as MediaQueryList
+  })
   window.matchMedia = vi.fn((query: string) => {
     if (query === '(max-width: 767px)') return { ...mql, matches: isMobile }
     if (query.includes('min-width: 768px')) return { ...mql, matches: isTablet }

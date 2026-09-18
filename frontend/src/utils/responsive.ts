@@ -11,7 +11,8 @@
  * in this module instead.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { isFunction, isWindowDefined } from './runtimeChecks'
 
 /** Canonical breakpoint values matching Tailwind's md/lg/xl. */
 export const BREAKPOINTS = {
@@ -33,7 +34,7 @@ const TABLET_QUERY = `(min-width: ${BREAKPOINTS.md}px) and (max-width: ${TABLET_
  * Returns whether `matchMedia` is available in the current environment.
  */
 function hasMatchMedia(): boolean {
-  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+  return isWindowDefined() && isFunction(window.matchMedia)
 }
 
 /**
@@ -52,15 +53,14 @@ function matchMediaMatches(query: string): boolean {
 /**
  * A reactive hook that tracks whether a CSS media query matches.
  *
- * Uses `window.matchMedia` with a listener for live updates, falling
- * back to a one-time check if the listener API is unavailable.
+ * Uses `window.matchMedia` with a `change` listener for live updates,
+ * falling back to the legacy `addListener` API when `addEventListener`
+ * is not available. Returns `false` in SSR or when `matchMedia` is absent.
  */
 export function useMatchMedia(query: string): boolean {
   const [matches, setMatches] = useState<boolean>(() => matchMediaMatches(query))
-  const queryRef = useRef(query)
 
   useEffect(() => {
-    queryRef.current = query
     if (!hasMatchMedia()) return
 
     const mql = window.matchMedia(query)
@@ -70,15 +70,9 @@ export function useMatchMedia(query: string): boolean {
       mql.addEventListener('change', handler)
       return () => mql.removeEventListener('change', handler)
     }
-    if ((mql as unknown as { addListener?: (l: (e: MediaQueryListEvent) => void) => void }).addListener) {
-      const listener = (event: MediaQueryListEvent) => setMatches(event.matches)
-      ;(mql as unknown as { addListener: (l: typeof listener) => void }).addListener(listener)
-      return () => (mql as unknown as { removeListener: (l: typeof listener) => void }).removeListener(listener)
-    }
 
-    const onResize = () => setMatches(matchMediaMatches(queryRef.current))
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    mql.addListener(handler)
+    return () => mql.removeListener(handler)
   }, [query])
 
   return matches

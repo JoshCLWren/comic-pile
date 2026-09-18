@@ -9,6 +9,7 @@ import {
   getDefaultCollapsedForWidth,
   getDefaultCollapsed,
 } from '../utils/responsive'
+import { cast } from '../utils/cast'
 
 describe('responsive contract', () => {
   describe('BREAKPOINTS', () => {
@@ -61,11 +62,11 @@ describe('useMatchMedia', () => {
   })
 
   it('tracks whether the media query matches', () => {
-    const mql = {
+    const mql = cast<MediaQueryList>({
       matches: true,
       addListener: vi.fn(),
       removeListener: vi.fn(),
-    } as unknown as MediaQueryList
+    })
     window.matchMedia = vi.fn(() => mql)
 
     const { result } = renderHook(() => useMatchMedia('(max-width: 767px)'))
@@ -75,11 +76,12 @@ describe('useMatchMedia', () => {
 
 describe('useResponsive', () => {
   it('returns isMobile true for narrow viewports', () => {
-    const makeMql = (matches: boolean) => ({
-      matches,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-    } as unknown as MediaQueryList)
+    const makeMql = (matches: boolean) =>
+      cast<MediaQueryList>({
+        matches,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+      })
 
     window.matchMedia = vi.fn((query: string) => {
       if (query === '(max-width: 767px)') return makeMql(true)
@@ -107,11 +109,11 @@ describe('getDefaultCollapsed', () => {
     const originalMatchMedia = window.matchMedia
     window.matchMedia = vi.fn(
       () =>
-        ({
+        cast<MediaQueryList>({
           matches: true,
           addListener: vi.fn(),
           removeListener: vi.fn(),
-        }) as unknown as MediaQueryList,
+        }),
     )
     expect(getDefaultCollapsed()).toBe(true)
     window.matchMedia = originalMatchMedia
@@ -121,11 +123,11 @@ describe('getDefaultCollapsed', () => {
     const originalMatchMedia = window.matchMedia
     window.matchMedia = vi.fn(
       () =>
-        ({
+        cast<MediaQueryList>({
           matches: false,
           addListener: vi.fn(),
           removeListener: vi.fn(),
-        }) as unknown as MediaQueryList,
+        }),
     )
     expect(getDefaultCollapsed()).toBe(false)
     window.matchMedia = originalMatchMedia
