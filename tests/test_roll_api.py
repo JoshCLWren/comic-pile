@@ -4,7 +4,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
+import logging
 
 @pytest.mark.asyncio
 async def test_roll_success(auth_client: AsyncClient, sample_data: dict) -> None:
@@ -632,3 +632,12 @@ async def test_roll_snoozed_thread_excluded_from_pool(
     assert data["die_size"] == 4
     assert 1 <= data["result"] <= 4
     assert data["thread_id"] != snoozed_thread.id
+
+
+@pytest.mark.asyncio
+async def test_roll_timezone_logging(auth_client: AsyncClient, caplog: pytest.Caplog) -> None:
+    """Verify that invalid timezones are logged and don't crash bootstrap."""
+    with caplog.at_level(logging.ERROR):
+        response = await auth_client.get("/api/v1/roll/bootstrap?timezone=INVALID_TZ")
+        assert response.status_code == 200
+        assert "Failed to update session timezone from browser value INVALID_TZ" in caplog.text

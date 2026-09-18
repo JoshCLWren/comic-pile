@@ -210,6 +210,7 @@ def _get_local_hour_from_timezone(timezone: str | None) -> int | None:
         tz = ZoneInfo(timezone)
         return datetime.now(tz).hour
     except Exception:
+        logger.exception("Failed to derive local hour from timezone %s", timezone)
         return None
 
 
@@ -1047,7 +1048,7 @@ async def roll_bootstrap(
                 await db.commit()
                 await db.refresh(current_session)
         except Exception:
-            pass
+            logger.exception("Failed to update session timezone from browser value %s", timezone)
 
     current_session_id = current_session.id
 
