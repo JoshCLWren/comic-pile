@@ -1,7 +1,4 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import ResumeRecovery from '../components/ResumeRecovery'
-import { queryKeys } from '../query/queryKeys'
 
 const { revalidateSession, recoverSession, invalidateSessionRecoveryCache, invalidateAfterResumeRecovery } = vi.hoisted(() => ({
   revalidateSession: vi.fn(),
