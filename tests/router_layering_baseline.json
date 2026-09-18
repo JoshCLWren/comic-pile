@@ -1,5 +1,4 @@
 {
-  "admin": ["execute-call", "query-import"],
   "analytics": ["execute-call", "query-import"],
   "auth": ["execute-call", "query-import"],
   "catalog": ["execute-call", "query-import"],
