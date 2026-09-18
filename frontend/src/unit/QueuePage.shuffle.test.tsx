@@ -144,4 +144,18 @@ describe('Queue shuffle availability', () => {
 
     expect(screen.getByRole('button', { name: 'Shuffle' })).toBeEnabled()
   })
+
+  it('enables shuffle from the authoritative count even when only one thread is loaded', () => {
+    mockedUseQueueThreads.mockReturnValue({
+      data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 }],
+      activeCount: 120,
+      isLoading: false,
+      refetch: vi.fn(),
+    })
+    mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
+
+    renderQueue()
+
+    expect(screen.getByRole('button', { name: 'Shuffle' })).toBeEnabled()
+  })
 })

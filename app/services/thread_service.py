@@ -240,14 +240,18 @@ async def list_queue_threads(
         page_token: Opaque cursor token for pagination continuation.
 
     Returns:
-        QueueThreadListResponse with paginated threads and next_page_token if
-        more exist.
+        QueueThreadListResponse with paginated threads, next_page_token if
+        more exist, and the authoritative whole-queue ``active_count``.
 
     Raises:
         InvalidRequestError: When the page token is stale or malformed.
     """
     validated_sort: QueueSort = cast(QueueSort, sort)
     normalized_search = normalize_queue_search(search)
+
+    # Authoritative whole-queue total. Computed separately so it never depends
+    # on the loaded page, the search filter, or the sort order (issue #2568).
+    active_count = await thread_repository.count_active_threads(db, user_id)
 
     cursor = None
     if page_token:
@@ -285,6 +289,7 @@ async def list_queue_threads(
     return QueueThreadListResponse(
         threads=queue_items,
         next_page_token=next_token,
+        active_count=active_count,
     )
 
 
