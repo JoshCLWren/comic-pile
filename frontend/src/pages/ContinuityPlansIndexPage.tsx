@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import GlossaryLink from '../components/GlossaryLink'
+import Modal from '../components/Modal'
 import { useDeleteReadingPlan, useReadingPlans } from '../hooks/useReadingPlans'
 
 function formatDate(iso: string): string {
@@ -64,55 +65,43 @@ export default function ContinuityPlansIndexPage() {
         </div>
       </header>
 
-      {cblChooserOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="cbl-plan-chooser-title"
-          className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 sm:items-center"
-        >
-          <div className="w-full max-w-lg rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4 shadow-xl">
-            <h2 id="cbl-plan-chooser-title" className="text-lg font-black text-[var(--theme-text-primary)]">
-              Choose a Reading Plan
-            </h2>
-            <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
-              Pick which plan should receive the CBL material, or create a new one.
-            </p>
-            <ul className="mt-4 max-h-72 space-y-2 overflow-y-auto">
-              {plans.map((plan) => (
-                <li key={plan.id}>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/continuity-plans/${plan.id}?addFrom=cbl`)}
-                    className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-[var(--theme-border)] px-3 py-2 text-left hover:border-[var(--theme-continuity-accent)]"
-                  >
-                    <span className="truncate font-bold text-[var(--theme-text-primary)]">{plan.name}</span>
-                    <span className="shrink-0 text-xs text-[var(--theme-text-dim)]">
-                      {plan.step_count} {plan.step_count === 1 ? 'step' : 'steps'}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-4 flex flex-wrap gap-2">
+      <Modal isOpen={cblChooserOpen} title="Choose a Reading Plan" onClose={() => setCblChooserOpen(false)}>
+        <p className="text-sm text-[var(--theme-text-muted)]">
+          Pick which plan should receive the CBL material, or create a new one.
+        </p>
+        <ul className="mt-4 max-h-72 space-y-2 overflow-y-auto">
+          {plans.map((plan) => (
+            <li key={plan.id}>
               <button
                 type="button"
-                onClick={() => navigate('/continuity-plans/new?addFrom=cbl')}
-                className="min-h-11 flex-1 rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-black hover:bg-[var(--theme-primary-action-hover)]"
+                onClick={() => navigate(`/continuity-plans/${plan.id}?addFrom=cbl`)}
+                className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-[var(--theme-border)] px-3 py-2 text-left hover:border-[var(--theme-continuity-accent)]"
               >
-                New Reading Plan
+                <span className="truncate font-bold text-[var(--theme-text-primary)]">{plan.name}</span>
+                <span className="shrink-0 text-xs text-[var(--theme-text-dim)]">
+                  {plan.step_count} {plan.step_count === 1 ? 'step' : 'steps'}
+                </span>
               </button>
-              <button
-                type="button"
-                onClick={() => setCblChooserOpen(false)}
-                className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => navigate('/continuity-plans/new?addFrom=cbl')}
+            className="min-h-11 flex-1 rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-black hover:bg-[var(--theme-primary-action-hover)]"
+          >
+            New Reading Plan
+          </button>
+          <button
+            type="button"
+            onClick={() => setCblChooserOpen(false)}
+            className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)]"
+          >
+            Cancel
+          </button>
         </div>
-      )}
+      </Modal>
 
       {plans.length === 0 ? (
         <div className="text-center py-8">

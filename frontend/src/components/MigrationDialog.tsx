@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import type { Thread } from '../types'
 import axios from 'axios'
 import { migrationApi } from '../services/api'
-import OverlayPortal from './OverlayPortal'
+import Modal from './Modal'
 import './MigrationDialog.css'
 
 interface MigrationDialogProps {
@@ -24,20 +24,13 @@ export default function MigrationDialog({ thread, onComplete, onSkip, onClose }:
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSkipConfirm, setShowSkipConfirm] = useState(false)
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (showSkipConfirm) {
-          setShowSkipConfirm(false)
-        } else {
-          onClose()
-        }
-      }
+  const handleModalClose = () => {
+    if (showSkipConfirm) {
+      setShowSkipConfirm(false)
+      return
     }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onClose, showSkipConfirm])
+    onClose()
+  }
 
   const lastRead = lastIssueRead === '' ? 0 : parseInt(lastIssueRead, 10)
   const total = totalIssues === '' ? 0 : parseInt(totalIssues, 10)
@@ -89,7 +82,7 @@ export default function MigrationDialog({ thread, onComplete, onSkip, onClose }:
     }
 
     if (isNaN(lastRead) || isNaN(total)) {
-      setError('Please enter valid numbers')
+      setError('Please fill in both fields')
       return false
     }
 
@@ -146,36 +139,8 @@ export default function MigrationDialog({ thread, onComplete, onSkip, onClose }:
     onSkip()
   }
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && !showSkipConfirm) {
-      onClose()
-    }
-  }
-
   return (
-    <OverlayPortal layer="dialog">
-      <div
-        className="migration-dialog__overlay"
-      onClick={handleBackdropClick}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="migration-dialog-title"
-    >
-      <div className="migration-dialog">
-        <div className="migration-dialog__header">
-          <h2 id="migration-dialog-title" className="migration-dialog__title">
-            Track Issues for "{thread.title}"
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="migration-dialog__close-btn"
-            aria-label="Close dialog"
-            disabled={isSubmitting}
-          >
-            &times;
-          </button>
-        </div>
+    <Modal isOpen title={`Track Issues for "${thread.title}"`} onClose={handleModalClose} data-testid="migration-dialog">
 
         <form onSubmit={handleSubmit} className="migration-dialog__form">
           <div className="migration-dialog__field">
@@ -284,8 +249,6 @@ export default function MigrationDialog({ thread, onComplete, onSkip, onClose }:
             </div>
           </div>
         )}
-        </div>
-      </div>
-    </OverlayPortal>
+    </Modal>
   )
 }

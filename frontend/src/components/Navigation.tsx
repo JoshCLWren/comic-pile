@@ -11,6 +11,7 @@ import { persistThemePreference } from '../services/themePreferenceSync'
 import type { ThemeId } from '../services/theme'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
 import { useResponsive } from '../utils/responsive'
+import OverlayPortal from './OverlayPortal'
 
 type BugReportSubmit = (
   reportType: ReportType,
@@ -193,8 +194,16 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
       setIsMoreOpen(false)
     }
 
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsMoreOpen(false)
+    }
+
     document.addEventListener('pointerdown', dismissMoreMenu)
-    return () => document.removeEventListener('pointerdown', dismissMoreMenu)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('pointerdown', dismissMoreMenu)
+      document.removeEventListener('keydown', handleEscape)
+    }
   }, [isMoreOpen])
 
   const isActive = (path: string) => location.pathname === path
@@ -436,12 +445,13 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
       </nav>
 
       {isMoreOpen && (
-        <nav
-          ref={moreMenuRef}
-          id="secondary-navigation"
-          aria-label="More pages"
-          className="fixed bottom-16 right-3 z-50 w-56 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-2 shadow-2xl md:bottom-24 md:right-6"
-        >
+        <OverlayPortal>
+          <nav
+            ref={moreMenuRef}
+            id="secondary-navigation"
+            aria-label="More pages"
+            className="fixed bottom-16 right-3 w-56 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-2 shadow-2xl md:bottom-24 md:right-6"
+          >
           {SECONDARY_NAV_ITEMS.map((item) => (
             <Link
               key={item.path}
@@ -480,7 +490,8 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               </button>
             ))}
           </div>
-        </nav>
+          </nav>
+        </OverlayPortal>
       )}
     </>
   )
