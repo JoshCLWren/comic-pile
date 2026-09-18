@@ -239,7 +239,7 @@ async def list_queue_threads(
         page_size: Number of threads to return per page (max 200).
         page_token: Opaque cursor token for pagination continuation.
 
-Returns:
+    Returns:
         QueueThreadListResponse with paginated ACTIVE threads and next_page_token if
         more exist, plus the authoritative whole-queue ``active_count``.
 
