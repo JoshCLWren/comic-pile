@@ -158,4 +158,7 @@ export const queryKeys = {
     summaries: (keys: string[]) =>
       ['creators', 'summaries', [...keys].sort()] as const,
   },
+  continuityCorrection: {
+    groups: () => ['continuityCorrection', 'groups'] as const,
+  },
 } as const

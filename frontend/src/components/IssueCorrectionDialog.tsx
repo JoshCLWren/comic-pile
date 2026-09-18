@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import type { KeyboardEvent } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import Modal from './Modal'
 import { issuesApi } from '../services/api-issues'
 import type { IssueListParams } from '../services/api-issues'
@@ -326,3 +327,4 @@ export default function IssueCorrectionDialog({
     </Modal>
   )
 }
+export interface IssueCorrectionIssuesApi {\n  list: (threadId: number, params?: IssueListParams) => Promise<IssueListResponse>\n  create: (threadId: number, issueRange: string, options?: { insert_after_issue_id?: number | null }) => Promise<IssueListResponse>\n  markRead: (issueId: number) => Promise<void>\n  markUnread: (issueId: number) => Promise<void>\n  move: (issueId: number, afterIssueId: number | null) => Promise<void>\n}
