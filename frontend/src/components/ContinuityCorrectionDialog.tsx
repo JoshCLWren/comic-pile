@@ -4,6 +4,7 @@ import Modal from './Modal';
 import {
   dependencyGroupsApi,
   type DependencyGroup,
+  type DependencyGroupMember,
   type DependencyGroupMemberTarget,
 } from '../services/api-dependency-groups';
 import { threadsApi } from '../services/api';
@@ -121,7 +122,7 @@ export default function ContinuityCorrectionDialog({
         targetGroup = created;
         createdGroup = created;
       } else {
-        targetGroup = groupsData?.find((candidate) => candidate.id === selectedGroupId) as DependencyGroup;
+        targetGroup = groupsData?.find((candidate) => candidate.id === selectedGroupId);
       }
 
       if (canSaveCurrentIssue) {
@@ -271,7 +272,6 @@ export default function ContinuityCorrectionDialog({
             onClick={onClose}
             disabled={isSaving}
             className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-black uppercase tracking-wider text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500"
-            disabled={isSaving}
           >
             Cancel
           </button>
@@ -280,13 +280,12 @@ export default function ContinuityCorrectionDialog({
             onClick={handleSaveMemberships}
             disabled={isSaving || !hasSomethingToAdd}
             className="flex-1 rounded-xl border border-amber-600/50 bg-amber-600/20 py-3 text-xs font-black uppercase tracking-wider text-amber-200 transition hover:bg-amber-600/30 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
-            disabled={isSaving || !hasSomethingToAdd}
           >
             {isSaving ? 'Saving…' : 'Save Changes'}
           </button>
         </div>
       </Modal>
-    )
+  )
 }
 
 export type { ContinuityCorrectionDialogProps }
