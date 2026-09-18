@@ -36,7 +36,7 @@ export interface InfiniteCollectionSpec<TItem, TPage, TToken = PageToken> {
   /** Failure retry policy (mirrors `useInfiniteQuery` `retry`). */
   retry?: boolean | number
   /** Placeholder data policy such as `keepPreviousData` (mirrors `useInfiniteQuery`). */
-  placeholderData?: any
+  placeholderData?: unknown
 }
 
 /** Semantic state exposed by the canonical paginator. */
@@ -104,7 +104,7 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     })
   }
 
-  const hasNextPage = query.hasNextPage
+  const hasNextPage = !!query.hasNextPage
   const nextPageToken: TToken | null =
     hasNextPage && lastPage ? (spec.getNextPageParam(lastPage) ?? null) : null
 
@@ -113,7 +113,7 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
       return
     }
     await query.fetchNextPage()
-  }, [query])
+  }, [query.hasNextPage, query.isFetchingNextPage, query.fetchNextPage])
 
   const refetch = useCallback(async (): Promise<void> => {
     await query.refetch()

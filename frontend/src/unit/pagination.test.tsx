@@ -1,11 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { 
-  useInfiniteCollection, 
-  collectAllPages, 
-  COLLECT_ALL_DEFAULT_MAX_PAGES 
-} from '../pagination'
+import { useInfiniteCollection, collectAllPages } from '../pagination'
 
 const createWrapper = () => {
   const queryClient = new QueryClient({

@@ -31,3 +31,5 @@ export const PaginationSentinel = forwardRef<HTMLDivElement, PaginationSentinelP
     return <div ref={ref} className={className} data-testid={dataTestId} aria-hidden={ariaHidden} />
   },
 )
+
+PaginationSentinel.displayName = 'PaginationSentinel'
