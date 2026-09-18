@@ -312,42 +312,25 @@ async def null_event_thread_references(db: AsyncSession, thread_ids: set[int]) -
 
 
 async def restore_session_start(
-    db: AsyncSession, session_id: int, user_id: int
+    db: AsyncSession,
+    session: SessionModel,
+    snapshot: Snapshot,
+    user_id: int,
 ) -> tuple[SessionModel, list[Thread]]:
     """Restore session to its initial state at session start.
 
     Args:
         db: Database session.
-        session_id: The session ID to restore.
-        user_id: The user ID for ownership validation.
+        session: The owned session being restored.
+        snapshot: The "Session start" snapshot to replay.
+        user_id: The session owner for thread scoping.
 
     Returns:
         Tuple of (restored session, affected threads).
-
-    Raises:
-        HTTPException: If session or snapshot not found.
     """
     from app.repositories.thread_repository import threads_by_ids, delete_threads_by_ids
     from app.models import Issue
     from sqlalchemy import delete
-
-    # Get the session
-    session = await find_owned(db, user_id, session_id)
-    if not session:
-        from fastapi import HTTPException, status
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
-        )
-
-    # Get the session start snapshot
-    snapshot = await first_start_snapshot(db, session_id)
-    if not snapshot:
-        from fastapi import HTTPException, status
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No session start snapshot found for session {session_id}",
-        )
 
     # Get current threads for the user
     current_threads_result = await db.execute(

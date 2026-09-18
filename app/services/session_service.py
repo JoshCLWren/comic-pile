@@ -5,15 +5,19 @@ the session and thread repositories.
 """
 
 
-from fastapi import Depends
+import asyncio
+
+from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import OperationalError
 
 from app.database import get_db
 from app.models import Session as SessionModel
 from app.repositories import session_repository
+from app.services.ownership import get_owned_session_or_404
 from app.services.thread_issue_stats import load_unread_counts
 from comic_pile.dependencies import refresh_user_blocked_status
+
 
 class SessionService:
     """Service for handling session business logic."""
@@ -46,9 +50,18 @@ class SessionService:
 
         while retries < max_retries:
             try:
+                session = await get_owned_session_or_404(self.db, user_id, session_id)
+
+                snapshot = await session_repository.first_start_snapshot(self.db, session_id)
+                if not snapshot:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"No session start snapshot found for session {session_id}",
+                    )
+
                 # Use repository to perform the data restoration
                 session, affected_threads = await session_repository.restore_session_start(
-                    self.db, session_id, user_id
+                    self.db, session, snapshot, user_id
                 )
 
                 # Recount issues for affected threads that use issue tracking
@@ -61,12 +74,12 @@ class SessionService:
 
                 await self.db.commit()
                 await self.db.refresh(session)
-                
+
                 # Sync user status
                 await refresh_user_blocked_status(user_id, self.db)
                 await self.db.commit()
                 await self.db.refresh(session)
-                
+
                 return session
 
             except OperationalError as e:
@@ -75,12 +88,12 @@ class SessionService:
                     retries += 1
                     if retries >= max_retries:
                         raise
-                    import asyncio
                     await asyncio.sleep(initial_delay * (2 ** (retries - 1)))
                 else:
                     raise
 
         raise RuntimeError(f"Failed to restore session after {max_retries} retries")
+
 
 async def get_session_service(db: AsyncSession = Depends(get_db)) -> SessionService:
     """Dependency provider for SessionService."""
