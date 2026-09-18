@@ -4,9 +4,6 @@ This module consolidates cross-router shared logic that was previously
 living as private functions in session.py, snooze.py, and roll.py.
 """
 
-import asyncio
-from datetime import UTC, datetime
-from typing import Annotated
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +18,7 @@ from app.schemas.session import (
     build_session_bandwidth_state,
     build_session_intent_state,
 )
-from comic_pile.session import get_current_die, get_or_create, is_active
+from comic_pile.session import get_current_die
 
 
 async def _invalidate_session_caches(user_id: int) -> None:

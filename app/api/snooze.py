@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.session_response import (
     build_ladder_path,
     build_session_response,
-    get_active_thread_info,
 )
 from app.auth import get_current_user
 from app.cache_invalidation import invalidate_user_view
@@ -24,15 +23,12 @@ from app.schemas import ActiveThreadInfo, SessionResponse
 from app.schemas.session import (
     SnoozeCorrectionInfo,
     SnoozedThreadInfo,
-    build_session_bandwidth_state,
-    build_session_intent_state,
 )
 from comic_pile.bandwidth_correction import (
     classify_candidate_effort,
     compute_snooze_correction,
 )
 from comic_pile.dice_ladder import step_up
-from comic_pile.session import get_current_die_for_session
 
 logger = logging.getLogger(__name__)
 
