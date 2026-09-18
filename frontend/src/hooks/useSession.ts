@@ -10,9 +10,9 @@ import type {
 } from "../types";
 import { useToast } from "../contexts/useToast";
 import { trackSessionGreeting } from "../utils/sessionGreeting";
-import { queryKeys } from "../query/queryKeys";
+import { queryKeys, type SessionListParams } from "../query/queryKeys";
 
-const EMPTY_PARAMS = Object.freeze({});
+const EMPTY_PARAMS: SessionListParams = Object.freeze({});
 
 function normalizeQueryError(error: unknown, fallbackMessage: string): Error | null {
   if (error == null) return null;
@@ -48,9 +48,12 @@ export function useSession() {
   );
 }
 
-export function useSessions(params = EMPTY_PARAMS) {
+export function useSessions(params: SessionListParams = EMPTY_PARAMS) {
   const query = useInfiniteQuery({
-    queryKey: ['sessions', params],
+    // Canonical `session.pages` space: the cursor lives in `pageParam`, not the
+    // key, so invalidation targeting `queryKeys.session.pages()` / `.all`
+    // reliably refreshes the Session index.
+    queryKey: queryKeys.session.list({ params }),
     queryFn: async ({ pageParam }) => {
       try {
         // SAFETY: useInfiniteQuery starts at the null initialPageParam and only advances with page tokens.
