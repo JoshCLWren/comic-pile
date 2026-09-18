@@ -511,7 +511,7 @@ class RollService:
         event: Event = artifacts["event"]
         rec_context_create: RecommendationContextCreate = artifacts["rec_context_create"]
 
-        await self._db.add(event)
+        self._db.add(event)
         await self._db.flush()
 
         rec_context = RecContextModel(
@@ -583,7 +583,7 @@ class RollService:
         event: Event = artifacts["event"]
         rec_context_create: RecommendationContextCreate = artifacts["rec_context_create"]
 
-        await self._db.add(event)
+        self._db.add(event)
         await self._db.flush()
 
         rec_context = RecContextModel(
