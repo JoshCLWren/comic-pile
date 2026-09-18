@@ -41,16 +41,21 @@ class UndoSnapshotRepository:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def get_snapshot_by_id(self, snapshot_id: int) -> Snapshot | None:
-        """Get a snapshot by ID.
+    async def get_snapshot_by_id(self, snapshot_id: int, session_id: int) -> Snapshot | None:
+        """Get a snapshot by ID scoped to a session.
 
         Args:
             snapshot_id: Snapshot ID to retrieve.
+            session_id: Session the snapshot must belong to.
 
         Returns:
             Snapshot or None if not found.
         """
-        result = await self.db.execute(select(Snapshot).where(Snapshot.id == snapshot_id))
+        result = await self.db.execute(
+            select(Snapshot)
+            .where(Snapshot.id == snapshot_id)
+            .where(Snapshot.session_id == session_id)
+        )
         return result.scalar_one_or_none()
 
     async def get_latest_delta_snapshot(self, session_id: int) -> Snapshot | None:
@@ -77,21 +82,27 @@ class UndoSnapshotRepository:
         
         return None
 
-    async def get_user_session(self, session_id: int, user_id: int) -> SessionModel | None:
+    async def get_user_session(
+        self, session_id: int, user_id: int, *, for_update: bool = False
+    ) -> SessionModel | None:
         """Get a session owned by a user.
 
         Args:
             session_id: Session ID to retrieve.
             user_id: User ID who must own the session.
+            for_update: Lock the session row to serialize concurrent undo writes.
 
         Returns:
             Session or None if not found or not owned by user.
         """
-        result = await self.db.execute(
+        query = (
             select(SessionModel)
             .where(SessionModel.id == session_id)
             .where(SessionModel.user_id == user_id)
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def get_user_threads(self, user_id: int) -> list[Thread]:
@@ -267,6 +278,27 @@ class UndoSnapshotRepository:
                 )
             )
 
+    async def clear_event_issue_references(
+        self, session_id: int, thread_ids_to_clear: list[int]
+    ) -> None:
+        """Clear issue references for counter-only threads without dropping thread links.
+
+        Counter-only snapshots predate issue tracking. Their restored state has no
+        issue identity, so rate events from the undone session must not retain foreign
+        keys to issues just removed, while the thread references stay intact.
+
+        Args:
+            session_id: Session ID to update events for.
+            thread_ids_to_clear: List of thread IDs to clear issue references for.
+        """
+        if thread_ids_to_clear:
+            await self.db.execute(
+                update(Event)
+                .where(Event.session_id == session_id)
+                .where(Event.thread_id.in_(thread_ids_to_clear))
+                .values(issue_id=None)
+            )
+
     async def delete_user_threads(self, user_id: int, thread_ids: list[int]) -> None:
         """Delete threads for a user.
 
@@ -394,7 +426,11 @@ class UndoSnapshotRepository:
             thread.last_activity_at = self._deserialize_datetime(state.get("last_activity_at"))
 
     async def create_issue_from_state(
-        self, issue_id: int, thread_id: int, issue_state: dict
+        self,
+        issue_id: int,
+        thread_id: int,
+        issue_state: dict,
+        fallback_position: int,
     ) -> Issue:
         """Create a new issue from snapshot state.
 
@@ -402,6 +438,7 @@ class UndoSnapshotRepository:
             issue_id: Issue ID to create.
             thread_id: Thread ID the issue belongs to.
             issue_state: Snapshot state for the issue.
+            fallback_position: Sequential position when the state omits one.
 
         Returns:
             Created issue.
@@ -412,24 +449,27 @@ class UndoSnapshotRepository:
             issue_number=issue_state["number"],
             status=issue_state["status"],
             read_at=self._deserialize_datetime(issue_state.get("read_at")),
-            position=issue_state.get("position", 1),
+            position=issue_state.get("position", fallback_position),
         )
         
         self.db.add(issue)
         await self.db.flush()
         return issue
 
-    async def update_issue_from_state(self, issue: Issue, issue_state: dict) -> None:
+    async def update_issue_from_state(
+        self, issue: Issue, issue_state: dict, fallback_position: int
+    ) -> None:
         """Update an existing issue from snapshot state.
 
         Args:
             issue: Issue to update.
             issue_state: Snapshot state for the issue.
+            fallback_position: Sequential position when the state omits one.
         """
         issue.issue_number = issue_state["number"]
         issue.status = issue_state["status"]
         issue.read_at = self._deserialize_datetime(issue_state.get("read_at"))
-        issue.position = issue_state.get("position", issue.position)
+        issue.position = issue_state.get("position", fallback_position)
 
     async def create_undo_event(
         self, session_id: int, snapshot: Snapshot

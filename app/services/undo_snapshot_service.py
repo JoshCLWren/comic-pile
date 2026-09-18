@@ -79,14 +79,16 @@ class UndoSnapshotService:
             HTTPException: If snapshot not found or not applicable.
         """
         # Get session and snapshot
-        session = await self.repository.get_user_session(session_id, session_user_id)
+        session = await self.repository.get_user_session(
+            session_id, session_user_id, for_update=True
+        )
         if not session:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session {session_id} not found",
             )
 
-        snapshot = await self.repository.get_snapshot_by_id(snapshot_id)
+        snapshot = await self.repository.get_snapshot_by_id(snapshot_id, session_id)
         if not snapshot:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -118,7 +120,7 @@ class UndoSnapshotService:
             and not state[USES_ISSUE_TRACKING_KEY]
         ]
         if counter_thread_ids:
-            await self.repository.update_event_thread_references(session_id, counter_thread_ids)
+            await self.repository.clear_event_issue_references(session_id, counter_thread_ids)
 
         # Record undo event
         await self.repository.create_undo_event(session_id, snapshot)
@@ -322,15 +324,17 @@ class UndoSnapshotService:
         if extra_ids:
             await self.repository.delete_issues_by_ids(extra_ids)
 
-        for _fallback_position, issue_state in enumerate(snapshot_issues, start=1):
+        for fallback_position, issue_state in enumerate(snapshot_issues, start=1):
             issue_id = int(issue_state["id"])
             issue = existing_by_id.get(issue_id)
             if issue is None:
                 issue = await self.repository.create_issue_from_state(
-                    issue_id, thread.id, issue_state
+                    issue_id, thread.id, issue_state, fallback_position
                 )
             else:
-                await self.repository.update_issue_from_state(issue, issue_state)
+                await self.repository.update_issue_from_state(
+                    issue, issue_state, fallback_position
+                )
 
         await self.db.flush()
         thread.total_issues = state.get("total_issues")
