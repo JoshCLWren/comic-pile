@@ -307,7 +307,7 @@ export default function IdentityInboxPage() {
   const [nextPageToken, setNextPageToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  [expandedId, setExpandedId] = useState<number | null>(null)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
   const limit = 20
 
   const fetchItems = useCallback(async (pageToken: string | null) => {
@@ -380,8 +380,8 @@ useEffect(() => {
     }
   }, [])
 
-  const totalPages = Math.ceil(total / limit)
-  const currentPage = Math.floor(offset / limit) + 1
+  // Removed unused totalPages and currentPage as they are not needed for token-based pagination
+
 
   return (
     <section aria-label="Identity reconciliation inbox" className="pt-4 pb-12 w-full">
@@ -391,61 +391,59 @@ useEffect(() => {
         reject wrong candidates, or defer for later.
       </p>
 
-{error && (
-  <div className="text-center py-4">
-    <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-3">
-      Failed to load identities
-    </p>
-    <button
-      onClick={() => void fetchItems(nextPageToken)}
-      className="h-9 px-4 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
-    >
-      Retry
-    </button>
-  </div>
-)}
-
-{loading ? (
-    <div className="text-center py-12 text-[var(--theme-text-muted)]">Loading...</div>
-  ) : items.length === 0 ? (
-    <div className="text-center py-12">
-      <div className="text-4xl mb-3">'\u2714\uFE0F'</div>
-      <div className="text-sm text-[var(--theme-text-muted)] font-medium">All clear!</div>
-      <div className="text-xs text-[var(--theme-text-dim)]">No unresolved identities in your inbox.</div>
-    </div>
-  ) : (
-    <>
-      <div className="text-xs text-[var(--theme-text-dim)] mb-3">
-        {items.length} {items.length === 1 ? 'item' : 'items'}
-      </div>
-      <div className="space-y-3">
-        {items.map((item) => (
-          <InboxItemCard
-            key={item.mapping_id}
-            item={item}
-            onConfirm={handleConfirm}
-            onReject={handleReject}
-            onDefer={handleDefer}
-            onSkip={handleSkip}
-            expandedId={expandedId}
-            toggleExpand={toggleExpand}
-          />
-        ))}
-      </div>
-      {nextPageToken !== null && (
-        <div className="flex justify-center">
+      {error && (
+        <div className="text-center py-4">
+          <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-3">
+            Failed to load identities
+          </p>
           <button
-            type="button"
             onClick={() => void fetchItems(nextPageToken)}
-            disabled={loading}
-            className="min-h-11 rounded-lg border border-amber-500/40 bg-stone-950 px-5 py-2 font-bold text-amber-300 disabled:cursor-wait disabled:opacity-60"
+            className="h-9 px-4 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
           >
-            {loading ? 'Loading more…' : 'Load More'}
+            Retry
           </button>
         </div>
       )}
-    </>
-  )}
+
+      {loading ? (
+        <div className="text-center py-12 text-[var(--theme-text-muted)]">Loading...</div>
+      ) : items.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="text-4xl mb-3">✔️</div>
+          <div className="text-sm text-[var(--theme-text-muted)] font-medium">All clear!</div>
+          <div className="text-xs text-[var(--theme-text-dim)]">No unresolved identities in your inbox.</div>
+        </div>
+      ) : (
+        <>
+          <div className="text-xs text-[var(--theme-text-dim)] mb-3">
+            {items.length} {items.length === 1 ? 'item' : 'items'}
+          </div>
+          <div className="space-y-3">
+            {items.map((item) => (
+              <InboxItemCard
+                key={item.mapping_id}
+                item={item}
+                onConfirm={handleConfirm}
+                onReject={handleReject}
+                onDefer={handleDefer}
+                onSkip={handleSkip}
+                expandedId={expandedId}
+                toggleExpand={toggleExpand}
+              />
+            ))}
+          </div>
+          {nextPageToken !== null && (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => void fetchItems(nextPageToken)}
+                disabled={loading}
+                className="min-h-11 rounded-lg border border-amber-500/40 bg-stone-950 px-5 py-2 font-bold text-amber-300 disabled:cursor-wait disabled:opacity-60"
+              >
+                {loading ? 'Loading more…' : 'Load More'}
+              </button>
+            </div>
+          )}
         </>
       )}
     </section>

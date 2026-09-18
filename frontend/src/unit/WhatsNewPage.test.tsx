@@ -168,9 +168,7 @@ describe('release time-of-day formatting', () => {
     it('renders the local published time-of-day on each card', async () => {
       api.list.mockResolvedValue({
         releases: [release({ id: 11, title: 'Timed release note' })],
-        total: 1,
-        limit: RELEASE_PAGE_SIZE,
-        offset: 0,
+        next_page_token: null,
       })
 
       render(<WhatsNewPage />)
@@ -182,22 +180,20 @@ describe('release time-of-day formatting', () => {
 
 describe('WhatsNewPage', () => {
     it('shows loading and then the empty release-ledger state', async () => {
-      let resolveList: ((value: { releases: Release[]; total: number; limit: number; offset: number }) => void) | undefined
+      let resolveList: ((value: { releases: Release[]; next_page_token: string | null }) => void) | undefined
       api.list.mockImplementation(() => new Promise(resolve => { resolveList = resolve }))
 
       render(<WhatsNewPage />)
       expect(screen.getByRole('status')).toHaveTextContent('Loading release notes')
 
-      resolveList?.({ releases: [], total: 0, limit: RELEASE_PAGE_SIZE, offset: 0 })
+      resolveList?.({ releases: [], next_page_token: null })
       expect(await screen.findByText('No release notes have been published yet.')).toBeInTheDocument()
     })
 
     it('renders structured public fields without exposing PR or provenance metadata', async () => {
       api.list.mockResolvedValue({
         releases: [release({ id: 10 })],
-        total: 1,
-        limit: RELEASE_PAGE_SIZE,
-        offset: 0,
+        next_page_token: null,
       })
 
       render(<WhatsNewPage />)
@@ -217,9 +213,7 @@ describe('WhatsNewPage', () => {
           release({ id: 2, title: 'First same-day update' }),
           release({ id: 1, title: 'Second same-day update' }),
         ],
-        total: 2,
-        limit: RELEASE_PAGE_SIZE,
-        offset: 0,
+        next_page_token: null,
       })
 
       render(<WhatsNewPage />)
@@ -232,15 +226,11 @@ describe('WhatsNewPage', () => {
       api.list
         .mockResolvedValueOnce({
           releases: [release({ id: 2, title: 'Newest release' })],
-          total: 2,
-          limit: RELEASE_PAGE_SIZE,
-          offset: 0,
+          next_page_token: 'token-1',
         })
         .mockResolvedValueOnce({
           releases: [release({ id: 1, title: 'Older release', released_at: '2026-08-10T20:00:00Z' })],
-          total: 2,
-          limit: RELEASE_PAGE_SIZE,
-          offset: 1,
+          next_page_token: null,
         })
 
       render(<WhatsNewPage />)
@@ -249,19 +239,17 @@ describe('WhatsNewPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Load older updates' }))
 
       expect(await screen.findByText('Older release')).toBeInTheDocument()
-      expect(api.list).toHaveBeenNthCalledWith(1, RELEASE_PAGE_SIZE, 0)
-      expect(api.list).toHaveBeenNthCalledWith(2, RELEASE_PAGE_SIZE, 1)
+      expect(api.list).toHaveBeenNthCalledWith(1, RELEASE_PAGE_SIZE, null)
+      expect(api.list).toHaveBeenNthCalledWith(2, RELEASE_PAGE_SIZE, 'token-1')
       expect(screen.queryByRole('button', { name: 'Load older updates' })).not.toBeInTheDocument()
     })
 
     it('shows a pending label while an older release page is loading', async () => {
-      let resolveOlder: ((value: { releases: Release[]; total: number; limit: number; offset: number }) => void) | undefined
+      let resolveOlder: ((value: { releases: Release[]; next_page_token: string | null }) => void) | undefined
       api.list
         .mockResolvedValueOnce({
           releases: [release({ id: 2, title: 'Newest release' })],
-          total: 2,
-          limit: RELEASE_PAGE_SIZE,
-          offset: 0,
+          next_page_token: 'token-1',
         })
         .mockImplementationOnce(() => new Promise(resolve => { resolveOlder = resolve }))
 
@@ -273,9 +261,7 @@ describe('WhatsNewPage', () => {
 
       resolveOlder?.({
         releases: [release({ id: 1, title: 'Older release', released_at: '2026-08-10T20:00:00Z' })],
-        total: 2,
-        limit: RELEASE_PAGE_SIZE,
-        offset: 1,
+        next_page_token: null,
       })
       expect(await screen.findByText('Older release')).toBeInTheDocument()
     })
@@ -284,16 +270,12 @@ describe('WhatsNewPage', () => {
       api.list
         .mockResolvedValueOnce({
           releases: [release({ id: 2, title: 'Newest release' })],
-          total: 2,
-          limit: RELEASE_PAGE_SIZE,
-          offset: 0,
+          next_page_token: 'token-1',
         })
         .mockRejectedValueOnce(new Error('older page unavailable'))
         .mockResolvedValueOnce({
           releases: [release({ id: 1, title: 'Recovered older release', released_at: '2026-08-10T20:00:00Z' })],
-          total: 2,
-          limit: RELEASE_PAGE_SIZE,
-          offset: 1,
+          next_page_token: null,
         })
 
       render(<WhatsNewPage />)
@@ -304,14 +286,14 @@ describe('WhatsNewPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
 
       expect(await screen.findByText('Recovered older release')).toBeInTheDocument()
-      expect(api.list).toHaveBeenNthCalledWith(2, RELEASE_PAGE_SIZE, 1)
-      expect(api.list).toHaveBeenNthCalledWith(3, RELEASE_PAGE_SIZE, 1)
+      expect(api.list).toHaveBeenNthCalledWith(2, RELEASE_PAGE_SIZE, 'token-1')
+      expect(api.list).toHaveBeenNthCalledWith(3, RELEASE_PAGE_SIZE, 'token-1')
     })
 
     it('keeps retry behavior when the initial release API request fails', async () => {
       api.list
         .mockRejectedValueOnce(new Error('release API unavailable'))
-        .mockResolvedValueOnce({ releases: [], total: 0, limit: RELEASE_PAGE_SIZE, offset: 0 })
+        .mockResolvedValueOnce({ releases: [], next_page_token: null })
 
       render(<WhatsNewPage />)
 
@@ -319,7 +301,7 @@ describe('WhatsNewPage', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
 
       await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2))
-      expect(api.list).toHaveBeenNthCalledWith(2, RELEASE_PAGE_SIZE, 0)
+      expect(api.list).toHaveBeenNthCalledWith(2, RELEASE_PAGE_SIZE, null)
       expect(await screen.findByText('No release notes have been published yet.')).toBeInTheDocument()
     })
 
@@ -335,9 +317,7 @@ describe('WhatsNewPage', () => {
           release({ id: 2, title: 'T', summary: 'S', category: 'bug' }),
           release({ id: 1, title: 'Real release note' }),
         ],
-        total: 2,
-        limit: RELEASE_PAGE_SIZE,
-        offset: 0,
+        next_page_token: null,
       })
 
       render(<WhatsNewPage />)
@@ -367,9 +347,7 @@ describe('WhatsNewPage', () => {
             summary: 'loading states',
           }),
         ],
-        total: 3,
-        limit: RELEASE_PAGE_SIZE,
-        offset: 0,
+        next_page_token: null,
       })
 
       render(<WhatsNewPage />)
@@ -392,9 +370,7 @@ describe('WhatsNewPage', () => {
             summary: 'Interrupted rolls now continue where you left off instead of restarting.',
           }),
         ],
-        total: 1,
-        limit: RELEASE_PAGE_SIZE,
-        offset: 0,
+        next_page_token: null,
       })
 
       render(<WhatsNewPage />)
@@ -414,9 +390,7 @@ describe('WhatsNewPage', () => {
             summary: 'See https://github.com/JoshCLWren/comic-pile/pull/1234 for details.',
           }),
         ],
-        total: 1,
-        limit: RELEASE_PAGE_SIZE,
-        offset: 0,
+        next_page_token: null,
       })
 
       render(<WhatsNewPage />)
