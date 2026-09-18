@@ -39,12 +39,6 @@ interface VirtualizedThreadListProps<T> {
    *   **Not a stable identifier** — it changes if the array is reordered.
    */
   renderItem: (thread: T, index: number) => ReactNode
-  /**
-   * Optional explicit column count retained for deterministic legacy tests.
-   * Production Queue rendering intentionally leaves this unset so the
-   * virtualized and non-virtualized presentations are both one full-width row.
-   */
-  explicitColumnCount?: number
   sentinelRef?: React.Ref<HTMLDivElement>
   hasNextPage?: boolean
   /**
@@ -63,15 +57,6 @@ interface VirtualizedThreadListProps<T> {
  * from the first page through the final page. This mirrors the
  * non-virtualized list introduced by #2088/#2099.
  *
- * `explicitColumnCount` preserves the older multi-column path only as a
- * deterministic test hook. Queue itself never supplies that prop.
- *
- * ### `data-index` contract
- * In the production single-column path, `data-index` is the thread index. When
- * an explicit multi-column count is supplied by a test, it represents the
- * virtual row index and consumers must use `renderItem`'s second argument for
- * thread-level identity.
- *
  * Uses `@tanstack/react-virtual` with `useWindowVirtualizer` for efficient DOM
  * virtualization. The window scroll surface owns Queue before and after the
  * virtualization threshold is crossed, preventing nested scroll containers.
@@ -89,16 +74,12 @@ interface VirtualizedThreadListProps<T> {
 export default function VirtualizedThreadList<T>({
   threads,
   renderItem,
-  explicitColumnCount,
   sentinelRef,
   hasNextPage,
   useVirtualizer,
 }: VirtualizedThreadListProps<T>) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
-  const [columnCount, setColumnCount] = useState(() =>
-    explicitColumnCount !== undefined ? Math.max(1, explicitColumnCount) : 1,
-  )
 
   // Read the initial wrapper offset synchronously to avoid a 0 → measured
   // layout jump. Production stays single-column regardless of wrapper width.
@@ -117,8 +98,7 @@ export default function VirtualizedThreadList<T>({
       const rect = wrapperRef.current.getBoundingClientRect()
       setScrollMargin(rect.top + window.scrollY)
     }
-    setColumnCount(explicitColumnCount !== undefined ? Math.max(1, explicitColumnCount) : 1)
-  }, [explicitColumnCount])
+  }, [])
 
   // React to offset changes (e.g. window resize or layout shifts above the list).
   // Guarded so server-side rendering and layout-less test environments
@@ -149,7 +129,7 @@ export default function VirtualizedThreadList<T>({
     }
   }, [])
 
-  const rowCount = Math.ceil(threads.length / columnCount)
+  const rowCount = threads.length
 
   // Memoize virtualizer options to avoid unnecessary setOptions()
   // calls on every render.
@@ -249,52 +229,27 @@ export default function VirtualizedThreadList<T>({
             width: '100%',
           }}
         >
-          {virtualizer.getVirtualItems().map((virtualItem) => {
-            const rowIndex = virtualItem.index
-            return columnCount === 1 ? (
-              <div
-                key={virtualItem.key}
-                data-index={rowIndex}
-                ref={virtualizer.measureElement}
-                className={rowIndex < threads.length - 1 ? 'border-b border-[var(--theme-border)]' : undefined}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  transform: `translateY(${virtualItem.start - scrollMargin}px)`,
-                }}
-              >
-                {renderItem(threads[rowIndex], rowIndex)}
-              </div>
-            ) : (
-              <div
-                key={virtualItem.key}
-                data-index={rowIndex}
-                ref={virtualizer.measureElement}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  paddingBottom: `${ROW_GAP}px`,
-                  transform: `translateY(${virtualItem.start - scrollMargin}px)`,
-                }}
-              >
-                <div
-                  className="grid gap-4"
-                  style={{
-                    gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
-                    rowGap: `${ROW_GAP}px`,
-                  }}
-                >
-                  {getRowThreads(threads, rowIndex, columnCount).map(
-                    (thread, colIndex) => renderItem(thread, rowIndex * columnCount + colIndex),
-                  )}
-                </div>
-              </div>
-            )
-          })}
+           {virtualizer.getVirtualItems().map((virtualItem) => {
+             const rowIndex = virtualItem.index
+             return (
+               <div
+                 key={virtualItem.key}
+                 data-index={rowIndex}
+                 ref={virtualizer.measureElement}
+                 className={rowIndex < threads.length - 1 ? 'border-b border-[var(--theme-border)]' : undefined}
+                 style={{
+                   position: 'absolute',
+                   top: 0,
+                   left: 0,
+                   width: '100%',
+                   transform: `translateY(${virtualItem.start - scrollMargin}px)`,
+                 }}
+               >
+                 {renderItem(threads[rowIndex], rowIndex)}
+               </div>
+             )
+           })}
+
           {hasNextPage && (
             <div
               ref={sentinelRef}
