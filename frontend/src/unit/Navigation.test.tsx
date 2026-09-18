@@ -167,15 +167,19 @@ test('shows loading and non-auth failure states and logs out gracefully', async 
 
 test('does not make a redundant /auth/me call after AuthProvider resolves user', async () => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-  const { container } = renderWithAuth()
+  renderWithAuth()
   
   await waitFor(() => {
     expect(screen.getByRole('navigation', { name: /desktop navigation/i })).toBeInTheDocument()
   })
   
   // Navigation should not make its own /auth/me call; only AuthProvider does
-  // The mock should only be called once by AuthProvider during bootstrap
-  expect(mockApiGet).toHaveBeenCalledTimes(1)
+  // AuthProvider also calls /v1/users/me/preferences via fetchAndApplyPersistedTheme,
+  // so we count only the /v1/auth/me calls.
+  const authMeCalls = mockApiGet.mock.calls.filter(
+    (call) => call[0] === '/v1/auth/me',
+  )
+  expect(authMeCalls).toHaveLength(1)
   expect(mockApiGet).toHaveBeenCalledWith('/v1/auth/me', { skipAuthRedirect: true, timeout: 15000 })
 })
 
