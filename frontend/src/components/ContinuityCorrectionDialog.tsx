@@ -67,14 +67,22 @@ export default function ContinuityCorrectionDialog({
   const [result, setResult] = useState<string | null>(null);
 
   // React Query for reading-order groups
-  const { data: groupsData, isPending: isLoadingGroups, error: errorGroups } = useQuery({
+  const {
+    data: groupsData,
+    isPending: isLoadingGroups,
+    error: groupsError,
+  } = useQuery({
     queryKey: queryKeys.continuityCorrection.groups(),
     queryFn: () => groupsApi.list(),
     retry: false,
   });
 
   // React Query for resolved connected threads
-  const { data: resolvedConnectedData, isPending: isLoadingConnected, error: errorConnected } = useQuery({
+  const {
+    data: resolvedConnectedData,
+    isPending: isLoadingConnected,
+    error: connectedError,
+  } = useQuery({
     queryKey: ['continuityConnectedThreads', threadId],
     queryFn: async () => {
       if (connectedThreads.length === 0) return [];
@@ -92,6 +100,8 @@ export default function ContinuityCorrectionDialog({
     },
     retry: false,
   });
+
+  const isResolvingConnected = connectedThreads.length > 0 && (isLoadingConnected || resolvedConnectedData === undefined);
 
   const canSaveCurrentIssue = issueId != null;
   const canSaveConnected = resolvedConnectedData?.length > 0;
@@ -171,9 +181,13 @@ export default function ContinuityCorrectionDialog({
           <h3 id="continuity-connections-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-400">
             Verified connections
           </h3>
-          {resolvedConnectedData?.length === 0 ? (
+          {isResolvingConnected ? (
             <p className="mt-2 text-[11px] text-stone-400" role="status">
               Resolving connected series…
+            </p>
+          ) : resolvedConnectedData?.length === 0 ? (
+            <p className="mt-2 text-[11px] text-stone-400" role="status">
+              No connected series found.
             </p>
           ) : (
             <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Connected threads">
@@ -187,9 +201,11 @@ export default function ContinuityCorrectionDialog({
               ))}
             </ul>
           )}
-          <p className="mt-2 text-[10px] font-bold text-stone-500">
-            These will be added to the chosen crossover without re-searching.
-          </p>
+          {!isResolvingConnected && resolvedConnectedData && resolvedConnectedData.length > 0 && (
+            <p className="mt-2 text-[10px] font-bold text-stone-500">
+              These will be added to the chosen crossover without re-searching.
+            </p>
+          )}
         </section>
       ) : null}
 
@@ -255,16 +271,23 @@ export default function ContinuityCorrectionDialog({
         </div>
       </fieldset>
 
-        {error ? (
-          <p className="text-[11px] text-rose-300" role="alert">
-            {error}
-          </p>
-        ) : null}
-        {result ? (
-          <p className="text-[11px] text-emerald-300" role="status">
-            {result}
-          </p>
-        ) : null}
+      {(groupsError || connectedError) && (
+        <p className="text-[11px] text-rose-300" role="alert">
+          {groupsError
+            ? getApiErrorDetail(groupsError)
+            : getApiErrorDetail(connectedError)}
+        </p>
+      )}
+      {error ? (
+        <p className="text-[11px] text-rose-300" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {result ? (
+        <p className="text-[11px] text-emerald-300" role="status">
+          {result}
+        </p>
+      ) : null}
 
         <div className="flex gap-2">
           <button

@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { KeyboardEvent } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import Modal from './Modal'
 import { issuesApi } from '../services/api-issues'
 import type { IssueListParams } from '../services/api-issues'
