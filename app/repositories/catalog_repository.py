@@ -46,7 +46,7 @@ async def search_catalog_series(
     query = query.limit(limit)
     
     result = await db.execute(query)
-    return result.scalars().unique().all()
+    return list(result.scalars().unique().all())
 
 
 async def search_catalog_issues(
@@ -94,7 +94,7 @@ async def search_catalog_issues(
     query = query.limit(limit)
     
     result = await db.execute(query)
-    return result.scalars().unique().all()
+    return list(result.scalars().unique().all())
 
 
 async def list_series_mappings(
@@ -129,7 +129,7 @@ async def list_series_mappings(
     query = query.limit(limit)
     
     result = await db.execute(query)
-    return result.scalars().all()
+    return list(result.scalars().all())
 
 
 async def list_issue_mappings(
@@ -164,4 +164,4 @@ async def list_issue_mappings(
     query = query.limit(limit)
     
     result = await db.execute(query)
-    return result.scalars().all()
+    return list(result.scalars().all())
