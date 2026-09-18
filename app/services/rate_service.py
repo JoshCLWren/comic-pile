@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cache_invalidation import invalidate_user_view
 from app.config import get_rating_settings
 from app.models import Event, Issue, Snapshot, Thread
-from app.models import Session as SessionModel
 from app.models.thread import normalize_format_value
 from app.models.user import User
 from app.repositories.issue_repository import (
