@@ -1,5 +1,10 @@
 """Pydantic schemas for request/response validation."""
 
+from app.schemas.analytics import (
+    AnalyticsMetricsResponse,
+    RecentSession,
+    TopRatedThread,
+)
 from app.schemas.auth import (
     RefreshTokenRequest,
     TokenResponse,
@@ -83,6 +88,10 @@ from app.schemas.thread import (
 )
 
 __all__ = [
+    # Analytics
+    "AnalyticsMetricsResponse",
+    "RecentSession",
+    "TopRatedThread",
     # Auth
     "UserRegisterRequest",
     "UserLoginRequest",
