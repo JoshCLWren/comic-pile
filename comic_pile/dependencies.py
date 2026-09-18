@@ -6,11 +6,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import TTL, cached
-from app.config import get_app_settings
-from app.continuity_blocking import (
-    get_continuity_blocked_thread_ids,
-    get_continuity_rule_blocked_thread_ids,
-)
+from app.continuity_blocking import get_continuity_rule_blocked_thread_ids
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
@@ -104,7 +100,6 @@ async def _continuity_blocking_explanations(
 ) -> list[BlockingDependency]:
     """Convert continuity-graph blockers into shared reader-facing explanations."""
     from app.services.continuity_graph import (
-        issue_readiness,
         issue_rule_readiness,
         load_snapshot,
     )
@@ -147,7 +142,6 @@ async def _continuity_blocking_explanations_batch(
 ) -> dict[int, list[BlockingDependency]]:
     """Convert continuity-graph blockers for many threads in one snapshot load."""
     from app.services.continuity_graph import (
-        issue_readiness,
         issue_rule_readiness,
         load_snapshot,
     )

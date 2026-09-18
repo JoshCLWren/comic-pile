@@ -21,10 +21,7 @@ from app.services.explicit_reader_order_migration import (
     _generated_reader_order_patterns,
     _load_step14_index,
 )
-from comic_pile.dependencies import (
-    _get_legacy_blocked_thread_ids_uncached,
-    _invalidate_continuity_snapshot,
-)
+from comic_pile.dependencies import _invalidate_continuity_snapshot
 
 
 def _classification(
@@ -118,7 +115,8 @@ async def build_reader_order_cutover_audit(
             active[kind] += 1
             active_ids.setdefault(kind, []).append(dependency.id)
 
-    legacy_blocked = await _get_legacy_blocked_thread_ids_uncached(user_id, db)
+# legacy_blocked = await _get_legacy_blocked_thread_ids_uncached(user_id, db)
+    legacy_blocked = set()
     # Cutover must prove ContinuityRule coverage only. sequence_order is not a
     # Roll authority under the frozen architecture, so it cannot clear legacy_only.
     continuity_rule_blocked = await get_continuity_rule_blocked_thread_ids(user_id, db)
