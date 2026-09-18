@@ -117,12 +117,13 @@ it('keeps paginated queue items as full-width rows on a wide viewport', async ()
 })
 
 /**
- * Acceptance criterion #6 for issue #2184: begin with ≤50 items, append enough
- * to cross the threshold, and verify the same user-facing scroll surface
- * (the window) owns Queue before and after — no nested vertical scroll channel
- * or fixed-height box is introduced.
+ * Acceptance criterion for #2565: Queue must use one virtualized rendering
+ * path from the first page onward. Appending pages must not replace the scroll
+ * owner or rebuild the list. Verify the same user-facing scroll surface (the
+ * window) owns Queue before and after growth — no nested vertical scroll
+ * channel or fixed-height box is introduced.
  */
-it('keeps a single scroll surface when the queue crosses the virtualization threshold', async () => {
+it('keeps a single scroll surface when the queue grows past the first page', async () => {
   const initialThreads: Thread[] = Array.from({ length: 50 }, (_, i) => createMockThread(i + 1))
   const grownThreads: Thread[] = Array.from({ length: 60 }, (_, i) => createMockThread(i + 1))
 
@@ -152,7 +153,8 @@ it('keeps a single scroll surface when the queue crosses the virtualization thre
   })
 
   await waitFor(() => {
-    expect(screen.getAllByTestId('queue-thread-item')).toHaveLength(50)
+    expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
+    expect(screen.getAllByTestId('queue-thread-item')).toHaveLength(2)
   })
   expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
 
@@ -166,11 +168,12 @@ it('keeps a single scroll surface when the queue crosses the virtualization thre
     }
   }
 
-  const plainSurface = scrollChannelOf(container.querySelector('#queue-container')!)
-  expect(['auto', 'scroll']).not.toContain(plainSurface.overflowY)
-  expect(plainSurface.inlineHeight).toBe('')
+  const initialSurface = scrollChannelOf(container.querySelector('#queue-container')!)
+  expect(['auto', 'scroll']).not.toContain(initialSurface.overflowY)
+  expect(initialSurface.inlineHeight).toBe('')
 
-  // Cross the threshold: VirtualizedThreadList replaces the plain list.
+  // Append next page: Queue stays on the same virtualized path, scroll owner
+  // is not replaced and list is not rebuilt under the user's scroll position.
   // SAFETY: same ref cast as the initial render for QueueList prop types
   rerender(
     <QueueList
@@ -189,13 +192,13 @@ it('keeps a single scroll surface when the queue crosses the virtualization thre
     expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
   })
 
-  const virtualizedSurface = scrollChannelOf(container.querySelector('#queue-container')!)
-  expect(['auto', 'scroll']).not.toContain(virtualizedSurface.overflowY)
-  expect(virtualizedSurface.inlineHeight).toBe('')
+  const grownSurface = scrollChannelOf(container.querySelector('#queue-container')!)
+  expect(['auto', 'scroll']).not.toContain(grownSurface.overflowY)
+  expect(grownSurface.inlineHeight).toBe('')
 
   // Presentation stays single-column (no multi-column grid is introduced).
   expect(container.querySelector('[style*="grid-template-columns"]')).not.toBeInTheDocument()
-  // Infinite-scroll sentinel survives the threshold crossing.
+  // Infinite-scroll sentinel survives page growth.
   expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
 })
 
