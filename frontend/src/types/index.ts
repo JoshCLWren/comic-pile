@@ -297,6 +297,12 @@ export interface AnalyticsMetrics {
 export interface ThreadListResponse {
   threads: Thread[];
   next_page_token: string | null;
+  /**
+   * Authoritative whole-queue active count, independent of loaded page/search/sort.
+   * Optional so older cached responses and test fixtures degrade to the loaded
+   * slice via the caller's fallback (issue #2568).
+   */
+  active_count?: number;
 }
 
 export interface SessionListResponse {

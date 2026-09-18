@@ -128,6 +128,30 @@ async def fetch_stale_threads(
     return list(result.scalars().all())
 
 
+async def count_active_threads(db: AsyncSession, user_id: int) -> int:
+    """Count a user's active queue threads (authoritative total).
+
+    The membership predicate matches the active-queue contract used by
+    repositioning and shuffle exactly (``status == "active"`` and
+    ``queue_position >= 1``), so the total is independent of the loaded page,
+    search filter, and sort order (see issue #2568).
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+
+    Returns:
+        Number of active queue threads owned by the user.
+    """
+    result = await db.execute(
+        select(func.count())
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+    )
+    return int(result.scalar_one())
+
+
 async def fetch_queue_page(
     db: AsyncSession,
     user_id: int,

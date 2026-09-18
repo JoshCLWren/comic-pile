@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
 
-from sqlalchemy import ColumnElement, or_
+from sqlalchemy import ColumnElement, and_, or_
 from sqlalchemy.sql.elements import ColumnElement as SQLColumnElement
 
 from app.models.thread import Thread
@@ -103,6 +103,15 @@ def decode_queue_cursor(
     if not all(isinstance(value, str) for value in raw_values):
         raise ValueError("Invalid Queue page token values")
 
+    # The value count is part of the cursor contract: position carries the
+    # blocked/unblocked grouping key in addition to the position and id.
+    expected_value_counts: dict[str, int] = {"position": 3, "title": 2, "created": 2}
+    expected_count = expected_value_counts.get(cursor_sort)
+    if expected_count is None or len(raw_values) != expected_count:
+        raise ValueError("Invalid Queue page token values")
+    if cursor_sort == "position" and raw_values[0] not in {"0", "1"}:
+        raise ValueError("Invalid Queue page token values")
+
     normalized_search = normalize_queue_search(search)
     if cursor_sort != sort or cursor_search != normalized_search:
         raise ValueError("Queue page token does not match current search or sort")
@@ -128,7 +137,15 @@ def build_sort_order(sort: QueueSort) -> list[SQLColumnElement[Any]]:
         List of SQLAlchemy column elements suitable for ``.order_by()``.
     """
     if sort == "position":
-        return [Thread.queue_position.asc(), Thread.id.asc()]
+        # Position uses the feasible-only product order: readable (unblocked)
+        # rows sort ahead of blocked rows. Encoding that grouping here keeps
+        # the keyset cursor order identical to the order the client displays,
+        # so a later page can never insert a row ahead of an earlier page.
+        return [
+            Thread.is_blocked.asc(),
+            Thread.queue_position.asc(),
+            Thread.id.asc(),
+        ]
     if sort == "title":
         return [Thread.title.asc(), Thread.id.asc()]
     # created: newest first is the natural exploration order
@@ -139,8 +156,10 @@ def build_cursor_filter(cursor: QueueCursor) -> ColumnElement[bool]:
     """Build a WHERE clause that skips past the cursor row.
 
     The filter implements keyset pagination: keep every row that sorts
-    strictly after the cursor row, using ``(sort_value, id)`` as the
-    composite key.
+    strictly after the cursor row using the same composite key as
+    :func:`build_sort_order`. Position cursors carry the blocked grouping
+    flag, so the boundary is ``(is_blocked, queue_position, id)``; title and
+    created use ``(sort_value, id)``.
 
     Args:
         cursor: A validated cursor whose ``values`` tuple matches the
@@ -150,11 +169,20 @@ def build_cursor_filter(cursor: QueueCursor) -> ColumnElement[bool]:
         A SQLAlchemy boolean expression for use in ``.where()``.
     """
     if cursor.sort == "position":
-        cursor_position = int(cursor.values[0])
-        cursor_id = int(cursor.values[1])
-        return or_(
+        cursor_blocked = cursor.values[0] == "1"
+        cursor_position = int(cursor.values[1])
+        cursor_id = int(cursor.values[2])
+        after_position = or_(
             Thread.queue_position > cursor_position,
             (Thread.queue_position == cursor_position) & (Thread.id > cursor_id),
+        )
+        if cursor_blocked:
+            return and_(Thread.is_blocked.is_(True), after_position)
+        # Unblocked cursor: every blocked row sorts after it, and unblocked
+        # rows must sort after the cursor row by (position, id).
+        return or_(
+            and_(Thread.is_blocked.is_(False), after_position),
+            Thread.is_blocked.is_(True),
         )
 
     if cursor.sort == "title":
@@ -185,7 +213,8 @@ def build_cursor_values_from_row(sort: QueueSort, thread: Thread) -> tuple[str, 
         A tuple of string-encoded sort-key and id values.
     """
     if sort == "position":
-        return (str(thread.queue_position), str(thread.id))
+        blocked_flag = "1" if thread.is_blocked else "0"
+        return (blocked_flag, str(thread.queue_position), str(thread.id))
     if sort == "title":
         return (thread.title, str(thread.id))
     return (thread.created_at.isoformat(), str(thread.id))

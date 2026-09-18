@@ -88,7 +88,7 @@ async def test_list_threads_empty(auth_client: AsyncClient) -> None:
     response = await auth_client.get("/api/v1/threads/")
     assert response.status_code == 200
     data = response.json()
-    assert data == {"threads": [], "next_page_token": None}
+    assert data == {"threads": [], "next_page_token": None, "active_count": 0}
 
 
 @pytest.mark.asyncio
