@@ -10,7 +10,7 @@ from datetime import datetime
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Session as SessionModel, Snapshot
+from app.models import Event, Session as SessionModel, Snapshot, Thread
 
 
 async def get_session(db: AsyncSession, session_id: int) -> SessionModel | None:
@@ -328,7 +328,7 @@ async def restore_session_start(
     """
     from app.repositories.thread_repository import threads_by_ids, delete_threads_by_ids
     from app.models import Issue
-    from sqlalchemy import delete, or_, update
+    from sqlalchemy import delete
     from datetime import datetime
 
     # Get the session
@@ -365,13 +365,15 @@ async def restore_session_start(
         await null_event_thread_references(db, threads_to_delete)
         await delete_threads_by_ids(db, threads_to_delete, user_id)
 
+    # Batch load existing threads to avoid N+1
+    existing_threads_map = await threads_by_ids(db, snapshot_thread_ids)
+
     # Get threads from snapshot (both existing and new)
     affected_threads = []
-    threads_to_recount = []
 
     for thread_id, state in snapshot.thread_states.items():
         thread_id_int = int(thread_id)
-        thread = await db.get(Thread, thread_id_int)
+        thread = existing_threads_map.get(thread_id_int)
         
         if thread:
             # Update existing thread
@@ -418,9 +420,6 @@ async def restore_session_start(
                 thread.total_issues = state.get("total_issues")
                 thread.next_unread_issue_id = state.get("next_unread_issue_id")
                 thread.reading_progress = state.get("reading_progress")
-                
-                if thread.uses_issue_tracking():
-                    threads_to_recount.append(thread)
             else:
                 # Clear migrated state when restoring to legacy
                 await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
@@ -474,9 +473,6 @@ async def restore_session_start(
                 new_thread.total_issues = state.get("total_issues")
                 new_thread.next_unread_issue_id = state.get("next_unread_issue_id")
                 new_thread.reading_progress = state.get("reading_progress")
-                
-                if new_thread.uses_issue_tracking():
-                    threads_to_recount.append(new_thread)
             else:
                 new_thread.issues_remaining = state.get("issues_remaining", 0)
 
