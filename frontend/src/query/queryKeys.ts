@@ -153,4 +153,9 @@ export const queryKeys = {
     snapshots: (sessionId: number | string) =>
       ['undo', 'snapshots', sessionId] as const,
   },
+  creators: {
+    all: ['creators'] as const,
+    summaries: (keys: string[]) =>
+      ['creators', 'summaries', [...keys].sort()] as const,
+  },
 } as const
