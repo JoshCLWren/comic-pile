@@ -287,7 +287,7 @@ class DependencyGroupService:
             await self._db.rollback()
             raise ConflictError("A group with this name already exists") from exc
         group_id = group.id
-        return await self._group_response(await self._require_owned_group(group_id, user_id))
+        return await self._group_response(group)
 
     async def get_group(self, user_id: int, group_id: int) -> DependencyGroupResponse:
         """Return one owned group.
@@ -346,7 +346,7 @@ class DependencyGroupService:
         except IntegrityError as exc:
             await self._db.rollback()
             raise ConflictError("A group with this name already exists") from exc
-        return await self._group_response(await self._require_owned_group(group_id, user_id))
+        return await self._group_response(group)
 
     async def delete_group(self, user_id: int, group_id: int) -> None:
         """Delete one owned group and its memberships.
