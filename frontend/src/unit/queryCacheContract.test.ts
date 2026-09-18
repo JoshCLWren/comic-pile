@@ -14,8 +14,8 @@ import {
 } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import type { Thread } from '../types'
-import type { CustomCBL } from '../../services/api-custom-cbl'
-import type { ContinuityPlan } from '../../services/api-continuity-plans'
+import type { CustomCBL } from '../services/api-custom-cbl'
+import type { ContinuityPlan } from '../services/api-continuity-plans'
 
 const thread: Thread = {
   id: 7,
@@ -34,9 +34,10 @@ function createSpiedClient() {
   const client = new QueryClient()
   const setQueryData = vi.spyOn(client, 'setQueryData')
   const invalidateQueries = vi.spyOn(client, 'invalidateQueries').mockResolvedValue()
+  const removeQueries = vi.spyOn(client, 'removeQueries').mockResolvedValue()
   const resetQueries = vi.spyOn(client, 'resetQueries').mockResolvedValue()
 
-  return { client, setQueryData, invalidateQueries, resetQueries }
+  return { client, setQueryData, invalidateQueries, removeQueries, resetQueries }
 }
 
 describe('canonical query keys', () => {
@@ -285,25 +286,18 @@ describe('targeted cache effects', () => {
     const readingPlan: ContinuityPlan = {
       id: 99,
       name: 'Test Reading Plan',
-      description: 'A test reading plan',
+      ordering_mode: 'strict_sequential',
       created_at: '2026-08-03T00:00:00Z',
       updated_at: '2026-08-03T00:00:00Z',
       user_id: 1,
-      lane_id: 'test-lane',
-      issues_added_count: 3,
-      issues_remaining_count: 2,
-      issues_skipped_count: 1,
-      issues_total_count: 6,
-      is_completed: false,
-      is_stale: false,
-      is_active: true,
-      last_issue_added_at: '2026-08-03T00:00:00Z',
-      next_issue_at: '2026-08-10T00:00:00Z',
-      next_issue_thread_id: 12,
-      next_issue_thread_title: 'Next Comic',
-      next_issue_thread_format: 'issue',
-      next_issue_thread_issue_number: '#45',
-      next_issue_thread_series_name: 'Series Name',
+      lanes: [
+        {
+          id: 'test-lane',
+          name: 'Test Lane',
+          order: 0,
+        },
+      ],
+      nodes: [],
     }
 
     it('applies a committed reading plan to detail cache and invalidates dependent queries', async () => {
