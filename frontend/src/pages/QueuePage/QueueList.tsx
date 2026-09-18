@@ -65,28 +65,13 @@ export function QueueList({
           {reorderError}
         </div>
       )}
-      {filteredThreads.length > VIRTUALIZATION_THRESHOLD ? (
-        <VirtualizedThreadList
-          threads={filteredThreads}
-          renderItem={renderItem}
-          sentinelRef={sentinelRef}
-          hasNextPage={hasNextPage}
-          useVirtualizer={useVirtualizer}
-        />
-      ) : (
-        <div
-          data-testid="queue-thread-list"
-          id="queue-container"
-          role="list"
-          aria-label="Series queue"
-          className="@container overflow-hidden rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] divide-y divide-[var(--theme-border)]"
-        >
-          {filteredThreads.map((thread, index) => renderItem(thread, index))}
-          {hasNextPage && (
-            <div ref={sentinelRef} className="h-4" data-testid="queue-infinite-scroll-sentinel" aria-hidden="true" />
-          )}
-        </div>
-      )}
+      <VirtualizedThreadList
+        threads={filteredThreads}
+        renderItem={renderItem}
+        sentinelRef={sentinelRef}
+        hasNextPage={hasNextPage}
+        useVirtualizer={useVirtualizer}
+      />
     </>
   )
 }
