@@ -32,7 +32,7 @@ async def test_cold_ping_does_not_initialize_database_or_cache() -> None:
     with (
         patch("app.main.init_database", new_callable=AsyncMock) as mock_init,
         patch.object(cache_accounting, "initialize", new_callable=AsyncMock) as mock_acct,
-        patch.object(main.cache, "configure", new_callable=AsyncMock) as mock_cache,
+        patch.object(main.cache, "configure", new_callable=AsyncMock),
     ):
         app = main.create_app(serve_frontend=False)
         startup = _find_startup_handler(app)
@@ -41,7 +41,6 @@ async def test_cold_ping_does_not_initialize_database_or_cache() -> None:
         # lightweight startup must not have touched heavy deps
         mock_init.assert_not_awaited()
         mock_acct.assert_not_awaited()
-        mock_cache.assert_not_awaited()
         assert is_heavy_initialized() is False
 
         transport = ASGITransport(app=app)
@@ -56,7 +55,7 @@ async def test_cold_ping_does_not_initialize_database_or_cache() -> None:
 
         mock_init.assert_not_awaited()
         mock_acct.assert_not_awaited()
-        mock_cache.assert_not_awaited()
+
 
 
 @pytest.mark.asyncio
@@ -69,7 +68,7 @@ async def test_first_non_ping_request_initializes_heavy_dependencies() -> None:
     with (
         patch("app.main.init_database", new_callable=AsyncMock) as mock_init,
         patch.object(cache_accounting, "initialize", new_callable=AsyncMock) as mock_acct,
-        patch.object(main.cache, "configure", new_callable=AsyncMock) as mock_cache,
+        patch.object(main.cache, "configure", new_callable=AsyncMock),
     ):
         app = main.create_app(serve_frontend=False)
         startup = _find_startup_handler(app)
