@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_user
 from app.cache_invalidation import invalidate_user_view
+from app.services.continuity import _refresh_blocked_state, _to_response
 from app.continuity_rules import (
     _would_create_cycle,
     ensure_owned_continuity_rule_references,
@@ -23,7 +24,6 @@ from app.schemas.continuity_rule import (
     ContinuityRuleResponse,
     ConvergenceTarget,
 )
-from comic_pile.dependencies import refresh_user_blocked_status
 
 router = APIRouter(tags=["continuity"])
 CONTINUITY_LOCK_NAMESPACE = 1_129_274_964
@@ -32,35 +32,6 @@ CONTINUITY_LOCK_NAMESPACE = 1_129_274_964
 async def _invalidate_continuity_caches(user_id: int) -> None:
     """Invalidate all user-scoped cached views after a continuity mutation."""
     await invalidate_user_view(user_id)
-
-
-async def _refresh_blocked_state(user_id: int, db: AsyncSession) -> None:
-    """Persist the unified Queue/Roll blocked projection after graph mutations."""
-    await refresh_user_blocked_status(user_id, db)
-    await db.commit()
-    await _invalidate_continuity_caches(user_id)
-
-
-def _to_response(rule: ContinuityRule) -> ContinuityRuleResponse:
-    """Convert a loaded persistence model into its API response."""
-    return ContinuityRuleResponse(
-        id=rule.id,
-        user_id=rule.user_id,
-        source_type=rule.source_type,
-        source_id=rule.source_id,
-        target_type=rule.target_type,
-        target_id=rule.target_id,
-        satisfaction_type=rule.satisfaction_type,
-        checkpoint_issue_id=rule.checkpoint_issue_id,
-        convergence_targets=[
-            {"type": target["type"], "id": int(target["id"])}
-            for target in (rule.convergence_targets or [])
-        ],
-        selected_member_issue_ids=sorted(member.issue_id for member in rule.selected_members),
-        note=rule.note,
-        created_at=rule.created_at,
-        updated_at=rule.updated_at,
-    )
 
 
 async def _get_owned_rule(db: AsyncSession, user_id: int, rule_id: int) -> ContinuityRule:
