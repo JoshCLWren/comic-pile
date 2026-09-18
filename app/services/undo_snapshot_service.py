@@ -1,6 +1,6 @@
 """Undo snapshot service for applying and listing snapshots."""
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -8,6 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Snapshot, Thread
+from app.models.session import Session as SessionModel
 from app.models.thread import normalize_format_value
 from app.repositories.undo_snapshot_repository import UndoSnapshotRepository
 from app.schemas import ActiveThreadInfo
@@ -24,7 +25,12 @@ from comic_pile.bandwidth import restore_ephemeral_bandwidth
 class UndoSnapshotService:
     """Service for undo snapshot operations."""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession) -> None:
+        """Initialize the service.
+
+        Args:
+            db: Database session.
+        """
         self.db = db
         self.repository = UndoSnapshotRepository(db)
 
@@ -125,7 +131,7 @@ class UndoSnapshotService:
             await self.repository.update_event_thread_references(session_id, counter_thread_ids)
 
         # Record undo event
-        undo_event = await self.repository.create_undo_event(session_id, snapshot)
+        await self.repository.create_undo_event(session_id, snapshot)
         
         # Delete delta snapshot after applying
         if is_delta:
@@ -139,7 +145,7 @@ class UndoSnapshotService:
         return session, response_values, {"is_delta": is_delta, "snapshot_id": snapshot_id}
 
     async def _apply_full_snapshot(
-        self, session: Any, snapshot: Snapshot, session_id: int
+        self, session: SessionModel, snapshot: Snapshot, session_id: int
     ) -> None:
         """Apply a legacy or session-start full-library snapshot."""
         snapshot_thread_ids = {int(thread_id) for thread_id in snapshot.thread_states}
@@ -190,7 +196,7 @@ class UndoSnapshotService:
             session.start_die = snapshot.session_state.get("start_die", session.start_die)
             session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
 
-    async def _apply_delta_snapshot(self, session: Any, snapshot: Snapshot) -> None:
+    async def _apply_delta_snapshot(self, session: SessionModel, snapshot: Snapshot) -> None:
         """Apply only state changed by one version-two rating snapshot."""
         thread_states = snapshot.thread_states or {}
         restore_thread_ids = [
@@ -329,7 +335,7 @@ class UndoSnapshotService:
         if extra_ids:
             await self.db.execute(delete(Issue).where(Issue.id.in_(extra_ids)))
 
-        for fallback_position, issue_state in enumerate(snapshot_issues, start=1):
+        for _fallback_position, issue_state in enumerate(snapshot_issues, start=1):
             issue_id = int(issue_state["id"])
             issue = existing_by_id.get(issue_id)
             if issue is None:
@@ -349,7 +355,7 @@ class UndoSnapshotService:
         )
 
     async def _precompute_response_values(
-        self, session: Any, session_id: int, is_delta: bool
+        self, session: SessionModel, session_id: int, is_delta: bool
     ) -> dict[str, Any]:
         """Pre-compute response values to avoid post-commit MissingGreenlet errors."""
         # Combined query: fetch all die-changing events and latest roll event

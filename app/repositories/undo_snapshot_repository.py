@@ -1,19 +1,24 @@
 """Undo snapshot repository for database operations."""
 
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Snapshot, Thread
+from app.models.session import Session as SessionModel
 from app.models.thread import normalize_format_value
 
 
 class UndoSnapshotRepository:
     """Repository for undo snapshot database operations."""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession) -> None:
+        """Initialize the repository.
+
+        Args:
+            db: Database session.
+        """
         self.db = db
 
     async def get_session_snapshots(
@@ -71,7 +76,7 @@ class UndoSnapshotRepository:
         
         return None
 
-    async def get_user_session(self, session_id: int, user_id: int) -> Any | None:
+    async def get_user_session(self, session_id: int, user_id: int) -> SessionModel | None:
         """Get a session owned by a user.
 
         Args:
@@ -81,8 +86,6 @@ class UndoSnapshotRepository:
         Returns:
             Session or None if not found or not owned by user.
         """
-        from app.models import Session as SessionModel
-        
         result = await self.db.execute(
             select(SessionModel)
             .where(SessionModel.id == session_id)
@@ -90,7 +93,7 @@ class UndoSnapshotRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_user_threads(self, user_id: int) -> list[Any]:
+    async def get_user_threads(self, user_id: int) -> list[Thread]:
         """Get all threads for a user.
 
         Args:
@@ -102,7 +105,7 @@ class UndoSnapshotRepository:
         result = await self.db.execute(select(Thread).where(Thread.user_id == user_id))
         return list(result.scalars().all())
 
-    async def get_threads_by_ids(self, thread_ids: list[int]) -> dict[int, Any]:
+    async def get_threads_by_ids(self, thread_ids: list[int]) -> dict[int, Thread]:
         """Get threads by IDs, returning a mapping of ID to thread.
 
         Args:
@@ -117,7 +120,7 @@ class UndoSnapshotRepository:
         result = await self.db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
         return {thread.id: thread for thread in result.scalars().all()}
 
-    async def get_issues_by_thread_ids(self, thread_ids: list[int]) -> dict[int, list[Any]]:
+    async def get_issues_by_thread_ids(self, thread_ids: list[int]) -> dict[int, list[Issue]]:
         """Get issues for thread IDs, returning a mapping of thread ID to issues list.
 
         Args:
@@ -137,7 +140,7 @@ class UndoSnapshotRepository:
             issues_by_thread.setdefault(issue.thread_id, []).append(issue)
         return issues_by_thread
 
-    async def get_event_by_id(self, event_id: int) -> Any | None:
+    async def get_event_by_id(self, event_id: int) -> Event | None:
         """Get an event by ID.
 
         Args:
@@ -166,8 +169,6 @@ class UndoSnapshotRepository:
             session_id: Session ID to update.
             thread_ids_to_clear: List of thread IDs to clear.
         """
-        from app.models import Session as SessionModel
-        
         if thread_ids_to_clear:
             await self.db.execute(
                 update(SessionModel)
@@ -266,7 +267,7 @@ class UndoSnapshotRepository:
 
     async def create_thread_from_state(
         self, thread_id: int, state: dict, session_user_id: int
-    ) -> Any:
+    ) -> Thread:
         """Create a new thread from snapshot state.
 
         Args:
@@ -277,8 +278,6 @@ class UndoSnapshotRepository:
         Returns:
             Created thread.
         """
-        from app.models import Thread
-        
         thread = Thread(
             id=thread_id,
             title=state.get("title", "Unknown Thread"),
@@ -300,7 +299,7 @@ class UndoSnapshotRepository:
         await self.db.flush()
         return thread
 
-    async def update_thread_from_state(self, thread: Any, state: dict) -> None:
+    async def update_thread_from_state(self, thread: Thread, state: dict) -> None:
         """Update an existing thread from snapshot state.
 
         Args:
@@ -330,7 +329,7 @@ class UndoSnapshotRepository:
 
     async def create_issue_from_state(
         self, issue_id: int, thread_id: int, issue_state: dict
-    ) -> Any:
+    ) -> Issue:
         """Create a new issue from snapshot state.
 
         Args:
@@ -341,8 +340,6 @@ class UndoSnapshotRepository:
         Returns:
             Created issue.
         """
-        from app.models import Issue
-        
         issue = Issue(
             id=issue_id,
             thread_id=thread_id,
@@ -356,7 +353,7 @@ class UndoSnapshotRepository:
         await self.db.flush()
         return issue
 
-    async def update_issue_from_state(self, issue: Any, issue_state: dict) -> None:
+    async def update_issue_from_state(self, issue: Issue, issue_state: dict) -> None:
         """Update an existing issue from snapshot state.
 
         Args:
@@ -370,7 +367,7 @@ class UndoSnapshotRepository:
 
     async def create_undo_event(
         self, session_id: int, snapshot: Snapshot
-    ) -> Any:
+    ) -> Event:
         """Create an undo event for a snapshot.
 
         Args:
@@ -380,8 +377,6 @@ class UndoSnapshotRepository:
         Returns:
             Created event.
         """
-        from app.models import Event
-        
         target_event = (
             await self.db.get(Event, snapshot.event_id)
             if snapshot.event_id is not None
