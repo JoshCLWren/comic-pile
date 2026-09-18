@@ -180,7 +180,8 @@ describe('CrossoversPage', () => {
 
     resolveRename?.({ ...annihilation, name: 'Annihilation Conquest' })
     groupsApi.list.mockResolvedValue([{ ...annihilation, name: 'Annihilation Conquest' }, secretWars])
-    expect(await screen.findByText('Annihilation Conquest')).toBeInTheDocument()
+    await screen.queryByLabelText('Rename Annihilation')
+    await screen.findByRole('button', { name: /Annihilation Conquest.*2 members/ })
     expect(screen.getAllByRole('button', { name: 'Rename' })[1]).toBeEnabled()
   })
 
