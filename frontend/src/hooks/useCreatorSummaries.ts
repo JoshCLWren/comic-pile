@@ -19,12 +19,7 @@ export function canonicalCreatorKey(creatorId: number): string {
   return `creator:${creatorId}`
 }
 
-export function useCreatorSummaries(keys: string[] | null | undefined): {
-  data: CreatorSummariesResponse | undefined
-  isPending: boolean
-  isError: boolean
-  error: unknown
-} {
+export function useCreatorSummaries(keys: string[] | null | undefined) {
   const normalized = keys && keys.length > 0 ? normalizeKeys(keys) : []
   const enabled = normalized.length > 0
 

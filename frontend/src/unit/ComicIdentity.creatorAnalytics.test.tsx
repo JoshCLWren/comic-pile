@@ -55,7 +55,7 @@ function summariesResponse(
     unread_issues_with_creator_metadata: number
   }> = {},
 ) {
-  const normalized: Record<string, unknown> = {}
+  const normalized: Record<string, { canonical_creator_key: string; display_name: string; normalized_roles: string[]; average_rating: number | null; ratings_count: number; read_unrated_count: number; upcoming_count: number }> = {}
   for (const [key, value] of Object.entries(summaries)) {
     normalized[key] = {
       canonical_creator_key: key,
@@ -81,7 +81,7 @@ function summariesResponse(
       upcoming_complete: coverage.upcoming_complete ?? true,
       ...coverage,
     },
-  } as unknown as Awaited<ReturnType<typeof creatorsApi.getSummaries>>
+  } satisfies Awaited<ReturnType<typeof creatorsApi.getSummaries>>
 }
 
 describe('ComicIdentity creator analytics (issue #2029)', () => {
@@ -208,7 +208,7 @@ describe('ComicIdentity creator analytics (issue #2029)', () => {
       creators: [
         { creator_id: 100, name: 'Stable One', roles: ['writer'] },
         { creator_id: null, name: 'Unknown ID', roles: ['cover'] },
-        { name: 'No ID Field', roles: ['writer'] } as unknown as { creator_id: number | null; name: string; roles: string[] },
+        { creator_id: null, name: 'No ID Field', roles: ['writer'] },
       ],
     }))
     getSummaries.mockResolvedValue(summariesResponse({
