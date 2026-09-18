@@ -78,9 +78,10 @@ export default function CrossoversPage() {
 
   const {
     data: rangeIssues = [],
-    isPending: isLoadingRangeIssues,
+    isPending: isPendingRangeIssues,
     error: rangeIssuesError,
   } = useCrossoverIssuesForRange(rangeThread?.id ?? null)
+  const isLoadingRangeIssues = rangeThread !== null && isPendingRangeIssues
 
   const threadLoadError = threadsError ? errorMessage(threadsError, 'Unable to load comics for selection.') : null
   const rangeLoadError = rangeIssuesError

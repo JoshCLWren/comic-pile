@@ -212,6 +212,7 @@ describe('CrossoversPage issue ranges', () => {
       '#½ comes after #2 in Nova. Choose a later ending issue.',
     )
     expect(screen.getByRole('button', { name: 'Add range' })).toBeDisabled()
+    console.log('DEBUG reversed mock.calls', JSON.stringify(groupsApi.addIssueRange.mock.calls))
     expect(groupsApi.addIssueRange).not.toHaveBeenCalled()
   })
 

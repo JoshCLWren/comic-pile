@@ -277,7 +277,7 @@ describe('CrossoversPage membership editing', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
     selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
-    fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
+    fireEvent.submit(screen.getByRole('form', { name: 'Add thread to Annihilation' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Thread lookup unavailable')
     expect(screen.getByLabelText('Current thread of series')).toHaveValue('Uncanny X-Men')
