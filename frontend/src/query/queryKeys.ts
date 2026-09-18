@@ -205,6 +205,8 @@ export const queryKeys = {
   },
   crossover: {
     all: ['crossover'] as const,
+    list: () => ['crossover', 'list'] as const,
+    detail: (groupId: number) => ['crossover', 'detail', groupId] as const,
     groups: (threadIds: number[]) =>
       ['crossover', 'groups', [...threadIds].sort((a, b) => a - b)] as const,
   },

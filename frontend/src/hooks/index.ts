@@ -10,6 +10,18 @@ export { useBugReport } from './useBugReport'
 export { useComicVineIssueIntelligence } from './useComicVineIssueIntelligence'
 export { useCreatorDetail, creatorDetailQueryOptions, CREATOR_DETAIL_PAGE_SIZE } from './useCreatorDetail'
 export { useCrossoverGroups } from './useCrossoverGroups'
+export {
+  useCrossoverGroupsList,
+  useAllThreads,
+  useCrossoverGroupDetail,
+  useCrossoverIssuesForRange,
+  useCreateCrossoverGroup,
+  useRenameCrossoverGroup,
+  useDeleteCrossoverGroup,
+  useAddCrossoverMember,
+  useAddCrossoverIssueRange,
+  useRemoveCrossoverMember,
+} from './useCrossovers'
 export { useDependencyGroups } from './useDependencyGroups'
 export { useReaderContext, useReadingOrdersForThread, useConnectedThreads } from './useReaderContext'
 export { useTasteDiscoveries } from './useTasteDiscoveries'

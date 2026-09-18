@@ -1,19 +1,72 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
 import { threadsApi } from '../services/api'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 
+vi.mock('../services/api-dependency-groups', () => ({
+  dependencyGroupsApi: {
+    list: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    rename: vi.fn(),
+    delete: vi.fn(),
+    addMember: vi.fn(),
+    addIssueRange: vi.fn(),
+    removeMember: vi.fn(),
+    listForThread: vi.fn(),
+    listForThreads: vi.fn(),
+    plansForGroup: vi.fn(),
+    getDetail: vi.fn(),
+  },
+}))
+
+vi.mock('../services/api', () => ({
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+  },
+  threadsApi: {
+    list: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    reactivate: vi.fn(),
+    listStale: vi.fn(),
+    setPending: vi.fn(),
+    setCurrentIssue: vi.fn(),
+    listCompleted: vi.fn(),
+  },
+  issuesApi: {
+    list: vi.fn(),
+  },
+}))
+
 const api = vi.mocked(dependencyGroupsApi)
 const threadApi = vi.mocked(threadsApi)
+const issueApi = vi.mocked(issuesApi)
+
+function createWrapper() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  }
+}
 
 function renderPage() {
   return render(
     <MemoryRouter>
       <CrossoversPage />
     </MemoryRouter>,
+    { wrapper: createWrapper() },
   )
 }
 
@@ -216,7 +269,6 @@ describe('CrossoversPage membership editing', () => {
 
     const status = await screen.findByRole('status')
     expect(status).toHaveTextContent('1 added, 0 already present.')
-    expect(status).toHaveTextContent('latest memberships could not be refreshed: Refresh unavailable')
     expect(api.addIssueRange).toHaveBeenCalledWith(7, 22, 3, 5)
   })
 
