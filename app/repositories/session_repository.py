@@ -5,12 +5,13 @@ lives here. Functions return ORM models or plain values; callers (services)
 own transaction boundaries.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Session as SessionModel, Snapshot, Thread
+from app.models.thread import normalize_format_value
 
 
 async def get_session(db: AsyncSession, session_id: int) -> SessionModel | None:
@@ -329,7 +330,6 @@ async def restore_session_start(
     from app.repositories.thread_repository import threads_by_ids, delete_threads_by_ids
     from app.models import Issue
     from sqlalchemy import delete
-    from datetime import datetime
 
     # Get the session
     session = await find_owned(db, user_id, session_id)
@@ -380,7 +380,6 @@ async def restore_session_start(
             if "title" in state:
                 thread.title = state["title"]
             if "format" in state:
-                from app.models.thread import normalize_format_value
                 thread.format = normalize_format_value(state["format"])
             thread.issues_remaining = state.get("issues_remaining", thread.issues_remaining)
             thread.last_rating = state.get("last_rating", thread.last_rating)
@@ -412,7 +411,7 @@ async def restore_session_start(
                         read_at=datetime.fromisoformat(issue_state["read_at"])
                         if issue_state["read_at"]
                         else None,
-                        created_at=datetime.now(),
+                        created_at=datetime.now(UTC),
                         position=position,
                     )
                     db.add(issue)
@@ -442,7 +441,7 @@ async def restore_session_start(
                 user_id=state.get("user_id", user_id),
                 created_at=datetime.fromisoformat(state["created_at"])
                 if state.get("created_at")
-                else datetime.now(),
+                else datetime.now(UTC),
             )
             
             if state.get("last_activity_at"):
@@ -465,7 +464,7 @@ async def restore_session_start(
                         read_at=datetime.fromisoformat(issue_state["read_at"])
                         if issue_state["read_at"]
                         else None,
-                        created_at=datetime.now(),
+                        created_at=datetime.now(UTC),
                         position=position,
                     )
                     db.add(issue)
