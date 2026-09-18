@@ -3,7 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.cache import TTL, cached
@@ -15,10 +15,12 @@ from app.schemas.dependency import (
     BlockingExplanation,
     DependencyCreate,
     DependencyNoteUpdate,
-    DependencyOrderCheckResponse,
+    DependencyOrderConflict,
+    DependencyOrderRequirement,
     DependencyResponse,
     IssueDependenciesResponse,
     ThreadConnectedResponse,
+    ThreadDependencyOrderCheckResponse,
     ThreadDependenciesResponse,
 )
 from app.services import dependency_service
@@ -208,27 +210,25 @@ async def delete_dependency(
 
 @router.get(
     "/threads/{thread_id}/dependency-order-check",
-    response_model=DependencyOrderCheckResponse,
+    response_model=ThreadDependencyOrderCheckResponse,
 )
 @cached(ttl=TTL.MEDIUM)
 async def check_thread_dependency_order(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> DependencyOrderCheckResponse:
+) -> ThreadDependencyOrderCheckResponse:
     """Check for conflicts between dependency order and issue position order.
 
     Returns a list of conflicts where dependencies imply issue X should come
     before issue Y, but the current position order disagrees.
     """
-    from app.schemas.dependency import DependencyOrderConflict
-    
     raw_conflicts = await dependency_service.check_thread_dependency_order(
         thread_id, current_user.id, db
     )
     
     if not raw_conflicts:
-        return DependencyOrderCheckResponse(thread_id=thread_id, conflicts=[])
+        return ThreadDependencyOrderCheckResponse(thread_id=thread_id, conflicts=[])
 
     conflicts: list[DependencyOrderConflict] = []
     for conflict in raw_conflicts:
@@ -243,7 +243,7 @@ async def check_thread_dependency_order(
         )
         conflicts.append(conflict_obj)
 
-    return DependencyOrderCheckResponse(thread_id=thread_id, conflicts=conflicts)
+    return ThreadDependencyOrderCheckResponse(thread_id=thread_id, conflicts=conflicts)
 
 
 @router.get(

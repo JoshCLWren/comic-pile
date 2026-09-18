@@ -6,9 +6,9 @@ and cache invalidation. Query construction lives in
 status mapping lives in routers.
 """
 
-from typing import Dict, List
+from typing import Annotated
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache_invalidation import invalidate_user_view
@@ -19,6 +19,7 @@ from app.schemas.dependency import (
     BlockingExplanation,
     ConnectedThreadInfo,
     DependencyResponse,
+    IssueDependenciesResponse,
     IssueDependencyEdge,
     ThreadDependenciesResponse,
     ThreadConnectedResponse,
@@ -35,7 +36,7 @@ from comic_pile.dependencies import (
 )
 
 
-async def enrich_dependencies(deps: List[Dependency], db: AsyncSession) -> List[DependencyResponse]:
+async def enrich_dependencies(deps: list[Dependency], db: AsyncSession) -> list[DependencyResponse]:
     """Batch-enrich dependencies with human-readable labels.
 
     Collects all referenced issue/thread IDs, fetches them in bulk,
@@ -54,7 +55,7 @@ async def enrich_dependencies(deps: List[Dependency], db: AsyncSession) -> List[
             issue_ids.add(dep.target_issue_id)
 
     # Bulk fetch issues
-    issue_map: Dict[int, Issue] = {}
+    issue_map: dict[int, Issue] = {}
     if issue_ids:
         result = await db.execute(select(Issue).where(Issue.id.in_(issue_ids)))
         for issue in result.scalars():
@@ -63,14 +64,14 @@ async def enrich_dependencies(deps: List[Dependency], db: AsyncSession) -> List[
             thread_ids.add(issue.thread_id)
 
     # Bulk fetch threads
-    thread_map: Dict[int, Thread] = {}
+    thread_map: dict[int, Thread] = {}
     if thread_ids:
         result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
         for thread in result.scalars():
             thread_map[thread.id] = thread
 
     # Build enriched responses
-    responses: List[DependencyResponse] = []
+    responses: list[DependencyResponse] = []
     for dep in deps:
         source_label: str | None = None
         target_label: str | None = None
@@ -120,7 +121,7 @@ def _to_blocking_dependency_schema(
 
 async def get_all_blocked_thread_ids(
     user_id: int, db: AsyncSession
-) -> List[int]:
+) -> list[int]:
     """Return all currently blocked thread IDs for the current user."""
     blocked_ids = await get_blocked_thread_ids(user_id, db)
     return sorted(blocked_ids)
@@ -128,7 +129,7 @@ async def get_all_blocked_thread_ids(
 
 async def get_thread_dependencies(
     thread_id: int, user_id: int, db: AsyncSession
-) -> ThreadDependenciesResponse:
+) -> ThreadDependenciesResponse | None:
     """List dependencies where a thread blocks others and where it is blocked."""
     from app.repositories import thread_repository
     
@@ -152,7 +153,7 @@ async def get_thread_dependencies(
 
 async def get_issue_dependencies(
     issue_id: int, user_id: int, db: AsyncSession
-) -> IssueDependenciesResponse:
+) -> IssueDependenciesResponse | None:
     """List all incoming and outgoing dependency edges for a specific issue."""
     issue = await issue_repository.get_issue(db, issue_id)
     if not issue:
@@ -176,21 +177,21 @@ async def get_issue_dependencies(
         if dep.target_issue_id is not None:
             issue_ids.add(dep.target_issue_id)
 
-    issue_map: Dict[int, Issue] = {}
+    issue_map: dict[int, Issue] = {}
     if issue_ids:
         result = await db.execute(select(Issue).where(Issue.id.in_(issue_ids)))
         for issue_obj in result.scalars():
             issue_map[issue_obj.id] = issue_obj
             thread_ids.add(issue_obj.thread_id)
 
-    thread_map: Dict[int, Thread] = {}
+    thread_map: dict[int, Thread] = {}
     if thread_ids:
         result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
         for thread_obj in result.scalars():
             thread_map[thread_obj.id] = thread_obj
 
-    incoming_edges: List[IssueDependencyEdge] = []
-    outgoing_edges: List[IssueDependencyEdge] = []
+    incoming_edges: list[IssueDependencyEdge] = []
+    outgoing_edges: list[IssueDependencyEdge] = []
 
     for dep in incoming_deps:
         if dep.source_issue_id is not None:
@@ -233,7 +234,7 @@ async def get_issue_dependencies(
 
 async def get_thread_blocking_info(
     thread_id: int, user_id: int, db: AsyncSession
-) -> BlockingExplanation:
+) -> BlockingExplanation | None:
     """Return blocked status and human-readable blocking reasons for a thread."""
     from app.repositories import thread_repository
     
@@ -254,11 +255,9 @@ async def get_thread_blocking_info(
 
 
 async def get_threads_blocking_info(
-    thread_ids: List[int], user_id: int, db: AsyncSession
-) -> Dict[int, BlockingExplanation]:
+    thread_ids: list[int], user_id: int, db: AsyncSession
+) -> dict[int, BlockingExplanation]:
     """Return blocked status and human-readable blocking reasons for multiple threads."""
-    from app.repositories import thread_repository
-    
     thread_count = await db.scalar(
         select(func.count()).select_from(Thread).where(
             Thread.id.in_(thread_ids),
@@ -273,7 +272,7 @@ async def get_threads_blocking_info(
         thread_ids, user_id, db
     )
 
-    result: Dict[int, BlockingExplanation] = {}
+    result: dict[int, BlockingExplanation] = {}
     for tid in thread_ids:
         if tid in blocked_ids:
             dependencies = reasons_map.get(tid, [])
@@ -294,7 +293,7 @@ async def get_threads_blocking_info(
 
 async def create_dependency(
     source_issue_id: int, target_issue_id: int, user_id: int, db: AsyncSession
-) -> tuple[DependencyResponse, str | None]:
+) -> tuple[DependencyResponse | None, str | None]:
     """Create a hard-block dependency between owned threads or owned issues."""
     from app.repositories import issue_repository, thread_repository
     
@@ -404,7 +403,7 @@ async def delete_dependency(dependency_id: int, user_id: int, db: AsyncSession) 
 
 async def check_thread_dependency_order(
     thread_id: int, user_id: int, db: AsyncSession
-) -> List[Dict]:
+) -> list[dict]:
     """Check for conflicts between dependency order and issue position order."""
     from app.repositories import thread_repository
     
@@ -418,7 +417,7 @@ async def check_thread_dependency_order(
 
 async def get_thread_connected_threads(
     thread_id: int, user_id: int, db: AsyncSession
-) -> ThreadConnectedResponse:
+) -> ThreadConnectedResponse | None:
     """Return threads connected to this one via dependencies."""
     from app.repositories import thread_repository
     
@@ -440,7 +439,7 @@ async def get_thread_connected_threads(
         if dep.target_issue_id is not None:
             issue_ids.add(dep.target_issue_id)
 
-    issue_map: Dict[int, Issue] = {}
+    issue_map: dict[int, Issue] = {}
     thread_ids: set[int] = set()
     if issue_ids:
         result = await db.execute(
@@ -450,7 +449,7 @@ async def get_thread_connected_threads(
             issue_map[issue_obj.id] = issue_obj
             thread_ids.add(issue_obj.thread_id)
 
-    thread_map: Dict[int, Thread] = {}
+    thread_map: dict[int, Thread] = {}
     if thread_ids:
         result = await db.execute(
             select(Thread).where(Thread.id.in_(thread_ids)).where(Thread.user_id == user_id)
@@ -459,7 +458,7 @@ async def get_thread_connected_threads(
             thread_map[thread_obj.id] = thread_obj
 
     # Track unique connected threads by thread_id, aggregating connection types.
-    connected_by_thread: Dict[int, Dict] = {}
+    connected_by_thread: dict[int, dict] = {}
 
     for dep in blocking_deps:
         if dep.target_issue_id is not None:
@@ -499,7 +498,7 @@ async def get_thread_connected_threads(
                         connected_by_thread[tid]["types"].add("blocked_by")
                         connected_by_thread[tid]["dependency_ids"].add(dep.id)
 
-    connected: List[ConnectedThreadInfo] = []
+    connected: list[ConnectedThreadInfo] = []
     for entry in connected_by_thread.values():
         types = entry["types"]
         if types == {"blocks"}:
