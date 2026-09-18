@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
-import { keepPreviousData, useInfiniteQuery, useMutation } from '@tanstack/react-query'
+import { keepPreviousData, useMutation } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
+import { useInfiniteCollection } from '../pagination'
 import { invalidateAfterQueueMovement } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
@@ -37,8 +38,8 @@ function toApiSort(sort: QueueSortBy): ApiSort {
 
 /**
  * Canonical bounded Queue list query options: the documented `queue.pages`
- * key plus the exact first-page fetch contract consumed by
- * `useInfiniteQuery` in `useQueueThreads`.
+ * key plus the exact first-page fetch contract consumed by the canonical
+ * paginator (`useInfiniteCollection`) in `useQueueThreads`.
  *
  * Sharing this factory keeps speculative warm-up (route prefetch) and the
  * live screen on one contract, so a warmed first page is read by the Queue
