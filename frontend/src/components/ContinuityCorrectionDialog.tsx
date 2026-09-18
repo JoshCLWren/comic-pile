@@ -104,7 +104,7 @@ export default function ContinuityCorrectionDialog({
   const isResolvingConnected = connectedThreads.length > 0 && (isLoadingConnected || resolvedConnectedData === undefined);
 
   const canSaveCurrentIssue = issueId != null;
-  const canSaveConnected = resolvedConnectedData?.length > 0;
+  const canSaveConnected = (resolvedConnectedData?.length ?? 0) > 0;
   const hasSomethingToAdd = mode !== 'none' && (canSaveCurrentIssue || canSaveConnected);
 
   async function handleSaveMemberships() {
@@ -126,13 +126,18 @@ export default function ContinuityCorrectionDialog({
     let createdGroup: DependencyGroup | null = null;
 
     try {
-      let targetGroup: DependencyGroup;
+      let targetGroup: DependencyGroup | undefined;
       if (mode === 'new') {
         const created = await groupsApi.create(normalizedName);
         targetGroup = created;
         createdGroup = created;
       } else {
         targetGroup = groupsData?.find((candidate) => candidate.id === selectedGroupId);
+      }
+
+      if (!targetGroup) {
+        setError('Select a crossover before saving.');
+        return;
       }
 
       if (canSaveCurrentIssue) {
@@ -310,5 +315,3 @@ export default function ContinuityCorrectionDialog({
       </Modal>
   )
 }
-
-export type { ContinuityCorrectionDialogProps }
