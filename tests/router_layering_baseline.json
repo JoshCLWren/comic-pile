@@ -1,5 +1,4 @@
 {
-  "admin": ["execute-call", "query-import"],
   "analytics": ["execute-call", "query-import"],
   "auth": ["execute-call", "query-import"],
   "catalog": ["execute-call", "query-import"],
@@ -13,7 +12,6 @@
   "issue": ["execute-call", "query-import"],
   "issue_dependency_batch": ["execute-call", "query-import"],
   "preferences": ["execute-call", "query-import"],
-  "queue": ["execute-call", "query-import"],
   "rate": ["execute-call", "query-import"],
   "reading_orders": ["execute-call", "query-import"],
   "roll": ["execute-call", "query-import"],

@@ -1,22 +1,19 @@
 """Admin API endpoints for data import/export."""
 
-import csv
-import io
-import json
-from datetime import UTC, datetime
-
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, UploadFile
 from typing import Annotated
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.session import build_narrative_summary
 from app.database import get_db
 from app.access_control import require_internal_ops_routes
-from app.models import Event, Thread, User
-from app.models import Session as SessionModel
-from app.models.thread import normalize_format_value
+from app.services.admin_service import (
+    import_csv as svc_import_csv,
+    export_csv as svc_export_csv,
+    export_json as svc_export_json,
+    delete_test_data as svc_delete_test_data,
+    export_summary as svc_export_summary,
+)
 
 router = APIRouter(
     prefix="/admin", tags=["admin"], dependencies=[Depends(require_internal_ops_routes)]
@@ -46,65 +43,7 @@ async def import_csv(
     Raises:
         HTTPException: If file is not a CSV.
     """
-    if not file.filename or not file.filename.endswith(".csv"):
-        raise HTTPException(status_code=400, detail="File must be a CSV")
-
-    content = await file.read()
-    csv_reader = csv.DictReader(content.decode("utf-8").splitlines())
-
-    imported = 0
-    errors = []
-    imported_threads = []
-
-    for row_num, row in enumerate(csv_reader, start=2):
-        try:
-            title = row.get("title", "").strip()
-            format_val = row.get("format", "").strip()
-            issues_remaining_str = row.get("issues_remaining", "").strip()
-
-            if not title:
-                errors.append(f"Row {row_num}: Missing title")
-                continue
-
-            if not format_val:
-                errors.append(f"Row {row_num}: Missing format")
-                continue
-
-            if not issues_remaining_str:
-                errors.append(f"Row {row_num}: Missing issues_remaining")
-                continue
-
-            try:
-                issues_remaining = int(issues_remaining_str)
-                if issues_remaining < 0:
-                    errors.append(f"Row {row_num}: issues_remaining must be >= 0")
-                    continue
-            except ValueError:
-                errors.append(f"Row {row_num}: issues_remaining must be an integer")
-                continue
-
-            new_thread = Thread(
-                title=title,
-                format=normalize_format_value(format_val),
-                issues_remaining=issues_remaining,
-                queue_position=1,
-                status="active",
-                user_id=1,
-            )
-            db.add(new_thread)
-            imported_threads.append(new_thread)
-            imported += 1
-
-        except Exception as e:
-            errors.append(f"Row {row_num}: {str(e)}")
-
-    await db.commit()
-
-    for i, thread in enumerate(reversed(imported_threads)):
-        thread.queue_position = i + 1
-
-    await db.commit()
-    return {"imported": imported, "errors": errors}
+    return await svc_import_csv(file, db)
 
 
 @router.get("/export/csv/")
@@ -119,28 +58,9 @@ async def export_csv(db: Annotated[AsyncSession, Depends(get_db)]) -> StreamingR
     Returns:
         StreamingResponse with CSV file attachment.
     """
-    result = await db.execute(
-        select(Thread)
-        .where(Thread.status == "active")
-        .where(Thread.queue_position >= 1)
-        .where(Thread.issues_remaining > 0)
-        .where(Thread.is_test.is_(False))
-        .order_by(Thread.queue_position)
-    )
-    threads = result.scalars().all()
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-
-    writer.writerow(["title", "format", "issues_remaining"])
-
-    for thread in threads:
-        writer.writerow([thread.title, normalize_format_value(thread.format), thread.issues_remaining])
-
-    output.seek(0)
-
+    csv_bytes = await svc_export_csv(db)
     return StreamingResponse(
-        io.BytesIO(output.getvalue().encode()),
+        csv_bytes,
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=threads_export.csv"},
     )
@@ -158,74 +78,9 @@ async def export_json(db: Annotated[AsyncSession, Depends(get_db)]) -> Streaming
     Returns:
         StreamingResponse with JSON file attachment.
     """
-    users_result = await db.execute(select(User))
-    users = users_result.scalars().all()
-    threads_result = await db.execute(select(Thread).where(Thread.is_test.is_(False)))
-    threads = threads_result.scalars().all()
-    sessions_result = await db.execute(select(SessionModel))
-    sessions = sessions_result.scalars().all()
-    events_result = await db.execute(select(Event))
-    events = events_result.scalars().all()
-
-    data = {
-        "users": [
-            {
-                "id": user.id,
-                "username": user.username,
-                "created_at": user.created_at.isoformat() if user.created_at else None,
-            }
-            for user in users
-        ],
-        "threads": [
-            {
-                "id": thread.id,
-                "title": thread.title,
-                "format": normalize_format_value(thread.format),
-                "issues_remaining": thread.issues_remaining,
-                "queue_position": thread.queue_position,
-                "status": thread.status,
-                "last_rating": thread.last_rating,
-                "last_activity_at": thread.last_activity_at.isoformat()
-                if thread.last_activity_at
-                else None,
-                "created_at": thread.created_at.isoformat() if thread.created_at else None,
-                "user_id": thread.user_id,
-            }
-            for thread in threads
-        ],
-        "sessions": [
-            {
-                "id": session.id,
-                "started_at": session.started_at.isoformat() if session.started_at else None,
-                "ended_at": session.ended_at.isoformat() if session.ended_at else None,
-                "start_die": session.start_die,
-                "user_id": session.user_id,
-            }
-            for session in sessions
-        ],
-        "events": [
-            {
-                "id": event.id,
-                "type": event.type,
-                "timestamp": event.timestamp.isoformat() if event.timestamp else None,
-                "die": event.die,
-                "result": event.result,
-                "selected_thread_id": event.selected_thread_id,
-                "selection_method": event.selection_method,
-                "rating": event.rating,
-                "issues_read": event.issues_read,
-                "queue_move": event.queue_move,
-                "die_after": event.die_after,
-                "session_id": event.session_id,
-                "thread_id": event.thread_id,
-            }
-            for event in events
-        ],
-    }
-
-    json_output = json.dumps(data, indent=2)
+    json_bytes = await svc_export_json(db)
     return StreamingResponse(
-        io.BytesIO(json_output.encode()),
+        json_bytes,
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=database_backup.json"},
     )
@@ -241,75 +96,7 @@ async def delete_test_data(db: Annotated[AsyncSession, Depends(get_db)]) -> dict
     Returns:
         Dictionary with counts of deleted threads, sessions, and events.
     """
-    test_threads_result = await db.execute(select(Thread).where(Thread.is_test.is_(True)))
-    test_threads = test_threads_result.scalars().all()
-    thread_ids = [t.id for t in test_threads]
-
-    deleted_events = 0
-    deleted_sessions = 0
-    deleted_threads = len(test_threads)
-
-    for thread_id in thread_ids:
-        events_by_thread_id_result = await db.execute(
-            select(Event).where(Event.thread_id == thread_id)
-        )
-        events_by_thread_id = events_by_thread_id_result.scalars().all()
-        events_by_selected_thread_id_result = await db.execute(
-            select(Event).where(Event.selected_thread_id == thread_id)
-        )
-        events_by_selected_thread_id = events_by_selected_thread_id_result.scalars().all()
-        all_events = set()
-        for e in events_by_thread_id:
-            all_events.add(e)
-        for e in events_by_selected_thread_id:
-            all_events.add(e)
-        deleted_events += len(all_events)
-        for event in all_events:
-            await db.delete(event)
-
-    await db.execute(
-        update(SessionModel)
-        .where(SessionModel.pending_thread_id.in_(thread_ids))
-        .values(pending_thread_id=None)
-    )
-
-    sessions_result = await db.execute(select(SessionModel).where(SessionModel.user_id == 1))
-    sessions = sessions_result.scalars().all()
-    for session in sessions:
-        session_events_result = await db.execute(
-            select(Event).where(Event.session_id == session.id)
-        )
-        session_events = session_events_result.scalars().all()
-
-        def is_test_event(event: Event) -> bool:
-            """Check if an event belongs to a test thread (via either thread_id or selected_thread_id).
-
-            Args:
-                event: Event to check.
-
-            Returns:
-                True if event belongs to a test thread.
-            """
-            thread_is_test = event.thread_id in thread_ids if event.thread_id else False
-            selected_is_test = (
-                event.selected_thread_id in thread_ids if event.selected_thread_id else False
-            )
-            return thread_is_test or selected_is_test
-
-        if all(is_test_event(e) for e in session_events):
-            await db.delete(session)
-            deleted_sessions += 1
-
-    for thread in test_threads:
-        await db.delete(thread)
-
-    await db.commit()
-
-    return {
-        "deleted_threads": deleted_threads,
-        "deleted_sessions": deleted_sessions,
-        "deleted_events": deleted_events,
-    }
+    return await svc_delete_test_data(db)
 
 
 @router.get("/export/summary/")
@@ -325,66 +112,9 @@ async def export_summary(db: Annotated[AsyncSession, Depends(get_db)]) -> Stream
     Returns:
         StreamingResponse with markdown file attachment.
     """
-    all_sessions_result = await db.execute(
-        select(SessionModel).order_by(SessionModel.started_at.desc())
-    )
-    all_sessions = all_sessions_result.scalars().all()
-
-    test_threads_result = await db.execute(select(Thread).where(Thread.is_test.is_(True)))
-    test_thread_ids = {t.id for t in test_threads_result.scalars().all()}
-
-    sessions = []
-    for session in all_sessions:
-        session_id = session.id
-        session_events_result = await db.execute(
-            select(Event).where(Event.session_id == session_id)
-        )
-        session_events = session_events_result.scalars().all()
-        thread_ids_in_session = set()
-        for event in session_events:
-            if event.thread_id:
-                thread_ids_in_session.add(event.thread_id)
-            if event.selected_thread_id:
-                thread_ids_in_session.add(event.selected_thread_id)
-        if not thread_ids_in_session or not thread_ids_in_session.issubset(test_thread_ids):
-            sessions.append((session, session_id))
-
-    output = io.StringIO()
-
-    for session, session_id in sessions:
-        started_at = session.started_at.astimezone(UTC)
-        ended_at = session.ended_at.astimezone(UTC) if session.ended_at else None
-
-        output.write(f"**Session:** {started_at.strftime('%b %d, %I:%M %p')}")
-        if ended_at:
-            output.write(f" - {ended_at.strftime('%I:%M %p')}")
-        output.write("\n")
-        output.write(f"Started at d{session.start_die}\n")
-
-        summary = await build_narrative_summary(session_id, db)
-
-        if summary["read"]:
-            output.write("\nRead:\n\n")
-            for entry in summary["read"]:
-                output.write(f"* {entry}\n")
-
-        if summary["skipped"]:
-            output.write("\nSkipped:\n\n")
-            for title in summary["skipped"]:
-                output.write(f"* {title}\n")
-
-        if summary["completed"]:
-            output.write("\nCompleted:\n\n")
-            for title in summary["completed"]:
-                output.write(f"* {title}\n")
-
-        output.write("\n---\n\n")
-
-    output.seek(0)
-
-    filename = f"session_summaries_{datetime.now(UTC).strftime('%Y%m%d')}.md"
+    md_bytes, filename = await svc_export_summary(db)
     return StreamingResponse(
-        io.BytesIO(output.getvalue().encode()),
+        md_bytes,
         media_type="text/markdown",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )

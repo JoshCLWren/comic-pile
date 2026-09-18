@@ -58,10 +58,14 @@ export default function ResumeRecovery({
           if (sequence !== requestSequence.current) {
             return
           }
+<<<<<<< HEAD
           // Data/auth recovery only (#2582): refresh the scoped resume set.
           // ResumeRecovery never restores or repositions the viewport — that
           // is owned exclusively by the route restoration layer.
           await invalidateAfterResumeRecovery(queryClient)
+=======
+          await invalidateSessionRecoveryCache(queryClient)
+>>>>>>> origin/main
           if (sequence !== requestSequence.current) {
             return
           }

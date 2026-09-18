@@ -129,4 +129,7 @@ async def test_router_startup_demote_on_postgres_init_failure(monkeypatch: pytes
     app_instance = main.create_app(serve_frontend=False)
     handler = next(h for h in app_instance.router.on_startup if getattr(h, "__name__", None) == "startup_event")
     await handler()
+    # Heavy init is now lazy; startup remains lightweight (issue #2561)
+    demote_mock.assert_not_awaited()
+    await app_instance.state.ensure_heavy_init()  # type: ignore[attr-defined]
     demote_mock.assert_awaited_once()
