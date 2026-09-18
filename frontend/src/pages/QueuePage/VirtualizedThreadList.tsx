@@ -56,11 +56,12 @@ interface VirtualizedThreadListProps<T> {
 }
 
 /**
- * Virtualized list for large queues (>50 threads).
+ * Virtualized list backing the queue at every page size.
  *
- * Production renders exactly one full-width thread per virtual row so crossing
- * the virtualization threshold does not change Queue's visual grammar. This
- * mirrors the non-virtualized list introduced by #2088/#2099.
+ * Production renders exactly one full-width thread per virtual row so Queue
+ * keeps a single rendering path (and a single window-owned scroll surface)
+ * from the first page through the final page. This mirrors the
+ * non-virtualized list introduced by #2088/#2099.
  *
  * `explicitColumnCount` preserves the older multi-column path only as a
  * deterministic test hook. Queue itself never supplies that prop.
@@ -114,7 +115,12 @@ export default function VirtualizedThreadList<T>({
   }, [explicitColumnCount])
 
   // React to offset changes (e.g. window resize or layout shifts above the list).
+  // Guarded so server-side rendering and layout-less test environments
+  // (jsdom without a ResizeObserver stub) keep the initial synchronous
+  // measurement instead of crashing the whole queue.
   useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return
+
     let rafId: number | null = null
 
     const observer = new ResizeObserver(() => {

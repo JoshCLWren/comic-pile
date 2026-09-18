@@ -117,14 +117,44 @@ it('keeps paginated queue items as full-width rows on a wide viewport', async ()
 })
 
 /**
- * Acceptance criterion #6 for issue #2184: begin with ≤50 items, append enough
- * to cross the threshold, and verify the same user-facing scroll surface
- * (the window) owns Queue before and after — no nested vertical scroll channel
- * or fixed-height box is introduced.
+ * Acceptance criterion for #2565: Queue must use one virtualized rendering
+ * path from the first page onward. Appending pages must not replace the scroll
+ * owner or rebuild the list. The fixture spans five pages (250 rows) and
+ * traverses page boundaries in both directions, proving the same user-facing
+ * scroll surface (the window) owns Queue throughout — no nested vertical
+ * scroll channel or fixed-height box is introduced — and that rows stay
+ * painted without requiring a scroll-away/back to recover.
  */
-it('keeps a single scroll surface when the queue crosses the virtualization threshold', async () => {
-  const initialThreads: Thread[] = Array.from({ length: 50 }, (_, i) => createMockThread(i + 1))
-  const grownThreads: Thread[] = Array.from({ length: 60 }, (_, i) => createMockThread(i + 1))
+it('keeps a single scroll surface while the queue grows and shrinks across pages', async () => {
+  const page = (count: number): Thread[] =>
+    Array.from({ length: count }, (_, i) => createMockThread(i + 1))
+
+  // Faithful count-aware double mirroring the library contract: item `start`
+  // values include the supplied scrollMargin and every row is reported, so a
+  // blanked viewport would surface as missing rows rather than hidden state.
+  const pageAwareUseVirtualizer = (
+    options: UseWindowVirtualizerOptions,
+  ): QueueVirtualizer => {
+    const margin = options.scrollMargin ?? 0
+    const count = options.count
+    const items = Array.from({ length: count }, (_, i) => {
+      const start = margin + i * ROW_HEIGHT_WITH_GAP
+      return {
+        key: i,
+        index: i,
+        start,
+        end: start + ROW_HEIGHT_WITH_GAP,
+        size: ROW_HEIGHT_WITH_GAP,
+        lane: 0,
+      }
+    })
+    return {
+      getVirtualItems: () => items,
+      getTotalSize: () => count * ROW_HEIGHT_WITH_GAP,
+      measureElement: vi.fn(),
+      scrollToIndex: vi.fn(),
+    }
+  }
 
   const sentinelRef = { current: null }
   const renderItem = (thread: Thread, index: number) => (
@@ -132,29 +162,6 @@ it('keeps a single scroll surface when the queue crosses the virtualization thre
       {thread.title} #{index + 1}
     </div>
   )
-
-  // SAFETY: sentinelRef is a nullable ref; cast to match QueueList prop types
-  const { container, rerender } = render(
-    <QueueList
-      activeThreads={initialThreads}
-      filteredThreads={initialThreads}
-      reorderError={null}
-      renderItem={renderItem}
-      isSearching={false}
-      sentinelRef={sentinelRef as React.RefObject<HTMLDivElement | null>}
-      hasNextPage
-      useVirtualizer={fakeUseVirtualizer}
-    />,
-  )
-
-  act(() => {
-    resizeCallback?.([{ contentRect: { height: 600, width: 1400 } }])
-  })
-
-  await waitFor(() => {
-    expect(screen.getAllByTestId('queue-thread-item')).toHaveLength(50)
-  })
-  expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
 
   const scrollChannelOf = (el: Element) => {
     const style = getComputedStyle(el)
@@ -166,37 +173,66 @@ it('keeps a single scroll surface when the queue crosses the virtualization thre
     }
   }
 
-  const plainSurface = scrollChannelOf(container.querySelector('#queue-container')!)
-  expect(['auto', 'scroll']).not.toContain(plainSurface.overflowY)
-  expect(plainSurface.inlineHeight).toBe('')
+  const expectSingleWindowSurface = (container: HTMLElement, rowCount: number) => {
+    expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
+    // Every loaded row stays painted — the viewport never blanks mid-traversal.
+    expect(screen.getAllByTestId('queue-thread-item')).toHaveLength(rowCount)
+    const surface = scrollChannelOf(container.querySelector('#queue-container')!)
+    expect(['auto', 'scroll']).not.toContain(surface.overflowY)
+    expect(surface.inlineHeight).toBe('')
+    // Presentation stays single-column (no multi-column grid is introduced).
+    expect(container.querySelector('[style*="grid-template-columns"]')).not.toBeInTheDocument()
+    // Infinite-scroll sentinel survives page growth and shrinkage.
+    expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
+  }
 
-  // Cross the threshold: VirtualizedThreadList replaces the plain list.
-  // SAFETY: same ref cast as the initial render for QueueList prop types
-  rerender(
+  // SAFETY: sentinelRef is a nullable ref; cast to match QueueList prop types
+  const renderQueue = (threads: Thread[]) => (
     <QueueList
-      activeThreads={grownThreads}
-      filteredThreads={grownThreads}
+      activeThreads={threads}
+      filteredThreads={threads}
       reorderError={null}
       renderItem={renderItem}
       isSearching={false}
       sentinelRef={sentinelRef as React.RefObject<HTMLDivElement | null>}
       hasNextPage
-      useVirtualizer={fakeUseVirtualizer}
-    />,
+      useVirtualizer={pageAwareUseVirtualizer}
+    />
   )
+
+  const { container, rerender } = render(renderQueue(page(50)))
+
+  act(() => {
+    resizeCallback?.([{ contentRect: { height: 600, width: 1400 } }])
+  })
 
   await waitFor(() => {
     expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
+    expect(screen.getAllByTestId('queue-thread-item')).toHaveLength(50)
   })
+  expectSingleWindowSurface(container, 50)
 
-  const virtualizedSurface = scrollChannelOf(container.querySelector('#queue-container')!)
-  expect(['auto', 'scroll']).not.toContain(virtualizedSurface.overflowY)
-  expect(virtualizedSurface.inlineHeight).toBe('')
+  // Grow page by page to five pages: the scroll owner is never replaced and
+  // the list is never rebuilt under the user's scroll position.
+  for (const count of [100, 150, 200, 250]) {
+    // SAFETY: same ref cast as the initial render for QueueList prop types
+    rerender(renderQueue(page(count)))
+    await waitFor(() => {
+      expect(screen.getAllByTestId('queue-thread-item')).toHaveLength(count)
+    })
+    expectSingleWindowSurface(container, count)
+  }
 
-  // Presentation stays single-column (no multi-column grid is introduced).
-  expect(container.querySelector('[style*="grid-template-columns"]')).not.toBeInTheDocument()
-  // Infinite-scroll sentinel survives the threshold crossing.
-  expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
+  // Traverse back upward through already-loaded pages and back down again:
+  // rows remain painted without scrolling away/back to recover.
+  for (const count of [150, 50, 250]) {
+    // SAFETY: same ref cast as the initial render for QueueList prop types
+    rerender(renderQueue(page(count)))
+    await waitFor(() => {
+      expect(screen.getAllByTestId('queue-thread-item')).toHaveLength(count)
+    })
+    expectSingleWindowSurface(container, count)
+  }
 })
 
 /**

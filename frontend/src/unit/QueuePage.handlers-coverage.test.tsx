@@ -26,7 +26,7 @@ vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children, onC
 vi.mock('../components/PositionSlider', () => ({ default: ({ onPositionSelect, onCancel }: { onPositionSelect: (n: number) => void; onCancel: () => void }) => <div><button onClick={() => onPositionSelect(0)}>invalid position</button><button onClick={() => onPositionSelect(1)}>confirm position</button><button onClick={onCancel}>cancel position</button></div> }))
 vi.mock('../components/DependencyBuilder', () => ({ default: ({ onClose, onChanged }: { onClose: () => void; onChanged: () => Promise<void> }) => <div><button onClick={onClose}>close dependencies</button><button onClick={() => void onChanged()}>dependency changed</button></div> }))
 vi.mock('../pages/QueuePage/IssueToggleList', () => ({ IssueToggleList: () => <div>issue list</div> }))
-vi.mock('../pages/QueuePage/VirtualizedThreadList', () => ({ VIRTUALIZATION_THRESHOLD: 50, default: ({ threads, renderItem }: { threads: never[]; renderItem: (thread: never, index: number) => React.ReactNode }) => <div>{threads.slice(0, 1).map((thread, index) => renderItem(thread, index))}</div> }))
+vi.mock('../pages/QueuePage/VirtualizedThreadList', () => ({ VIRTUALIZATION_THRESHOLD: 50, default: ({ threads, renderItem }: { threads: never[]; renderItem: (thread: never, index: number) => React.ReactNode }) => <div data-testid="queue-thread-list">{threads.map((thread, index) => renderItem(thread, index))}</div> }))
   // SAFETY: as never is used for type narrowing in mock data
   // SAFETY: object literal satisfies the event handler parameter type; as never bridges the gap
 vi.mock('../components/MigrationDialog', () => ({ default: ({ onComplete, onSkip, onClose }: { onComplete: (thread: never) => void; onSkip: () => void; onClose: () => void }) => <div><button onClick={() => onComplete({ id: 1, title: 'Saga' } as never)}>complete migration</button><button onClick={onSkip}>skip migration</button><button onClick={onClose}>close migration</button></div> }))
@@ -225,7 +225,7 @@ describe('QueuePage callback coverage', () => {
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useQueueThreads).mockReturnValue({ data: manyThreads as never, isPending: false, refetch: mocks.refetch } as never)
     renderPage()
-    expect(screen.getByText('card callback')).toBeInTheDocument()
+    expect(screen.getAllByText('card callback')).toHaveLength(51)
   })
 
   it('shows issue preview errors and creates complex ranges with read markers', async () => {
