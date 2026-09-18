@@ -599,7 +599,7 @@ async def bulk_mark_issue_unread(
     for thread_id in thread_ids:
         thread = await get_owned_thread_or_404(db, current_user_id, thread_id)
         adopted_issues = await issue_repository.issues_ordered(db, thread_id)
-        tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
+        apply_thread_issue_tracking_state(thread, adopted_issues)
         thread.status = "active"
 
     for issue in issues:

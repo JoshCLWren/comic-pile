@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
-const issues = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), move: vi.fn(), markRead: vi.fn(), markUnread: vi.fn() }))
+const issues = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), move: vi.fn(), markRead: vi.fn(), markUnread: vi.fn(), bulkMarkRead: vi.fn(), bulkMarkUnread: vi.fn() }))
 vi.mock('../services/api-issues', () => ({ issuesApi: issues }))
 vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, onClose, children }: { isOpen: boolean; title: string; onClose: () => void; children: ReactNode }) => isOpen ? <div role="dialog"><h2>{title}</h2><button type="button" aria-label="Close modal" onClick={onClose}>×</button>{children}</div> : null }))
 import BugReportModal from '../components/BugReportModal'

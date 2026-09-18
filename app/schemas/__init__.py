@@ -14,6 +14,8 @@ from app.schemas.dependency import (
     ThreadDependenciesResponse,
 )
 from app.schemas.issue import (
+    IssueBulkMarkReadRequest,
+    IssueBulkMarkUnreadRequest,
     IssueCreate,
     IssueCreateRange,
     IssueListResponse,
@@ -104,6 +106,8 @@ __all__ = [
     "BlockingExplanation",
     "ThreadDependenciesResponse",
     # Issue
+    "IssueBulkMarkReadRequest",
+    "IssueBulkMarkUnreadRequest",
     "IssueCreate",
     "IssueCreateRange",
     "IssueMoveRequest",
