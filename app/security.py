@@ -5,11 +5,7 @@ import logging
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.failed_login_repository import (
-    clear_attempts_for_username,
-    count_recent_attempts,
-    record_failed_attempt,
-)
+from app.repositories.failed_login_repository import count_recent_attempts
 
 logger = logging.getLogger(__name__)
 
@@ -79,22 +75,6 @@ async def check_login_lockout(db: AsyncSession, username: str, ip_address: str) 
         )
 
 
-async def record_failed_login(db: AsyncSession, username: str, ip_address: str) -> None:
-    """Persist a failed-login attempt record.
-
-    Args:
-        db: SQLAlchemy async session.
-        username: The attempted username.
-        ip_address: The client IP address.
-    """
-    await record_failed_attempt(db, username=username, ip_address=ip_address)
-
-
-async def clear_failed_logins(db: AsyncSession, username: str) -> None:
-    """Remove all failed-login records for a username after successful login.
-
-    Args:
-        db: SQLAlchemy async session.
-        username: The username whose attempts to clear.
-    """
-    await clear_attempts_for_username(db, username)
+# NOTE: Persistence for failed-login attempts lives in
+# ``app/repositories/failed_login_repository.py`` (issue #2597). The
+# repository owns the records; this module only exposes lockout policy.
