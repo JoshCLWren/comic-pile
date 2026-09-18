@@ -1,13 +1,11 @@
 """Login security: failed-attempt tracking and account lockout."""
 
 import logging
-from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.failed_login_attempt import FailedLoginAttempt
+from app.repositories.failed_login_repository import count_recent_attempts
 
 logger = logging.getLogger(__name__)
 
@@ -35,36 +33,6 @@ def get_client_ip(request_headers: dict, client_host: str | None) -> str:
     return client_host or "unknown"
 
 
-async def _count_recent_attempts(
-    db: AsyncSession,
-    username: str | None = None,
-    ip_address: str | None = None,
-    window_minutes: int = 15,
-) -> int:
-    """Count failed login attempts within a time window.
-
-    Args:
-        db: SQLAlchemy async session.
-        username: Filter by username (optional).
-        ip_address: Filter by IP address (optional).
-        window_minutes: Look-back window in minutes.
-
-    Returns:
-        Number of matching attempts.
-    """
-    cutoff = datetime.now(UTC) - timedelta(minutes=window_minutes)
-    conditions = [FailedLoginAttempt.attempted_at >= cutoff]
-    if username is not None:
-        conditions.append(FailedLoginAttempt.username == username)
-    if ip_address is not None:
-        conditions.append(FailedLoginAttempt.ip_address == ip_address)
-
-    result = await db.execute(
-        select(func.count()).select_from(FailedLoginAttempt).where(*conditions)
-    )
-    return result.scalar_one()
-
-
 async def check_login_lockout(db: AsyncSession, username: str, ip_address: str) -> None:
     """Raise HTTP 401 if the username or IP is locked out.
 
@@ -76,7 +44,7 @@ async def check_login_lockout(db: AsyncSession, username: str, ip_address: str) 
     Raises:
         HTTPException: 401 with generic message when locked out.
     """
-    username_failures = await _count_recent_attempts(
+    username_failures = await count_recent_attempts(
         db, username=username, window_minutes=USERNAME_LOCKOUT_MINUTES
     )
     if username_failures >= MAX_USERNAME_FAILURES:
@@ -91,7 +59,7 @@ async def check_login_lockout(db: AsyncSession, username: str, ip_address: str) 
             detail=LOCKOUT_ERROR_MESSAGE,
         )
 
-    ip_failures = await _count_recent_attempts(
+    ip_failures = await count_recent_attempts(
         db, ip_address=ip_address, window_minutes=IP_LOCKOUT_MINUTES
     )
     if ip_failures >= MAX_IP_FAILURES:
@@ -107,28 +75,6 @@ async def check_login_lockout(db: AsyncSession, username: str, ip_address: str) 
         )
 
 
-async def record_failed_login(db: AsyncSession, username: str, ip_address: str) -> None:
-    """Persist a failed-login attempt record.
-
-    Args:
-        db: SQLAlchemy async session.
-        username: The attempted username.
-        ip_address: The client IP address.
-    """
-    attempt = FailedLoginAttempt(
-        username=username,
-        ip_address=ip_address,
-    )
-    db.add(attempt)
-    await db.commit()
-
-
-async def clear_failed_logins(db: AsyncSession, username: str) -> None:
-    """Remove all failed-login records for a username after successful login.
-
-    Args:
-        db: SQLAlchemy async session.
-        username: The username whose attempts to clear.
-    """
-    await db.execute(delete(FailedLoginAttempt).where(FailedLoginAttempt.username == username))
-    await db.commit()
+# NOTE: Persistence for failed-login attempts lives in
+# ``app/repositories/failed_login_repository.py`` (issue #2597). The
+# repository owns the records; this module only exposes lockout policy.
