@@ -92,7 +92,9 @@ describe('edge component behavior', () => {
     await user.type(screen.getByLabelText(/Total Issues/), '0')
     fireEvent.submit(screen.getByRole('button', { name: 'Start Tracking' }).closest('form')!)
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/negative|greater than 0/))
-    fireEvent.click(screen.getByRole('dialog'))
-    expect(onClose).toHaveBeenCalled()
+    const dialog = screen.getByRole('dialog')
+    const backdrop = dialog.previousElementSibling as HTMLElement
+    fireEvent.click(backdrop)
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 })
