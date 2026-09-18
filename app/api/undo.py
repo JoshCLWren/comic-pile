@@ -3,7 +3,6 @@
 from typing import Annotated
 
 import asyncio
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import OperationalError
@@ -15,7 +14,7 @@ from app.database import get_db
 from app.models import Session as SessionModel
 from app.models.user import User
 from app.schemas import SessionResponse
-from app.services.snapshot_contract import SNAPSHOT_VERSION_KEY
+from app.schemas.session import build_session_intent_state
 from app.services.undo_snapshot_service import UndoSnapshotService
 
 router = APIRouter(tags=["undo"])
@@ -124,4 +123,4 @@ async def list_session_snapshots(
 
     # Use service to list snapshots
     service = UndoSnapshotService(db)
-    return await service.list_session_snapshots(session_id)
+    return await service.list_session_snapshots(session_id, current_user.id)

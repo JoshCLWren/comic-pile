@@ -548,15 +548,15 @@ async def test_undo_delta_restore_recovers_pre_rating_bandwidth(
     async_db: AsyncSession, sample_data: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Undoing a rating restores the exact bandwidth captured before it."""
-    from app.api.undo import (
-        _is_delta_snapshot,
-        _latest_delta_snapshot,
-        _restore_from_delta_snapshot,
-    )
+    from app.repositories.undo_snapshot_repository import UndoSnapshotRepository
+    from app.services.undo_snapshot_service import UndoSnapshotService
     from app.services.snapshot_contract import SNAPSHOT_VERSION, SNAPSHOT_VERSION_KEY
 
     session = sample_data["sessions"][0]
     thread = sample_data["threads"][0]
+
+    service = UndoSnapshotService(async_db)
+    repository = UndoSnapshotRepository(async_db)
 
     pre_state = {
         "start_die": 6,
@@ -587,7 +587,7 @@ async def test_undo_delta_restore_recovers_pre_rating_bandwidth(
     await async_db.commit()
     await async_db.refresh(snapshot)
 
-    assert _is_delta_snapshot(snapshot)
+    assert service._is_delta_snapshot(snapshot)
 
     # Simulate a post-rating correction changing the live state.
     session.predicted_bandwidth = "deep"
@@ -598,12 +598,12 @@ async def test_undo_delta_restore_recovers_pre_rating_bandwidth(
     session.bandwidth_updated_at = datetime.now(UTC)
     await async_db.commit()
 
-    latest = await _latest_delta_snapshot(async_db, session.id)
+    latest = await repository.get_latest_delta_snapshot(session.id)
     assert latest is not None and latest.id == snapshot.id
 
     refreshed = await async_db.get(SessionModel, session.id)
     assert refreshed is not None
-    await _restore_from_delta_snapshot(async_db, refreshed, latest)
+    await service._apply_delta_snapshot(refreshed, latest)
 
     assert refreshed.predicted_bandwidth == "balanced"
     assert refreshed.active_bandwidth == "light"

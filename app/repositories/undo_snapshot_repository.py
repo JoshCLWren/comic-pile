@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Snapshot, Thread
 from app.models.thread import normalize_format_value
-from comic_pile.bandwidth import restore_ephemeral_bandwidth
 
 
 class UndoSnapshotRepository:

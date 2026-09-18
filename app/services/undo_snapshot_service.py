@@ -1,16 +1,16 @@
 """Undo snapshot service for applying and listing snapshots."""
 
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any
 
-from sqlalchemy import select
+from fastapi import HTTPException, status
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Snapshot, Thread
 from app.models.thread import normalize_format_value
 from app.repositories.undo_snapshot_repository import UndoSnapshotRepository
 from app.schemas import ActiveThreadInfo
-from app.schemas.session import build_session_intent_state
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
     QUEUE_CHANGES_KEY,
@@ -34,23 +34,26 @@ class UndoSnapshotService:
         return thread_states.get(SNAPSHOT_VERSION_KEY) == SNAPSHOT_VERSION
 
     async def list_session_snapshots(
-        self, session_id: int
+        self, session_id: int, session_user_id: int
     ) -> list[dict[str, Any]]:
         """List all snapshots for a session.
 
         Args:
             session_id: Session whose snapshots should be listed.
+            session_user_id: Session owner ID for authorization.
 
         Returns:
             Snapshot metadata in reverse chronological order.
 
         Raises:
-            HTTPException: If the session is not found.
+            HTTPException: If the session is not found or not owned by user.
         """
-        # Get session to verify ownership (will be checked by caller)
-        session = await self.repository.get_user_session(session_id, 0)  # user_id checked by caller
+        session = await self.repository.get_user_session(session_id, session_user_id)
         if not session:
-            raise Exception(f"Session {session_id} not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session {session_id} not found",
+            )
 
         snapshots = await self.repository.get_session_snapshots(session_id)
         return [
@@ -82,18 +85,27 @@ class UndoSnapshotService:
         # Get session and snapshot
         session = await self.repository.get_user_session(session_id, session_user_id)
         if not session:
-            raise Exception(f"Session {session_id} not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Session {session_id} not found",
+            )
 
         snapshot = await self.repository.get_snapshot_by_id(snapshot_id)
         if not snapshot:
-            raise Exception(f"Snapshot {snapshot_id} not found for session {session_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Snapshot {snapshot_id} not found for session {session_id}",
+            )
 
         # Check if this is a delta snapshot and validate
         is_delta = self._is_delta_snapshot(snapshot)
         if is_delta:
             latest_delta = await self.repository.get_latest_delta_snapshot(session_id)
             if latest_delta is None or latest_delta.id != snapshot.id:
-                raise Exception("Only the latest rating can be undone")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Only the latest rating can be undone",
+                )
 
         # Apply the snapshot
         if is_delta:
