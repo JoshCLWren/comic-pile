@@ -37,7 +37,8 @@ test.describe('reading-mode quiz acceptance', () => {
   test('completes the two-question flow and records source quiz', async ({
     authenticatedPage,
   }) => {
-    test.skip(!quizEnabled, 'reading-mode quiz launcher is feature-gated')
+    // This test suite requires the readingModeQuiz feature to be enabled
+    expect(quizEnabled).toBe(true)
     const page = authenticatedPage
     await openQuiz(page)
 
@@ -79,7 +80,8 @@ test.describe('reading-mode quiz acceptance', () => {
     })
     expect(seed.ok()).toBe(true)
 
-    test.skip(!quizEnabled, 'reading-mode quiz launcher is feature-gated')
+    // This test suite requires the readingModeQuiz feature to be enabled
+    expect(quizEnabled).toBe(true)
     await openQuiz(page)
     await page.getByTestId('reading-mode-quiz-back').click()
 
@@ -94,7 +96,8 @@ test.describe('reading-mode quiz acceptance', () => {
   test('quiz is always manually reachable and never auto-opens', async ({
     authenticatedPage,
   }) => {
-    test.skip(!quizEnabled, 'reading-mode quiz launcher is feature-gated')
+    // This test suite requires the readingModeQuiz feature to be enabled
+    expect(quizEnabled).toBe(true)
     const page = authenticatedPage
     await gotoRollPage(page)
     await waitForRollPageReady(page)
@@ -108,7 +111,8 @@ test.describe('reading-mode quiz gating (issue #1945)', () => {
   test('hides the launcher and suggestion prompts from the normal production Roll surface', async ({
     authenticatedPage,
   }) => {
-    test.skip(quizEnabled, 'gating only applies when the launcher feature is disabled')
+    // This test suite requires the readingModeQuiz feature to be disabled
+    expect(quizEnabled).toBe(false)
     const page = authenticatedPage
     await gotoRollPage(page)
     await waitForRollPageReady(page)
