@@ -286,7 +286,6 @@ class DependencyGroupService:
         except IntegrityError as exc:
             await self._db.rollback()
             raise ConflictError("A group with this name already exists") from exc
-        group_id = group.id
         return await self._group_response(group)
 
     async def get_group(self, user_id: int, group_id: int) -> DependencyGroupResponse:

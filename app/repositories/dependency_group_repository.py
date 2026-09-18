@@ -397,7 +397,7 @@ async def insert_issue_memberships(
         .on_conflict_do_nothing(constraint="uq_dependency_group_issue")
         .returning(DependencyGroupMembership.issue_id)
     )
-    return list((await db.execute(statement)).scalars())
+    return list(filter(None, (await db.execute(statement)).scalars()))
 
 
 async def other_crossover_group_names_by_thread(
