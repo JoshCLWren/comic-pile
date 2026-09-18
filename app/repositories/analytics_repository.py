@@ -110,7 +110,11 @@ async def event_type_counts(db: AsyncSession, user_id: int) -> dict[str, int]:
         .where(SessionModel.user_id == user_id)
         .group_by(Event.type)
     )
-    return dict(result.all())
+    rows = result.all()
+    counts: dict[str, int] = {}
+    for row in rows:
+        counts[str(row[0])] = int(row[1])
+    return counts
 
 
 async def top_rated_threads(

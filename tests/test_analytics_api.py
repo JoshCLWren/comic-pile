@@ -57,8 +57,8 @@ async def test_metrics_aggregates_recent_sessions_and_ended_duration(
     """Recent sessions honor the window and the average uses ended durations."""
     sessions = sample_data["sessions"]
     now = datetime.now(UTC)
-    sessions[0].ended_at = sessions[0].started_at + timedelta(hours=2)
     sessions[0].started_at = now - timedelta(days=1)
+    sessions[0].ended_at = sessions[0].started_at + timedelta(hours=2)
     sessions[1].started_at = now
     await async_db.flush()
 
