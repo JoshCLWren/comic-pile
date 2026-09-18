@@ -1,7 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import AppErrorBoundary from './components/AppErrorBoundary'
-import { SessionProvider } from './contexts/SessionContext'
 import { ToastProvider } from './contexts/ToastProvider'
 import { startBootstrapShellLifecycle } from './bootstrapShell'
 import { restoreStoredTheme } from './services/theme'
@@ -25,11 +24,9 @@ const bootstrapShellLifecycle = startBootstrapShellLifecycle(rootElement, bootst
 createRoot(rootElement).render(
   <StrictMode>
     <AppErrorBoundary>
-      <SessionProvider>
-        <ToastProvider>
-          <App />
-        </ToastProvider>
-      </SessionProvider>
+      <ToastProvider>
+        <App />
+      </ToastProvider>
     </AppErrorBoundary>
   </StrictMode>,
 )
