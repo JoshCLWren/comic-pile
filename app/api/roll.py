@@ -15,10 +15,8 @@ from typing import Annotated, Any
 
 from app.api.session import (
     _invalidate_session_caches,
-    build_ladder_path,
     get_session_with_thread_safe,
 )
-from app.api.snooze import build_session_response
 from app.auth import get_current_user
 from app.config import get_recommendation_settings
 
@@ -37,6 +35,7 @@ from app.services.reading_effort import (
 )
 from app.services.recommendation_explanation import RecommendationExplanationProjection
 from app.services.roll_service import RollService
+from app.services.session_builders import build_ladder_path, build_session_response
 from app.schemas import (
     ExplainableFactorResponse,
     OverrideRequest,

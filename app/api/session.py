@@ -33,6 +33,7 @@ from app.schemas.session import (
     build_session_intent_state,
 )
 from app.services.ownership import get_owned_session_or_404
+from app.services.session_builders import build_ladder_path
 from app.services.session_service import get_session_service, SessionService
 from app.services.session_history_projection import project_session_history_events
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
@@ -274,50 +275,6 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
     summary["completed"] = sorted(completed_titles)
 
     return summary
-
-
-async def build_ladder_path(
-    session_id: int,
-    db: AsyncSession,
-    *,
-    session: SessionModel | None = None,
-    die_events: list[Event] | None = None,
-) -> str:
-    """Build narrative summary of dice ladder from session events.
-
-    Args:
-        session_id: The session ID to build ladder path for.
-        db: Database session.
-        session: Pre-loaded session object (avoids a redundant SELECT).
-        die_events: Pre-fetched die-changing events (avoids a redundant SELECT).
-
-    Returns:
-        String representation of dice ladder path (e.g., "d4 → d6 → d8").
-    """
-    if session is None:
-        session = await db.get(SessionModel, session_id)
-        if not session:
-            return ""
-
-    if die_events is None:
-        events_result = await db.execute(
-            select(Event)
-            .where(Event.session_id == session_id)
-            .where(Event.type.in_(("rate", "snooze", "undo")))
-            .where(Event.die_after.is_not(None))
-            .order_by(Event.timestamp, Event.id)
-        )
-        die_events = events_result.scalars().all()
-
-    if not die_events:
-        return str(session.start_die)
-
-    path = [session.start_die]
-    for event in die_events:
-        if event.die_after:
-            path.append(event.die_after)
-
-    return " → ".join(str(d) for d in path)
 
 
 async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadInfo | None:
