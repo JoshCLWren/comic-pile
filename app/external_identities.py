@@ -137,12 +137,65 @@ async def upsert_external_identities(
                     ]
                 )
             )
-            await db.execute(statement)
+            try:
+                async with db.begin_nested():
+                    await db.execute(statement)
+            except IntegrityError:
+                # Roll back the savepoint only; refresh existing identities
+                # and retry insertion of the still-missing subset.
+                pass
 
-        refreshed = list(
-            (await db.execute(select(ExternalIdentity).where(combined_condition))).scalars().all()
-        )
-        existing_by_key = {(i.provider, i.entity_type, i.external_id): i for i in refreshed}
+            refreshed = list(
+                (await db.execute(select(ExternalIdentity).where(combined_condition))).scalars().all()
+            )
+            existing_by_key = {(i.provider, i.entity_type, i.external_id): i for i in refreshed}
+
+            # Re-compute missing after refresh / rollback
+            missing_after_refresh = [
+                s
+                for s in normalized_specs
+                if (s.provider, s.entity_type, s.external_id) not in existing_by_key
+            ]
+            seen_after = set(existing_by_key.keys())
+            retry_specs = []
+            for spec in missing_after_refresh:
+                key = (spec.provider, spec.entity_type, spec.external_id)
+                if key not in seen_after:
+                    seen_after.add(key)
+                    retry_specs.append(spec)
+            if retry_specs:
+                retry_statement = (
+                    pg_insert(ExternalIdentity)
+                    .values(
+                        [
+                            {
+                                "provider": spec.provider,
+                                "entity_type": spec.entity_type,
+                                "external_id": spec.external_id,
+                                "external_url": spec.external_url,
+                                "metadata_json": spec.metadata_json or {},
+                                "provider_updated_at": spec.provider_updated_at,
+                            }
+                            for spec in retry_specs
+                        ]
+                    )
+                    .on_conflict_do_nothing(
+                        index_elements=[
+                            ExternalIdentity.__table__.c.provider,
+                            ExternalIdentity.__table__.c.entity_type,
+                            ExternalIdentity.__table__.c.external_id,
+                        ]
+                    )
+                )
+                try:
+                    async with db.begin_nested():
+                        await db.execute(retry_statement)
+                except IntegrityError:
+                    pass
+                refreshed = list(
+                    (await db.execute(select(ExternalIdentity).where(combined_condition))).scalars().all()
+                )
+                existing_by_key = {(i.provider, i.entity_type, i.external_id): i for i in refreshed}
 
     for spec in normalized_specs:
         key = (spec.provider, spec.entity_type, spec.external_id)
