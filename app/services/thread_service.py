@@ -347,10 +347,13 @@ async def list_completed_threads(
     next_token = None
     if has_more and threads_to_return:
         last = threads_to_return[-1]
+        # For completed threads, "position" sort uses created_at ordering,
+        # so cursor values must match the actual sort columns.
+        cursor_sort = "created" if validated_sort == "position" else validated_sort
         page_cursor = QueueCursor(
             sort=validated_sort,
             search=normalized_search,
-            values=build_cursor_values_from_row(validated_sort, last),
+            values=build_cursor_values_from_row(cursor_sort, last),
         )
         next_token = encode_queue_cursor(page_cursor)
 

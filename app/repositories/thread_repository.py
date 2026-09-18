@@ -202,16 +202,15 @@ async def fetch_completed_page(
         query = query.where(Thread.title.ilike(f"%{search}%"))
 
     # Apply deterministic sort order with tie-breakers
-    # For completed threads, reverse the order so newest comes first
+    # For completed threads, "position" sort falls back to created_at desc
+    # since completed threads don't have queue positions.
     if sort == "position":
-        # Completed threads don't have queue positions, sort by creation date descending
         for col in [Thread.created_at.desc(), Thread.id.desc()]:
             query = query.order_by(col)
     elif sort == "title":
         for col in [Thread.title.asc(), Thread.id.asc()]:
             query = query.order_by(col)
     else:  # created
-        # Newest first is the natural exploration order for completed
         for col in [Thread.created_at.desc(), Thread.id.desc()]:
             query = query.order_by(col)
 
