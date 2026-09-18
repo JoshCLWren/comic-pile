@@ -28,9 +28,6 @@ async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> se
     return await get_continuity_rule_blocked_thread_ids(user_id, db)
 
 
-# Deleted legacy blocking helpers and unused imports.
-
-
 @cached(ttl=TTL.SHORT)
 async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
     """Return cached blocked thread IDs for non-transactional reads."""
@@ -71,28 +68,6 @@ def format_blocking_reason(dependency: BlockingDependency) -> str:
     return build_blocking_explanation(dependency.issue_number, dependency.thread_title)
 
 
-def _merge_blocking_explanations(
-    *groups: list[BlockingDependency],
-) -> list[BlockingDependency]:
-    """Deduplicate blocker rows while preserving first-seen order."""
-    merged: list[BlockingDependency] = []
-    seen: set[tuple[int, str]] = set()
-    for group in groups:
-        for dependency in group:
-            key = (dependency.thread_id, dependency.issue_number)
-            if key in seen:
-                continue
-            seen.add(key)
-            merged.append(dependency)
-    return merged
-
-
-# Deleted legacy blocking helpers.
-
-
-# Deleted legacy blocking helpers.
-
-
 async def _continuity_blocking_explanations(
     thread_id: int,
     user_id: int,
@@ -110,10 +85,9 @@ async def _continuity_blocking_explanations(
     if thread is None or thread.next_unread_issue_id is None:
         return []
 
-    readiness = issue_rule_readiness
     reasons: list[BlockingDependency] = []
     seen: set[tuple[int, str]] = set()
-    for blocker in readiness(thread.next_unread_issue_id, snapshot):
+    for blocker in issue_rule_readiness(thread.next_unread_issue_id, snapshot):
         for detail in blocker.unread_issue_details:
             issue = snapshot.issues.get(detail.issue_id)
             if issue is None:
@@ -148,7 +122,6 @@ async def _continuity_blocking_explanations_batch(
 
     _invalidate_continuity_snapshot(user_id, db)
     snapshot = await load_snapshot(db, user_id)
-    readiness = issue_rule_readiness
     reasons_map: dict[int, list[BlockingDependency]] = {}
     for thread_id in thread_ids:
         thread = snapshot.threads.get(thread_id)
@@ -156,7 +129,7 @@ async def _continuity_blocking_explanations_batch(
             continue
         reasons: list[BlockingDependency] = []
         seen: set[tuple[int, str]] = set()
-        for blocker in readiness(thread.next_unread_issue_id, snapshot):
+        for blocker in issue_rule_readiness(thread.next_unread_issue_id, snapshot):
             for detail in blocker.unread_issue_details:
                 issue = snapshot.issues.get(detail.issue_id)
                 if issue is None:
@@ -405,6 +378,3 @@ async def refresh_user_blocked_status(
         )
 
     return changes
-
-
-# Deleted legacy blocking status refresher.
