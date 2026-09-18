@@ -502,7 +502,10 @@ export default function ContinuityPlannerPage({
     setSaveError(null)
   }
 
-  const isLoading = threadsPending || groupsPending || (planId != null && planPending)
+  // New plans render immediately (as before the React Query migration) so the
+  // editor stays usable while server collections stream in. Existing plans wait
+  // for their plan payload plus supporting collections before hydrating.
+  const isLoading = planId != null && (threadsPending || groupsPending || planPending)
   const loadError = threadsError
     ? errorMessage(threadsError, 'Unable to load the continuity planner.')
     : groupsError
