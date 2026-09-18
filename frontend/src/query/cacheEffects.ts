@@ -358,3 +358,13 @@ export async function invalidateSessionRecoveryCache(
     client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
   ])
 }
+
+/**
+ * Invalidate the identity-inbox list cache after a mutation (confirm, reject,
+ * defer, skip) so the inbox refetches the updated item set.
+ */
+export async function invalidateIdentityInbox(
+  client: QueryClient,
+): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.identityInbox.all })
+}
