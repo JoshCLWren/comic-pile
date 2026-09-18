@@ -9,7 +9,6 @@
   "health": ["execute-call", "query-import"],
 
   "issue_dependency_batch": ["execute-call", "query-import"],
-  "preferences": ["execute-call", "query-import"],
   "roll": ["execute-call", "query-import"],
   "session": ["execute-call", "query-import"],
   "test_helpers": ["execute-call", "query-import"],
