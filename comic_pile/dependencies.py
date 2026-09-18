@@ -6,13 +6,19 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import TTL, cached
-from app.continuity_blocking import (
-    get_continuity_rule_blocked_thread_ids,
-)
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.services.continuity_graph import SNAPSHOT_SESSION_KEY
+
+# Historical CBL materialization is inert unless separately proven or promoted
+# as reader hard intent. Trigger mirroring into ContinuityRule is not such a
+# promotion, so the canonical predicate is exactly:
+#     note IS NULL OR note NOT LIKE 'cbl-order:%'
+_CANONICAL_DEPENDENCY_NOTE = or_(
+    Dependency.note.is_(None),
+    Dependency.note.not_like("cbl-order:%"),
+)
 
 
 def _invalidate_continuity_snapshot(user_id: int, db: AsyncSession) -> None:
@@ -23,9 +29,36 @@ def _invalidate_continuity_snapshot(user_id: int, db: AsyncSession) -> None:
 
 
 async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
-    """Read unified blocked thread IDs directly from the current transaction."""
+    """Read canonical blocked thread IDs directly from the current transaction.
+
+    After the Dependency-only cutover the Roll runtime consults only canonical
+    Dependency rows: the target thread's next unread issue joined to incoming
+    edges from unread issues owned by the same user, restricted to rows that are
+    not historical ``cbl-order:%`` materialization.
+    """
     _invalidate_continuity_snapshot(user_id, db)
-    return await get_continuity_rule_blocked_thread_ids(user_id, db)
+    source_issue = Issue.__table__.alias("source_issue")
+    next_unread_issue = Issue.__table__.alias("next_unread_issue")
+    target_thread = Thread.__table__.alias("target_thread")
+    source = Thread.__table__.alias("source_thread")
+
+    issue_result = await db.execute(
+        select(target_thread.c.id)
+        .join(
+            next_unread_issue,
+            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
+        )
+        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(source, source_issue.c.thread_id == source.c.id)
+        .where(target_thread.c.user_id == user_id)
+        .where(source.c.user_id == user_id)
+        .where(source_issue.c.status != "read")
+        .where(target_thread.c.next_unread_issue_id.isnot(None))
+        .where(_CANONICAL_DEPENDENCY_NOTE)
+        .distinct()
+    )
+    return {row[0] for row in issue_result.all()}
 
 
 @cached(ttl=TTL.SHORT)
@@ -68,97 +101,101 @@ def format_blocking_reason(dependency: BlockingDependency) -> str:
     return build_blocking_explanation(dependency.issue_number, dependency.thread_title)
 
 
-async def _continuity_blocking_explanations(
+async def _dependency_blocking_explanations(
     thread_id: int,
     user_id: int,
     db: AsyncSession,
 ) -> list[BlockingDependency]:
-    """Convert continuity-graph blockers into shared reader-facing explanations."""
-    from app.services.continuity_graph import (
-        issue_rule_readiness,
-        load_snapshot,
+    """Return unread canonical Dependency blockers for one thread."""
+    source_issue = Issue.__table__.alias("source_issue")
+    next_unread_issue = Issue.__table__.alias("next_unread_issue")
+    source_thread = Thread.__table__.alias("source_thread")
+    target_thread = Thread.__table__.alias("target_thread")
+
+    issue_result = await db.execute(
+        select(
+            source_thread.c.id,
+            source_thread.c.title,
+            source_issue.c.issue_number,
+        )
+        .select_from(target_thread)
+        .join(
+            next_unread_issue,
+            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
+        )
+        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
+        .where(target_thread.c.id == thread_id)
+        .where(target_thread.c.user_id == user_id)
+        .where(source_thread.c.user_id == user_id)
+        .where(source_issue.c.status != "read")
+        .where(target_thread.c.next_unread_issue_id.isnot(None))
+        .where(_CANONICAL_DEPENDENCY_NOTE)
+        .distinct()
     )
-
-    _invalidate_continuity_snapshot(user_id, db)
-    snapshot = await load_snapshot(db, user_id)
-    thread = snapshot.threads.get(thread_id)
-    if thread is None or thread.next_unread_issue_id is None:
-        return []
-
-    reasons: list[BlockingDependency] = []
-    seen: set[tuple[int, str]] = set()
-    for blocker in issue_rule_readiness(thread.next_unread_issue_id, snapshot):
-        for detail in blocker.unread_issue_details:
-            issue = snapshot.issues.get(detail.issue_id)
-            if issue is None:
-                continue
-            source_thread = snapshot.threads.get(issue.thread_id)
-            if source_thread is None:
-                continue
-            key = (source_thread.id, str(issue.issue_number))
-            if key in seen:
-                continue
-            seen.add(key)
-            reasons.append(
-                BlockingDependency(
-                    thread_id=source_thread.id,
-                    thread_title=source_thread.title,
-                    issue_number=str(issue.issue_number),
-                )
-            )
-    return reasons
+    return [
+        BlockingDependency(
+            thread_id=thread_id_val,
+            thread_title=thread_title,
+            issue_number=str(issue_number),
+        )
+        for thread_id_val, thread_title, issue_number in issue_result.all()
+    ]
 
 
-async def _continuity_blocking_explanations_batch(
+async def _dependency_blocking_explanations_batch(
     thread_ids: list[int],
     user_id: int,
     db: AsyncSession,
 ) -> dict[int, list[BlockingDependency]]:
-    """Convert continuity-graph blockers for many threads in one snapshot load."""
-    from app.services.continuity_graph import (
-        issue_rule_readiness,
-        load_snapshot,
+    """Return unread canonical Dependency blockers for many threads."""
+    source_issue = Issue.__table__.alias("source_issue")
+    next_unread_issue = Issue.__table__.alias("next_unread_issue")
+    source_thread = Thread.__table__.alias("source_thread")
+    target_thread = Thread.__table__.alias("target_thread")
+
+    result = await db.execute(
+        select(
+            target_thread.c.id,
+            source_thread.c.id,
+            source_thread.c.title,
+            source_issue.c.issue_number,
+        )
+        .join(
+            next_unread_issue,
+            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
+        )
+        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
+        .where(target_thread.c.id.in_(thread_ids))
+        .where(target_thread.c.user_id == user_id)
+        .where(source_thread.c.user_id == user_id)
+        .where(source_issue.c.status != "read")
+        .where(target_thread.c.next_unread_issue_id.isnot(None))
+        .where(_CANONICAL_DEPENDENCY_NOTE)
     )
 
-    _invalidate_continuity_snapshot(user_id, db)
-    snapshot = await load_snapshot(db, user_id)
     reasons_map: dict[int, list[BlockingDependency]] = {}
-    for thread_id in thread_ids:
-        thread = snapshot.threads.get(thread_id)
-        if thread is None or thread.next_unread_issue_id is None:
-            continue
-        reasons: list[BlockingDependency] = []
-        seen: set[tuple[int, str]] = set()
-        for blocker in issue_rule_readiness(thread.next_unread_issue_id, snapshot):
-            for detail in blocker.unread_issue_details:
-                issue = snapshot.issues.get(detail.issue_id)
-                if issue is None:
-                    continue
-                source_thread = snapshot.threads.get(issue.thread_id)
-                if source_thread is None:
-                    continue
-                key = (source_thread.id, str(issue.issue_number))
-                if key in seen:
-                    continue
-                seen.add(key)
-                reasons.append(
-                    BlockingDependency(
-                        thread_id=source_thread.id,
-                        thread_title=source_thread.title,
-                        issue_number=str(issue.issue_number),
-                    )
-                )
-        if reasons:
-            reasons_map[thread_id] = reasons
+    for target_tid, src_tid, src_title, src_issue_num in result.all():
+        reasons_map.setdefault(target_tid, []).append(
+            BlockingDependency(
+                thread_id=src_tid,
+                thread_title=src_title,
+                issue_number=str(src_issue_num),
+            )
+        )
     return reasons_map
 
 
 async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[BlockingDependency]:
     """Human-readable reasons a thread is blocked.
 
-    Continuity-rule blockers are the only authority for Roll blocking.
+    Canonical Dependency rows are the only authority for Roll blocking, so
+    explanations are built from the same canonical edges the evaluator uses.
     """
-    return await _continuity_blocking_explanations(thread_id, user_id, db)
+    return await _dependency_blocking_explanations(thread_id, user_id, db)
 
 
 async def get_blocking_explanations_batch(
@@ -170,8 +207,8 @@ async def get_blocking_explanations_batch(
     if not thread_ids:
         return {}
 
-    continuity_map = await _continuity_blocking_explanations_batch(thread_ids, user_id, db)
-    return {thread_id: continuity_map.get(thread_id, []) for thread_id in thread_ids}
+    dependency_map = await _dependency_blocking_explanations_batch(thread_ids, user_id, db)
+    return {thread_id: dependency_map.get(thread_id, []) for thread_id in thread_ids}
 
 
 async def validate_position_dependency_consistency(
