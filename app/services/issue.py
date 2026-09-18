@@ -501,3 +501,35 @@ async def mark_issue_unread(
     db.add(event)
 
     await refresh_user_blocked_status(current_user_id, db)
+
+
+async def bulk_mark_issue_read(
+    db: AsyncSession,
+    issue_ids: list[int],
+    current_user_id: int,
+) -> None:
+    """Mark multiple issues as read atomically.
+
+    Args:
+        db: Database session.
+        issue_ids: Ordered broadcast list of issue IDs.
+        current_user_id: User owning the issues.
+    """
+    for issue_id in issue_ids:
+        await mark_issue_read(db, issue_id, current_user_id)
+
+
+async def bulk_mark_issue_unread(
+    db: AsyncSession,
+    issue_ids: list[int],
+    current_user_id: int,
+) -> None:
+    """Mark multiple issues as unread atomically.
+
+    Args:
+        db: Database session.
+        issue_ids: Ordered broadcast list of issue IDs.
+        current_user_id: User owning the issues.
+    """
+    for issue_id in issue_ids:
+        await mark_issue_unread(db, issue_id, current_user_id)

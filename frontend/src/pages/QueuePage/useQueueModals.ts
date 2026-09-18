@@ -295,7 +295,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
               )
               if (lastRead > 0 && issueListResponse.issues.length > 0) {
                 const issuesToMark = issueListResponse.issues.slice(0, lastRead)
-                await Promise.all(issuesToMark.map((issue) => issuesApi.markRead(issue.id)))
+                await issuesApi.bulkMarkRead(issuesToMark.map((issue) => issue.id))
               }
             }
           } catch (issueError: unknown) {
