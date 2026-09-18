@@ -1,6 +1,5 @@
 import { useRef, useEffect, useLayoutEffect } from 'react'
 import * as THREE from 'three'
-import type { MeshStandardMaterial } from 'three'
 import { buildD10Faces } from './d10Geometry'
 import { getDiceRenderConfigForSides } from './diceRenderConfig'
 import type { Dice3DProps, DiceRenderGlobalConfig, DiceSide } from './diceTypes'
@@ -969,14 +968,8 @@ export default function Dice3D({
         scene.remove(meshRef.current);
         if (meshRef.current.geometry) meshRef.current.geometry.dispose();
         if (meshRef.current.material) {
-          const materials = Array.isArray(meshRef.current.material)
-            ? meshRef.current.material
-            : [meshRef.current.material];
-          for (const material of materials) {
-            const stdMaterial = material as MeshStandardMaterial;
-            if (stdMaterial.map) stdMaterial.map.dispose();
-            material.dispose();
-          }
+          if (meshRef.current.material.map) meshRef.current.material.map.dispose();
+          meshRef.current.material.dispose();
         }
       }
       renderer.dispose();
@@ -990,14 +983,8 @@ export default function Dice3D({
       sceneRef.current.remove(meshRef.current);
       if (meshRef.current.geometry) meshRef.current.geometry.dispose();
       if (meshRef.current.material) {
-        const materials = Array.isArray(meshRef.current.material)
-          ? meshRef.current.material
-          : [meshRef.current.material];
-        for (const material of materials) {
-          const stdMaterial = material as MeshStandardMaterial;
-          if (stdMaterial.map) stdMaterial.map.dispose();
-          material.dispose();
-        }
+        if (meshRef.current.material.map) meshRef.current.material.map.dispose();
+        meshRef.current.material.dispose();
       }
     }
 
