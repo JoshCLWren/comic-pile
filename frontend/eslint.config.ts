@@ -5,9 +5,64 @@ import tsEslintParser from '@typescript-eslint/parser'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
+/**
+ * Custom rule to prevent direct React Query cache mutations outside cacheEffects.ts
+ */
+const noDirectCacheMutations = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description: 'Prevent direct React Query cache mutations outside cacheEffects.ts',
+      recommended: 'error',
+    },
+    schema: [],
+    messages: {
+      directCacheMutation: 'Direct React Query cache mutations are only allowed in cacheEffects.ts or test files.',
+    },
+  },
+  create(context) {
+    const cacheEffectsPath = 'src/query/cacheEffects.ts'
+    const isCacheEffectsFile = context.filename?.endsWith(cacheEffectsPath)
+    const isTestFile = context.filename?.includes('/test/') || context.filename?.includes('/unit/') || context.filename?.includes('/e2e/')
+
+    return {
+      CallExpression(node) {
+        if (isCacheEffectsFile || isTestFile) return
+
+        const callee = node.callee
+        if (callee.type === 'MemberExpression') {
+          const object = callee.object
+          const property = callee.property
+
+          if (
+            object.type === 'Identifier' &&
+            object.name === 'queryClient' &&
+            property.type === 'Identifier' &&
+            ['setQueryData', 'invalidateQueries', 'removeQueries'].includes(property.name)
+          ) {
+            context.report({
+              node,
+              messageId: 'directCacheMutation',
+            })
+          }
+        }
+      },
+    }
+  },
+}
+
 export default [
   {
     ignores: ['dist', 'coverage'],
+  },
+  {
+    files: ['**/*.{js,jsx,ts,tsx}'],
+    plugins: {
+      'no-direct-cache-mutations': noDirectCacheMutations,
+    },
+    rules: {
+      'no-direct-cache-mutations/no-direct-cache-mutations': 'error',
+    },
   },
   {
     files: ['**/*.{js,jsx,ts,tsx}'],

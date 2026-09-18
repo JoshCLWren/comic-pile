@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { invalidateReadingPlans } from '../query/cacheEffects'
+import { invalidateReadingPlans, applyCommittedReadingPlanUpdate } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import {
   continuityPlansApi,
@@ -41,8 +41,7 @@ export function useSaveReadingPlan(planId: number | null, deps: SaveReadingPlanD
         ? api.update(planId, payload)
         : api.create(payload),
     onSuccess: async (plan) => {
-      client.setQueryData(queryKeys.readingPlans.detail(plan.id), plan)
-      await invalidateReadingPlans(client)
+      await applyCommittedReadingPlanUpdate(client, plan)
     },
   })
 }

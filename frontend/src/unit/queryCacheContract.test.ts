@@ -6,9 +6,16 @@ import {
   invalidateAfterIssueEdit,
   invalidateAfterQueueMovement,
   invalidateCurrentSessionAfterSnooze,
+  applyCreatedCustomCBL,
+  applyUpdatedCustomCBL,
+  applyDeletedCustomCBL,
+  applyCommittedReadingPlanUpdate,
+  invalidateSessionRecoveryCache,
 } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import type { Thread } from '../types'
+import type { CustomCBL } from '../../services/api-custom-cbl'
+import type { ContinuityPlan } from '../../services/api-continuity-plans'
 
 const thread: Thread = {
   id: 7,
@@ -216,7 +223,7 @@ describe('targeted cache effects', () => {
 
     await invalidateAfterQueueMovement(client)
 
-expect(resetQueries).toHaveBeenCalledTimes(1)
+    expect(resetQueries).toHaveBeenCalledTimes(1)
     expect(resetQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.pages(),
     })
@@ -228,6 +235,100 @@ expect(resetQueries).toHaveBeenCalledTimes(1)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
+    })
+  })
+
+  describe('custom CBL cache effects', () => {
+    const customCBL: CustomCBL = {
+      id: 42,
+      name: 'My Custom List',
+      description: 'A test custom list',
+      issue_count: 5,
+      user_id: 1,
+      created_at: '2026-08-03T00:00:00Z',
+      updated_at: '2026-08-03T00:00:00Z',
+      entries: [
+        { id: 1, position: 0, issue_id: 100, thread_id: 7, series_name: 'Batman', issue_number: '#1', status: 'read' },
+        { id: 2, position: 1, issue_id: 101, thread_id: 8, series_name: 'Superman', issue_number: '#1', status: 'unread' },
+      ],
+    }
+
+    it('applies a created custom CBL to detail cache and invalidates list', async () => {
+      const { client, setQueryData, invalidateQueries } = createSpiedClient()
+
+      await applyCreatedCustomCBL(client, customCBL)
+
+      expect(setQueryData).toHaveBeenCalledWith(queryKeys.customCBLs.detail(customCBL.id), customCBL)
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.list(), exact: true })
+    })
+
+    it('applies an updated custom CBL to detail cache and invalidates list', async () => {
+      const { client, setQueryData, invalidateQueries } = createSpiedClient()
+
+      await applyUpdatedCustomCBL(client, customCBL)
+
+      expect(setQueryData).toHaveBeenCalledWith(queryKeys.customCBLs.detail(customCBL.id), customCBL)
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.list(), exact: true })
+    })
+
+    it('removes a deleted custom CBL from detail cache and invalidates list', async () => {
+      const { client, removeQueries, invalidateQueries } = createSpiedClient()
+
+      await applyDeletedCustomCBL(client, customCBL.id)
+
+      expect(removeQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.detail(customCBL.id), exact: true })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.list(), exact: true })
+    })
+  })
+
+  describe('reading plan cache effects', () => {
+    const readingPlan: ContinuityPlan = {
+      id: 99,
+      name: 'Test Reading Plan',
+      description: 'A test reading plan',
+      created_at: '2026-08-03T00:00:00Z',
+      updated_at: '2026-08-03T00:00:00Z',
+      user_id: 1,
+      lane_id: 'test-lane',
+      issues_added_count: 3,
+      issues_remaining_count: 2,
+      issues_skipped_count: 1,
+      issues_total_count: 6,
+      is_completed: false,
+      is_stale: false,
+      is_active: true,
+      last_issue_added_at: '2026-08-03T00:00:00Z',
+      next_issue_at: '2026-08-10T00:00:00Z',
+      next_issue_thread_id: 12,
+      next_issue_thread_title: 'Next Comic',
+      next_issue_thread_format: 'issue',
+      next_issue_thread_issue_number: '#45',
+      next_issue_thread_series_name: 'Series Name',
+    }
+
+    it('applies a committed reading plan to detail cache and invalidates dependent queries', async () => {
+      const { client, setQueryData, invalidateQueries, resetQueries } = createSpiedClient()
+
+      await applyCommittedReadingPlanUpdate(client, readingPlan)
+
+      expect(setQueryData).toHaveBeenCalledWith(queryKeys.readingPlans.detail(readingPlan.id), readingPlan)
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.list(), exact: true })
+      expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.current(), exact: true })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.bootstrap(), exact: true })
+    })
+  })
+
+  describe('session recovery cache effects', () => {
+    it('invalidates all queries affected by session recovery', async () => {
+      const { client, invalidateQueries } = createSpiedClient()
+
+      await invalidateSessionRecoveryCache(client)
+
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.current(), exact: true })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.bootstrap(), exact: true })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.all })
     })
   })
 })
