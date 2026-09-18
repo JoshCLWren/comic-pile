@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ResumeRecovery from '../components/ResumeRecovery'
+import { queryKeys } from '../query/queryKeys'
 
 const { revalidateSession, recoverSession, invalidateQueries } = vi.hoisted(() => ({
   revalidateSession: vi.fn(),
@@ -56,8 +57,42 @@ describe('ResumeRecovery', () => {
     expect(screen.getByText('Last usable screen')).toBeInTheDocument()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     await waitFor(() => expect(revalidateSession).toHaveBeenCalledWith(15000))
-    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledOnce())
+    // Scoped resume set (#2582): current session, roll bootstrap, queue
+    // pages — never an unscoped invalidate of every query.
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledTimes(3))
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.queue.pages(),
+    })
     expect(recoverSession).not.toHaveBeenCalled()
+  })
+
+  it('refreshes data without moving the viewport during resume recovery', async () => {
+    // ResumeRecovery owns data/auth recovery, not viewport position (#2582):
+    // the route restoration layer alone repositions the window.
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
+    const scrollIntoView = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => undefined)
+    revalidateSession.mockResolvedValue(undefined)
+    invalidateQueries.mockResolvedValue(undefined)
+
+    renderRecovery()
+    dispatchPageShow(true)
+
+    await waitFor(() => expect(revalidateSession).toHaveBeenCalledWith(15000))
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalled())
+    expect(scrollTo).not.toHaveBeenCalled()
+    expect(scrollIntoView).not.toHaveBeenCalled()
+    scrollTo.mockRestore()
+    scrollIntoView.mockRestore()
   })
 
   it('does not retry automatic resume after a definitive authentication failure', async () => {
@@ -120,7 +155,7 @@ describe('ResumeRecovery', () => {
     await act(async () => {
       await Promise.resolve()
     })
-    expect(invalidateQueries).toHaveBeenCalledOnce()
+    expect(invalidateQueries).toHaveBeenCalledTimes(3)
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
@@ -158,7 +193,7 @@ describe('ResumeRecovery', () => {
       finishExplicitRecovery?.()
     })
 
-    expect(invalidateQueries).toHaveBeenCalledOnce()
+    expect(invalidateQueries).toHaveBeenCalledTimes(3)
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
@@ -185,7 +220,7 @@ describe('ResumeRecovery', () => {
     })
 
     expect(revalidateSession).toHaveBeenCalledTimes(2)
-    expect(invalidateQueries).toHaveBeenCalledOnce()
+    expect(invalidateQueries).toHaveBeenCalledTimes(3)
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
@@ -203,7 +238,7 @@ describe('ResumeRecovery', () => {
 
     renderRecovery()
     dispatchPageShow(true)
-    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledOnce())
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledTimes(3))
 
     now.mockReturnValue(11_001)
     fireEvent(document, new Event('visibilitychange'))

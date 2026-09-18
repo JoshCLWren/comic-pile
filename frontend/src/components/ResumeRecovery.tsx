@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { queryClient } from '../query/queryClient'
+import { invalidateAfterResumeRecovery } from '../query/cacheEffects'
 import { isDefinitiveAuthenticationFailure } from '../services/authFailure'
 
 const RESUME_REQUEST_TIMEOUT_MS = 15000
@@ -57,7 +58,10 @@ export default function ResumeRecovery({
           if (sequence !== requestSequence.current) {
             return
           }
-          await queryClient.invalidateQueries()
+          // Data/auth recovery only (#2582): refresh the scoped resume set.
+          // ResumeRecovery never restores or repositions the viewport — that
+          // is owned exclusively by the route restoration layer.
+          await invalidateAfterResumeRecovery(queryClient)
           if (sequence !== requestSequence.current) {
             return
           }

@@ -108,6 +108,27 @@ export async function invalidateCurrentSessionAfterSnooze(
 }
 
 /**
+ * Refresh the minimal auth-resume set after a bfcache/visibility resume
+ * recovery (`ResumeRecovery`, #2582). Scoped to the retained resume
+ * resources — current session, roll bootstrap, and queue pages — so recovery
+ * reconciles data without the unscoped `invalidateQueries()` blast that used
+ * to churn deferred layout underneath an in-progress scroll restore.
+ */
+export async function invalidateAfterResumeRecovery(client: QueryClient): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    }),
+    client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
+  ])
+}
+
+/**
  * Drop the cached roll bootstrap after a manual thread selection
  * (`POST /threads/{id}/set-pending`) so the next Roll mount fetches the new
  * pending thread instead of replaying a still-fresh snapshot with no pending

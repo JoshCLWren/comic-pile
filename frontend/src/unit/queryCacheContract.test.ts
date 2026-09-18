@@ -5,6 +5,7 @@ import {
   applyUpdatedThreadCache,
   invalidateAfterIssueEdit,
   invalidateAfterQueueMovement,
+  invalidateAfterResumeRecovery,
   invalidateCurrentSessionAfterSnooze,
 } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
@@ -250,7 +251,7 @@ describe('targeted cache effects', () => {
 
     await invalidateAfterQueueMovement(client)
 
-expect(resetQueries).toHaveBeenCalledTimes(1)
+    expect(resetQueries).toHaveBeenCalledTimes(1)
     expect(resetQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.pages(),
     })
@@ -263,5 +264,26 @@ expect(resetQueries).toHaveBeenCalledTimes(1)
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
     })
+  })
+
+  it('limits resume recovery to the scoped resume set without an unscoped invalidate', async () => {
+    const { client, setQueryData, invalidateQueries, resetQueries } = createSpiedClient()
+
+    await invalidateAfterResumeRecovery(client)
+
+    expect(invalidateQueries).toHaveBeenCalledTimes(3)
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.queue.pages(),
+    })
+    expect(setQueryData).not.toHaveBeenCalled()
+    expect(resetQueries).not.toHaveBeenCalled()
   })
 })

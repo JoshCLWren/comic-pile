@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { requestSemanticScroll } from '../../scroll/scrollCoordinator'
 import { isFunction } from '../../utils/runtimeChecks'
 
 /**
@@ -19,17 +20,30 @@ interface UseRollViewportParams {
   isRatingView: boolean
 }
 
+/**
+ * Explicit semantic scrolling for the Roll dice/rating transition (#2582).
+ *
+ * This is the narrow feature-scroll exception to route scroll ownership: the
+ * scroll only fires for an intentional in-page product transition and is
+ * routed through `requestSemanticScroll` so it can never race an actively
+ * settling route restore — a deferred transition applies once the restore
+ * ends instead of fighting it.
+ */
 export function useRollViewport({ isRatingView }: UseRollViewportParams) {
   const mainDieRef = useRef<HTMLDivElement>(null)
   const ratingViewTopRef = useRef<HTMLDivElement>(null)
   const prevIsRatingViewRef = useRef(isRatingView)
 
   const scrollToDice = useCallback(() => {
-    mainDieRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
+    requestSemanticScroll(() => {
+      mainDieRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' })
+    })
   }, [])
 
   const scrollToRatingStart = useCallback((behavior: 'auto' | 'smooth' = scrollBehavior()) => {
-    ratingViewTopRef.current?.scrollIntoView({ behavior, block: 'start' })
+    requestSemanticScroll(() => {
+      ratingViewTopRef.current?.scrollIntoView({ behavior, block: 'start' })
+    })
   }, [])
 
   useEffect(() => {

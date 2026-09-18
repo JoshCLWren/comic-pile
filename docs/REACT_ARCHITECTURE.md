@@ -228,6 +228,41 @@ guard test `frontend/src/unit/boundedThreadQuery.guard.test.ts` fails if the
 universal `useThreads` export is reintroduced or if the queue query starts
 auto-traversing pages.
 
+### Scroll Ownership
+
+Route scroll restoration has exactly one owner (#2582): the route
+restoration layer (`useScrollRestoration` in
+`frontend/src/hooks/useScrollRestoration.ts`), coordinated through the shared
+module `frontend/src/scroll/scrollCoordinator.ts`. That module is the only
+production code allowed to call `window.scrollTo` to restore a prior route
+position.
+
+- **Route/resume restoration** (`restoreRouteScrollPosition`) covers POP/PUSH
+  navigation, reloads, bfcache restores, and visibility resume. Correctness
+  settles against an explicit layout-readiness contract
+  (`waitForLayoutSettled`: stable animation frames, bounded) — never a fixed
+  timeout. A user-driven gesture (wheel / touch / keys) ends the settle watch
+  so restoration never fights an intentional scroll.
+- **Explicit feature semantic scrolling** is the narrow exception: Roll may
+  move between the dice and rating regions (`useRollViewport`,
+  `ThreadPool` return-to-top) and Help may jump to a glossary anchor, but only
+  for an intentional in-page product transition and only through
+  `requestSemanticScroll` / `scrollToTopSemantic`, which defer while a route
+  restore is actively settling.
+- **Virtualizers own measurement/rendering, not navigation.** Queue
+  virtualization measures offsets and responds to layout but never restores
+  the window position; its drag edge auto-scroll is an explicit user-gesture
+  scroll through the virtualizer, not a restore.
+- **ResumeRecovery owns data/auth recovery, not viewport position.** It
+  refreshes the scoped resume set through
+  `invalidateAfterResumeRecovery` in `frontend/src/query/cacheEffects.ts` and
+  never touches the viewport.
+
+**Rule**: Do not add another `window.scrollTo` restoration path, another
+scroll retry timer, or an unscoped `invalidateQueries()` in a resume path.
+The guard test `frontend/src/unit/scrollOwnership.test.ts` fails if a second
+navigation-scroll owner is introduced.
+
 ### Context Providers
 
 **DiceContext**: Client-side state for dice interactions

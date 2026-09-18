@@ -76,6 +76,12 @@ interface VirtualizedThreadListProps<T> {
  * virtualization. The window scroll surface owns Queue before and after the
  * virtualization threshold is crossed, preventing nested scroll containers.
  *
+ * Scroll ownership (#2582): this component owns measurement/rendering only.
+ * It never repositions the window for navigation or resume — route
+ * restoration belongs exclusively to the route restoration layer. The single
+ * `scrollToIndex` call below serves an explicit user drag gesture (edge
+ * auto-scroll while reordering) and is not a restore path.
+ *
  * Preserves existing selectors (`data-testid="queue-thread-list"`,
  * `id="queue-container"`, `role="list"`, `aria-label="Series queue"`)
  * for E2E compatibility, including in the empty state.
