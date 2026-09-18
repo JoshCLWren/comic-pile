@@ -15,9 +15,9 @@ from typing import Annotated, Any
 
 from app.services.session_response import (
     _invalidate_session_caches,
-    build_ladder_path,
     get_session_with_thread_safe,
     build_session_response,
+    build_ladder_path,
 )
 from app.auth import get_current_user
 from app.config import get_recommendation_settings

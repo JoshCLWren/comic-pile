@@ -162,6 +162,48 @@ async def events_chronological(db: AsyncSession, session_id: int) -> list[Event]
     return list(result.scalars().all())
 
 
+async def recent_session_events(db: AsyncSession, session_id: int) -> list[Event]:
+    """Return the most recent rate/snooze/undo/roll events for a session.
+
+    Args:
+        db: Database session.
+        session_id: Session whose events are fetched.
+
+    Returns:
+        Matching events ordered newest first by ``(timestamp desc, id desc)``.
+    """
+    result = await db.execute(
+        select(Event)
+        .where(Event.session_id == session_id)
+        .where(Event.type.in_(("rate", "snooze", "undo", "roll")))
+        .order_by(Event.timestamp.desc(), Event.id.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def recent_snooze_events(
+    db: AsyncSession, session_id: int, *, limit: int = 10
+) -> list[Event]:
+    """Return the most recent snooze events for a session.
+
+    Args:
+        db: Database session.
+        session_id: Session whose snooze events are fetched.
+        limit: Maximum number of events to return.
+
+    Returns:
+        Snooze events ordered newest first by ``(timestamp desc, id desc)``.
+    """
+    result = await db.execute(
+        select(Event)
+        .where(Event.session_id == session_id)
+        .where(Event.type == "snooze")
+        .order_by(Event.timestamp.desc(), Event.id.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
 async def die_change_events(db: AsyncSession, session_id: int) -> list[Event]:
     """Return rate/snooze/undo events that changed the die for a session.
 
