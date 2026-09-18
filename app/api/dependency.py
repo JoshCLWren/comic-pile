@@ -136,13 +136,13 @@ async def create_dependency(
                 "Thread-level dependencies are no longer supported. "
                 "Create an issue-level dependency instead: use the last issue "
                 "of the source thread and the first issue of the target thread."
-            ),
-        )
-    
+        ),
+    )
+
     result, warning = await dependency_service.create_dependency(
         dependency_data.source_id, dependency_data.target_id, current_user.id, db
     )
-    
+
     if not result:
         if warning == "Issue not found" or warning is None:
             raise HTTPException(
@@ -153,7 +153,7 @@ async def create_dependency(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=warning,
         )
-    
+
     return result
 
 
@@ -206,7 +206,6 @@ async def delete_dependency(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Dependency {dependency_id} not found",
         )
-    
     return {"message": "Dependency deleted"}
 
 
