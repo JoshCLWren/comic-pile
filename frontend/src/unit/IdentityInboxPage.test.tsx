@@ -6,10 +6,19 @@ import IdentityInboxPage from '../pages/IdentityInboxPage'
 import type { IdentityInboxItem } from '../services/api'
 
 const mockUseIdentityInbox = vi.fn()
-const mockConfirmMutation = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() }
-const mockRejectMutation = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() }
-const mockDeferMutation = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() }
-const mockSkipMutation = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() }
+type MockMutationResult = {
+  mutate: ReturnType<typeof vi.fn>
+  mutateAsync: ReturnType<typeof vi.fn>
+  isPending: boolean
+  isError: boolean
+  error: Error | null
+  data: unknown
+  reset: ReturnType<typeof vi.fn>
+}
+const mockConfirmMutation: MockMutationResult = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() }
+const mockRejectMutation: MockMutationResult = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() }
+const mockDeferMutation: MockMutationResult = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() }
+const mockSkipMutation: MockMutationResult = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() }
 
 const mockUseConfirmInboxCandidate = vi.fn(() => mockConfirmMutation)
 const mockUseRejectInboxCandidate = vi.fn(() => mockRejectMutation)
@@ -295,6 +304,25 @@ describe('IdentityInboxPage', () => {
     )
 
     expect(mockUseIdentityInbox).toHaveBeenCalledWith(0)
+  })
+
+  it('surfaces an action error without discarding the current list', () => {
+    mockUseConfirmInboxCandidate.mockReturnValue({
+      mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false,
+      isError: true, error: new Error('action failed'), data: undefined, reset: vi.fn(),
+    })
+    mockQueryResult([inboxItem()], 1)
+
+    render(
+      <MemoryRouter initialEntries={['/identity-inbox']}>
+        <Routes>
+          <Route path="/identity-inbox" element={<IdentityInboxPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText(/action failed/i)).toBeInTheDocument()
+    expect(screen.getByText('Mister Miracle')).toBeInTheDocument()
   })
 
   it('navigates to the next page via the Next button', async () => {

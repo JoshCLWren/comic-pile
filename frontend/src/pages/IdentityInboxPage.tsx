@@ -153,7 +153,7 @@ function InboxItemCard({
 }: {
   item: InboxItem
   onConfirm: (mappingId: number, identityId: number) => void
-  onReject: (mappingId: number, identityId: number, reason: string) => void
+  onReject: (mappingId: number, identityId: number, reason: string) => Promise<void>
   onDefer: (mappingId: number) => void
   onSkip: (mappingId: number) => void
   expandedId: number | null
@@ -164,14 +164,20 @@ function InboxItemCard({
   const [rejectReason, setRejectReason] = useState('')
   const [showRejectForm, setShowRejectForm] = useState(false)
 
-  const handleReject = (identityId: number) => {
+  const handleReject = async (identityId: number) => {
     if (!rejectReason.trim()) {
       setShowRejectForm(true)
       return
     }
-    onReject(item.mapping_id, identityId, rejectReason)
-    setRejectReason('')
+    const reason = rejectReason
     setShowRejectForm(false)
+    try {
+      await onReject(item.mapping_id, identityId, reason)
+      setRejectReason('')
+    } catch {
+      setRejectReason(reason)
+      setShowRejectForm(true)
+    }
   }
 
   return (
@@ -301,8 +307,8 @@ export default function IdentityInboxPage() {
   )
 
   const handleReject = useCallback(
-    (mappingId: number, identityId: number, reason: string) => {
-      rejectMutation.mutate({
+    async (mappingId: number, identityId: number, reason: string): Promise<void> => {
+      await rejectMutation.mutateAsync({
         mappingId,
         payload: { external_identity_id: identityId, rejection_reason: reason },
       })
@@ -333,6 +339,14 @@ export default function IdentityInboxPage() {
       : 'Failed to load inbox'
     : null
 
+  const actionError =
+    confirmMutation.error ?? rejectMutation.error ?? deferMutation.error ?? skipMutation.error
+  const actionErrorMessage = actionError
+    ? actionError instanceof Error
+      ? actionError.message
+      : 'Action failed'
+    : null
+
   return (
     <section aria-label="Identity reconciliation inbox" className="pt-4 pb-12 w-full">
       <h1 className="text-2xl font-bold mb-2 text-[var(--theme-text-primary)]">Identity Inbox</h1>
@@ -340,6 +354,12 @@ export default function IdentityInboxPage() {
         Resolve unmatched or ambiguous external comic identities. Confirm the correct match,
         reject wrong candidates, or defer for later.
       </p>
+
+      {actionErrorMessage && (
+        <div className="p-3 mb-4 bg-[var(--theme-danger)]/10 border border-[var(--theme-danger)]/30 rounded-lg text-sm text-[var(--theme-danger)]">
+          {actionErrorMessage}
+        </div>
+      )}
 
       {errorMessage && (
         <div className="p-3 mb-4 bg-[var(--theme-danger)]/10 border border-[var(--theme-danger)]/30 rounded-lg text-sm text-[var(--theme-danger)]">

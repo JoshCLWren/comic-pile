@@ -185,7 +185,9 @@ describe('CrossoversPage membership editing', () => {
 
     selectThread('Comic series for issue range', 'Nova', 'Nova')
     await screen.findByText(/Issues from Nova/)
+    await waitFor(() => expect(screen.getByLabelText('First issue')).toBeEnabled())
     fireEvent.change(screen.getByLabelText('First issue'), { target: { value: '31' } })
+    await waitFor(() => expect(screen.getByLabelText('Last issue')).toBeEnabled())
     fireEvent.change(screen.getByLabelText('Last issue'), { target: { value: '33' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add range' }))
 
@@ -206,7 +208,9 @@ describe('CrossoversPage membership editing', () => {
 
     selectThread('Comic series for issue range', 'Nova', 'Nova')
     await screen.findByLabelText('First issue')
+    await waitFor(() => expect(screen.getByLabelText('First issue')).toBeEnabled())
     fireEvent.change(screen.getByLabelText('First issue'), { target: { value: '31' } })
+    await waitFor(() => expect(screen.getByLabelText('Last issue')).toBeEnabled())
     fireEvent.change(screen.getByLabelText('Last issue'), { target: { value: '33' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add range' }))
 
