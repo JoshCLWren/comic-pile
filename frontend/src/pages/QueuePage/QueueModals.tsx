@@ -27,6 +27,11 @@ interface QueueModalsProps {
   setIssuesToAdd: (next: number) => void
   activeThreads: Thread[]
   completedThreads: Thread[]
+  /**
+   * Authoritative whole-queue active total, independent of the loaded page.
+   * Drives the reposition slider range (issue #2568).
+   */
+  queueSize: number
   onCreateSubmit: (event: FormEvent) => Promise<void>
   onEditSubmit: (event: FormEvent) => Promise<void>
   onReactivateSubmit: (event: FormEvent) => Promise<void>
@@ -73,6 +78,7 @@ export function QueueModals({
   setIssuesToAdd,
   activeThreads,
   completedThreads,
+  queueSize,
   onCreateSubmit,
   onEditSubmit,
   onReactivateSubmit,
@@ -383,6 +389,7 @@ export function QueueModals({
             currentThread={repositioningThread}
             onPositionSelect={onRepositionConfirm}
             onCancel={onCloseReposition}
+            queueSize={queueSize}
           />
         )}
       </Modal>
