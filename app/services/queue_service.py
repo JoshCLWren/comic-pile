@@ -11,7 +11,8 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache_invalidation import invalidate_user_view
-from app.repositories import queue_repository, thread_repository
+from app.models.thread import normalize_format_value
+from app.repositories import issue_repository, queue_repository, thread_repository
 from app.services.errors import InvalidRequestError, NotFoundError
 from app.services.thread_service import thread_to_response
 from app.schemas import ThreadResponse
@@ -103,67 +104,130 @@ class QueueService:
         return await self._move_thread(user_id, thread_id, action="back")
 
     async def _move_thread(
-        self,
-        user_id: int,
-        thread_id: int,
-        *,
-        action: str,
-        new_position: int | None = None,
-    ) -> ThreadResponse:
-        """Run one queue-mutation flow and record a reorder event on change.
+         self,
+         user_id: int,
+         thread_id: int,
+         *,
+         action: str,
+         new_position: int | None = None,
+     ) -> ThreadResponse:
+         """Run one queue-mutation flow and record a reorder event on change.
 
-        Args:
-            user_id: Owner that must own the thread.
-            thread_id: Thread to move.
-            action: Mutation kind: ``"position"``, ``"front"``, or ``"back"``.
-            new_position: Target position for the ``"position"`` action.
+         Args:
+             user_id: Owner that must own the thread.
+             thread_id: Thread to move.
+             action: Mutation kind: ``"position"``, ``"front"``, or ``"back"``.
+             new_position: Target position for the ``"position"`` action.
 
-        Returns:
-            ThreadResponse with the updated thread information.
+         Returns:
+             ThreadResponse with the updated thread information.
 
-        Raises:
-            NotFoundError: When the thread does not exist for this user.
-            InvalidRequestError: When the target position is out of range.
-        """
-        thread = await thread_repository.find_owned(self._db, user_id, thread_id)
-        if thread is None:
-            logger.error("Thread %d not found for user %d", thread_id, user_id)
-            raise NotFoundError(f"Thread {thread_id} not found")
+         Raises:
+             NotFoundError: When the thread does not exist for this user.
+             InvalidRequestError: When the target position is out of range.
+         """
+         thread = await thread_repository.find_owned(self._db, user_id, thread_id)
+         if thread is None:
+             logger.error("Thread %d not found for user %d", thread_id, user_id)
+             raise NotFoundError(f"Thread {thread_id} not found")
 
-        if action == "position":
-            if new_position is None:
-                raise InvalidRequestError("new_position is required")
-            if thread.queue_position == new_position:
-                return await thread_to_response(thread, self._db)
+         if action == "position":
+             if new_position is None:
+                 raise InvalidRequestError("new_position is required")
+             if thread.queue_position == new_position:
+                 # Extract thread data before any potential commit
+                 thread_id_extracted = thread.id
+                 thread_title_extracted = thread.title
+                 thread_format_extracted = thread.format
+                 thread_normalized_format_extracted = normalize_format_value(thread_format_extracted)
+                 thread_issues_remaining_extracted = thread.issues_remaining
+                 thread_queue_position_extracted = thread.queue_position
+                 thread_status_extracted = thread.status
+                 thread_last_rating_extracted = thread.last_rating
+                 thread_last_activity_at_extracted = thread.last_activity_at
+                 thread_notes_extracted = thread.notes
+                 thread_is_test_extracted = thread.is_test
+                 thread_is_blocked_extracted = thread.is_blocked
+                 thread_blocking_reasons_extracted = thread.blocking_reasons
+                 thread_created_at_extracted = thread.created_at
+                 thread_total_issues_extracted = thread.total_issues
+                 thread_reading_progress_extracted = thread.reading_progress
+                 thread_next_unread_issue_id_extracted = thread.next_unread_issue_id
+                 
+                 return await thread_to_response(thread, self._db)
+         
+         before_positions = await queue_repository.active_queue_positions(self._db, user_id)
 
-        before_positions = await queue_repository.active_queue_positions(self._db, user_id)
+         try:
+             if action == "position":
+                 await _move_to_position(thread_id, user_id, new_position, self._db)
+             elif action == "front":
+                 await _move_to_front(thread_id, user_id, self._db)
+             else:
+                 await _move_to_back(thread_id, user_id, self._db)
+         except ValueError as exc:
+             logger.error(
+                 "Invalid position %s for thread %s: %s",
+                 new_position,
+                 thread_id,
+                 exc,
+             )
+             raise InvalidRequestError(str(exc)) from exc
 
-        try:
-            if action == "position":
-                await _move_to_position(thread_id, user_id, new_position, self._db)
-            elif action == "front":
-                await _move_to_front(thread_id, user_id, self._db)
-            else:
-                await _move_to_back(thread_id, user_id, self._db)
-        except ValueError as exc:
-            logger.error(
-                "Invalid position %s for thread %s: %s",
-                new_position,
-                thread_id,
-                exc,
-            )
-            raise InvalidRequestError(str(exc)) from exc
+         await self._db.refresh(thread)
+         after_positions = await queue_repository.active_queue_positions(self._db, user_id)
 
-        await self._db.refresh(thread)
-        after_positions = await queue_repository.active_queue_positions(self._db, user_id)
+         if after_positions != before_positions:
+             await queue_repository.add_reorder_event(self._db, thread_id)
+             await self._db.commit()
+             await self._db.refresh(thread)
+             await invalidate_queue_caches(user_id)
 
-        if after_positions != before_positions:
-            await queue_repository.add_reorder_event(self._db, thread_id)
-            await self._db.commit()
-            await self._db.refresh(thread)
-            await invalidate_queue_caches(user_id)
+         # Extract all thread data needed for response BEFORE accessing lazy attributes
+         thread_id_extracted = thread.id
+         thread_title_extracted = thread.title
+         thread_format_extracted = thread.format
+         thread_normalized_format_extracted = normalize_format_value(thread_format_extracted)
+         thread_issues_remaining_extracted = thread.issues_remaining
+         thread_queue_position_extracted = thread.queue_position
+         thread_status_extracted = thread.status
+         thread_last_rating_extracted = thread.last_rating
+         thread_last_activity_at_extracted = thread.last_activity_at
+         thread_notes_extracted = thread.notes
+         thread_is_test_extracted = thread.is_test
+         thread_is_blocked_extracted = thread.is_blocked
+         thread_blocking_reasons_extracted = thread.blocking_reasons
+         thread_created_at_extracted = thread.created_at
+         thread_total_issues_extracted = thread.total_issues
+         thread_reading_progress_extracted = thread.reading_progress
+         thread_next_unread_issue_id_extracted = thread.next_unread_issue_id
 
-        return await thread_to_response(thread, self._db)
+         # Build ThreadResponse manually to avoid post‑commit lazy loads
+         response_data = {
+             "id": thread_id_extracted,
+             "title": thread_title_extracted,
+             "format": thread_normalized_format_extracted,
+             "issues_remaining": thread_issues_remaining_extracted,
+             "queue_position": thread_queue_position_extracted,
+             "status": thread_status_extracted,
+             "last_rating": thread_last_rating_extracted,
+             "last_activity_at": thread_last_activity_at_extracted,
+             "notes": thread_notes_extracted,
+             "is_test": thread_is_test_extracted,
+             "is_blocked": thread_is_blocked_extracted,
+             "blocking_reasons": thread_blocking_reasons_extracted,
+             "created_at": thread_created_at_extracted,
+             "total_issues": thread_total_issues_extracted,
+             "reading_progress": thread_reading_progress_extracted,
+             "next_unread_issue_id": thread_next_unread_issue_id_extracted,
+         }
+         # Fetch next_unread_issue_number if needed (does not touch lazy thread attrs)
+         if thread_next_unread_issue_id_extracted is not None:
+             next_issue = await issue_repository.get_issue(self._db, thread_next_unread_issue_id_extracted)
+             if next_issue:
+                 response_data["next_unread_issue_number"] = next_issue.issue_number
+
+         return ThreadResponse(**response_data)
 
     async def shuffle(self, user_id: int) -> None:
         """Randomize all active queue positions for the authenticated user.
