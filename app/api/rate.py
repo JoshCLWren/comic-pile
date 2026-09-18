@@ -1,9 +1,8 @@
 """Rate API endpoint."""
 
-from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +25,4 @@ async def post_rate(
     db: AsyncSession = Depends(get_db),
 ) -> ThreadResponse:
     """Delegate rating orchestration to the rate service."""
-    return await rate_thread(
-        request=request, rate_data=rate_data, current_user=current_user, db=db
-    )
+    return await rate_thread(rate_data=rate_data, current_user=current_user, db=db)

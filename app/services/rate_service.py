@@ -1,17 +1,13 @@
-"""Rate API endpoint."""
+"""Rate service orchestrating the thread-rating pipeline."""
 
 from datetime import UTC, datetime
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user
 from app.cache_invalidation import invalidate_user_view
 from app.config import get_rating_settings
-from app.database import get_db
-from app.middleware import limiter
 from app.models import Event, Issue, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.thread import normalize_format_value
@@ -29,8 +25,6 @@ from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
 from comic_pile.queue import move_to_back, move_to_front, move_to_safe_position
 from comic_pile.session import get_current_die_for_session
-
-router = APIRouter()
 
 
 async def _find_source_roll_event(
@@ -217,18 +211,14 @@ def _get_rating_limits() -> tuple[float, float, float]:
     return settings.rating_min, settings.rating_max, settings.rating_threshold
 
 
-@router.post("/", response_model=ThreadResponse)
-@limiter.limit("60/minute")
 async def rate_thread(
-    request: Request,
     rate_data: RateRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
+    current_user: User,
+    db: AsyncSession,
 ) -> ThreadResponse:
     """Rate current reading and update its thread.
 
     Args:
-        request: FastAPI request object for rate limiting.
         rate_data: Rating request data.
         current_user: Authenticated user making the request.
         db: SQLAlchemy session.
