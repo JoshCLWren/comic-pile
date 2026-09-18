@@ -187,6 +187,11 @@ export async function invalidateReadingPlans(client: QueryClient): Promise<void>
   await invalidateAfterQueueMovement(client)
 }
 
+/**
+ * Apply a committed reading plan to the cache and refresh dependent queries.
+ * Centralizes the pattern used in useReadingPlans.ts useSaveReadingPlan and
+ * CustomCBLBuilder.tsx apply mutation.
+ */
 export async function applyCommittedReadingPlan(
   client: QueryClient,
   plan: ContinuityPlan,
@@ -197,6 +202,16 @@ export async function applyCommittedReadingPlan(
     exact: true,
   })
   await invalidateAfterQueueMovement(client)
+}
+
+/**
+ * @deprecated Use `applyCommittedReadingPlan` instead.
+ */
+export async function applyCommittedReadingPlanUpdate(
+  client: QueryClient,
+  plan: ContinuityPlan,
+): Promise<void> {
+  return applyCommittedReadingPlan(client, plan)
 }
 
 /**
@@ -306,22 +321,6 @@ export async function applyDeletedCustomCBL(
 ): Promise<void> {
   client.removeQueries({ queryKey: queryKeys.customCBLs.detail(deletedId), exact: true })
   await client.invalidateQueries({ queryKey: queryKeys.customCBLs.list(), exact: true })
-}
-
-/**
- * Apply a committed reading plan to the cache and refresh dependent queries.
- * Centralizes the pattern used in useReadingPlans.ts useSaveReadingPlan.
- */
-export async function applyCommittedReadingPlanUpdate(
-  client: QueryClient,
-  plan: ContinuityPlan,
-): Promise<void> {
-  client.setQueryData(queryKeys.readingPlans.detail(plan.id), plan)
-  await client.invalidateQueries({
-    queryKey: queryKeys.readingPlans.list(),
-    exact: true,
-  })
-  await invalidateAfterQueueMovement(client)
 }
 
 /**

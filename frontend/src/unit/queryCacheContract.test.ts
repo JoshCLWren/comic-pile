@@ -9,7 +9,7 @@ import {
   applyCreatedCustomCBL,
   applyUpdatedCustomCBL,
   applyDeletedCustomCBL,
-  applyCommittedReadingPlanUpdate,
+  applyCommittedReadingPlan,
   invalidateSessionRecoveryCache,
 } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
@@ -303,7 +303,7 @@ describe('targeted cache effects', () => {
     it('applies a committed reading plan to detail cache and invalidates dependent queries', async () => {
       const { client, setQueryData, invalidateQueries, resetQueries } = createSpiedClient()
 
-      await applyCommittedReadingPlanUpdate(client, readingPlan)
+      await applyCommittedReadingPlan(client, readingPlan)
 
       expect(setQueryData).toHaveBeenCalledWith(queryKeys.readingPlans.detail(readingPlan.id), readingPlan)
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.list(), exact: true })
