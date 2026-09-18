@@ -55,7 +55,10 @@ def _log_refresh_outcome(request: Request, *, outcome: str, reason: str) -> None
         outcome: Stable high-level result, either ``success`` or ``rejected``.
         reason: Stable reason code suitable for production log filtering.
     """
-    logger.warning(
+    level = "INFO" if outcome == "success" else "WARNING"
+    log_func = logger.info if outcome == "success" else logger.warning
+
+    log_func(
         "Auth refresh %s: %s",
         outcome,
         reason,
@@ -65,7 +68,7 @@ def _log_refresh_outcome(request: Request, *, outcome: str, reason: str) -> None
             "auth_reason": reason,
             "path": request.url.path,
             "request_id": getattr(request.state, "request_id", None),
-            "level": "WARNING",
+            "level": level,
         },
     )
 
