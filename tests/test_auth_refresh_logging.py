@@ -112,7 +112,7 @@ async def test_refresh_logs_revoked_token_and_success(
     client: AsyncClient,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Successful and independently revoked browser refreshes remain distinguishable.
+    \"\"\"Successful and independently revoked browser refreshes remain distinguishable.
 
     Args:
         client: Async application client backed by the PostgreSQL test database.
@@ -120,43 +120,51 @@ async def test_refresh_logs_revoked_token_and_success(
 
     Returns:
         None.
-    """
-    caplog.set_level(logging.WARNING)
+    \"\"\"
+    caplog.set_level(logging.INFO)
     register_response = await client.post(
-        "/api/v1/auth/register",
+        \"/api/v1/auth/register\",
         json={
-            "username": "auth-log-user",
-            "email": "auth-log-user@example.com",
-            "password": "password123",
+            \"username\": \"auth-log-user\",
+            \"email\": \"auth-log-user@example.com\",
+            \"password\": \"password123\",
         },
     )
     assert register_response.status_code == 200
 
-    refresh_response = await client.post("/api/v1/auth/refresh")
+    refresh_response = await client.post(\"/api/v1/auth/refresh\")
     assert refresh_response.status_code == 200
-    assert "refreshed" in _auth_reasons(caplog)
+    assert \"refreshed\" in _auth_reasons(caplog)
+    
+    success_record = next(r for r in caplog.records if r.levelname == \"INFO\" and \"auth_refresh\" in r.__dict__.get(\"event\", \"\"))
+    assert success_record.__dict__[\"auth_outcome\"] == \"success\"
+    assert success_record.__dict__[\"level\"] == \"INFO\"
 
-    access_token = refresh_response.json()["access_token"]
-    refresh_token = refresh_response.json()["refresh_token"]
-    csrf_response = await client.get("/api/v1/auth/csrf")
+    access_token = refresh_response.json()[\"access_token\"]
+    refresh_token = refresh_response.json()[\"refresh_token\"]
+    csrf_response = await client.get(\"/api/v1/auth/csrf\")
     assert csrf_response.status_code == 200
-    csrf_token = csrf_response.json()["csrf_token"]
+    csrf_token = csrf_response.json()[\"csrf_token\"]
     logout_response = await client.post(
-        "/api/v1/auth/logout",
+        \"/api/v1/auth/logout\",
         headers={
-            "Authorization": f"Bearer {access_token}",
-            "X-CSRF-Token": csrf_token,
+            \"Authorization\": f\"Bearer {access_token}\",
+            \"X-CSRF-Token\": csrf_token,
         },
     )
     assert logout_response.status_code == 200
 
     revoked_response = await client.post(
-        "/api/v1/auth/refresh",
-        json={"refresh_token": refresh_token},
+        \"/api/v1/auth/refresh\",
+        json={\"refresh_token\": refresh_token},
     )
     assert revoked_response.status_code == 401
-    assert "revoked_token" in _auth_reasons(caplog)
+    assert \"revoked_token\" in _auth_reasons(caplog)
     assert refresh_token not in caplog.text
+    
+    revoked_record = next(r for r in caplog.records if r.levelname == \"WARNING\" and \"auth_refresh\" in r.__dict__.get(\"event\", \"\") and r.__dict__.get(\"auth_reason\") == \"revoked_token\")
+    assert revoked_record.__dict__[\"auth_outcome\"] == \"rejected\"
+    assert revoked_record.__dict__[\"level\"] == \"WARNING\"
 
 
 @pytest.mark.asyncio
