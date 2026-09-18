@@ -14,6 +14,7 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Session, Thread
+from app.models.thread import normalize_format_value
 from app.models.recommendation_context import RecommendationContext as RecContextModel
 from app.repositories.roll_repository import (
     fetch_issue_by_id,
@@ -53,7 +54,7 @@ from comic_pile.session import get_current_die_for_session, get_or_create
 
 from app.api.session import _invalidate_session_caches
 from app.config import get_recommendation_settings
-from app.models.thread import normalize_format_value
+from app.schemas import RollResponse
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,7 @@ class RollService:
     """
 
     def __init__(self, db: AsyncSession) -> None:
+        """Initialize the RollService with a database session."""
         self._db = db
 
     async def select_pending_thread(
@@ -104,7 +106,6 @@ class RollService:
             selection_bandwidth, selection_intent, control_mode
         )
 
-        max_bonus = 0.0
         weights_applied = False
         candidate_weights: list = []
         if resolved_mode is SelectionMode.FORCED_LEGACY:
@@ -150,7 +151,6 @@ class RollService:
                 now=datetime.now(UTC),
             )
             selected_index = selected.selected_index
-            max_bonus = selected.max_bonus
             candidate_weights = selected.weights
             weights_applied = selected.weights_applied
 
@@ -385,7 +385,6 @@ class RollService:
 
         Either ``selected_thread`` or ``thread_attrs`` must be provided.
         """
-        from app.schemas import RollResponse
         if thread_attrs is not None:
             thread_id = thread_attrs["thread_id"]
             title = thread_attrs["title"]
