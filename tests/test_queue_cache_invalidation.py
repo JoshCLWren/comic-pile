@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.api import queue
+from app.services import queue_service
 
 
 @pytest.mark.asyncio
@@ -20,9 +20,9 @@ async def test_queue_invalidation_uses_one_user_generation_bump(
         None.
     """
     invalidator = AsyncMock(return_value=True)
-    monkeypatch.setattr(queue, "invalidate_user_view", invalidator)
+    monkeypatch.setattr(queue_service, "invalidate_user_view", invalidator)
 
-    await queue._invalidate_queue_caches(17)
+    await queue_service.invalidate_queue_caches(17)
 
     invalidator.assert_awaited_once_with(17)
 
@@ -40,10 +40,10 @@ async def test_queue_invalidation_keeps_users_isolated(
         None.
     """
     invalidator = AsyncMock(return_value=True)
-    monkeypatch.setattr(queue, "invalidate_user_view", invalidator)
+    monkeypatch.setattr(queue_service, "invalidate_user_view", invalidator)
 
-    await queue._invalidate_queue_caches(17)
-    await queue._invalidate_queue_caches(23)
+    await queue_service.invalidate_queue_caches(17)
+    await queue_service.invalidate_queue_caches(23)
 
     assert invalidator.await_count == 2
     assert [call.args for call in invalidator.await_args_list] == [(17,), (23,)]
