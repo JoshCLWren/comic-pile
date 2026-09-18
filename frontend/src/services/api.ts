@@ -391,6 +391,30 @@ export const threadsApi = {
     })
     return response
   },
+  listActive: async (search?: string, sort?: string, pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
+    const queryParams: Record<string, string | number> = {};
+    if (search) queryParams.search = search;
+    if (sort) queryParams.sort = sort;
+    if (pageSize) queryParams.page_size = pageSize;
+    if (pageToken) queryParams.page_token = pageToken;
+    
+    const response = await api.get<ThreadListResponse>('/v1/threads/', {
+      params: Object.keys(queryParams).length ? queryParams : undefined,
+    })
+    return response
+  },
+  listCompleted: async (search?: string, sort?: string, pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
+    const queryParams: Record<string, string | number> = {};
+    if (search) queryParams.search = search;
+    if (sort) queryParams.sort = sort;
+    if (pageSize) queryParams.page_size = pageSize;
+    if (pageToken) queryParams.page_token = pageToken;
+    
+    const response = await api.get<ThreadListResponse>('/v1/threads/completed/threads', {
+      params: Object.keys(queryParams).length ? queryParams : undefined,
+    })
+    return response
+  },
   get: (id: number) => api.get<Thread>(`/v1/threads/${id}`),
   create: (data: ThreadCreatePayload) => api.post<Thread, ThreadCreatePayload>('/v1/threads/', data),
   update: (id: number, data: ThreadUpdatePayload) =>

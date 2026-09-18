@@ -7,6 +7,13 @@ export interface QueuePageKeyOptions {
   pageSize: number
 }
 
+export interface CompletedPageKeyOptions {
+  search?: string
+  sort: QueueSort
+  pageToken?: string | null
+  pageSize: number
+}
+
 export interface SessionPageKeyOptions {
   pageToken?: string | null
   pageSize: number
@@ -38,6 +45,29 @@ export const queryKeys = {
     page: ({ search, sort, pageToken, pageSize }: QueuePageKeyOptions) =>
       [
         'queue',
+        'pages',
+        {
+          search: normalizedSearch(search),
+          sort,
+          pageToken: pageToken ?? null,
+          pageSize,
+        },
+      ] as const,
+  },
+  completed: {
+    all: ['completed'] as const,
+    pages: () => ['completed', 'pages'] as const,
+    /**
+     * Canonical bounded/infinite Completed list key. `pageToken` is intentionally
+     * excluded so the key stays stable across cursor pages; the cursor lives in
+     * `pageParam`, not the key. Changing `search`, `sort`, or `pageSize` becomes
+     * a distinct query that resets to the first compatible page.
+     */
+    list: ({ search, sort, pageSize }: { search?: string; sort: QueueSort; pageSize: number }) =>
+      ['completed', 'pages', { search: normalizedSearch(search), sort, pageSize }] as const,
+    page: ({ search, sort, pageToken, pageSize }: CompletedPageKeyOptions) =>
+      [
+        'completed',
         'pages',
         {
           search: normalizedSearch(search),

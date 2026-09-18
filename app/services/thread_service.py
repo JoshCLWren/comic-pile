@@ -225,7 +225,7 @@ async def list_queue_threads(
     page_size: int,
     page_token: str | None,
 ) -> QueueThreadListResponse:
-    """List threads with deterministic cursor-based pagination.
+    """List ACTIVE threads with deterministic cursor-based pagination.
 
     Every retained sort has a deterministic cursor contract with stable
     tie-breakers so that search results remain correct across multiple pages.
@@ -240,7 +240,7 @@ async def list_queue_threads(
         page_token: Opaque cursor token for pagination continuation.
 
     Returns:
-        QueueThreadListResponse with paginated threads and next_page_token if
+        QueueThreadListResponse with paginated ACTIVE threads and next_page_token if
         more exist.
 
     Raises:
@@ -257,6 +257,78 @@ async def list_queue_threads(
             raise InvalidRequestError(str(exc)) from exc
 
     threads = await thread_repository.fetch_queue_page(
+        db,
+        user_id,
+        search=normalized_search,
+        sort=validated_sort,
+        cursor=cursor,
+        limit=page_size + 1,
+    )
+
+    has_more = len(threads) > page_size
+    threads_to_return = threads[:page_size]
+
+    thread_responses = await threads_to_responses(threads_to_return, db)
+
+    queue_items = [to_queue_list_item(tr) for tr in thread_responses]
+
+    next_token = None
+    if has_more and threads_to_return:
+        last = threads_to_return[-1]
+        page_cursor = QueueCursor(
+            sort=validated_sort,
+            search=normalized_search,
+            values=build_cursor_values_from_row(validated_sort, last),
+        )
+        next_token = encode_queue_cursor(page_cursor)
+
+    return QueueThreadListResponse(
+        threads=queue_items,
+        next_page_token=next_token,
+    )
+
+
+async def list_completed_threads(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    search: str | None,
+    sort: str,
+    page_size: int,
+    page_token: str | None,
+) -> QueueThreadListResponse:
+    """List COMPLETED threads with deterministic cursor-based pagination.
+
+    Every retained sort has a deterministic cursor contract with stable
+    tie-breakers so that search results remain correct across multiple pages.
+    Changing ``search`` or ``sort`` invalidates any prior cursor.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        search: Optional case-insensitive title search filter.
+        sort: Validated sort order – ``position``, ``title``, or ``created``.
+        page_size: Number of threads to return per page (max 200).
+        page_token: Opaque cursor token for pagination continuation.
+
+    Returns:
+        QueueThreadListResponse with paginated COMPLETED threads and next_page_token if
+        more exist.
+
+    Raises:
+        InvalidRequestError: When the page token is stale or malformed.
+    """
+    validated_sort: QueueSort = cast(QueueSort, sort)
+    normalized_search = normalize_queue_search(search)
+
+    cursor = None
+    if page_token:
+        try:
+            cursor = decode_queue_cursor(page_token, sort=validated_sort, search=search)
+        except ValueError as exc:
+            raise InvalidRequestError(str(exc)) from exc
+
+    threads = await thread_repository.fetch_completed_page(
         db,
         user_id,
         search=normalized_search,
