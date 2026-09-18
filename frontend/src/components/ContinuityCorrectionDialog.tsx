@@ -251,7 +251,8 @@ export default function ContinuityCorrectionDialog({
               : 'No specific issue is available to add.'}
             {canSaveConnected ? ' Connected series will also be added.' : null}
           </p>
-        </fieldset>
+        </div>
+      </fieldset>
 
         {error ? (
           <p className="text-[11px] text-rose-300" role="alert">
@@ -286,7 +287,6 @@ export default function ContinuityCorrectionDialog({
         </div>
       </Modal>
     )
-  )
 }
 
 export type { ContinuityCorrectionDialogProps }

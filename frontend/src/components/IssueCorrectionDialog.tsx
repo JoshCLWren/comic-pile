@@ -327,4 +327,10 @@ export default function IssueCorrectionDialog({
     </Modal>
   )
 }
-export interface IssueCorrectionIssuesApi {\n  list: (threadId: number, params?: IssueListParams) => Promise<IssueListResponse>\n  create: (threadId: number, issueRange: string, options?: { insert_after_issue_id?: number | null }) => Promise<IssueListResponse>\n  markRead: (issueId: number) => Promise<void>\n  markUnread: (issueId: number) => Promise<void>\n  move: (issueId: number, afterIssueId: number | null) => Promise<void>\n}
+export interface IssueCorrectionIssuesApi {
+  list: (threadId: number, params?: IssueListParams) => Promise<IssueListResponse>
+  create: (threadId: number, issueRange: string, options?: { insert_after_issue_id?: number | null }) => Promise<IssueListResponse>
+  markRead: (issueId: number) => Promise<void>
+  markUnread: (issueId: number) => Promise<void>
+  move: (issueId: number, afterIssueId: number | null) => Promise<void>
+}
