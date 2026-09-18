@@ -148,7 +148,11 @@ async def _capture_threads_pre_states(
 
     return {
         thread.id: await _capture_thread_pre_state(
-            thread, db, issues_by_thread.get(thread.id)
+            thread,
+            db,
+            issues_by_thread.get(thread.id, [])
+            if thread.uses_issue_tracking()
+            else None,
         )
         for thread in threads
     }
