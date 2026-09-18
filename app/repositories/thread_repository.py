@@ -161,7 +161,7 @@ async def fetch_queue_page(
     cursor: QueueCursor | None,
     limit: int,
 ) -> list[Thread]:
-    """Fetch one deterministic page of a user's threads for the queue list.
+    """Fetch one deterministic page of a user's ACTIVE threads for the queue list.
 
     Args:
         db: Database session.
@@ -172,14 +172,67 @@ async def fetch_queue_page(
         limit: Maximum number of threads to return.
 
     Returns:
-        Threads in canonical page order, at most ``limit`` rows.
+        Active threads in canonical page order, at most ``limit`` rows.
     """
-    query = select(Thread).where(Thread.user_id == user_id)
+    query = select(Thread).where(
+        Thread.user_id == user_id,
+        Thread.status == "active"
+    )
 
     if search:
         query = query.where(Thread.title.ilike(f"%{search}%"))
 
     # Apply deterministic sort order with tie-breakers
+    for col in build_sort_order(sort):
+        query = query.order_by(col)
+
+    # Apply opaque cursor-based pagination
+    if cursor is not None:
+        query = query.where(build_cursor_filter(cursor))
+
+    query = query.limit(limit)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def fetch_completed_page(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    search: str | None,
+    sort: QueueSort,
+    cursor: QueueCursor | None,
+    limit: int,
+) -> list[Thread]:
+    """Fetch one deterministic page of a user's COMPLETED threads for the finished series.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        search: Normalized case-insensitive title substring, or None.
+        sort: Validated sort order key with deterministic tie-breakers.
+        cursor: Decoded continuation cursor, or None for the first page.
+        limit: Maximum number of threads to return.
+
+    Returns:
+        Completed threads in canonical page order, at most ``limit`` rows.
+
+    Note:
+        Callers normalize ``position`` to ``created`` before calling (completed
+        threads hold no live queue positions). The shared
+        :func:`build_sort_order` helper keeps the ORDER BY columns and the
+        keyset cursor filter on the same contract for every sort.
+    """
+    query = select(Thread).where(
+        Thread.user_id == user_id,
+        Thread.status == "completed"
+    )
+
+    if search:
+        query = query.where(Thread.title.ilike(f"%{search}%"))
+
+    # Apply deterministic sort order with tie-breakers (shared with the
+    # active-queue path so ordering and cursor filters cannot diverge).
     for col in build_sort_order(sort):
         query = query.order_by(col)
 

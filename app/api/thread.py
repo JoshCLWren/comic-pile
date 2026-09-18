@@ -42,6 +42,11 @@ from app.services.errors import (
 
 router = APIRouter(tags=["threads"])
 
+#: Versioned-only router for new client resources. Mounted solely under
+#: ``/api/v1/threads`` so new endpoints never introduce bare ``/api/*``
+#: routes (see ``tests/test_route_versioning.py`` and docs/API.md).
+v1_router = APIRouter(tags=["threads"])
+
 _ERROR_STATUS: dict[type[ServiceError], int] = {
     NotFoundError: status.HTTP_404_NOT_FOUND,
     InvalidRequestError: status.HTTP_400_BAD_REQUEST,
@@ -149,8 +154,70 @@ async def list_threads(
         raise _map_service_error(exc) from exc
 
 
-@router.get("/completed", response_class=HTMLResponse)
+@v1_router.get("/completed/threads", response_model=QueueThreadListResponse)
+@limiter.limit("100/minute")
+@cached(ttl=TTL.SHORT)
 async def list_completed_threads(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    search: str | None = Query(default=None, min_length=1),
+    sort: str = Query(
+        default="created",
+        description="Sort order: position, title, or created",
+    ),
+    page_size: int = Query(
+        default=50,
+        ge=1,
+        le=200,
+        description="Number of threads to return per page (default 50, max 200)",
+    ),
+    page_token: str | None = Query(
+        default=None, description="Opaque cursor token for pagination continuation"
+    ),
+) -> QueueThreadListResponse:
+    """List completed threads with deterministic cursor-based pagination.
+
+    Every retained sort has a deterministic cursor contract with stable
+    tie-breakers so that search results remain correct across multiple pages.
+    Changing ``search`` or ``sort`` invalidates any prior cursor.
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        search: Optional case-insensitive title search filter.
+        sort: Sort order – ``position``, ``title``, or ``created``.
+        page_size: Threads per page (default 50, max 200).
+        page_token: Opaque cursor token for pagination continuation.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Paginated completed threads plus ``next_page_token`` when more pages exist.
+
+    Raises:
+        HTTPException: If the sort value is unsupported or the page token is stale/malformed.
+    """
+    if sort not in {"position", "title", "created"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="sort must be one of: position, title, created",
+        )
+
+    try:
+        return await thread_service.list_completed_threads(
+            db,
+            current_user.id,
+            search=search,
+            sort=sort,
+            page_size=page_size,
+            page_token=page_token,
+        )
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
+
+
+@router.get("/completed", response_class=HTMLResponse)
+async def list_completed_threads_html(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
