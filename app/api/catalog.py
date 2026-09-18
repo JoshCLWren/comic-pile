@@ -8,8 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.auth import get_current_user
-from app.external_identities import link_thread_external_series, upsert_external_identity
-from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
 from app.models.user import User
 from app.schemas.catalog import (
     ExternalIdentityUpsert,
@@ -24,14 +22,14 @@ from app.schemas.catalog import (
     IssueExternalIdentityMappingResponse,
 )
 from app.services.catalog import (
-    upsert_catalog_series,
-    upsert_catalog_issue,
-    attach_series_to_thread,
-    attach_issue_to_thread,
-    search_catalog_series,
-    search_catalog_issues,
-    list_series_mappings,
-    list_issue_mappings,
+    upsert_catalog_series as upsert_catalog_series_svc,
+    upsert_catalog_issue as upsert_catalog_issue_svc,
+    attach_series_to_thread as attach_series_to_thread_svc,
+    attach_issue_to_thread as attach_issue_to_thread_svc,
+    search_catalog_series as search_catalog_series_svc,
+    search_catalog_issues as search_catalog_issues_svc,
+    list_series_mappings as list_series_mappings_svc,
+    list_issue_mappings as list_issue_mappings_svc,
 )
 
 def _dt_to_ts(dt: datetime | None) -> float | None:
@@ -63,7 +61,7 @@ async def search_catalog_series(
     Returns:
         List of matching external identities for series.
     """
-    identities = await search_catalog_series(
+    identities = await search_catalog_series_svc(
         db,
         search=search,
         provider=provider or "comicvine",
@@ -110,7 +108,7 @@ async def search_catalog_issues(
     Returns:
         List of matching external identities for issues.
     """
-    identities = await search_catalog_issues(
+    identities = await search_catalog_issues_svc(
         db,
         search=search,
         provider=provider or "comicvine",
@@ -156,7 +154,7 @@ async def upsert_catalog_series(
     Returns:
         The created or existing external identity.
     """
-    identity = await upsert_catalog_series(
+    identity = await upsert_catalog_series_svc(
         db,
         provider=request.provider,
         entity_type=request.entity_type,
@@ -199,7 +197,7 @@ async def upsert_catalog_issue(
     Returns:
         The created or existing external identity.
     """
-    identity = await upsert_catalog_issue(
+    identity = await upsert_catalog_issue_svc(
         db,
         provider=request.provider,
         entity_type=request.entity_type,
@@ -245,7 +243,7 @@ async def attach_series_to_thread(
     Returns:
         The created or updated thread-series mapping.
     """
-    mapping = await attach_series_to_thread(
+    mapping = await attach_series_to_thread_svc(
         db,
         user_id=current_user.id,
         thread_id=thread_id,
@@ -291,7 +289,7 @@ async def attach_issue_to_thread(
     Returns:
         The created or updated issue-external identity mapping.
     """
-    mapping = await attach_issue_to_thread(
+    mapping = await attach_issue_to_thread_svc(
         db,
         user_id=current_user.id,
         thread_id=thread_id,
@@ -342,7 +340,7 @@ async def list_series_mappings(
     Returns:
         List of thread-series mappings.
     """
-    mappings = await list_series_mappings(
+    mappings = await list_series_mappings_svc(
         db,
         thread_id=thread_id,
         status=status,
@@ -386,7 +384,7 @@ async def list_issue_mappings(
     Returns:
         List of issue-external identity mappings.
     """
-    mappings = await list_issue_mappings(
+    mappings = await list_issue_mappings_svc(
         db,
         issue_id=issue_id,
         status=status,

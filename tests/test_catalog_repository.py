@@ -1,7 +1,6 @@
 """Tests for catalog repository functions."""
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.external_identity import ExternalIdentity

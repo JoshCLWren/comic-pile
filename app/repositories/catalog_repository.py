@@ -103,7 +103,7 @@ async def list_series_mappings(
     thread_id: int | None = None,
     status: str | None = None,
     limit: int = 100,
-) -> list["ThreadExternalSeriesMapping"]:
+) -> list[ThreadExternalSeriesMapping]:
     """List thread-series mappings.
 
     Args:
@@ -138,7 +138,7 @@ async def list_issue_mappings(
     issue_id: int | None = None,
     status: str | None = None,
     limit: int = 100,
-) -> list["IssueExternalIdentityMapping"]:
+) -> list[IssueExternalIdentityMapping]:
     """List issue-external identity mappings.
 
     Args:

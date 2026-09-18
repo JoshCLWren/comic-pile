@@ -75,7 +75,7 @@ async def upsert_catalog_issue(
     Returns:
         The created or existing external identity.
     """
-    return await upsert_catalog_series(
+    return await upsert_external_identity(
         db,
         provider=provider,
         entity_type=entity_type,
