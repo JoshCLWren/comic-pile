@@ -8,8 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.external_identities import (
     ExternalIdentityMappingError,
+    ExternalIdentitySpec,
     link_issue_external_identity,
     link_thread_external_series,
+    upsert_external_identities,
     upsert_external_identity,
 )
 from app.models import Issue, Thread, User
@@ -262,3 +264,147 @@ async def test_deleting_external_evidence_never_deletes_user_owned_reading_data(
             IssueExternalIdentityMapping.external_identity_id == identity_id
         )
     ) == 0
+
+
+@pytest.mark.asyncio
+async def test_upsert_external_identities_batches_and_deduplicates(
+    async_db: AsyncSession,
+) -> None:
+    """Batch upsert creates multiple identities in one round trip and deduplicates."""
+    specs = [
+        ExternalIdentitySpec(
+            provider="comicvine",
+            entity_type="series",
+            external_id="4050-series-1",
+        ),
+        ExternalIdentitySpec(
+            provider="comicvine",
+            entity_type="issue",
+            external_id="4000-issue-1",
+        ),
+        ExternalIdentitySpec(
+            provider="comicvine",
+            entity_type="series",
+            external_id="4050-series-2",
+        ),
+        # Duplicate spec should be deduplicated
+        ExternalIdentitySpec(
+            provider="comicvine",
+            entity_type="series",
+            external_id="4050-series-1",
+        ),
+    ]
+
+    result = await upsert_external_identities(async_db, specs=specs)
+
+    assert len(result) == 3
+    assert ("comicvine", "series", "4050-series-1") in result
+    assert ("comicvine", "issue", "4000-issue-1") in result
+    assert ("comicvine", "series", "4050-series-2") in result
+
+    # Verify all three identities were created
+    count = await async_db.scalar(select(func.count()).select_from(ExternalIdentity))
+    assert count == 3
+
+    # Second call with same specs should be idempotent
+    result2 = await upsert_external_identities(async_db, specs=specs)
+    assert len(result2) == 3
+    assert result2[("comicvine", "series", "4050-series-1")].id == result[
+        ("comicvine", "series", "4050-series-1")
+    ].id
+
+    count2 = await async_db.scalar(select(func.count()).select_from(ExternalIdentity))
+    assert count2 == 3
+
+
+@pytest.mark.asyncio
+async def test_upsert_external_identities_updates_fresh_metadata(
+    async_db: AsyncSession,
+) -> None:
+    """Batch upsert updates metadata when provider_updated_at is fresher."""
+    fresh_at = datetime.now(UTC)
+    stale_at = fresh_at - timedelta(days=1)
+
+    # Create initial identities with stale metadata
+    specs = [
+        ExternalIdentitySpec(
+            provider="comicvine",
+            entity_type="series",
+            external_id="4050-meta-test",
+            external_url="https://example.com/stale",
+            metadata_json={"name": "Stale"},
+            provider_updated_at=stale_at,
+        ),
+    ]
+    await upsert_external_identities(async_db, specs=specs)
+
+    # Update with fresh metadata
+    fresh_specs = [
+        ExternalIdentitySpec(
+            provider="comicvine",
+            entity_type="series",
+            external_id="4050-meta-test",
+            external_url="https://example.com/fresh",
+            metadata_json={"name": "Fresh"},
+            provider_updated_at=fresh_at,
+        ),
+    ]
+    result = await upsert_external_identities(async_db, specs=fresh_specs)
+
+    identity = result[("comicvine", "series", "4050-meta-test")]
+    assert identity.external_url == "https://example.com/fresh"
+    assert identity.metadata_json == {"name": "Fresh"}
+    assert identity.provider_updated_at == fresh_at
+
+    # Stale update should be ignored
+    stale_specs = [
+        ExternalIdentitySpec(
+            provider="comicvine",
+            entity_type="series",
+            external_id="4050-meta-test",
+            external_url="https://example.com/stale-again",
+            metadata_json={"name": "Stale Again"},
+            provider_updated_at=stale_at,
+        ),
+    ]
+    result2 = await upsert_external_identities(async_db, specs=stale_specs)
+
+    identity2 = result2[("comicvine", "series", "4050-meta-test")]
+    assert identity2.external_url == "https://example.com/fresh"
+    assert identity2.metadata_json == {"name": "Fresh"}
+    assert identity2.provider_updated_at == fresh_at
+
+
+@pytest.mark.asyncio
+async def test_upsert_external_identities_rejects_invalid_specs(
+    async_db: AsyncSession,
+) -> None:
+    """Batch upsert validates all specs before any persistence."""
+    specs = [
+        ExternalIdentitySpec(
+            provider="comicvine",
+            entity_type="series",
+            external_id="4050-valid",
+        ),
+        ExternalIdentitySpec(
+            provider="",  # Invalid: empty provider
+            entity_type="issue",
+            external_id="4000-invalid",
+        ),
+    ]
+
+    with pytest.raises(ExternalIdentityMappingError, match="provider and external_id are required"):
+        await upsert_external_identities(async_db, specs=specs)
+
+    # No partial writes should have occurred
+    count = await async_db.scalar(select(func.count()).select_from(ExternalIdentity))
+    assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_upsert_external_identities_empty_iterable(
+    async_db: AsyncSession,
+) -> None:
+    """Empty iterable returns empty mapping without database access."""
+    result = await upsert_external_identities(async_db, specs=[])
+    assert result == {}
