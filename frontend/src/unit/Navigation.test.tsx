@@ -165,8 +165,26 @@ test('shows loading and non-auth failure states and logs out gracefully', async 
 
 })
 
-test('clears authentication when the user lookup returns unauthorized', async () => {
-  mockApiGet.mockResolvedValueOnce({ username: 'user', email: 'user@example.com' })
+test('does not make a redundant /auth/me call after AuthProvider resolves user', async () => {
+  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+  renderWithAuth()
+  
+  await waitFor(() => {
+    expect(screen.getByRole('navigation', { name: /desktop navigation/i })).toBeInTheDocument()
+  })
+  
+  // Navigation should not make its own /auth/me call; only AuthProvider does
+  // AuthProvider also calls /v1/users/me/preferences via fetchAndApplyPersistedTheme,
+  // so we count only the /v1/auth/me calls.
+  const authMeCalls = mockApiGet.mock.calls.filter(
+    (call) => call[0] === '/v1/auth/me',
+  )
+  expect(authMeCalls).toHaveLength(1)
+  expect(mockApiGet).toHaveBeenCalledWith('/v1/auth/me', { skipAuthRedirect: true, timeout: 15000 })
+})
+
+test('clears authentication when AuthProvider bootstrap returns unauthorized', async () => {
+  mockApiGet
     .mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } })
     .mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } })
   render(
