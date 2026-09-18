@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
 import secrets
@@ -70,12 +71,12 @@ async def dependency_health(
     if result.status == "unhealthy":
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content=result.__dict__,
+            content=dataclasses.asdict(result),
         )
     if result.status == "degraded":
         return JSONResponse(
             status_code=status.HTTP_207_MULTI_STATUS,
-            content=result.__dict__,
+            content=dataclasses.asdict(result),
         )
     return result
 
@@ -127,12 +128,12 @@ async def warmup(
     if result.status == "unhealthy":
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content=result.__dict__,
+            content=dataclasses.asdict(result),
         )
     if result.status == "degraded":
         return JSONResponse(
             status_code=status.HTTP_207_MULTI_STATUS,
-            content=result.__dict__,
+            content=dataclasses.asdict(result),
         )
     return result
 
