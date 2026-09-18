@@ -151,7 +151,6 @@ async def create_dependency(
         target_issue_id=target_issue_id,
     )
     db.add(dependency)
-    await db.refresh(dependency)
     return dependency
 
 
@@ -173,7 +172,6 @@ async def update_dependency_note(
     )
     dependency = result.scalar_one()
     dependency.note = note
-    await db.refresh(dependency)
     return dependency
 
 
