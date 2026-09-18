@@ -93,6 +93,7 @@ async function fetchAndApplyPersistedTheme(timeout?: number): Promise<void> {
 const RollPage = lazyRoute('roll')
 const QueuePage = lazyRoute('queue')
 const ThreadDetailView = lazyRoute('threadDetail')
+const CreatorDetailPage = lazyRoute('creatorDetail')
 const HistoryPage = lazyRoute('history')
 const SessionPage = lazyRoute('session')
 const CrossoversPage = lazyRoute('crossovers')
@@ -359,6 +360,7 @@ function AppRoutes() {
         <Route path="/" element={<ProtectedRoute><AuthenticatedLayout wide onBugReportSubmit={submit}><RollPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/queue" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><QueuePage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/thread/:id" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ThreadDetailView /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/creators/:creatorKey" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><CreatorDetailPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/history" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HistoryPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/sessions/:id" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><SessionPage /></AuthenticatedLayout></ProtectedRoute>} />
         <Route path="/crossovers" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><CrossoversPage /></AuthenticatedLayout></ProtectedRoute>} />

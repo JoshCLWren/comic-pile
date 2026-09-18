@@ -138,6 +138,16 @@ export const queryKeys = {
     groups: (threadIds: number[]) =>
       ['crossover', 'groups', [...threadIds].sort((a, b) => a - b)] as const,
   },
+  creator: {
+    all: ['creator'] as const,
+    /**
+     * Canonical bounded creator detail key. The pagination cursor lives in
+     * `pageParam`, not the key, so every page of one creator shares the
+     * stable prefix and `limit` changes become a distinct query.
+     */
+    detail: (creatorKey: string, { limit }: { limit: number }) =>
+      ['creator', 'detail', creatorKey, { limit }] as const,
+  },
   undo: {
     all: ['undo'] as const,
     snapshots: (sessionId: number | string) =>

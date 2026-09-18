@@ -551,3 +551,137 @@ async def test_bounded_constant_query_count(
     assert len(six_keys.json()["summaries"]) == 6
     assert len(one_key_selects) == len(six_key_selects)
     assert len(one_key_selects) <= 4, one_key_selects
+
+
+@pytest.mark.asyncio
+async def test_same_display_name_different_stable_ids(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Two creators can share a display name but have distinct stable IDs."""
+    thread1, issues1 = await _make_thread(
+        async_db, default_user, title="Book One", issue_count=1, queue_position=1, read_through=1
+    )
+    thread2, issues2 = await _make_thread(
+        async_db, default_user, title="Book Two", issue_count=1, queue_position=1, read_through=1
+    )
+    # Both creators share the same display name but have different external IDs
+    await _confirm_identity(
+        async_db, issues1[0], creators=[{"id": 111, "name": "Shared Name", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db, issues2[0], creators=[{"id": 222, "name": "Shared Name", "role": "artist"}]
+    )
+    await _rate(async_db, issues1[0], rating=4.5, timestamp=D1)
+    await _rate(async_db, issues2[0], rating=3.0, timestamp=D2)
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:111,creator:222")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["summaries"]) == {"creator:111", "creator:222"}
+
+    summary_111 = body["summaries"]["creator:111"]
+    summary_222 = body["summaries"]["creator:222"]
+
+    assert summary_111["ratings_count"] == 1
+    assert summary_111["average_rating"] == pytest.approx(4.5)
+    assert summary_222["ratings_count"] == 1
+    assert summary_222["average_rating"] == pytest.approx(3.0)
+    assert summary_111["display_name"] == "Shared Name"
+    assert summary_222["display_name"] == "Shared Name"
+
+
+@pytest.mark.asyncio
+async def test_creator_multiple_rated_issues(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A creator credited on several rating events accumulates correct aggregated counts."""
+    thread, issues = await _make_thread(
+        async_db, default_user, title="MultiRate", issue_count=3, queue_position=1, read_through=3
+    )
+    # Creator with multiple rated issues (multiple issues under same creator)
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 333, "name": "Multi Rated Creator", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 333, "name": "Multi Rated Creator", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db, issues[2], creators=[{"id": 333, "name": "Multi Rated Creator", "role": "writer"}]
+    )
+    # Rate each issue at different levels
+    await _rate(async_db, issues[0], rating=5.0, timestamp=D1)
+    await _rate(async_db, issues[1], rating=4.0, timestamp=D2)
+    await _rate(async_db, issues[2], rating=3.0, timestamp=D3)
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:333")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "creator:333" in body["summaries"]
+    summary = body["summaries"]["creator:333"]
+    # Should have three rated issues, average of (5+4+3)/3 = 4.0
+    assert summary["ratings_count"] == 3
+    assert summary["average_rating"] == pytest.approx(4.0)
+
+
+@pytest.mark.asyncio
+async def test_creator_zero_rating_average_is_none(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A creator with only non-rating events should not display as 0★."""
+    thread, issues = await _make_thread(
+        async_db, default_user, title="ZeroRating", issue_count=1, queue_position=1, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 444, "name": "Zero Rating Creator", "role": "writer"}]
+    )
+    # No rating events; only read-through status
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:444")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "creator:444" in body["summaries"]
+    summary = body["summaries"]["creator:444"]
+    assert summary["ratings_count"] == 0
+    assert summary["average_rating"] is None
+
+
+@pytest.mark.asyncio
+async def test_read_unread_issues_in_multiple_threads(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Unread credited issues can appear across multiple threads, all counted toward upcoming."""
+    # Create two separate threads each with one unread issue credited to same creator
+    thread_a, issues_a = await _make_thread(
+        async_db, default_user, title="Thread A", issue_count=1, queue_position=1, read_through=1
+    )
+    thread_b, issues_b = await _make_thread(
+        async_db, default_user, title="Thread B", issue_count=1, queue_position=2, read_through=0
+    )
+    await _confirm_identity(
+        async_db, issues_a[0], creators=[{"id": 555, "name": "Cross-Thread Creator", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db, issues_b[0], creators=[{"id": 555, "name": "Cross-Thread Creator", "role": "writer"}]
+    )
+    await _rate(async_db, issues_a[0], rating=4.0, timestamp=D1)
+    # issues_b[0] remains unread
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:555")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "creator:555" in body["summaries"]
+    summary = body["summaries"]["creator:555"]
+    # Upcoming count should be 1 (the unread issue in thread_b)
+    assert summary["upcoming_count"] == 1

@@ -292,19 +292,38 @@ export function RatingView({
               <button
                 type="button"
                 onClick={handleFetchReadingContext}
-                className="w-full px-3 py-2 text-left text-sm rounded-lg border transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 text-left text-sm rounded-lg border transition-colors group"
                 style={{
                   borderColor: 'var(--theme-continuity-accent)',
                   color: 'var(--theme-text-primary)',
                   backgroundColor: 'var(--theme-bg-panel)',
                 }}
                 data-testid="reading-context-button"
+                aria-expanded="false"
+                aria-controls="rating-region-reading-context"
               >
-                Reading Context
+                <span>Reading Context</span>
+                <span className="text-stone-500 transition-transform group-hover:rotate-180" aria-hidden="true">⌄</span>
               </button>
             ) : null
           ) : (
-            <div className="min-w-0" data-testid="rating-region-reading-context">
+            <div className="min-w-0" data-testid="rating-region-reading-context" id="rating-region-reading-context">
+              <div className="mb-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setReadingContextExpanded(false)}
+                  className="min-h-6 px-2 text-xs font-medium rounded transition-colors"
+                  style={{
+                    border: '1px solid var(--theme-border)',
+                    color: 'var(--theme-text-muted)',
+                    backgroundColor: 'var(--theme-bg-panel)',
+                  }}
+                  aria-label="Minimize Reading Context"
+                  aria-expanded="true"
+                >
+                  Minimize
+                </button>
+              </div>
               {readerContextLoading ? (
                 <ReadingContextStatusCard isLoading error={readerContextError} />
               ) : readerContextFailure ? (
@@ -337,19 +356,38 @@ export function RatingView({
               <button
                 type="button"
                 onClick={handleFetchReadingBoundaries}
-                className="w-full px-3 py-2 text-left text-sm rounded-lg border transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 text-left text-sm rounded-lg border transition-colors group"
                 style={{
                   borderColor: 'var(--theme-continuity-accent)',
                   color: 'var(--theme-text-primary)',
                   backgroundColor: 'var(--theme-bg-panel)',
                 }}
                 data-testid="reading-boundaries-button"
+                aria-expanded="false"
+                aria-controls="rating-region-reading-boundaries"
               >
-                Reading Boundaries
+                <span>Reading Boundaries</span>
+                <span className="text-stone-500 transition-transform group-hover:rotate-180" aria-hidden="true">⌄</span>
               </button>
             ) : null
           ) : (
-            <div className="min-w-0" data-testid="rating-region-reading-boundaries">
+            <div className="min-w-0" data-testid="rating-region-reading-boundaries" id="rating-region-reading-boundaries">
+              <div className="mb-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setReadingBoundariesExpanded(false)}
+                  className="min-h-6 px-2 text-xs font-medium rounded transition-colors"
+                  style={{
+                    border: '1px solid var(--theme-border)',
+                    color: 'var(--theme-text-muted)',
+                    backgroundColor: 'var(--theme-bg-panel)',
+                  }}
+                  aria-label="Minimize Reading Boundaries"
+                  aria-expanded="true"
+                >
+                  Minimize
+                </button>
+              </div>
               {readerContextLoading ? (
                 <ReadingContextStatusCard isLoading error={readerContextError} />
               ) : readerContextFailure ? (

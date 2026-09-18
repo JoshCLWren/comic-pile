@@ -28,7 +28,6 @@ export interface RollPageState {
   showSimpleMigration: boolean
   isRatingView: boolean
   rating: number
-  predictedDie: number
   errorMessage: string
   suppressPendingAutoOpenRef: React.MutableRefObject<boolean>
   rollIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>
@@ -60,7 +59,6 @@ export interface RollPageStateSetters {
   setShowSimpleMigration: (value: boolean) => void
   setIsRatingView: (value: boolean) => void
   setRating: (value: number) => void
-  setPredictedDie: (value: number) => void
   setErrorMessage: (value: string) => void
 }
 
@@ -89,7 +87,6 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [showSimpleMigration, setShowSimpleMigration] = useState(false)
   const [isRatingView, setIsRatingView] = useState(false)
   const [rating, setRating] = useState(4.0)
-  const [predictedDie, setPredictedDie] = useState(6)
   const [errorMessage, setErrorMessage] = useState('')
 
   const suppressPendingAutoOpenRef = useRef(false)
@@ -145,8 +142,6 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setIsRatingView,
     rating,
     setRating,
-    predictedDie,
-    setPredictedDie,
     errorMessage,
     setErrorMessage,
     suppressPendingAutoOpenRef,

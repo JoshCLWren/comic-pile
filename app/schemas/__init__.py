@@ -24,6 +24,12 @@ from app.schemas.issue import (
     IssueUpdate,
 )
 from app.schemas.migration import MigrateToIssuesRequest
+from app.schemas.performance_metric import (
+    PerformanceMetricComparison,
+    PerformanceMetricCreate,
+    PerformanceMetricQuery,
+    PerformanceMetricSummary,
+)
 from app.schemas.preferences import ThemeId, UserPreferencesPatchRequest, UserPreferencesResponse
 from app.schemas.rate import RateRequest
 from app.schemas.recommendation_explanation import (
@@ -108,6 +114,11 @@ __all__ = [
     "IssueOrderValidationResponse",
     # Migration
     "MigrateToIssuesRequest",
+    # Performance Metrics
+    "PerformanceMetricCreate",
+    "PerformanceMetricQuery",
+    "PerformanceMetricSummary",
+    "PerformanceMetricComparison",
     # Preferences
     "ThemeId",
     "UserPreferencesResponse",

@@ -85,3 +85,9 @@ def test_z_ai_and_ollama_cloud_pin_guards_reject_paid_ids(validate) -> None:
     assert validate.ollama_cloud_model_is_free('nemotron-3-nano:30b')
     assert validate.ollama_cloud_model_is_free('gpt-oss:20b')
     assert not validate.ollama_cloud_model_is_free('llama3')
+
+def test_opencode_zen_promo_union_alpha_is_free(validate) -> None:
+    """Bare Zen union-alpha is a time-boxed $0 promo free pin."""
+    assert validate.opencode_model_is_free("union-alpha")
+    assert not validate.opencode_model_is_free("stealth/union-alpha")
+

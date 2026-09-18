@@ -5,6 +5,7 @@ import { type ComicVineRelatedIssue } from '../../../services/api'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import ImageWithLoading from '../../../components/ImageWithLoading'
+import { CreatorName } from './CreatorName'
 import { optimizedImageSrcSet, optimizedImageUrl } from '../../../services/imageDelivery'
 
 interface ComicIdentityProps {
@@ -341,7 +342,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                       <p className="text-[9px] text-stone-500">Related by story-arc membership, not reading order.</p>
                       <div className="space-y-1.5" data-testid="story-arc-issue-list">
                         {displayedIssues.map((issue) => {
-                          const identity = extractComicIdentity(issue)
+                          const identity = extractComicIdentity(issue, issue.comicpile_matches)
                           const state = getMemberState(issue)
                           const stateLabel = getStateLabel(state)
                           const stateColorClass = getStateColorClass(state)

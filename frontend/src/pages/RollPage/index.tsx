@@ -26,6 +26,7 @@ import { useRollPageState } from './useRollPageState'
 import { useRollBootstrapSync } from './useRollBootstrapSync'
 import { useRollPendingSession } from './useRollPendingSession'
 import { useRollRating } from './useRollRating'
+import { computePredictedDie } from './utils'
 import { useRollSnooze } from './useRollSnooze'
 import { useRollDependencies } from './useRollDependencies'
 import { useRollActions } from './useRollActions'
@@ -376,7 +377,7 @@ export default function RollPage() {
                 currentDie={state.currentDie}
                 rolledResult={state.rolledResult}
                 rating={state.rating}
-                predictedDie={state.predictedDie}
+                predictedDie={computePredictedDie(state.currentDie, state.rating)}
                 hasValidRolledResult={hasValidRolledResult}
                 poolSize={pool.length}
                 errorMessage={state.errorMessage}

@@ -24,6 +24,7 @@ export const routeModules = {
   roll: () => import('../pages/RollPage'),
   queue: () => import('../pages/QueuePage'),
   threadDetail: () => import('../pages/ThreadDetailView'),
+  creatorDetail: () => import('../pages/CreatorDetailPage'),
   history: () => import('../pages/HistoryPage'),
   session: () => import('../pages/SessionPage'),
   crossovers: () => import('../pages/CrossoversPage'),

@@ -61,7 +61,7 @@ def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
         if source == 'opencode-free':
             assert opencode_model_is_free(model), (
                 f'worker {worker} opencode-free pin must be a free OpenCode model '
-                f'(big-pickle or *-free), got {model!r}'
+                f'(big-pickle, *-free, or promo id), got {model!r}'
             )
         elif source == 'openrouter-free':
             assert openrouter_model_is_free(model), (
