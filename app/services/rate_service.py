@@ -1,9 +1,13 @@
-"""Rate service orchestrating the thread-rating pipeline."""
+"""Rate service orchestrating the thread-rating pipeline.
+
+Services own business logic, transaction boundaries (commit/rollback),
+and cache invalidation. Query construction lives in repositories
+(app.repositories). HTTP status mapping lives in routers.
+"""
 
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache_invalidation import invalidate_user_view
@@ -12,6 +16,19 @@ from app.models import Event, Issue, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.thread import normalize_format_value
 from app.models.user import User
+from app.repositories.issue_repository import (
+    first_unread,
+    find_in_thread_by_number,
+    get_issue,
+    issues_ordered,
+)
+from app.repositories.rate_repository import fetch_source_roll_event
+from app.repositories.session_repository import (
+    fetch_active_session,
+    get_session,
+    latest_action_event,
+)
+from app.repositories.thread_repository import find_owned, threads_for_user
 from app.schemas import RateRequest, ThreadResponse
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
@@ -42,16 +59,7 @@ async def _find_source_roll_event(
     Returns:
         The ID of the most recent roll event selecting this thread, or None.
     """
-    result = await db.execute(
-        select(Event.id)
-        .where(Event.session_id == session_id)
-        .where(Event.type == "roll")
-        .where(Event.selected_thread_id == thread_id)
-        .order_by(Event.timestamp.desc(), Event.id.desc())
-        .limit(1)
-    )
-    row = result.scalar_one_or_none()
-    return row
+    return await fetch_source_roll_event(db, session_id, thread_id)
 
 
 async def _capture_thread_pre_state(thread: Thread, db: AsyncSession) -> dict:
@@ -84,10 +92,7 @@ async def _capture_thread_pre_state(thread: Thread, db: AsyncSession) -> dict:
     }
 
     if uses_issue_tracking:
-        issues_result = await db.execute(
-            select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
-        )
-        issues = issues_result.scalars().all()
+        issues = await issues_ordered(db, thread.id)
         state["issue_states"] = [
             {
                 "id": issue.id,
@@ -174,13 +179,12 @@ async def snapshot_thread_states(
             await db.commit()
         return
 
-    result = await db.execute(select(Thread).where(Thread.user_id == user_id))
-    threads = result.scalars().all()
+    threads = await threads_for_user(db, user_id)
     thread_states = {
         thread.id: await _capture_thread_pre_state(thread, db) for thread in threads
     }
 
-    session = await db.get(SessionModel, session_id)
+    session = await get_session(db, session_id)
     session_state = None
     if session:
         session_state = {
@@ -230,13 +234,7 @@ async def rate_thread(
         HTTPException: If no active session, rating, or thread is valid.
     """
     user_id = current_user.id
-    result = await db.execute(
-        select(SessionModel)
-        .where(SessionModel.user_id == user_id)
-        .where(SessionModel.ended_at.is_(None))
-        .order_by(SessionModel.started_at.desc())
-    )
-    current_session = result.scalars().first()
+    current_session = await fetch_active_session(db, user_id)
     if not current_session:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -247,43 +245,35 @@ async def rate_thread(
     target_thread_id = current_session.pending_thread_id
 
     if target_thread_id is not None:
-        result = await db.execute(
-            select(Thread).where(Thread.id == target_thread_id).where(Thread.user_id == user_id)
-        )
-        thread = result.scalar_one_or_none()
+        thread = await find_owned(db, user_id, target_thread_id)
         if not thread:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Thread {target_thread_id} not found",
             )
     else:
-        result = await db.execute(
-            select(Event)
-            .where(Event.session_id == current_session_id)
-            .where(Event.type.in_(["roll", "rate", "snooze", "rolled_but_skipped"]))
-            .order_by(Event.timestamp.desc(), Event.id.desc())
+        latest_action_event_ = await latest_action_event(
+            db,
+            current_session_id,
+            ("roll", "rate", "snooze", "rolled_but_skipped"),
         )
-        latest_action_event = result.scalars().first()
         if (
-            not latest_action_event
-            or latest_action_event.type != "roll"
-            or latest_action_event.selected_thread_id is None
+            not latest_action_event_
+            or latest_action_event_.type != "roll"
+            or latest_action_event_.selected_thread_id is None
         ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No active thread. Please roll the dice first.",
             )
 
-        result = await db.execute(
-            select(Thread)
-            .where(Thread.id == latest_action_event.selected_thread_id)
-            .where(Thread.user_id == user_id)
+        thread = await find_owned(
+            db, user_id, latest_action_event_.selected_thread_id
         )
-        thread = result.scalar_one_or_none()
         if not thread:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Thread {latest_action_event.selected_thread_id} not found",
+                detail=f"Thread {latest_action_event_.selected_thread_id} not found",
             )
 
     thread_id = thread.id
@@ -326,12 +316,9 @@ async def rate_thread(
 
     if not thread.uses_issue_tracking() and rate_data.issue_number is not None:
         issue_number = rate_data.issue_number
-        result = await db.execute(
-            select(Issue)
-            .where(Issue.thread_id == thread.id)
-            .where(Issue.issue_number == issue_number)
+        current_issue = await find_in_thread_by_number(
+            db, thread.id, issue_number
         )
-        current_issue = result.scalar_one_or_none()
         created_issues: list[Issue] = []
 
         if not current_issue:
@@ -385,10 +372,7 @@ async def rate_thread(
         if created_issues:
             all_issues = sorted(created_issues, key=lambda i: i.position)
         else:
-            all_issues_result = await db.execute(
-                select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
-            )
-            all_issues = all_issues_result.scalars().all()
+            all_issues = await issues_ordered(db, thread.id)
         for issue in all_issues:
             if issue.position < current_issue.position and issue.status != "read":
                 issue.status = "read"
@@ -414,12 +398,7 @@ async def rate_thread(
 
     if thread.uses_issue_tracking():
         if thread.next_unread_issue_id:
-            issue_result = await db.execute(
-                select(Issue)
-                .where(Issue.id == thread.next_unread_issue_id)
-                .where(Issue.thread_id == thread.id)
-            )
-            issue = issue_result.scalar_one_or_none()
+            issue = await get_issue(db, thread.next_unread_issue_id)
             if issue and issue.status == "unread":
                 issue.status = "read"
                 issue.read_at = datetime.now(UTC)
@@ -427,14 +406,7 @@ async def rate_thread(
                 rated_issue_number = issue.issue_number
                 issues_read = 1
 
-                next_result = await db.execute(
-                    select(Issue)
-                    .where(Issue.thread_id == thread.id)
-                    .where(Issue.status == "unread")
-                    .order_by(Issue.position, Issue.id)
-                    .limit(1)
-                )
-                next_issue = next_result.scalar_one_or_none()
+                next_issue = await first_unread(db, thread.id)
                 if next_issue:
                     thread.next_unread_issue_id = next_issue.id
                     thread.reading_progress = "in_progress"
@@ -468,7 +440,9 @@ async def rate_thread(
         else step_up(current_die)
     )
 
-    source_roll_event_id = await _find_source_roll_event(db, current_session_id, thread_id)
+    source_roll_event_id = await _find_source_roll_event(
+        db, current_session_id, thread_id
+    )
 
     event = Event(
         type="rate",
@@ -549,7 +523,7 @@ async def rate_thread(
         if next_issue is not None and next_issue.id == resp_next_unread_issue_id:
             resp_next_unread_issue_number = next_issue.issue_number
         else:
-            next_issue_obj = await db.get(Issue, resp_next_unread_issue_id)
+            next_issue_obj = await get_issue(db, resp_next_unread_issue_id)
             if next_issue_obj:
                 resp_next_unread_issue_number = next_issue_obj.issue_number
 
