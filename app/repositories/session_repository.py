@@ -351,6 +351,10 @@ async def restore_session_start(
     # Batch load existing threads to avoid N+1
     existing_threads_map = await threads_by_ids(db, snapshot_thread_ids)
 
+    # Batch delete all issues for snapshot threads (recreated or cleared)
+    if snapshot_thread_ids:
+        await db.execute(delete(Issue).where(Issue.thread_id.in_(snapshot_thread_ids)))
+
     # Get threads from snapshot (both existing and new)
     affected_threads = []
 
@@ -377,10 +381,7 @@ async def restore_session_start(
 
             # Handle issue states
             if "issue_states" in state and state["issue_states"] is not None:
-                # Delete existing issues
-                await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
-
-                # Recreate issues from snapshot
+                # Issues already batch-deleted above; recreate from snapshot
                 max_position = 0
                 for issue_state in state["issue_states"]:
                     position = issue_state.get("position", max_position + 1)
@@ -403,8 +404,7 @@ async def restore_session_start(
                 thread.next_unread_issue_id = state.get("next_unread_issue_id")
                 thread.reading_progress = state.get("reading_progress")
             else:
-                # Clear migrated state when restoring to legacy
-                await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
+                # Clear migrated state when restoring to legacy (issues batch-deleted above)
                 thread.total_issues = None
                 thread.next_unread_issue_id = None
                 thread.reading_progress = None
