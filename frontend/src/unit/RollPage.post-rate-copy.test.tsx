@@ -123,9 +123,13 @@ vi.mock('../services/api-taste', () => ({
     submitVerdict: vi.fn().mockResolvedValue({}),
   },
 }))
-vi.mock('../hooks/useReaderContext', () => ({
-  useReaderContext: () => ({ context: null, isLoading: false, error: null, refetch: vi.fn() }),
-}))
+vi.mock('../hooks/useReaderContext', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks/useReaderContext')>()
+  return {
+    ...actual,
+    useReaderContext: () => ({ context: null, isLoading: false, error: null, refetch: vi.fn() }),
+  }
+})
 vi.mock('../services/api', () => ({
   default: {},
   threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }) },

@@ -1,8 +1,7 @@
-import { useCallback, useEffect } from 'react'
-import { useReadingOrdersForThread, useConnectedThreads } from '../../hooks/useReaderContext'
+import { useCallback, useEffect, useState } from 'react'
+import { useConnectedThreads, useReadingOrdersForThread } from '../../hooks/useReaderContext'
 import { getApiErrorDetail } from '../../utils/apiError'
-import type { ConnectedThreadInfo, RatePayload, Thread } from '../../types'
-import type { ReadingOrder } from '../../services/api-reading-orders'
+import type { RatePayload, Thread } from '../../types'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
@@ -53,29 +52,31 @@ export function useRollRating({
   const [lastRated, setLastRated] = useState<PostRateReference | null>(null)
   const [readingDetailsRequested, setReadingDetailsRequested] = useState(false)
 
-  // Use React Query for reading orders and connected threads
-  const { readingOrders: fetchedReadingOrders, isError: readingOrdersError, error: readingOrdersErrorDetail } = useReadingOrdersForThread(
-    activeRatingThread?.id ?? null
-  )
-  const { connectedThreads: fetchedConnectedThreads, isError: connectedThreadsError, error: connectedThreadsErrorDetail } = useConnectedThreads(
-    activeRatingThread?.id ?? null
-  )
+  const {
+    readingOrders,
+    isError: readingOrdersIsError,
+    error: readingOrdersError,
+  } = useReadingOrdersForThread(activeRatingThread?.id ?? null, readingDetailsRequested)
 
-  // Update local state when React Query data is available
-  const readingOrders = fetchedReadingOrders
-  const connectedThreads = fetchedConnectedThreads
+  const {
+    connectedThreads,
+    isError: connectedThreadsIsError,
+    error: connectedThreadsError,
+  } = useConnectedThreads(activeRatingThread?.id ?? null, readingDetailsRequested)
 
-  // Handle errors from React Query and surface them in the UI
   useEffect(() => {
-    if (readingOrdersError && readingOrdersErrorDetail) {
-      setErrorMessage(`Failed to load reading orders: ${getApiErrorDetail(readingOrdersErrorDetail)}`)
-    } else if (connectedThreadsError && connectedThreadsErrorDetail) {
-      setErrorMessage(`Failed to load connected threads: ${getApiErrorDetail(connectedThreadsErrorDetail)}`)
-    } else if (!readingOrdersError && !connectedThreadsError) {
-      // Clear errors when data loads successfully
-      setErrorMessage('')
+    if (readingOrdersIsError && readingOrdersError) {
+      setErrorMessage(`Failed to load reading orders: ${getApiErrorDetail(readingOrdersError)}`)
+    } else if (connectedThreadsIsError && connectedThreadsError) {
+      setErrorMessage(`Failed to load connected threads: ${getApiErrorDetail(connectedThreadsError)}`)
     }
-  }, [readingOrdersError, readingOrdersErrorDetail, connectedThreadsError, connectedThreadsErrorDetail, setErrorMessage])
+  }, [
+    readingOrdersIsError,
+    readingOrdersError,
+    connectedThreadsIsError,
+    connectedThreadsError,
+    setErrorMessage,
+  ])
 
   const clearLastRated = useCallback(() => setLastRated(null), [])
 
@@ -83,10 +84,8 @@ export function useRollRating({
     setReadingDetailsRequested(true)
   }, [])
 
-  const fetchReadingDetails = useCallback((threadId: number | null) => {
+  const fetchReadingDetails = useCallback((_threadId: number | null) => {
     setReadingDetailsRequested(true)
-    // React Query will automatically fetch data when the threadId changes
-    // and handle loading/error states internally
   }, [])
 
   const fetchReadingContext = useCallback(
