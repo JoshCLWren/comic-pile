@@ -11,7 +11,6 @@ import {
 } from '../hooks/useSession'
 import { sessionApi } from '../services/api'
 import { ToastProvider } from '../contexts/ToastProvider'
-import { CacheProvider } from '../contexts/CacheContext'
 
 vi.mock('../services/api', () => ({
   sessionApi: {
@@ -30,9 +29,7 @@ function renderWithProvider<T>(hook: () => T): { result: { current: T } } {
   return renderHook(hook, {
     wrapper: ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={client}>
-        <CacheProvider>
-          <ToastProvider>{children}</ToastProvider>
-        </CacheProvider>
+        <ToastProvider>{children}</ToastProvider>
       </QueryClientProvider>
     ),
   })
