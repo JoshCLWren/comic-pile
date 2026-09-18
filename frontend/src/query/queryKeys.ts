@@ -121,6 +121,7 @@ export const queryKeys = {
   },
   thread: {
     all: ['thread'] as const,
+    list: () => ['thread', 'list'] as const,
     summaries: () => ['thread', 'summary'] as const,
     summary: (threadId: number) => ['thread', 'summary', threadId] as const,
     details: () => ['thread', 'detail'] as const,
@@ -143,6 +144,7 @@ export const queryKeys = {
   },
   dependencies: {
     all: ['dependencies'] as const,
+    list: () => ['dependencies', 'list'] as const,
     forThread: (threadId: number) => ['dependencies', 'thread', threadId] as const,
     blocking: (threadId: number) => ['dependencies', 'blocking', threadId] as const,
     blockingBatch: (threadIds: number[]) =>
