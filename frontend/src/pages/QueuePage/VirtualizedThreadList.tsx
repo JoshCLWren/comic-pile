@@ -229,27 +229,26 @@ export default function VirtualizedThreadList<T>({
             width: '100%',
           }}
         >
-           {virtualizer.getVirtualItems().map((virtualItem) => {
-             const rowIndex = virtualItem.index
-             return (
-               <div
-                 key={virtualItem.key}
-                 data-index={rowIndex}
-                 ref={virtualizer.measureElement}
-                 className={rowIndex < threads.length - 1 ? 'border-b border-[var(--theme-border)]' : undefined}
-                 style={{
-                   position: 'absolute',
-                   top: 0,
-                   left: 0,
-                   width: '100%',
-                   transform: `translateY(${virtualItem.start - scrollMargin}px)`,
-                 }}
-               >
-                 {renderItem(threads[rowIndex], rowIndex)}
-               </div>
-             )
-           })}
-
+          {virtualizer.getVirtualItems().map((virtualItem) => {
+            const rowIndex = virtualItem.index
+            return (
+              <div
+                key={virtualItem.key}
+                data-index={rowIndex}
+                ref={virtualizer.measureElement}
+                className={rowIndex < threads.length - 1 ? 'border-b border-[var(--theme-border)]' : undefined}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualItem.start - scrollMargin}px)`,
+                }}
+              >
+                {renderItem(threads[rowIndex], rowIndex)}
+              </div>
+            )
+          })}
           {hasNextPage && (
             <div
               ref={sentinelRef}
