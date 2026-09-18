@@ -47,17 +47,17 @@ async def test_cold_ping_does_not_initialize_database_or_cache() -> None:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.get("/api/ping")
 
-        assert resp.status_code == 200
-        assert resp.json() == {"status": "alive"}
-        # observability: lightweight wake-up distinguishable from heavy cold start
-        assert resp.headers.get("X-Heavy-Init") == "0"
-        assert is_heavy_initialized() is False
+            assert resp.status_code == 200
+            assert resp.json() == {"status": "alive"}
+            # observability: lightweight wake-up distinguishable from heavy cold start
+            assert resp.headers.get("X-Heavy-Init") == "0"
+            assert is_heavy_initialized() is False
 
-        # trailing-slash probes must stay light too (slash redirect happens
-        # inside routing, after this middleware would otherwise heavy-init)
-        slash_resp = await client.get("/api/ping/")
-        assert slash_resp.headers.get("X-Heavy-Init") == "0"
-        assert is_heavy_initialized() is False
+            # trailing-slash probes must stay light too (slash redirect happens
+            # inside routing, after this middleware would otherwise heavy-init)
+            slash_resp = await client.get("/api/ping/")
+            assert slash_resp.headers.get("X-Heavy-Init") == "0"
+            assert is_heavy_initialized() is False
 
         mock_init.assert_not_awaited()
         mock_acct.assert_not_awaited()
