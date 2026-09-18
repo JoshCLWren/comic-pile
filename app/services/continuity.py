@@ -7,11 +7,11 @@ used by the continuity rule, plan, and template routers.
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache_invalidation import invalidate_user_view
-from comic_pile.dependencies import refresh_user_blocked_status
 from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.schemas.continuity_plan import ContinuityPlanResponse
 from app.schemas.continuity_rule import ContinuityRuleResponse
+from comic_pile.dependencies import refresh_user_blocked_status
 
 
 async def _refresh_blocked_state(
