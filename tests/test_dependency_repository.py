@@ -13,8 +13,8 @@ async def test_get_dependency(async_db: AsyncSession, default_user: User) -> Non
     """Test getting a dependency by ID."""
     user = default_user
 
-    thread1 = Thread(title="Thread 1", user_id=user.id)
-    thread2 = Thread(title="Thread 2", user_id=user.id)
+    thread1 = Thread(title="Thread 1", user_id=user.id, format="Comic", queue_position=0)
+    thread2 = Thread(title="Thread 2", user_id=user.id, format="Comic", queue_position=0)
     async_db.add_all([thread1, thread2])
     await async_db.flush()
 
@@ -45,9 +45,9 @@ async def test_get_thread_dependencies(async_db: AsyncSession, default_user: Use
     """Test getting thread dependencies."""
     user = default_user
 
-    thread1 = Thread(title="Thread 1", user_id=user.id)
-    thread2 = Thread(title="Thread 2", user_id=user.id)
-    thread3 = Thread(title="Thread 3", user_id=user.id)
+    thread1 = Thread(title="Thread 1", user_id=user.id, format="Comic", queue_position=0)
+    thread2 = Thread(title="Thread 2", user_id=user.id, format="Comic", queue_position=0)
+    thread3 = Thread(title="Thread 3", user_id=user.id, format="Comic", queue_position=0)
     async_db.add_all([thread1, thread2, thread3])
     await async_db.flush()
 
@@ -76,8 +76,8 @@ async def test_get_issue_dependencies(async_db: AsyncSession, default_user: User
     """Test getting issue dependencies."""
     user = default_user
 
-    thread1 = Thread(title="Thread 1", user_id=user.id)
-    thread2 = Thread(title="Thread 2", user_id=user.id)
+    thread1 = Thread(title="Thread 1", user_id=user.id, format="Comic", queue_position=0)
+    thread2 = Thread(title="Thread 2", user_id=user.id, format="Comic", queue_position=0)
     async_db.add_all([thread1, thread2])
     await async_db.flush()
 
@@ -106,8 +106,8 @@ async def test_get_dependency_by_ids(async_db: AsyncSession, default_user: User)
     """Test getting dependency by source and target IDs."""
     user = default_user
 
-    thread1 = Thread(title="Thread 1", user_id=user.id)
-    thread2 = Thread(title="Thread 2", user_id=user.id)
+    thread1 = Thread(title="Thread 1", user_id=user.id, format="Comic", queue_position=0)
+    thread2 = Thread(title="Thread 2", user_id=user.id, format="Comic", queue_position=0)
     async_db.add_all([thread1, thread2])
     await async_db.flush()
 
@@ -132,8 +132,8 @@ async def test_create_dependency(async_db: AsyncSession, default_user: User) -> 
     """Test creating a dependency."""
     user = default_user
 
-    thread1 = Thread(title="Thread 1", user_id=user.id)
-    thread2 = Thread(title="Thread 2", user_id=user.id)
+    thread1 = Thread(title="Thread 1", user_id=user.id, format="Comic", queue_position=0)
+    thread2 = Thread(title="Thread 2", user_id=user.id, format="Comic", queue_position=0)
     async_db.add_all([thread1, thread2])
     await async_db.flush()
 
@@ -154,8 +154,8 @@ async def test_update_dependency_note(async_db: AsyncSession, default_user: User
     """Test updating dependency note."""
     user = default_user
 
-    thread1 = Thread(title="Thread 1", user_id=user.id)
-    thread2 = Thread(title="Thread 2", user_id=user.id)
+    thread1 = Thread(title="Thread 1", user_id=user.id, format="Comic", queue_position=0)
+    thread2 = Thread(title="Thread 2", user_id=user.id, format="Comic", queue_position=0)
     async_db.add_all([thread1, thread2])
     await async_db.flush()
 
@@ -178,8 +178,8 @@ async def test_delete_dependency(async_db: AsyncSession, default_user: User) -> 
     """Test deleting a dependency."""
     user = default_user
 
-    thread1 = Thread(title="Thread 1", user_id=user.id)
-    thread2 = Thread(title="Thread 2", user_id=user.id)
+    thread1 = Thread(title="Thread 1", user_id=user.id, format="Comic", queue_position=0)
+    thread2 = Thread(title="Thread 2", user_id=user.id, format="Comic", queue_position=0)
     async_db.add_all([thread1, thread2])
     await async_db.flush()
 
@@ -202,8 +202,8 @@ async def test_is_dependency_owned_by_user(async_db: AsyncSession, default_user:
     """Test checking dependency ownership."""
     user = default_user
 
-    thread1 = Thread(title="Thread 1", user_id=user.id)
-    thread2 = Thread(title="Thread 2", user_id=user.id)
+    thread1 = Thread(title="Thread 1", user_id=user.id, format="Comic", queue_position=0)
+    thread2 = Thread(title="Thread 2", user_id=user.id, format="Comic", queue_position=0)
     async_db.add_all([thread1, thread2])
     await async_db.flush()
 

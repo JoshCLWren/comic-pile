@@ -368,6 +368,10 @@ async def create_dependency(
 
     await invalidate_dependency_caches(user_id)
 
+    # Refresh the dependency object before enriching to avoid MissingGreenlet
+    # after session expiration from commit.
+    await db.refresh(dependency)
+
     # Enrich the response
     enriched = await enrich_dependencies([dependency], db)
     response = enriched[0]
@@ -406,6 +410,7 @@ async def update_dependency_note(
     updated = await dependency_repository.update_dependency_note(db, dependency_id, note)
     await db.commit()
     await invalidate_dependency_caches(user_id)
+    await db.refresh(updated)
     enriched = await enrich_dependencies([updated], db)
     return enriched[0]
 

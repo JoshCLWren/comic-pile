@@ -50,8 +50,8 @@ async def get_thread_dependencies(
         .where(target_issue.c.thread_id == thread_id)
     )
 
-    blocking_deps = blocking_result.scalars().all()
-    blocked_by_deps = blocked_by_result.scalars().all()
+    blocking_deps = list(blocking_result.scalars().all())
+    blocked_by_deps = list(blocked_by_result.scalars().all())
 
     return blocking_deps, blocked_by_deps
 
@@ -73,8 +73,8 @@ async def get_issue_dependencies(db: AsyncSession, issue_id: int) -> tuple[list[
         select(Dependency).where(Dependency.source_issue_id == issue_id)
     )
 
-    incoming_deps = incoming_result.scalars().all()
-    outgoing_deps = outgoing_result.scalars().all()
+    incoming_deps = list(incoming_result.scalars().all())
+    outgoing_deps = list(outgoing_result.scalars().all())
 
     return incoming_deps, outgoing_deps
 

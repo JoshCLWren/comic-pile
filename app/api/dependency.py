@@ -100,7 +100,7 @@ async def get_threads_blocking_info(
     threads_result = await dependency_service.get_threads_blocking_info(
         request.thread_ids, current_user.id, db
     )
-    if not threads_result:
+    if threads_result is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="One or more threads not found",
