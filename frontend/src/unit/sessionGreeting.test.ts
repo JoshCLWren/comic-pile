@@ -86,7 +86,8 @@ describe('trackSessionGreeting', () => {
   it('does nothing when the observed session id is missing', () => {
     const showToast = vi.fn()
     // SAFETY: a malformed current-session response can carry a missing id at runtime even though the API type declares it required.
-    trackSessionGreeting({ sessionId: null as unknown as number, userId: 3, showToast })
+    // Cast to any to bypass the type checker for this edge case test.
+    trackSessionGreeting({ sessionId: null as any, userId: 3, showToast })
     expect(showToast).not.toHaveBeenCalled()
     expect(localStorage.getItem(storageKey(3))).toBeNull()
   })
