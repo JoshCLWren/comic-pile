@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,8 +12,9 @@ from app.auth import get_current_user
 from app.cache import TTL, cached
 from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
-from app.models import Event, Issue, Thread
+from app.models import Event, Issue
 from app.models.user import User
+from app.repositories import issue_repository
 from app.schemas import (
     IssueCreateRange,
     IssueListResponse,
@@ -129,70 +129,6 @@ def _is_issue_thread_number_conflict(exc: IntegrityError) -> bool:
         and "thread_id" in error_text
         and "issue_number" in error_text
     )
-
-
-async def _get_locked_thread_with_issues(
-    thread_id: int,
-    current_user: User,
-    db: AsyncSession,
-) -> tuple[Thread, list[Issue]]:
-    """Lock a thread and all of its issues, validating ownership."""
-    thread = await get_owned_thread_or_404(db, current_user.id, thread_id, for_update=True)
-
-    issues_result = await db.execute(
-        select(Issue)
-        .where(Issue.thread_id == thread_id)
-        .order_by(Issue.position, Issue.id)
-        .with_for_update()
-    )
-    return thread, list(issues_result.scalars().all())
-
-
-async def _get_issue_thread_id(
-    issue_id: int,
-    current_user: User,
-    db: AsyncSession,
-) -> int:
-    """Resolve an issue's thread ID with ownership validation before taking thread locks."""
-    issue_thread_result = await db.execute(
-        select(Issue.thread_id)
-        .join(Thread, Thread.id == Issue.thread_id)
-        .where(Issue.id == issue_id, Thread.user_id == current_user.id)
-    )
-    thread_id = issue_thread_result.scalar_one_or_none()
-    if thread_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        )
-    return thread_id
-
-
-def _assign_issue_positions(issues: list[Issue]) -> None:
-    """Rewrite positions so the given issue order becomes canonical."""
-    for position, issue in enumerate(issues, start=1):
-        issue.position = position
-
-
-def _recalculate_next_unread_issue_id(thread: Thread, issues: list[Issue]) -> None:
-    """Update a thread's next unread pointer from the current in-memory issue order."""
-    next_unread_issue = next(
-        (issue for issue in issues if issue.status == "unread"),
-        None,
-    )
-    thread.next_unread_issue_id = next_unread_issue.id if next_unread_issue else None
-
-
-def _recalculate_thread_issue_tracking_state(thread: Thread, issues: list[Issue]) -> None:
-    """Recalculate issue-tracking metadata from the current in-memory issue state."""
-    state = apply_thread_issue_tracking_state(thread, issues)
-
-    if state.issues_remaining == 0:
-        thread.status = "completed"
-        return
-
-    if thread.status == "completed":
-        thread.status = "active"
 
 
 @router.get("/threads/{thread_id}/issues", response_model=IssueListResponse)
@@ -465,16 +401,7 @@ async def mark_issue_read(
 
     thread_id = thread.id
 
-    next_unread_result = await db.execute(
-        select(Issue)
-        .where(
-            Issue.thread_id == thread_id,
-            Issue.status == "unread",
-        )
-        .order_by(Issue.position)
-        .limit(1)
-    )
-    next_unread = next_unread_result.scalar_one_or_none()
+    next_unread = await issue_repository.first_unread(db, thread.id)
 
     if next_unread:
         thread.next_unread_issue_id = next_unread.id

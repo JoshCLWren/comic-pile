@@ -7,9 +7,9 @@ lifecycle status are kept in sync with the issue set.
 
 import logging
 from datetime import UTC, datetime
-from typing import Annotated
 
 from fastapi import HTTPException, status
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Thread
@@ -172,21 +172,11 @@ async def create_issues(
             detail="Internal error: Position conflict with existing issues",
         )
 
-    try:
-        # Flush to trigger uniqueness check before calculating final tracking state
-        await db.flush()
-    except Exception as e:
-        await db.rollback()
-        if issue_repository.is_thread_number_conflict(e if hasattr(e, 'orig') else Exception(str(e))): # Simplified for now
-             # Note: Repository function usually expects IntegrityError.
-             # We'll handle the specific IntegrityError in the router or wrap it.
-             pass
-        raise e
+    await db.flush()
 
     # Re-fetch ordered issues to derive tracking state correctly
     adopted_issues = await issue_repository.issues_ordered(db, thread_id)
     tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
-    total_issue_count = tracking_state.total_issues
 
     was_unmigrated = thread.total_issues is None
     had_next_unread_issue = thread.next_unread_issue_id is not None
@@ -196,9 +186,8 @@ async def create_issues(
     elif was_unmigrated or not had_next_unread_issue:
         if not was_unmigrated and thread.status == "completed":
             # Shift other active threads in queue
-            from sqlalchemy import update as sa_update
             await db.execute(
-                sa_update(Thread)
+                update(Thread)
                 .where(Thread.user_id == current_user_id)
                 .where(Thread.status == "active")
                 .values(queue_position=Thread.queue_position + 1)
@@ -214,6 +203,7 @@ async def create_issues(
     db.add(event)
 
     await refresh_user_blocked_status(current_user_id, db)
+    total_issue_count = tracking_state.total_issues
     return new_issues, total_issue_count
 
 
@@ -353,7 +343,6 @@ async def delete_issue(
     # Prune continuity plans
     from app.models.continuity_plan import ContinuityPlan
     from app.models.continuity_rule import ContinuityRule
-    from sqlalchemy import delete as sa_delete, select
 
     plans_result = await db.execute(
         select(ContinuityPlan).where(ContinuityPlan.user_id == current_user_id)
@@ -380,7 +369,7 @@ async def delete_issue(
             
             marker = f"continuity-plan:{plan.id}"
             await db.execute(
-                sa_delete(ContinuityRule).where(
+                delete(ContinuityRule).where(
                     ContinuityRule.user_id == current_user_id,
                     ContinuityRule.note == marker,
                     (
@@ -393,14 +382,14 @@ async def delete_issue(
             )
             if len(pruned) < 2:
                 await db.execute(
-                    sa_delete(ContinuityRule).where(
+                    delete(ContinuityRule).where(
                         ContinuityRule.user_id == current_user_id,
                         ContinuityRule.note == marker,
                     )
                 )
 
     await db.execute(
-        sa_delete(ContinuityRule).where(
+        delete(ContinuityRule).where(
             ContinuityRule.user_id == current_user_id,
             (
                 (ContinuityRule.source_type == "issue") & (ContinuityRule.source_id == issue_id)
