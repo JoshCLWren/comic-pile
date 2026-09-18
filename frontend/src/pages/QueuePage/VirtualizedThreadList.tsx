@@ -3,7 +3,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual'
 import {
-  getRowThreads,
   EDGE_SCROLL_ZONE,
   ROW_GAP,
   ROW_HEIGHT_WITH_GAP,
