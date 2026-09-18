@@ -174,12 +174,12 @@ async def create_issues(
 
     await db.flush()
 
+    was_unmigrated = thread.total_issues is None
+    had_next_unread_issue = thread.next_unread_issue_id is not None
+
     # Re-fetch ordered issues to derive tracking state correctly
     adopted_issues = await issue_repository.issues_ordered(db, thread_id)
     tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
-
-    was_unmigrated = thread.total_issues is None
-    had_next_unread_issue = thread.next_unread_issue_id is not None
 
     if tracking_state.next_unread_issue_id is None:
         thread.status = "completed"
@@ -330,7 +330,11 @@ async def delete_issue(
         if i.position > deleted_position:
             i.position -= 1
 
-    apply_thread_issue_tracking_state(thread, remaining_issues)
+    state = apply_thread_issue_tracking_state(thread, remaining_issues)
+    if state.issues_remaining == 0:
+        thread.status = "completed"
+    elif thread.status == "completed":
+        thread.status = "active"
 
     event = Event(
         type="issue_deleted",
