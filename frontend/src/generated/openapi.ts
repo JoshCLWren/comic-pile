@@ -4070,7 +4070,7 @@ export interface paths {
          *         db: Database session.
          *
          *     Returns:
-         *         Snapshot metadata in reverse chronological order.
+         *         Typed snapshot list in reverse chronological order.
          *
          *     Raises:
          *         HTTPException: If the session is not owned by the current user.
@@ -8577,6 +8577,8 @@ export interface components {
             created_at: string;
             /** Description */
             description: string | null;
+            /** Event Id */
+            event_id?: number | null;
             /** Id */
             id: number;
             /** Session Id */
@@ -14420,9 +14422,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["SnapshotsListResponse"];
                 };
             };
             /** @description Validation Error */

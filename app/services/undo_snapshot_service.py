@@ -4,10 +4,9 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Issue, Snapshot, Thread
+from app.models import Issue, Snapshot, Thread
 from app.models.session import Session as SessionModel
 from app.models.thread import normalize_format_value
 from app.repositories.undo_snapshot_repository import UndoSnapshotRepository
@@ -41,7 +40,7 @@ class UndoSnapshotService:
 
     async def list_session_snapshots(
         self, session_id: int, session_user_id: int
-    ) -> list[dict[str, Any]]:
+    ) -> list[Snapshot]:
         """List all snapshots for a session.
 
         Args:
@@ -49,7 +48,7 @@ class UndoSnapshotService:
             session_user_id: Session owner ID for authorization.
 
         Returns:
-            Snapshot metadata in reverse chronological order.
+            Snapshot models in reverse chronological order.
 
         Raises:
             HTTPException: If the session is not found or not owned by user.
@@ -61,20 +60,11 @@ class UndoSnapshotService:
                 detail=f"Session {session_id} not found",
             )
 
-        snapshots = await self.repository.get_session_snapshots(session_id)
-        return [
-            {
-                "id": snapshot.id,
-                "created_at": snapshot.created_at,
-                "description": snapshot.description,
-                "event_id": snapshot.event_id,
-            }
-            for snapshot in snapshots
-        ]
+        return await self.repository.get_session_snapshots(session_id)
 
     async def apply_snapshot(
         self, session_id: int, snapshot_id: int, session_user_id: int
-    ) -> tuple[Any, dict[str, Any], dict[str, Any]]:
+    ) -> tuple[SessionModel, dict[str, Any], dict[str, Any]]:
         """Apply a snapshot to restore session state.
 
         Args:
@@ -272,7 +262,7 @@ class UndoSnapshotService:
         """Restore one thread and its issue state from a snapshot payload."""
         thread = pre_loaded_thread
         if thread is None:
-            thread = await self.db.get(Thread, thread_id)
+            thread = await self.repository.get_thread_by_id(thread_id)
             if thread is None:
                 # Create new thread
                 thread = await self.repository.create_thread_from_state(
@@ -305,18 +295,15 @@ class UndoSnapshotService:
         if pre_loaded_issues is not None:
             existing_issues = pre_loaded_issues
         else:
-            result = await self.db.execute(
-                select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
-            )
-            existing_issues = list(result.scalars().all())
+            existing_issues = await self.repository.get_issues_by_thread(thread.id)
 
         thread.next_unread_issue_id = None
         await self.db.flush()
 
         if not uses_issue_tracking:
             if existing_issues:
-                await self.db.execute(
-                    delete(Issue).where(Issue.id.in_([issue.id for issue in existing_issues]))
+                await self.repository.delete_issues_by_ids(
+                    [issue.id for issue in existing_issues]
                 )
             thread.total_issues = None
             thread.next_unread_issue_id = None
@@ -333,7 +320,7 @@ class UndoSnapshotService:
         existing_by_id = {issue.id: issue for issue in existing_issues}
         extra_ids = [issue.id for issue in existing_issues if issue.id not in snapshot_ids]
         if extra_ids:
-            await self.db.execute(delete(Issue).where(Issue.id.in_(extra_ids)))
+            await self.repository.delete_issues_by_ids(extra_ids)
 
         for _fallback_position, issue_state in enumerate(snapshot_issues, start=1):
             issue_id = int(issue_state["id"])
@@ -359,13 +346,7 @@ class UndoSnapshotService:
     ) -> dict[str, Any]:
         """Pre-compute response values to avoid post-commit MissingGreenlet errors."""
         # Combined query: fetch all die-changing events and latest roll event
-        result = await self.db.execute(
-            select(Event)
-            .where(Event.session_id == session_id)
-            .where(Event.type.in_(("rate", "snooze", "undo", "roll")))
-            .order_by(Event.timestamp.desc(), Event.id.desc())
-        )
-        all_events = list(result.scalars().all())
+        all_events = await self.repository.list_session_outcome_events(session_id)
 
         # Current die from pre-fetched events
         pre_current_die = session.manual_die
@@ -389,14 +370,8 @@ class UndoSnapshotService:
             )
 
         # Snapshot count: one query regardless of delta/full
-        from sqlalchemy import func
-        
-        count_result = await self.db.execute(
-            select(func.count())
-            .select_from(Snapshot)
-            .where(Snapshot.session_id == session_id)
-        )
-        pre_snapshot_count = (count_result.scalar() or 0) - (1 if is_delta else 0)
+        pre_snapshot_count = await self.repository.count_session_snapshots(session_id)
+        pre_snapshot_count -= 1 if is_delta else 0
 
         # Active thread info from pre-fetched events
         pre_active_event = None
@@ -406,8 +381,11 @@ class UndoSnapshotService:
                 pre_active_event = evt
                 break
 
+        pre_last_rolled_result = pre_active_event.result if pre_active_event else None
         if pre_active_event and pre_active_event.selected_thread_id:
-            pre_thread = await self.db.get(Thread, pre_active_event.selected_thread_id)
+            pre_thread = await self.repository.get_thread_by_id(
+                pre_active_event.selected_thread_id
+            )
             if pre_thread is not None:
                 # Refresh identity-mapped state before reading it
                 await self.db.refresh(pre_thread)
@@ -424,7 +402,7 @@ class UndoSnapshotService:
             "current_die": pre_current_die,
             "ladder_path": pre_ladder_path,
             "snapshot_count": pre_snapshot_count,
-            "active_event": pre_active_event,
+            "last_rolled_result": pre_last_rolled_result,
             "active_info": pre_active_info,
         }
 

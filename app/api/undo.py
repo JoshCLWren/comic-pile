@@ -4,16 +4,15 @@ from typing import Annotated
 
 import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
-from app.models import Session as SessionModel
 from app.models.user import User
-from app.schemas import SessionResponse
+from app.schemas import SessionResponse, SnapshotResponse, SnapshotsListResponse
 from app.schemas.session import build_session_intent_state
 from app.services.undo_snapshot_service import UndoSnapshotService
 
@@ -54,6 +53,21 @@ async def undo_to_snapshot(
                 session_id, snapshot_id, current_user.id
             )
 
+            # Extract every ORM attribute BEFORE commit: post-commit access
+            # would trigger a lazy load on the expired session (MissingGreenlet).
+            started_at = session.started_at
+            ended_at = session.ended_at
+            start_die = session.start_die
+            manual_die = session.manual_die
+            owner_id = session.user_id
+            pending_thread_id = session.pending_thread_id
+            timezone = session.timezone
+            predicted_intent = session.predicted_intent
+            active_intent = session.active_intent
+            intent_confidence = session.intent_confidence
+            intent_source = session.intent_source
+            intent_version = session.intent_version
+
             await db.commit()
 
             await invalidate_user_view(current_user.id)
@@ -61,25 +75,25 @@ async def undo_to_snapshot(
             # Build response from pre-computed values (safe: extracted before commit)
             return SessionResponse(
                 id=session_id,
-                started_at=session.started_at,
-                ended_at=session.ended_at,
-                start_die=session.start_die,
-                manual_die=session.manual_die,
-                user_id=session.user_id,
+                started_at=started_at,
+                ended_at=ended_at,
+                start_die=start_die,
+                manual_die=manual_die,
+                user_id=owner_id,
                 ladder_path=response_values["ladder_path"],
                 active_thread=response_values["active_info"],
                 current_die=response_values["current_die"],
-                last_rolled_result=response_values["active_event"].result if response_values["active_event"] else None,
+                last_rolled_result=response_values["last_rolled_result"],
                 has_restore_point=response_values["snapshot_count"] > 0,
                 snapshot_count=response_values["snapshot_count"],
-                pending_thread_id=session.pending_thread_id,
-                timezone=session.timezone,
+                pending_thread_id=pending_thread_id,
+                timezone=timezone,
                 intent=build_session_intent_state(
-                    predicted_intent=session.predicted_intent,
-                    active_intent=session.active_intent,
-                    confidence=session.intent_confidence,
-                    source=session.intent_source,
-                    mode_version=session.intent_version,
+                    predicted_intent=predicted_intent,
+                    active_intent=active_intent,
+                    confidence=intent_confidence,
+                    source=intent_source,
+                    mode_version=intent_version,
                 ),
             )
         except OperationalError as error:
@@ -99,7 +113,7 @@ async def list_session_snapshots(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> list[dict]:
+) -> SnapshotsListResponse:
     """List all snapshots for a session.
 
     Args:
@@ -108,19 +122,24 @@ async def list_session_snapshots(
         db: Database session.
 
     Returns:
-        Snapshot metadata in reverse chronological order.
+        Typed snapshot list in reverse chronological order.
 
     Raises:
         HTTPException: If the session is not owned by the current user.
     """
-    # Verify session ownership
-    session = await db.get(SessionModel, session_id)
-    if not session or session.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found",
-        )
-
-    # Use service to list snapshots
+    # Service verifies session ownership and loads snapshots
     service = UndoSnapshotService(db)
-    return await service.list_session_snapshots(session_id, current_user.id)
+    snapshots = await service.list_session_snapshots(session_id, current_user.id)
+    return SnapshotsListResponse(
+        session_id=session_id,
+        snapshots=[
+            SnapshotResponse(
+                id=snapshot.id,
+                session_id=snapshot.session_id,
+                created_at=snapshot.created_at,
+                description=snapshot.description,
+                event_id=snapshot.event_id,
+            )
+            for snapshot in snapshots
+        ],
+    )

@@ -14,6 +14,7 @@ class SnapshotResponse(BaseModel):
     session_id: int
     created_at: datetime
     description: str | None
+    event_id: int | None = None
 
     @field_serializer("created_at")
     def serialize_created_at(self, value: datetime) -> str:
