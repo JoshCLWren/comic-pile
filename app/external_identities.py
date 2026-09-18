@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -95,13 +96,14 @@ async def upsert_external_identities(
     existing_identities = list(
         (await db.execute(select(ExternalIdentity).where(combined_condition))).scalars().all()
     )
-    existing_by_key = {
-        (i.provider, i.entity_type, i.external_id): i for i in existing_identities
-    }
+    existing_by_key = {(i.provider, i.entity_type, i.external_id): i for i in existing_identities}
 
-    missing_specs = [s for s in normalized_specs if (s.provider, s.entity_type, s.external_id) not in existing_by_key]
+    missing_specs = [
+        s
+        for s in normalized_specs
+        if (s.provider, s.entity_type, s.external_id) not in existing_by_key
+    ]
     seen_keys = set(existing_by_key.keys())
-    created_identities: list[ExternalIdentity] = []
 
     if missing_specs:
         unique_missing_specs = []
@@ -111,59 +113,36 @@ async def upsert_external_identities(
                 seen_keys.add(key)
                 unique_missing_specs.append(spec)
 
-        for spec in unique_missing_specs:
-            identity = ExternalIdentity(
-                provider=spec.provider,
-                entity_type=spec.entity_type,
-                external_id=spec.external_id,
-                external_url=spec.external_url,
-                metadata_json=spec.metadata_json or {},
-                provider_updated_at=spec.provider_updated_at,
-            )
-            db.add(identity)
-            created_identities.append(identity)
-
-        try:
-            await db.flush()
-        except IntegrityError:
-            await db.rollback()
-            retry_conditions = [
-                (ExternalIdentity.provider == s.provider)
-                & (ExternalIdentity.entity_type == s.entity_type)
-                & (ExternalIdentity.external_id == s.external_id)
-                for s in unique_missing_specs
-            ]
-            combined_retry = retry_conditions[0]
-            for cond in retry_conditions[1:]:
-                combined_retry = combined_retry | cond
-            retry_identities = list(
-                (await db.execute(select(ExternalIdentity).where(combined_retry))).scalars().all()
-            )
-            for identity in retry_identities:
-                existing_by_key[(identity.provider, identity.entity_type, identity.external_id)] = identity
-
-            still_missing = [s for s in unique_missing_specs if (s.provider, s.entity_type, s.external_id) not in existing_by_key]
-            if still_missing:
-                for spec in still_missing:
-                    identity = ExternalIdentity(
-                        provider=spec.provider,
-                        entity_type=spec.entity_type,
-                        external_id=spec.external_id,
-                        external_url=spec.external_url,
-                        metadata_json=spec.metadata_json or {},
-                        provider_updated_at=spec.provider_updated_at,
-                    )
-                    db.add(identity)
-                    created_identities.append(identity)
-                await db.flush()
-                retry_identities = list(
-                    (await db.execute(select(ExternalIdentity).where(combined_retry))).scalars().all()
+        if unique_missing_specs:
+            statement = (
+                pg_insert(ExternalIdentity)
+                .values(
+                    [
+                        {
+                            "provider": spec.provider,
+                            "entity_type": spec.entity_type,
+                            "external_id": spec.external_id,
+                            "external_url": spec.external_url,
+                            "metadata_json": spec.metadata_json or {},
+                            "provider_updated_at": spec.provider_updated_at,
+                        }
+                        for spec in unique_missing_specs
+                    ]
                 )
-                for identity in retry_identities:
-                    existing_by_key[(identity.provider, identity.entity_type, identity.external_id)] = identity
+                .on_conflict_do_nothing(
+                    index_elements=[
+                        ExternalIdentity.__table__.c.provider,
+                        ExternalIdentity.__table__.c.entity_type,
+                        ExternalIdentity.__table__.c.external_id,
+                    ]
+                )
+            )
+            await db.execute(statement)
 
-    for identity in created_identities:
-        existing_by_key[(identity.provider, identity.entity_type, identity.external_id)] = identity
+        refreshed = list(
+            (await db.execute(select(ExternalIdentity).where(combined_condition))).scalars().all()
+        )
+        existing_by_key = {(i.provider, i.entity_type, i.external_id): i for i in refreshed}
 
     for spec in normalized_specs:
         key = (spec.provider, spec.entity_type, spec.external_id)

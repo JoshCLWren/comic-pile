@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.external_identities import (
     ExternalIdentityMappingError,
@@ -22,7 +22,9 @@ from app.models.external_identity import (
 )
 
 
-async def _owned_issue(db: AsyncSession, *, username: str, title: str, issue_number: str = "1") -> tuple[User, Thread, Issue]:
+async def _owned_issue(
+    db: AsyncSession, *, username: str, title: str, issue_number: str = "1"
+) -> tuple[User, Thread, Issue]:
     user = User(username=username)
     db.add(user)
     await db.flush()
@@ -146,11 +148,14 @@ async def test_issue_mapping_preserves_candidates_rejections_and_user_ownership(
 
     assert repeated.id == winner_mapping.id
     assert rejected_mapping.rejection_reason == "Wrong annual despite similar title"
-    assert await async_db.scalar(
-        select(func.count()).select_from(IssueExternalIdentityMapping).where(
-            IssueExternalIdentityMapping.issue_id == issue.id
+    assert (
+        await async_db.scalar(
+            select(func.count())
+            .select_from(IssueExternalIdentityMapping)
+            .where(IssueExternalIdentityMapping.issue_id == issue.id)
         )
-    ) == 3
+        == 3
+    )
 
     with pytest.raises(ExternalIdentityMappingError, match="not owned"):
         await link_issue_external_identity(
@@ -223,12 +228,17 @@ async def test_composite_thread_supports_multiple_series_and_issue_mapping_survi
     assert first_mapping.external_identity_id != second_mapping.external_identity_id
     assert issue_mapping.issue_id == issue.id
     assert issue.thread_id == thread.id
-    assert await async_db.scalar(
-        select(func.count()).select_from(ThreadExternalSeriesMapping).where(
-            ThreadExternalSeriesMapping.thread_id == thread.id,
-            ThreadExternalSeriesMapping.status == "confirmed",
+    assert (
+        await async_db.scalar(
+            select(func.count())
+            .select_from(ThreadExternalSeriesMapping)
+            .where(
+                ThreadExternalSeriesMapping.thread_id == thread.id,
+                ThreadExternalSeriesMapping.status == "confirmed",
+            )
         )
-    ) == 2
+        == 2
+    )
 
 
 @pytest.mark.asyncio
@@ -259,11 +269,14 @@ async def test_deleting_external_evidence_never_deletes_user_owned_reading_data(
 
     assert await async_db.get(Thread, thread.id) is not None
     assert await async_db.get(Issue, issue.id) is not None
-    assert await async_db.scalar(
-        select(func.count()).select_from(IssueExternalIdentityMapping).where(
-            IssueExternalIdentityMapping.external_identity_id == identity_id
+    assert (
+        await async_db.scalar(
+            select(func.count())
+            .select_from(IssueExternalIdentityMapping)
+            .where(IssueExternalIdentityMapping.external_identity_id == identity_id)
         )
-    ) == 0
+        == 0
+    )
 
 
 @pytest.mark.asyncio
@@ -309,9 +322,10 @@ async def test_upsert_external_identities_batches_and_deduplicates(
     # Second call with same specs should be idempotent
     result2 = await upsert_external_identities(async_db, specs=specs)
     assert len(result2) == 3
-    assert result2[("comicvine", "series", "4050-series-1")].id == result[
-        ("comicvine", "series", "4050-series-1")
-    ].id
+    assert (
+        result2[("comicvine", "series", "4050-series-1")].id
+        == result[("comicvine", "series", "4050-series-1")].id
+    )
 
     count2 = await async_db.scalar(select(func.count()).select_from(ExternalIdentity))
     assert count2 == 3
@@ -408,3 +422,65 @@ async def test_upsert_external_identities_empty_iterable(
     """Empty iterable returns empty mapping without database access."""
     result = await upsert_external_identities(async_db, specs=[])
     assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_batch_upsert_converges_when_concurrent_writer_committed_same_identity(
+    db_engine: AsyncEngine,
+) -> None:
+    """Batch upsert converges to a committed identity instead of raising or cloning it."""
+    winner_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+
+    async with winner_factory() as winner_db:
+        competing = ExternalIdentity(
+            provider="comicvine",
+            entity_type="series",
+            external_id="4050-concurrent-series",
+            metadata_json={"name": "Winner"},
+        )
+        winner_db.add(competing)
+        await winner_db.commit()
+        winner_id = competing.id
+
+    async with winner_factory() as caller_db:
+        async with caller_db.begin():
+            result = await upsert_external_identities(
+                caller_db,
+                specs=[
+                    ExternalIdentitySpec(
+                        provider="comicvine",
+                        entity_type="series",
+                        external_id="4050-concurrent-series",
+                        metadata_json={"name": "Loser"},
+                    ),
+                    ExternalIdentitySpec(
+                        provider="comicvine",
+                        entity_type="issue",
+                        external_id="4000-concurrent-issue",
+                    ),
+                ],
+            )
+
+            assert ("comicvine", "series", "4050-concurrent-series") in result
+            assert ("comicvine", "issue", "4000-concurrent-issue") in result
+            assert result[("comicvine", "series", "4050-concurrent-series")].id == winner_id
+            assert result[("comicvine", "series", "4050-concurrent-series")].metadata_json == {
+                "name": "Winner"
+            }
+
+            other = ExternalIdentity(
+                provider="comicvine",
+                entity_type="issue",
+                external_id="4000-sibling",
+            )
+            caller_db.add(other)
+            await caller_db.flush()
+
+        count = await caller_db.scalar(select(func.count()).select_from(ExternalIdentity))
+        assert count == 3
+        survivor = await caller_db.scalar(
+            select(ExternalIdentity).where(ExternalIdentity.external_id == "4050-concurrent-series")
+        )
+        assert survivor is not None
+        assert survivor.id == winner_id
+        assert survivor.metadata_json == {"name": "Winner"}
