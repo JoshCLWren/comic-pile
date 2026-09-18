@@ -637,7 +637,10 @@ async def test_roll_snoozed_thread_excluded_from_pool(
 
 
 @pytest.mark.asyncio
-async def test_roll_timezone_logging(auth_client: AsyncClient, caplog: pytest.Caplog) -> None:
+async def test_roll_timezone_logging(
+    auth_client: AsyncClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """Verify that invalid timezones are logged and don't crash bootstrap."""
     with caplog.at_level(logging.ERROR):
         response = await auth_client.get("/api/v1/roll/bootstrap?timezone=INVALID_TZ")
