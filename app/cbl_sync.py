@@ -5,11 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cbl_ingest import CBLBook, CBLList
-from app.external_identities import upsert_external_identity
+from app.external_identities import upsert_external_identities
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 
 
@@ -23,6 +23,7 @@ class CBLSyncSummary:
     deactivated_lists: int
     unchanged_lists: int
     entries_written: int
+    identities_upserted: int
     dry_run: bool
 
 
