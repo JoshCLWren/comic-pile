@@ -4,7 +4,6 @@
     11,
     20,
     21,
-    23,
     29,
     39,
     41,
@@ -21,7 +20,6 @@
     54,
     55,
     56,
-    57,
     58,
     59,
     60,
@@ -42,9 +40,11 @@
     17,
     18,
     19,
+    23,
     40,
     43,
     44,
+    57,
     66,
     67,
     70
@@ -63,7 +63,9 @@
     "nvidia/nemotron-3-ultra-550b-a55b",
     "nvidia/nvidia-nemotron-nano-9b-v2",
     "openrouter/free",
+    "stealth/union-alpha",
     "stepfun-ai/step-3.7-flash",
-    "thinkingmachines/inkling"
+    "thinkingmachines/inkling",
+    "union-alpha"
   ]
 }
