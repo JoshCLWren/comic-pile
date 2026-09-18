@@ -447,11 +447,13 @@ async def test_batch_upsert_converges_when_concurrent_writer_committed_same_iden
             result = await upsert_external_identities(
                 caller_db,
                 specs=[
+                    # No metadata here: provided metadata overwrites per the
+                    # single-upsert merge contract (see the fresh/stale test).
+                    # This test proves race convergence, not clobbering.
                     ExternalIdentitySpec(
                         provider="comicvine",
                         entity_type="series",
                         external_id="4050-concurrent-series",
-                        metadata_json={"name": "Loser"},
                     ),
                     ExternalIdentitySpec(
                         provider="comicvine",
