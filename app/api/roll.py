@@ -201,8 +201,12 @@ def _get_local_hour_from_timezone(timezone: str | None) -> int | None:
     Args:
         timezone: IANA timezone string (e.g., "America/Chicago")
 
-    Returns:
-        Local hour (0-23) or None if timezone is invalid/unavailable.
+        Returns:
+        Local hour (0-23) or None if timezone is invalid/unavailable. Invalid or
+        unavailable timezone values are soft failures: the error is logged and the
+        caller continues with no local-hour signal.
+
+    
     """
     if timezone is None:
         return None

@@ -1,10 +1,12 @@
 """Tests for roll API endpoints."""
 
+import logging
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-import logging
+
 
 @pytest.mark.asyncio
 async def test_roll_success(auth_client: AsyncClient, sample_data: dict) -> None:
