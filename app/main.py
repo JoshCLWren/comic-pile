@@ -640,7 +640,11 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         defer_heavy_init = os.getenv("TEST_ENVIRONMENT") == "true" and os.getenv(
             "ENABLE_LAZY_HEAVY_INIT_IN_TESTS"
         ) != "true"
-        if request.url.path != "/api/ping" and not defer_heavy_init:
+        # Exempt the keep-warm probe including its trailing-slash form, which
+        # Starlette would otherwise slash-redirect only after heavy init ran.
+        request_path = request.url.path
+        is_ping_probe = request_path == "/api/ping" or request_path.startswith("/api/ping/")
+        if not is_ping_probe and not defer_heavy_init:
             await _ensure_heavy_init()
         response = await call_next(request)
         from app.startup_diagnostics import is_heavy_initialized as _is_heavy
