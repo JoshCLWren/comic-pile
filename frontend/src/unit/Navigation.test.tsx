@@ -6,6 +6,7 @@ import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
+import { cast } from '../utils/cast'
 
 vi.mock('../contexts/useToast', () => ({
   useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
@@ -32,9 +33,19 @@ vi.mock('../services/api', () => {
 })
 
 beforeEach(() => {
+  const width = 390
   Object.defineProperty(window, 'innerWidth', {
     configurable: true,
-    value: 390,
+    value: width,
+  })
+  const isMobile = width < 768
+  const isTablet = width >= 768 && width < 1024
+  const isDesktop = width >= 1024
+  window.matchMedia = vi.fn((query: string) => {
+    if (query === '(max-width: 767px)') return cast<MediaQueryList>({ matches: isMobile, addListener: vi.fn(), removeListener: vi.fn() })
+    if (query.includes('min-width: 768px')) return cast<MediaQueryList>({ matches: isTablet, addListener: vi.fn(), removeListener: vi.fn() })
+    if (query.includes('min-width: 1024px')) return cast<MediaQueryList>({ matches: isDesktop, addListener: vi.fn(), removeListener: vi.fn() })
+    return cast<MediaQueryList>({ matches: true, addListener: vi.fn(), removeListener: vi.fn() })
   })
   window.dispatchEvent(new Event('resize'))
   mockApiGet.mockReset()
@@ -222,6 +233,13 @@ test('falls back to an empty username when the user profile omits it', async () 
 
 test('renders all secondary nav links inline on a desktop viewport', async () => {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 })
+  window.matchMedia = vi.fn((query: string) =>
+    cast<MediaQueryList>({
+      matches: query.includes('min-width: 1024px'),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    }),
+  )
   window.dispatchEvent(new Event('resize'))
   renderWithAuth()
 

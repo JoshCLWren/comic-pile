@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import { getDefaultCollapsed } from '../utils/responsive'
 
 const STORAGE_KEY = 'comic-pile-nav-collapsed'
 
@@ -9,14 +10,6 @@ interface NavCollapseContextValue {
 }
 
 const NavCollapseContext = createContext<NavCollapseContextValue | null>(null)
-
-function getDefaultCollapsed(): boolean {
-  if (typeof window === 'undefined') return false
-  const w = window.innerWidth
-  if (w < 768) return false
-  if (w >= 1024) return false
-  return true
-}
 
 function readStoredCollapse(): boolean | null {
   try {
