@@ -2,8 +2,10 @@
 
 from typing import Annotated
 
+import asyncio
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import and_, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,21 +21,6 @@ from app.services.undo_snapshot_service import UndoSnapshotService
 router = APIRouter(tags=["undo"])
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @router.post("/{session_id}/undo/{snapshot_id}")
 async def undo_to_snapshot(
     session_id: int,
@@ -41,7 +28,7 @@ async def undo_to_snapshot(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
-    """Undo session state to a snapshot with deadlock retry handling.
+    """Undo session state to a snapshot.
 
     Args:
         session_id: Session to restore.
@@ -53,6 +40,7 @@ async def undo_to_snapshot(
         Restored session response.
 
     Raises:
+        HTTPException: If the session or snapshot is not found.
         RuntimeError: If all deadlock retries fail.
     """
     max_retries = 3
@@ -61,24 +49,6 @@ async def undo_to_snapshot(
 
     while retries < max_retries:
         try:
-            # Get session with lock
-            result = await db.execute(
-                select(SessionModel)
-                .where(
-                    and_(
-                        SessionModel.id == session_id,
-                        SessionModel.user_id == current_user.id,
-                    )
-                )
-                .with_for_update()
-            )
-            session = result.scalar_one_or_none()
-            if not session:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Session {session_id} not found",
-                )
-
             # Use service to apply snapshot
             service = UndoSnapshotService(db)
             session, response_values, snapshot_info = await service.apply_snapshot(
@@ -89,7 +59,7 @@ async def undo_to_snapshot(
 
             await invalidate_user_view(current_user.id)
 
-            # Build response from pre-computed values
+            # Build response from pre-computed values (safe: extracted before commit)
             return SessionResponse(
                 id=session_id,
                 started_at=session.started_at,
