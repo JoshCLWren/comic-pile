@@ -26,6 +26,9 @@ export const MOBILE_MAX_WIDTH = BREAKPOINTS.md - 1 // 767
 /** Maximum width for the tablet portrait band (md to just below lg). */
 export const TABLET_MAX_WIDTH = BREAKPOINTS.lg - 1 // 1023
 
+/** Media query matching the tablet portrait band (md through just below lg). */
+const TABLET_QUERY = `(min-width: ${BREAKPOINTS.md}px) and (max-width: ${TABLET_MAX_WIDTH}px)`
+
 /**
  * Returns whether `matchMedia` is available in the current environment.
  */
@@ -91,7 +94,7 @@ export function useMatchMedia(query: string): boolean {
  */
 export function useResponsive() {
   const isMobile = useMatchMedia(`(max-width: ${MOBILE_MAX_WIDTH}px)`)
-  const isTablet = useMatchMedia(`(min-width: ${BREAKPOINTS.md}px) and (max-width: ${TABLET_MAX_WIDTH}px)`)
+  const isTablet = useMatchMedia(TABLET_QUERY)
   const isDesktop = useMatchMedia(`(min-width: ${BREAKPOINTS.lg}px)`)
 
   return { isMobile, isTablet, isDesktop }
@@ -113,10 +116,9 @@ export function getDefaultCollapsedForWidth(width: number): boolean {
 }
 
 /**
- * Determine the default nav-collapse state using `matchMedia`.
- * Returns `false` in SSR.
+ * Determine the default nav-collapse state using the shared `matchMedia`
+ * abstraction. Returns `false` in SSR or when `matchMedia` is unavailable.
  */
 export function getDefaultCollapsed(): boolean {
-  if (typeof window === 'undefined') return false
-  return getDefaultCollapsedForWidth(window.innerWidth)
+  return matchMediaMatches(TABLET_QUERY)
 }

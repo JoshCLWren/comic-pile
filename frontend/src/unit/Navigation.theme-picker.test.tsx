@@ -51,7 +51,7 @@ function setViewport(width: number) {
   const isDesktop = width >= 1024
   window.matchMedia = vi.fn((query: string) => {
     if (query === '(max-width: 767px)') return { matches: isMobile, addListener: vi.fn(), removeListener: vi.fn() } as unknown as MediaQueryList
-    if (query.includes('min-width: 768px')) return { matches: isTablet || isDesktop, addListener: vi.fn(), removeListener: vi.fn() } as unknown as MediaQueryList
+    if (query.includes('min-width: 768px')) return { matches: isTablet, addListener: vi.fn(), removeListener: vi.fn() } as unknown as MediaQueryList
     if (query.includes('min-width: 1024px')) return { matches: isDesktop, addListener: vi.fn(), removeListener: vi.fn() } as unknown as MediaQueryList
     return { matches: true, addListener: vi.fn(), removeListener: vi.fn() } as unknown as MediaQueryList
   })

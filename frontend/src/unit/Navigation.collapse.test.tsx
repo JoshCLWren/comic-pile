@@ -46,7 +46,7 @@ function setViewport(width: number) {
   } as unknown as MediaQueryList
   window.matchMedia = vi.fn((query: string) => {
     if (query === '(max-width: 767px)') return { ...mql, matches: isMobile }
-    if (query.includes('min-width: 768px')) return { ...mql, matches: isTablet || isDesktop }
+    if (query.includes('min-width: 768px')) return { ...mql, matches: isTablet }
     if (query.includes('min-width: 1024px')) return { ...mql, matches: isDesktop }
     return mql
   })

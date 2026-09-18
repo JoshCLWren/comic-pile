@@ -33,6 +33,12 @@ beforeEach(() => {
     configurable: true,
     value: 390,
   })
+  window.matchMedia = vi.fn((query: string) => {
+    if (query === '(max-width: 767px)') return { matches: true, addListener: vi.fn(), removeListener: vi.fn() } as unknown as MediaQueryList
+    if (query.includes('min-width: 768px')) return { matches: false, addListener: vi.fn(), removeListener: vi.fn() } as unknown as MediaQueryList
+    if (query.includes('min-width: 1024px')) return { matches: false, addListener: vi.fn(), removeListener: vi.fn() } as unknown as MediaQueryList
+    return { matches: false, addListener: vi.fn(), removeListener: vi.fn() } as unknown as MediaQueryList
+  })
   window.dispatchEvent(new Event('resize'))
   mockApiGet.mockReset()
   mockApiPost.mockReset()

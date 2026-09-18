@@ -102,4 +102,32 @@ describe('getDefaultCollapsed', () => {
     expect(getDefaultCollapsed()).toBe(false)
     global.window = originalWindow
   })
+
+  it('returns true in the tablet portrait band via matchMedia', () => {
+    const originalMatchMedia = window.matchMedia
+    window.matchMedia = vi.fn(
+      () =>
+        ({
+          matches: true,
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+        }) as unknown as MediaQueryList,
+    )
+    expect(getDefaultCollapsed()).toBe(true)
+    window.matchMedia = originalMatchMedia
+  })
+
+  it('returns false on mobile via matchMedia', () => {
+    const originalMatchMedia = window.matchMedia
+    window.matchMedia = vi.fn(
+      () =>
+        ({
+          matches: false,
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+        }) as unknown as MediaQueryList,
+    )
+    expect(getDefaultCollapsed()).toBe(false)
+    window.matchMedia = originalMatchMedia
+  })
 })
