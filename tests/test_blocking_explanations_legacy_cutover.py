@@ -54,7 +54,7 @@ async def _thread_issue(
     return thread, issue
 
 
-def _add_dependency(
+async def _add_dependency(
     db: AsyncSession,
     source_issue: Issue,
     target_issue: Issue,
@@ -70,8 +70,8 @@ def _add_dependency(
     )
     db.add(dependency)
     if commit:
-        db.flush()
-        db.commit()
+        await db.flush()
+        await db.commit()
     return dependency
 
 
@@ -95,7 +95,7 @@ async def test_blocking_explanations_use_canonical_dependencies(
         queue_position=2,
     )
     await async_db.commit()
-    _add_dependency(async_db, source_issue, target_issue, note="preface")
+    await _add_dependency(async_db, source_issue, target_issue, note="preface")
     await update_thread_blocked_status(target_thread.id, user.id, async_db)
     await async_db.commit()
     await async_db.refresh(target_thread)
@@ -157,7 +157,7 @@ async def test_cbl_order_dependency_note_is_inert_for_blocking(
         queue_position=2,
     )
     await async_db.commit()
-    _add_dependency(
+    await _add_dependency(
         async_db, source_issue, target_issue, note="cbl-order:materialized"
     )
     await async_db.refresh(target_thread)
