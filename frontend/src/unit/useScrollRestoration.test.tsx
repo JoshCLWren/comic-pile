@@ -1,6 +1,6 @@
 import { act, render } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it, vi, type FrameRequestCallback } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useScrollRestoration } from '../hooks/useScrollRestoration'
 
 function TestScreen() {
@@ -98,7 +98,8 @@ describe('useScrollRestoration', () => {
     await act(async () => {
       await Promise.resolve()
     })
-    delete (document.documentElement as unknown as Record<string, unknown>).scrollHeight
+    // Restore the original descriptor so subsequent tests are unaffected.
+    Reflect.deleteProperty(document.documentElement, 'scrollHeight')
 
     expect(scrollTo).toHaveBeenCalledWith(0, 240)
     // Initial restore plus at least one re-apply once deferred layout grew.
