@@ -5,14 +5,12 @@ from __future__ import annotations
 import logging
 import os
 import secrets
-from datetime import UTC
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache_quota import observe_cache_quota
 from app.database import get_db
 from app.services import health_probe
 from app.startup_diagnostics import StartupSnapshot

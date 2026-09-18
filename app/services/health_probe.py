@@ -9,7 +9,6 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Literal
 
 from app.cache import cache
@@ -25,6 +24,12 @@ class ProbeError(Exception):
     """Base exception for probe failures."""
 
     def __init__(self, message: str, *, cause: BaseException | None = None) -> None:
+        """Initialize the probe error.
+
+        Args:
+            message: Human-readable error description.
+            cause: Optional underlying exception that caused this error.
+        """
         super().__init__(message)
         self.cause = cause
 
