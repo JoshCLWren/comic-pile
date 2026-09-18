@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useState, type ComponentType } from 'react'
+import { FormEvent, useCallback, useEffect, useState, type ComponentType } from 'react'
 import axios from 'axios'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -236,6 +236,35 @@ export default function ContinuityPlannerPage({
   const planLoaded = planData != null && !planPending
   const [planHydrated, setPlanHydrated] = useState(false)
 
+  useEffect(() => {
+    console.log('HYDRATE EFFECT', { isInvalidRoute, planLoaded, planHydrated, hasPlan: !!planData, groupsLength: groups.length })
+    if (isInvalidRoute) {
+      return
+    }
+    if (planLoaded && !planHydrated && planData) {
+      const loadedLanes = (planData.lanes.length > 0
+        ? planData.lanes
+        : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
+      ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
+        .sort((a, b) => a.order - b.order)
+      const hydrated = hydrateLabels(
+        [...planData.nodes].sort((a, b) => a.position - b.position),
+        groups,
+      )
+      setName(planData.name)
+      setLanes(loadedLanes)
+      setNodes(normalizePositions(hydrated))
+      setOrderingMode(planData.ordering_mode)
+      setSavedName(planData.name)
+      setSavedLanes(loadedLanes)
+      setSavedNodes(normalizePositions(hydrated))
+      setSavedOrderingMode(planData.ordering_mode)
+      setActiveLaneId(loadedLanes[0]?.id ?? DEFAULT_LANE_ID)
+      window.localStorage.setItem(LAST_PLAN_KEY, String(planData.id))
+      setPlanHydrated(true)
+    }
+  }, [planLoaded, planHydrated, planData, isInvalidRoute, groups, hydrateLabels])
+
   // Immediate invalid-route error after hooks (hooks must be called unconditionally)
   if (isInvalidRoute) {
     return <div role="alert" className="rounded-2xl border border-red-800 bg-red-950/30 p-4 text-red-200">Invalid continuity plan ID.</div>
@@ -246,29 +275,6 @@ export default function ContinuityPlannerPage({
     orderingMode !== savedOrderingMode ||
     JSON.stringify(lanes) !== JSON.stringify(savedLanes) ||
     JSON.stringify(nodes) !== JSON.stringify(savedNodes)
-
-  if (planLoaded && !planHydrated && planData) {
-    const loadedLanes = (planData.lanes.length > 0
-      ? planData.lanes
-      : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
-    ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
-      .sort((a, b) => a.order - b.order)
-    const hydrated = hydrateLabels(
-      [...planData.nodes].sort((a, b) => a.position - b.position),
-      groups,
-    )
-    setName(planData.name)
-    setLanes(loadedLanes)
-    setNodes(normalizePositions(hydrated))
-    setOrderingMode(planData.ordering_mode)
-    setSavedName(planData.name)
-    setSavedLanes(loadedLanes)
-    setSavedNodes(normalizePositions(hydrated))
-    setSavedOrderingMode(planData.ordering_mode)
-    setActiveLaneId(loadedLanes[0]?.id ?? DEFAULT_LANE_ID)
-    window.localStorage.setItem(LAST_PLAN_KEY, String(planData.id))
-    setPlanHydrated(true)
-  }
 
   const orderedLanes = [...lanes].sort((a, b) => a.order - b.order)
   const targetLaneId = orderedLanes.some((lane) => lane.id === activeLaneId)
