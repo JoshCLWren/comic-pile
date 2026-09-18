@@ -20,7 +20,7 @@ type ReleaseDay = {
 }
 
 type ReleaseRequest = {
-  offset: number
+  pageToken: string | null
   replace: boolean
 }
 
@@ -155,25 +155,24 @@ function ReleaseCard({ release }: { release: Release }) {
 
 export default function WhatsNewPage() {
   const [releases, setReleases] = useState<Release[]>([])
-  const [total, setTotal] = useState(0)
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [failedRequest, setFailedRequest] = useState<ReleaseRequest>({ offset: 0, replace: true })
   const days = useMemo(() => groupReleasesByDay(releases), [releases])
-  const hasMore = releases.length < total
+  const hasMore = nextPageToken !== null  // In canonical paginator, hasMore is determined by whether we have a next_page_token
 
-  const load = useCallback(async (offset: number, replace: boolean) => {
+const load = useCallback(async (pageToken: string | null, replace: boolean) => {
     if (replace) setLoading(true)
     else setLoadingMore(true)
     setError(null)
 
     try {
-      const response = await releasesApi.list(RELEASE_PAGE_SIZE, offset)
-      setReleases(current => replace ? response.releases : [...current, ...response.releases])
-      setTotal(response.total)
+      const response = await releasesApi.list(RELEASE_PAGE_SIZE, pageToken)
+      setReleases(prev => replace ? response.releases : [...prev, ...response.releases])
+      setNextPageToken(response.next_page_token)
+      setLoadingMore(false)
     } catch (loadError) {
-      setFailedRequest({ offset, replace })
       setError(
         loadError instanceof Error
           ? loadError.message
@@ -181,16 +180,15 @@ export default function WhatsNewPage() {
       )
     } finally {
       if (replace) setLoading(false)
-      else setLoadingMore(false)
     }
   }, [])
 
   useEffect(() => {
-    void load(0, true)
+    void load(null, true)
   }, [load])
 
   const retry = () => {
-    void load(failedRequest.offset, failedRequest.replace)
+    void load(nextPageToken, false)
   }
 
   return (
@@ -261,18 +259,18 @@ export default function WhatsNewPage() {
             )
           })}
 
-          {hasMore && (
-            <div className="flex justify-center">
-              <button
-                type="button"
-                disabled={loadingMore}
-                onClick={() => void load(releases.length, false)}
-                className="min-h-11 rounded-lg border border-amber-500/40 bg-stone-950 px-5 py-2 font-bold text-amber-300 disabled:cursor-wait disabled:opacity-60"
-              >
-                {loadingMore ? 'Loading older updates…' : 'Load older updates'}
-              </button>
-            </div>
-          )}
+{hasMore && (
+  <div className="flex justify-center">
+    <button
+      type="button"
+      disabled={loadingMore}
+      onClick={() => void load(nextPageToken, false)}
+      className="min-h-11 rounded-lg border border-amber-500/40 bg-stone-950 px-5 py-2 font-bold text-amber-300 disabled:cursor-wait disabled:opacity-60"
+    >
+      {loadingMore ? 'Loading older updates…' : 'Load older updates'}
+    </button>
+  </div>
+)}
         </div>
       )}
     </section>

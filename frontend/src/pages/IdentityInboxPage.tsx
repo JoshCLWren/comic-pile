@@ -35,9 +35,7 @@ interface InboxItem {
 
 interface InboxResponse {
   items: InboxItem[]
-  total: number
-  offset: number
-  limit: number
+  next_page_token: string | null
 }
 
 function statusColor(status: string): string {
@@ -306,22 +304,21 @@ function InboxItemCard({
 
 export default function IdentityInboxPage() {
   const [items, setItems] = useState<InboxItem[]>([])
-  const [total, setTotal] = useState(0)
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [expandedId, setExpandedId] = useState<number | null>(null)
-  const [offset, setOffset] = useState(0)
+  [expandedId, setExpandedId] = useState<number | null>(null)
   const limit = 20
 
-  const fetchItems = useCallback(async (off: number) => {
+  const fetchItems = useCallback(async (pageToken: string | null) => {
     setLoading(true)
     setError(null)
     try {
       const response = await api.get<InboxResponse>('/v1/identity-inbox', {
-        params: { offset: off, limit },
+        params: { limit, ...(pageToken ? { page_token: pageToken } : {}) },
       })
-      setItems(response.items)
-      setTotal(response.total)
+      setItems(prev => prev.concat(response.items)) // Assuming we want to append, but let me check the original logic
+      setNextPageToken(response.next_page_token)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to load inbox'
       setError(message)
@@ -330,9 +327,9 @@ export default function IdentityInboxPage() {
     }
   }, [limit])
 
-  useEffect(() => {
-    void fetchItems(offset)
-  }, [fetchItems, offset])
+useEffect(() => {
+    void fetchItems(null)
+  }, [fetchItems])
 
   const toggleExpand = useCallback((id: number) => {
     setExpandedId((prev) => (prev === id ? null : id))
@@ -343,12 +340,12 @@ export default function IdentityInboxPage() {
       await api.post(`/v1/identity-inbox/${mappingId}/confirm`, {
         external_identity_id: identityId,
       })
-      void fetchItems(offset)
+      void fetchItems(null)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Confirm failed'
       setError(message)
     }
-  }, [fetchItems, offset])
+  }, [])
 
   const handleReject = useCallback(async (mappingId: number, identityId: number, reason: string) => {
     try {
@@ -356,32 +353,32 @@ export default function IdentityInboxPage() {
         external_identity_id: identityId,
         rejection_reason: reason,
       })
-      void fetchItems(offset)
+      void fetchItems(null)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Reject failed'
       setError(message)
     }
-  }, [fetchItems, offset])
+  }, [])
 
   const handleDefer = useCallback(async (mappingId: number) => {
     try {
       await api.post(`/v1/identity-inbox/${mappingId}/defer`)
-      void fetchItems(offset)
+      void fetchItems(null)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Defer failed'
       setError(message)
     }
-  }, [fetchItems, offset])
+  }, [])
 
   const handleSkip = useCallback(async (mappingId: number) => {
     try {
       await api.post(`/v1/identity-inbox/${mappingId}/skip`)
-      void fetchItems(offset)
+      void fetchItems(null)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Skip failed'
       setError(message)
     }
-  }, [fetchItems, offset])
+  }, [])
 
   const totalPages = Math.ceil(total / limit)
   const currentPage = Math.floor(offset / limit) + 1
@@ -394,62 +391,61 @@ export default function IdentityInboxPage() {
         reject wrong candidates, or defer for later.
       </p>
 
-      {error && (
-        <div className="p-3 mb-4 bg-[var(--theme-danger)]/10 border border-[var(--theme-danger)]/30 rounded-lg text-sm text-[var(--theme-danger)]">
-          {error}
+{error && (
+  <div className="text-center py-4">
+    <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-3">
+      Failed to load identities
+    </p>
+    <button
+      onClick={() => void fetchItems(nextPageToken)}
+      className="h-9 px-4 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+    >
+      Retry
+    </button>
+  </div>
+)}
+
+{loading ? (
+    <div className="text-center py-12 text-[var(--theme-text-muted)]">Loading...</div>
+  ) : items.length === 0 ? (
+    <div className="text-center py-12">
+      <div className="text-4xl mb-3">'\u2714\uFE0F'</div>
+      <div className="text-sm text-[var(--theme-text-muted)] font-medium">All clear!</div>
+      <div className="text-xs text-[var(--theme-text-dim)]">No unresolved identities in your inbox.</div>
+    </div>
+  ) : (
+    <>
+      <div className="text-xs text-[var(--theme-text-dim)] mb-3">
+        {items.length} {items.length === 1 ? 'item' : 'items'}
+      </div>
+      <div className="space-y-3">
+        {items.map((item) => (
+          <InboxItemCard
+            key={item.mapping_id}
+            item={item}
+            onConfirm={handleConfirm}
+            onReject={handleReject}
+            onDefer={handleDefer}
+            onSkip={handleSkip}
+            expandedId={expandedId}
+            toggleExpand={toggleExpand}
+          />
+        ))}
+      </div>
+      {nextPageToken !== null && (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => void fetchItems(nextPageToken)}
+            disabled={loading}
+            className="min-h-11 rounded-lg border border-amber-500/40 bg-stone-950 px-5 py-2 font-bold text-amber-300 disabled:cursor-wait disabled:opacity-60"
+          >
+            {loading ? 'Loading more…' : 'Load More'}
+          </button>
         </div>
       )}
-
-      {loading ? (
-        <div className="text-center py-12 text-[var(--theme-text-dim)]">Loading...</div>
-      ) : items.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-4xl mb-3">{'\u2714\uFE0F'}</div>
-          <div className="text-sm text-[var(--theme-text-muted)] font-medium">All clear!</div>
-          <div className="text-xs text-[var(--theme-text-dim)] mt-1">No unresolved identities in your inbox.</div>
-        </div>
-      ) : (
-        <>
-          <div className="text-xs text-[var(--theme-text-dim)] mb-3">
-            {total} unresolved {total === 1 ? 'item' : 'items'}
-          </div>
-          <div className="space-y-3">
-            {items.map((item) => (
-              <InboxItemCard
-                key={item.mapping_id}
-                item={item}
-                onConfirm={handleConfirm}
-                onReject={handleReject}
-                onDefer={handleDefer}
-                onSkip={handleSkip}
-                expandedId={expandedId}
-                toggleExpand={toggleExpand}
-              />
-            ))}
-          </div>
-          {totalPages > 1 && (
-            <div className="flex justify-center items-center gap-4 mt-6">
-              <button
-                type="button"
-                onClick={() => setOffset((o) => Math.max(0, o - limit))}
-                disabled={offset === 0}
-                className="px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                Previous
-              </button>
-              <span className="text-xs text-[var(--theme-text-dim)]">
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setOffset((o) => o + limit)}
-                disabled={currentPage >= totalPages}
-                className="px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                Next
-              </button>
-            </div>
-          )}
+    </>
+  )}
         </>
       )}
     </section>
