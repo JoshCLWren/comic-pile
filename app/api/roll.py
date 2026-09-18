@@ -13,12 +13,12 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated, Any
 
-from app.api.session import (
+from app.services.session_response import (
     _invalidate_session_caches,
     build_ladder_path,
     get_session_with_thread_safe,
+    build_session_response,
 )
-from app.api.snooze import build_session_response
 from app.auth import get_current_user
 from app.config import get_recommendation_settings
 
