@@ -5,6 +5,7 @@ import {
   applyUpdatedThreadCache,
   invalidateAfterIssueEdit,
   invalidateAfterQueueMovement,
+  invalidateAfterResumeRecovery,
   invalidateCurrentSessionAfterSnooze,
   applyCreatedCustomCBL,
   applyUpdatedCustomCBL,
@@ -291,6 +292,27 @@ describe('targeted cache effects', () => {
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
     })
+  })
+
+  it('limits resume recovery to the scoped resume set without an unscoped invalidate', async () => {
+    const { client, setQueryData, invalidateQueries, resetQueries } = createSpiedClient()
+
+    await invalidateAfterResumeRecovery(client)
+
+    expect(invalidateQueries).toHaveBeenCalledTimes(3)
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.queue.pages(),
+    })
+    expect(setQueryData).not.toHaveBeenCalled()
+    expect(resetQueries).not.toHaveBeenCalled()
   })
 
   describe('custom CBL cache effects', () => {

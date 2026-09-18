@@ -81,4 +81,62 @@ describe('useScrollRestoration', () => {
     })
     expect(scrollTo).toHaveBeenCalledWith(0, 120)
   })
+
+  it('re-applies the saved position after deferred content settles without a fixed timeout', async () => {
+    // Deferred data renders grow the page after the first restore pass, which
+    // the browser may have clamped. The settle contract must re-apply the
+    // saved offset once layout stabilizes — driven by layout frames, not by
+    // waiting out a guessed delay.
+    sessionStorage.setItem(SCROLL_KEY, JSON.stringify({ '/': 240 }))
+    const heights = [800, 1600, 1600, 1600, 1600, 1600]
+    Object.defineProperty(document.documentElement, 'scrollHeight', {
+      configurable: true,
+      get: () => heights.shift() ?? 1600,
+    })
+
+    renderAt('/')
+    await act(async () => {
+      await Promise.resolve()
+    })
+    // Restore the original descriptor so subsequent tests are unaffected.
+    Reflect.deleteProperty(document.documentElement, 'scrollHeight')
+
+    expect(scrollTo).toHaveBeenCalledWith(0, 240)
+    // Initial restore plus at least one re-apply once deferred layout grew.
+    expect(scrollTo.mock.calls.length).toBeGreaterThan(1)
+    for (const call of scrollTo.mock.calls) {
+      expect(call).toEqual([0, 240])
+    }
+  })
+
+  it('leaves the viewport alone once the user scrolls during the settle window', async () => {
+    // Queue layout frames manually so a user gesture can land mid-settle.
+    // Without cancellation every frame would re-apply (jsdom scrollY never
+    // reaches the target); the wheel gesture must end the watch instead.
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      frames.push(cb)
+      return frames.length
+    })
+    sessionStorage.setItem(SCROLL_KEY, JSON.stringify({ '/': 240 }))
+    renderAt('/')
+    await act(async () => {
+      frames.shift()?.(0)
+    })
+    expect(scrollTo).toHaveBeenCalledWith(0, 240)
+    const callsAfterFirstRestore = scrollTo.mock.calls.length
+
+    await act(async () => {
+      window.dispatchEvent(new Event('wheel'))
+    })
+    await act(async () => {
+      while (frames.length > 0) {
+        frames.shift()?.(0)
+      }
+    })
+
+    // The initial restore still applies; the settle watch ends on the user
+    // gesture instead of re-applying over an intentional scroll.
+    expect(scrollTo.mock.calls.length).toBe(callsAfterFirstRestore)
+  })
 })

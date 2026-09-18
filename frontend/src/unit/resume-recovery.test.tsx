@@ -1,15 +1,16 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ResumeRecovery from '../components/ResumeRecovery'
 
-const { revalidateSession, recoverSession, invalidateSessionRecoveryCache } = vi.hoisted(() => ({
+const { revalidateSession, recoverSession, invalidateSessionRecoveryCache, invalidateAfterResumeRecovery } = vi.hoisted(() => ({
   revalidateSession: vi.fn(),
   recoverSession: vi.fn(),
   invalidateSessionRecoveryCache: vi.fn(),
+  invalidateAfterResumeRecovery: vi.fn(),
 }))
 
 vi.mock('../query/cacheEffects', () => ({
   invalidateSessionRecoveryCache,
+  invalidateAfterResumeRecovery,
 }))
 
 function dispatchPageShow(persisted: boolean): void {
@@ -38,6 +39,7 @@ describe('ResumeRecovery', () => {
     revalidateSession.mockReset()
     recoverSession.mockReset()
     invalidateSessionRecoveryCache.mockReset()
+    invalidateAfterResumeRecovery.mockReset()
     setVisibilityState('visible')
   })
 
@@ -48,7 +50,7 @@ describe('ResumeRecovery', () => {
 
   it('revalidates auth and cached application data silently after a BFCache restore', async () => {
     revalidateSession.mockResolvedValue(undefined)
-    invalidateSessionRecoveryCache.mockResolvedValue(undefined)
+    invalidateAfterResumeRecovery.mockResolvedValue(undefined)
 
     renderRecovery()
     dispatchPageShow(true)
@@ -56,8 +58,31 @@ describe('ResumeRecovery', () => {
     expect(screen.getByText('Last usable screen')).toBeInTheDocument()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     await waitFor(() => expect(revalidateSession).toHaveBeenCalledWith(15000))
-    await waitFor(() => expect(invalidateSessionRecoveryCache).toHaveBeenCalledOnce())
+    // Scoped resume set (#2582): current session, roll bootstrap, queue
+    // pages — never an unscoped invalidate of every query.
+    await waitFor(() => expect(invalidateAfterResumeRecovery).toHaveBeenCalledOnce())
     expect(recoverSession).not.toHaveBeenCalled()
+  })
+
+  it('refreshes data without moving the viewport during resume recovery', async () => {
+    // ResumeRecovery owns data/auth recovery, not viewport position (#2582):
+    // the route restoration layer alone repositions the window.
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
+    const scrollIntoView = vi
+      .spyOn(Element.prototype, 'scrollIntoView')
+      .mockImplementation(() => undefined)
+    revalidateSession.mockResolvedValue(undefined)
+    invalidateAfterResumeRecovery.mockResolvedValue(undefined)
+
+    renderRecovery()
+    dispatchPageShow(true)
+
+    await waitFor(() => expect(revalidateSession).toHaveBeenCalledWith(15000))
+    await waitFor(() => expect(invalidateAfterResumeRecovery).toHaveBeenCalled())
+    expect(scrollTo).not.toHaveBeenCalled()
+    expect(scrollIntoView).not.toHaveBeenCalled()
+    scrollTo.mockRestore()
+    scrollIntoView.mockRestore()
   })
 
   it('does not retry automatic resume after a definitive authentication failure', async () => {
@@ -120,7 +145,7 @@ describe('ResumeRecovery', () => {
     await act(async () => {
       await Promise.resolve()
     })
-    expect(invalidateSessionRecoveryCache).toHaveBeenCalledOnce()
+    expect(invalidateAfterResumeRecovery).toHaveBeenCalledOnce()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
@@ -158,7 +183,7 @@ describe('ResumeRecovery', () => {
       finishExplicitRecovery?.()
     })
 
-    expect(invalidateSessionRecoveryCache).toHaveBeenCalledOnce()
+    expect(invalidateAfterResumeRecovery).toHaveBeenCalledOnce()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
@@ -185,7 +210,7 @@ describe('ResumeRecovery', () => {
     })
 
     expect(revalidateSession).toHaveBeenCalledTimes(2)
-    expect(invalidateSessionRecoveryCache).toHaveBeenCalledOnce()
+    expect(invalidateAfterResumeRecovery).toHaveBeenCalledOnce()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
@@ -203,7 +228,7 @@ describe('ResumeRecovery', () => {
 
     renderRecovery()
     dispatchPageShow(true)
-    await waitFor(() => expect(invalidateSessionRecoveryCache).toHaveBeenCalledOnce())
+    await waitFor(() => expect(invalidateAfterResumeRecovery).toHaveBeenCalledOnce())
 
     now.mockReturnValue(11_001)
     fireEvent(document, new Event('visibilitychange'))

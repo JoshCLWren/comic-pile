@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
+import { requestSemanticScroll } from '../scroll/scrollCoordinator'
 
 // Simple, static glossary help page for core app concepts.
 // This is intentionally content-forward and does not touch backend.
@@ -116,7 +117,9 @@ const DEFINITIONS: Term[] = [
 /**
  * Scrolls the glossary to a definition when the page is opened through a
  * cross-link such as `/glossary#crossover`. Defers two animation frames so it
- * runs after the app's route-level scroll restoration.
+ * runs after the app's route-level scroll restoration, and routes the anchor
+ * scroll through the scroll coordinator (#2582) so it additionally defers
+ * while a route restore is still settling instead of racing it.
  */
 function useGlossaryAnchorScroll(): void {
   const location = useLocation()
@@ -128,8 +131,11 @@ function useGlossaryAnchorScroll(): void {
     let cancelled = false
     const scrollToTerm = () => {
       if (cancelled) return
-      const target = document.getElementById(id)
-      if (target) target.scrollIntoView({ block: 'start', behavior: 'auto' })
+      requestSemanticScroll(() => {
+        if (cancelled) return
+        const target = document.getElementById(id)
+        if (target) target.scrollIntoView({ block: 'start', behavior: 'auto' })
+      })
     }
     frame = window.requestAnimationFrame(() => {
       frame = window.requestAnimationFrame(scrollToTerm)
