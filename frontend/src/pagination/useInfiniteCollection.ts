@@ -1,7 +1,6 @@
 import { useCallback } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import type { QueryFunctionContext, QueryKey } from '@tanstack/react-query'
-import type { KeepPreviousDataPlaceholderData } from '@tanstack/react-query'
 
 /** Opaque cursor token for the canonical pagination contract. */
 export type PageToken = string | null
@@ -37,7 +36,7 @@ export interface InfiniteCollectionSpec<TItem, TPage, TToken = PageToken> {
   /** Failure retry policy (mirrors `useInfiniteQuery` `retry`). */
   retry?: boolean | number
   /** Placeholder data policy such as `keepPreviousData` (mirrors `useInfiniteQuery`). */
-  placeholderData?: KeepPreviousDataPlaceholderData<TPage, QueryKey>
+  placeholderData?: any
 }
 
 /** Semantic state exposed by the canonical paginator. */

@@ -103,30 +103,24 @@ export function useQueueThreads(
   sort: QueueSortBy = 'position',
   threadsList: Pick<typeof threadsApi, 'list'> = threadsApi,
 ) {
-  const query = useInfiniteQuery({
+  const query = useInfiniteCollection<Thread, ThreadListResponse>({
     ...queueThreadsQueryOptions(searchTerm, sort, threadsList),
     retry: false,
     placeholderData: keepPreviousData,
+    selectPage: (page) => page.threads,
   })
 
-  const data = query.data?.pages.flatMap((page) => page.threads) ?? null
-  // Initial load OR an in-flight next-page append both keep already-rendered
-  // rows visible: `isPending` drives the full-screen loader only before any
-  // data exists, while `isFetchingNextPage` drives the inline loading indicator.
-  const isPending = query.isPending || query.isFetchingNextPage
+  const data = query.items
+  const isPending = query.isPending
   const isError = query.isError
-  const lastPage = query.data?.pages.at(-1)
-  const nextPageToken = query.hasNextPage ? (lastPage?.next_page_token ?? null) : null
+  const nextPageToken = query.nextPageToken
 
-  const refetch = useCallback((): Promise<void> => {
-    return query.refetch().then(() => undefined)
+  const refetch = useCallback(async (): Promise<void> => {
+    await query.refetch()
   }, [query])
 
-  const loadMore = useCallback((): Promise<void> => {
-    if (!query.hasNextPage || query.isFetchingNextPage) {
-      return Promise.resolve()
-    }
-    return query.fetchNextPage().then(() => undefined)
+  const loadMore = useCallback(async (): Promise<void> => {
+    await query.fetchNextPage()
   }, [query])
 
   return { data, isPending, isError, refetch, nextPageToken, loadMore }
