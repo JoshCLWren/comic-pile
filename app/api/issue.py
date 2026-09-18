@@ -1,7 +1,7 @@
 """Issue CRUD API endpoints."""
 
 import logging
-from datetime import UTC, datetime
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -12,9 +12,8 @@ from app.auth import get_current_user
 from app.cache import TTL, cached
 from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
-from app.models import Event, Issue
+from app.models import Issue
 from app.models.user import User
-from app.repositories import issue_repository
 from app.schemas import (
     IssueCreateRange,
     IssueListResponse,
@@ -29,10 +28,7 @@ from app.services import issue as issue_service
 from app.services.comicvine_intelligence import get_issue_intelligence
 from app.services.reader_context import get_reader_context
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
-from comic_pile.dependencies import (
-    refresh_user_blocked_status,
-    validate_position_dependency_consistency,
-)
+from comic_pile.dependencies import validate_position_dependency_consistency
 
 logger = logging.getLogger(__name__)
 
@@ -387,42 +383,7 @@ async def mark_issue_read(
     Raises:
         HTTPException: If issue not found, thread not found, or issue already read.
     """
-    issue = await get_owned_issue_or_404(db, current_user.id, issue_id)
-    thread = await get_owned_thread_or_404(db, current_user.id, issue.thread_id)
-
-    if issue.status == "read":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Issue {issue_id} is already marked as read",
-        )
-
-    issue.status = "read"
-    issue.read_at = datetime.now(UTC)
-
-    thread_id = thread.id
-
-    next_unread = await issue_repository.first_unread(db, thread.id)
-
-    if next_unread:
-        thread.next_unread_issue_id = next_unread.id
-        thread.reading_progress = "in_progress"
-        thread.issues_remaining = await thread.get_issues_remaining(db)
-    else:
-        thread.next_unread_issue_id = None
-        thread.reading_progress = "completed"
-        thread.issues_remaining = 0
-        thread.status = "completed"
-
-    event = Event(
-        type="issue_read",
-        timestamp=datetime.now(UTC),
-        thread_id=thread_id,
-        issue_id=issue_id,
-        issue_number=issue.issue_number,
-    )
-    db.add(event)
-
-    await refresh_user_blocked_status(current_user.id, db)
+    await issue_service.mark_issue_read(db, issue_id, current_user.id)
     await db.commit()
     await _invalidate_issue_caches(current_user.id)
 
@@ -445,68 +406,8 @@ async def mark_issue_unread(
     Raises:
         HTTPException: If issue not found, thread not found, or issue already unread.
     """
-    issue = await get_owned_issue_or_404(db, current_user.id, issue_id)
-    thread = await get_owned_thread_or_404(db, current_user.id, issue.thread_id)
-
-    if issue.status == "unread":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Issue {issue_id} is already marked as unread",
-        )
-
-    issue.status = "unread"
-    issue.read_at = None
-
-    thread_id = thread.id
-    thread_was_completed = thread.status == "completed"
-
-    if thread.next_unread_issue_id is None or await should_update_next_unread(
-        issue.id, thread.next_unread_issue_id, db
-    ):
-        thread.next_unread_issue_id = issue.id
-
-    thread.reading_progress = "in_progress"
-    thread.issues_remaining = await thread.get_issues_remaining(db)
-
-    if thread_was_completed:
-        thread.status = "active"
-
-    event = Event(
-        type="issue_unread",
-        timestamp=datetime.now(UTC),
-        thread_id=thread_id,
-        issue_id=issue_id,
-        issue_number=issue.issue_number,
-    )
-    db.add(event)
-
-    await refresh_user_blocked_status(current_user.id, db)
+    await issue_service.mark_issue_unread(db, issue_id, current_user.id)
     await db.commit()
     await _invalidate_issue_caches(current_user.id)
 
 
-async def should_update_next_unread(
-    issue_id: int, next_unread_issue_id: int, db: AsyncSession
-) -> bool:
-    """Check if next_unread_issue_id should be updated to the given issue.
-
-    Returns True if the issue should become the next unread
-    (i.e., its position is earlier than the current next unread).
-
-    Args:
-        issue_id: Issue ID to check.
-        next_unread_issue_id: Current next unread issue ID.
-        db: Database session.
-
-    Returns:
-        True if issue position is earlier than current next unread issue.
-    """
-    next_issue = await db.get(Issue, next_unread_issue_id)
-    if not next_issue:
-        return True
-
-    issue = await db.get(Issue, issue_id)
-    if not issue:
-        return False
-
-    return issue.position < next_issue.position
