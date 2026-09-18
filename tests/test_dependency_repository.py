@@ -1,6 +1,5 @@
 """Tests for dependency repository functions."""
 
-import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

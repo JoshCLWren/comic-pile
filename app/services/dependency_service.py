@@ -6,7 +6,6 @@ and cache invalidation. Query construction lives in
 status mapping lives in routers.
 """
 
-from typing import Annotated
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession

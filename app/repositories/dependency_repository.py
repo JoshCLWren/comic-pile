@@ -4,7 +4,6 @@ All SQLAlchemy access for the ``Dependency`` model family lives here. Functions
 return ORM models or plain values; callers (services) own transactions.
 """
 
-from typing import Dict, List
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,7 +26,7 @@ async def get_dependency(db: AsyncSession, dependency_id: int) -> Dependency | N
 
 async def get_thread_dependencies(
     db: AsyncSession, thread_id: int
-) -> tuple[List[Dependency], List[Dependency]]:
+) -> tuple[list[Dependency], list[Dependency]]:
     """Get dependencies where a thread blocks others and where it is blocked.
 
     Args:
@@ -57,7 +56,7 @@ async def get_thread_dependencies(
     return blocking_deps, blocked_by_deps
 
 
-async def get_issue_dependencies(db: AsyncSession, issue_id: int) -> tuple[List[Dependency], List[Dependency]]:
+async def get_issue_dependencies(db: AsyncSession, issue_id: int) -> tuple[list[Dependency], list[Dependency]]:
     """Get all incoming and outgoing dependency edges for a specific issue.
 
     Args:
@@ -82,7 +81,7 @@ async def get_issue_dependencies(db: AsyncSession, issue_id: int) -> tuple[List[
 
 async def get_thread_connected_dependencies(
     db: AsyncSession, thread_id: int
-) -> tuple[List[Dependency], List[Dependency]]:
+) -> tuple[list[Dependency], list[Dependency]]:
     """Get dependencies connected to a specific thread.
 
     Args:
