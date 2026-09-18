@@ -282,6 +282,14 @@ Key rules for factory workers:
 - A factory must not post the final `<!-- product-acceptance:v1 -->` verdict as the deciding authority, mark the parent `ralph-status:done`, or close the parent.
 - Duplicate factory PRs that attempt to close already-delivered child work do not satisfy product acceptance.
 
+## Semantic review strike policy
+
+A factory implementation attempt gets three substantive semantic repair cycles. A cycle is counted once per distinct PR head that receives a trusted controller-authored `verdict-repair` semantic review marker. Mirrored comments, duplicate markers for the same head, stale-head results, CI failures, merge conflicts, provider failures, and no-diff handoffs do not consume this semantic strike budget.
+
+On a fourth distinct semantic repair verdict, cancel that implementation attempt instead of repairing it again: persist the fourth review findings, close the PR, return the linked issue to unowned executable implementation, and record a `comic-pile-factory-strike-reset-v1` marker on the issue. When producer provenance is known, that producer is ineligible to receive the first clean implementation retry. The exclusion is one-shot and is spent only after a different factory posts a real implementation claim for the retried issue.
+
+This is an attempt-level circuit breaker, not an issue-level failure. The issue remains valid work unless a separate terminal blocker applies.
+
 ## Markers and leases
 
 Use the existing canonical marker schemas:
