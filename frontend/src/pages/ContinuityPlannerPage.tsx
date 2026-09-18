@@ -159,12 +159,7 @@ export default function ContinuityPlannerPage({
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
   const isInvalidRoute = id !== undefined && parsedId !== null && (!Number.isInteger(parsedId) || parsedId <= 0)
 
-  // Immediate invalid-route error without waiting for hooks
-  if (isInvalidRoute) {
-    return <div role="alert" className="rounded-2xl border border-red-800 bg-red-950/30 p-4 text-red-200">Invalid continuity plan ID.</div>
-  }
-
-  // Server collections from React Query hooks
+  // Server collections from React Query hooks — must be called unconditionally
   const { data: threads = [], isPending: threadsPending, error: threadsError } = useAllThreads()
   const { data: groups = [], isPending: groupsPending, error: groupsError } = useAllDependencyGroups()
   const { data: planData, isPending: planPending, error: planError } = useContinuityPlan(planId)
@@ -218,12 +213,6 @@ export default function ContinuityPlannerPage({
   const lastPlanId = typeof window === 'undefined' ? null : window.localStorage.getItem(LAST_PLAN_KEY)
   const savePlan = useSaveReadingPlan(planId)
 
-  const isDirty =
-    name !== savedName ||
-    orderingMode !== savedOrderingMode ||
-    JSON.stringify(lanes) !== JSON.stringify(savedLanes) ||
-    JSON.stringify(nodes) !== JSON.stringify(savedNodes)
-
   const hydrateLabels = useCallback((rawNodes: ContinuityPlanNode[], loadedGroups: typeof groups): PlannerNode[] => {
     const groupNames = new Map(loadedGroups.map((group) => [group.id, group.name]))
     return rawNodes.map((node): PlannerNode => {
@@ -246,6 +235,17 @@ export default function ContinuityPlannerPage({
   // Hydrate editor state from plan data when it arrives
   const planLoaded = planData != null && !planPending
   const [planHydrated, setPlanHydrated] = useState(false)
+
+  // Immediate invalid-route error after hooks (hooks must be called unconditionally)
+  if (isInvalidRoute) {
+    return <div role="alert" className="rounded-2xl border border-red-800 bg-red-950/30 p-4 text-red-200">Invalid continuity plan ID.</div>
+  }
+
+  const isDirty =
+    name !== savedName ||
+    orderingMode !== savedOrderingMode ||
+    JSON.stringify(lanes) !== JSON.stringify(savedLanes) ||
+    JSON.stringify(nodes) !== JSON.stringify(savedNodes)
 
   if (planLoaded && !planHydrated && planData) {
     const loadedLanes = (planData.lanes.length > 0
