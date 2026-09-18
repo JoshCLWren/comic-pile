@@ -1,3 +1,5 @@
+import { isString } from '../utils/runtimeChecks'
+
 export type QueueSort = 'position' | 'alphabetical' | 'created'
 
 export interface QueuePageKeyOptions {
@@ -36,14 +38,14 @@ function normalizedSearch(search?: string): string | null {
   return value ? value : null
 }
 
-function normalizedSessionParams(params?: SessionListParams): SessionListParams {
+function normalizedSessionParams(params?: SessionListParams) {
   if (!params) return {}
   const normalized: SessionListParams = {}
   for (const key of Object.keys(params).sort()) {
     if (key === 'page_token') continue
     const value = params[key]
     if (value == null) continue
-    const candidate = typeof value === 'string' ? value.trim() : value
+    const candidate = isString(value) ? value.trim() : value
     if (candidate === '') continue
     normalized[key] = candidate
   }

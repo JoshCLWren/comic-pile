@@ -36,10 +36,7 @@ function renderWithProvider<T>(hook: () => T): { result: { current: T } } {
   })
 }
 
-function renderWithClient<T>(hook: () => T): {
-  result: { current: T }
-  client: QueryClient
-} {
+function renderWithClient<T>(hook: () => T) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   const rendered = renderHook(hook, {
     wrapper: ({ children }: { children: ReactNode }) => (
