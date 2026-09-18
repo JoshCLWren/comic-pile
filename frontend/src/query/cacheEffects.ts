@@ -2,8 +2,23 @@ import type { QueryClient } from '@tanstack/react-query'
 import type { InfiniteData } from '@tanstack/react-query'
 import type { Thread, ThreadListResponse } from '../types'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
+import type { CustomCBL, CustomCBLListItem } from '../services/api-custom-cbl'
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
+
+/**
+ * Centralized cache effects for all React Query mutations in ComicPile.
+ * 
+ * ALL cache writes, invalidations, and optimistic updates must use these helpers.
+ * Direct calls to `setQueryData`, `invalidateQueries`, or `removeQueries` outside
+ * of this module are prohibited in production code.
+ * 
+ * Intentional exceptions:
+ * - `useRollBootstrap.ts` reconciliation events: The real-time reconciliation system
+ *   requires direct `setQueryData` calls to update the bootstrap cache immediately
+ *   when external events occur. This is explicitly documented and justified by the
+ *   real-time nature of the reconciliation system.
+ */
 
 export type ThreadCacheRollback = () => void
 
@@ -172,6 +187,11 @@ export async function invalidateReadingPlans(client: QueryClient): Promise<void>
   await invalidateAfterQueueMovement(client)
 }
 
+/**
+ * Apply a committed reading plan to the cache and refresh dependent queries.
+ * Centralizes the pattern used in useReadingPlans.ts useSaveReadingPlan and
+ * CustomCBLBuilder.tsx apply mutation.
+ */
 export async function applyCommittedReadingPlan(
   client: QueryClient,
   plan: ContinuityPlan,
@@ -182,6 +202,16 @@ export async function applyCommittedReadingPlan(
     exact: true,
   })
   await invalidateAfterQueueMovement(client)
+}
+
+/**
+ * @deprecated Use `applyCommittedReadingPlan` instead.
+ */
+export async function applyCommittedReadingPlanUpdate(
+  client: QueryClient,
+  plan: ContinuityPlan,
+): Promise<void> {
+  return applyCommittedReadingPlan(client, plan)
 }
 
 /**
@@ -255,4 +285,55 @@ export function applyEditedThreadToQueuePages(
 
   client.setQueryData(queryKeys.thread.detail(updatedThread.id), updatedThread)
   client.setQueryData(queryKeys.thread.summary(updatedThread.id), updatedThread)
+}
+
+/**
+ * Apply a created custom CBL to the cache and refresh the list view.
+ * Mirrors the pattern used in CustomCBLBuilder.tsx create mutation.
+ */
+export async function applyCreatedCustomCBL(
+  client: QueryClient,
+  created: CustomCBL,
+): Promise<void> {
+  client.setQueryData(queryKeys.customCBLs.detail(created.id), created)
+  await client.invalidateQueries({ queryKey: queryKeys.customCBLs.list(), exact: true })
+}
+
+/**
+ * Apply an updated custom CBL to the cache and refresh the list view.
+ * Mirrors the pattern used in CustomCBLBuilder.tsx save mutation.
+ */
+export async function applyUpdatedCustomCBL(
+  client: QueryClient,
+  saved: CustomCBL,
+): Promise<void> {
+  client.setQueryData(queryKeys.customCBLs.detail(saved.id), saved)
+  await client.invalidateQueries({ queryKey: queryKeys.customCBLs.list(), exact: true })
+}
+
+/**
+ * Remove a custom CBL from the cache and refresh the list view.
+ * Mirrors the pattern used in CustomCBLBuilder.tsx delete mutation.
+ */
+export async function applyDeletedCustomCBL(
+  client: QueryClient,
+  deletedId: number,
+): Promise<void> {
+  client.removeQueries({ queryKey: queryKeys.customCBLs.detail(deletedId), exact: true })
+  await client.invalidateQueries({ queryKey: queryKeys.customCBLs.list(), exact: true })
+}
+
+/**
+ * Invalidate all queries affected by session recovery in ResumeRecovery.
+ * Replaces the blanket `invalidateQueries()` call with targeted invalidation.
+ */
+export async function invalidateSessionRecoveryCache(
+  client: QueryClient,
+): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.session.current(), exact: true }),
+    client.invalidateQueries({ queryKey: queryKeys.roll.bootstrap(), exact: true }),
+    client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
+    client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
+  ])
 }

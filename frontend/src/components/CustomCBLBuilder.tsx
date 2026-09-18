@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { applyCommittedReadingPlan } from '../query/cacheEffects'
+import { applyCommittedReadingPlan, applyCreatedCustomCBL, applyUpdatedCustomCBL, applyDeletedCustomCBL } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import {
   customCBLApi,
@@ -87,8 +87,7 @@ export default function CustomCBLBuilder({
   const createMutation = useMutation({
     mutationFn: () => customCBLApi.create({ name: newName.trim(), issue_ids: [] }),
     onSuccess: async (created) => {
-      queryClient.setQueryData(queryKeys.customCBLs.detail(created.id), created)
-      await queryClient.invalidateQueries({ queryKey: queryKeys.customCBLs.list(), exact: true })
+      await applyCreatedCustomCBL(queryClient, created)
       setSelectedId(created.id)
       setNewName('')
       setMessage('Custom CBL created.')
@@ -104,8 +103,7 @@ export default function CustomCBLBuilder({
       })
     },
     onSuccess: async (saved) => {
-      queryClient.setQueryData(queryKeys.customCBLs.detail(saved.id), saved)
-      await queryClient.invalidateQueries({ queryKey: queryKeys.customCBLs.list(), exact: true })
+      await applyUpdatedCustomCBL(queryClient, saved)
       setEntries(normalizePositions(saved.entries))
       setMessage('Custom CBL saved.')
     },
@@ -113,8 +111,7 @@ export default function CustomCBLBuilder({
   const deleteMutation = useMutation({
     mutationFn: (listId: number) => customCBLApi.delete(listId),
     onSuccess: async () => {
-      if (selectedId) queryClient.removeQueries({ queryKey: queryKeys.customCBLs.detail(selectedId), exact: true })
-      await queryClient.invalidateQueries({ queryKey: queryKeys.customCBLs.list(), exact: true })
+      if (selectedId) await applyDeletedCustomCBL(queryClient, selectedId)
       setSelectedId(null)
       setName('')
       setDescription('')
