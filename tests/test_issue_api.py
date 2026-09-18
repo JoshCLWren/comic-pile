@@ -2538,8 +2538,10 @@ async def test_bulk_mark_issue_read_success(auth_client: AsyncClient, async_db: 
     assert response.status_code == 204
     await async_db.refresh(i1)
     await async_db.refresh(i2)
+    await async_db.refresh(thread)
     assert i1.status == "read"
     assert i2.status == "read"
+    assert thread.status == "completed"
 
 
 @pytest.mark.asyncio
@@ -2570,8 +2572,10 @@ async def test_bulk_mark_issue_unread_success(auth_client: AsyncClient, async_db
     assert response.status_code == 204
     await async_db.refresh(i1)
     await async_db.refresh(i2)
+    await async_db.refresh(thread)
     assert i1.status == "unread"
     assert i2.status == "unread"
+    assert thread.status == "active"
 
 
 @pytest.mark.asyncio
