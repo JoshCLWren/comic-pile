@@ -225,7 +225,7 @@ describe('QueuePage callback coverage', () => {
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useQueueThreads).mockReturnValue({ data: manyThreads as never, isPending: false, refetch: mocks.refetch } as never)
     renderPage()
-    expect(screen.getByText('card callback')).toBeInTheDocument()
+    expect(screen.getAllByText('card callback')).toHaveLength(51)
   })
 
   it('shows issue preview errors and creates complex ranges with read markers', async () => {
