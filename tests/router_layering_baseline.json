@@ -1,6 +1,5 @@
 {
   "analytics": ["execute-call", "query-import"],
-  "auth": ["execute-call", "query-import"],
   "continuity_plan": ["execute-call", "query-import"],
   "continuity_rule": ["execute-call", "query-import"],
   "continuity_template": ["execute-call", "query-import"],
