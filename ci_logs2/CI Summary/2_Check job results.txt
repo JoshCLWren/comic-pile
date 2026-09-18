@@ -1,0 +1,37 @@
+﻿2026-09-18T22:23:33.2198076Z ##[group]Run echo "Build: success"
+2026-09-18T22:23:33.2198895Z [36;1mecho "Build: success"[0m
+2026-09-18T22:23:33.2199751Z [36;1mecho "Frontend Lint + Typecheck: failure"[0m
+2026-09-18T22:23:33.2200595Z [36;1mecho "Python Lint (ruff): success"[0m
+2026-09-18T22:23:33.2201419Z [36;1mecho "Python Type Check (ty): success"[0m
+2026-09-18T22:23:33.2202255Z [36;1mecho "Frontend Unit Tests: failure"[0m
+2026-09-18T22:23:33.2202950Z [36;1mecho "Rendered UI Audit: success"[0m
+2026-09-18T22:23:33.2282962Z [36;1mecho "Migration Health: success"[0m
+2026-09-18T22:23:33.2284031Z [36;1mecho "Backend Tests: success"[0m
+2026-09-18T22:23:33.2285105Z [36;1mif [ "success" != "success" ] || \[0m
+2026-09-18T22:23:33.2286060Z [36;1m   [ "failure" != "success" ] || \[0m
+2026-09-18T22:23:33.2286986Z [36;1m   [ "success" != "success" ] || \[0m
+2026-09-18T22:23:33.2287797Z [36;1m   [ "success" != "success" ] || \[0m
+2026-09-18T22:23:33.2288395Z [36;1m   [ "failure" != "success" ] || \[0m
+2026-09-18T22:23:33.2289027Z [36;1m   [ "success" != "success" ] || \[0m
+2026-09-18T22:23:33.2289604Z [36;1m   [ "success" != "success" ] || \[0m
+2026-09-18T22:23:33.2290195Z [36;1m   [ "success" != "success" ]; then[0m
+2026-09-18T22:23:33.2291085Z [36;1m  echo "::error::One or more required CI jobs failed. Please review the failures."[0m
+2026-09-18T22:23:33.2291872Z [36;1m  exit 1[0m
+2026-09-18T22:23:33.2292295Z [36;1mfi[0m
+2026-09-18T22:23:33.2292700Z [36;1m[0m
+2026-09-18T22:23:33.2293243Z [36;1mecho "::notice::All enabled CI jobs passed successfully!"[0m
+2026-09-18T22:23:33.2616875Z shell: /usr/bin/bash -e {0}
+2026-09-18T22:23:33.2617693Z env:
+2026-09-18T22:23:33.2618121Z   REGISTRY: ghcr.io
+2026-09-18T22:23:33.2618612Z   IMAGE_NAME: JoshCLWren/comic-pile
+2026-09-18T22:23:33.2619151Z ##[endgroup]
+2026-09-18T22:23:33.2827131Z Build: success
+2026-09-18T22:23:33.2827980Z Frontend Lint + Typecheck: failure
+2026-09-18T22:23:33.2828899Z Python Lint (ruff): success
+2026-09-18T22:23:33.2829721Z Python Type Check (ty): success
+2026-09-18T22:23:33.2830620Z Frontend Unit Tests: failure
+2026-09-18T22:23:33.2831467Z Rendered UI Audit: success
+2026-09-18T22:23:33.2832272Z Migration Health: success
+2026-09-18T22:23:33.2833061Z Backend Tests: success
+2026-09-18T22:23:33.2864580Z ##[error]One or more required CI jobs failed. Please review the failures.
+2026-09-18T22:23:33.2880905Z ##[error]Process completed with exit code 1.

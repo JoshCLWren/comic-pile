@@ -1,0 +1,28 @@
+﻿2026-09-18T22:19:43.1229273Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-18T22:19:43.1230794Z ##[group]Run actions/upload-artifact@v4
+2026-09-18T22:19:43.1231098Z with:
+2026-09-18T22:19:43.1231407Z   name: rendered-ui-audit-271921b8a5967aa9c20ee146489300e75d851507
+2026-09-18T22:19:43.1231791Z   path: frontend/test-results/ui-audit/
+2026-09-18T22:19:43.1232072Z   if-no-files-found: ignore
+2026-09-18T22:19:43.1232353Z   retention-days: 7
+2026-09-18T22:19:43.1232598Z   compression-level: 6
+2026-09-18T22:19:43.1232833Z   overwrite: false
+2026-09-18T22:19:43.1233097Z   include-hidden-files: false
+2026-09-18T22:19:43.1233357Z env:
+2026-09-18T22:19:43.1233557Z   REGISTRY: ghcr.io
+2026-09-18T22:19:43.1233817Z   IMAGE_NAME: JoshCLWren/comic-pile
+2026-09-18T22:19:43.1234149Z ##[endgroup]
+2026-09-18T22:19:43.2491495Z (node:6390) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-09-18T22:19:43.2492198Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-09-18T22:19:43.2585710Z With the provided path, there will be 35 files uploaded
+2026-09-18T22:19:43.2586557Z Artifact name is valid!
+2026-09-18T22:19:43.2586916Z Root directory input is valid!
+2026-09-18T22:19:43.5326539Z Beginning upload of artifact content to blob storage
+2026-09-18T22:19:43.7579943Z (node:6390) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-09-18T22:19:44.2026938Z Uploaded bytes 6908983
+2026-09-18T22:19:44.2376999Z Finished uploading artifact content to blob storage!
+2026-09-18T22:19:44.2377874Z SHA256 digest of uploaded artifact zip is f61688852ee2e97980917d21b3252a82d2be8f8c9e3e5aa45262b9c24c5a10ed
+2026-09-18T22:19:44.2378675Z Finalizing artifact upload
+2026-09-18T22:19:44.5164017Z Artifact rendered-ui-audit-271921b8a5967aa9c20ee146489300e75d851507.zip successfully finalized. Artifact ID 10571050171
+2026-09-18T22:19:44.5165197Z Artifact rendered-ui-audit-271921b8a5967aa9c20ee146489300e75d851507 has been successfully uploaded! Final size is 6908983 bytes. Artifact ID is 10571050171
+2026-09-18T22:19:44.5170954Z Artifact download URL: https://github.com/JoshCLWren/comic-pile/actions/runs/35400736612/artifacts/10571050171

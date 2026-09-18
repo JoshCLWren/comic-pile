@@ -1,0 +1,14 @@
+﻿2026-09-18T22:17:19.2503150Z ##[group]Run pnpm run lint:anti-slop
+2026-09-18T22:17:19.2503474Z [36;1mpnpm run lint:anti-slop[0m
+2026-09-18T22:17:19.2503814Z shell: sh -e {0}
+2026-09-18T22:17:19.2504011Z env:
+2026-09-18T22:17:19.2504192Z   REGISTRY: ghcr.io
+2026-09-18T22:17:19.2504410Z   IMAGE_NAME: JoshCLWren/comic-pile
+2026-09-18T22:17:19.2505121Z   PATH: /workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin
+2026-09-18T22:17:19.2505440Z ##[endgroup]
+2026-09-18T22:17:19.5345683Z 
+2026-09-18T22:17:19.5346382Z > comic-pile@0.1.0 lint:anti-slop /__w/comic-pile/comic-pile
+2026-09-18T22:17:19.5346813Z > oxlint -c .oxlintrc.json frontend
+2026-09-18T22:17:19.5346995Z 
+2026-09-18T22:17:20.7598455Z Found 0 warnings and 0 errors.
+2026-09-18T22:17:20.7599074Z Finished in 1.2s on 490 files with 16 rules using 4 threads.

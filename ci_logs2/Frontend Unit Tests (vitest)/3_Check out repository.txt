@@ -1,0 +1,100 @@
+﻿2026-09-18T22:17:22.2485813Z ##[group]Run actions/checkout@v7
+2026-09-18T22:17:22.2486336Z with:
+2026-09-18T22:17:22.2486608Z   repository: JoshCLWren/comic-pile
+2026-09-18T22:17:22.2488876Z   token: ***
+2026-09-18T22:17:22.2489152Z   ssh-strict: true
+2026-09-18T22:17:22.2489425Z   ssh-user: git
+2026-09-18T22:17:22.2489904Z   persist-credentials: true
+2026-09-18T22:17:22.2490195Z   clean: true
+2026-09-18T22:17:22.2490521Z   sparse-checkout-cone-mode: true
+2026-09-18T22:17:22.2490826Z   fetch-depth: 1
+2026-09-18T22:17:22.2491057Z   fetch-tags: false
+2026-09-18T22:17:22.2491334Z   show-progress: true
+2026-09-18T22:17:22.2491588Z   lfs: false
+2026-09-18T22:17:22.2491869Z   submodules: false
+2026-09-18T22:17:22.2492137Z   set-safe-directory: true
+2026-09-18T22:17:22.2492407Z   allow-unsafe-pr-checkout: false
+2026-09-18T22:17:22.2492868Z env:
+2026-09-18T22:17:22.2493101Z   REGISTRY: ghcr.io
+2026-09-18T22:17:22.2493358Z   IMAGE_NAME: JoshCLWren/comic-pile
+2026-09-18T22:17:22.2493739Z   PATH: /workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin
+2026-09-18T22:17:22.2494169Z ##[endgroup]
+2026-09-18T22:17:22.2549759Z ##[command]/usr/bin/docker exec  70374692f673d5efd688550bb1bf92edd38d5d25b74c0c80784923d447bd197b sh -c "cat /etc/*release | grep ^ID"
+2026-09-18T22:17:22.4280483Z Syncing repository: JoshCLWren/comic-pile
+2026-09-18T22:17:22.4288819Z ##[group]Getting Git version info
+2026-09-18T22:17:22.4289877Z Working directory is '/__w/comic-pile/comic-pile'
+2026-09-18T22:17:22.4291233Z [command]/usr/bin/git version
+2026-09-18T22:17:22.4291659Z git version 2.47.3
+2026-09-18T22:17:22.4293355Z ##[endgroup]
+2026-09-18T22:17:22.4298254Z Temporarily overriding HOME='/__w/_temp/dcaa74f9-4e86-4396-8bac-7ce64085429a' before making global git config changes
+2026-09-18T22:17:22.4299105Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-18T22:17:22.4300218Z [command]/usr/bin/git config --global --add safe.directory /__w/comic-pile/comic-pile
+2026-09-18T22:17:22.4301530Z Deleting the contents of '/__w/comic-pile/comic-pile'
+2026-09-18T22:17:22.4302361Z ##[group]Determining repository object format
+2026-09-18T22:17:22.4303066Z ##[endgroup]
+2026-09-18T22:17:22.4303576Z ##[group]Initializing the repository
+2026-09-18T22:17:22.4304071Z [command]/usr/bin/git init /__w/comic-pile/comic-pile
+2026-09-18T22:17:22.4317256Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-09-18T22:17:22.4318062Z hint: is subject to change. To configure the initial branch name to use in all
+2026-09-18T22:17:22.4318699Z hint: of your new repositories, which will suppress this warning, call:
+2026-09-18T22:17:22.4319191Z hint:
+2026-09-18T22:17:22.4319804Z hint: 	git config --global init.defaultBranch <name>
+2026-09-18T22:17:22.4320237Z hint:
+2026-09-18T22:17:22.4320657Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-09-18T22:17:22.4321556Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-09-18T22:17:22.4322236Z hint:
+2026-09-18T22:17:22.4322663Z hint: 	git branch -m <name>
+2026-09-18T22:17:22.4323318Z Initialized empty Git repository in /__w/comic-pile/comic-pile/.git/
+2026-09-18T22:17:22.4345155Z [command]/usr/bin/git remote add origin https://github.com/JoshCLWren/comic-pile
+2026-09-18T22:17:22.4360152Z ##[endgroup]
+2026-09-18T22:17:22.4360859Z ##[group]Disabling automatic garbage collection
+2026-09-18T22:17:22.4364715Z [command]/usr/bin/git config --local gc.auto 0
+2026-09-18T22:17:22.4390793Z ##[endgroup]
+2026-09-18T22:17:22.4392482Z ##[group]Setting up auth
+2026-09-18T22:17:22.4393155Z Removing SSH command configuration
+2026-09-18T22:17:22.4397901Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-18T22:17:22.4423383Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-18T22:17:22.4604593Z Removing HTTP extra header
+2026-09-18T22:17:22.4609104Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-18T22:17:22.4636141Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-18T22:17:22.4820057Z Removing includeIf entries pointing to credentials config files
+2026-09-18T22:17:22.4822446Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-18T22:17:22.4846037Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-18T22:17:22.5021876Z [command]/usr/bin/git config --file /__w/_temp/git-credentials-8977a767-988a-49b7-a7f5-b93f4b5b5816.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-09-18T22:17:22.5059161Z [command]/usr/bin/git config --local includeIf.gitdir:/__w/comic-pile/comic-pile/.git.path /__w/_temp/git-credentials-8977a767-988a-49b7-a7f5-b93f4b5b5816.config
+2026-09-18T22:17:22.5081915Z [command]/usr/bin/git config --local includeIf.gitdir:/__w/comic-pile/comic-pile/.git/worktrees/*.path /__w/_temp/git-credentials-8977a767-988a-49b7-a7f5-b93f4b5b5816.config
+2026-09-18T22:17:22.5105298Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-8977a767-988a-49b7-a7f5-b93f4b5b5816.config
+2026-09-18T22:17:22.5126883Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-8977a767-988a-49b7-a7f5-b93f4b5b5816.config
+2026-09-18T22:17:22.5148263Z ##[endgroup]
+2026-09-18T22:17:22.5148821Z ##[group]Fetching the repository
+2026-09-18T22:17:22.5153571Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +271921b8a5967aa9c20ee146489300e75d851507:refs/remotes/pull/2694/merge
+2026-09-18T22:17:23.9741735Z From https://github.com/JoshCLWren/comic-pile
+2026-09-18T22:17:23.9742638Z  * [new ref]         271921b8a5967aa9c20ee146489300e75d851507 -> pull/2694/merge
+2026-09-18T22:17:23.9761005Z ##[endgroup]
+2026-09-18T22:17:23.9761781Z ##[group]Determining the checkout info
+2026-09-18T22:17:23.9762582Z ##[endgroup]
+2026-09-18T22:17:23.9767631Z [command]/usr/bin/git sparse-checkout disable
+2026-09-18T22:17:23.9964339Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-09-18T22:17:23.9990071Z ##[group]Checking out the ref
+2026-09-18T22:17:23.9992366Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/2694/merge
+2026-09-18T22:17:24.0845790Z Note: switching to 'refs/remotes/pull/2694/merge'.
+2026-09-18T22:17:24.0846338Z 
+2026-09-18T22:17:24.0846590Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-09-18T22:17:24.0847246Z changes and commit them, and you can discard any commits you make in this
+2026-09-18T22:17:24.0848191Z state without impacting any branches by switching back to a branch.
+2026-09-18T22:17:24.0848540Z 
+2026-09-18T22:17:24.0848811Z If you want to create a new branch to retain commits you create, you may
+2026-09-18T22:17:24.0849308Z do so (now or later) by using -c with the switch command. Example:
+2026-09-18T22:17:24.0849771Z 
+2026-09-18T22:17:24.0849908Z   git switch -c <new-branch-name>
+2026-09-18T22:17:24.0850108Z 
+2026-09-18T22:17:24.0850226Z Or undo this operation with:
+2026-09-18T22:17:24.0850394Z 
+2026-09-18T22:17:24.0850548Z   git switch -
+2026-09-18T22:17:24.0850691Z 
+2026-09-18T22:17:24.0850958Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-09-18T22:17:24.0851214Z 
+2026-09-18T22:17:24.0851551Z HEAD is now at 271921b Merge 3eac37823642a5dca3c052b7944e489cda1a9150 into a118efcd0b333834fe2e1dd53862a06fee392f0e
+2026-09-18T22:17:24.0853116Z ##[endgroup]
+2026-09-18T22:17:24.0883986Z [command]/usr/bin/git log -1 --format=%H
+2026-09-18T22:17:24.0904898Z 271921b8a5967aa9c20ee146489300e75d851507

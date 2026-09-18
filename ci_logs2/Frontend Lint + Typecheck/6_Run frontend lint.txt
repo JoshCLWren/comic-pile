@@ -1,0 +1,35 @@
+﻿2026-09-18T22:17:20.7863901Z ##[group]Run pnpm --filter frontend run lint
+2026-09-18T22:17:20.7864275Z [36;1mpnpm --filter frontend run lint[0m
+2026-09-18T22:17:20.7864833Z shell: sh -e {0}
+2026-09-18T22:17:20.7865137Z env:
+2026-09-18T22:17:20.7865407Z   REGISTRY: ghcr.io
+2026-09-18T22:17:20.7865631Z   IMAGE_NAME: JoshCLWren/comic-pile
+2026-09-18T22:17:20.7865935Z   PATH: /workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin
+2026-09-18T22:17:20.7866242Z ##[endgroup]
+2026-09-18T22:17:21.0713869Z frontend                                 |  WARN  The field "pnpm.onlyBuiltDependencies" was found in /__w/comic-pile/comic-pile/frontend/package.json. This will not take effect. You should configure "pnpm.onlyBuiltDependencies" at the root of the workspace instead.
+2026-09-18T22:17:21.0899363Z 
+2026-09-18T22:17:21.0899964Z > frontend@0.0.0 lint /__w/comic-pile/comic-pile/frontend
+2026-09-18T22:17:21.0900528Z > eslint .
+2026-09-18T22:17:21.0900716Z 
+2026-09-18T22:17:29.1365647Z 
+2026-09-18T22:17:29.1366883Z /__w/comic-pile/comic-pile/frontend/src/components/Dice3D.tsx
+2026-09-18T22:17:29.1370553Z   794:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+2026-09-18T22:17:29.1372684Z   806:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+2026-09-18T22:17:29.1373832Z 
+2026-09-18T22:17:29.1374131Z /__w/comic-pile/comic-pile/frontend/src/pages/WhatsNewPage.tsx
+2026-09-18T22:17:29.1375704Z    32:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+2026-09-18T22:17:29.1377654Z    45:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+2026-09-18T22:17:29.1379758Z    58:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+2026-09-18T22:17:29.1381684Z    64:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+2026-09-18T22:17:29.1383762Z   101:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+2026-09-18T22:17:29.1386096Z   111:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+2026-09-18T22:17:29.1387267Z 
+2026-09-18T22:17:29.1387727Z /__w/comic-pile/comic-pile/frontend/src/unit/CrossoversPage.memberships.test.tsx
+2026-09-18T22:17:29.1389306Z   55:7  error  'issueApi' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  @typescript-eslint/no-unused-vars
+2026-09-18T22:17:29.1390044Z 
+2026-09-18T22:17:29.1390476Z ✖ 9 problems (1 error, 8 warnings)
+2026-09-18T22:17:29.1390795Z 
+2026-09-18T22:17:29.2619160Z /__w/comic-pile/comic-pile/frontend:
+2026-09-18T22:17:29.2620123Z  ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  frontend@0.0.0 lint: `eslint .`
+2026-09-18T22:17:29.2620493Z Exit status 1
+2026-09-18T22:17:29.2730669Z ##[error]Process completed with exit code 1.

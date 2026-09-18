@@ -1,0 +1,106 @@
+﻿2026-09-18T22:17:39.1215221Z ##[group]Run actions/checkout@v7
+2026-09-18T22:17:39.1215845Z with:
+2026-09-18T22:17:39.1216079Z   repository: JoshCLWren/comic-pile
+2026-09-18T22:17:39.1218674Z   token: ***
+2026-09-18T22:17:39.1218883Z   ssh-strict: true
+2026-09-18T22:17:39.1219089Z   ssh-user: git
+2026-09-18T22:17:39.1219293Z   persist-credentials: true
+2026-09-18T22:17:39.1219523Z   clean: true
+2026-09-18T22:17:39.1219733Z   sparse-checkout-cone-mode: true
+2026-09-18T22:17:39.1219986Z   fetch-depth: 1
+2026-09-18T22:17:39.1220182Z   fetch-tags: false
+2026-09-18T22:17:39.1220385Z   show-progress: true
+2026-09-18T22:17:39.1220586Z   lfs: false
+2026-09-18T22:17:39.1220771Z   submodules: false
+2026-09-18T22:17:39.1220987Z   set-safe-directory: true
+2026-09-18T22:17:39.1221231Z   allow-unsafe-pr-checkout: false
+2026-09-18T22:17:39.1221702Z env:
+2026-09-18T22:17:39.1221892Z   REGISTRY: ghcr.io
+2026-09-18T22:17:39.1222119Z   IMAGE_NAME: JoshCLWren/comic-pile
+2026-09-18T22:17:39.1222370Z   CI: true
+2026-09-18T22:17:39.1222590Z   SECRET_KEY: test-secret-key-for-testing-only
+2026-09-18T22:17:39.1223209Z   DATABASE_URL: ***postgres:5432/comic_pile_test
+2026-09-18T22:17:39.1223736Z   TEST_DATABASE_URL: ***postgres:5432/comic_pile_test
+2026-09-18T22:17:39.1224055Z   REDIS_URL: redis://redis:6379/0
+2026-09-18T22:17:39.1224329Z   PGUSER: postgres
+2026-09-18T22:17:39.1224816Z   PATH: /workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin
+2026-09-18T22:17:39.1225130Z ##[endgroup]
+2026-09-18T22:17:39.1288030Z ##[command]/usr/bin/docker exec  4bf9200f54aaf7c96e15a33475b6a8f08aad1302acc578d453eb3de53ebe2e49 sh -c "cat /etc/*release | grep ^ID"
+2026-09-18T22:17:39.3261575Z Syncing repository: JoshCLWren/comic-pile
+2026-09-18T22:17:39.3263468Z ##[group]Getting Git version info
+2026-09-18T22:17:39.3264055Z Working directory is '/__w/comic-pile/comic-pile'
+2026-09-18T22:17:39.3265184Z [command]/usr/bin/git version
+2026-09-18T22:17:39.3265608Z git version 2.47.3
+2026-09-18T22:17:39.3267328Z ##[endgroup]
+2026-09-18T22:17:39.3273229Z Temporarily overriding HOME='/__w/_temp/a58f08e8-5975-4024-8a73-1ee853839dd5' before making global git config changes
+2026-09-18T22:17:39.3274466Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-18T22:17:39.3275719Z [command]/usr/bin/git config --global --add safe.directory /__w/comic-pile/comic-pile
+2026-09-18T22:17:39.3327425Z Deleting the contents of '/__w/comic-pile/comic-pile'
+2026-09-18T22:17:39.3329920Z ##[group]Determining repository object format
+2026-09-18T22:17:39.3330731Z ##[endgroup]
+2026-09-18T22:17:39.3331335Z ##[group]Initializing the repository
+2026-09-18T22:17:39.3336481Z [command]/usr/bin/git init /__w/comic-pile/comic-pile
+2026-09-18T22:17:39.3384532Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-09-18T22:17:39.3385873Z hint: is subject to change. To configure the initial branch name to use in all
+2026-09-18T22:17:39.3386769Z hint: of your new repositories, which will suppress this warning, call:
+2026-09-18T22:17:39.3387403Z hint:
+2026-09-18T22:17:39.3387933Z hint: 	git config --global init.defaultBranch <name>
+2026-09-18T22:17:39.3388501Z hint:
+2026-09-18T22:17:39.3389102Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-09-18T22:17:39.3390023Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-09-18T22:17:39.3390730Z hint:
+2026-09-18T22:17:39.3391115Z hint: 	git branch -m <name>
+2026-09-18T22:17:39.3391767Z Initialized empty Git repository in /__w/comic-pile/comic-pile/.git/
+2026-09-18T22:17:39.3401550Z [command]/usr/bin/git remote add origin https://github.com/JoshCLWren/comic-pile
+2026-09-18T22:17:39.3470985Z ##[endgroup]
+2026-09-18T22:17:39.3471744Z ##[group]Disabling automatic garbage collection
+2026-09-18T22:17:39.3475445Z [command]/usr/bin/git config --local gc.auto 0
+2026-09-18T22:17:39.3507195Z ##[endgroup]
+2026-09-18T22:17:39.3508072Z ##[group]Setting up auth
+2026-09-18T22:17:39.3508598Z Removing SSH command configuration
+2026-09-18T22:17:39.3513909Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-18T22:17:39.3547349Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-18T22:17:39.3827702Z Removing HTTP extra header
+2026-09-18T22:17:39.3832221Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-18T22:17:39.3869725Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-18T22:17:39.4131268Z Removing includeIf entries pointing to credentials config files
+2026-09-18T22:17:39.4136523Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-18T22:17:39.4176693Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-18T22:17:39.4428415Z [command]/usr/bin/git config --file /__w/_temp/git-credentials-fbb7ca87-8b7f-40db-8369-0040d1cd3c50.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-09-18T22:17:39.4513847Z [command]/usr/bin/git config --local includeIf.gitdir:/__w/comic-pile/comic-pile/.git.path /__w/_temp/git-credentials-fbb7ca87-8b7f-40db-8369-0040d1cd3c50.config
+2026-09-18T22:17:39.4559469Z [command]/usr/bin/git config --local includeIf.gitdir:/__w/comic-pile/comic-pile/.git/worktrees/*.path /__w/_temp/git-credentials-fbb7ca87-8b7f-40db-8369-0040d1cd3c50.config
+2026-09-18T22:17:39.4605176Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-fbb7ca87-8b7f-40db-8369-0040d1cd3c50.config
+2026-09-18T22:17:39.4650158Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-fbb7ca87-8b7f-40db-8369-0040d1cd3c50.config
+2026-09-18T22:17:39.4684126Z ##[endgroup]
+2026-09-18T22:17:39.4684763Z ##[group]Fetching the repository
+2026-09-18T22:17:39.4691266Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +271921b8a5967aa9c20ee146489300e75d851507:refs/remotes/pull/2694/merge
+2026-09-18T22:17:40.3032410Z From https://github.com/JoshCLWren/comic-pile
+2026-09-18T22:17:40.3032954Z  * [new ref]         271921b8a5967aa9c20ee146489300e75d851507 -> pull/2694/merge
+2026-09-18T22:17:40.3054309Z ##[endgroup]
+2026-09-18T22:17:40.3055256Z ##[group]Determining the checkout info
+2026-09-18T22:17:40.3055969Z ##[endgroup]
+2026-09-18T22:17:40.3061192Z [command]/usr/bin/git sparse-checkout disable
+2026-09-18T22:17:40.3102941Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-09-18T22:17:40.3134470Z ##[group]Checking out the ref
+2026-09-18T22:17:40.3139513Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/2694/merge
+2026-09-18T22:17:40.4402171Z Note: switching to 'refs/remotes/pull/2694/merge'.
+2026-09-18T22:17:40.4402668Z 
+2026-09-18T22:17:40.4403001Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-09-18T22:17:40.4403827Z changes and commit them, and you can discard any commits you make in this
+2026-09-18T22:17:40.4404837Z state without impacting any branches by switching back to a branch.
+2026-09-18T22:17:40.4405388Z 
+2026-09-18T22:17:40.4405924Z If you want to create a new branch to retain commits you create, you may
+2026-09-18T22:17:40.4406633Z do so (now or later) by using -c with the switch command. Example:
+2026-09-18T22:17:40.4406907Z 
+2026-09-18T22:17:40.4407036Z   git switch -c <new-branch-name>
+2026-09-18T22:17:40.4407223Z 
+2026-09-18T22:17:40.4407329Z Or undo this operation with:
+2026-09-18T22:17:40.4407498Z 
+2026-09-18T22:17:40.4407581Z   git switch -
+2026-09-18T22:17:40.4407724Z 
+2026-09-18T22:17:40.4407936Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-09-18T22:17:40.4408530Z 
+2026-09-18T22:17:40.4408874Z HEAD is now at 271921b Merge 3eac37823642a5dca3c052b7944e489cda1a9150 into a118efcd0b333834fe2e1dd53862a06fee392f0e
+2026-09-18T22:17:40.4413040Z ##[endgroup]
+2026-09-18T22:17:40.4458379Z [command]/usr/bin/git log -1 --format=%H
+2026-09-18T22:17:40.4488918Z 271921b8a5967aa9c20ee146489300e75d851507

@@ -1,0 +1,49 @@
+﻿2026-09-18T22:16:38.4789922Z Current runner version: '2.337.0'
+2026-09-18T22:16:38.4807668Z ##[group]Runner Image Provisioner
+2026-09-18T22:16:38.4808389Z Hosted Compute Agent
+2026-09-18T22:16:38.4808735Z Version: 20260828.587
+2026-09-18T22:16:38.4809145Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+2026-09-18T22:16:38.4809564Z Build Date: 2026-08-28T16:44:25Z
+2026-09-18T22:16:38.4809978Z Worker ID: {31694cb6-f511-463d-abc7-c42f541344b9}
+2026-09-18T22:16:38.4810428Z Azure Region: westus3
+2026-09-18T22:16:38.4810763Z ##[endgroup]
+2026-09-18T22:16:38.4812034Z ##[group]Operating System
+2026-09-18T22:16:38.4812405Z Ubuntu
+2026-09-18T22:16:38.4812755Z 24.04.5
+2026-09-18T22:16:38.4813100Z LTS
+2026-09-18T22:16:38.4813402Z ##[endgroup]
+2026-09-18T22:16:38.4813745Z ##[group]Runner Image
+2026-09-18T22:16:38.4814106Z Image: ubuntu-24.04
+2026-09-18T22:16:38.4814468Z Version: 20260907.300.1
+2026-09-18T22:16:38.4815089Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md
+2026-09-18T22:16:38.4816109Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300
+2026-09-18T22:16:38.4816664Z ##[endgroup]
+2026-09-18T22:16:38.4818370Z ##[group]GITHUB_TOKEN Permissions
+2026-09-18T22:16:38.4819859Z Actions: write
+2026-09-18T22:16:38.4820209Z ArtifactMetadata: write
+2026-09-18T22:16:38.4820632Z Attestations: write
+2026-09-18T22:16:38.4821183Z Checks: write
+2026-09-18T22:16:38.4821533Z CodeQuality: write
+2026-09-18T22:16:38.4821871Z Contents: write
+2026-09-18T22:16:38.4822199Z CopilotRequests: write
+2026-09-18T22:16:38.4822569Z Deployments: write
+2026-09-18T22:16:38.4822924Z Discussions: write
+2026-09-18T22:16:38.4823317Z Drives: write
+2026-09-18T22:16:38.4823641Z Issues: write
+2026-09-18T22:16:38.4823955Z Metadata: read
+2026-09-18T22:16:38.4824359Z Models: read
+2026-09-18T22:16:38.4824705Z Packages: write
+2026-09-18T22:16:38.4825013Z Pages: write
+2026-09-18T22:16:38.4825372Z PullRequests: write
+2026-09-18T22:16:38.4825712Z RepositoryProjects: write
+2026-09-18T22:16:38.4826100Z SecurityEvents: write
+2026-09-18T22:16:38.4826503Z Statuses: write
+2026-09-18T22:16:38.4826824Z VulnerabilityAlerts: read
+2026-09-18T22:16:38.4827213Z ##[endgroup]
+2026-09-18T22:16:38.4828547Z Secret source: Actions
+2026-09-18T22:16:38.4829103Z Cache mode: write
+2026-09-18T22:16:38.4829711Z Prepare workflow directory
+2026-09-18T22:16:38.5171263Z Prepare all required actions
+2026-09-18T22:16:38.5202516Z Getting action download info
+2026-09-18T22:16:38.8072537Z Download action repository 'actions/checkout@v7' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-09-18T22:16:39.0561456Z Complete job name: Python Lint (ruff)

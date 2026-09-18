@@ -117,6 +117,7 @@ describe('CrossoversPage', () => {
     expect(createButton).toBeEnabled()
 
     fireEvent.change(nameInput, { target: { value: 'Annihilation' } })
+    groupsApi.list.mockResolvedValue([annihilation])
     fireEvent.click(createButton)
     expect(await screen.findByText('Annihilation')).toBeInTheDocument()
     expect(groupsApi.create).toHaveBeenCalledWith('Annihilation')
@@ -128,6 +129,7 @@ describe('CrossoversPage', () => {
     await screen.findByText(/No crossovers yet/)
 
     fireEvent.change(screen.getByLabelText('New crossover'), { target: { value: '  Annihilation  ' } })
+    groupsApi.list.mockResolvedValue([annihilation])
     fireEvent.click(screen.getByRole('button', { name: 'Create crossover' }))
 
     expect(await screen.findByText('Annihilation')).toBeInTheDocument()
@@ -145,12 +147,14 @@ describe('CrossoversPage', () => {
     await screen.findByText('Annihilation')
     fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
     fireEvent.change(screen.getByLabelText('Rename Annihilation'), { target: { value: 'Annihilation Conquest' } })
+    groupsApi.list.mockResolvedValue([{ ...annihilation, name: 'Annihilation Conquest' }])
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByText('Annihilation Conquest')).toBeInTheDocument()
     expect(groupsApi.rename).toHaveBeenCalledWith(7, 'Annihilation Conquest')
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    groupsApi.list.mockResolvedValue([])
     await waitFor(() => expect(screen.queryByText('Annihilation Conquest')).not.toBeInTheDocument())
     expect(window.confirm).toHaveBeenCalled()
     expect(groupsApi.delete).toHaveBeenCalledWith(7)
@@ -175,6 +179,7 @@ describe('CrossoversPage', () => {
     expect(screen.queryByLabelText('Rename Secret Wars')).not.toBeInTheDocument()
 
     resolveRename?.({ ...annihilation, name: 'Annihilation Conquest' })
+    groupsApi.list.mockResolvedValue([{ ...annihilation, name: 'Annihilation Conquest' }, secretWars])
     expect(await screen.findByText('Annihilation Conquest')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Rename' })[1]).toBeEnabled()
   })

@@ -130,7 +130,7 @@ function openRangeForm(name = /Annihilation.*0 members/) {
 
 async function loadIssues() {
   fireEvent.change(screen.getByLabelText('Comic series for issue range'), { target: { value: 'Nova' } })
-  const listbox = screen.getByRole('listbox', { name: 'Comic series for issue range results' })
+  const listbox = await screen.findByRole('listbox', { name: 'Comic series for issue range results' })
   fireEvent.click(within(listbox).getByRole('option', { name: /Nova/ }))
   await screen.findByText(/Issues from Nova/)
   await waitFor(() => {
@@ -282,7 +282,7 @@ describe('CrossoversPage issue ranges', () => {
       await screen.findByText('Annihilation')
       openRangeForm()
       fireEvent.change(screen.getByLabelText('Comic series for issue range'), { target: { value: 'Nova' } })
-      const listbox = screen.getByRole('listbox', { name: 'Comic series for issue range results' })
+      const listbox = await screen.findByRole('listbox', { name: 'Comic series for issue range results' })
       fireEvent.click(within(listbox).getByRole('option', { name: /Nova/ }))
 
       expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -320,7 +320,7 @@ describe('CrossoversPage issue ranges', () => {
     await screen.findByText('Annihilation')
     openRangeForm()
     fireEvent.change(screen.getByLabelText('Comic series for issue range'), { target: { value: 'Nova' } })
-    const listbox = screen.getByRole('listbox', { name: 'Comic series for issue range results' })
+    const listbox = await screen.findByRole('listbox', { name: 'Comic series for issue range results' })
     fireEvent.click(within(listbox).getByRole('option', { name: /Nova/ }))
     await screen.findByText(/Issues from Nova/)
 
@@ -341,7 +341,7 @@ describe('CrossoversPage issue ranges', () => {
     await screen.findByText('Annihilation')
     openRangeForm()
     fireEvent.change(screen.getByLabelText('Comic series for issue range'), { target: { value: 'Nova' } })
-    const listbox = screen.getByRole('listbox', { name: 'Comic series for issue range results' })
+    const listbox = await screen.findByRole('listbox', { name: 'Comic series for issue range results' })
     fireEvent.click(within(listbox).getByRole('option', { name: /Nova/ }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Nova has no issues to add.')
@@ -370,7 +370,7 @@ describe('CrossoversPage issue ranges', () => {
     openRangeForm()
 
     fireEvent.change(screen.getByLabelText('Comic series for issue range'), { target: { value: 'Nova' } })
-    const listbox = screen.getByRole('listbox', { name: 'Comic series for issue range results' })
+    const listbox = await screen.findByRole('listbox', { name: 'Comic series for issue range results' })
     fireEvent.click(within(listbox).getByRole('option', { name: /Nova/ }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Issues unavailable')

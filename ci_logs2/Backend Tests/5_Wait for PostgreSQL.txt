@@ -1,0 +1,27 @@
+﻿2026-09-18T22:17:40.5320818Z ##[group]Run i=1
+2026-09-18T22:17:40.5321115Z [36;1mi=1[0m
+2026-09-18T22:17:40.5321328Z [36;1mwhile [ $i -le 30 ]; do[0m
+2026-09-18T22:17:40.5321662Z [36;1m  if pg_isready -h postgres -p 5432 -U postgres; then[0m
+2026-09-18T22:17:40.5322026Z [36;1m    echo "PostgreSQL is ready"[0m
+2026-09-18T22:17:40.5322291Z [36;1m    exit 0[0m
+2026-09-18T22:17:40.5322491Z [36;1m  fi[0m
+2026-09-18T22:17:40.5322710Z [36;1m  echo "Waiting for PostgreSQL..."[0m
+2026-09-18T22:17:40.5322991Z [36;1m  sleep 2[0m
+2026-09-18T22:17:40.5323199Z [36;1m  i=$((i + 1))[0m
+2026-09-18T22:17:40.5323404Z [36;1mdone[0m
+2026-09-18T22:17:40.5323613Z [36;1mecho "PostgreSQL failed to start"[0m
+2026-09-18T22:17:40.5323873Z [36;1mexit 1[0m
+2026-09-18T22:17:40.5324164Z shell: sh -e {0}
+2026-09-18T22:17:40.5324351Z env:
+2026-09-18T22:17:40.5324535Z   REGISTRY: ghcr.io
+2026-09-18T22:17:40.5325178Z   IMAGE_NAME: JoshCLWren/comic-pile
+2026-09-18T22:17:40.5325430Z   CI: true
+2026-09-18T22:17:40.5325654Z   SECRET_KEY: test-secret-key-for-testing-only
+2026-09-18T22:17:40.5326325Z   DATABASE_URL: ***postgres:5432/comic_pile_test
+2026-09-18T22:17:40.5326864Z   TEST_DATABASE_URL: ***postgres:5432/comic_pile_test
+2026-09-18T22:17:40.5327184Z   REDIS_URL: redis://redis:6379/0
+2026-09-18T22:17:40.5327446Z   PGUSER: postgres
+2026-09-18T22:17:40.5327718Z   PATH: /workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin
+2026-09-18T22:17:40.5328031Z ##[endgroup]
+2026-09-18T22:17:40.6109811Z postgres:5432 - accepting connections
+2026-09-18T22:17:40.6113464Z PostgreSQL is ready

@@ -1,0 +1,49 @@
+﻿2026-09-18T22:16:39.0140228Z Current runner version: '2.337.0'
+2026-09-18T22:16:39.0172714Z ##[group]Runner Image Provisioner
+2026-09-18T22:16:39.0173652Z Hosted Compute Agent
+2026-09-18T22:16:39.0174244Z Version: 20260828.587
+2026-09-18T22:16:39.0174973Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+2026-09-18T22:16:39.0175980Z Build Date: 2026-08-28T16:44:25Z
+2026-09-18T22:16:39.0176925Z Worker ID: {1970178f-bdc8-4106-9c04-f06e5997ba8a}
+2026-09-18T22:16:39.0177848Z Azure Region: westus3
+2026-09-18T22:16:39.0178455Z ##[endgroup]
+2026-09-18T22:16:39.0180602Z ##[group]Operating System
+2026-09-18T22:16:39.0181239Z Ubuntu
+2026-09-18T22:16:39.0181968Z 24.04.5
+2026-09-18T22:16:39.0182528Z LTS
+2026-09-18T22:16:39.0183102Z ##[endgroup]
+2026-09-18T22:16:39.0183708Z ##[group]Runner Image
+2026-09-18T22:16:39.0184343Z Image: ubuntu-24.04
+2026-09-18T22:16:39.0185201Z Version: 20260907.300.1
+2026-09-18T22:16:39.0186646Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md
+2026-09-18T22:16:39.0188477Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300
+2026-09-18T22:16:39.0189461Z ##[endgroup]
+2026-09-18T22:16:39.0192466Z ##[group]GITHUB_TOKEN Permissions
+2026-09-18T22:16:39.0194950Z Actions: write
+2026-09-18T22:16:39.0195561Z ArtifactMetadata: write
+2026-09-18T22:16:39.0196316Z Attestations: write
+2026-09-18T22:16:39.0196913Z Checks: write
+2026-09-18T22:16:39.0197518Z CodeQuality: write
+2026-09-18T22:16:39.0198108Z Contents: write
+2026-09-18T22:16:39.0198662Z CopilotRequests: write
+2026-09-18T22:16:39.0199255Z Deployments: write
+2026-09-18T22:16:39.0199814Z Discussions: write
+2026-09-18T22:16:39.0200384Z Drives: write
+2026-09-18T22:16:39.0200939Z Issues: write
+2026-09-18T22:16:39.0201457Z Metadata: read
+2026-09-18T22:16:39.0202093Z Models: read
+2026-09-18T22:16:39.0202667Z Packages: write
+2026-09-18T22:16:39.0203222Z Pages: write
+2026-09-18T22:16:39.0203839Z PullRequests: write
+2026-09-18T22:16:39.0204398Z RepositoryProjects: write
+2026-09-18T22:16:39.0205084Z SecurityEvents: write
+2026-09-18T22:16:39.0205652Z Statuses: write
+2026-09-18T22:16:39.0206286Z VulnerabilityAlerts: read
+2026-09-18T22:16:39.0206938Z ##[endgroup]
+2026-09-18T22:16:39.0209094Z Secret source: Actions
+2026-09-18T22:16:39.0210034Z Cache mode: write
+2026-09-18T22:16:39.0210723Z Prepare workflow directory
+2026-09-18T22:16:39.0780618Z Prepare all required actions
+2026-09-18T22:16:39.0832564Z Getting action download info
+2026-09-18T22:16:39.3854644Z Download action repository 'actions/checkout@v7' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-09-18T22:16:39.6503510Z Complete job name: Migration Health

@@ -1,0 +1,144 @@
+﻿2026-09-18T22:16:39.4537295Z ##[group]Checking docker version
+2026-09-18T22:16:39.4548124Z ##[command]/usr/bin/docker version --format '{{.Server.APIVersion}}'
+2026-09-18T22:16:39.5614462Z '1.48'
+2026-09-18T22:16:39.5622197Z Docker daemon API version: '1.48'
+2026-09-18T22:16:39.5623072Z ##[command]/usr/bin/docker version --format '{{.Client.APIVersion}}'
+2026-09-18T22:16:39.6085606Z '1.48'
+2026-09-18T22:16:39.6093936Z Docker client API version: '1.48'
+2026-09-18T22:16:39.6098440Z ##[endgroup]
+2026-09-18T22:16:39.6101202Z ##[group]Clean up resources from previous jobs
+2026-09-18T22:16:39.6105564Z ##[command]/usr/bin/docker ps --all --quiet --no-trunc --filter "label=6d7b4c"
+2026-09-18T22:16:39.6247190Z ##[command]/usr/bin/docker network prune --force --filter "label=6d7b4c"
+2026-09-18T22:16:39.6377077Z ##[endgroup]
+2026-09-18T22:16:39.6377667Z ##[group]Create local container network
+2026-09-18T22:16:39.6386219Z ##[command]/usr/bin/docker network create --label 6d7b4c github_network_5d5c5020a8f048d8933bbcad7b1b4cd9
+2026-09-18T22:16:39.6871509Z ead35f4fedaec47ed47f45dce26aba92679bd6e066cfc139dc20d5c5d0e0b49d
+2026-09-18T22:16:39.6884222Z ##[endgroup]
+2026-09-18T22:16:39.6916272Z ##[group]Starting job container
+2026-09-18T22:16:39.6941898Z ##[command]/usr/bin/docker --config /home/runner/work/_temp/.docker_75d5d502-b33a-4054-a066-c6ef79c6cd2b login ghcr.io -u JoshCLWren --password-stdin
+2026-09-18T22:16:40.1312360Z ##[command]/usr/bin/docker --config /home/runner/work/_temp/.docker_75d5d502-b33a-4054-a066-c6ef79c6cd2b pull ghcr.io/joshclwren/comic-pile@sha256:63027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61
+2026-09-18T22:16:40.5814238Z ghcr.io/joshclwren/comic-pile@sha256:63027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61: Pulling from joshclwren/comic-pile
+2026-09-18T22:16:40.7010337Z 6310eb16bf42: Pulling fs layer
+2026-09-18T22:16:40.7011426Z d4a378e57055: Pulling fs layer
+2026-09-18T22:16:40.7012879Z 6bd54ebeb5af: Pulling fs layer
+2026-09-18T22:16:40.7013259Z 3d2c3ff37d4c: Pulling fs layer
+2026-09-18T22:16:40.7013842Z a1f392ccff9c: Pulling fs layer
+2026-09-18T22:16:40.7014238Z 57759ac501ae: Pulling fs layer
+2026-09-18T22:16:40.7014675Z 396d677cf641: Pulling fs layer
+2026-09-18T22:16:40.7015101Z 717544ad5ce1: Pulling fs layer
+2026-09-18T22:16:40.7015488Z b14072a0dfd7: Pulling fs layer
+2026-09-18T22:16:40.7015795Z 9b2fa253f78b: Pulling fs layer
+2026-09-18T22:16:40.7016269Z 01cfa5e5d82c: Pulling fs layer
+2026-09-18T22:16:40.7016714Z d993b0eb6203: Pulling fs layer
+2026-09-18T22:16:40.7017086Z 4f4fb700ef54: Pulling fs layer
+2026-09-18T22:16:40.7017499Z 6c7d03eeca83: Pulling fs layer
+2026-09-18T22:16:40.7017891Z d62d50cc5f64: Pulling fs layer
+2026-09-18T22:16:40.7018268Z 07fcd8a72641: Pulling fs layer
+2026-09-18T22:16:40.7018652Z 74532e5c575a: Pulling fs layer
+2026-09-18T22:16:40.7018964Z 17d2d749c762: Pulling fs layer
+2026-09-18T22:16:40.7019390Z f8cd15248567: Pulling fs layer
+2026-09-18T22:16:40.7020059Z 9e9176db32f2: Pulling fs layer
+2026-09-18T22:16:40.7020459Z 159ba15c0307: Pulling fs layer
+2026-09-18T22:16:40.7020841Z 6f32f000b414: Pulling fs layer
+2026-09-18T22:16:40.7021200Z 3d2c3ff37d4c: Waiting
+2026-09-18T22:16:40.7021559Z d62d50cc5f64: Waiting
+2026-09-18T22:16:40.7021922Z a1f392ccff9c: Waiting
+2026-09-18T22:16:40.7022294Z 07fcd8a72641: Waiting
+2026-09-18T22:16:40.7022599Z 57759ac501ae: Waiting
+2026-09-18T22:16:40.7022965Z 74532e5c575a: Waiting
+2026-09-18T22:16:40.7023389Z 396d677cf641: Waiting
+2026-09-18T22:16:40.7023770Z 17d2d749c762: Waiting
+2026-09-18T22:16:40.7024081Z 717544ad5ce1: Waiting
+2026-09-18T22:16:40.7024469Z f8cd15248567: Waiting
+2026-09-18T22:16:40.7024772Z b14072a0dfd7: Waiting
+2026-09-18T22:16:40.7025110Z 9b2fa253f78b: Waiting
+2026-09-18T22:16:40.7025479Z 9e9176db32f2: Waiting
+2026-09-18T22:16:40.7025769Z 01cfa5e5d82c: Waiting
+2026-09-18T22:16:40.7026152Z 159ba15c0307: Waiting
+2026-09-18T22:16:40.7026448Z d993b0eb6203: Waiting
+2026-09-18T22:16:40.7026811Z 6f32f000b414: Waiting
+2026-09-18T22:16:40.7027117Z 4f4fb700ef54: Waiting
+2026-09-18T22:16:40.7027383Z 6c7d03eeca83: Waiting
+2026-09-18T22:16:41.0093116Z d4a378e57055: Verifying Checksum
+2026-09-18T22:16:41.0094137Z d4a378e57055: Download complete
+2026-09-18T22:16:41.0374595Z 6bd54ebeb5af: Verifying Checksum
+2026-09-18T22:16:41.0375210Z 6bd54ebeb5af: Download complete
+2026-09-18T22:16:41.1110245Z 6310eb16bf42: Verifying Checksum
+2026-09-18T22:16:41.1111160Z 6310eb16bf42: Download complete
+2026-09-18T22:16:41.1682724Z 3d2c3ff37d4c: Verifying Checksum
+2026-09-18T22:16:41.1687257Z 3d2c3ff37d4c: Download complete
+2026-09-18T22:16:41.3125865Z 396d677cf641: Verifying Checksum
+2026-09-18T22:16:41.3127247Z 396d677cf641: Download complete
+2026-09-18T22:16:41.3863795Z 57759ac501ae: Verifying Checksum
+2026-09-18T22:16:41.3865839Z 57759ac501ae: Download complete
+2026-09-18T22:16:41.4778578Z a1f392ccff9c: Verifying Checksum
+2026-09-18T22:16:41.4779920Z a1f392ccff9c: Download complete
+2026-09-18T22:16:41.5440475Z b14072a0dfd7: Verifying Checksum
+2026-09-18T22:16:41.5441856Z b14072a0dfd7: Download complete
+2026-09-18T22:16:41.7092231Z 01cfa5e5d82c: Download complete
+2026-09-18T22:16:41.7597460Z 717544ad5ce1: Verifying Checksum
+2026-09-18T22:16:41.7600037Z 717544ad5ce1: Download complete
+2026-09-18T22:16:41.8153484Z 9b2fa253f78b: Verifying Checksum
+2026-09-18T22:16:41.8154478Z 9b2fa253f78b: Download complete
+2026-09-18T22:16:41.9147447Z 4f4fb700ef54: Verifying Checksum
+2026-09-18T22:16:41.9148183Z 4f4fb700ef54: Download complete
+2026-09-18T22:16:41.9482081Z 6310eb16bf42: Pull complete
+2026-09-18T22:16:42.0357367Z d993b0eb6203: Verifying Checksum
+2026-09-18T22:16:42.0357957Z d993b0eb6203: Download complete
+2026-09-18T22:16:42.2025034Z 07fcd8a72641: Verifying Checksum
+2026-09-18T22:16:42.2026364Z 07fcd8a72641: Download complete
+2026-09-18T22:16:42.2692060Z d62d50cc5f64: Verifying Checksum
+2026-09-18T22:16:42.2692714Z d62d50cc5f64: Download complete
+2026-09-18T22:16:42.3525052Z 74532e5c575a: Download complete
+2026-09-18T22:16:42.4731715Z 6c7d03eeca83: Verifying Checksum
+2026-09-18T22:16:42.4738217Z 6c7d03eeca83: Download complete
+2026-09-18T22:16:42.6388620Z f8cd15248567: Download complete
+2026-09-18T22:16:42.7477535Z 9e9176db32f2: Download complete
+2026-09-18T22:16:42.8392316Z 159ba15c0307: Download complete
+2026-09-18T22:16:42.9655095Z 17d2d749c762: Verifying Checksum
+2026-09-18T22:16:42.9655657Z 17d2d749c762: Download complete
+2026-09-18T22:16:43.0015504Z 6f32f000b414: Verifying Checksum
+2026-09-18T22:16:43.0016080Z 6f32f000b414: Download complete
+2026-09-18T22:16:44.7925852Z d4a378e57055: Pull complete
+2026-09-18T22:16:45.5173512Z 6bd54ebeb5af: Pull complete
+2026-09-18T22:16:45.5361520Z 3d2c3ff37d4c: Pull complete
+2026-09-18T22:16:46.6875370Z a1f392ccff9c: Pull complete
+2026-09-18T22:16:47.4609152Z 57759ac501ae: Pull complete
+2026-09-18T22:16:47.4835281Z 396d677cf641: Pull complete
+2026-09-18T22:16:49.6541059Z 717544ad5ce1: Pull complete
+2026-09-18T22:16:49.6678266Z b14072a0dfd7: Pull complete
+2026-09-18T22:16:50.3466597Z 9b2fa253f78b: Pull complete
+2026-09-18T22:16:50.3594142Z 01cfa5e5d82c: Pull complete
+2026-09-18T22:16:50.7154604Z d993b0eb6203: Pull complete
+2026-09-18T22:16:50.7255762Z 4f4fb700ef54: Pull complete
+2026-09-18T22:16:58.2565913Z 6c7d03eeca83: Pull complete
+2026-09-18T22:16:58.9368030Z d62d50cc5f64: Pull complete
+2026-09-18T22:16:58.9499850Z 07fcd8a72641: Pull complete
+2026-09-18T22:16:58.9627158Z 74532e5c575a: Pull complete
+2026-09-18T22:17:21.1432136Z 17d2d749c762: Pull complete
+2026-09-18T22:17:21.3433703Z f8cd15248567: Pull complete
+2026-09-18T22:17:21.6686547Z 9e9176db32f2: Pull complete
+2026-09-18T22:17:21.7059179Z 159ba15c0307: Pull complete
+2026-09-18T22:17:21.7443174Z 6f32f000b414: Pull complete
+2026-09-18T22:17:21.7763526Z Digest: sha256:63027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61
+2026-09-18T22:17:21.7771086Z Status: Downloaded newer image for ghcr.io/joshclwren/comic-pile@sha256:63027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61
+2026-09-18T22:17:21.7785558Z ghcr.io/joshclwren/comic-pile@sha256:63027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61
+2026-09-18T22:17:21.7864602Z ##[command]/usr/bin/docker create --name 3c22a68a9fcb458aaacbb8bd08c76520_ghcriojoshclwrencomicpilesha25663027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61_9e95cc --label 6d7b4c --workdir /__w/comic-pile/comic-pile --network github_network_5d5c5020a8f048d8933bbcad7b1b4cd9  -e "HOME=/github/home" -e GITHUB_ACTIONS=true -e CI=true -v "/var/run/docker.sock":"/var/run/docker.sock" -v "/home/runner/work":"/__w" -v "/home/runner/actions-runner/cached/2.337.0/externals":"/__e":ro -v "/home/runner/work/_temp":"/__w/_temp" -v "/home/runner/work/_actions":"/__w/_actions" -v "/opt/hostedtoolcache":"/__t" -v "/home/runner/work/_temp/_github_home":"/github/home" -v "/home/runner/work/_temp/_github_workflow":"/github/workflow" --entrypoint "tail" ghcr.io/joshclwren/comic-pile@sha256:63027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61 "-f" "/dev/null"
+2026-09-18T22:17:21.9398797Z 70374692f673d5efd688550bb1bf92edd38d5d25b74c0c80784923d447bd197b
+2026-09-18T22:17:21.9418313Z ##[command]/usr/bin/docker start 70374692f673d5efd688550bb1bf92edd38d5d25b74c0c80784923d447bd197b
+2026-09-18T22:17:22.1945904Z 70374692f673d5efd688550bb1bf92edd38d5d25b74c0c80784923d447bd197b
+2026-09-18T22:17:22.1963491Z ##[command]/usr/bin/docker ps --all --filter id=70374692f673d5efd688550bb1bf92edd38d5d25b74c0c80784923d447bd197b --filter status=running --no-trunc --format "{{.ID}} {{.Status}}"
+2026-09-18T22:17:22.2089200Z 70374692f673d5efd688550bb1bf92edd38d5d25b74c0c80784923d447bd197b Up Less than a second
+2026-09-18T22:17:22.2104086Z ##[command]/usr/bin/docker inspect --format "{{range .Config.Env}}{{println .}}{{end}}" 70374692f673d5efd688550bb1bf92edd38d5d25b74c0c80784923d447bd197b
+2026-09-18T22:17:22.2221001Z HOME=/github/home
+2026-09-18T22:17:22.2223485Z GITHUB_ACTIONS=true
+2026-09-18T22:17:22.2226582Z CI=true
+2026-09-18T22:17:22.2227286Z PATH=/workspace/.venv/bin:/workspace/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+2026-09-18T22:17:22.2227969Z PYTHON_VERSION=3.14.7
+2026-09-18T22:17:22.2228531Z PYTHON_SHA256=3b48dac8fb59f62eaa67ac83c1eb12bda1b7a08406dd286e252c11a66be27f81
+2026-09-18T22:17:22.2229147Z DEBIAN_FRONTEND=noninteractive
+2026-09-18T22:17:22.2229726Z PYTHONUNBUFFERED=1
+2026-09-18T22:17:22.2230025Z PYTHONDONTWRITEBYTECODE=1
+2026-09-18T22:17:22.2237870Z ##[endgroup]
+2026-09-18T22:17:22.2246013Z ##[group]Waiting for all services to be ready
+2026-09-18T22:17:22.2247842Z ##[endgroup]

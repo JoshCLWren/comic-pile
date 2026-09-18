@@ -1,0 +1,14 @@
+﻿2026-09-18T22:17:40.4715728Z ##[group]Run rm -f .env .env.test .env.backup .envrc .env.local .env.production
+2026-09-18T22:17:40.4716358Z [36;1mrm -f .env .env.test .env.backup .envrc .env.local .env.production[0m
+2026-09-18T22:17:40.4720263Z shell: sh -e {0}
+2026-09-18T22:17:40.4720509Z env:
+2026-09-18T22:17:40.4720699Z   REGISTRY: ghcr.io
+2026-09-18T22:17:40.4720940Z   IMAGE_NAME: JoshCLWren/comic-pile
+2026-09-18T22:17:40.4721201Z   CI: true
+2026-09-18T22:17:40.4721441Z   SECRET_KEY: test-secret-key-for-testing-only
+2026-09-18T22:17:40.4722126Z   DATABASE_URL: ***postgres:5432/comic_pile_test
+2026-09-18T22:17:40.4722785Z   TEST_DATABASE_URL: ***postgres:5432/comic_pile_test
+2026-09-18T22:17:40.4723167Z   REDIS_URL: redis://redis:6379/0
+2026-09-18T22:17:40.4723454Z   PGUSER: postgres
+2026-09-18T22:17:40.4723741Z   PATH: /workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin
+2026-09-18T22:17:40.4724058Z ##[endgroup]

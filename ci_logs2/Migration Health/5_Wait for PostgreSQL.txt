@@ -1,0 +1,17 @@
+﻿2026-09-18T22:17:47.4737522Z ##[group]Run i=1
+2026-09-18T22:17:47.4737871Z [36;1mi=1[0m
+2026-09-18T22:17:47.4738271Z [36;1mwhile [ $i -le 30 ]; do[0m
+2026-09-18T22:17:47.4738734Z [36;1m  if pg_isready -h postgres -p 5432 -U postgres; then exit 0; fi[0m
+2026-09-18T22:17:47.4739184Z [36;1m  sleep 2; i=$((i + 1))[0m
+2026-09-18T22:17:47.4739507Z [36;1mdone[0m
+2026-09-18T22:17:47.4739783Z [36;1mexit 1[0m
+2026-09-18T22:17:47.4740174Z shell: sh -e {0}
+2026-09-18T22:17:47.4740472Z env:
+2026-09-18T22:17:47.4740729Z   REGISTRY: ghcr.io
+2026-09-18T22:17:47.4741083Z   IMAGE_NAME: JoshCLWren/comic-pile
+2026-09-18T22:17:47.4741481Z   CI: true
+2026-09-18T22:17:47.4742172Z   DATABASE_URL: ***postgres:5432/comic_pile_test
+2026-09-18T22:17:47.4742797Z   TEST_DATABASE_URL: ***postgres:5432/comic_pile_test
+2026-09-18T22:17:47.4743237Z   PATH: /workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin
+2026-09-18T22:17:47.4743604Z ##[endgroup]
+2026-09-18T22:17:47.5472511Z postgres:5432 - accepting connections

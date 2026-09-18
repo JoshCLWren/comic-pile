@@ -1,0 +1,46 @@
+﻿2026-09-18T22:16:42.0716649Z ##[group]Run pnpm install --frozen-lockfile
+2026-09-18T22:16:42.0717026Z [36;1mpnpm install --frozen-lockfile[0m
+2026-09-18T22:16:42.0736033Z shell: /usr/bin/bash -e {0}
+2026-09-18T22:16:42.0736311Z env:
+2026-09-18T22:16:42.0736536Z   REGISTRY: ghcr.io
+2026-09-18T22:16:42.0736789Z   IMAGE_NAME: JoshCLWren/comic-pile
+2026-09-18T22:16:42.0737048Z ##[endgroup]
+2026-09-18T22:16:42.1829569Z ! Corepack is about to download https://registry.npmjs.org/pnpm/-/pnpm-10.15.0.tgz
+2026-09-18T22:16:43.7844155Z frontend                                 |  WARN  The field "pnpm.onlyBuiltDependencies" was found in /home/runner/work/comic-pile/comic-pile/frontend/package.json. This will not take effect. You should configure "pnpm.onlyBuiltDependencies" at the root of the workspace instead.
+2026-09-18T22:16:43.7911022Z Scope: all 2 workspace projects
+2026-09-18T22:16:43.8361417Z Lockfile is up to date, resolution step is skipped
+2026-09-18T22:16:43.8822409Z Progress: resolved 1, reused 0, downloaded 0, added 0
+2026-09-18T22:16:43.9564956Z Packages: +978
+2026-09-18T22:16:43.9565671Z ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+2026-09-18T22:16:44.8908221Z Progress: resolved 978, reused 0, downloaded 173, added 160
+2026-09-18T22:16:45.8929361Z Progress: resolved 978, reused 0, downloaded 460, added 454
+2026-09-18T22:16:46.8922780Z Progress: resolved 978, reused 0, downloaded 767, added 754
+2026-09-18T22:16:47.8441581Z Progress: resolved 978, reused 0, downloaded 978, added 978, done
+2026-09-18T22:16:51.7972742Z 
+2026-09-18T22:16:51.7974034Z dependencies:
+2026-09-18T22:16:51.7974547Z + dotenv 17.4.2
+2026-09-18T22:16:51.7974717Z 
+2026-09-18T22:16:51.7974877Z devDependencies:
+2026-09-18T22:16:51.7975181Z + @eslint/js 9.39.5
+2026-09-18T22:16:51.7975541Z + @oxlint/plugins 1.82.0
+2026-09-18T22:16:51.7975944Z + eslint 9.39.5
+2026-09-18T22:16:51.7976274Z + eslint-plugin-react-hooks 7.1.1
+2026-09-18T22:16:51.7976618Z + eslint-plugin-react-refresh 0.5.3
+2026-09-18T22:16:51.7977008Z + globals 15.15.0
+2026-09-18T22:16:51.7977316Z + htmlhint 1.9.2
+2026-09-18T22:16:51.7977603Z + jiti 2.7.0
+2026-09-18T22:16:51.7977855Z + oxlint 1.82.0
+2026-09-18T22:16:51.7978283Z + react 19.2.7
+2026-09-18T22:16:51.7978623Z + react-dom 19.2.7
+2026-09-18T22:16:51.7979090Z + testdriverai 7.11.58-test
+2026-09-18T22:16:51.7979421Z + vitest 4.1.11
+2026-09-18T22:16:51.7979613Z 
+2026-09-18T22:16:51.7980758Z ╭ Warning ─────────────────────────────────────────────────────────────────────╮
+2026-09-18T22:16:51.7981373Z │                                                                              │
+2026-09-18T22:16:51.7981955Z │   Ignored build scripts: esbuild, msw.                                       │
+2026-09-18T22:16:51.7982817Z │   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+2026-09-18T22:16:51.7983844Z │   to run scripts.                                                            │
+2026-09-18T22:16:51.7985088Z │                                                                              │
+2026-09-18T22:16:51.7985995Z ╰──────────────────────────────────────────────────────────────────────────────╯
+2026-09-18T22:16:51.7986513Z 
+2026-09-18T22:16:51.8242147Z Done in 8.6s using pnpm v10.15.0

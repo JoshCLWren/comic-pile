@@ -1,0 +1,33 @@
+﻿2026-09-18T22:17:24.7727813Z Post job cleanup.
+2026-09-18T22:17:24.7735829Z ##[command]/usr/bin/docker exec  74f0ac2c1aeeb5e66aeac52e3423caba0501492b1f8cfd04614804a18127b111 sh -c "cat /etc/*release | grep ^ID"
+2026-09-18T22:17:24.9481805Z [command]/usr/bin/git version
+2026-09-18T22:17:24.9526874Z git version 2.47.3
+2026-09-18T22:17:24.9631160Z Temporarily overriding HOME='/__w/_temp/0c50def2-2b89-401b-9697-edac34a4e225' before making global git config changes
+2026-09-18T22:17:24.9632420Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-18T22:17:24.9633388Z [command]/usr/bin/git config --global --add safe.directory /__w/comic-pile/comic-pile
+2026-09-18T22:17:24.9661881Z Removing SSH command configuration
+2026-09-18T22:17:24.9665057Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-18T22:17:24.9712144Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-18T22:17:25.0014936Z Removing HTTP extra header
+2026-09-18T22:17:25.0016077Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-18T22:17:25.0049144Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-18T22:17:25.0299977Z Removing includeIf entries pointing to credentials config files
+2026-09-18T22:17:25.0308214Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-18T22:17:25.0338558Z includeif.gitdir:/__w/comic-pile/comic-pile/.git.path
+2026-09-18T22:17:25.0339338Z includeif.gitdir:/__w/comic-pile/comic-pile/.git/worktrees/*.path
+2026-09-18T22:17:25.0340168Z includeif.gitdir:/github/workspace/.git.path
+2026-09-18T22:17:25.0340757Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-09-18T22:17:25.0349851Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/__w/comic-pile/comic-pile/.git.path
+2026-09-18T22:17:25.0382818Z /__w/_temp/git-credentials-f0516ff3-ba24-4760-80e7-5427c8d332ba.config
+2026-09-18T22:17:25.0392877Z [command]/usr/bin/git config --local --unset includeif.gitdir:/__w/comic-pile/comic-pile/.git.path \/__w\/_temp\/git\-credentials\-f0516ff3\-ba24\-4760\-80e7\-5427c8d332ba\.config
+2026-09-18T22:17:25.0451094Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/__w/comic-pile/comic-pile/.git/worktrees/*.path
+2026-09-18T22:17:25.0471037Z /__w/_temp/git-credentials-f0516ff3-ba24-4760-80e7-5427c8d332ba.config
+2026-09-18T22:17:25.0488148Z [command]/usr/bin/git config --local --unset includeif.gitdir:/__w/comic-pile/comic-pile/.git/worktrees/*.path \/__w\/_temp\/git\-credentials\-f0516ff3\-ba24\-4760\-80e7\-5427c8d332ba\.config
+2026-09-18T22:17:25.0520016Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-09-18T22:17:25.0549273Z /github/runner_temp/git-credentials-f0516ff3-ba24-4760-80e7-5427c8d332ba.config
+2026-09-18T22:17:25.0561185Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-f0516ff3\-ba24\-4760\-80e7\-5427c8d332ba\.config
+2026-09-18T22:17:25.0606256Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-09-18T22:17:25.0633384Z /github/runner_temp/git-credentials-f0516ff3-ba24-4760-80e7-5427c8d332ba.config
+2026-09-18T22:17:25.0641263Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-f0516ff3\-ba24\-4760\-80e7\-5427c8d332ba\.config
+2026-09-18T22:17:25.0680770Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-18T22:17:25.0912682Z Removing credentials config '/__w/_temp/git-credentials-f0516ff3-ba24-4760-80e7-5427c8d332ba.config'

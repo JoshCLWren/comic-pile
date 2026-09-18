@@ -1,0 +1,18 @@
+﻿2026-09-18T22:17:47.5539146Z ##[group]Run HEADS=$(alembic heads 2>/dev/null | grep -c "(head)")
+2026-09-18T22:17:47.5539718Z [36;1mHEADS=$(alembic heads 2>/dev/null | grep -c "(head)")[0m
+2026-09-18T22:17:47.5540134Z [36;1mif [ "$HEADS" -ne 1 ]; then[0m
+2026-09-18T22:17:47.5540637Z [36;1m  echo "ERROR: $HEADS Alembic heads detected - resolve before merging"[0m
+2026-09-18T22:17:47.5541095Z [36;1m  alembic heads[0m
+2026-09-18T22:17:47.5541440Z [36;1m  exit 1[0m
+2026-09-18T22:17:47.5541733Z [36;1mfi[0m
+2026-09-18T22:17:47.5542200Z [36;1mecho "Single head confirmed: $(alembic heads 2>/dev/null)"[0m
+2026-09-18T22:17:47.5542769Z shell: sh -e {0}
+2026-09-18T22:17:47.5543054Z env:
+2026-09-18T22:17:47.5543319Z   REGISTRY: ghcr.io
+2026-09-18T22:17:47.5543668Z   IMAGE_NAME: JoshCLWren/comic-pile
+2026-09-18T22:17:47.5544006Z   CI: true
+2026-09-18T22:17:47.5544706Z   DATABASE_URL: ***postgres:5432/comic_pile_test
+2026-09-18T22:17:47.5545498Z   TEST_DATABASE_URL: ***postgres:5432/comic_pile_test
+2026-09-18T22:17:47.5545980Z   PATH: /workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin
+2026-09-18T22:17:47.5546990Z ##[endgroup]
+2026-09-18T22:17:50.7918502Z Single head confirmed: b1c2d3e4f5a6 (head)

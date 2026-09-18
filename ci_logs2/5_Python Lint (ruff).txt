@@ -1,0 +1,345 @@
+﻿2026-09-18T22:16:38.4790279Z Current runner version: '2.337.0'
+2026-09-18T22:16:38.4807818Z ##[group]Runner Image Provisioner
+2026-09-18T22:16:38.4808391Z Hosted Compute Agent
+2026-09-18T22:16:38.4808737Z Version: 20260828.587
+2026-09-18T22:16:38.4809147Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+2026-09-18T22:16:38.4809565Z Build Date: 2026-08-28T16:44:25Z
+2026-09-18T22:16:38.4809980Z Worker ID: {31694cb6-f511-463d-abc7-c42f541344b9}
+2026-09-18T22:16:38.4810430Z Azure Region: westus3
+2026-09-18T22:16:38.4810765Z ##[endgroup]
+2026-09-18T22:16:38.4812040Z ##[group]Operating System
+2026-09-18T22:16:38.4812432Z Ubuntu
+2026-09-18T22:16:38.4812756Z 24.04.5
+2026-09-18T22:16:38.4813102Z LTS
+2026-09-18T22:16:38.4813404Z ##[endgroup]
+2026-09-18T22:16:38.4813747Z ##[group]Runner Image
+2026-09-18T22:16:38.4814108Z Image: ubuntu-24.04
+2026-09-18T22:16:38.4814470Z Version: 20260907.300.1
+2026-09-18T22:16:38.4815233Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md
+2026-09-18T22:16:38.4816111Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300
+2026-09-18T22:16:38.4816666Z ##[endgroup]
+2026-09-18T22:16:38.4818372Z ##[group]GITHUB_TOKEN Permissions
+2026-09-18T22:16:38.4819864Z Actions: write
+2026-09-18T22:16:38.4820212Z ArtifactMetadata: write
+2026-09-18T22:16:38.4820633Z Attestations: write
+2026-09-18T22:16:38.4821185Z Checks: write
+2026-09-18T22:16:38.4821534Z CodeQuality: write
+2026-09-18T22:16:38.4821873Z Contents: write
+2026-09-18T22:16:38.4822201Z CopilotRequests: write
+2026-09-18T22:16:38.4822571Z Deployments: write
+2026-09-18T22:16:38.4822925Z Discussions: write
+2026-09-18T22:16:38.4823319Z Drives: write
+2026-09-18T22:16:38.4823643Z Issues: write
+2026-09-18T22:16:38.4823956Z Metadata: read
+2026-09-18T22:16:38.4824361Z Models: read
+2026-09-18T22:16:38.4824706Z Packages: write
+2026-09-18T22:16:38.4825015Z Pages: write
+2026-09-18T22:16:38.4825374Z PullRequests: write
+2026-09-18T22:16:38.4825723Z RepositoryProjects: write
+2026-09-18T22:16:38.4826102Z SecurityEvents: write
+2026-09-18T22:16:38.4826505Z Statuses: write
+2026-09-18T22:16:38.4826826Z VulnerabilityAlerts: read
+2026-09-18T22:16:38.4827214Z ##[endgroup]
+2026-09-18T22:16:38.4828553Z Secret source: Actions
+2026-09-18T22:16:38.4829161Z Cache mode: write
+2026-09-18T22:16:38.4829713Z Prepare workflow directory
+2026-09-18T22:16:38.5171293Z Prepare all required actions
+2026-09-18T22:16:38.5202540Z Getting action download info
+2026-09-18T22:16:38.8072572Z Download action repository 'actions/checkout@v7' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-09-18T22:16:39.0561497Z Complete job name: Python Lint (ruff)
+2026-09-18T22:16:39.0847451Z ##[group]Checking docker version
+2026-09-18T22:16:39.0855562Z ##[command]/usr/bin/docker version --format '{{.Server.APIVersion}}'
+2026-09-18T22:16:39.2334346Z '1.48'
+2026-09-18T22:16:39.2347873Z Docker daemon API version: '1.48'
+2026-09-18T22:16:39.2348329Z ##[command]/usr/bin/docker version --format '{{.Client.APIVersion}}'
+2026-09-18T22:16:39.2678853Z '1.48'
+2026-09-18T22:16:39.2691331Z Docker client API version: '1.48'
+2026-09-18T22:16:39.2696760Z ##[endgroup]
+2026-09-18T22:16:39.2698423Z ##[group]Clean up resources from previous jobs
+2026-09-18T22:16:39.2703041Z ##[command]/usr/bin/docker ps --all --quiet --no-trunc --filter "label=3a814c"
+2026-09-18T22:16:39.2819502Z ##[command]/usr/bin/docker network prune --force --filter "label=3a814c"
+2026-09-18T22:16:39.2919603Z ##[endgroup]
+2026-09-18T22:16:39.2919917Z ##[group]Create local container network
+2026-09-18T22:16:39.2926928Z ##[command]/usr/bin/docker network create --label 3a814c github_network_8361cc22344b41298a0d3c54632c2434
+2026-09-18T22:16:39.3305625Z e552c0ddf10591dc00b39968b89b1a3e50f589fff05b83047ee6b0d1b77ac3c9
+2026-09-18T22:16:39.3321943Z ##[endgroup]
+2026-09-18T22:16:39.3338972Z ##[group]Starting job container
+2026-09-18T22:16:39.3354449Z ##[command]/usr/bin/docker --config /home/runner/work/_temp/.docker_08704152-2445-4231-b5b2-f1b9e8928ccc login ghcr.io -u JoshCLWren --password-stdin
+2026-09-18T22:16:39.9801679Z ##[command]/usr/bin/docker --config /home/runner/work/_temp/.docker_08704152-2445-4231-b5b2-f1b9e8928ccc pull ghcr.io/joshclwren/comic-pile@sha256:63027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61
+2026-09-18T22:16:40.6607360Z ghcr.io/joshclwren/comic-pile@sha256:63027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61: Pulling from joshclwren/comic-pile
+2026-09-18T22:16:40.8658578Z 6310eb16bf42: Pulling fs layer
+2026-09-18T22:16:40.8659337Z d4a378e57055: Pulling fs layer
+2026-09-18T22:16:40.8660019Z 6bd54ebeb5af: Pulling fs layer
+2026-09-18T22:16:40.8660649Z 3d2c3ff37d4c: Pulling fs layer
+2026-09-18T22:16:40.8661318Z a1f392ccff9c: Pulling fs layer
+2026-09-18T22:16:40.8661855Z 57759ac501ae: Pulling fs layer
+2026-09-18T22:16:40.8662404Z 396d677cf641: Pulling fs layer
+2026-09-18T22:16:40.8662937Z 717544ad5ce1: Pulling fs layer
+2026-09-18T22:16:40.8663483Z b14072a0dfd7: Pulling fs layer
+2026-09-18T22:16:40.8664019Z 9b2fa253f78b: Pulling fs layer
+2026-09-18T22:16:40.8664577Z 01cfa5e5d82c: Pulling fs layer
+2026-09-18T22:16:40.8665114Z d993b0eb6203: Pulling fs layer
+2026-09-18T22:16:40.8665711Z 4f4fb700ef54: Pulling fs layer
+2026-09-18T22:16:40.8666324Z 6c7d03eeca83: Pulling fs layer
+2026-09-18T22:16:40.8666907Z 3d2c3ff37d4c: Waiting
+2026-09-18T22:16:40.8667407Z d62d50cc5f64: Pulling fs layer
+2026-09-18T22:16:40.8667974Z 07fcd8a72641: Pulling fs layer
+2026-09-18T22:16:40.8668540Z 74532e5c575a: Pulling fs layer
+2026-09-18T22:16:40.8669087Z a1f392ccff9c: Waiting
+2026-09-18T22:16:40.8669578Z 17d2d749c762: Pulling fs layer
+2026-09-18T22:16:40.8670145Z f8cd15248567: Pulling fs layer
+2026-09-18T22:16:40.8670782Z 9e9176db32f2: Pulling fs layer
+2026-09-18T22:16:40.8671502Z 57759ac501ae: Waiting
+2026-09-18T22:16:40.8672092Z 159ba15c0307: Pulling fs layer
+2026-09-18T22:16:40.8672767Z 6f32f000b414: Pulling fs layer
+2026-09-18T22:16:40.8673441Z 396d677cf641: Waiting
+2026-09-18T22:16:40.8674050Z 717544ad5ce1: Waiting
+2026-09-18T22:16:40.8674680Z 6c7d03eeca83: Waiting
+2026-09-18T22:16:40.8675365Z b14072a0dfd7: Waiting
+2026-09-18T22:16:40.8676006Z d62d50cc5f64: Waiting
+2026-09-18T22:16:40.8676604Z 9b2fa253f78b: Waiting
+2026-09-18T22:16:40.8677203Z 01cfa5e5d82c: Waiting
+2026-09-18T22:16:40.8677800Z 07fcd8a72641: Waiting
+2026-09-18T22:16:40.8678388Z 74532e5c575a: Waiting
+2026-09-18T22:16:40.8678979Z d993b0eb6203: Waiting
+2026-09-18T22:16:40.8679572Z 4f4fb700ef54: Waiting
+2026-09-18T22:16:40.8680156Z 17d2d749c762: Waiting
+2026-09-18T22:16:40.8680746Z f8cd15248567: Waiting
+2026-09-18T22:16:40.8681401Z 9e9176db32f2: Waiting
+2026-09-18T22:16:40.8681989Z 159ba15c0307: Waiting
+2026-09-18T22:16:40.8682916Z 6f32f000b414: Waiting
+2026-09-18T22:16:41.1732046Z d4a378e57055: Verifying Checksum
+2026-09-18T22:16:41.1732551Z d4a378e57055: Download complete
+2026-09-18T22:16:41.2040125Z 6bd54ebeb5af: Verifying Checksum
+2026-09-18T22:16:41.2040637Z 6bd54ebeb5af: Download complete
+2026-09-18T22:16:41.2334105Z 6310eb16bf42: Verifying Checksum
+2026-09-18T22:16:41.2334519Z 6310eb16bf42: Download complete
+2026-09-18T22:16:41.3996015Z 3d2c3ff37d4c: Verifying Checksum
+2026-09-18T22:16:41.3996694Z 3d2c3ff37d4c: Download complete
+2026-09-18T22:16:41.6775029Z 396d677cf641: Verifying Checksum
+2026-09-18T22:16:41.6775563Z 396d677cf641: Download complete
+2026-09-18T22:16:41.6803222Z 57759ac501ae: Verifying Checksum
+2026-09-18T22:16:41.6803584Z 57759ac501ae: Download complete
+2026-09-18T22:16:41.8432172Z 6310eb16bf42: Pull complete
+2026-09-18T22:16:41.9329475Z b14072a0dfd7: Verifying Checksum
+2026-09-18T22:16:41.9330044Z b14072a0dfd7: Download complete
+2026-09-18T22:16:42.5094728Z 9b2fa253f78b: Verifying Checksum
+2026-09-18T22:16:42.5095147Z 9b2fa253f78b: Download complete
+2026-09-18T22:16:42.7403104Z a1f392ccff9c: Verifying Checksum
+2026-09-18T22:16:42.7976400Z a1f392ccff9c: Download complete
+2026-09-18T22:16:42.7976738Z 01cfa5e5d82c: Verifying Checksum
+2026-09-18T22:16:42.7977595Z 01cfa5e5d82c: Download complete
+2026-09-18T22:16:42.9798525Z 717544ad5ce1: Verifying Checksum
+2026-09-18T22:16:42.9798842Z 717544ad5ce1: Download complete
+2026-09-18T22:16:43.0275207Z 4f4fb700ef54: Verifying Checksum
+2026-09-18T22:16:43.0275566Z 4f4fb700ef54: Download complete
+2026-09-18T22:16:43.0828309Z d993b0eb6203: Verifying Checksum
+2026-09-18T22:16:43.0834412Z d993b0eb6203: Download complete
+2026-09-18T22:16:43.2651480Z d4a378e57055: Pull complete
+2026-09-18T22:16:43.3363196Z 07fcd8a72641: Verifying Checksum
+2026-09-18T22:16:43.3365970Z 07fcd8a72641: Download complete
+2026-09-18T22:16:43.3476377Z d62d50cc5f64: Verifying Checksum
+2026-09-18T22:16:43.3476959Z d62d50cc5f64: Download complete
+2026-09-18T22:16:43.6203916Z 74532e5c575a: Verifying Checksum
+2026-09-18T22:16:43.6204229Z 74532e5c575a: Download complete
+2026-09-18T22:16:43.8699870Z f8cd15248567: Download complete
+2026-09-18T22:16:44.1513556Z 9e9176db32f2: Verifying Checksum
+2026-09-18T22:16:44.1513866Z 9e9176db32f2: Download complete
+2026-09-18T22:16:44.2583103Z 6bd54ebeb5af: Pull complete
+2026-09-18T22:16:44.4015693Z 159ba15c0307: Verifying Checksum
+2026-09-18T22:16:44.4015997Z 159ba15c0307: Download complete
+2026-09-18T22:16:44.4486114Z 3d2c3ff37d4c: Pull complete
+2026-09-18T22:16:44.6566221Z 6f32f000b414: Download complete
+2026-09-18T22:16:45.9503954Z a1f392ccff9c: Pull complete
+2026-09-18T22:16:46.1011500Z 6c7d03eeca83: Verifying Checksum
+2026-09-18T22:16:46.1011821Z 6c7d03eeca83: Download complete
+2026-09-18T22:16:46.9844645Z 57759ac501ae: Pull complete
+2026-09-18T22:16:47.0171905Z 396d677cf641: Pull complete
+2026-09-18T22:16:47.4196554Z 17d2d749c762: Verifying Checksum
+2026-09-18T22:16:47.4196820Z 17d2d749c762: Download complete
+2026-09-18T22:16:48.8728963Z 717544ad5ce1: Pull complete
+2026-09-18T22:16:48.9242361Z b14072a0dfd7: Pull complete
+2026-09-18T22:16:49.4734121Z 9b2fa253f78b: Pull complete
+2026-09-18T22:16:49.4824438Z 01cfa5e5d82c: Pull complete
+2026-09-18T22:16:49.7953617Z d993b0eb6203: Pull complete
+2026-09-18T22:16:49.8215460Z 4f4fb700ef54: Pull complete
+2026-09-18T22:16:55.9317164Z 6c7d03eeca83: Pull complete
+2026-09-18T22:16:56.4718068Z d62d50cc5f64: Pull complete
+2026-09-18T22:16:56.5002079Z 07fcd8a72641: Pull complete
+2026-09-18T22:16:56.5080705Z 74532e5c575a: Pull complete
+2026-09-18T22:17:12.8604105Z 17d2d749c762: Pull complete
+2026-09-18T22:17:12.9878035Z f8cd15248567: Pull complete
+2026-09-18T22:17:13.1321484Z 9e9176db32f2: Pull complete
+2026-09-18T22:17:13.1400097Z 159ba15c0307: Pull complete
+2026-09-18T22:17:13.1687954Z 6f32f000b414: Pull complete
+2026-09-18T22:17:13.1958116Z Digest: sha256:63027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61
+2026-09-18T22:17:13.1964080Z Status: Downloaded newer image for ghcr.io/joshclwren/comic-pile@sha256:63027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61
+2026-09-18T22:17:13.1971698Z ghcr.io/joshclwren/comic-pile@sha256:63027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61
+2026-09-18T22:17:13.2033494Z ##[command]/usr/bin/docker create --name cbd5e50853e647a2a4abbbae6d93eb49_ghcriojoshclwrencomicpilesha25663027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61_a2c2d7 --label 3a814c --workdir /__w/comic-pile/comic-pile --network github_network_8361cc22344b41298a0d3c54632c2434  -e "HOME=/github/home" -e GITHUB_ACTIONS=true -e CI=true -v "/var/run/docker.sock":"/var/run/docker.sock" -v "/home/runner/work":"/__w" -v "/home/runner/actions-runner/cached/2.337.0/externals":"/__e":ro -v "/home/runner/work/_temp":"/__w/_temp" -v "/home/runner/work/_actions":"/__w/_actions" -v "/opt/hostedtoolcache":"/__t" -v "/home/runner/work/_temp/_github_home":"/github/home" -v "/home/runner/work/_temp/_github_workflow":"/github/workflow" --entrypoint "tail" ghcr.io/joshclwren/comic-pile@sha256:63027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61 "-f" "/dev/null"
+2026-09-18T22:17:13.2251354Z 76be56d39a3f83c0a7844e4fb85d1c80938662a8297d6c9be99340e539b632c6
+2026-09-18T22:17:13.2273194Z ##[command]/usr/bin/docker start 76be56d39a3f83c0a7844e4fb85d1c80938662a8297d6c9be99340e539b632c6
+2026-09-18T22:17:13.4716033Z 76be56d39a3f83c0a7844e4fb85d1c80938662a8297d6c9be99340e539b632c6
+2026-09-18T22:17:13.4744671Z ##[command]/usr/bin/docker ps --all --filter id=76be56d39a3f83c0a7844e4fb85d1c80938662a8297d6c9be99340e539b632c6 --filter status=running --no-trunc --format "{{.ID}} {{.Status}}"
+2026-09-18T22:17:13.4835196Z 76be56d39a3f83c0a7844e4fb85d1c80938662a8297d6c9be99340e539b632c6 Up Less than a second
+2026-09-18T22:17:13.4853467Z ##[command]/usr/bin/docker inspect --format "{{range .Config.Env}}{{println .}}{{end}}" 76be56d39a3f83c0a7844e4fb85d1c80938662a8297d6c9be99340e539b632c6
+2026-09-18T22:17:13.4946220Z CI=true
+2026-09-18T22:17:13.4956072Z HOME=/github/home
+2026-09-18T22:17:13.4956409Z GITHUB_ACTIONS=true
+2026-09-18T22:17:13.4956719Z PATH=/workspace/.venv/bin:/workspace/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+2026-09-18T22:17:13.4957350Z PYTHON_VERSION=3.14.7
+2026-09-18T22:17:13.4957549Z PYTHON_SHA256=3b48dac8fb59f62eaa67ac83c1eb12bda1b7a08406dd286e252c11a66be27f81
+2026-09-18T22:17:13.4957787Z DEBIAN_FRONTEND=noninteractive
+2026-09-18T22:17:13.4957917Z PYTHONUNBUFFERED=1
+2026-09-18T22:17:13.4958050Z PYTHONDONTWRITEBYTECODE=1
+2026-09-18T22:17:13.4965338Z ##[endgroup]
+2026-09-18T22:17:13.4972097Z ##[group]Waiting for all services to be ready
+2026-09-18T22:17:13.4973301Z ##[endgroup]
+2026-09-18T22:17:13.5193226Z ##[group]Run actions/checkout@v7
+2026-09-18T22:17:13.5193618Z with:
+2026-09-18T22:17:13.5193791Z   repository: JoshCLWren/comic-pile
+2026-09-18T22:17:13.5195979Z   token: ***
+2026-09-18T22:17:13.5196141Z   ssh-strict: true
+2026-09-18T22:17:13.5196305Z   ssh-user: git
+2026-09-18T22:17:13.5196474Z   persist-credentials: true
+2026-09-18T22:17:13.5196667Z   clean: true
+2026-09-18T22:17:13.5196838Z   sparse-checkout-cone-mode: true
+2026-09-18T22:17:13.5197037Z   fetch-depth: 1
+2026-09-18T22:17:13.5197205Z   fetch-tags: false
+2026-09-18T22:17:13.5197316Z   show-progress: true
+2026-09-18T22:17:13.5197427Z   lfs: false
+2026-09-18T22:17:13.5197527Z   submodules: false
+2026-09-18T22:17:13.5197646Z   set-safe-directory: true
+2026-09-18T22:17:13.5197782Z   allow-unsafe-pr-checkout: false
+2026-09-18T22:17:13.5198106Z env:
+2026-09-18T22:17:13.5198203Z   REGISTRY: ghcr.io
+2026-09-18T22:17:13.5198322Z   IMAGE_NAME: JoshCLWren/comic-pile
+2026-09-18T22:17:13.5198528Z   PATH: /workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin
+2026-09-18T22:17:13.5198692Z ##[endgroup]
+2026-09-18T22:17:13.5237981Z ##[command]/usr/bin/docker exec  76be56d39a3f83c0a7844e4fb85d1c80938662a8297d6c9be99340e539b632c6 sh -c "cat /etc/*release | grep ^ID"
+2026-09-18T22:17:13.6597258Z Syncing repository: JoshCLWren/comic-pile
+2026-09-18T22:17:13.6598905Z ##[group]Getting Git version info
+2026-09-18T22:17:13.6599310Z Working directory is '/__w/comic-pile/comic-pile'
+2026-09-18T22:17:13.6599817Z [command]/usr/bin/git version
+2026-09-18T22:17:13.6600020Z git version 2.47.3
+2026-09-18T22:17:13.6600709Z ##[endgroup]
+2026-09-18T22:17:13.6603950Z Temporarily overriding HOME='/__w/_temp/83145b28-8707-428d-8af2-5e4e4a27f854' before making global git config changes
+2026-09-18T22:17:13.6604504Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-18T22:17:13.6605001Z [command]/usr/bin/git config --global --add safe.directory /__w/comic-pile/comic-pile
+2026-09-18T22:17:13.6632102Z Deleting the contents of '/__w/comic-pile/comic-pile'
+2026-09-18T22:17:13.6638901Z ##[group]Determining repository object format
+2026-09-18T22:17:13.6639268Z ##[endgroup]
+2026-09-18T22:17:13.6639632Z ##[group]Initializing the repository
+2026-09-18T22:17:13.6639891Z [command]/usr/bin/git init /__w/comic-pile/comic-pile
+2026-09-18T22:17:13.6678453Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-09-18T22:17:13.6678984Z hint: is subject to change. To configure the initial branch name to use in all
+2026-09-18T22:17:13.6679395Z hint: of your new repositories, which will suppress this warning, call:
+2026-09-18T22:17:13.6679675Z hint:
+2026-09-18T22:17:13.6679938Z hint: 	git config --global init.defaultBranch <name>
+2026-09-18T22:17:13.6680684Z hint:
+2026-09-18T22:17:13.6681133Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-09-18T22:17:13.6681776Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-09-18T22:17:13.6682040Z hint:
+2026-09-18T22:17:13.6682167Z hint: 	git branch -m <name>
+2026-09-18T22:17:13.6682356Z Initialized empty Git repository in /__w/comic-pile/comic-pile/.git/
+2026-09-18T22:17:13.6685607Z [command]/usr/bin/git remote add origin https://github.com/JoshCLWren/comic-pile
+2026-09-18T22:17:13.6724667Z ##[endgroup]
+2026-09-18T22:17:13.6724976Z ##[group]Disabling automatic garbage collection
+2026-09-18T22:17:13.6727593Z [command]/usr/bin/git config --local gc.auto 0
+2026-09-18T22:17:13.6751148Z ##[endgroup]
+2026-09-18T22:17:13.6751467Z ##[group]Setting up auth
+2026-09-18T22:17:13.6751767Z Removing SSH command configuration
+2026-09-18T22:17:13.6754818Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-18T22:17:13.6782224Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-18T22:17:13.6967112Z Removing HTTP extra header
+2026-09-18T22:17:13.6971353Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-18T22:17:13.6999384Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-18T22:17:13.7189889Z Removing includeIf entries pointing to credentials config files
+2026-09-18T22:17:13.7190934Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-18T22:17:13.7216936Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-18T22:17:13.7393250Z [command]/usr/bin/git config --file /__w/_temp/git-credentials-61905429-abdc-4dd6-aa92-a6f9a7cc3777.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-09-18T22:17:13.7425826Z [command]/usr/bin/git config --local includeIf.gitdir:/__w/comic-pile/comic-pile/.git.path /__w/_temp/git-credentials-61905429-abdc-4dd6-aa92-a6f9a7cc3777.config
+2026-09-18T22:17:13.7452039Z [command]/usr/bin/git config --local includeIf.gitdir:/__w/comic-pile/comic-pile/.git/worktrees/*.path /__w/_temp/git-credentials-61905429-abdc-4dd6-aa92-a6f9a7cc3777.config
+2026-09-18T22:17:13.7477179Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-61905429-abdc-4dd6-aa92-a6f9a7cc3777.config
+2026-09-18T22:17:13.7502297Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-61905429-abdc-4dd6-aa92-a6f9a7cc3777.config
+2026-09-18T22:17:13.7524939Z ##[endgroup]
+2026-09-18T22:17:13.7525160Z ##[group]Fetching the repository
+2026-09-18T22:17:13.7529959Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +271921b8a5967aa9c20ee146489300e75d851507:refs/remotes/pull/2694/merge
+2026-09-18T22:17:15.4593252Z From https://github.com/JoshCLWren/comic-pile
+2026-09-18T22:17:15.4594063Z  * [new ref]         271921b8a5967aa9c20ee146489300e75d851507 -> pull/2694/merge
+2026-09-18T22:17:15.4608068Z ##[endgroup]
+2026-09-18T22:17:15.4608392Z ##[group]Determining the checkout info
+2026-09-18T22:17:15.4608884Z ##[endgroup]
+2026-09-18T22:17:15.4612655Z [command]/usr/bin/git sparse-checkout disable
+2026-09-18T22:17:15.4643256Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-09-18T22:17:15.4667526Z ##[group]Checking out the ref
+2026-09-18T22:17:15.4669891Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/2694/merge
+2026-09-18T22:17:15.5531177Z Note: switching to 'refs/remotes/pull/2694/merge'.
+2026-09-18T22:17:15.5531403Z 
+2026-09-18T22:17:15.5531590Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-09-18T22:17:15.5532235Z changes and commit them, and you can discard any commits you make in this
+2026-09-18T22:17:15.5532626Z state without impacting any branches by switching back to a branch.
+2026-09-18T22:17:15.5532846Z 
+2026-09-18T22:17:15.5533031Z If you want to create a new branch to retain commits you create, you may
+2026-09-18T22:17:15.5533405Z do so (now or later) by using -c with the switch command. Example:
+2026-09-18T22:17:15.5533603Z 
+2026-09-18T22:17:15.5533704Z   git switch -c <new-branch-name>
+2026-09-18T22:17:15.5533842Z 
+2026-09-18T22:17:15.5533932Z Or undo this operation with:
+2026-09-18T22:17:15.5534051Z 
+2026-09-18T22:17:15.5534127Z   git switch -
+2026-09-18T22:17:15.5534247Z 
+2026-09-18T22:17:15.5534375Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-09-18T22:17:15.5534535Z 
+2026-09-18T22:17:15.5534738Z HEAD is now at 271921b Merge 3eac37823642a5dca3c052b7944e489cda1a9150 into a118efcd0b333834fe2e1dd53862a06fee392f0e
+2026-09-18T22:17:15.5537951Z ##[endgroup]
+2026-09-18T22:17:15.5571456Z [command]/usr/bin/git log -1 --format=%H
+2026-09-18T22:17:15.5593631Z 271921b8a5967aa9c20ee146489300e75d851507
+2026-09-18T22:17:15.5766322Z ##[group]Run ruff check .
+2026-09-18T22:17:15.5766518Z [36;1mruff check .[0m
+2026-09-18T22:17:15.5768721Z shell: sh -e {0}
+2026-09-18T22:17:15.5768836Z env:
+2026-09-18T22:17:15.5768941Z   REGISTRY: ghcr.io
+2026-09-18T22:17:15.5769068Z   IMAGE_NAME: JoshCLWren/comic-pile
+2026-09-18T22:17:15.5769247Z   PATH: /workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin
+2026-09-18T22:17:15.5769418Z ##[endgroup]
+2026-09-18T22:17:15.6944752Z All checks passed!
+2026-09-18T22:17:15.7069224Z Post job cleanup.
+2026-09-18T22:17:15.7073989Z ##[command]/usr/bin/docker exec  76be56d39a3f83c0a7844e4fb85d1c80938662a8297d6c9be99340e539b632c6 sh -c "cat /etc/*release | grep ^ID"
+2026-09-18T22:17:15.8198834Z [command]/usr/bin/git version
+2026-09-18T22:17:15.8227463Z git version 2.47.3
+2026-09-18T22:17:15.8251285Z Temporarily overriding HOME='/__w/_temp/4277cf39-ade6-49d6-a02c-5ebb37a202e1' before making global git config changes
+2026-09-18T22:17:15.8251977Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-18T22:17:15.8261919Z [command]/usr/bin/git config --global --add safe.directory /__w/comic-pile/comic-pile
+2026-09-18T22:17:15.8289797Z Removing SSH command configuration
+2026-09-18T22:17:15.8293665Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-18T22:17:15.8322001Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-18T22:17:15.8515739Z Removing HTTP extra header
+2026-09-18T22:17:15.8519418Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-18T22:17:15.8550911Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-18T22:17:15.8749846Z Removing includeIf entries pointing to credentials config files
+2026-09-18T22:17:15.8750180Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-18T22:17:15.8772539Z includeif.gitdir:/__w/comic-pile/comic-pile/.git.path
+2026-09-18T22:17:15.8772810Z includeif.gitdir:/__w/comic-pile/comic-pile/.git/worktrees/*.path
+2026-09-18T22:17:15.8773032Z includeif.gitdir:/github/workspace/.git.path
+2026-09-18T22:17:15.8773273Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-09-18T22:17:15.8777664Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/__w/comic-pile/comic-pile/.git.path
+2026-09-18T22:17:15.8799582Z /__w/_temp/git-credentials-61905429-abdc-4dd6-aa92-a6f9a7cc3777.config
+2026-09-18T22:17:15.8807276Z [command]/usr/bin/git config --local --unset includeif.gitdir:/__w/comic-pile/comic-pile/.git.path \/__w\/_temp\/git\-credentials\-61905429\-abdc\-4dd6\-aa92\-a6f9a7cc3777\.config
+2026-09-18T22:17:15.8835564Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/__w/comic-pile/comic-pile/.git/worktrees/*.path
+2026-09-18T22:17:15.8857163Z /__w/_temp/git-credentials-61905429-abdc-4dd6-aa92-a6f9a7cc3777.config
+2026-09-18T22:17:15.8862713Z [command]/usr/bin/git config --local --unset includeif.gitdir:/__w/comic-pile/comic-pile/.git/worktrees/*.path \/__w\/_temp\/git\-credentials\-61905429\-abdc\-4dd6\-aa92\-a6f9a7cc3777\.config
+2026-09-18T22:17:15.8889001Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-09-18T22:17:15.8909754Z /github/runner_temp/git-credentials-61905429-abdc-4dd6-aa92-a6f9a7cc3777.config
+2026-09-18T22:17:15.8914998Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-61905429\-abdc\-4dd6\-aa92\-a6f9a7cc3777\.config
+2026-09-18T22:17:15.8946969Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-09-18T22:17:15.8967419Z /github/runner_temp/git-credentials-61905429-abdc-4dd6-aa92-a6f9a7cc3777.config
+2026-09-18T22:17:15.8972890Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-61905429\-abdc\-4dd6\-aa92\-a6f9a7cc3777\.config
+2026-09-18T22:17:15.9001035Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-09-18T22:17:15.9170597Z Removing credentials config '/__w/_temp/git-credentials-61905429-abdc-4dd6-aa92-a6f9a7cc3777.config'
+2026-09-18T22:17:15.9289740Z Stop and remove container: cbd5e50853e647a2a4abbbae6d93eb49_ghcriojoshclwrencomicpilesha25663027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61_a2c2d7
+2026-09-18T22:17:15.9293333Z ##[command]/usr/bin/docker rm --force 76be56d39a3f83c0a7844e4fb85d1c80938662a8297d6c9be99340e539b632c6
+2026-09-18T22:17:16.1221644Z 76be56d39a3f83c0a7844e4fb85d1c80938662a8297d6c9be99340e539b632c6
+2026-09-18T22:17:16.1243044Z Remove container network: github_network_8361cc22344b41298a0d3c54632c2434
+2026-09-18T22:17:16.1245933Z ##[command]/usr/bin/docker network rm github_network_8361cc22344b41298a0d3c54632c2434
+2026-09-18T22:17:16.2147271Z github_network_8361cc22344b41298a0d3c54632c2434
+2026-09-18T22:17:16.2202442Z Cleaning up orphan processes

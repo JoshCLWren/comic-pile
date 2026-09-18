@@ -52,7 +52,6 @@ vi.mock('../services/api', () => ({
 
 const api = vi.mocked(dependencyGroupsApi)
 const threadApi = vi.mocked(threadsApi)
-const issueApi = vi.mocked(issuesApi)
 
 function createWrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -130,9 +129,9 @@ const issues = [
   },
 ]
 
-function selectThread(label: string, query: string, title: string) {
+async function selectThread(label: string, query: string, title: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value: query } })
-  const listbox = screen.getByRole('listbox', { name: `${label} results` })
+  const listbox = await screen.findByRole('listbox', { name: `${label} results` })
   fireEvent.click(within(listbox).getByRole('option', { name: new RegExp(title) }))
 }
 
@@ -311,6 +310,7 @@ describe('CrossoversPage membership editing', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove Nova #2 from Annihilation' }))
+    api.list.mockResolvedValue([{ ...crossover, memberships: [crossover.memberships[1]] }])
     await waitFor(() => expect(screen.queryByText('Nova #2')).not.toBeInTheDocument())
     expect(api.removeMember).toHaveBeenCalledWith(7, 1)
     expect(screen.getByText('Annihilation')).toBeInTheDocument()
@@ -329,6 +329,7 @@ describe('CrossoversPage membership editing', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove Nova (whole series) from Annihilation' }))
     expect(api.removeMember).toHaveBeenCalledTimes(1)
     resolveRemoval?.()
+    api.list.mockResolvedValue([{ ...crossover, memberships: [crossover.memberships[1]] }])
     await waitFor(() => expect(screen.queryByText('Nova #2')).not.toBeInTheDocument())
     expect(screen.getByText('Nova (whole series)')).toBeInTheDocument()
   })
