@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Session, Snapshot, Thread
 from app.models.recommendation_context import RecommendationContext as RecContextModel
+from app.schemas.roll import RollRecoveryInfo
 
 
 async def fetch_session_for_roll(
@@ -518,20 +519,26 @@ async def fetch_bootstrap_recovery_data(
     user_id: int,
     pending_thread_id: int | None,
     pending_thread_title: str | None,
-) -> dict[str, object]:
+) -> RollRecoveryInfo | None:
     """Fetch recovery data for the bootstrap endpoint.
 
     Args:
-        db: Database session.
-        user_id: Owner of the session.
+        db: Async database session.
+        user_id: Authenticated owner of the session.
         pending_thread_id: Current pending thread ID.
         pending_thread_title: Title of the pending thread.
 
     Returns:
-        Recovery data dictionary.
+        RollRecoveryInfo when the pending roll is blocked, otherwise None.
     """
     from app.roll_recovery import build_roll_recovery
-    return await build_roll_recovery(db, user_id, pending_thread_id, pending_thread_title)
+
+    return await build_roll_recovery(
+        db,
+        user_id=user_id,
+        pending_thread_id=pending_thread_id,
+        pending_thread_title=pending_thread_title,
+    )
 
 
 async def fetch_recommendation_explanation(

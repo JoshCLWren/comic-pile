@@ -335,6 +335,7 @@ async def roll_dice(
         selection_method_override=None,
     )
 
+    await db.add(artifacts.event)
     await db.flush()
     rec_context = RecommendationContext(
         event_id=artifacts.event.id,
@@ -440,6 +441,7 @@ async def skip_roll(
         empty_pool_detail="No alternative threads available to skip to",
     )
 
+    await db.add(artifacts.event)
     await db.flush()
     rec_context = RecommendationContext(
         event_id=artifacts.event.id,

@@ -7,10 +7,11 @@ and cache invalidation. Query construction lives in
 
 import logging
 from datetime import UTC, datetime
+from typing import TypedDict
 
 # Import comic_pile first to resolve circular dependency with
 # comic_pile.bandwidth -> app.services.reading_effort.
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Session, Thread
@@ -59,6 +60,33 @@ from app.schemas import RollResponse
 logger = logging.getLogger(__name__)
 
 
+class _SelectionArtifacts(TypedDict):
+    """Bundle of selection artifacts returned by ``select_pending_thread``.
+
+    The shared selection logic builds a plain dict so the router can wrap it
+    in its own ``_SelectionArtifacts`` without duplicating fields. TypedDict
+    lets callers access each artifact with a precise type instead of ``object``.
+    """
+
+    selected_thread: Thread
+    unread_count: int
+    issue_number: str | None
+    selected_thread_issue_id: int | None
+    selected_thread_issue_number: str | None
+    bounded_rows: list[tuple[Thread, int, str | None]]
+    selected_index: int
+    bounded_candidate_ids: list[int]
+    candidate_weights: list
+    selected_effort_estimate: EffortEstimate
+    json_candidate_weights: list[dict[str, object]] | None
+    json_selected_weight: float | None
+    recommendation_context: dict[str, object]
+    recommendation_reason_codes: list[str]
+    selection_method: str
+    event: Event
+    rec_context_create: RecommendationContextCreate
+
+
 class RollService:
     """Service for roll orchestration.
 
@@ -81,7 +109,7 @@ class RollService:
         selection_intent: str,
         selection_method_override: str | None = None,
         empty_pool_detail: str = "No active threads available to roll",
-    ) -> dict[str, object]:
+    ) -> _SelectionArtifacts:
         """Run the weighted bounded-pool selection shared by roll and skip.
 
         Returns a dictionary of selection artifacts without committing.
@@ -393,6 +421,11 @@ class RollService:
             total_issues = thread_attrs["total_issues"]
             reading_progress = thread_attrs["reading_progress"]
         else:
+            if selected_thread is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Selected thread not found",
+                )
             thread_id = selected_thread.id
             title = selected_thread.title
             format_ = normalize_format_value(selected_thread.format)
@@ -418,6 +451,15 @@ class RollService:
             explanation=None,
         )
 
+    async def execute_dismiss_pending(self, current_user_id: int) -> None:
+        """Execute the dismiss_pending_roll flow."""
+        current_session = await get_or_create(self._db, user_id=current_user_id, existing_user=None)
+        now = datetime.now(UTC)
+        from app.repositories.roll_repository import clear_session_pending
+        await clear_session_pending(self._db, current_session.id, now)
+        await self._db.commit()
+        await _invalidate_session_caches(current_user_id)
+
     async def execute_roll(
         self,
         *,
@@ -433,7 +475,7 @@ class RollService:
             pending_title = pending_thread.title if pending_thread else "another thread"
             pending_reference = f"'{pending_title}'" if pending_thread else "another thread"
             raise HTTPException(
-                status_code=409,
+                status_code=status.HTTP_409_CONFLICT,
                 detail=(
                     f"A roll is already pending for {pending_reference}. "
                     "Rate, snooze, or cancel the pending roll before rolling again."
@@ -465,10 +507,11 @@ class RollService:
             selection_method_override=None,
         )
 
-        selected_thread = artifacts["selected_thread"]
-        event = artifacts["event"]
-        rec_context_create = artifacts["rec_context_create"]
+        selected_thread: Thread = artifacts["selected_thread"]
+        event: Event = artifacts["event"]
+        rec_context_create: RecommendationContextCreate = artifacts["rec_context_create"]
 
+        await self._db.add(event)
         await self._db.flush()
 
         rec_context = RecContextModel(
@@ -499,11 +542,13 @@ class RollService:
         await self._db.commit()
         await _invalidate_session_caches(user_id)
 
+        selected_index: int = artifacts["selected_index"]
+        unread_count: int = artifacts["unread_count"]
         return self.build_roll_response(
             selected_thread=selected_thread,
             current_die=current_die,
-            selected_index=artifacts["selected_index"],
-            unread_count=artifacts["unread_count"],
+            selected_index=selected_index,
+            unread_count=unread_count,
             snoozed_count=len(snoozed_ids),
         )
 
@@ -514,7 +559,10 @@ class RollService:
 
         skipped_thread_id = current_session.pending_thread_id
         if skipped_thread_id is None:
-            raise HTTPException(status_code=409, detail="No pending roll to skip. Roll first.")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="No pending roll to skip. Roll first.",
+            )
 
         current_die = await get_current_die_for_session(current_session, self._db)
         snoozed_ids = current_session.snoozed_thread_ids or []
@@ -531,10 +579,11 @@ class RollService:
             empty_pool_detail="No alternative threads available to skip to",
         )
 
-        selected_thread = artifacts["selected_thread"]
-        event = artifacts["event"]
-        rec_context_create = artifacts["rec_context_create"]
+        selected_thread: Thread = artifacts["selected_thread"]
+        event: Event = artifacts["event"]
+        rec_context_create: RecommendationContextCreate = artifacts["rec_context_create"]
 
+        await self._db.add(event)
         await self._db.flush()
 
         rec_context = RecContextModel(
@@ -569,22 +618,54 @@ class RollService:
         await self._db.commit()
         await _invalidate_session_caches(user_id)
 
+        selected_index: int = artifacts["selected_index"]
+        unread_count: int = artifacts["unread_count"]
         return self.build_roll_response(
             selected_thread=selected_thread,
             current_die=current_die,
-            selected_index=artifacts["selected_index"],
-            unread_count=artifacts["unread_count"],
+            selected_index=selected_index,
+            unread_count=unread_count,
             snoozed_count=len(snoozed_ids),
         )
 
-    async def execute_dismiss_pending(self, current_user_id: int) -> None:
-        """Execute the dismiss_pending_roll flow."""
-        current_session = await get_or_create(self._db, user_id=current_user_id, existing_user=None)
-        now = datetime.now(UTC)
-        from app.repositories.roll_repository import clear_session_pending
-        await clear_session_pending(self._db, current_session.id, now)
-        await self._db.commit()
-        await _invalidate_session_caches(current_user_id)
+
+def build_rolling_recommendation_context(
+    die_size: int,
+    selected_queue_position: int,
+    bounded_candidate_ids: list[int],
+    selected_index: int,
+    selection_method: str,
+    session_timezone: str | None,
+    selected_thread_last_rating: float | None,
+    selected_thread_last_activity_at: datetime | None,
+    effort_estimate: str | None = None,
+    algorithm_version: str | None = None,
+    control_mode: str | None = None,
+) -> dict[str, object]:
+    """Build rolling recommendation context dict (module-level for backward compat)."""
+    local_hour = None
+    if timezone := session_timezone:
+        try:
+            from zoneinfo import ZoneInfo
+            local_hour = datetime.now(ZoneInfo(timezone)).hour
+        except Exception:
+            pass
+    return {
+        "schema_version": 1,
+        "algorithm_version": algorithm_version or RECOMMENDATION_ALGORITHM_VERSION,
+        "control_mode": control_mode or CONTROL_MODE_CONTEXTUAL,
+        "die_size": die_size,
+        "selected_queue_position": selected_queue_position,
+        "bounded_candidate_ids": bounded_candidate_ids,
+        "selected_index": selected_index,
+        "selection_method": selection_method,
+        "session_timezone": session_timezone,
+        "local_hour": local_hour,
+        "selected_thread_last_rating": selected_thread_last_rating,
+        "selected_thread_last_activity_at": selected_thread_last_activity_at.isoformat()
+        if selected_thread_last_activity_at else None,
+        "effort_estimate": effort_estimate,
+    }
 
 
 def build_rolling_recommendation_context(
