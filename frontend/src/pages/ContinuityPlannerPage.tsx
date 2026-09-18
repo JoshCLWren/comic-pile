@@ -234,14 +234,26 @@ export default function ContinuityPlannerPage({
 
   // Hydrate editor state from plan data when it arrives
   const planLoaded = planData != null && !planPending
+  const groupsLoaded = !groupsPending
   const [planHydrated, setPlanHydrated] = useState(false)
 
   useEffect(() => {
-    console.log('HYDRATE EFFECT', { isInvalidRoute, planLoaded, planHydrated, hasPlan: !!planData, groupsLength: groups.length })
+    setPlanHydrated(false)
+  }, [planId])
+
+  useEffect(() => {
     if (isInvalidRoute) {
       return
     }
-    if (planLoaded && !planHydrated && planData) {
+    if (planId == null && !planHydrated && !threadsPending && groupsLoaded) {
+      setSavedName(DEFAULT_PLAN_NAME)
+      setSavedLanes([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
+      setSavedNodes([])
+      setSavedOrderingMode('informational')
+      setPlanHydrated(true)
+      return
+    }
+    if (planLoaded && groupsLoaded && !planHydrated && planData) {
       const loadedLanes = (planData.lanes.length > 0
         ? planData.lanes
         : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
@@ -263,7 +275,7 @@ export default function ContinuityPlannerPage({
       window.localStorage.setItem(LAST_PLAN_KEY, String(planData.id))
       setPlanHydrated(true)
     }
-  }, [planLoaded, planHydrated, planData, isInvalidRoute, groups, hydrateLabels])
+  }, [planLoaded, groupsLoaded, planHydrated, planData, planId, isInvalidRoute, threadsPending, groups, hydrateLabels])
 
   // Immediate invalid-route error after hooks (hooks must be called unconditionally)
   if (isInvalidRoute) {
