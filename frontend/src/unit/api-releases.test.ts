@@ -14,12 +14,12 @@ beforeEach(() => {
 
 describe('releasesApi', () => {
   it('uses the public release-list defaults', async () => {
-    const payload = { releases: [], next_page_token: null }
+    const payload = { releases: [], total: 0, limit: 20, offset: 0 }
     get.mockResolvedValue(payload)
 
     await expect(releasesApi.list()).resolves.toEqual(payload)
     expect(get).toHaveBeenCalledWith('/v1/releases/', {
-      params: {},
+      params: { limit: 20, offset: 0 },
     })
   })
 
@@ -27,12 +27,9 @@ describe('releasesApi', () => {
     const payload = { releases: [], total: 75, limit: 50, offset: 20 }
     get.mockResolvedValue(payload)
 
-    await expect(releasesApi.list(50, 'token-123')).resolves.toEqual(payload)
+    await expect(releasesApi.list(50, 20)).resolves.toEqual(payload)
     expect(get).toHaveBeenCalledWith('/v1/releases/', {
-      params: {
-        page_size: 50,
-        page_token: 'token-123',
-      },
+      params: { limit: 50, offset: 20 },
     })
   })
 })
