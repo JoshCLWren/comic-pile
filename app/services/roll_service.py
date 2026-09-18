@@ -374,20 +374,38 @@ class RollService:
     def build_roll_response(
         self,
         *,
-        selected_thread: Thread,
+        selected_thread: Thread | None = None,
+        thread_attrs: dict | None = None,
         current_die: int,
         selected_index: int,
         unread_count: int,
         snoozed_count: int,
     ) -> RollResponse:
-        """Convert selection artifacts into the public RollResponse."""
+        """Convert selection artifacts into the public RollResponse.
+
+        Either ``selected_thread`` or ``thread_attrs`` must be provided.
+        """
         from app.schemas import RollResponse
+        if thread_attrs is not None:
+            thread_id = thread_attrs["thread_id"]
+            title = thread_attrs["title"]
+            format_ = normalize_format_value(thread_attrs["format"]) if isinstance(thread_attrs.get("format"), str) else normalize_format_value(thread_attrs["format"]) if thread_attrs.get("format") else None
+            queue_position = thread_attrs["queue_position"]
+            total_issues = thread_attrs["total_issues"]
+            reading_progress = thread_attrs["reading_progress"]
+        else:
+            thread_id = selected_thread.id
+            title = selected_thread.title
+            format_ = normalize_format_value(selected_thread.format)
+            queue_position = selected_thread.queue_position
+            total_issues = selected_thread.total_issues
+            reading_progress = selected_thread.reading_progress
         return RollResponse(
-            thread_id=selected_thread.id,
-            title=selected_thread.title,
-            format=normalize_format_value(selected_thread.format),
+            thread_id=thread_id,
+            title=title,
+            format=format_,
             issues_remaining=unread_count,
-            queue_position=selected_thread.queue_position,
+            queue_position=queue_position,
             die_size=current_die,
             result=selected_index + 1,
             offset=snoozed_count,
@@ -396,8 +414,8 @@ class RollService:
             issue_number=None,
             next_issue_id=None,
             next_issue_number=None,
-            total_issues=selected_thread.total_issues,
-            reading_progress=selected_thread.reading_progress,
+            total_issues=total_issues,
+            reading_progress=reading_progress,
             explanation=None,
         )
 
