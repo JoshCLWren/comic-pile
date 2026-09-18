@@ -40,7 +40,7 @@ Comic Pile is a dice-driven comic reading tracker built with:
 **Decision**: HTTP/JSON API with OpenAPI-generated frontend types
 **Documented in**: 
 - [FRONTEND_OPENAPI_TYPES.md](FRONTEND_OPENAPI_TYPES.md)
-- [REACT_ARCHITECTURE.md](REACT_ARCHITECTURE.md) (services layer)
+- [REACT_ARCHITECTURE.md](REACT_ARCHITECTURE.md) (frontend architecture and API integration)
 
 **Key Points**:
 - Frontend uses Axios service layer with base URL `/api`

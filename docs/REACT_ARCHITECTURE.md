@@ -1,614 +1,151 @@
-# React Architecture for Comic Pile
+# React & TanStack Query Architecture for Comic Pile
 
 ## Overview
 
-This document describes the React-based frontend architecture for Comic Pile, a dice-driven comic reading tracker. The frontend uses React with Vite for fast development and builds, Tailwind CSS for styling, and custom hooks with useState/useEffect for server state management.
+This document describes the modern TypeScript/React frontend architecture for Comic Pile, a dice-driven comic reading tracker. The frontend uses React 19 with Vite for development and bundling, Tailwind CSS for styling, TanStack Query (`@tanstack/react-query`) for canonical server state management, and OpenAPI-generated types for strict backend contract parity.
+
+Hand-rolled `useState`/`useEffect` fetching and manual session context caching are obsolete. All server data flows through TanStack Query keys and centralized cache effects.
+
+---
 
 ## Technology Stack
 
-- **Build Tool**: Vite 7.x - Fast, modern build tool with hot module replacement
-- **Framework**: React 19.x - UI library with hooks and concurrent features
-- **Routing**: React Router DOM 7.x - Client-side routing
-- **HTTP Client**: Axios - Promise-based HTTP client with interceptors
-- **State Management**:
-  - Custom hooks (useState/useEffect) - Server state with memory leak protection
-  - React Context - Client-side global state (dice selection, session state, toast notifications)
-- **Styling**: Tailwind CSS 4.x - Utility-first CSS framework with PostCSS integration
-- **Type Safety**: TypeScript with strict mode
-- **3D Graphics**: Three.js for dice rendering (lazy-loaded)
+- **Build Tool**: Vite 7.x — Fast ESM development server and Rollup production bundler.
+- **Framework**: React 19.x — Modern UI library with Concurrent features, Transitions, and Suspense.
+- **Language**: TypeScript (strict mode) — Strong static typing across all components, hooks, and services.
+- **Server State Management**: `@tanstack/react-query` v5 — Declarative data fetching, caching, automatic deduplication, garbage collection, and query invalidation.
+- **HTTP Client**: Axios — Configured instance in `services/api.ts` with interceptors for authentication, base URL configuration, and error normalization.
+- **Routing & Navigation**: React Router DOM 7.x — Client-side declarative routing with code splitting and route prefetching (`useRoutePrefetch`).
+- **Styling & Visual Contract**: Tailwind CSS 4.x — Governed strictly by [`FRONTEND_VISUAL_GRAMMAR.md`](FRONTEND_VISUAL_GRAMMAR.md).
+- **3D Graphics**: Three.js — Visual dice roller with lazy-loaded geometries and physics integration.
+
+---
 
 ## Project Structure
 
-```
-frontend/
-├── src/
-│   ├── components/      # Reusable UI components
-│   │   ├── Header.jsx  # Navigation, session indicators, die selector
-│   │   ├── Footer.jsx  # Optional footer component
-│   │   └── Dice3D.jsx  # Three.js 3D dice component (from dice3d.js)
-│   ├── pages/          # Route-level page components
-│   │   ├── RollPage.jsx      # Single dice, roll button, results
-│   │   ├── RatePage.jsx      # Rating form, dice display
-│   │   ├── QueuePage.jsx     # Thread list, drag-drop reordering
-│   │   ├── HistoryPage.jsx    # Event log, undo buttons
-│   │   └── SessionPage.jsx   # Session details, snapshots
-│   ├── hooks/          # Custom React hooks
-│   │   ├── useThreads.js       # Thread list management
-│   │   ├── useSession.js       # Session state management
-│   │   ├── useHistory.js       # History/events state
-│   │   ├── useSnapshots.js     # Snapshots state
-│   │   ├── useDiceLadder.js    # Dice ladder logic
-│   │   └── useDice3D.js       # Three.js dice lifecycle
-│   ├── services/       # API service layer
-│   │   └── api.js      # Axios instance with base URL and interceptors
-│   ├── contexts/       # React Context providers
-│   │   ├── DiceContext.jsx    # Current die, manual mode, selected thread
-│   │   └── SessionContext.jsx # Current session, has_restore_point
-│   ├── App.jsx         # Main app component with Router
-│   ├── main.jsx        # React entry point
-│   └── index.css       # Tailwind CSS imports
-├── public/             # Static assets (images, fonts)
-├── index.html          # HTML template
-├── vite.config.js      # Vite configuration
-├── tailwind.config.js  # Tailwind CSS configuration
-└── package.json        # NPM dependencies and scripts
-```
-
-## Component Hierarchy
+The frontend structure under `frontend/src/`:
 
 ```
-App (BrowserRouter)
-├── DiceContext.Provider
-├── SessionContext.Provider
-└── Routes
-    ├── / (RollPage)
-    │   ├── Header
-    │   ├── Dice3D (3D dice visualization)
-    │   └── RollButton
-    ├── /rate (RatePage)
-    │   ├── Header
-    │   ├── Dice3D
-    │   └── RatingForm
-    ├── /queue (QueuePage)
-    │   ├── Header
-    │   ├── ThreadList
-    │   └── ReorderControls
-    ├── /history (HistoryPage)
-    │   ├── Header
-    │   ├── EventList
-    │   └── UndoButton
-    └── /sessions/:id (SessionPage)
-        ├── Header
-        ├── SessionDetails
-        └── SnapshotList
+frontend/src/
+├── components/          # Reusable UI components (Navigation, Modals, Virtualized lists)
+├── contexts/            # Focused client state providers (Toast, NavCollapse, BugReportRestore, PositionMenu)
+├── hooks/               # Domain hooks powered by TanStack Query & custom interactions
+├── pages/               # Route-level page components (RollPage, QueuePage, etc.)
+├── query/               # Canonical TanStack Query configuration & cache effects
+│   ├── queryClient.ts   # Global QueryClient singleton & default stale/gc policies
+│   ├── queryKeys.ts     # Type-safe, canonical hierarchical query keys
+│   ├── cacheEffects.ts  # Centralized mutation cache updates and invalidation helpers
+│   └── routePrefetch.ts # Canonical query prefetching for route transitions
+├── routes/              # Route module definitions and lazy loading boundaries
+├── services/            # API services and OpenAPI integrations
+│   ├── api.ts           # Configured Axios client with auth token interceptors
+│   ├── theme.ts         # Multi-surface theme runtime & preference persistence
+│   └── ...              # Domain-specific API service endpoints
+├── types/               # TypeScript interfaces & OpenAPI-generated contract models
+├── utils/               # Pure utility functions (dates, parsing, topological sort)
+├── App.tsx              # App provider tree, routing table, and layout shells
+├── main.tsx             # Root React 19 hydration entry point
+└── index.css            # Tailwind CSS root imports and theme variables
 ```
 
-## Data Flow
+---
 
-### API Service Layer
+## Server State Management (TanStack Query)
 
-The `services/api.ts` module provides a configured Axios instance:
+### 1. Canonical Query Keys (`frontend/src/query/queryKeys.ts`)
 
-```javascript
-const api = axios.create({
-  baseURL: '/api',  // FastAPI backend
-  timeout: 10000,
-})
+All query keys are defined hierarchically to prevent cache collision and enable targeted invalidations:
+
+```typescript
+export const queryKeys = {
+  queue: {
+    all: ['queue'] as const,
+    pages: () => ['queue', 'pages'] as const,
+    list: ({ search, sort, pageSize }) => [...],
+  },
+  session: {
+    all: ['session'] as const,
+    current: () => ['session', 'current'] as const,
+    detail: (sessionId: number) => ['session', 'detail', sessionId] as const,
+  },
+  roll: {
+    all: ['roll'] as const,
+    bootstrap: () => ['roll', 'bootstrap'] as const,
+  },
+  thread: {
+    all: ['thread'] as const,
+    summary: (threadId: number) => ['thread', 'summary', threadId] as const,
+    detail: (threadId: number) => ['thread', 'detail', threadId] as const,
+    issuePages: (threadId: number) => ['thread', threadId, 'issues'] as const,
+  },
+  // ... dependencies, readingPlans, comicVine, analytics, creator, etc.
+} as const
 ```
 
-**Request Interceptor**: Adds authentication headers (future feature)
-**Response Interceptor**: Extracts response.data automatically, logs errors
+### 2. Centralized Cache Effects (`frontend/src/query/cacheEffects.ts`)
 
-### Custom Hooks Pattern
+Whenever a mutation occurs (rating a comic, reordering the queue, updating thread metadata), cache updates and invalidations must use the centralized functions in `cacheEffects.ts`:
 
-Custom hooks manage server state using useState/useEffect with proper cleanup to prevent memory leaks:
+- `applyRatedThreadCache(client, thread)`: Updates active thread in-place and invalidates current session.
+- `applyUpdatedThreadCache(client, thread)`: Updates detail/summary cache and invalidates queue pages, session, and roll bootstrap.
+- `invalidateAfterQueueMutation(client)`: Resets paginated queue loader and refetches session and roll bootstrap.
+- `applyEditedThreadToQueuePages(client, thread)`: Updates thread metadata across all loaded infinite query pages in-place without triggering network refetches.
+- `optimisticallyUpdateThreadCache(client, threadId, update)`: Safe optimistic updates with rollback closures.
 
-```javascript
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { api } from '../services/api'
+**Rule:** Never write hand-rolled `useState`/`useEffect` fetch lifecycles with manual `isMounted` flags for server state. Use `useQuery`, `useInfiniteQuery`, or `useMutation` hooks.
 
-export function useThreads() {
-  const [data, setData] = useState(null)
-  const [isPending, setIsPending] = useState(true)
-  const [isError, setIsError] = useState(false)
-  const [error, setError] = useState(null)
-  const isMounted = useRef(true)
+---
 
-  useEffect(() => {
-    return () => {
-      isMounted.current = false
-    }
-  }, [])
+## Routing & Layout Architecture
 
-  const fetchData = useCallback(async () => {
-    if (isMounted.current) {
-      setIsPending(true)
-      setIsError(false)
-      setError(null)
-    }
-    try {
-      const result = await api.getThreads()
-      if (isMounted.current) {
-        setData(result)
-      }
-    } catch (err) {
-      if (isMounted.current) {
-        setIsError(true)
-        setError(err)
-      }
-    } finally {
-      if (isMounted.current) {
-        setIsPending(false)
-      }
-    }
-  }, [])
+### Route Splitting & Prefetching
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
+Routes are lazy-loaded via `routes/routeModules.ts` using `lazyRoute()`. When an authenticated user is detected, `useRoutePrefetch(enabled)` warms the bundle chunks in the background for instant navigation.
 
-  return { data, isPending, isError, error, refetch: fetchData }
-}
+### Layout Shells
 
-export function useCreateThread() {
-  const [isPending, setIsPending] = useState(false)
-  const [isError, setIsError] = useState(false)
-  const [error, setError] = useState(null)
-  const isMounted = useRef(true)
-
-  useEffect(() => {
-    return () => {
-      isMounted.current = false
-    }
-  }, [])
-
-  const createThread = useCallback(async (threadData) => {
-    if (isMounted.current) {
-      setIsPending(true)
-      setIsError(false)
-      setError(null)
-    }
-    try {
-      const result = await api.createThread(threadData)
-      if (isMounted.current) {
-        return result
-      }
-    } catch (err) {
-      if (isMounted.current) {
-        setIsError(true)
-        setError(err)
-      }
-      throw err
-    } finally {
-      if (isMounted.current) {
-        setIsPending(false)
-      }
-    }
-  }, [])
-
-  return { createThread, isPending, isError, error }
-}
-```
-
-**Available Hooks**:
-- `useQueueThreads()` - Bounded, screen-specific thread list query for the Queue screen
-- `useThread(id)` - Fetch a single thread's details
-- `useStaleThreads(days)` - Fetch stale-thread summary data
-- `useSession()` - Fetch current session state
-- `useHistory()` - Fetch event history
-- `useSnapshots()` - Fetch restore points
-- `useCreateThread()` - Create new thread mutation
-- `useRate()` - Submit rating mutation
-- `useRoll()` - Roll dice mutation
-- `useDeleteThread()` - Delete thread mutation
-- `useReorderQueue()` - Reorder threads mutation
-
-### Bounded Thread Queries
-
-Thread list data must be loaded through bounded, screen-specific query hooks.
-The universal `useThreads()` hook was removed because it hydrated every page
-of the thread list (page_size=200 plus automatic page traversal) regardless of
-the screen, which defeats the per-screen cache boundaries.
-
-**Supported bounded entry points**:
-- `useQueueThreads(searchTerm?)` in `frontend/src/hooks/useQueue.ts` - the Queue
-  screen's thread-list query. Fetches a single bounded page (`page_size=50`) on
-  mount, supports an optional `search` term, and never auto-traverses pages.
-  Returns `{ data, isPending, isError, refetch, nextPageToken, loadMore }`.
-  `loadMore()` advances to the next page only when `nextPageToken` is present.
-- `useThread(id)` in `frontend/src/hooks/useThread.ts` - a single thread's
-  details (thread detail screen).
-- `useStaleThreads(days)` in `frontend/src/hooks/useThread.ts` - stale-thread
-  summary for the roll screen.
-
-**Rule**: Do not reintroduce a universal thread-list hook that hydrates the
-entire library across all screens. A screen that needs thread list data must
-use a bounded, screen-specific query (single page, opt-in pagination). The
-guard test `frontend/src/unit/boundedThreadQuery.guard.test.ts` fails if the
-universal `useThreads` export is reintroduced or if the queue query starts
-auto-traversing pages.
+1. **`AuthenticatedLayout`**: Grid layout (`md:grid-cols-[auto_minmax(0,1fr)]`) containing the unified `Navigation` sidebar/bottom bar and main responsive container.
+2. **`PublicLayout`**: Minimal container for public auth routes (`/login`, `/register`).
+3. **`ResumeRecovery` & `AuthResumeBoundary`**: Handles silent session token renewal and graceful recovery after return visits.
 
 ### Scroll Ownership
 
-Route scroll restoration has exactly one owner (#2582): the route
-restoration layer (`useScrollRestoration` in
-`frontend/src/hooks/useScrollRestoration.ts`), coordinated through the shared
-module `frontend/src/scroll/scrollCoordinator.ts`. That module is the only
-production code allowed to call `window.scrollTo` to restore a prior route
-position.
+Route scroll restoration has one owner: `useScrollRestoration` in
+`frontend/src/hooks/useScrollRestoration.ts`, coordinated through
+`frontend/src/scroll/scrollCoordinator.ts`. That module is the only production
+code allowed to call `window.scrollTo` to restore a prior route position.
 
 - **Route/resume restoration** (`restoreRouteScrollPosition`) covers POP/PUSH
-  navigation, reloads, bfcache restores, and visibility resume. Correctness
-  settles against an explicit layout-readiness contract
-  (`waitForLayoutSettled`: stable animation frames, bounded) — never a fixed
-  timeout. A user-driven gesture (wheel / touch / keys) ends the settle watch
-  so restoration never fights an intentional scroll.
-- **Explicit feature semantic scrolling** is the narrow exception: Roll may
-  move between the dice and rating regions (`useRollViewport`,
-  `ThreadPool` return-to-top) and Help may jump to a glossary anchor, but only
-  for an intentional in-page product transition and only through
-  `requestSemanticScroll` / `scrollToTopSemantic`, which defer while a route
-  restore is actively settling.
-- **Virtualizers own measurement/rendering, not navigation.** Queue
-  virtualization measures offsets and responds to layout but never restores
-  the window position; its drag edge auto-scroll is an explicit user-gesture
-  scroll through the virtualizer, not a restore.
-- **ResumeRecovery owns data/auth recovery, not viewport position.** It
-  refreshes the scoped resume set through
-  `invalidateAfterResumeRecovery` in `frontend/src/query/cacheEffects.ts` and
-  never touches the viewport.
-
-**Rule**: Do not add another `window.scrollTo` restoration path, another
-scroll retry timer, or an unscoped `invalidateQueries()` in a resume path.
-The guard test `frontend/src/unit/scrollOwnership.test.ts` fails if a second
-navigation-scroll owner is introduced.
-
-### Context Providers
-
-**DiceContext**: Client-side state for dice interactions
-- `currentDie`: Currently selected die type (d4, d6, d8, d10, d12, d20)
-- `manualMode`: Boolean flag for manual mode toggle
-- `selectedThreadId`: ID of manually selected thread
-
-**SessionContext**: Global session state
-- `currentSession`: Active session object
-- `hasRestorePoint`: Boolean flag for undo availability
-
-## URL Patterns
-
-React Router preserves existing URL patterns for bookmarks:
-
-| URL | Component | Description |
-|-----|-----------|-------------|
-| `/` | RollPage | Default home page with dice roll |
-| `/rate` | RatePage | Rating form for selected comic |
-| `/queue` | QueuePage | Thread list and reordering |
-| `/history` | HistoryPage | Event log with undo functionality |
-| `/sessions/:id` | SessionPage | Session details and snapshots |
-
-## Build Pipeline
-
-### Development Mode
-
-```bash
-pnpm run dev
-# or
-pnpm dev
-# or
-make dev  # (runs via pyproject.toml scripts)
-```
-
-Vite dev server runs on `http://localhost:5173` with HMR (Hot Module Replacement).
-
-### Production Build
-
-```bash
-pnpm run build
-# or
-pnpm build
-```
-
-Vite builds to `../static/react/`:
-- `index.html` - Entry HTML with asset references
-- `assets/index-*.js` - Bundled JavaScript with hash for caching
-- `assets/index-*.css` - Tailwind CSS styles
-
-### FastAPI Integration
-
-FastAPI serves the React build:
-
-```python
-app.mount("/static", StaticFiles(directory="static"), name="static")
-app.mount("/react", StaticFiles(directory="static/react", html=True), name="react")
-```
-
-**Access React App**: `http://localhost:8000/react/`
-
-**API Endpoints**: `http://localhost:8000/api/*` (same backend, no changes needed)
-
-## Styling Approach
-
-### Tailwind CSS Configuration
-
-```javascript
-export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
-}
-```
-
-**Content Paths**: Scan all React components for Tailwind class usage
-
-### Mobile-First Design
-
-Following the existing design system:
-- Touch targets ≥44px
-- Responsive layouts (mobile → tablet → desktop)
-- Large buttons for easy tapping
-
-### Existing Design Preservation
-
-Use existing Tailwind classes from Jinja2 templates:
-- `bg-yellow-400`, `bg-gray-100` for dice colors
-- `text-xl`, `font-bold` for typography
-- `rounded-lg`, `shadow-md` for card components
-- `flex`, `grid` for layouts
-
-## 3D Dice Component
-
-### Three.js Integration
-
-`components/Dice3D.jsx` renders an interactive Three.js die inside a `position: relative` container. It is wrapped by `components/LazyDice3D.jsx`, which suspends Three.js loading until first render; `RollPage.jsx` uses `LazyDice3D` to avoid blocking the initial page load.
-
-**Prop interface:**
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `sides` | number | `6` | Die type: 4, 6, 8, 10, 12, or 20 |
-| `value` | number | `1` | Face to show when settled |
-| `isRolling` | bool | `false` | Drives the tumbling animation |
-| `freeze` | bool | `false` | Stops idle rotation when `true` |
-| `lockMotion` | bool | `false` | Snaps to target face immediately (no lerp) |
-| `color` | number | `0xffffff` | Three.js hex color tint |
-| `onRollComplete` | func | `null` | Called once the settle animation finishes |
-| `renderConfig` | object | `null` | Override texture/UV config (see `diceRenderConfig.js`) |
-
-**Lifecycle**: Three.js scene and renderer are created once on mount and disposed on unmount. Geometry and texture are rebuilt whenever `sides`, `color`, or `renderConfig` change. The animation loop restarts when `freeze`, `lockMotion`, or `isRolling` change so the loop always sees the current ref values.
-
-## Testing Strategy
-
-### Unit Tests
-
-React components can be tested with React Testing Library (future addition):
-```javascript
-test('roll button calls roll mutation', () => {
-  const { getByText } = render(<RollPage />)
-  fireEvent.click(getByText(/roll d6/i))
-  expect(mockApi.roll).toHaveBeenCalled()
-})
-```
-
-### Integration Tests
-
-Existing Playwright tests will verify:
-- Roll flow: Tap roll → See result → Start reading
-- Queue management: Add, delete, reorder threads
-- History navigation and undo
-- Session lifecycle
-
-### API Tests
-
-Existing pytest tests cover backend API endpoints:
-```python
-async def test_roll_dice(async_client):
-    response = await async_client.post("/roll/roll")
-    assert response.status_code == 200
-    assert "result" in response.json()
-```
-
-## Performance Considerations
-
-### Code Splitting
-
-Vite automatically splits code by routes (dynamic imports):
-```jsx
-const HistoryPage = lazy(() => import('./pages/HistoryPage'))
-```
-
-### Caching Strategy
-
-- **Browser Cache**: Static files cached via FastAPI StaticFiles
-- **Asset Hashing**: Vite adds hash to filenames (`index-BwiMnkKz.js`) for cache busting
-
-### Bundle Size
-
-Initial bundle: ~180 KB (~58 KB gzipped) — includes React, React Router, Axios.
-
-Three.js is lazy-loaded on demand via `LazyDice3D`:
-- `Dice3D` chunk: ~16 KB (~6 KB gzipped)
-- `three` chunk: ~489 KB (~124 KB gzipped)
-
-_Measured via `cd frontend && pnpm run build` Vite output, March 2026. Re-run after significant dependency changes to keep these numbers accurate._
-
-## Mobile Usage Guide
-
-### Touch Targets
-All interactive elements maintain minimum 44px touch targets:
-- Buttons: `min-h-[48px]` for primary actions
-- Navigation items: Full-height flex containers with padding
-- Form inputs: Adequate padding for easy tapping
-
-### Responsive Breakpoints
-- Mobile-first design (base styles for mobile)
-- Tablet optimizations: `md:` prefix (768px+)
-- Desktop layouts: `lg:` prefix (1024px+)
-
-### Touch Gestures
-- Swipe gestures avoided to prevent conflicts with browser navigation
-- Pull-to-refresh not implemented (use manual refresh)
-- Long-press actions avoided for better accessibility
-
-## Accessibility
-
-### Keyboard Navigation
-- All interactive elements are keyboard accessible
-- Tab order follows visual layout
-- Escape key closes modals and dialogs
-- Enter/Space activate buttons
-
-### ARIA Attributes
-- Navigation: `aria-label` on all nav items
-- Modals: `role="dialog"`, `aria-modal="true"`, `aria-labelledby`
-- Forms: `htmlFor` associations between labels and inputs
-- Loading states: `aria-busy` and `aria-live` regions
-
-### Focus Management
-- Focus traps in modal dialogs
-- Focus returns to trigger element on modal close
-- Visible focus indicators on all interactive elements
-- Skip links for keyboard navigation (planned)
-
-### Screen Reader Support
-- Semantic HTML elements used throughout
-- Icons have `aria-hidden="true"` with text labels
-- Dynamic content updates announced via `aria-live` regions
-- Form validation errors use `role="alert"`
-
-### Color Contrast
-- Text meets WCAG AA contrast requirements (4.5:1 minimum)
-- Dice face numbers use high-contrast colors
-- Error states use color + icon + text (not color alone)
-
-### Viewport Management
-- Meta viewport prevents accidental zoom on input focus
-- Overscroll behavior controlled to prevent rubber-banding
-- Fixed navigation bars use `position: fixed` with proper z-index
-
-### Performance
-- Three.js dice component lazy-loaded to avoid blocking initial render
-- Images use modern formats with lazy loading
-- Minimal JavaScript bundle size (~180KB initial, ~489KB for 3D dice on demand)
-
-## Development Workflow
-
-### Linting
-
-```bash
-pnpm --filter frontend run lint # ESLint for JSX/JavaScript
-make lint # Run Python + JavaScript linting
-```
-
-### Type Checking
-
-Vite provides JSDoc-based type hints for JavaScript files.
-
-### Hot Reload
-
-Vite dev server updates:
-- CSS changes without full reload
-- Component updates with HMR (preserves state)
-
-## Deployment
-
-### Build Process
-
-1. `pnpm run build` → Builds to `static/react/`
-2. `alembic upgrade head` → Database migrations
-3. `uvicorn app.main:app --host 0.0.0.0` → Start FastAPI
-
-### Environment Variables
-
-No React-specific env vars needed (uses `/api` for backend).
-
-## Key Decisions & Rationale
-
-### Why Vite over Create React App?
-- Faster builds (esbuild vs webpack)
-- Better HMR (preserves component state)
-- Modern config (no webpack config needed)
-
-### Why Custom Hooks for Server State?
-- Zero dependencies for server state
-- Full control over data fetching logic
-- Simpler mental model for small apps
-- Easier to debug and understand
-- Consistent with AGENTS.md guidelines
-
-### Why Axios over Fetch?
-- Request/response interceptors
-- Automatic JSON parsing
-- Better error handling
-- Timeout support
-
-### Why Tailwind CSS 4.x over 3.x?
-- New PostCSS plugin (`@tailwindcss/postcss`)
-- Faster build times
-- Simpler configuration
-
-## TanStack Query Pilot
-
-TanStack Query (`@tanstack/react-query`) is the standard server-state layer, introduced via a small pilot. The custom `useState`/`useEffect` hooks remain for existing features; migrate incrementally.
-
-### Provider placement
-
-`QueryClientProvider` is the outermost provider, inside `BrowserRouter`, in `frontend/src/App.tsx`. The client is a single stable module-level instance (`frontend/src/query/queryClient.ts`) — never build a new `QueryClient` per render (it resets cache and breaks request dedup).
-
-### Adding a query
-
-```ts
-// frontend/src/query/queryKeys.ts
-export const queryKeys = { issues: ['issues'] as const }
-```
-
-```ts
-// frontend/src/hooks/useIssuesQuery.ts
-export function useIssuesQuery() {
-  return useQuery<Issue[]>({
-    queryKey: queryKeys.issues,
-    queryFn: async () => (await issuesApi.list()).issues ?? [],
-  })
-}
-```
-
-Two consumers of the same query key under one provider share a single in-flight request (dedup). Use `isPending` for the initial-load state (v5 semantics).
-
-### Mutation + targeted invalidation
-
-```ts
-const queryClient = useQueryClient()
-const createMutation = useMutation({
-  mutationFn: (data) => issuesApi.create(data),
-  onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.issues }),
-})
-```
-
-Invalidate only the exact key affected. Note that `invalidateQueries` matches query keys by prefix by default, so `{ queryKey: ['issues'] }` invalidates both `['issues']` and `['issues', 1]`. To match exactly, add `exact: true`. Choose query-key scopes carefully to avoid unintentionally invalidating sibling queries.
-
-### Auth / retry interplay
-
-The axios interceptor in `services/api.ts` already handles 401 → token refresh → single retry and login redirect. The QueryClient `retry` callback suppresses TanStack retries for 401 and 403 `Not authenticated`, and retries other errors up to 3 times. Mutations never auto-retry. `refetchOnWindowFocus` is `false` so pages keep their own refetch choreography.
-
-## Future Enhancements
-
-1. **TypeScript Migration**: Migrate from JSDoc to full TypeScript
-2. **Error Boundaries**: Add React error boundaries for graceful failures
-3. **Loading States**: Skeleton screens during data fetching
-4. **Pagination**: Infinite scroll for large thread queues
-5. **Real-time Updates**: WebSocket for live session updates
-6. **PWA**: Add service worker for offline support
-7. **Accessibility**: ARIA labels, keyboard navigation, screen reader support
-
-## References
-
-- [Vite Documentation](https://vitejs.dev/)
-- [React Documentation](https://react.dev/)
-- [Tailwind CSS Documentation](https://tailwindcss.com/)
-- [React Router Documentation](https://reactrouter.com/)
-- [Comic Pile API Documentation](./API.md)
-- [AGENTS.md](../AGENTS.md) - Project guidelines and conventions
+  navigation, reloads, bfcache restores, and visibility resume. It waits for
+  layout to settle through `waitForLayoutSettled`, with bounded stable animation
+  frames rather than a fixed timeout. A user scroll gesture ends the settle
+  watch so restoration does not fight intentional scrolling.
+- **Feature scrolling** is limited to intentional in-page transitions, such as
+  Roll moving between dice and rating regions or Help jumping to a glossary
+  anchor. These use `requestSemanticScroll` or `scrollToTopSemantic`, which
+  defer while route restoration is settling.
+- **Virtualizers** own measurement and rendering, not navigation restoration.
+  Queue edge auto-scroll remains an explicit user-gesture scroll.
+- **ResumeRecovery** owns data and auth recovery, not viewport position. It
+  refreshes the scoped resume set through `invalidateAfterResumeRecovery` in
+  `frontend/src/query/cacheEffects.ts` and never changes the viewport.
+
+Do not add another route-restoration `window.scrollTo` path, a separate scroll
+retry timer, or an unscoped `invalidateQueries()` call in a resume path. The
+guard test `frontend/src/unit/scrollOwnership.test.ts` protects the single
+navigation-scroll owner.
+
+---
+
+## Client State vs Server State
+
+- **Server State**: Managed strictly through TanStack Query (`queryClient`, `queryKeys`, `cacheEffects`).
+- **Global UI State**: Managed via dedicated context providers:
+  - `ToastProvider`: Floating notifications and action confirmations.
+  - `NavCollapseProvider`: Desktop navigation sidebar expanded/collapsed state.
+  - `BugReportRestoreProvider`: Preserves bug report drafts across view changes.
+  - `PositionMenuProvider`: Keeps position-menu interaction state available to its consumers.
+- **Authentication**: `AuthProvider` lives in `frontend/src/App.tsx`. It owns
+  authentication identity; server session, queue, and roll data stay in
+  TanStack Query rather than a manual `SessionContext` cache.
+- **Visual Design Rules**: All component styling must conform to [`docs/FRONTEND_VISUAL_GRAMMAR.md`](FRONTEND_VISUAL_GRAMMAR.md).
