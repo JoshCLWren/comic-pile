@@ -139,8 +139,8 @@ def issue_excludes_worker_on_strike_retry(number: int, worker: str) -> bool:
             ]
         )
     except RuntimeError:
-        # Fail closed for the excluded-producer fence when its history is unavailable.
-        return True
+        # Do not stall unrelated issue intake on a transient comment read failure.
+        return False
     reset_worker: str | None = None
     reset_seen = False
     for comment in flatten_pages(pages):
