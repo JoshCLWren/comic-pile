@@ -96,7 +96,7 @@ export function useCrossoverGroupDetail(groupId: number | null) {
 
 export function useCrossoverIssuesForRange(threadId: number | null) {
   return useQuery({
-    queryKey: threadId != null ? ['crossover', 'issues', threadId] as const : [],
+    queryKey: threadId != null ? queryKeys.crossover.issues(threadId) : [],
     queryFn: async () => {
       try {
         return await fetchAllIssues(threadId!)
@@ -115,7 +115,7 @@ export function useCreateCrossoverGroup() {
   return useMutation({
     mutationFn: (name: string) => dependencyGroupsApi.create(name),
     onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: queryKeys.crossover.list() })
+      await invalidateAfterCrossoverMutation(client)
     },
   })
 }
@@ -154,11 +154,8 @@ export function useAddCrossoverMember() {
       groupId: number
       target: DependencyGroupMemberTarget
     }) => dependencyGroupsApi.addMember(groupId, target),
-    onSuccess: async (_data, variables) => {
-      await client.invalidateQueries({
-        queryKey: queryKeys.crossover.detail(variables.groupId),
-      })
-      await client.invalidateQueries({ queryKey: queryKeys.crossover.list() })
+    onSuccess: async () => {
+      await invalidateAfterCrossoverMutation(client)
     },
   })
 }
@@ -178,11 +175,8 @@ export function useAddCrossoverIssueRange() {
       startPosition: number
       endPosition: number
     }) => dependencyGroupsApi.addIssueRange(groupId, threadId, startPosition, endPosition),
-    onSuccess: async (_data, variables) => {
-      await client.invalidateQueries({
-        queryKey: queryKeys.crossover.detail(variables.groupId),
-      })
-      await client.invalidateQueries({ queryKey: queryKeys.crossover.list() })
+    onSuccess: async () => {
+      await invalidateAfterCrossoverMutation(client)
     },
   })
 }
@@ -193,11 +187,8 @@ export function useRemoveCrossoverMember() {
   return useMutation({
     mutationFn: ({ groupId, memberId }: { groupId: number; memberId: number }) =>
       dependencyGroupsApi.removeMember(groupId, memberId),
-    onSuccess: async (_data, variables) => {
-      await client.invalidateQueries({
-        queryKey: queryKeys.crossover.detail(variables.groupId),
-      })
-      await client.invalidateQueries({ queryKey: queryKeys.crossover.list() })
+    onSuccess: async () => {
+      await invalidateAfterCrossoverMutation(client)
     },
   })
 }

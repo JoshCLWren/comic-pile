@@ -209,6 +209,7 @@ export const queryKeys = {
     detail: (groupId: number) => ['crossover', 'detail', groupId] as const,
     groups: (threadIds: number[]) =>
       ['crossover', 'groups', [...threadIds].sort((a, b) => a - b)] as const,
+    issues: (threadId: number) => ['crossover', 'issues', threadId] as const,
   },
   creator: {
     all: ['creator'] as const,

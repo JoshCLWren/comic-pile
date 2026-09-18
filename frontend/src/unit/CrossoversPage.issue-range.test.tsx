@@ -188,14 +188,6 @@ describe('CrossoversPage issue ranges', () => {
       added_issue_ids: [31, 33],
       already_present_issue_ids: [32],
     })
-    groupsApi.get.mockResolvedValue({
-      ...crossover,
-      memberships: [
-        { id: 1, issue_id: 31, thread_id: null },
-        { id: 2, issue_id: 32, thread_id: null },
-        { id: 3, issue_id: 33, thread_id: null },
-      ],
-    })
 
     renderPage()
     await screen.findByText('Annihilation')
@@ -206,7 +198,6 @@ describe('CrossoversPage issue ranges', () => {
 
     expect(await screen.findByRole('status')).toHaveTextContent('2 added, 1 already present.')
     expect(groupsApi.addIssueRange).toHaveBeenCalledWith(7, 22, 3, 5)
-    expect(groupsApi.get).toHaveBeenCalledWith(7)
     expect(screen.queryByLabelText('First issue')).not.toBeInTheDocument()
   })
 
