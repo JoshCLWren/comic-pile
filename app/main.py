@@ -637,7 +637,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @app.middleware("http")
     async def heavy_init_middleware(request: Request, call_next):
         """Ensure heavy dependencies are ready for all routes except the ping probe."""
-        if request.url.path != "/api/ping":
+        defer_heavy_init = os.getenv("TEST_ENVIRONMENT") == "true" and os.getenv(
+            "ENABLE_LAZY_HEAVY_INIT_IN_TESTS"
+        ) != "true"
+        if request.url.path != "/api/ping" and not defer_heavy_init:
             await _ensure_heavy_init()
         response = await call_next(request)
         from app.startup_diagnostics import is_heavy_initialized as _is_heavy
