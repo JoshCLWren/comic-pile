@@ -9,6 +9,7 @@ from app.cache import TTL, cached
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
+from app.services.continuity_blocking import get_continuity_rule_blocked_thread_ids
 from app.services.continuity_graph import SNAPSHOT_SESSION_KEY
 
 # Historical CBL materialization is inert unless separately proven or promoted
@@ -31,10 +32,11 @@ def _invalidate_continuity_snapshot(user_id: int, db: AsyncSession) -> None:
 async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
     """Read canonical blocked thread IDs directly from the current transaction.
 
-    After the Dependency-only cutover the Roll runtime consults only canonical
+    After the Dependency-only cutover the Roll runtime consults canonical
     Dependency rows: the target thread's next unread issue joined to incoming
     edges from unread issues owned by the same user, restricted to rows that are
-    not historical ``cbl-order:%`` materialization.
+    not historical ``cbl-order:%`` materialization. ContinuityRule blockers
+    are also included so reader-facing blocked state remains accurate.
     """
     _invalidate_continuity_snapshot(user_id, db)
     source_issue = Issue.__table__.alias("source_issue")
@@ -58,7 +60,9 @@ async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> se
         .where(_CANONICAL_DEPENDENCY_NOTE)
         .distinct()
     )
-    return {row[0] for row in issue_result.all()}
+    dependency_blocked: set[int] = {row[0] for row in issue_result.all()}
+    continuity_blocked = await get_continuity_rule_blocked_thread_ids(user_id, db)
+    return dependency_blocked | continuity_blocked
 
 
 @cached(ttl=TTL.SHORT)

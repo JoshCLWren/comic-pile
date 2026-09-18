@@ -536,9 +536,8 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
         except HTTPException as exc:
             if exc.status_code == 422 and isinstance(exc.detail, dict) and exc.detail.get("code") == "continuity_graph_too_large":
                 # Continuity graph is too large (user has too many threads/issues/etc.)
-                # Raw-Dependency blocking was retired by the cutover, so no legacy
-                # fallback remains; skip the refresh and proceed with the delete
-                # since continuity data for the deleted thread is already cleaned up.
+                # Blocked-status refresh is skipped; the delete already cleaned up
+                # continuity data for the deleted thread.
                 logger.warning(
                     "Skipping blocked-status refresh for user %s: %s",
                     user_id,
