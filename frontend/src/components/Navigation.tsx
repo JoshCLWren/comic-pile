@@ -10,6 +10,7 @@ import { DEFAULT_THEME, getAppliedTheme, isSupportedTheme, readStoredThemePrefer
 import { persistThemePreference } from '../services/themePreferenceSync'
 import type { ThemeId } from '../services/theme'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
+import { useResponsive } from '../utils/responsive'
 
 type BugReportSubmit = (
   reportType: ReportType,
@@ -158,21 +159,14 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const { isAuthenticated, isLoading, user, logout } = useAuth()
   const { collapsed, toggleCollapsed } = useNavCollapse()
   const navigate = useNavigate()
+  const { isMobile } = useResponsive()
   const [isMoreOpen, setIsMoreOpen] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
   const [activeTheme, setActiveTheme] = useState<ThemeId>(
     () => getAppliedTheme() ?? readStoredThemePreference() ?? DEFAULT_THEME,
   )
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const moreMenuRef = useRef<HTMLElement>(null)
   const { showToast } = useToast()
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768)
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
 
   useEffect(() => {
     const root = document.documentElement

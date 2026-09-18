@@ -7,6 +7,7 @@ import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { ToastProvider } from '../contexts/ToastProvider'
+import { cast } from '../utils/cast'
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -36,6 +37,20 @@ const STORAGE_KEY = 'comic-pile-nav-collapsed'
 
 function setViewport(width: number) {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+  const isMobile = width < 768
+  const isTablet = width >= 768 && width < 1024
+  const isDesktop = width >= 1024
+  const mql = cast<MediaQueryList>({
+    matches: !isMobile,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+  })
+  window.matchMedia = vi.fn((query: string) => {
+    if (query === '(max-width: 767px)') return { ...mql, matches: isMobile }
+    if (query.includes('min-width: 768px')) return { ...mql, matches: isTablet }
+    if (query.includes('min-width: 1024px')) return { ...mql, matches: isDesktop }
+    return mql
+  })
   window.dispatchEvent(new Event('resize'))
 }
 
@@ -146,6 +161,33 @@ describe('navigation collapse behavior (#2285)', () => {
   it('restores a persisted choice even when the viewport default disagrees', async () => {
     localStorage.setItem(STORAGE_KEY, 'true')
     setViewport(1440)
+    renderNavigation()
+
+    const desktopNav = await screen.findByRole('navigation', { name: /desktop navigation/i })
+    await waitFor(() => {
+      expect(within(desktopNav).getByRole('button', { name: /expand navigation/i }))
+        .toBeInTheDocument()
+    })
+    expect(desktopNav).toHaveAttribute('data-nav-collapsed', 'true')
+  })
+
+  it('preserves persisted collapse preference across viewport band crossings', async () => {
+    localStorage.setItem(STORAGE_KEY, 'false')
+    setViewport(800)
+    renderNavigation()
+
+    const desktopNav = await screen.findByRole('navigation', { name: /desktop navigation/i })
+    await waitFor(() => {
+      expect(within(desktopNav).getByRole('button', { name: /collapse navigation/i }))
+        .toBeInTheDocument()
+    })
+    // Stored preference is honored even when viewport band says collapsed
+    expect(desktopNav).toHaveAttribute('data-nav-collapsed', 'false')
+  })
+
+  it('gives correct default when no stored preference exists', async () => {
+    localStorage.clear()
+    setViewport(800)
     renderNavigation()
 
     const desktopNav = await screen.findByRole('navigation', { name: /desktop navigation/i })
