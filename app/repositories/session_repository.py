@@ -308,3 +308,213 @@ async def null_event_thread_references(db: AsyncSession, thread_ids: set[int]) -
         )
         .values(thread_id=None, selected_thread_id=None)
     )
+
+
+async def restore_session_start(
+    db: AsyncSession, session_id: int, user_id: int
+) -> tuple[SessionModel, list[Thread]]:
+    """Restore session to its initial state at session start.
+
+    Args:
+        db: Database session.
+        session_id: The session ID to restore.
+        user_id: The user ID for ownership validation.
+
+    Returns:
+        Tuple of (restored session, affected threads).
+
+    Raises:
+        HTTPException: If session or snapshot not found.
+    """
+    from app.repositories.thread_repository import threads_by_ids, delete_threads_by_ids
+    from app.models import Issue
+    from sqlalchemy import delete, or_, update
+    from datetime import datetime
+
+    # Get the session
+    session = await find_owned(db, user_id, session_id)
+    if not session:
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    # Get the session start snapshot
+    snapshot = await first_start_snapshot(db, session_id)
+    if not snapshot:
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No session start snapshot found for session {session_id}",
+        )
+
+    # Get current threads for the user
+    current_threads_result = await db.execute(
+        select(Thread).where(Thread.user_id == user_id)
+    )
+    current_threads = current_threads_result.scalars().all()
+    current_thread_ids = {thread.id for thread in current_threads}
+
+    # Get thread IDs from snapshot
+    snapshot_thread_ids = {int(tid) for tid in snapshot.thread_states.keys()}
+
+    # Delete threads that don't exist in the snapshot
+    threads_to_delete = current_thread_ids - snapshot_thread_ids
+    if threads_to_delete:
+        await null_event_thread_references(db, threads_to_delete)
+        await delete_threads_by_ids(db, threads_to_delete, user_id)
+
+    # Get threads from snapshot (both existing and new)
+    affected_threads = []
+    threads_to_recount = []
+
+    for thread_id, state in snapshot.thread_states.items():
+        thread_id_int = int(thread_id)
+        thread = await db.get(Thread, thread_id_int)
+        
+        if thread:
+            # Update existing thread
+            if "title" in state:
+                thread.title = state["title"]
+            if "format" in state:
+                from app.models.thread import normalize_format_value
+                thread.format = normalize_format_value(state["format"])
+            thread.issues_remaining = state.get("issues_remaining", thread.issues_remaining)
+            thread.last_rating = state.get("last_rating", thread.last_rating)
+            thread.queue_position = state.get("queue_position", thread.queue_position)
+            thread.status = state.get("status", thread.status)
+            if "notes" in state:
+                thread.notes = state["notes"]
+            if "is_test" in state:
+                thread.is_test = state["is_test"]
+            if state.get("last_activity_at"):
+                thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
+
+            # Handle issue states
+            if "issue_states" in state and state["issue_states"] is not None:
+                # Delete existing issues
+                await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
+
+                # Recreate issues from snapshot
+                max_position = 0
+                for issue_state in state["issue_states"]:
+                    position = issue_state.get("position", max_position + 1)
+                    if position > max_position:
+                        max_position = position
+                    issue = Issue(
+                        id=issue_state["id"],
+                        thread_id=thread_id_int,
+                        issue_number=issue_state["number"],
+                        status=issue_state["status"],
+                        read_at=datetime.fromisoformat(issue_state["read_at"])
+                        if issue_state["read_at"]
+                        else None,
+                        created_at=datetime.now(),
+                        position=position,
+                    )
+                    db.add(issue)
+                
+                thread.total_issues = state.get("total_issues")
+                thread.next_unread_issue_id = state.get("next_unread_issue_id")
+                thread.reading_progress = state.get("reading_progress")
+                
+                if thread.uses_issue_tracking():
+                    threads_to_recount.append(thread)
+            else:
+                # Clear migrated state when restoring to legacy
+                await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
+                thread.total_issues = None
+                thread.next_unread_issue_id = None
+                thread.reading_progress = None
+                thread.issues_remaining = state.get("issues_remaining", thread.issues_remaining)
+        else:
+            # Create new thread
+            new_thread = Thread(
+                id=thread_id_int,
+                title=state.get("title", "Unknown Thread"),
+                format=normalize_format_value(state.get("format", "comic")),
+                issues_remaining=state.get("issues_remaining", 0),
+                last_rating=state.get("last_rating"),
+                queue_position=state.get("queue_position", 1),
+                status=state.get("status", "active"),
+                notes=state.get("notes"),
+                is_test=state.get("is_test", False),
+                user_id=state.get("user_id", user_id),
+                created_at=datetime.fromisoformat(state["created_at"])
+                if state.get("created_at")
+                else datetime.now(),
+            )
+            
+            if state.get("last_activity_at"):
+                new_thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
+            
+            db.add(new_thread)
+
+            # Handle issue states for new thread
+            if "issue_states" in state and state["issue_states"] is not None:
+                max_position = 0
+                for issue_state in state["issue_states"]:
+                    position = issue_state.get("position", max_position + 1)
+                    if position > max_position:
+                        max_position = position
+                    issue = Issue(
+                        id=issue_state["id"],
+                        thread_id=thread_id_int,
+                        issue_number=issue_state["number"],
+                        status=issue_state["status"],
+                        read_at=datetime.fromisoformat(issue_state["read_at"])
+                        if issue_state["read_at"]
+                        else None,
+                        created_at=datetime.now(),
+                        position=position,
+                    )
+                    db.add(issue)
+                
+                new_thread.total_issues = state.get("total_issues")
+                new_thread.next_unread_issue_id = state.get("next_unread_issue_id")
+                new_thread.reading_progress = state.get("reading_progress")
+                
+                if new_thread.uses_issue_tracking():
+                    threads_to_recount.append(new_thread)
+            else:
+                new_thread.issues_remaining = state.get("issues_remaining", 0)
+
+        affected_threads.append(thread if thread else new_thread)
+
+    # Restore session state
+    if snapshot.session_state:
+        session.start_die = snapshot.session_state.get("start_die", session.start_die)
+        session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
+        session.active_bandwidth = snapshot.session_state.get(
+            "active_bandwidth", session.active_bandwidth
+        )
+        session.predicted_bandwidth = snapshot.session_state.get(
+            "predicted_bandwidth", session.predicted_bandwidth
+        )
+        session.bandwidth_confidence = snapshot.session_state.get(
+            "bandwidth_confidence", session.bandwidth_confidence
+        )
+        session.bandwidth_source = snapshot.session_state.get(
+            "bandwidth_source", session.bandwidth_source
+        )
+        session.bandwidth_version = snapshot.session_state.get(
+            "bandwidth_version", session.bandwidth_version
+        )
+        session.active_intent = snapshot.session_state.get(
+            "active_intent", session.active_intent
+        )
+        session.predicted_intent = snapshot.session_state.get(
+            "predicted_intent", session.predicted_intent
+        )
+        session.intent_confidence = snapshot.session_state.get(
+            "intent_confidence", session.intent_confidence
+        )
+        session.intent_source = snapshot.session_state.get(
+            "intent_source", session.intent_source
+        )
+        session.intent_version = snapshot.session_state.get(
+            "intent_version", session.intent_version
+        )
+
+    return session, affected_threads
