@@ -82,7 +82,7 @@ export default function MigrationDialog({ thread, onComplete, onSkip, onClose }:
     }
 
     if (isNaN(lastRead) || isNaN(total)) {
-      setError('Please enter valid numbers')
+      setError('Please fill in both fields')
       return false
     }
 
