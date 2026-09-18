@@ -2,11 +2,13 @@
 
 import base64
 import json
+from typing import cast
 
 import pytest
 
 from app.services.queue_pagination import (
     QueueCursor,
+    QueueSort,
     decode_queue_cursor,
     encode_queue_cursor,
     normalize_queue_search,
@@ -21,7 +23,7 @@ def _encode_payload(payload: object) -> str:
 
 def test_queue_cursor_round_trips_for_same_query() -> None:
     """Round-trip a cursor when sort and normalized search are unchanged."""
-    cursor = QueueCursor(sort="position", search=" Batman ", values=("10", "42"))
+    cursor = QueueCursor(sort="position", search=" Batman ", values=("0", "10", "42"))
 
     token = encode_queue_cursor(cursor)
 
@@ -29,14 +31,14 @@ def test_queue_cursor_round_trips_for_same_query() -> None:
     assert decode_queue_cursor(token, sort="position", search=" BATMAN ") == QueueCursor(
         sort="position",
         search="batman",
-        values=("10", "42"),
+        values=("0", "10", "42"),
     )
 
 
 def test_queue_cursor_rejects_sort_change() -> None:
     """Reject a cursor when the requested sort differs from its contract."""
     token = encode_queue_cursor(
-        QueueCursor(sort="position", search="", values=("10", "42")),
+        QueueCursor(sort="position", search="", values=("0", "10", "42")),
     )
 
     with pytest.raises(ValueError, match="does not match"):
@@ -85,6 +87,40 @@ def test_queue_cursor_rejects_invalid_payload_shapes(payload: object, message: s
 
     with pytest.raises(ValueError, match=message):
         decode_queue_cursor(token, sort="title", search=None)
+
+
+@pytest.mark.parametrize(
+    ("payload", "sort"),
+    [
+        ({"sort": "position", "search": "", "values": ["5", "10"]}, "position"),
+        (
+            {"sort": "position", "search": "", "values": ["0", "5", "10", "extra"]},
+            "position",
+        ),
+        ({"sort": "title", "search": "", "values": ["x-men"]}, "title"),
+        (
+            {"sort": "created", "search": "", "values": ["2024-01-01T00:00:00+00:00"]},
+            "created",
+        ),
+    ],
+)
+def test_queue_cursor_rejects_wrong_value_count(payload: object, sort: str) -> None:
+    """Reject a cursor whose sort-key value count does not match its contract."""
+    token = _encode_payload(payload)
+
+    with pytest.raises(ValueError, match="token values"):
+        decode_queue_cursor(token, sort=cast(QueueSort, sort), search=None)
+
+
+@pytest.mark.parametrize("blocked_flag", ["true", "2", ""])
+def test_queue_cursor_rejects_invalid_position_blocked_flag(blocked_flag: str) -> None:
+    """Reject a position cursor whose blocked grouping key is not 0 or 1."""
+    token = _encode_payload(
+        {"sort": "position", "search": "", "values": [blocked_flag, "5", "10"]}
+    )
+
+    with pytest.raises(ValueError, match="token values"):
+        decode_queue_cursor(token, sort="position", search=None)
 
 
 def test_queue_search_normalization_is_case_insensitive_and_trimmed() -> None:
