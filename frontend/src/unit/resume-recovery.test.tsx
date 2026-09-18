@@ -167,7 +167,7 @@ describe('ResumeRecovery', () => {
     revalidateSession
       .mockRejectedValueOnce(new Error('radio still waking'))
       .mockResolvedValueOnce(undefined)
-    invalidateQueries.mockResolvedValue(undefined)
+    invalidateSessionRecoveryCache.mockResolvedValue(undefined)
 
     renderRecovery()
 
