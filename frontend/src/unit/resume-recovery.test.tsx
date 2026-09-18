@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import ResumeRecovery from '../components/ResumeRecovery'
 
 const { revalidateSession, recoverSession, invalidateSessionRecoveryCache, invalidateAfterResumeRecovery } = vi.hoisted(() => ({
   revalidateSession: vi.fn(),
@@ -38,6 +39,7 @@ describe('ResumeRecovery', () => {
     revalidateSession.mockReset()
     recoverSession.mockReset()
     invalidateSessionRecoveryCache.mockReset()
+    invalidateAfterResumeRecovery.mockReset()
     setVisibilityState('visible')
   })
 
