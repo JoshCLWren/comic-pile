@@ -1,13 +1,12 @@
 """Session narrative summary service."""
 
-from typing import Dict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
 
 
-async def build_narrative_summary(session_id: int, db: AsyncSession) -> Dict[str, list[str]]:
+async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str, list[str]]:
     """Build narrative summary categorizing session events."""
     events_result = await db.execute(
         select(Event).where(Event.session_id == session_id).order_by(Event.timestamp)
