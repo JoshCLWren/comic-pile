@@ -254,6 +254,7 @@ async def snooze_thread(db: AsyncSession, user_id: int) -> SessionResponse:
 
     await db.commit()
 
+    await db.refresh(current_session)
     await invalidate_user_view(user_id)
 
     return await build_session_response(
@@ -317,6 +318,7 @@ async def unsnooze_thread(db: AsyncSession, user_id: int, thread_id: int) -> Ses
 
     await db.commit()
 
+    await db.refresh(current_session)
     await invalidate_user_view(user_id)
 
     return await build_session_response(
