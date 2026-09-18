@@ -147,6 +147,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     _configure_logging(app_settings.environment)
     startup_state: dict[str, str] = {}
 
+    _heavy_lock: asyncio.Lock = asyncio.Lock()
+    _heavy_state: dict[str, bool] = {"initialized": False, "in_progress": False}
+
     app = FastAPI(
         title="Dice-Driven Comic Tracker",
         description="API for tracking comic reading with dice rolls",
@@ -508,9 +511,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             )
             await cache.demote()
             startup_state["cache_provider_type"] = "demoted-off"
-
-    _heavy_lock: asyncio.Lock = asyncio.Lock()
-    _heavy_state: dict[str, bool] = {"initialized": False, "in_progress": False}
 
     async def _ensure_heavy_init() -> None:
         """Lazily initialize database, cache accounting, and cache provider once.
