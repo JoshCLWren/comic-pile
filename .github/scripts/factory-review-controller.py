@@ -22,6 +22,7 @@ classify_ci_reconciliation = _review_policy.classify_ci_reconciliation
 head_has_authorized_approval = _review_policy.head_has_authorized_approval
 producer_worker_from_pr = _review_policy.producer_worker_from_pr
 review_marker = _review_policy.review_marker
+semantic_repair_heads = _review_policy.semantic_repair_heads
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 OWNER_RE = re.compile(r"^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-7][0-9])$")
@@ -82,6 +83,8 @@ NO_REQUIRED_CHECKS_RE = re.compile(r"no checks reported|no required checks", re.
 NO_REQUIRED_CHECKS_REASON = (
     "no required checks reported at this head; merge is blocked until CI runs and passes"
 )
+FACTORY_REPAIR_CYCLE_LIMIT = 3
+STRIKE_RESET_MARKER = "comic-pile-factory-strike-reset-v1"
 
 GateDecision = Literal["pass", "retry", "deny"]
 
@@ -996,16 +999,75 @@ def handle_review(
     )
 
     if verdict == "repair":
+        prior_repair_heads = semantic_repair_heads(
+            review_comment_bodies(pr_number),
+            pr=pr_number,
+        )
+        if reviewed_head not in prior_repair_heads and len(prior_repair_heads) >= FACTORY_REPAIR_CYCLE_LIMIT:
+            if not has_actionable_review_findings(excerpt):
+                raise RuntimeError("strike-limit repair requires durable actionable review findings")
+            post_review_comment(
+                pr_number=pr_number,
+                marker=marker,
+                reviewer=worker,
+                verdict="repair",
+                excerpt=excerpt,
+                note=(
+                    "Fourth distinct semantic repair cycle reached. This implementation attempt "
+                    "is cancelled; the linked issue is returned for a clean implementation."
+                ),
+            )
+            issue = linked_issue_from_branch(branch)
+            if issue is not None:
+                excluded = producer or "unknown"
+                strike_marker = (
+                    f"<!-- {STRIKE_RESET_MARKER}:issue-{issue}:pr-{pr_number}:"
+                    f"excluded-producer-{excluded} -->"
+                )
+                run_gh(
+                    [
+                        "issue",
+                        "comment",
+                        str(issue),
+                        "--repo",
+                        REPO,
+                        "--body",
+                        strike_marker,
+                    ]
+                )
+            transition_pr_and_linked_issue(
+                pr_number=pr_number,
+                branch=branch,
+                worker=worker,
+                pr_stage="factory:blocked",
+                issue_stage="factory:building",
+            )
+            run_gh(["pr", "close", str(pr_number), "--repo", REPO])
+            return {
+                "status": "strike-limit-cancelled",
+                "head": reviewed_head,
+                "producer": producer,
+                "repair_cycles": len(prior_repair_heads) + 1,
+            }
         persist_repair_handoff(
             pr_number=pr_number,
             findings=excerpt,
             marker=marker,
             reviewer=worker,
-            note="Semantic blockers remain. The PR is returning to repair.",
+            note=(
+                f"Semantic blockers remain. Repair cycle "
+                f"{len(prior_repair_heads | {reviewed_head})}/{FACTORY_REPAIR_CYCLE_LIMIT}; "
+                "the PR is returning to repair."
+            ),
             branch=branch,
             worker=worker,
         )
-        return {"status": "repair", "head": reviewed_head, "producer": producer}
+        return {
+            "status": "repair",
+            "head": reviewed_head,
+            "producer": producer,
+            "repair_cycles": len(prior_repair_heads | {reviewed_head}),
+        }
 
     if verdict == "reject":
         if not has_actionable_review_findings(excerpt):
