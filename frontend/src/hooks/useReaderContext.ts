@@ -1,49 +1,40 @@
 import { useQuery } from '@tanstack/react-query'
-import {
-  readerContextApi,
-  type ReaderContextResponse,
-} from '../services/api-reader-context'
-import { queryKeys } from '../query/queryKeys'
+import { readingOrdersApi } from '../services/api-reading-orders'
+import { dependenciesApi } from '../services/api'
+import { queryKeys } from './queryKeys'
+import type { ReadingOrder } from '../services/api-reading-orders'
+import type { ConnectedThreadInfo } from '../types'
 
-interface ReaderContextState {
-  context: ReaderContextResponse | null
-  isLoading: boolean
-  error: Error | null
-  refetch: () => void
-}
-
-const EMPTY_STATE: ReaderContextState = {
-  context: null,
-  isLoading: false,
-  error: null,
-  refetch: () => undefined,
-}
-
-export function useReaderContext(
-  issueId: number | null | undefined,
-  enabled = true,
-): ReaderContextState {
-  const { data, isPending, error, refetch } = useQuery({
-    queryKey: issueId ? queryKeys.readerContext.detail(issueId) : [],
-    queryFn: async () => {
-      try {
-        return await readerContextApi.get(issueId!)
-      } catch (reason) {
-        throw reason instanceof Error ? reason : new Error('Unable to load reader context')
-      }
-    },
-    enabled: issueId != null && enabled,
+export function useReadingOrdersForThread(threadId: number | null) {
+  const { data, isPending, isError, error } = useQuery({
+    queryKey: threadId ? queryKeys.readingOrders.forThread(threadId) : [],
+    queryFn: () => readingOrdersApi.getForThread(threadId!),
+    enabled: !!threadId,
+    // SAFETY: null is the intentional initialData while the query is loading or disabled.
+    initialData: null as { reading_orders: ReadingOrder[] } | null,
   })
 
-  if (issueId == null || !enabled) return EMPTY_STATE
+  return {
+    readingOrders: data?.reading_orders ?? [],
+    isPending,
+    isError,
+    error,
+  }
+}
+
+export function useConnectedThreads(threadId: number | null) {
+  const { data, isPending, isError, error } = useQuery({
+    queryKey: threadId ? queryKeys.dependencies.connected(threadId) : [],
+    queryFn: () => dependenciesApi.getConnectedThreads(threadId!),
+    enabled: !!threadId,
+    // SAFETY: null is the intentional initialData while the query is loading or disabled.
+    initialData: null as { connected_threads: ConnectedThreadInfo[] } | null,
+  })
 
   return {
-    context: data ?? null,
-    isLoading: isPending,
-    // SAFETY: the queryFn normalizes failures to Error, so the query error value is Error | null.
-    error: (error as Error | null) ?? null,
-    refetch: () => {
-      void refetch()
-    },
+    connectedThreads: data?.connected_threads ?? [],
+    isPending,
+    isError,
+    error,
   }
 }

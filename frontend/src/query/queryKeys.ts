@@ -147,6 +147,11 @@ export const queryKeys = {
     blocking: (threadId: number) => ['dependencies', 'blocking', threadId] as const,
     blockingBatch: (threadIds: number[]) =>
       ['dependencies', 'blocking-batch', [...threadIds].sort((a, b) => a - b)] as const,
+    connected: (threadId: number) => ['dependencies', 'connected', threadId] as const,
+  },
+  readingOrders: {
+    all: ['readingOrders'] as const,
+    forThread: (threadId: number) => ['readingOrders', 'thread', threadId] as const,
   },
   analytics: {
     all: ['analytics'] as const,
