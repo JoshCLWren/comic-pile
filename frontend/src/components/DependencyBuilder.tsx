@@ -614,9 +614,9 @@ export default function DependencyBuilder({
                 </button>
               ))}
             </div>
-           )}
+          )}
 
-           {/* Inline migration prompt */}
+          {/* Inline migration prompt */}
            {selectedThread && selectedThreadNeedsMigration && (
              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 space-y-2">
                <p className="text-xs text-amber-300 font-bold">
@@ -630,9 +630,9 @@ export default function DependencyBuilder({
                  >
                    Migrate Now
                  </button>
-               ) : (
+                ) : (
                   <form onSubmit={handleInlineMigration} className="space-y-2">
-                     <div className="flex flex-col md:flex-row gap-2">
+                    <div className="flex flex-col md:flex-row gap-2">
                       <div className="flex-1">
                         <label htmlFor="migration-last-read" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Last issue read</label>
                         <input
@@ -658,14 +658,14 @@ export default function DependencyBuilder({
                         />
                       </div>
                     </div>
-                   <button
-                     type="submit"
-                     disabled={isMigrating}
-                     className="w-full py-1.5 bg-amber-500/20 border border-amber-500/30 rounded-lg text-xs font-black uppercase tracking-widest text-amber-200 disabled:opacity-50"
-                   >
-                     {isMigrating ? 'Migrating…' : 'Migrate'}
-                   </button>
-                 </form>
+                    <button
+                      type="submit"
+                      disabled={isMigrating}
+                      className="w-full py-1.5 bg-amber-500/20 border border-amber-500/30 rounded-lg text-xs font-black uppercase tracking-widest text-amber-200 disabled:opacity-50"
+                    >
+                      {isMigrating ? 'Migrating…' : 'Migrate'}
+                    </button>
+                  </form>
                )}
              </div>
            )}
@@ -682,10 +682,10 @@ export default function DependencyBuilder({
                      </label>
                      <select
                        id="source-issue"
-                       value={sourceIssueId || ''}
-                       onChange={(event) => setSourceIssueId(event.target.value ? Number(event.target.value) : null)}
-                       className="w-full rounded-xl px-3 py-2 text-sm form-control"
-disabled={(sourceIssues?.length ?? 0) === 0}
+                        value={sourceIssueId || ''}
+                        onChange={(event) => setSourceIssueId(event.target.value ? Number(event.target.value) : null)}
+                        className="w-full rounded-xl px-3 py-2 text-sm form-control"
+                        disabled={(sourceIssues?.length ?? 0) === 0}
                       >
                         {(sourceIssues?.length ?? 0) === 0 ? (
                           <option value="">No unread issues available</option>
@@ -738,7 +738,7 @@ disabled={(sourceIssues?.length ?? 0) === 0}
                disabled={isLoadingSourceIssues || isLoadingTargetIssues}
                onMembershipChanged={onChanged}
              />
-           )}
+            )}
 
             <button
               type="button"
@@ -748,13 +748,13 @@ disabled={(sourceIssues?.length ?? 0) === 0}
               }
               className="w-full py-2 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 whitespace-normal break-words text-left"
             >
-               {isSaving
-                 ? 'Adding dependency…'
-                 : isDuplicateDependency()
-                 ? 'Already added'
-: selectedThread
-                  ? `Block issue #${targetIssues?.find((i) => i.id === targetIssueId)?.issue_number || '?'} with: ${selectedThread.title} #${sourceIssues?.find((i) => i.id === sourceIssueId)?.issue_number || '?'}`
-                 : 'Select a prerequisite'}
+              {isSaving
+                ? 'Adding dependency…'
+                : isDuplicateDependency()
+                ? 'Already added'
+                : selectedThread
+                ? `Block issue #${targetIssues?.find((i) => i.id === targetIssueId)?.issue_number || '?'} with: ${selectedThread.title} #${sourceIssues?.find((i) => i.id === sourceIssueId)?.issue_number || '?'}`
+                : 'Select a prerequisite'}
             </button>
          </div>
 
