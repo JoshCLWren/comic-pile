@@ -311,12 +311,26 @@ export function applyEditedThreadToQueuePages(
 }
 
 /**
+ * Boolean guard for the paged (infinite) issue cache shape. The
+ * `queryKeys.thread.issuePages` prefix also hosts the flattened all-issues
+ * array (`queryKeys.thread.issuePagesAll`), so shape-matching updaters must
+ * skip array-valued queries instead of treating them as `{ pages }` data.
+ */
+function isIssuePagesInfiniteData(data: unknown): data is InfiniteData<IssueListResponse> {
+  return (
+    isObject(data)
+    && Array.isArray(data.pages)
+    && data.pages.every((page) => isObject(page) && Array.isArray(page.issues))
+  )
+}
+
+/**
  * Apply an authoritative issue read-status result to the cache so the thread
  * detail view reflects a toggle without refetching every loaded issue page.
  *
  * The snapshot carries the reconciled visible issues plus the server-refreshed
- * thread; the issues are patched in-place across every loaded page (keyed via
- * `queryKeys.thread.issuePages`) and the thread is pushed through
+ * thread; the issues are patched in-place across every loaded infinite page
+ * (keyed via `queryKeys.thread.issuePages`) and the thread is pushed through
  * `applyEditedThreadToQueuePages` (detail, summary, and queue rows).
  */
 export function applyIssueReadSnapshotToCache(
@@ -327,7 +341,10 @@ export function applyIssueReadSnapshotToCache(
   const issuesById = new Map(snapshotIssues.map((issue) => [issue.id, issue]))
 
   client.setQueriesData<InfiniteData<IssueListResponse>>(
-    { queryKey: queryKeys.thread.issuePages(updatedThread.id) },
+    {
+      queryKey: queryKeys.thread.issuePages(updatedThread.id),
+      predicate: (query) => isIssuePagesInfiniteData(query.state.data),
+    },
     (old) => {
       if (!old) return old
       return {
@@ -437,7 +454,7 @@ export function optimisticallyUpdateIssueStatus(
   issue: Issue,
   nextStatus: 'read' | 'unread',
 ): IssueCacheRollback {
-  const allIssuesKey = queryKeys.thread.issuePages(threadId)
+  const allIssuesKey = queryKeys.thread.issuePagesAll(threadId)
   const previousIssues = client.getQueryData<Issue[]>(allIssuesKey)
 
   if (previousIssues) {
@@ -468,7 +485,7 @@ export function optimisticallyDeleteIssue(
   threadId: number,
   issueId: number,
 ): IssueCacheRollback {
-  const allIssuesKey = queryKeys.thread.issuePages(threadId)
+  const allIssuesKey = queryKeys.thread.issuePagesAll(threadId)
   const previousIssues = client.getQueryData<Issue[]>(allIssuesKey)
 
   if (previousIssues) {
@@ -494,7 +511,7 @@ export function optimisticallyReorderIssues(
   threadId: number,
   issueIds: number[],
 ): IssueCacheRollback {
-  const allIssuesKey = queryKeys.thread.issuePages(threadId)
+  const allIssuesKey = queryKeys.thread.issuePagesAll(threadId)
   const previousIssues = client.getQueryData<Issue[]>(allIssuesKey)
 
   if (previousIssues) {

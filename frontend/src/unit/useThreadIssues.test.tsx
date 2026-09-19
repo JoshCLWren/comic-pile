@@ -103,13 +103,12 @@ describe('useThreadIssuePages', () => {
     })
 
     const wrapper = createWrapper()
-    const { result } = renderHook(() => useThreadIssuePages(1, 'unread'), { wrapper })
+    const { result } = renderHook(() => useThreadIssuePages(1, { status: 'unread' }), { wrapper })
 
     await waitFor(() => expect(result.current.data?.pages[0].issues).toEqual([issue]))
     expect(mockedIssuesApi.list).toHaveBeenCalledWith(1, {
       status: 'unread',
-      page_size: 50,
-      page_token: undefined,
+      page_size: 100,
     })
 
     // fetch next page with token
@@ -228,7 +227,7 @@ describe('mutations', () => {
     mockedIssuesApi.markUnread.mockResolvedValue(undefined)
 
     // seed singleton cache
-    queryClient.setQueryData<Issue[]>(queryKeys.thread.issuePages(10), [issue])
+    queryClient.setQueryData<Issue[]>(queryKeys.thread.issuePagesAll(10), [issue])
 
     const wrapper = createWrapper()
     const { result } = renderHook(() => useToggleIssueStatus(10), { wrapper })
@@ -245,9 +244,9 @@ describe('mutations', () => {
 
     // failure rollback
     mockedIssuesApi.markRead.mockRejectedValueOnce(new Error('fail'))
-    const before = queryClient.getQueryData<Issue[]>(queryKeys.thread.issuePages(10))
+    const before = queryClient.getQueryData<Issue[]>(queryKeys.thread.issuePagesAll(10))
     await expect(act(async () => result.current.mutateAsync({ issue, nextStatus: 'read' }))).rejects.toThrow()
-    expect(queryClient.getQueryData<Issue[]>(queryKeys.thread.issuePages(10))).toEqual(before)
+    expect(queryClient.getQueryData<Issue[]>(queryKeys.thread.issuePagesAll(10))).toEqual(before)
   })
 
   it('creates issues from range', async () => {
@@ -273,7 +272,7 @@ describe('mutations', () => {
   it('deletes issue with optimistic filter and rollback', async () => {
     const a = makeIssue({ id: 60, issue_number: '60' })
     const b = makeIssue({ id: 61, issue_number: '61' })
-    queryClient.setQueryData<Issue[]>(queryKeys.thread.issuePages(13), [a, b])
+    queryClient.setQueryData<Issue[]>(queryKeys.thread.issuePagesAll(13), [a, b])
     mockedIssuesApi.delete.mockResolvedValue(undefined)
 
     const wrapper = createWrapper()
@@ -285,7 +284,7 @@ describe('mutations', () => {
     expect(mockedIssuesApi.delete).toHaveBeenCalledWith(60)
 
     mockedIssuesApi.delete.mockRejectedValueOnce(new Error('delete fail'))
-    queryClient.setQueryData<Issue[]>(queryKeys.thread.issuePages(13), [a, b])
+    queryClient.setQueryData<Issue[]>(queryKeys.thread.issuePagesAll(13), [a, b])
     await expect(act(async () => result.current.mutateAsync(60))).rejects.toThrow()
   })
 
@@ -293,7 +292,7 @@ describe('mutations', () => {
     const a = makeIssue({ id: 70, issue_number: '70' })
     const b = makeIssue({ id: 71, issue_number: '71' })
     const c = makeIssue({ id: 72, issue_number: '72' })
-    queryClient.setQueryData<Issue[]>(queryKeys.thread.issuePages(14), [a, b, c])
+    queryClient.setQueryData<Issue[]>(queryKeys.thread.issuePagesAll(14), [a, b, c])
     mockedIssuesApi.reorder.mockResolvedValue(undefined)
 
     const wrapper = createWrapper()
@@ -305,14 +304,14 @@ describe('mutations', () => {
     expect(mockedIssuesApi.reorder).toHaveBeenCalledWith(14, [72, 70, 71])
 
     // rollback on failure
-    queryClient.setQueryData<Issue[]>(queryKeys.thread.issuePages(14), [a, b, c])
+    queryClient.setQueryData<Issue[]>(queryKeys.thread.issuePagesAll(14), [a, b, c])
     mockedIssuesApi.reorder.mockRejectedValueOnce(new Error('reorder fail'))
     await expect(act(async () => result.current.mutateAsync([71, 72]))).rejects.toThrow()
   })
 
   it('handles reorder with missing ids', async () => {
     const a = makeIssue({ id: 80, issue_number: '80' })
-    queryClient.setQueryData<Issue[]>(queryKeys.thread.issuePages(15), [a])
+    queryClient.setQueryData<Issue[]>(queryKeys.thread.issuePagesAll(15), [a])
     mockedIssuesApi.reorder.mockResolvedValue(undefined)
     const wrapper = createWrapper()
     const { result } = renderHook(() => useReorderIssues(15), { wrapper })

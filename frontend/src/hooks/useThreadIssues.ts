@@ -8,41 +8,53 @@ import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { invalidateAfterIssueEdit, optimisticallyUpdateIssueStatus, optimisticallyDeleteIssue, optimisticallyReorderIssues } from '../query/cacheEffects'
 
-const PAGE_SIZE = 50
+export const THREAD_ISSUES_PAGE_SIZE = 100
+
+export interface ThreadIssuePagesOptions {
+  /** Optional read-status filter; filtered reads own a distinct cache. */
+  status?: 'read' | 'unread'
+  /** When false the query stays disabled (used by collapsed sections). */
+  enabled?: boolean
+}
 
 /**
  * Infinite query for paginated thread issue reads (used by IssueList).
  * Filter changes reset the query to the first page. Caller uses fetchNextPage.
  *
- * The second parameter accepts either a status filter or the legacy boolean
- * `enabled` flag so existing callers (e.g. ThreadDetailView, which passes a
- * boolean expand flag) keep working. The return value spreads the raw
- * infinite-query result and adds flattened conveniences (`issues`,
- * `totalCount`, `pages`, `nextPageToken`) matching the previous loader shape.
+ * The options are decoded at the hook boundary: a status filter selects a
+ * filtered cache (`['paged', { status }]`) so filtered and unfiltered reads
+ * never share a page cursor, while `enabled` gates the query for collapsed
+ * sections. The return value spreads the raw infinite-query result and adds
+ * flattened conveniences (`issues`, `totalCount`, `pages`, `nextPageToken`)
+ * matching the previous loader shape.
  */
 export function useThreadIssuePages(
   threadId: number | null,
-  statusOrEnabled?: 'read' | 'unread' | boolean,
-  enabledOverride?: boolean,
+  options: ThreadIssuePagesOptions = {},
 ) {
-  const status = typeof statusOrEnabled === 'string' ? statusOrEnabled : undefined
-  const enabledFlag =
-    typeof statusOrEnabled === 'boolean' ? statusOrEnabled : (enabledOverride ?? true)
-  const enabled = threadId != null && enabledFlag
+  const { status, enabled = true } = options
+  const pageKey =
+    threadId != null && status != null
+      ? [...queryKeys.thread.issuePagesPaged(threadId), { status }]
+      : threadId != null
+        ? queryKeys.thread.issuePages(threadId)
+        : []
   const query = useInfiniteQuery<IssueListResponse>({
-    queryKey:
-      threadId != null
-        ? [...queryKeys.thread.issuePages(threadId), 'paged', { status: status ?? null }]
-        : [],
-    queryFn: ({ pageParam }) =>
-      issuesApi.list(threadId!, {
-        status,
-        page_size: PAGE_SIZE,
-        page_token: (pageParam as string | null) ?? undefined,
-      }),
+    queryKey: pageKey,
+    queryFn: ({ pageParam }) => {
+      const params: IssueListParams = { page_size: THREAD_ISSUES_PAGE_SIZE }
+      if (status != null) {
+        params.status = status
+      }
+      const pageToken = pageParam == null ? null : String(pageParam)
+      if (pageToken != null) {
+        params.page_token = pageToken
+      }
+      return issuesApi.list(threadId!, params)
+    },
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_page_token,
-    enabled,
+    enabled: threadId != null && enabled,
     retry: false,
   })
 
@@ -85,7 +97,7 @@ export function getIssueTotalCount(
  */
 export function useThreadAllIssues(threadId: number) {
   return useQuery<Issue[]>({
-    queryKey: queryKeys.thread.issuePages(threadId),
+    queryKey: queryKeys.thread.issuePagesAll(threadId),
     queryFn: async () => {
       const allIssues: Issue[] = []
       const seenPageTokens = new Set<string>()
