@@ -1,9 +1,0 @@
-﻿2026-09-18T22:17:22.9372791Z ##[group]Run ty check --error-on-warning
-2026-09-18T22:17:22.9373211Z [36;1mty check --error-on-warning[0m
-2026-09-18T22:17:22.9376558Z shell: sh -e {0}
-2026-09-18T22:17:22.9376799Z env:
-2026-09-18T22:17:22.9376986Z   REGISTRY: ghcr.io
-2026-09-18T22:17:22.9377224Z   IMAGE_NAME: JoshCLWren/comic-pile
-2026-09-18T22:17:22.9377555Z   PATH: /workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin
-2026-09-18T22:17:22.9377871Z ##[endgroup]
-2026-09-18T22:17:24.7516607Z All checks passed!

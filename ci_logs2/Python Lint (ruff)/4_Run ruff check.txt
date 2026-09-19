@@ -1,9 +1,0 @@
-﻿2026-09-18T22:17:15.5766309Z ##[group]Run ruff check .
-2026-09-18T22:17:15.5766517Z [36;1mruff check .[0m
-2026-09-18T22:17:15.5768717Z shell: sh -e {0}
-2026-09-18T22:17:15.5768834Z env:
-2026-09-18T22:17:15.5768940Z   REGISTRY: ghcr.io
-2026-09-18T22:17:15.5769066Z   IMAGE_NAME: JoshCLWren/comic-pile
-2026-09-18T22:17:15.5769245Z   PATH: /workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin
-2026-09-18T22:17:15.5769417Z ##[endgroup]
-2026-09-18T22:17:15.6944711Z All checks passed!

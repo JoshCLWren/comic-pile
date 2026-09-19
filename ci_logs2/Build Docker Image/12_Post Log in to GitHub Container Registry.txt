@@ -1,8 +1,0 @@
-﻿2026-09-18T22:16:30.7424131Z Post job cleanup.
-2026-09-18T22:16:30.9042343Z ##[group]Logout from ghcr.io
-2026-09-18T22:16:30.9074722Z [command]/usr/bin/docker logout ghcr.io
-2026-09-18T22:16:30.9191462Z Removing login credentials for ghcr.io
-2026-09-18T22:16:30.9219558Z ##[endgroup]
-2026-09-18T22:16:30.9220077Z ##[group]Post cache
-2026-09-18T22:16:30.9229235Z State not set
-2026-09-18T22:16:30.9239365Z ##[endgroup]

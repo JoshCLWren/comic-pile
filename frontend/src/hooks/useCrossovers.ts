@@ -1,9 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   dependencyGroupsApi,
-  type DependencyGroup,
-  type DependencyGroupIssueRangeResult,
-  type DependencyGroupMember,
   type DependencyGroupMemberTarget,
 } from '../services/api-dependency-groups'
 import { threadsApi } from '../services/api'
@@ -75,21 +72,6 @@ export function useAllThreads() {
         throw err instanceof Error ? err : new Error('Unable to load comics for selection.')
       }
     },
-    retry: false,
-  })
-}
-
-export function useCrossoverGroupDetail(groupId: number | null) {
-  return useQuery({
-    queryKey: groupId != null ? queryKeys.crossover.detail(groupId) : [],
-    queryFn: async () => {
-      try {
-        return await dependencyGroupsApi.get(groupId!)
-      } catch (err) {
-        throw err instanceof Error ? err : new Error('Unable to refresh crossover memberships.')
-      }
-    },
-    enabled: groupId != null,
     retry: false,
   })
 }

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from 'react'
+import axios from 'axios'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   ContinuityIssueRangeSelector,
@@ -9,6 +10,7 @@ import { type DependencyGroup, type DependencyGroupMember } from '../services/ap
 import type { Issue } from '../types'
 import GlossaryLink from '../components/GlossaryLink'
 import type { Thread } from '../types'
+import { isString } from '../utils/runtimeChecks'
 import {
   useCrossoverGroupsList,
   useAllThreads,
@@ -24,8 +26,11 @@ import {
 type PositionedIssue = Issue & { position: number }
 
 function errorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message) return error.message
-  return fallback
+  if (axios.isAxiosError(error)) {
+    const detail = error.response?.data?.detail
+    if (isString(detail) && detail.trim()) return detail
+  }
+  return error instanceof Error && error.message ? error.message : fallback
 }
 
 function memberLabel(member: DependencyGroupMember): string {

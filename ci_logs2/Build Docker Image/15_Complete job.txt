@@ -1,5 +1,0 @@
-﻿2026-09-18T22:16:33.4098508Z Evaluate and set job outputs
-2026-09-18T22:16:33.4103329Z Set output 'image-digest'
-2026-09-18T22:16:33.4104749Z Set output 'image-tag'
-2026-09-18T22:16:33.4105593Z Set output 'image-ref'
-2026-09-18T22:16:33.4106135Z Cleaning up orphan processes

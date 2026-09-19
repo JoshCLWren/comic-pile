@@ -13,7 +13,6 @@ export { useCrossoverGroups } from './useCrossoverGroups'
 export {
   useCrossoverGroupsList,
   useAllThreads,
-  useCrossoverGroupDetail,
   useCrossoverIssuesForRange,
   useCreateCrossoverGroup,
   useRenameCrossoverGroup,

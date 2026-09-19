@@ -1,8 +1,0 @@
-﻿2026-09-18T22:16:29.0578552Z ##[group]Run echo "image-tag=ghcr.io/joshclwren/comic-pile:271921b8a5967aa9c20ee146489300e75d851507" >> $GITHUB_OUTPUT
-2026-09-18T22:16:29.0579489Z [36;1mecho "image-tag=ghcr.io/joshclwren/comic-pile:271921b8a5967aa9c20ee146489300e75d851507" >> $GITHUB_OUTPUT[0m
-2026-09-18T22:16:29.0580316Z [36;1mecho "image-ref=ghcr.io/joshclwren/comic-pile@sha256:63027afc7b8ab5ceed66822b4565d9c6c660bee6521622298c8cdfdabe8dcc61" >> $GITHUB_OUTPUT[0m
-2026-09-18T22:16:29.0617548Z shell: /usr/bin/bash -e {0}
-2026-09-18T22:16:29.0617794Z env:
-2026-09-18T22:16:29.0617966Z   REGISTRY: ghcr.io
-2026-09-18T22:16:29.0618178Z   IMAGE_NAME: JoshCLWren/comic-pile
-2026-09-18T22:16:29.0618405Z ##[endgroup]

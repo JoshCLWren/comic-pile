@@ -263,6 +263,29 @@ describe('CrossoversPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Duplicate crossover name')
   })
 
+  it('uses API detail messages and safe fallbacks for non-Error failures', async () => {
+    const axiosFailure = (detail: string) => {
+      const error = new Error()
+      const shaped = error as unknown as Record<string, unknown>
+      shaped.isAxiosError = true
+      shaped.response = { data: { detail } }
+      return error
+    }
+    groupsApi.list
+      .mockRejectedValueOnce(axiosFailure('Crossover service unavailable'))
+      .mockRejectedValueOnce(axiosFailure('   '))
+      .mockRejectedValueOnce('offline')
+
+    renderPage()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Crossover service unavailable')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('Unable to load crossovers.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('Unable to load crossovers.')).toBeInTheDocument()
+  })
+
   it('allows a failed initial load to be retried', async () => {
     groupsApi.list.mockRejectedValueOnce(new Error('Network unavailable')).mockResolvedValueOnce([annihilation])
     renderPage()

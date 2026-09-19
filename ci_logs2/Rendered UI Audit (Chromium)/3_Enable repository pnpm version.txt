@@ -1,7 +1,0 @@
-﻿2026-09-18T22:16:41.5453391Z ##[group]Run corepack enable
-2026-09-18T22:16:41.5454502Z [36;1mcorepack enable[0m
-2026-09-18T22:16:41.5482081Z shell: /usr/bin/bash -e {0}
-2026-09-18T22:16:41.5483069Z env:
-2026-09-18T22:16:41.5483904Z   REGISTRY: ghcr.io
-2026-09-18T22:16:41.5484738Z   IMAGE_NAME: JoshCLWren/comic-pile
-2026-09-18T22:16:41.5485738Z ##[endgroup]
