@@ -8,7 +8,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.session import get_active_thread
+from app.services.session_response import get_active_thread
 from app.auth import create_access_token
 from app.config import clear_settings_cache
 from app.models import Event, Issue, Session, Snapshot, Thread, User

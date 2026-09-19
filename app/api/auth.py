@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from jose.exceptions import ExpiredSignatureError
-from sqlalchemy import exc as sqlalchemy_exc, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
@@ -24,6 +24,16 @@ from app.csrf import ensure_csrf_cookie, is_secure_request
 from app.database import get_db
 from app.middleware import limiter
 from app.models.user import User
+from app.repositories.failed_login_repository import (
+    clear_attempts_for_username,
+    record_failed_attempt,
+)
+from app.repositories.revoked_token_repository import is_token_revoked
+from app.repositories.user_repository import (
+    check_username_or_email_exists,
+    create_user,
+    get_user_by_username,
+)
 from app.schemas.auth import (
     RefreshTokenRequest,
     TokenResponse,
@@ -31,12 +41,7 @@ from app.schemas.auth import (
     UserRegisterRequest,
     UserResponse,
 )
-from app.security import (
-    check_login_lockout,
-    clear_failed_logins,
-    get_client_ip,
-    record_failed_login,
-)
+from app.security import check_login_lockout, get_client_ip
 
 router = APIRouter(tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -55,7 +60,10 @@ def _log_refresh_outcome(request: Request, *, outcome: str, reason: str) -> None
         outcome: Stable high-level result, either ``success`` or ``rejected``.
         reason: Stable reason code suitable for production log filtering.
     """
-    logger.warning(
+    level = "INFO" if outcome == "success" else "WARNING"
+    log_func = logger.info if outcome == "success" else logger.warning
+
+    log_func(
         "Auth refresh %s: %s",
         outcome,
         reason,
@@ -65,7 +73,7 @@ def _log_refresh_outcome(request: Request, *, outcome: str, reason: str) -> None
             "auth_reason": reason,
             "path": request.url.path,
             "request_id": getattr(request.state, "request_id", None),
-            "level": "WARNING",
+            "level": level,
         },
     )
 
@@ -111,14 +119,7 @@ async def register_user(
             detail=EMAIL_USERNAME_MESSAGE,
         )
 
-    conditions = [User.username == user_data.username]
-    if user_data.email:
-        conditions.append(User.email == user_data.email)
-
-    from sqlalchemy import or_
-
-    result = await db.execute(select(User).where(or_(*conditions)).limit(1))
-    existing = result.scalar_one_or_none()
+    existing = await check_username_or_email_exists(db, user_data.username, user_data.email)
     if existing:
         if existing.username == user_data.username:
             raise HTTPException(
@@ -132,16 +133,15 @@ async def register_user(
             )
 
     hashed_password = hash_password(user_data.password)
-    username = user_data.username
-    user = User(
-        username=username,
+    await create_user(
+        db,
+        username=user_data.username,
         email=user_data.email,
         password_hash=hashed_password,
     )
-    db.add(user)
     try:
         await db.commit()
-    except sqlalchemy_exc.IntegrityError:
+    except IntegrityError:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -150,8 +150,8 @@ async def register_user(
 
     jti = secrets.token_urlsafe(32)
     ensure_csrf_cookie(request, response)
-    access_token = create_access_token(data={"sub": username, "jti": jti})
-    refresh_token = create_refresh_token(data={"sub": username, "jti": jti})
+    access_token = create_access_token(data={"sub": user_data.username, "jti": jti})
+    refresh_token = create_refresh_token(data={"sub": user_data.username, "jti": jti})
     _set_refresh_cookie(response, request, refresh_token)
 
     return TokenResponse(
@@ -197,23 +197,22 @@ async def login_user(
 
     await check_login_lockout(db, username=login_data.username, ip_address=client_ip)
 
-    result = await db.execute(select(User).where(User.username == login_data.username).limit(1))
-    user = result.scalar_one_or_none()
+    user = await get_user_by_username(db, login_data.username)
     if not user or not user.password_hash:
-        await record_failed_login(db, username=login_data.username, ip_address=client_ip)
+        await record_failed_attempt(db, username=login_data.username, ip_address=client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
         )
 
     if not verify_password(login_data.password, user.password_hash):
-        await record_failed_login(db, username=login_data.username, ip_address=client_ip)
+        await record_failed_attempt(db, username=login_data.username, ip_address=client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
         )
 
-    await clear_failed_logins(db, username=login_data.username)
+    await clear_attempts_for_username(db, username=login_data.username)
 
     jti = secrets.token_urlsafe(32)
     ensure_csrf_cookie(request, response)
@@ -297,19 +296,14 @@ async def refresh_access_token(
             detail="Invalid refresh token",
         )
 
-    from app.models.revoked_token import RevokedToken
-
-    result = await db.execute(select(RevokedToken).where(RevokedToken.jti == jti).limit(1))
-    revoked = result.scalar_one_or_none()
-    if revoked:
+    if await is_token_revoked(db, jti):
         _log_refresh_outcome(request, outcome="rejected", reason="revoked_token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token has been revoked",
         )
 
-    result = await db.execute(select(User).where(User.username == username).limit(1))
-    user = result.scalar_one_or_none()
+    user = await get_user_by_username(db, username)
     if not user:
         _log_refresh_outcome(request, outcome="rejected", reason="invalid_token")
         raise HTTPException(
@@ -357,8 +351,7 @@ async def logout_user(
             payload = verify_token(token)
             username = payload.get("sub")
             if username:
-                result = await db.execute(select(User).where(User.username == username).limit(1))
-                user = result.scalar_one_or_none()
+                user = await get_user_by_username(db, username)
                 if user:
                     await revoke_token(db, token, user.id)
         except (JWTError, AttributeError, TypeError):

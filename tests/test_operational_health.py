@@ -8,7 +8,8 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api import health
+from app.services import health_probe
+from app.services.health_probe import ProbeUnavailableError
 from app.startup_diagnostics import StartupSnapshot
 
 
@@ -30,7 +31,7 @@ async def test_liveness_does_not_probe_dependencies(
     async def fail_if_called() -> None:
         raise AssertionError("dependency probe must not run")
 
-    monkeypatch.setattr(health, "_cache_probe", fail_if_called)
+    monkeypatch.setattr(health_probe, "cache_probe", fail_if_called)
     response = await client.get("/api/v1/health/live")
 
     assert response.status_code == 200
@@ -55,7 +56,7 @@ async def test_dependency_health_reports_independent_timings(
     async def healthy_cache() -> None:
         return None
 
-    monkeypatch.setattr(health, "_cache_probe", healthy_cache)
+    monkeypatch.setattr(health_probe, "cache_probe", healthy_cache)
     response = await client.get("/api/v1/health/dependencies")
 
     assert response.status_code == 200
@@ -84,9 +85,9 @@ async def test_dependency_health_reports_partial_failure(
     """
 
     async def unavailable_cache() -> None:
-        raise ConnectionError("cache offline")
+        raise ProbeUnavailableError("cache offline")
 
-    monkeypatch.setattr(health, "_cache_probe", unavailable_cache)
+    monkeypatch.setattr(health_probe, "cache_probe", unavailable_cache)
     response = await client.get("/api/v1/health/dependencies")
 
     assert response.status_code == 207
@@ -113,13 +114,13 @@ async def test_dependency_health_reports_database_unavailable(
     """
 
     async def unavailable_database(_: AsyncSession) -> None:
-        raise ConnectionError("database offline")
+        raise ProbeUnavailableError("database offline")
 
     async def healthy_cache() -> None:
         return None
 
-    monkeypatch.setattr(health, "_database_probe", unavailable_database)
-    monkeypatch.setattr(health, "_cache_probe", healthy_cache)
+    monkeypatch.setattr(health_probe, "database_probe", unavailable_database)
+    monkeypatch.setattr(health_probe, "cache_probe", healthy_cache)
     response = await client.get("/api/v1/health/dependencies")
 
     assert response.status_code == 503
@@ -146,8 +147,8 @@ async def test_dependency_probe_times_out_without_hanging(
     async def slow_operation() -> None:
         await asyncio.sleep(0.05)
 
-    monkeypatch.setattr(health, "DEPENDENCY_TIMEOUT_SECONDS", 0.001)
-    result = await health._timed_probe(slow_operation)
+    monkeypatch.setattr(health_probe, "DEPENDENCY_TIMEOUT_SECONDS", 0.001)
+    result = await health_probe._timed_probe(slow_operation)
 
     assert result.status == "timeout"
     assert result.duration_ms < 50
@@ -197,8 +198,8 @@ async def test_legacy_health_is_dependency_free(
     async def fail_if_called(*_: object) -> None:
         raise AssertionError("legacy liveness must not probe dependencies")
 
-    monkeypatch.setattr(health, "_database_probe", fail_if_called)
-    monkeypatch.setattr(health, "_cache_probe", fail_if_called)
+    monkeypatch.setattr(health_probe, "database_probe", fail_if_called)
+    monkeypatch.setattr(health_probe, "cache_probe", fail_if_called)
 
     response = await client.get("/api/health")
 
@@ -226,7 +227,7 @@ async def test_warmup_uses_read_only_dependency_boundary(
         nonlocal calls
         calls += 1
 
-    monkeypatch.setattr(health, "_cache_probe", healthy_cache)
+    monkeypatch.setattr(health_probe, "cache_probe", healthy_cache)
     response = await client.get("/api/v1/health/warmup")
 
     assert response.status_code == 200
@@ -247,6 +248,8 @@ def _make_mock_request(invocation: int = 1) -> MagicMock:
         application_import_ms=10.0,
         application_creation_ms=20.0,
         lifespan_ms=20.0,
+        heavy_initialized=False,
+        heavy_init_duration_ms=None,
         deployment_id="test-deployment",
         process_started_at_ns=1_000_000_000,
     )
@@ -307,9 +310,9 @@ async def test_warm_endpoint_handler_enabled_no_activity(
 
     mock_request = _make_mock_request(invocation=5)
     mock_db = AsyncMock()
-    mock_result = AsyncMock()
+    mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
-    mock_db.execute.return_value = mock_result
+    mock_db.execute = AsyncMock(return_value=mock_result)
 
     result = await health_module.warm_endpoint(mock_request, mock_db)
 
@@ -346,9 +349,9 @@ async def test_warm_endpoint_handler_with_recent_activity(
 
     mock_request = _make_mock_request(invocation=10)
     mock_db = AsyncMock()
-    mock_result = AsyncMock()
+    mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = datetime.now(UTC)
-    mock_db.execute.return_value = mock_result
+    mock_db.execute = AsyncMock(return_value=mock_result)
 
     result = await health_module.warm_endpoint(mock_request, mock_db)
 
@@ -382,6 +385,7 @@ async def test_warm_endpoint_handler_rate_limit_exceeded(
     # Request count exceeds the limit
     mock_request = _make_mock_request(invocation=10)
     mock_db = AsyncMock()
+    mock_db.execute = AsyncMock()
 
     result = await health_module.warm_endpoint(mock_request, mock_db)
 

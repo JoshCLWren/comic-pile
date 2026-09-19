@@ -72,7 +72,13 @@ vi.mock('../hooks/useSkip', () => ({
 vi.mock('../services/api-taste', () => ({
   tasteApi: { getDiscoveries: vi.fn().mockResolvedValue({ discoveries: [], generated_at: new Date().toISOString() }), dismiss: vi.fn().mockResolvedValue({ dismissed: true }), submitVerdict: vi.fn().mockResolvedValue({}) },
 }))
-vi.mock('../hooks/useReaderContext', () => ({ useReaderContext: () => ({ context: null, isLoading: false, error: null, refetch: vi.fn() }) }))
+vi.mock('../hooks/useReaderContext', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks/useReaderContext')>()
+  return {
+    ...actual,
+    useReaderContext: () => ({ context: null, isLoading: false, error: null, refetch: vi.fn() }),
+  }
+})
 vi.mock('../services/api', () => ({ default: {}, threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }], next_page_token: null }) }, dependenciesApi: { getConnectedThreads: relatedApi.connectedThreads, getBlockingInfo: relatedApi.blockingInfo, getBatchBlockingInfo: relatedApi.batchBlockingInfo } }))
 vi.mock('../services/api-reading-orders', () => ({ readingOrdersApi: { getForThread: relatedApi.readingOrders } }))
 vi.mock('../components/LazyDice3D', () => ({ default: ({ onRollComplete }: { onRollComplete?: () => void }) => <div data-testid="dice"><button type="button" onClick={onRollComplete}>complete dice</button></div> }))

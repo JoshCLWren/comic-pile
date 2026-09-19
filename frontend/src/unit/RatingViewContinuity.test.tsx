@@ -15,14 +15,18 @@ vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
   ReadingOrderGroups: () => null,
 }))
 
-vi.mock('../hooks/useReaderContext', () => ({
-  useReaderContext: () => ({
-    context: null,
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
-  }),
-}))
+vi.mock('../hooks/useReaderContext', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks/useReaderContext')>()
+  return {
+    ...actual,
+    useReaderContext: () => ({
+      context: null,
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    }),
+  }
+})
 vi.mock('../components/ContinuityCorrectionDialog', () => ({
   default: ({
     isOpen,

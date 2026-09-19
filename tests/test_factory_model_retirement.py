@@ -84,7 +84,13 @@ def test_retired_fixed_models_are_replaced_by_catalog_free_slots() -> None:
     assert REMOVED_WORKERS.isdisjoint({row[0] for row in rows})
 
     rows_by_worker = {row[0]: row for row in rows}
-    assert rows_by_worker["23"][1] in CATALOG_SOURCES
+    catalog_free_workers = [
+        worker for worker, row in rows_by_worker.items() if row[1] in CATALOG_SOURCES
+    ]
+    assert catalog_free_workers, "at least one catalog-free replacement lane must remain"
+    # Worker 29 is the durable catalog-free replacement slot. Worker 23 was
+    # converted to stealth/union-alpha and may be catalog-retired later.
+    assert "29" in rows_by_worker
     assert rows_by_worker["29"][1] in CATALOG_SOURCES
 
 

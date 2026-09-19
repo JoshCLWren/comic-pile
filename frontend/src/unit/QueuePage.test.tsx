@@ -68,6 +68,8 @@ vi.mock('../services/api-issues', () => ({
   issuesApi: {
     create: vi.fn().mockResolvedValue({ issues: [] }),
     markRead: vi.fn().mockResolvedValue(undefined),
+    bulkMarkRead: vi.fn().mockResolvedValue(undefined),
+    bulkMarkUnread: vi.fn().mockResolvedValue(undefined),
     migrateThread: vi.fn().mockResolvedValue({}),
   },
 }))
@@ -715,14 +717,14 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   await user.type(screen.getByLabelText('Issues'), 'Annual 1, 5-7')
   await user.type(screen.getByLabelText(/Issues already read/i), '2')
   await user.click(screen.getByRole('button', { name: /create series/i }))
-  await waitFor(() => expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(11))
-  expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(12)
+  await waitFor(() => expect(mockedIssuesApi.bulkMarkRead).toHaveBeenCalledWith([11, 12]))
 })
 
   it('creates a later single issue without requiring earlier issues', async () => {
   const user = userEvent.setup()
   const create = vi.fn().mockResolvedValue({ id: 78 })
   mockedIssuesApi.markRead.mockClear()
+  mockedIssuesApi.bulkMarkRead.mockClear()
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
   mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   mockedIssuesApi.create.mockResolvedValue({ issues: [{ id: 71, issue_number: '71' }] })
@@ -744,6 +746,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   })))
   expect(mockedIssuesApi.create).toHaveBeenCalledWith(78, '71')
   expect(mockedIssuesApi.markRead).not.toHaveBeenCalled()
+  expect(mockedIssuesApi.bulkMarkRead).not.toHaveBeenCalled()
 })
 
   it('handles reactivation success and failure from completed threads', async () => {

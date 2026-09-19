@@ -156,6 +156,12 @@ Responsive rules describe behavior, not screenshots.
 
 Tailwind's existing breakpoints are the default guardrails. Do not add a new breakpoint for a single feature unless the layout has a demonstrated behavioral transition that the existing breakpoints cannot express.
 
+**Tailwind's breakpoint contract is canonical:** `md = 768px`, `lg = 1024px`, `xl = 1280px`.
+
+**Tablet portrait is an explicit product band.** At `md` through just below `lg`, the desktop/sidebar navigation model remains available but the left navigation is **collapsed by default** to protect content width. Nav collapse persistence represents **user preference**, while viewport constraints determine what can currently be displayed. A viewport transition must not erase the user's stored preference merely because the current band cannot display it. On a first visit with no stored preference, use the band's default.
+
+**Phone/mobile chrome remains determined by the canonical `md` boundary** rather than an independently maintained JS threshold.
+
 ### Mobile and narrow layouts
 
 Narrow layouts may stack vertically and scroll naturally. Maintain readable order, touch targets, safe-area spacing, and horizontal containment. Horizontal scrolling is not an acceptable fallback for ordinary application content.
@@ -179,6 +185,17 @@ Fixed/sticky elements must not cover reachable content. The shared shell owns or
 ### Scrolling
 
 Scrolling is correct when information density genuinely exceeds available space, particularly on mobile. Scrolling is a defect signal when controls are below the fold because of blank grid tracks, oversized decorative media, unnecessary fixed heights, or other manufactured whitespace.
+
+### Responsive implementation ownership
+
+All responsive behavior must follow the canonical breakpoint contract defined above:
+
+* **Tailwind's breakpoint contract is canonical:** `md = 768px`, `lg = 1024px`, `xl = 1280px`.
+* **CSS/Tailwind owns responsive presentation.** Do not hard-code responsive behavior with direct `window.innerWidth` comparisons.
+* **JS responsive behavior** uses the shared `matchMedia` abstraction (`useMatchMedia`, `useResponsive`) from `frontend/src/utils/responsive.ts`.
+* **No duplicated breakpoint constants.** All code references the canonical values from the shared module.
+* **Tablet portrait** (768 through 1023) is an explicit product band. Nav is collapsed by default when there is no stored user preference.
+* **Viewport transitions must not erase persisted user preferences.** A user's stored collapse preference survives crossing the `md` or `lg` boundaries.
 
 ## Motion
 

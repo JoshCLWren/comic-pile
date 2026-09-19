@@ -1,13 +1,12 @@
 import api from './api'
-import type { Issue, ReaderContextResponse, Thread } from '../types'
+import type {
+  Issue,
+  IssueListResponse,
+  ReaderContextResponse,
+  Thread,
+} from '../types'
 
-export type IssueListResponse = {
-  issues: Issue[]
-  total_count: number
-  page_size: number
-  next_page_token: string | null
-}
-
+export type { IssueListResponse }
 
 /** HTTP client contract required by the issue service. */
 export interface IssuesApiHttpClient {
@@ -112,6 +111,14 @@ export function createIssuesApi(client: IssuesApiHttpClient) {
      */
     markUnread: async (issueId: number): Promise<void> => {
       await client.post(`/v1/issues/${issueId}:markUnread`)
+    },
+
+    bulkMarkRead: async (issueIds: number[]): Promise<void> => {
+      await client.post(`/v1/issues:bulkMarkRead`, { issue_ids: issueIds })
+    },
+
+    bulkMarkUnread: async (issueIds: number[]): Promise<void> => {
+      await client.post(`/v1/issues:bulkMarkUnread`, { issue_ids: issueIds })
     },
 
     /**

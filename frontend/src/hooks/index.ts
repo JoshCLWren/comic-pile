@@ -10,8 +10,19 @@ export { useBugReport } from './useBugReport'
 export { useComicVineIssueIntelligence } from './useComicVineIssueIntelligence'
 export { useCreatorDetail, creatorDetailQueryOptions, CREATOR_DETAIL_PAGE_SIZE } from './useCreatorDetail'
 export { useCrossoverGroups } from './useCrossoverGroups'
+export {
+  useCrossoverGroupsList,
+  useAllThreads,
+  useCrossoverIssuesForRange,
+  useCreateCrossoverGroup,
+  useRenameCrossoverGroup,
+  useDeleteCrossoverGroup,
+  useAddCrossoverMember,
+  useAddCrossoverIssueRange,
+  useRemoveCrossoverMember,
+} from './useCrossovers'
 export { useDependencyGroups } from './useDependencyGroups'
-export { useReaderContext } from './useReaderContext'
+export { useReaderContext, useReadingOrdersForThread, useConnectedThreads } from './useReaderContext'
 export { useTasteDiscoveries } from './useTasteDiscoveries'
 export { useRollBootstrap, resolveBrowserTimezone } from './useRollBootstrap'
 export { useRollPrerequisiteSwitch } from './useRollPrerequisiteSwitch'

@@ -21,6 +21,14 @@ from factory_capacity_policy import (
 from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments)
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
+STRIKE_RESET_RE = re.compile(
+    r"comic-pile-factory-strike-reset-v1:issue-(?P<issue>\d+):pr-(?P<pr>\d+):"
+    r"excluded-producer-(?P<worker>\d+|unknown)"
+)
+IMPLEMENT_CLAIM_RE = re.compile(
+    r"comic-pile-factory-implement-claim-v3:issue-(?P<issue>\d+):"
+    r"opencode-(?:free-model|nvidia|omniroute)-factory-(?P<worker>\d+):"
+)
 LEASE_ACTIVITY_PATTERNS = (
     re.compile(r"comic-pile-factory-implement-(?:claim|progress)-v3:issue-\d+:[^:>]+:(\d{10})"),
     re.compile(r"comic-pile-factory-fix-(?:claim|progress)-v3:[^:>]+:[^:>]+:(\d{10})"),
@@ -117,6 +125,41 @@ def candidate_is_live_executable(candidate: Candidate) -> bool:
     if 'factory:ci' in labels:
         return required_checks_failed(candidate.number)
     return True
+
+
+def issue_excludes_worker_on_strike_retry(number: int, worker: str) -> bool:
+    """Keep the failed producer out of the first clean retry implementation."""
+    try:
+        pages = gh_json(
+            [
+                "api",
+                "--paginate",
+                "--slurp",
+                f"repos/{REPO}/issues/{number}/comments?per_page=100",
+            ]
+        )
+    except RuntimeError:
+        # Do not stall unrelated issue intake on a transient comment read failure.
+        return False
+    reset_worker: str | None = None
+    reset_seen = False
+    for comment in flatten_pages(pages):
+        if not comment_is_trusted(comment):
+            continue
+        body = str(comment.get("body") or "")
+        reset = STRIKE_RESET_RE.search(body)
+        if reset and int(reset.group("issue")) == number:
+            reset_worker = reset.group("worker")
+            reset_seen = True
+            continue
+        if reset_seen:
+            claim = IMPLEMENT_CLAIM_RE.search(body)
+            if claim and int(claim.group("issue")) == number:
+                # Once a clean retry actually begins, the one-shot exclusion is spent.
+                reset_seen = False
+                reset_worker = None
+                continue
+    return reset_seen and reset_worker == worker
 
 
 def target_still_unowned(number: int) -> bool:
@@ -512,6 +555,11 @@ def assign(worker: str) -> Candidate | None:
     candidates = order_candidates_for_worker(candidates, worker)
     for candidate in candidates:
         if not candidate_is_live_executable(candidate):
+            continue
+        if (
+            candidate.kind == "issue"
+            and issue_excludes_worker_on_strike_retry(candidate.number, worker)
+        ):
             continue
         if assign_candidate(candidate, worker):
             reason = ' conflict-repair' if candidate.conflicted else ''

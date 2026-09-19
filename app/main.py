@@ -1,5 +1,6 @@
 """FastAPI application factory and configuration."""
 
+import asyncio
 import logging
 import os
 import secrets
@@ -146,6 +147,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     _configure_logging(app_settings.environment)
     startup_state: dict[str, str] = {}
 
+    _heavy_lock: asyncio.Lock = asyncio.Lock()
+    _heavy_state: dict[str, bool] = {"initialized": False, "in_progress": False}
+
     app = FastAPI(
         title="Dice-Driven Comic Tracker",
         description="API for tracking comic reading with dice rolls",
@@ -266,6 +270,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
     app.include_router(thread.router, prefix="/api/v1/threads", tags=["threads"])
+    # New client resources (e.g. paginated completed threads for issue #2567)
+    # are versioned-only: no bare /api/* twin.
+    app.include_router(thread.v1_router, prefix="/api/v1/threads", tags=["threads"])
     if app_settings.environment != "production":
         app.include_router(debug.router, prefix="/api", tags=["debug"])
         app.include_router(debug.router, prefix="/api/v1", tags=["debug"])
@@ -508,71 +515,145 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             await cache.demote()
             startup_state["cache_provider_type"] = "demoted-off"
 
+    async def _ensure_heavy_init() -> None:
+        """Lazily initialize database, cache accounting, and cache provider once.
+
+        The lightweight ``/api/ping`` wake-up deliberately skips this path so a
+        cold ping does not open a PostgreSQL connection or reserve cache blocks.
+        Every other operational route triggers heavy init on first use, guarded
+        by an async lock so concurrent cold requests only run the sequence once.
+        """
+        if _heavy_state["initialized"]:
+            return
+        async with _heavy_lock:
+            if _heavy_state["initialized"]:
+                return
+            if _heavy_state["in_progress"]:
+                return
+            _heavy_state["in_progress"] = True
+            try:
+                await init_database(app_settings.environment)
+
+                from app.cache_accounting import cache_accounting
+                from app.database import async_engine
+
+                try:
+                    await cache_accounting.initialize(async_engine)
+                except Exception:
+                    logger.warning(
+                        "Durable cache accounting init failed; quota telemetry degraded"
+                    )
+
+                redis_settings = get_redis_settings()
+                from app.cache_quota import set_quota_throttle_enabled
+
+                set_quota_throttle_enabled(redis_settings.cache_quota_throttle_enabled)
+                provider = redis_settings.effective_provider
+
+                if provider == "off":
+                    logger.info("CACHE_PROVIDER=off - caching disabled")
+                elif provider == "postgres":
+                    await _init_provided_cache(
+                        "postgres",
+                        startup_state,
+                        {"database_url": get_database_settings().async_url},
+                    )
+                elif provider == "redis":
+                    if (
+                        redis_settings.resolved_upstash_rest_url
+                        and redis_settings.resolved_upstash_rest_token
+                    ):
+                        await _init_provided_cache(
+                            "redis",
+                            startup_state,
+                            {
+                                "url": redis_settings.resolved_upstash_rest_url,
+                                "token": redis_settings.resolved_upstash_rest_token,
+                                "throttle_enabled": redis_settings.cache_quota_throttle_enabled,
+                            },
+                        )
+                    elif redis_settings.redis_url:
+                        if not redis_settings.cache_local_redis_dev:
+                            logger.warning(
+                                "Local Redis URL present but CACHE_LOCAL_REDIS_DEV is not set; "
+                                "refusing the local Redis client path. Use Upstash credentials "
+                                "or enable the dev flag to use local Redis."
+                            )
+                        else:
+                            await _init_provided_cache(
+                                "redis",
+                                startup_state,
+                                {
+                                    "local_url": redis_settings.redis_url,
+                                    "allow_local": True,
+                                    "throttle_enabled": redis_settings.cache_quota_throttle_enabled,
+                                },
+                            )
+                    else:
+                        logger.warning(
+                            "Redis credentials absent for CACHE_PROVIDER=redis; caching disabled"
+                        )
+
+                from app.startup_diagnostics import mark_heavy_init_complete
+
+                heavy_ms = mark_heavy_init_complete()
+                logger.warning(
+                    "Heavy application initialization completed in %.2f ms provider=%s",
+                    heavy_ms,
+                    startup_state.get("cache_provider_type", "unconfigured"),
+                    extra={
+                        "event": "heavy_application_startup",
+                        "heavy_initialized": True,
+                        "heavy_init_duration_ms": round(heavy_ms, 2),
+                        "cache_provider_type": startup_state.get(
+                            "cache_provider_type", "unconfigured"
+                        ),
+                    },
+                )
+                _heavy_state["initialized"] = True
+            finally:
+                _heavy_state["in_progress"] = False
+
+    # Expose for tests and get_db fallback
+    app.state.ensure_heavy_init = _ensure_heavy_init  # type: ignore[attr-defined]
+    app.state.heavy_init_state = _heavy_state  # type: ignore[attr-defined]
+
     @app.on_event("startup")
     async def startup_event():
-        """Initialize database and cache on application startup."""
-        await init_database(app_settings.environment)
+        """Lightweight startup; heavy DB/cache init is deferred to first non-ping request."""
         await compute_startup_duration()
+        from app.startup_diagnostics import is_heavy_initialized, startup_event_snapshot
 
-        from app.cache_accounting import cache_accounting
-        from app.database import async_engine
+        snapshot = startup_event_snapshot()
+        logger.warning(
+            "Lightweight application startup completed (ping-ready) in %.2f ms heavy_initialized=%s",
+            snapshot.startup_duration_ms or 0.0,
+            is_heavy_initialized(),
+            extra={
+                "event": "lightweight_application_startup",
+                "heavy_initialized": is_heavy_initialized(),
+                "startup_duration_ms": round(snapshot.startup_duration_ms or 0.0, 2),
+                "deployment_id": snapshot.deployment_id,
+            },
+        )
 
-        try:
-            await cache_accounting.initialize(async_engine)
-        except Exception:
-            logger.warning("Durable cache accounting init failed; quota telemetry degraded")
+    @app.middleware("http")
+    async def heavy_init_middleware(request: Request, call_next):
+        """Ensure heavy dependencies are ready for all routes except the ping probe."""
+        defer_heavy_init = os.getenv("TEST_ENVIRONMENT") == "true" and os.getenv(
+            "ENABLE_LAZY_HEAVY_INIT_IN_TESTS"
+        ) != "true"
+        # Exempt the keep-warm probe including its trailing-slash form, which
+        # Starlette would otherwise slash-redirect only after heavy init ran.
+        request_path = request.url.path
+        is_ping_probe = request_path == "/api/ping" or request_path.startswith("/api/ping/")
+        if not is_ping_probe and not defer_heavy_init:
+            await _ensure_heavy_init()
+        response = await call_next(request)
+        from app.startup_diagnostics import is_heavy_initialized as _is_heavy
 
-        redis_settings = get_redis_settings()
-        from app.cache_quota import set_quota_throttle_enabled
-
-        set_quota_throttle_enabled(redis_settings.cache_quota_throttle_enabled)
-        provider = redis_settings.effective_provider
-
-        if provider == "off":
-            logger.info("CACHE_PROVIDER=off - caching disabled")
-            return
-
-        if provider == "postgres":
-            await _init_provided_cache(
-                "postgres",
-                startup_state,
-                {"database_url": get_database_settings().async_url},
-            )
-            return
-
-        if provider == "redis":
-            if redis_settings.resolved_upstash_rest_url and redis_settings.resolved_upstash_rest_token:
-                await _init_provided_cache(
-                    "redis",
-                    startup_state,
-                    {
-                        "url": redis_settings.resolved_upstash_rest_url,
-                        "token": redis_settings.resolved_upstash_rest_token,
-                        "throttle_enabled": redis_settings.cache_quota_throttle_enabled,
-                    },
-                )
-            elif redis_settings.redis_url:
-                if not redis_settings.cache_local_redis_dev:
-                    logger.warning(
-                        "Local Redis URL present but CACHE_LOCAL_REDIS_DEV is not set; "
-                        "refusing the local Redis client path. Use Upstash credentials "
-                        "or enable the dev flag to use local Redis."
-                    )
-                    return
-                await _init_provided_cache(
-                    "redis",
-                    startup_state,
-                    {
-                        "local_url": redis_settings.redis_url,
-                        "allow_local": True,
-                        "throttle_enabled": redis_settings.cache_quota_throttle_enabled,
-                    },
-                )
-            else:
-                logger.warning(
-                    "Redis credentials absent for CACHE_PROVIDER=redis; caching disabled"
-                )
-            return
+        response.headers["X-Heavy-Init"] = "1" if _is_heavy() else "0"
+        return response
 
     @app.on_event("shutdown")
     async def shutdown_event():

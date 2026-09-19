@@ -111,6 +111,7 @@ beforeEach(() => {
   if (typeof window !== "undefined") {
       window.localStorage.clear();
     }
+  queryClient.clear()
   continuityPlansApi.create = mocks.create as never
   continuityPlansApi.list = mocks.list as never
   continuityPlansApi.get = mocks.get as never
@@ -154,6 +155,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  queryClient.clear()
   continuityPlansApi.create = _origCreate
   continuityPlansApi.list = _origList
   continuityPlansApi.get = _origGet

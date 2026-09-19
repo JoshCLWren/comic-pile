@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
-import { keepPreviousData, useInfiniteQuery, useMutation } from '@tanstack/react-query'
+import { keepPreviousData, useMutation } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
+import { useInfiniteCollection } from '../pagination'
 import { invalidateAfterQueueMovement } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
@@ -37,8 +38,8 @@ function toApiSort(sort: QueueSortBy): ApiSort {
 
 /**
  * Canonical bounded Queue list query options: the documented `queue.pages`
- * key plus the exact first-page fetch contract consumed by
- * `useInfiniteQuery` in `useQueueThreads`.
+ * key plus the exact first-page fetch contract consumed by the canonical
+ * paginator (`useInfiniteCollection`) in `useQueueThreads`.
  *
  * Sharing this factory keeps speculative warm-up (route prefetch) and the
  * live screen on one contract, so a warmed first page is read by the Queue
@@ -102,33 +103,36 @@ export function useQueueThreads(
   sort: QueueSortBy = 'position',
   threadsList: Pick<typeof threadsApi, 'list'> = threadsApi,
 ) {
-  const query = useInfiniteQuery({
+  const query = useInfiniteCollection<Thread, ThreadListResponse>({
     ...queueThreadsQueryOptions(searchTerm, sort, threadsList),
     retry: false,
     placeholderData: keepPreviousData,
+    selectPage: (page) => page.threads,
   })
 
-  const data = query.data?.pages.flatMap((page) => page.threads) ?? null
+  const hasData = query.pages.length > 0
+  const data = hasData ? query.items : null
+  // Authoritative whole-queue total exposed by the first page (issue #2568).
+  // Every page carries the same search-independent total; the first page is
+  // the canonical source. Falls back to null so callers can decide how to
+  // degrade when a cached/older response omits the field.
+  const activeCount = query.pages[0]?.active_count ?? null
   // Initial load OR an in-flight next-page append both keep already-rendered
   // rows visible: `isPending` drives the full-screen loader only before any
-  // data exists, while `isFetchingNextPage` drives the inline loading indicator.
-  const isPending = query.isPending || query.isFetchingNextPage
+  // data exists, while `isNextPageLoading` drives the inline loading indicator.
+  const isPending = query.isPending || query.isNextPageLoading
   const isError = query.isError
-  const lastPage = query.data?.pages.at(-1)
-  const nextPageToken = query.hasNextPage ? (lastPage?.next_page_token ?? null) : null
+  const nextPageToken = query.nextPageToken
 
-  const refetch = useCallback((): Promise<void> => {
-    return query.refetch().then(() => undefined)
+  const refetch = useCallback(async (): Promise<void> => {
+    await query.refetch()
   }, [query])
 
-  const loadMore = useCallback((): Promise<void> => {
-    if (!query.hasNextPage || query.isFetchingNextPage) {
-      return Promise.resolve()
-    }
-    return query.fetchNextPage().then(() => undefined)
+  const loadMore = useCallback(async (): Promise<void> => {
+    await query.fetchNextPage()
   }, [query])
 
-  return { data, isPending, isError, refetch, nextPageToken, loadMore }
+  return { data, isPending, isError, refetch, nextPageToken, loadMore, activeCount }
 }
 
 /**

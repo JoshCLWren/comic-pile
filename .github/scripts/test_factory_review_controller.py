@@ -770,3 +770,25 @@ def test_fixed_model_factory_schedules_are_active():
     assert dispatcher.count("    - cron: '") == 1
     assert "    - cron: '7 * * * *'" in dispatcher
     assert "gh workflow run factory-ready-merge-drain.yml" in dispatcher
+
+
+def test_semantic_repair_heads_count_distinct_heads_once():
+    policy = load_controller()._review_policy
+    head_a = "a" * 40
+    head_b = "b" * 40
+    comments = [
+        policy.review_marker(pr=42, head=head_a, reviewer="7", producer="8", verdict="repair"),
+        policy.review_marker(pr=42, head=head_a, reviewer="9", producer="8", verdict="repair"),
+        policy.review_marker(pr=42, head=head_b, reviewer="10", producer="8", verdict="repair"),
+        policy.review_marker(pr=42, head="c" * 40, reviewer="11", producer="8", verdict="approve"),
+        policy.review_marker(pr=43, head="d" * 40, reviewer="12", producer="8", verdict="repair"),
+    ]
+    assert policy.semantic_repair_heads(comments, pr=42) == {head_a, head_b}
+
+
+def test_review_controller_has_three_repairs_then_cancel_circuit_breaker():
+    controller = load_controller()
+    source = Path(controller.__file__).read_text()
+    assert "FACTORY_REPAIR_CYCLE_LIMIT = 3" in source
+    assert 'status": "strike-limit-cancelled"' in source
+    assert "comic-pile-factory-strike-reset-v1" in source

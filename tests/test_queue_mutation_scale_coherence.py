@@ -35,9 +35,11 @@ from comic_pile.queue import move_to_back, move_to_position, shuffle_queue
 from tests.conftest import get_or_create_user_async
 
 FIRST_PAGE_SIZE = 50
-# Threads without issue tracking (no total_issues) only execute 1 SELECT for the thread list.
-# Migrated threads would execute 3 SELECTs (threads + unread counts + next issue numbers).
-EXPECTED_SELECTS_PER_PAGE = 1
+# Threads without issue tracking (no total_issues) execute 2 SELECTs for the
+# thread list: the page itself plus the authoritative whole-queue active_count
+# added by issue #2568. Migrated threads would execute 4 SELECTs (threads +
+# unread counts + next issue numbers + active_count).
+EXPECTED_SELECTS_PER_PAGE = 2
 
 
 def _make_request() -> Request:
@@ -209,6 +211,9 @@ async def test_initial_requests_and_payload_remain_bounded_as_library_grows(
     first_bytes = len(first.model_dump_json().encode())
 
     assert len(first.threads) == FIRST_PAGE_SIZE
+    # active_count is the authoritative whole-queue total and must never be a
+    # count of the loaded page (issue #2568), even when only one page is loaded.
+    assert first.active_count == library_size
     # For library_size == FIRST_PAGE_SIZE, all items fit in one page so next_page_token is None
     if library_size > FIRST_PAGE_SIZE:
         assert first.next_page_token is not None, (

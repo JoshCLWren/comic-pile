@@ -75,7 +75,7 @@ async def upsert_catalog_issue(
     Returns:
         The created or existing external identity.
     """
-    return await upsert_catalog_series(
+    return await upsert_external_identity(
         db,
         provider=provider,
         entity_type=entity_type,
@@ -332,3 +332,97 @@ async def reconcile_unmapped_issues(
         processed += 1
 
     return counts
+
+
+async def search_catalog_series(
+    db: AsyncSession,
+    *,
+    search: str | None = None,
+    provider: str = "comicvine",
+    limit: int = 50,
+) -> list[ExternalIdentity]:
+    """Search for canonical series in the shared catalog.
+
+    Args:
+        db: Database session.
+        search: Optional search term to match against series external_id.
+        provider: Filter by provider name (default: comicvine).
+        limit: Maximum number of results to return (hard capped at 50).
+
+    Returns:
+        List of matching external identities for series.
+    """
+    from app.repositories.catalog_repository import search_catalog_series as repo_search
+    
+    return await repo_search(db, search=search, provider=provider, limit=limit)
+
+
+async def search_catalog_issues(
+    db: AsyncSession,
+    *,
+    search: str | None = None,
+    provider: str = "comicvine",
+    series_external_id: str | None = None,
+    limit: int = 50,
+) -> list[ExternalIdentity]:
+    """Search for canonical issues in the shared catalog.
+
+    Args:
+        db: Database session.
+        search: Optional search term to match against issue external_id.
+        provider: Filter by provider name (default: comicvine).
+        series_external_id: Filter by series external_id to scope the search.
+        limit: Maximum number of results to return (hard capped at 50).
+
+    Returns:
+        List of matching external identities for issues.
+    """
+    from app.repositories.catalog_repository import search_catalog_issues as repo_search
+    
+    return await repo_search(db, search=search, provider=provider, series_external_id=series_external_id, limit=limit)
+
+
+async def list_series_mappings(
+    db: AsyncSession,
+    *,
+    thread_id: int | None = None,
+    status: str | None = None,
+    limit: int = 100,
+) -> list[ThreadExternalSeriesMapping]:
+    """List thread-series mappings.
+
+    Args:
+        db: Database session.
+        thread_id: Optional filter by thread ID.
+        status: Optional filter by mapping status.
+        limit: Maximum number of results to return.
+
+    Returns:
+        List of thread-series mappings.
+    """
+    from app.repositories.catalog_repository import list_series_mappings as repo_list
+    
+    return await repo_list(db, thread_id=thread_id, status=status, limit=limit)
+
+
+async def list_issue_mappings(
+    db: AsyncSession,
+    *,
+    issue_id: int | None = None,
+    status: str | None = None,
+    limit: int = 100,
+) -> list[IssueExternalIdentityMapping]:
+    """List issue-external identity mappings.
+
+    Args:
+        db: Database session.
+        issue_id: Optional filter by issue ID.
+        status: Optional filter by mapping status.
+        limit: Maximum number of results to return.
+
+    Returns:
+        List of issue-external identity mappings.
+    """
+    from app.repositories.catalog_repository import list_issue_mappings as repo_list
+    
+    return await repo_list(db, issue_id=issue_id, status=status, limit=limit)

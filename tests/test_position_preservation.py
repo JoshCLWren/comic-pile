@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.rate import snapshot_thread_states
+from app.services.rate_service import snapshot_thread_states
 from app.api.undo import undo_to_snapshot
 from app.models import Event, Issue, Snapshot, Thread
 from app.models import Session as SessionModel

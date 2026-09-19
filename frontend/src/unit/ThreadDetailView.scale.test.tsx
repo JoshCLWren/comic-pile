@@ -16,7 +16,10 @@ vi.mock('react-router-dom', async () => {
   }
 })
 
-vi.mock('../hooks/useThread', () => ({ useUpdateThread: vi.fn() }))
+vi.mock('../hooks/useThread', async () => {
+  const actual = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
+  return { ...actual, useUpdateThread: vi.fn() }
+})
 vi.mock('../services/api', () => ({
   threadsApi: { get: vi.fn() },
   dependenciesApi: {
@@ -33,7 +36,8 @@ const mockedThreadsApiGet = vi.mocked(threadsApi.get)
 const mockedIssuesApiList = vi.mocked(issuesApi.list)
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  mockedThreadsApiGet.mockReset()
+  mockedIssuesApiList.mockReset()
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
 })
 

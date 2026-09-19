@@ -2508,3 +2508,78 @@ async def test_mark_annual_unread_success(auth_client: AsyncClient, async_db: As
     assert thread.status == "active"
     assert thread.reading_progress == "in_progress"
     assert thread.next_unread_issue_id == issue2.id
+
+
+@pytest.mark.asyncio
+async def test_bulk_mark_issue_read_success(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+    """POST /issues:bulkMarkRead marks multiple issues as read."""
+    user = await get_or_create_user_async(async_db)
+    thread = Thread(
+        title="Bulk Thread",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+        reading_progress="in_progress",
+        next_unread_issue_id=None,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    i1 = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread", read_at=None)
+    i2 = Issue(thread_id=thread.id, issue_number="2", position=2, status="unread", read_at=None)
+    async_db.add(i1)
+    async_db.add(i2)
+    await async_db.commit()
+
+    response = await auth_client.post("/api/v1/issues:bulkMarkRead", json={"issue_ids": [i1.id, i2.id]})
+    assert response.status_code == 204
+    await async_db.refresh(i1)
+    await async_db.refresh(i2)
+    await async_db.refresh(thread)
+    assert i1.status == "read"
+    assert i2.status == "read"
+    assert thread.status == "completed"
+
+
+@pytest.mark.asyncio
+async def test_bulk_mark_issue_unread_success(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+    """POST /issues:bulkMarkUnread marks multiple issues as unread."""
+    user = await get_or_create_user_async(async_db)
+    thread = Thread(
+        title="Bulk Unread",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="completed",
+        user_id=user.id,
+        total_issues=2,
+        reading_progress="completed",
+        next_unread_issue_id=None,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    i1 = Issue(thread_id=thread.id, issue_number="1", position=1, status="read", read_at=datetime.now(UTC))
+    i2 = Issue(thread_id=thread.id, issue_number="2", position=2, status="read", read_at=datetime.now(UTC))
+    async_db.add(i1)
+    async_db.add(i2)
+    await async_db.commit()
+
+    response = await auth_client.post("/api/v1/issues:bulkMarkUnread", json={"issue_ids": [i1.id, i2.id]})
+    assert response.status_code == 204
+    await async_db.refresh(i1)
+    await async_db.refresh(i2)
+    await async_db.refresh(thread)
+    assert i1.status == "unread"
+    assert i2.status == "unread"
+    assert thread.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_bulk_mark_issue_read_bad_request_empty(auth_client: AsyncClient) -> None:
+    """POST /issues:bulkMarkRead returns 422 for empty list."""
+    response = await auth_client.post("/api/v1/issues:bulkMarkRead", json={"issue_ids": []})
+    assert response.status_code == 422

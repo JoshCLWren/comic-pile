@@ -479,3 +479,84 @@ async def test_adopt_rejects_boolean_source_list_id(
     )
     assert response.status_code == 422, response.text
     assert "positive integers" in response.text
+
+
+@pytest.mark.asyncio
+async def test_adopt_multi_item_template_batched_ownership_check(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Multi-item template adoption validates ownership in one batched query.
+
+    This test covers the batched ownership check fix: instead of N queries
+    for N items, a single IN query is used.
+    """
+    user = await get_or_create_user_async(async_db)
+    issues = [
+        await _make_issue(async_db, user_id=user.id, suffix=str(i), position=i)
+        for i in range(10)
+    ]
+    await async_db.commit()
+    list_id = await _seed_template_evidence(async_db, issues=issues)
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/crossover-templates/adopt",
+        json={
+            "source_list_ids": [list_id],
+            "plan_name": "Multi-Item Batched Crossover",
+            "ordering_mode": "informational",
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["ordering_mode"] == "informational"
+    assert [node["ref_id"] for node in body["nodes"]] == [issue.id for issue in issues]
+
+    plan_count = await async_db.scalar(
+        select(func.count()).select_from(ContinuityPlan)
+    )
+    assert plan_count == 1, "plan is created for multi-item adoption"
+
+
+@pytest.mark.asyncio
+async def test_adopt_multi_item_rejects_first_unowned_in_batch(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Batched ownership check reports the first unowned item by position."""
+    user = await get_or_create_user_async(async_db)
+    foreign_user = User(
+        username="foreign-batch-user",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(foreign_user)
+    await async_db.flush()
+
+    owned_issues = [
+        await _make_issue(async_db, user_id=user.id, suffix=f"owned-{i}")
+        for i in range(3)
+    ]
+    foreign_issue = await _make_issue(async_db, user_id=foreign_user.id, suffix="foreign-1")
+    await async_db.commit()
+
+    list_id = await _seed_template_evidence(
+        async_db, issues=owned_issues + [foreign_issue]
+    )
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/v1/crossover-templates/adopt",
+        json={
+            "source_list_ids": [list_id],
+            "plan_name": "Mixed Batch Crossover",
+        },
+    )
+    assert response.status_code == 422, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "template_item_not_owned"
+    assert detail["issue_id"] == foreign_issue.id
+    assert detail["position"] == 3
+
+    plan_count = await async_db.scalar(
+        select(func.count()).select_from(ContinuityPlan)
+    )
+    assert plan_count == 0, "no plan is created when adoption is rejected"

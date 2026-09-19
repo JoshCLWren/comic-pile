@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
 import { ToastProvider } from '../contexts/ToastProvider'
+import { queryKeys } from '../query/queryKeys'
+import { queryClient } from '../query/queryClient'
 import { useUpdateThread } from '../hooks/useThread'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
@@ -25,7 +27,10 @@ vi.mock('react-router-dom', async () => {
     useLocation: () => locationState,
   }
 })
-vi.mock('../hooks/useThread', () => ({ useUpdateThread: vi.fn() }))
+vi.mock('../hooks/useThread', async () => {
+  const actual = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
+  return { ...actual, useUpdateThread: vi.fn() }
+})
 vi.mock('../services/api', () => ({
   threadsApi: { get: vi.fn() },
   dependenciesApi: {
@@ -45,10 +50,12 @@ beforeEach(() => {
   locationState.state = undefined
   navigateSpy.mockReset()
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  mockedThreadsApiGet.mockReset()
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1,
     status: 'active', total_issues: null, notes: null,
   } as never)
+  mockedIssuesApiList.mockReset()
   mockedIssuesApiList.mockResolvedValue({ issues: [], next_page_token: null, total_count: 0, page_size: 100 })
   mockedConnectedThreads.mockReset()
   mockedConnectedThreads.mockResolvedValue({ thread_id: 1, connected_threads: [] })
@@ -68,6 +75,12 @@ it('renders a thread without legacy rating content', async () => {
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   expect(screen.queryByText(/Reviews/)).not.toBeInTheDocument()
+})
+
+it('caches the thread detail under the canonical thread-detail query key', async () => {
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  expect(queryClient.getQueryData(queryKeys.thread.detail(1))).toMatchObject({ id: 1, title: 'Saga' })
 })
 
 it('auto-opens the edit modal when arriving with openEditModal state', async () => {
@@ -104,8 +117,30 @@ it('fetches one bounded page when the Issues section expands', async () => {
   await user.click(screen.getByRole('button', { name: 'Expand' }))
   await waitFor(() => expect(mockedIssuesApiList).toHaveBeenCalledTimes(1))
   expect(mockedIssuesApiList).toHaveBeenCalledWith(1, { page_size: 100 })
-  expect(screen.getByText('#1')).toBeInTheDocument()
+  await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
   expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument()
+})
+
+it('caches loaded issues under the canonical issue-pages query key', async () => {
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
+    status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
+  } as never)
+  mockedIssuesApiList.mockResolvedValueOnce({
+    issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }],
+    next_page_token: null, total_count: 1, page_size: 100,
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Expand' }))
+  await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+  await waitFor(() => {
+    const cached = queryClient.getQueryData<
+      { pages: { issues: { id: number; issue_number: string }[] }[] }
+    >(queryKeys.thread.issuePages(1))
+    expect(cached?.pages[0]?.issues.map((issue) => issue.issue_number)).toEqual(['1'])
+  })
 })
 
 it('loads the next page without duplicates or gaps', async () => {
@@ -186,7 +221,7 @@ it('renders migrated progress, paginated issues, and saves edits', async () => {
   await waitFor(() => expect(screen.getByText('80%')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Expand' }))
-  expect(screen.getByText('#1')).toBeInTheDocument()
+  await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
   await user.click(screen.getByRole('button', { name: 'Edit' }))
   await user.clear(screen.getByDisplayValue('Saga'))
   await user.type(screen.getAllByDisplayValue('')[0]!, 'Updated')
@@ -209,11 +244,16 @@ it('disables the save action while an edit is pending', async () => {
   expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled()
 })
 
-it('handles missing threads and API errors', async () => {
+it('shows the error detail when fetching the thread fails', async () => {
   mockedThreadsApiGet.mockRejectedValueOnce(new Error('missing'))
   renderPage()
   await waitFor(() => expect(screen.getByText('missing')).toBeInTheDocument())
-  mockedThreadsApiGet.mockResolvedValueOnce(null as never)
+})
+
+it('shows Thread not found when the thread detail is unavailable', async () => {
+  mockedThreadsApiGet.mockRejectedValueOnce({
+    response: { status: 404, data: { detail: 'Thread not found' } },
+  } as never)
   renderPage()
   await waitFor(() => expect(screen.getByText('Thread not found')).toBeInTheDocument())
 })
@@ -239,7 +279,6 @@ it('edits migrated threads and displays the all-read boundary', async () => {
     status: 'complete', total_issues: 4, next_unread_issue_number: null,
     notes: '',
   } as never)
-  mockedIssuesApiList.mockReset()
   mockedIssuesApiList.mockResolvedValue({
     issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }],
     next_page_token: null, total_count: 1, page_size: 100,
@@ -256,12 +295,13 @@ it('edits migrated threads and displays the all-read boundary', async () => {
   await waitFor(() => expect(screen.getByText('All issues read')).toBeInTheDocument())
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Expand' }))
+  await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
   await user.click(screen.getByRole('button', { name: 'Collapse' }))
   await user.click(screen.getByRole('button', { name: 'Edit' }))
   await user.click(screen.getByRole('button', { name: 'Save Changes' }))
 
   await waitFor(() => expect(mutate).toHaveBeenCalledWith(expect.objectContaining({ id: 1 })))
-  expect(screen.getByText('Updated Saga')).toBeInTheDocument()
+  await waitFor(() => expect(screen.getByText('Updated Saga')).toBeInTheDocument())
 })
 
 it('renders named blocked-by dependencies and an empty blocking list as links', async () => {

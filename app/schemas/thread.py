@@ -92,8 +92,13 @@ class ThreadListResponse(BaseModel):
 
 
 class QueueThreadListResponse(BaseModel):
-    """Schema for paginated thread list response using the queue-optimized item."""
+    """Schema for paginated thread list response using the queue-optimized item.
+
+    ``active_count`` is the authoritative total number of active threads in the
+    user's queue. It is computed from the whole queue, never from the loaded
+    page, and is independent of any search or sort filter (see issue #2568).
+    """
 
     threads: list[QueueThreadListItem]
     next_page_token: str | None = None
-    active_count: int
+    active_count: int = Field(0, ge=0)

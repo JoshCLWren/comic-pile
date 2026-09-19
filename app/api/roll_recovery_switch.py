@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.session import _invalidate_session_caches
+from app.cache_invalidation import invalidate_session_caches
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
@@ -40,7 +40,7 @@ async def switch_roll_prerequisite(
         node_type=request.node_type,
         node_id=request.node_id,
     )
-    await _invalidate_session_caches(current_user.id)
+    await invalidate_session_caches(current_user.id)
     return RollPrerequisiteSwitchResponse(
         original_thread_id=result.original_thread_id,
         target_thread_id=result.target_thread_id,

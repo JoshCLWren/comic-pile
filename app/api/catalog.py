@@ -4,13 +4,10 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.auth import get_current_user
-from app.external_identities import link_thread_external_series, upsert_external_identity
-from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
 from app.models.user import User
 from app.schemas.catalog import (
     ExternalIdentityUpsert,
@@ -24,6 +21,17 @@ from app.schemas.catalog import (
     ThreadExternalSeriesMappingResponse,
     IssueExternalIdentityMappingResponse,
 )
+from app.services.catalog import (
+    upsert_catalog_series as upsert_catalog_series_svc,
+    upsert_catalog_issue as upsert_catalog_issue_svc,
+    attach_series_to_thread as attach_series_to_thread_svc,
+    attach_issue_to_thread as attach_issue_to_thread_svc,
+    search_catalog_series as search_catalog_series_svc,
+    search_catalog_issues as search_catalog_issues_svc,
+    list_series_mappings as list_series_mappings_svc,
+    list_issue_mappings as list_issue_mappings_svc,
+)
+
 def _dt_to_ts(dt: datetime | None) -> float | None:
     """Convert datetime to Unix timestamp."""
     return dt.timestamp() if dt is not None else None
@@ -39,6 +47,7 @@ router = APIRouter(prefix="/api/v1", tags=["catalog"])
 async def search_catalog_series(
     search: str | None = Query(default=None, min_length=1, description="Search by series external_id"),
     provider: str | None = Query(default="comicvine", description="Filter by provider"),
+    limit: int = Query(default=50, ge=1, le=100, description="Maximum number of results to return"),
     db: AsyncSession = Depends(get_db),
 ) -> list[CatalogSeriesSearchResponse]:
     """Search for canonical series in the shared catalog.
@@ -46,22 +55,18 @@ async def search_catalog_series(
     Args:
         search: Optional search term to match against series external_id.
         provider: Filter by provider name (default: comicvine).
+        limit: Maximum number of results to return (hard capped at 100).
         db: Database session.
 
     Returns:
         List of matching external identities for series.
     """
-    query = select(ExternalIdentity).where(
-        ExternalIdentity.entity_type == "series",
-        ExternalIdentity.provider == (provider or "comicvine").strip().lower(),
+    identities = await search_catalog_series_svc(
+        db,
+        search=search,
+        provider=provider or "comicvine",
+        limit=limit,
     )
-
-    if search:
-        normalized = search.strip().lower()
-        query = query.where(ExternalIdentity.external_id.ilike(f"%{normalized}%"))
-
-    result = await db.execute(query)
-    identities = result.scalars().unique().all()
     return [
         CatalogSeriesSearchResponse(
             id=identity.id,
@@ -88,6 +93,7 @@ async def search_catalog_issues(
     series_external_id: str | None = Query(
         default=None, description="Filter by series external_id (e.g., 4050-justice-league)"
     ),
+    limit: int = Query(default=50, ge=1, le=100, description="Maximum number of results to return"),
     db: AsyncSession = Depends(get_db),
 ) -> list[CatalogIssueSearchResponse]:
     """Search for canonical issues in the shared catalog.
@@ -96,33 +102,19 @@ async def search_catalog_issues(
         search: Optional search term to match against issue external_id.
         provider: Filter by provider name (default: comicvine).
         series_external_id: Filter by series external_id to scope the search.
+        limit: Maximum number of results to return (hard capped at 100).
         db: Database session.
 
     Returns:
         List of matching external identities for issues.
     """
-    query = select(ExternalIdentity).where(
-        ExternalIdentity.entity_type == "issue",
-        ExternalIdentity.provider == (provider or "comicvine").strip().lower(),
+    identities = await search_catalog_issues_svc(
+        db,
+        search=search,
+        provider=provider or "comicvine",
+        series_external_id=series_external_id,
+        limit=limit,
     )
-
-    if series_external_id:
-        series_result = await db.execute(
-            select(ExternalIdentity).where(
-                ExternalIdentity.entity_type == "series",
-                ExternalIdentity.external_id == series_external_id,
-            )
-        )
-        series_identity = series_result.scalar_one_or_none()
-        if series_identity is None:
-            return []
-
-    if search:
-        normalized = search.strip().lower()
-        query = query.where(ExternalIdentity.external_id.ilike(f"%{normalized}%"))
-
-    result = await db.execute(query)
-    identities = result.scalars().unique().all()
     return [
         CatalogIssueSearchResponse(
             id=identity.id,
@@ -162,7 +154,7 @@ async def upsert_catalog_series(
     Returns:
         The created or existing external identity.
     """
-    identity = await upsert_external_identity(
+    identity = await upsert_catalog_series_svc(
         db,
         provider=request.provider,
         entity_type=request.entity_type,
@@ -205,7 +197,7 @@ async def upsert_catalog_issue(
     Returns:
         The created or existing external identity.
     """
-    identity = await upsert_external_identity(
+    identity = await upsert_catalog_issue_svc(
         db,
         provider=request.provider,
         entity_type=request.entity_type,
@@ -251,18 +243,11 @@ async def attach_series_to_thread(
     Returns:
         The created or updated thread-series mapping.
     """
-    identity = await upsert_external_identity(
-        db,
-        provider="comicvine",
-        entity_type="series",
-        external_id=series_external_id,
-    )
-
-    mapping = await link_thread_external_series(
+    mapping = await attach_series_to_thread_svc(
         db,
         user_id=current_user.id,
         thread_id=thread_id,
-        external_identity_id=identity.id,
+        series_external_id=series_external_id,
         status=request.status,
         evidence_source=request.evidence_source,
         confidence=request.confidence,
@@ -304,9 +289,7 @@ async def attach_issue_to_thread(
     Returns:
         The created or updated issue-external identity mapping.
     """
-    from app.services.catalog import attach_issue_to_thread as attach_issue_service
-
-    mapping = await attach_issue_service(
+    mapping = await attach_issue_to_thread_svc(
         db,
         user_id=current_user.id,
         thread_id=thread_id,
@@ -341,6 +324,7 @@ async def attach_issue_to_thread(
 async def list_series_mappings(
     thread_id: int | None = Query(default=None, description="Filter by thread_id"),
     status: str | None = Query(default=None, description="Filter by mapping status"),
+    limit: int = Query(default=100, ge=1, le=500, description="Maximum number of results to return"),
     db: AsyncSession = Depends(get_db),
 ) -> list[ThreadExternalSeriesMappingResponse]:
     """List thread-series mappings (inspection endpoint).
@@ -350,21 +334,18 @@ async def list_series_mappings(
     Args:
         thread_id: Optional filter by thread ID.
         status: Optional filter by mapping status.
+        limit: Maximum number of results to return.
         db: Database session.
 
     Returns:
         List of thread-series mappings.
     """
-    query = select(ThreadExternalSeriesMapping)
-
-    if thread_id is not None:
-        query = query.where(ThreadExternalSeriesMapping.thread_id == thread_id)
-
-    if status is not None:
-        query = query.where(ThreadExternalSeriesMapping.status == status)
-
-    result = await db.execute(query.order_by(ThreadExternalSeriesMapping.created_at.desc()))
-    mappings = result.scalars().all()
+    mappings = await list_series_mappings_svc(
+        db,
+        thread_id=thread_id,
+        status=status,
+        limit=limit,
+    )
     return [
         ThreadExternalSeriesMappingResponse(
             id=mapping.id,
@@ -387,6 +368,7 @@ async def list_series_mappings(
 async def list_issue_mappings(
     issue_id: int | None = Query(default=None, description="Filter by issue_id"),
     status: str | None = Query(default=None, description="Filter by mapping status"),
+    limit: int = Query(default=100, ge=1, le=500, description="Maximum number of results to return"),
     db: AsyncSession = Depends(get_db),
 ) -> list[IssueExternalIdentityMappingResponse]:
     """List issue-external identity mappings (inspection endpoint).
@@ -396,21 +378,18 @@ async def list_issue_mappings(
     Args:
         issue_id: Optional filter by issue ID.
         status: Optional filter by mapping status.
+        limit: Maximum number of results to return.
         db: Database session.
 
     Returns:
         List of issue-external identity mappings.
     """
-    query = select(IssueExternalIdentityMapping)
-
-    if issue_id is not None:
-        query = query.where(IssueExternalIdentityMapping.issue_id == issue_id)
-
-    if status is not None:
-        query = query.where(IssueExternalIdentityMapping.status == status)
-
-    result = await db.execute(query.order_by(IssueExternalIdentityMapping.created_at.desc()))
-    mappings = result.scalars().all()
+    mappings = await list_issue_mappings_svc(
+        db,
+        issue_id=issue_id,
+        status=status,
+        limit=limit,
+    )
     return [
         IssueExternalIdentityMappingResponse(
             id=mapping.id,

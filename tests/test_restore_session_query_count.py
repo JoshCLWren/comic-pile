@@ -116,3 +116,11 @@ async def test_restore_recounts_are_bulk_constant(
     assert per_thread_issue_reads == [], (
         f"Found per-thread issue reads: {per_thread_issue_reads}"
     )
+
+    # Issue #2610: batch delete, not per-thread loop deletes
+    issue_deletes = [
+        s for s in statements if "delete" in s.lower() and "issues" in s.lower()
+    ]
+    assert len(issue_deletes) <= 1, (
+        f"Expected at most 1 batch issue DELETE, found {len(issue_deletes)}: {issue_deletes}"
+    )

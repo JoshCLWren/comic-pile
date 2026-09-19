@@ -82,6 +82,29 @@ def enable_rate_limiting_for_tests(request: pytest.FixtureRequest) -> Iterator[N
         os.environ["ENABLE_RATE_LIMITING_IN_TESTS"] = original_value
 
 
+@pytest.fixture(autouse=True)
+def enable_lazy_heavy_init_for_tests(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Opt the lazy heavy-init middleware path back in for dedicated modules.
+
+    The heavy-init middleware defers real heavy initialization under
+    ``TEST_ENVIRONMENT`` so request-driven tests never initialize database,
+    cache-accounting, or cache-provider infrastructure on the shared app
+    across per-test event loops (issue #2561 regression guard). Modules that
+    verify the lazy-init sequencing opt back in and mock the heavy
+    dependencies explicitly.
+    """
+    original_value = os.environ.get("ENABLE_LAZY_HEAVY_INIT_IN_TESTS")
+    if request.node.nodeid.startswith("tests/test_ping_cold_start"):
+        os.environ["ENABLE_LAZY_HEAVY_INIT_IN_TESTS"] = "true"
+    else:
+        os.environ.pop("ENABLE_LAZY_HEAVY_INIT_IN_TESTS", None)
+    yield
+    if original_value is None:
+        os.environ.pop("ENABLE_LAZY_HEAVY_INIT_IN_TESTS", None)
+    else:
+        os.environ["ENABLE_LAZY_HEAVY_INIT_IN_TESTS"] = original_value
+
+
 def _looks_like_test_database(database_url: str) -> bool:
     url = make_url(database_url)
     db_name = (url.database or "").lower()

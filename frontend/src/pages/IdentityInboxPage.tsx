@@ -1,44 +1,17 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
-import api from '../services/api'
 import { isObject, isNonEmptyString, isString } from '../utils/runtimeChecks'
+import {
+  useIdentityInbox,
+  useConfirmInboxCandidate,
+  useRejectInboxCandidate,
+  useDeferInboxItem,
+  useSkipInboxItem,
+} from '../hooks/useIdentityInbox'
+import type { IdentityInboxCandidate as InboxCandidate, IdentityInboxItem as InboxItem } from '../services/api'
 
 type MetadataValue = string | Record<string, string> | null
 type EvidenceValue = string | string[] | null
-interface InboxCandidate {
-  external_identity_id: number
-  provider: string
-  comicvine_id: string | null
-  external_url: string | null
-  metadata_json: Record<string, MetadataValue>
-  status: string
-  confidence: number | null
-  evidence_source: string | null
-  evidence_json: Record<string, EvidenceValue>
-  rejection_reason: string | null
-}
-
-interface InboxItem {
-  mapping_id: number
-  issue_id: number
-  thread_id: number
-  thread_title: string
-  issue_number: string
-  status: string
-  provider: string | null
-  source_entry_summary: string
-  why_stopped: string
-  candidates: InboxCandidate[]
-  created_at: number | null
-  updated_at: number | null
-}
-
-interface InboxResponse {
-  items: InboxItem[]
-  total: number
-  offset: number
-  limit: number
-}
 
 function statusColor(status: string): string {
   switch (status) {
@@ -176,32 +149,34 @@ function InboxItemCard({
   onSkip,
   expandedId,
   toggleExpand,
+  isMutating,
 }: {
   item: InboxItem
   onConfirm: (mappingId: number, identityId: number) => void
-  onReject: (mappingId: number, identityId: number, reason: string) => void
+  onReject: (mappingId: number, identityId: number, reason: string) => Promise<void>
   onDefer: (mappingId: number) => void
   onSkip: (mappingId: number) => void
   expandedId: number | null
   toggleExpand: (id: number) => void
+  isMutating: boolean
 }) {
   const isExpanded = expandedId === item.mapping_id
   const [rejectReason, setRejectReason] = useState('')
   const [showRejectForm, setShowRejectForm] = useState(false)
-  const [actionLoading, setActionLoading] = useState(false)
 
   const handleReject = async (identityId: number) => {
     if (!rejectReason.trim()) {
       setShowRejectForm(true)
       return
     }
-    setActionLoading(true)
+    const reason = rejectReason
+    setShowRejectForm(false)
     try {
-      await onReject(item.mapping_id, identityId, rejectReason)
+      await onReject(item.mapping_id, identityId, reason)
       setRejectReason('')
-      setShowRejectForm(false)
-    } finally {
-      setActionLoading(false)
+    } catch {
+      setRejectReason(reason)
+      setShowRejectForm(true)
     }
   }
 
@@ -250,8 +225,8 @@ function InboxItemCard({
                   candidate={c}
                   onConfirm={(id) => onConfirm(item.mapping_id, id)}
                   onReject={(id) => handleReject(id)}
-                  isConfirming={actionLoading}
-                  isRejecting={actionLoading}
+                  isConfirming={isMutating}
+                  isRejecting={isMutating}
                 />
               ))
             )}
@@ -304,87 +279,73 @@ function InboxItemCard({
   )
 }
 
+const INBOX_LIMIT = 20
+
 export default function IdentityInboxPage() {
-  const [items, setItems] = useState<InboxItem[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [expandedId, setExpandedId] = useState<number | null>(null)
   const [offset, setOffset] = useState(0)
-  const limit = 20
+  const [expandedId, setExpandedId] = useState<number | null>(null)
 
-  const fetchItems = useCallback(async (off: number) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const response = await api.get<InboxResponse>('/v1/identity-inbox', {
-        params: { offset: off, limit },
-      })
-      setItems(response.items)
-      setTotal(response.total)
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load inbox'
-      setError(message)
-    } finally {
-      setLoading(false)
-    }
-  }, [limit])
+  const { data, isPending, isError, error } = useIdentityInbox(offset)
+  const confirmMutation = useConfirmInboxCandidate()
+  const rejectMutation = useRejectInboxCandidate()
+  const deferMutation = useDeferInboxItem()
+  const skipMutation = useSkipInboxItem()
 
-  useEffect(() => {
-    void fetchItems(offset)
-  }, [fetchItems, offset])
+  const items = data?.items ?? []
+  const total = data?.total ?? 0
+  const isMutating = confirmMutation.isPending || rejectMutation.isPending || deferMutation.isPending || skipMutation.isPending
 
   const toggleExpand = useCallback((id: number) => {
     setExpandedId((prev) => (prev === id ? null : id))
   }, [])
 
-  const handleConfirm = useCallback(async (mappingId: number, identityId: number) => {
-    try {
-      await api.post(`/v1/identity-inbox/${mappingId}/confirm`, {
-        external_identity_id: identityId,
+  const handleConfirm = useCallback(
+    (mappingId: number, identityId: number) => {
+      confirmMutation.mutate({ mappingId, payload: { external_identity_id: identityId } })
+    },
+    [confirmMutation],
+  )
+
+  const handleReject = useCallback(
+    async (mappingId: number, identityId: number, reason: string): Promise<void> => {
+      await rejectMutation.mutateAsync({
+        mappingId,
+        payload: { external_identity_id: identityId, rejection_reason: reason },
       })
-      void fetchItems(offset)
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Confirm failed'
-      setError(message)
-    }
-  }, [fetchItems, offset])
+    },
+    [rejectMutation],
+  )
 
-  const handleReject = useCallback(async (mappingId: number, identityId: number, reason: string) => {
-    try {
-      await api.post(`/v1/identity-inbox/${mappingId}/reject`, {
-        external_identity_id: identityId,
-        rejection_reason: reason,
-      })
-      void fetchItems(offset)
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Reject failed'
-      setError(message)
-    }
-  }, [fetchItems, offset])
+  const handleDefer = useCallback(
+    (mappingId: number) => {
+      deferMutation.mutate(mappingId)
+    },
+    [deferMutation],
+  )
 
-  const handleDefer = useCallback(async (mappingId: number) => {
-    try {
-      await api.post(`/v1/identity-inbox/${mappingId}/defer`)
-      void fetchItems(offset)
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Defer failed'
-      setError(message)
-    }
-  }, [fetchItems, offset])
+  const handleSkip = useCallback(
+    (mappingId: number) => {
+      skipMutation.mutate(mappingId)
+    },
+    [skipMutation],
+  )
 
-  const handleSkip = useCallback(async (mappingId: number) => {
-    try {
-      await api.post(`/v1/identity-inbox/${mappingId}/skip`)
-      void fetchItems(offset)
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Skip failed'
-      setError(message)
-    }
-  }, [fetchItems, offset])
+  const totalPages = Math.ceil(total / INBOX_LIMIT)
+  const currentPage = Math.floor(offset / INBOX_LIMIT) + 1
 
-  const totalPages = Math.ceil(total / limit)
-  const currentPage = Math.floor(offset / limit) + 1
+  const errorMessage = isError
+    ? error instanceof Error
+      ? error.message
+      : 'Failed to load inbox'
+    : null
+
+  const actionError =
+    confirmMutation.error ?? rejectMutation.error ?? deferMutation.error ?? skipMutation.error
+  const actionErrorMessage = actionError
+    ? actionError instanceof Error
+      ? actionError.message
+      : 'Action failed'
+    : null
 
   return (
     <section aria-label="Identity reconciliation inbox" className="pt-4 pb-12 w-full">
@@ -394,13 +355,19 @@ export default function IdentityInboxPage() {
         reject wrong candidates, or defer for later.
       </p>
 
-      {error && (
+      {actionErrorMessage && (
         <div className="p-3 mb-4 bg-[var(--theme-danger)]/10 border border-[var(--theme-danger)]/30 rounded-lg text-sm text-[var(--theme-danger)]">
-          {error}
+          {actionErrorMessage}
         </div>
       )}
 
-      {loading ? (
+      {errorMessage && (
+        <div className="p-3 mb-4 bg-[var(--theme-danger)]/10 border border-[var(--theme-danger)]/30 rounded-lg text-sm text-[var(--theme-danger)]">
+          {errorMessage}
+        </div>
+      )}
+
+      {isPending ? (
         <div className="text-center py-12 text-[var(--theme-text-dim)]">Loading...</div>
       ) : items.length === 0 ? (
         <div className="text-center py-12">
@@ -424,6 +391,7 @@ export default function IdentityInboxPage() {
                 onSkip={handleSkip}
                 expandedId={expandedId}
                 toggleExpand={toggleExpand}
+                isMutating={isMutating}
               />
             ))}
           </div>
@@ -431,7 +399,7 @@ export default function IdentityInboxPage() {
             <div className="flex justify-center items-center gap-4 mt-6">
               <button
                 type="button"
-                onClick={() => setOffset((o) => Math.max(0, o - limit))}
+                onClick={() => setOffset((o) => Math.max(0, o - INBOX_LIMIT))}
                 disabled={offset === 0}
                 className="px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
@@ -442,7 +410,7 @@ export default function IdentityInboxPage() {
               </span>
               <button
                 type="button"
-                onClick={() => setOffset((o) => o + limit)}
+                onClick={() => setOffset((o) => o + INBOX_LIMIT)}
                 disabled={currentPage >= totalPages}
                 className="px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >

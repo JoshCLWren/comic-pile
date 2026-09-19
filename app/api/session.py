@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -33,9 +33,10 @@ from app.schemas.session import (
     build_session_intent_state,
 )
 from app.services.ownership import get_owned_session_or_404
+from app.services.session_response import build_ladder_path
+from app.services.session_service import get_session_service, SessionService
 from app.services.session_history_projection import project_session_history_events
 from app.services.thread_issue_stats import load_next_issue_numbers, load_unread_counts
-from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.session import get_current_die, get_or_create, is_active
 
 router = APIRouter(tags=["sessions"])
@@ -83,11 +84,6 @@ def _to_session_list_item(sr: SessionResponse) -> SessionListItem:
         has_restore_point=sr.has_restore_point,
         snapshot_count=sr.snapshot_count,
     )
-
-
-async def _invalidate_session_caches(user_id: int) -> None:
-    """Invalidate session-derived views with one bounded user generation bump."""
-    await invalidate_user_view(user_id)
 
 
 async def _fetch_thread_issue_metadata(
@@ -274,50 +270,6 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
     summary["completed"] = sorted(completed_titles)
 
     return summary
-
-
-async def build_ladder_path(
-    session_id: int,
-    db: AsyncSession,
-    *,
-    session: SessionModel | None = None,
-    die_events: list[Event] | None = None,
-) -> str:
-    """Build narrative summary of dice ladder from session events.
-
-    Args:
-        session_id: The session ID to build ladder path for.
-        db: Database session.
-        session: Pre-loaded session object (avoids a redundant SELECT).
-        die_events: Pre-fetched die-changing events (avoids a redundant SELECT).
-
-    Returns:
-        String representation of dice ladder path (e.g., "d4 → d6 → d8").
-    """
-    if session is None:
-        session = await db.get(SessionModel, session_id)
-        if not session:
-            return ""
-
-    if die_events is None:
-        events_result = await db.execute(
-            select(Event)
-            .where(Event.session_id == session_id)
-            .where(Event.type.in_(("rate", "snooze", "undo")))
-            .where(Event.die_after.is_not(None))
-            .order_by(Event.timestamp, Event.id)
-        )
-        die_events = events_result.scalars().all()
-
-    if not die_events:
-        return str(session.start_die)
-
-    path = [session.start_die]
-    for event in die_events:
-        if event.die_after:
-            path.append(event.die_after)
-
-    return " → ".join(str(d) for d in path)
 
 
 async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadInfo | None:
@@ -507,7 +459,6 @@ async def list_sessions(
     Returns:
         SessionHistoryListResponse with paginated sessions and next_page_token if more exist.
     """
-    from fastapi import HTTPException, status
     from sqlalchemy import or_
 
     query = select(SessionModel).where(SessionModel.user_id == current_user.id)
@@ -986,6 +937,7 @@ async def restore_session_start(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
+    session_service: SessionService = Depends(get_session_service),
 ) -> SessionResponse:
     """Restore session to its initial state at session start.
 
@@ -993,6 +945,7 @@ async def restore_session_start(
         session_id: The session ID to restore.
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
+        session_service: Session service for business logic.
 
     Returns:
         SessionResponse with restored session details.
@@ -1001,260 +954,51 @@ async def restore_session_start(
         HTTPException: If session or snapshot not found.
         RuntimeError: If failed after max retries.
     """
-    from sqlalchemy.exc import OperationalError
+    session = await session_service.restore_session_start(session_id, current_user.id)
 
-    max_retries = 3
-    initial_delay = 0.1
-    retries = 0
+    await invalidate_user_view(current_user.id)
 
-    while retries < max_retries:
-        try:
-            session = await get_owned_session_or_404(db, current_user.id, session_id)
+    from sqlalchemy import func
 
-            snapshot_result = await db.execute(
-                select(Snapshot)
-                .where(Snapshot.session_id == session_id)
-                .where(Snapshot.description == "Session start")
-                .order_by(Snapshot.created_at)
-            )
-            snapshot = snapshot_result.scalars().first()
+    active_thread = await get_active_thread(session.id, db)
 
-            if not snapshot:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"No session start snapshot found for session {session_id}",
-                )
+    snapshot_count_result = await db.execute(
+        select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
+    )
+    snapshot_count = snapshot_count_result.scalar() or 0
 
-            from sqlalchemy import delete, or_, update
+    return SessionResponse(
+        id=session.id,
+        started_at=session.started_at,
+        ended_at=session.ended_at,
+        start_die=session.start_die,
+        manual_die=session.manual_die,
+        user_id=session.user_id,
+        ladder_path=await build_ladder_path(session.id, db),
+        active_thread=active_thread,
+        current_die=await get_current_die(session.id, db),
+        last_rolled_result=active_thread.last_rolled_result if active_thread else None,
+        has_restore_point=snapshot_count > 0,
+        snapshot_count=snapshot_count,
+        pending_thread_id=session.pending_thread_id,
+        timezone=session.timezone,
+        reading_bandwidth=session.reading_bandwidth,
+        reading_intent=session.reading_intent,
+        reading_mode_source=session.reading_mode_source,
+        reading_mode_suggested=session.reading_mode_suggested,
+        bandwidth=build_session_bandwidth_state(
+            predicted_bandwidth=session.predicted_bandwidth,
+            active_bandwidth=session.active_bandwidth,
+            confidence=session.bandwidth_confidence,
+            source=session.bandwidth_source,
+            mode_version=session.bandwidth_version,
+        ),
+        intent=build_session_intent_state(
+            predicted_intent=session.predicted_intent,
+            active_intent=session.active_intent,
+            confidence=session.intent_confidence,
+            source=session.intent_source,
+            mode_version=session.intent_version,
+        ),
+    )
 
-            snapshot_thread_ids = {int(tid) for tid in snapshot.thread_states.keys()}
-
-            current_threads_result = await db.execute(
-                select(Thread).where(Thread.user_id == current_user.id)
-            )
-            current_threads = current_threads_result.scalars().all()
-            current_thread_ids = {thread.id for thread in current_threads}
-
-            threads_to_delete = current_thread_ids - snapshot_thread_ids
-            if threads_to_delete:
-                await db.execute(
-                    update(Event)
-                    .where(
-                        or_(
-                            Event.thread_id.in_(threads_to_delete),
-                            Event.selected_thread_id.in_(threads_to_delete),
-                        )
-                    )
-                    .values(thread_id=None, selected_thread_id=None)
-                )
-                await db.execute(
-                    delete(Thread)
-                    .where(Thread.id.in_(threads_to_delete))
-                    .where(Thread.user_id == current_user.id)
-                )
-
-            threads_to_recount: list[Thread] = []
-            for thread_id, state in snapshot.thread_states.items():
-                thread_id_int = int(thread_id)
-                thread = await db.get(Thread, thread_id_int)
-                if thread:
-                    if "title" in state:
-                        thread.title = state["title"]
-                    if "format" in state:
-                        thread.format = normalize_format_value(state["format"])
-                    thread.issues_remaining = state.get("issues_remaining", thread.issues_remaining)
-                    thread.last_rating = state.get("last_rating", thread.last_rating)
-                    thread.queue_position = state.get("queue_position", thread.queue_position)
-                    thread.status = state.get("status", thread.status)
-                    if "notes" in state:
-                        thread.notes = state["notes"]
-                    if "is_test" in state:
-                        thread.is_test = state["is_test"]
-                    if state.get("last_activity_at"):
-                        thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
-
-                    if "issue_states" in state and state["issue_states"] is not None:
-                        await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
-
-                        max_position = 0
-                        for issue_state in state["issue_states"]:
-                            position = issue_state.get("position", max_position + 1)
-                            if position > max_position:
-                                max_position = position
-                            issue = Issue(
-                                id=issue_state["id"],
-                                thread_id=thread_id_int,
-                                issue_number=issue_state["number"],
-                                status=issue_state["status"],
-                                read_at=datetime.fromisoformat(issue_state["read_at"])
-                                if issue_state["read_at"]
-                                else None,
-                                created_at=datetime.now(UTC),
-                                position=position,
-                            )
-                            db.add(issue)
-                        thread.total_issues = state.get("total_issues")
-                        thread.next_unread_issue_id = state.get("next_unread_issue_id")
-                        thread.reading_progress = state.get("reading_progress")
-                        if thread.uses_issue_tracking():
-                            threads_to_recount.append(thread)
-                    else:
-                        # Clear migrated state when restoring to legacy
-                        await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
-                        thread.total_issues = None
-                        thread.next_unread_issue_id = None
-                        thread.reading_progress = None
-                        thread.issues_remaining = state.get(
-                            "issues_remaining", thread.issues_remaining
-                        )
-                else:
-                    new_thread = Thread(
-                        id=thread_id_int,
-                        title=state.get("title", "Unknown Thread"),
-                        format=normalize_format_value(state.get("format", "comic")),
-                        issues_remaining=state.get("issues_remaining", 0),
-                        last_rating=state.get("last_rating"),
-                        queue_position=state.get("queue_position", 1),
-                        status=state.get("status", "active"),
-                        notes=state.get("notes"),
-                        is_test=state.get("is_test", False),
-                        user_id=state.get("user_id", session.user_id),
-                        created_at=datetime.fromisoformat(state["created_at"])
-                        if state.get("created_at")
-                        else datetime.now(UTC),
-                    )
-                    if state.get("last_activity_at"):
-                        new_thread.last_activity_at = datetime.fromisoformat(
-                            state["last_activity_at"]
-                        )
-                    db.add(new_thread)
-
-                    if "issue_states" in state and state["issue_states"] is not None:
-                        max_position = 0
-                        for issue_state in state["issue_states"]:
-                            position = issue_state.get("position", max_position + 1)
-                            if position > max_position:
-                                max_position = position
-                            issue = Issue(
-                                id=issue_state["id"],
-                                thread_id=thread_id_int,
-                                issue_number=issue_state["number"],
-                                status=issue_state["status"],
-                                read_at=datetime.fromisoformat(issue_state["read_at"])
-                                if issue_state["read_at"]
-                                else None,
-                                created_at=datetime.now(UTC),
-                                position=position,
-                            )
-                            db.add(issue)
-                        new_thread.total_issues = state.get("total_issues")
-                        new_thread.next_unread_issue_id = state.get("next_unread_issue_id")
-                        new_thread.reading_progress = state.get("reading_progress")
-                        if new_thread.uses_issue_tracking():
-                            threads_to_recount.append(new_thread)
-                    else:
-                        new_thread.issues_remaining = state.get("issues_remaining", 0)
-
-            if threads_to_recount:
-                await db.flush()
-                unread_counts = await load_unread_counts(threads_to_recount, db)
-                for thread_obj in threads_to_recount:
-                    thread_obj.issues_remaining = unread_counts.get(thread_obj.id, 0)
-
-            if snapshot.session_state:
-                session.start_die = snapshot.session_state.get("start_die", session.start_die)
-                session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
-                session.active_bandwidth = snapshot.session_state.get(
-                    "active_bandwidth", session.active_bandwidth
-                )
-                session.predicted_bandwidth = snapshot.session_state.get(
-                    "predicted_bandwidth", session.predicted_bandwidth
-                )
-                session.bandwidth_confidence = snapshot.session_state.get(
-                    "bandwidth_confidence", session.bandwidth_confidence
-                )
-                session.bandwidth_source = snapshot.session_state.get(
-                    "bandwidth_source", session.bandwidth_source
-                )
-                session.bandwidth_version = snapshot.session_state.get(
-                    "bandwidth_version", session.bandwidth_version
-                )
-                session.active_intent = snapshot.session_state.get(
-                    "active_intent", session.active_intent
-                )
-                session.predicted_intent = snapshot.session_state.get(
-                    "predicted_intent", session.predicted_intent
-                )
-                session.intent_confidence = snapshot.session_state.get(
-                    "intent_confidence", session.intent_confidence
-                )
-                session.intent_source = snapshot.session_state.get(
-                    "intent_source", session.intent_source
-                )
-                session.intent_version = snapshot.session_state.get(
-                    "intent_version", session.intent_version
-                )
-
-            await db.commit()
-            await db.refresh(session)
-            await refresh_user_blocked_status(current_user.id, db)
-            await db.commit()
-            await db.refresh(session)
-
-            await invalidate_user_view(current_user.id)
-
-            from sqlalchemy import func
-
-            active_thread = await get_active_thread(session.id, db)
-
-            snapshot_count_result = await db.execute(
-                select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
-            )
-            snapshot_count = snapshot_count_result.scalar() or 0
-
-            return SessionResponse(
-                id=session.id,
-                started_at=session.started_at,
-                ended_at=session.ended_at,
-                start_die=session.start_die,
-                manual_die=session.manual_die,
-                user_id=session.user_id,
-                ladder_path=await build_ladder_path(session.id, db),
-                active_thread=active_thread,
-                current_die=await get_current_die(session.id, db),
-                last_rolled_result=active_thread.last_rolled_result if active_thread else None,
-                has_restore_point=snapshot_count > 0,
-                snapshot_count=snapshot_count,
-                pending_thread_id=session.pending_thread_id,
-                timezone=session.timezone,
-                reading_bandwidth=session.reading_bandwidth,
-                reading_intent=session.reading_intent,
-                reading_mode_source=session.reading_mode_source,
-                reading_mode_suggested=session.reading_mode_suggested,
-                bandwidth=build_session_bandwidth_state(
-                    predicted_bandwidth=session.predicted_bandwidth,
-                    active_bandwidth=session.active_bandwidth,
-                    confidence=session.bandwidth_confidence,
-                    source=session.bandwidth_source,
-                    mode_version=session.bandwidth_version,
-                ),
-                intent=build_session_intent_state(
-                    predicted_intent=session.predicted_intent,
-                    active_intent=session.active_intent,
-                    confidence=session.intent_confidence,
-                    source=session.intent_source,
-                    mode_version=session.intent_version,
-                ),
-            )
-        except OperationalError as e:
-            if "deadlock" in str(e).lower():
-                await db.rollback()
-                retries += 1
-                if retries >= max_retries:
-                    raise
-                delay = initial_delay * (2 ** (retries - 1))
-                await asyncio.sleep(delay)
-            else:
-                raise
-
-    raise RuntimeError(f"Failed to restore session after {max_retries} retries")

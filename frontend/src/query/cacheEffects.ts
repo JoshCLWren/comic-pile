@@ -1,9 +1,25 @@
 import type { QueryClient } from '@tanstack/react-query'
 import type { InfiniteData } from '@tanstack/react-query'
-import type { Thread, ThreadListResponse } from '../types'
+import type { Issue, IssueListResponse, Thread, ThreadListResponse } from '../types'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
+import type { CustomCBL, CustomCBLListItem } from '../services/api-custom-cbl'
+import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
+
+/**
+ * Centralized cache effects for all React Query mutations in ComicPile.
+ * 
+ * ALL cache writes, invalidations, and optimistic updates must use these helpers.
+ * Direct calls to `setQueryData`, `invalidateQueries`, or `removeQueries` outside
+ * of this module are prohibited in production code.
+ * 
+ * Intentional exceptions:
+ * - `useRollBootstrap.ts` reconciliation events: The real-time reconciliation system
+ *   requires direct `setQueryData` calls to update the bootstrap cache immediately
+ *   when external events occur. This is explicitly documented and justified by the
+ *   real-time nature of the reconciliation system.
+ */
 
 export type ThreadCacheRollback = () => void
 
@@ -108,6 +124,27 @@ export async function invalidateCurrentSessionAfterSnooze(
 }
 
 /**
+ * Refresh the minimal auth-resume set after a bfcache/visibility resume
+ * recovery (`ResumeRecovery`, #2582). Scoped to the retained resume
+ * resources — current session, roll bootstrap, and queue pages — so recovery
+ * reconciles data without the unscoped `invalidateQueries()` blast that used
+ * to churn deferred layout underneath an in-progress scroll restore.
+ */
+export async function invalidateAfterResumeRecovery(client: QueryClient): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    }),
+    client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
+  ])
+}
+
+/**
  * Drop the cached roll bootstrap after a manual thread selection
  * (`POST /threads/{id}/set-pending`) so the next Roll mount fetches the new
  * pending thread instead of replaying a still-fresh snapshot with no pending
@@ -172,6 +209,11 @@ export async function invalidateReadingPlans(client: QueryClient): Promise<void>
   await invalidateAfterQueueMovement(client)
 }
 
+/**
+ * Apply a committed reading plan to the cache and refresh dependent queries.
+ * Centralizes the pattern used in useReadingPlans.ts useSaveReadingPlan and
+ * CustomCBLBuilder.tsx apply mutation.
+ */
 export async function applyCommittedReadingPlan(
   client: QueryClient,
   plan: ContinuityPlan,
@@ -182,6 +224,16 @@ export async function applyCommittedReadingPlan(
     exact: true,
   })
   await invalidateAfterQueueMovement(client)
+}
+
+/**
+ * @deprecated Use `applyCommittedReadingPlan` instead.
+ */
+export async function applyCommittedReadingPlanUpdate(
+  client: QueryClient,
+  plan: ContinuityPlan,
+): Promise<void> {
+  return applyCommittedReadingPlan(client, plan)
 }
 
 /**
@@ -255,4 +307,131 @@ export function applyEditedThreadToQueuePages(
 
   client.setQueryData(queryKeys.thread.detail(updatedThread.id), updatedThread)
   client.setQueryData(queryKeys.thread.summary(updatedThread.id), updatedThread)
+}
+
+/**
+ * Apply an authoritative issue read-status result to the cache so the thread
+ * detail view reflects a toggle without refetching every loaded issue page.
+ *
+ * The snapshot carries the reconciled visible issues plus the server-refreshed
+ * thread; the issues are patched in-place across every loaded page (keyed via
+ * `queryKeys.thread.issuePages`) and the thread is pushed through
+ * `applyEditedThreadToQueuePages` (detail, summary, and queue rows).
+ */
+export function applyIssueReadSnapshotToCache(
+  client: QueryClient,
+  snapshot: IssueMutationSnapshot,
+): void {
+  const { issues: snapshotIssues, thread: updatedThread } = snapshot
+  const issuesById = new Map(snapshotIssues.map((issue) => [issue.id, issue]))
+
+  client.setQueriesData<InfiniteData<IssueListResponse>>(
+    { queryKey: queryKeys.thread.issuePages(updatedThread.id) },
+    (old) => {
+      if (!old) return old
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          issues: page.issues.map((issue: Issue) => issuesById.get(issue.id) ?? issue),
+        })),
+      }
+    },
+  )
+
+  applyEditedThreadToQueuePages(client, updatedThread)
+}
+
+/**
+ * Refresh the retained data a DependencyBuilder change can affect: the thread
+ * detail/summary, dependency and crossover groups, reading orders, current
+ * session, and queue pages. Replaces the previous one-off thread refetch in the
+ * thread detail view.
+ */
+export async function invalidateAfterDependencyChange(
+  client: QueryClient,
+  threadId: number,
+): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
+    client.invalidateQueries({ queryKey: queryKeys.crossover.all }),
+    client.invalidateQueries({ queryKey: queryKeys.thread.detail(threadId), exact: true }),
+    client.invalidateQueries({ queryKey: queryKeys.thread.summary(threadId), exact: true }),
+    client.invalidateQueries({ queryKey: queryKeys.readingOrders.forThread(threadId) }),
+    client.invalidateQueries({ queryKey: queryKeys.session.current(), exact: true }),
+    client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
+  ])
+}
+
+/**
+ * Apply a created custom CBL to the cache and refresh the list view.
+ * Mirrors the pattern used in CustomCBLBuilder.tsx create mutation.
+ */
+export async function applyCreatedCustomCBL(
+  client: QueryClient,
+  created: CustomCBL,
+): Promise<void> {
+  client.setQueryData(queryKeys.customCBLs.detail(created.id), created)
+  await client.invalidateQueries({ queryKey: queryKeys.customCBLs.list(), exact: true })
+}
+
+/**
+ * Apply an updated custom CBL to the cache and refresh the list view.
+ * Mirrors the pattern used in CustomCBLBuilder.tsx save mutation.
+ */
+export async function applyUpdatedCustomCBL(
+  client: QueryClient,
+  saved: CustomCBL,
+): Promise<void> {
+  client.setQueryData(queryKeys.customCBLs.detail(saved.id), saved)
+  await client.invalidateQueries({ queryKey: queryKeys.customCBLs.list(), exact: true })
+}
+
+/**
+ * Remove a custom CBL from the cache and refresh the list view.
+ * Mirrors the pattern used in CustomCBLBuilder.tsx delete mutation.
+ */
+export async function applyDeletedCustomCBL(
+  client: QueryClient,
+  deletedId: number,
+): Promise<void> {
+  client.removeQueries({ queryKey: queryKeys.customCBLs.detail(deletedId), exact: true })
+  await client.invalidateQueries({ queryKey: queryKeys.customCBLs.list(), exact: true })
+}
+
+/**
+ * Invalidate all queries affected by session recovery in ResumeRecovery.
+ * Replaces the blanket `invalidateQueries()` call with targeted invalidation.
+ */
+export async function invalidateSessionRecoveryCache(
+  client: QueryClient,
+): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.session.current(), exact: true }),
+    client.invalidateQueries({ queryKey: queryKeys.roll.bootstrap(), exact: true }),
+    client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
+    client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
+  ])
+}
+
+/**
+ * Invalidate the identity-inbox list cache after a mutation (confirm, reject,
+ * defer, skip) so the inbox refetches the updated item set.
+ */
+export async function invalidateIdentityInbox(
+  client: QueryClient,
+): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.identityInbox.all })
+}
+
+/**
+ * Invalidate crossover group caches after a mutation that changes group
+ * membership or metadata (create, rename, delete, addMember, addIssueRange,
+ * removeMember). The list query is invalidated so the CrossoversPage refetches
+ * the full group list with updated membership counts.
+ */
+export async function invalidateAfterCrossoverMutation(
+  client: QueryClient,
+): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.crossover.all })
 }

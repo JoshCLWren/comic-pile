@@ -91,11 +91,13 @@ describe('MigrationDialog', () => {
     const onClose = vi.fn()
     render(<MigrationDialog thread={thread} onComplete={vi.fn()} onSkip={vi.fn()} onClose={onClose} />)
     const dialog = screen.getByRole('dialog')
-    fireEvent.click(dialog, { target: dialog, currentTarget: dialog })
-    expect(onClose).toHaveBeenCalled()
+    const backdrop = dialog.previousElementSibling as HTMLElement
+    fireEvent.click(backdrop)
+    expect(onClose).toHaveBeenCalledTimes(1)
     await userEvent.setup().click(screen.getByRole('button', { name: 'Skip' }))
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByText(/Skip migration/)).not.toBeInTheDocument()
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
 })

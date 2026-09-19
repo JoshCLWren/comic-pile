@@ -40,6 +40,7 @@ export default function QueuePage() {
     isError,
     nextPageToken,
     loadMore,
+    activeCount,
   } = useQueueThreads(searchQuery, sortBy)
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
@@ -52,6 +53,10 @@ export default function QueuePage() {
     threads,
     sortBy,
   )
+  // Authoritative whole-queue total from the backend, never a count of the
+  // loaded page (issue #2568). `activeThreads.length` is only a fallback for
+  // responses that predate the field.
+  const authoritativeActiveCount = activeCount ?? activeThreads.length
   const blockingByThreadId = useQueueBlockingInfo(
     activeThreads.map((thread) => thread.id),
   )
@@ -112,7 +117,10 @@ export default function QueuePage() {
   const handleRepositionConfirm = useCallback(
     async (targetPosition: number) => {
       if (!modals.repositioningThread) return
-      if (targetPosition < 1 || targetPosition > activeThreads.length) {
+      if (
+        targetPosition < 1 ||
+        targetPosition > authoritativeActiveCount
+      ) {
         window.alert('Invalid position specified. Please choose a valid position.')
         return
       }
@@ -127,7 +135,7 @@ export default function QueuePage() {
         window.alert('Failed to reposition thread. Please try again.')
       }
     },
-    [modals, moveToPositionMutation, activeThreads.length],
+    [modals, moveToPositionMutation, authoritativeActiveCount],
   )
 
   const renderThreadCard = useCallback(
@@ -186,7 +194,9 @@ export default function QueuePage() {
   })
 
   const mobileAddEnabled = !modals.isAnyModalOpen
-  const shuffleDisabled = activeThreads.length < 2
+  // Shuffle operates on the whole queue, so enablement must use the
+  // authoritative queue size rather than the loaded page slice (issue #2568).
+  const shuffleDisabled = authoritativeActiveCount < 2
 
   // Keep already-rendered rows visible while an additional page loads, but
   // preserve the full-screen initial loading state before Queue has any data.
@@ -198,7 +208,7 @@ export default function QueuePage() {
     <PositionMenuProvider>
       <div className="space-y-6 md:space-y-10 pb-[calc(10rem_+_env(safe-area-inset-bottom))] md:pb-10">
         <QueueControls
-          activeCount={activeThreads.length}
+          activeCount={authoritativeActiveCount}
           shuffleDisabled={shuffleDisabled}
           shufflePending={shuffleQueueMutation.isPending}
           onShuffle={actions.handleShuffle}
@@ -276,6 +286,7 @@ export default function QueuePage() {
           setIssuesToAdd={modals.setIssuesToAdd}
           activeThreads={activeThreads}
           completedThreads={completedThreads}
+          queueSize={authoritativeActiveCount}
           onCreateSubmit={modals.handleCreateSubmit}
           onEditSubmit={modals.handleEditSubmit}
           onReactivateSubmit={modals.handleReactivateSubmit}

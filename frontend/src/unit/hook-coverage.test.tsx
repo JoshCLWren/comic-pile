@@ -29,9 +29,7 @@ vi.mock('../services/api', () => api)
 vi.mock('../services/protectedRollMutationApi', () => ({ protectedRollMutationApi: protectedApi }))
 vi.mock('../services/rollBootstrapApi', () => ({ rollBootstrapApi: bootstrapApi }))
 const toast = vi.hoisted(() => ({ showToast: vi.fn() }))
-const cache = vi.hoisted(() => ({ invalidateQueries: vi.fn() }))
 vi.mock('../contexts/useToast', () => ({ useToast: () => toast }))
-vi.mock('../contexts/useCache', () => ({ useCache: () => cache }))
 
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks/useRate'

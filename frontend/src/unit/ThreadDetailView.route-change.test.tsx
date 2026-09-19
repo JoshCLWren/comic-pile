@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
 import { ToastProvider } from '../contexts/ToastProvider'
+import { queryKeys } from '../query/queryKeys'
+import { queryClient } from '../query/queryClient'
 import { useUpdateThread } from '../hooks/useThread'
 import { threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
@@ -19,18 +21,17 @@ vi.mock('react-router-dom', async () => {
     useLocation: () => ({ state: undefined }),
   }
 })
-vi.mock('../hooks/useThread', () => ({ useUpdateThread: vi.fn() }))
-vi.mock('../services/api', () => {
-  const client = { get: vi.fn() }
-  return {
-    default: client,
-    threadsApi: { get: vi.fn() },
-    dependenciesApi: {
-      getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
-      getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
-    },
-  }
+vi.mock('../hooks/useThread', async () => {
+  const actual = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
+  return { ...actual, useUpdateThread: vi.fn() }
 })
+vi.mock('../services/api', () => ({
+  threadsApi: { get: vi.fn() },
+  dependenciesApi: {
+    getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
+    getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
+  },
+}))
 vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn() } }))
 
 const mockedUseUpdateThread = vi.mocked(useUpdateThread)
@@ -78,16 +79,21 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
   routeParams.id = '1'
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  mockedThreadsApiGet.mockReset()
   mockedThreadsApiGet.mockImplementation(async (id: number) => threadResult(id))
+  mockedIssuesApiList.mockReset()
   mockedIssuesApiList.mockImplementation(async (threadId: number) => issueResult(threadId))
 })
 
+function renderView() {
+  return render(<ToastProvider><ThreadDetailView /></ToastProvider>)
+}
+
 it('clears loaded issues and fetches the new thread after a route change', async () => {
   const user = userEvent.setup()
-  const view = render(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  const view = renderView()
 
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   await user.click(screen.getByRole('button', { name: 'Expand' }))
@@ -105,19 +111,47 @@ it('clears loaded issues and fetches the new thread after a route change', async
   expect(mockedIssuesApiList).toHaveBeenNthCalledWith(2, 2, { page_size: 100 })
 })
 
-it('ignores stale successful and failed thread requests after navigation', async () => {
+it('keys thread and issue caches per thread so stale issue responses never leak', async () => {
+  const user = userEvent.setup()
+  const firstIssues = deferred<IssueListResponse>()
+  mockedIssuesApiList.mockImplementation((threadId: number) => (
+    threadId === 1 ? firstIssues.promise : Promise.resolve(issueResult(threadId))
+  ))
+  const view = renderView()
+
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  await user.click(screen.getByRole('button', { name: 'Expand' }))
+  routeParams.id = '2'
+  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
+  await user.click(screen.getByRole('button', { name: 'Expand' }))
+  await waitFor(() => expect(screen.getByText('#Monstress 1')).toBeInTheDocument())
+
+  firstIssues.resolve(issueResult(1))
+  await waitFor(() => expect(screen.queryByText('#Saga 1')).not.toBeInTheDocument())
+
+  await waitFor(() => {
+    const threadOne = queryClient.getQueryData<{ pages: IssueListResponse[] }>(
+      queryKeys.thread.issuePages(1),
+    )
+    expect(threadOne?.pages[0]?.issues[0]?.issue_number).toBe('Saga 1')
+  })
+  const threadTwo = queryClient.getQueryData<{ pages: IssueListResponse[] }>(
+    queryKeys.thread.issuePages(2),
+  )
+  expect(threadTwo?.pages[0]?.issues[0]?.issue_number).toBe('Monstress 1')
+})
+
+it('keys thread detail caches per thread so stale thread failures never leak', async () => {
   const firstRequest = deferred<Thread>()
   mockedThreadsApiGet.mockImplementation((id: number) => (
     id === 1 ? firstRequest.promise : Promise.resolve(threadResult(id))
   ))
-  const view = render(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  const view = renderView()
 
   routeParams.id = '2'
   view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
   await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
-
-  firstRequest.resolve(threadResult(1))
-  await waitFor(() => expect(screen.queryByText('Saga')).not.toBeInTheDocument())
 
   const rejectedRequest = deferred<Thread>()
   mockedThreadsApiGet.mockImplementation((id: number) => (
@@ -128,47 +162,30 @@ it('ignores stale successful and failed thread requests after navigation', async
   routeParams.id = '2'
   view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
   await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
-
+  firstRequest.resolve(threadResult(1))
   rejectedRequest.reject(new Error('stale failure'))
+  // Suppress unhandled rejection from stale query that was unmounted
+  rejectedRequest.promise.catch(() => {})
   await waitFor(() => expect(screen.queryByText('stale failure')).not.toBeInTheDocument())
-})
 
-it('ignores stale successful and failed issue requests after navigation', async () => {
-  const user = userEvent.setup()
-  const firstIssues = deferred<IssueListResponse>()
-  mockedIssuesApiList.mockImplementation((threadId: number) => (
-    threadId === 1 ? firstIssues.promise : Promise.resolve(issueResult(threadId))
-  ))
-  const view = render(<ToastProvider><ThreadDetailView /></ToastProvider>)
-
-  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
-  await user.click(screen.getByRole('button', { name: 'Expand' }))
-  routeParams.id = '2'
-  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
-  await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
-
-  firstIssues.resolve(issueResult(1))
-  await waitFor(() => expect(screen.queryByText('#Saga 1')).not.toBeInTheDocument())
-
-  const rejectedIssues = deferred<IssueListResponse>()
-  mockedIssuesApiList.mockImplementation((threadId: number) => (
-    threadId === 1 ? rejectedIssues.promise : Promise.resolve(issueResult(threadId))
-  ))
-  routeParams.id = '1'
-  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
-  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
-  await user.click(screen.getByRole('button', { name: 'Expand' }))
-  routeParams.id = '2'
-  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
-  await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
-
-  rejectedIssues.reject(new Error('stale issue failure'))
-  await waitFor(() => expect(screen.queryByText('Failed to load issues')).not.toBeInTheDocument())
+  const saga = queryClient.getQueryData<Thread>(queryKeys.thread.detail(1))
+  expect(saga?.title).toBe('Saga')
+  const monstress = queryClient.getQueryData<Thread>(queryKeys.thread.detail(2))
+  expect(monstress?.title).toBe('Monstress')
 })
 
 it('handles a route without a thread id without making requests', async () => {
   routeParams.id = ''
-  render(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  renderView()
+
+  await waitFor(() => expect(screen.getByText('Thread not found')).toBeInTheDocument())
+  expect(mockedThreadsApiGet).not.toHaveBeenCalled()
+  expect(mockedIssuesApiList).not.toHaveBeenCalled()
+})
+
+it('handles a non-numeric thread id without making requests', async () => {
+  routeParams.id = 'abc'
+  renderView()
 
   await waitFor(() => expect(screen.getByText('Thread not found')).toBeInTheDocument())
   expect(mockedThreadsApiGet).not.toHaveBeenCalled()

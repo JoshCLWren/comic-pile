@@ -3,7 +3,6 @@
 11	nvidia	poolside/laguna-xs-2.1	15	dispatcher	Laguna XS 2.1
 20	nvidia	openai/gpt-oss-20b	45	dispatcher	GPT OSS 20B
 21	nvidia	google/gemma-4-31b-it	50	dispatcher	Gemma 4 31B
-23	openrouter-free	stealth/union-alpha	55	dispatcher	OpenRouter Stealth Union Alpha
 29	opencode-free	big-pickle	0	dispatcher	Catalog Free Slot 29
 39	opencode-free	big-pickle	5	dispatcher	OpenCode Big Pickle
 41	opencode-free	mimo-v2.5-free	15	dispatcher	OpenCode MiMo V2.5 Free
@@ -20,7 +19,6 @@
 54	z-ai	glm-4.5-flash	20	dispatcher	Z.AI GLM 4.5 Flash
 55	ollama-cloud	nemotron-3-nano:30b	25	dispatcher	Ollama Cloud Nemotron 3 Nano 30B
 56	openrouter-free	dots-studio/dots-3-note-preview:free	30	dispatcher	OpenRouter Dots 3 Note Preview Free
-57	opencode-free	union-alpha	35	dispatcher	OpenCode Union Alpha
 58	opencode-free	muse-spark-1.3-contributor-free	40	dispatcher	OpenCode Muse Spark 1.3 Contributor Free
 59	opencode-free	ling-3.0-flash-fin-free	45	dispatcher	OpenCode Ling 3.0 Flash Fin Free
 60	openrouter-free	cohere/north-mini-code:free	50	dispatcher	OpenRouter Cohere North Mini Code Free

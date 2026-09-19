@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { useQuery, useInfiniteQuery, useMutation } from "@tanstack/react-query";
 import { sessionApi } from "../services/api";
 import type {
@@ -9,10 +9,10 @@ import type {
   SessionSummary,
 } from "../types";
 import { useToast } from "../contexts/useToast";
-import { queryKeys } from "../query/queryKeys";
+import { trackSessionGreeting } from "../utils/sessionGreeting";
+import { queryKeys, type SessionListParams } from "../query/queryKeys";
 
-const EMPTY_PARAMS = Object.freeze({});
-const STORAGE_KEY_PREFIX = "comic_pile_last_session_id";
+const EMPTY_PARAMS: SessionListParams = Object.freeze({});
 
 function normalizeQueryError(error: unknown, fallbackMessage: string): Error | null {
   if (error == null) return null;
@@ -22,42 +22,16 @@ function normalizeQueryError(error: unknown, fallbackMessage: string): Error | n
 
 export function useSession() {
   const { showToast } = useToast();
-  const lastNotifiedSessionIdRef = useRef<number | null>(null);
 
   const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: queryKeys.session.current(),
     queryFn: async () => {
       const result = await sessionApi.getCurrent();
 
-      const currentSessionId = result.id;
-      const currentUserId = result.user_id ?? "anonymous";
-      const storageKey = `${STORAGE_KEY_PREFIX}_${currentUserId}`;
-      let storedSessionId: string | null = null;
-      try {
-        storedSessionId = localStorage.getItem(storageKey);
-      } catch {
-        // Session loading should still succeed when browser storage is unavailable.
-      }
-      let previousSessionId: number | null = null;
-      if (storedSessionId) {
-        const parsed = parseInt(storedSessionId, 10);
-        previousSessionId = Number.isFinite(parsed) ? parsed : null;
-      }
-
-      if (
-        previousSessionId !== null &&
-        currentSessionId !== previousSessionId &&
-        currentSessionId !== lastNotifiedSessionIdRef.current
-      ) {
-        showToast("Session started. Happy reading!", "info");
-        lastNotifiedSessionIdRef.current = currentSessionId;
-      }
-
-      try {
-        localStorage.setItem(storageKey, currentSessionId.toString());
-      } catch {
-        // Persisting the session ID is best effort and must not hide the API result.
-      }
+      // Greeting persistence and the session-started toast are owned by the
+      // shared `sessionGreeting` helper so the roll bootstrap and this query
+      // can never race on the same storage key or double-toast.
+      trackSessionGreeting({ sessionId: result.id, userId: result.user_id, showToast });
       return result;
     },
   });
@@ -74,9 +48,12 @@ export function useSession() {
   );
 }
 
-export function useSessions(params = EMPTY_PARAMS) {
+export function useSessions(params: SessionListParams = EMPTY_PARAMS) {
   const query = useInfiniteQuery({
-    queryKey: ['sessions', params],
+    // Canonical `session.pages` space: the cursor lives in `pageParam`, not the
+    // key, so invalidation targeting `queryKeys.session.pages()` / `.all`
+    // reliably refreshes the Session index.
+    queryKey: queryKeys.session.list({ params }),
     queryFn: async ({ pageParam }) => {
       try {
         // SAFETY: useInfiniteQuery starts at the null initialPageParam and only advances with page tokens.

@@ -1,0 +1,18 @@
+{
+  "manualTokenLoops": {
+    "components/DependencyBuilder.tsx": "collect-all while loop",
+    "components/IssueCorrectionDialog.tsx": "collect-all while loop",
+    "pages/ContinuityPlannerPage.tsx": "collect-all do/while loops",
+    "pages/CrossoversPage.tsx": "collect-all while loops",
+    "pages/QueuePage/IssueToggleList.tsx": "collect-all while loop",
+    "pages/RollPage/useRollModals.ts": "collect-all do/while loop"
+  },
+  "handRolledPagers": {
+    "components/IssueList.tsx": "setNextPageToken hand-written paging state",
+    "pages/ThreadDetailView.tsx": "setNextPageToken hand-written paging state"
+  },
+  "nextCursorFiles": {
+    "hooks/useCreatorDetail.ts": "legacy offset next_cursor consumer",
+    "services/api.ts": "legacy offset next_cursor response type"
+  }
+}

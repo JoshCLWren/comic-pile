@@ -11,12 +11,16 @@ const list = vi.fn<IssueCorrectionIssuesApi['list']>()
 const create = vi.fn<IssueCorrectionIssuesApi['create']>()
 const markRead = vi.fn<IssueCorrectionIssuesApi['markRead']>()
 const markUnread = vi.fn<IssueCorrectionIssuesApi['markUnread']>()
+const bulkMarkRead = vi.fn<IssueCorrectionIssuesApi['bulkMarkRead']>()
+const bulkMarkUnread = vi.fn<IssueCorrectionIssuesApi['bulkMarkUnread']>()
 const move = vi.fn<IssueCorrectionIssuesApi['move']>()
 const issuesApi: IssueCorrectionIssuesApi = {
   list,
   create,
   markRead,
   markUnread,
+  bulkMarkRead,
+  bulkMarkUnread,
   move,
 }
 
@@ -61,6 +65,8 @@ describe('IssueCorrectionDialog', () => {
     vi.clearAllMocks()
     markRead.mockResolvedValue(undefined)
     markUnread.mockResolvedValue(undefined)
+    bulkMarkRead.mockResolvedValue(undefined)
+    bulkMarkUnread.mockResolvedValue(undefined)
     move.mockResolvedValue(undefined)
   })
 
@@ -82,7 +88,7 @@ describe('IssueCorrectionDialog', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Update' }))
 
     await waitFor(() => {
-      expect(markRead).toHaveBeenCalledWith(1)
+      expect(bulkMarkRead).toHaveBeenCalledWith([1])
     })
     expect(markUnread).toHaveBeenCalledWith(2)
     expect(create).not.toHaveBeenCalled()

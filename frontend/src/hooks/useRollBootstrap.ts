@@ -4,11 +4,10 @@ import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import type { RollBootstrapApi } from '../services/apiTypes'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import { useToast } from '../contexts/useToast'
+import { trackSessionGreeting } from '../utils/sessionGreeting'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from './rollMutationReconciliation'
-
-const STORAGE_KEY_PREFIX = 'comic_pile_last_session_id'
 
 /** Best-effort browser IANA timezone used to timestamp the reading session. */
 export function resolveBrowserTimezone(): string | undefined {
@@ -22,7 +21,6 @@ export function resolveBrowserTimezone(): string | undefined {
 export function useRollBootstrap(api?: RollBootstrapApi) {
   const bootstrapApi = api ?? rollBootstrapApi
   const { showToast } = useToast()
-  const lastNotifiedSessionIdRef = useRef<number | null>(null)
   const justReconciledRef = useRef<RollBootstrapResponse | null>(null)
   const reconciliationExpiryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Bumped on every fetch and on every reconciliation so a stale in-flight
@@ -62,39 +60,14 @@ export function useRollBootstrap(api?: RollBootstrapApi) {
 
   // Persist the active reading session and greet on a genuinely new session.
   // Previously lived inside the manual fetch; now runs whenever authoritative
-  // bootstrap data changes (initial load or reconciliation).
+  // bootstrap data changes (initial load or reconciliation). Greeting
+  // persistence and the session-started toast are owned by the shared
+  // `sessionGreeting` helper so the current-session query and this bootstrap
+  // can never race on the same storage key or double-toast.
   useEffect(() => {
     if (data == null) return
 
-    const currentSessionId = data.session_id
-    const currentUserId = data.user_id ?? 'anonymous'
-    const storageKey = `${STORAGE_KEY_PREFIX}_${currentUserId}`
-
-    let previousSessionId: number | null = null
-    try {
-      const storedSessionId = localStorage.getItem(storageKey)
-      if (storedSessionId) {
-        const parsed = parseInt(storedSessionId, 10)
-        previousSessionId = Number.isFinite(parsed) ? parsed : null
-      }
-    } catch {
-      // Session loading should still succeed when browser storage is unavailable.
-    }
-
-    if (
-      previousSessionId !== null &&
-      currentSessionId !== previousSessionId &&
-      currentSessionId !== lastNotifiedSessionIdRef.current
-    ) {
-      showToast('Session started. Happy reading!', 'info')
-      lastNotifiedSessionIdRef.current = currentSessionId
-    }
-
-    try {
-      localStorage.setItem(storageKey, currentSessionId.toString())
-    } catch {
-      // Persisting the session ID is best effort and must not hide the API result.
-    }
+    trackSessionGreeting({ sessionId: data.session_id, userId: data.user_id, showToast })
   }, [data, showToast])
 
   const refetchBootstrap = useCallback(async (): Promise<RollBootstrapResponse> => {

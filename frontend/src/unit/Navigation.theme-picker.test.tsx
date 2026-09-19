@@ -7,6 +7,7 @@ import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { ToastProvider } from '../contexts/ToastProvider'
+import { cast } from '../utils/cast'
 import { readStoredThemePreference } from '../services/theme'
 import {
   resetThemePreferenceSyncForTests,
@@ -46,6 +47,15 @@ function axiosError(status: number): Error & { isAxiosError: true; response: { s
 
 function setViewport(width: number) {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+  const isMobile = width < 768
+  const isTablet = width >= 768 && width < 1024
+  const isDesktop = width >= 1024
+  window.matchMedia = vi.fn((query: string) => {
+    if (query === '(max-width: 767px)') return cast<MediaQueryList>({ matches: isMobile, addListener: vi.fn(), removeListener: vi.fn() })
+    if (query.includes('min-width: 768px')) return cast<MediaQueryList>({ matches: isTablet, addListener: vi.fn(), removeListener: vi.fn() })
+    if (query.includes('min-width: 1024px')) return cast<MediaQueryList>({ matches: isDesktop, addListener: vi.fn(), removeListener: vi.fn() })
+    return cast<MediaQueryList>({ matches: true, addListener: vi.fn(), removeListener: vi.fn() })
+  })
   window.dispatchEvent(new Event('resize'))
 }
 

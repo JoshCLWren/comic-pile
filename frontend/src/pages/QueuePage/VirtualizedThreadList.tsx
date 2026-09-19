@@ -3,7 +3,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual'
 import {
-  getRowThreads,
   EDGE_SCROLL_ZONE,
   ROW_GAP,
   ROW_HEIGHT_WITH_GAP,
@@ -39,12 +38,6 @@ interface VirtualizedThreadListProps<T> {
    *   **Not a stable identifier** — it changes if the array is reordered.
    */
   renderItem: (thread: T, index: number) => ReactNode
-  /**
-   * Optional explicit column count retained for deterministic legacy tests.
-   * Production Queue rendering intentionally leaves this unset so the
-   * virtualized and non-virtualized presentations are both one full-width row.
-   */
-  explicitColumnCount?: number
   sentinelRef?: React.Ref<HTMLDivElement>
   hasNextPage?: boolean
   /**
@@ -56,24 +49,22 @@ interface VirtualizedThreadListProps<T> {
 }
 
 /**
- * Virtualized list for large queues (>50 threads).
+ * Virtualized list backing the queue at every page size.
  *
- * Production renders exactly one full-width thread per virtual row so crossing
- * the virtualization threshold does not change Queue's visual grammar. This
- * mirrors the non-virtualized list introduced by #2088/#2099.
- *
- * `explicitColumnCount` preserves the older multi-column path only as a
- * deterministic test hook. Queue itself never supplies that prop.
- *
- * ### `data-index` contract
- * In the production single-column path, `data-index` is the thread index. When
- * an explicit multi-column count is supplied by a test, it represents the
- * virtual row index and consumers must use `renderItem`'s second argument for
- * thread-level identity.
+ * Production renders exactly one full-width thread per virtual row so Queue
+ * keeps a single rendering path (and a single window-owned scroll surface)
+ * from the first page through the final page. This mirrors the
+ * non-virtualized list introduced by #2088/#2099.
  *
  * Uses `@tanstack/react-virtual` with `useWindowVirtualizer` for efficient DOM
  * virtualization. The window scroll surface owns Queue before and after the
  * virtualization threshold is crossed, preventing nested scroll containers.
+ *
+ * Scroll ownership (#2582): this component owns measurement/rendering only.
+ * It never repositions the window for navigation or resume — route
+ * restoration belongs exclusively to the route restoration layer. The single
+ * `scrollToIndex` call below serves an explicit user drag gesture (edge
+ * auto-scroll while reordering) and is not a restore path.
  *
  * Preserves existing selectors (`data-testid="queue-thread-list"`,
  * `id="queue-container"`, `role="list"`, `aria-label="Series queue"`)
@@ -82,16 +73,12 @@ interface VirtualizedThreadListProps<T> {
 export default function VirtualizedThreadList<T>({
   threads,
   renderItem,
-  explicitColumnCount,
   sentinelRef,
   hasNextPage,
   useVirtualizer,
 }: VirtualizedThreadListProps<T>) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
-  const [columnCount, setColumnCount] = useState(() =>
-    explicitColumnCount !== undefined ? Math.max(1, explicitColumnCount) : 1,
-  )
 
   // Read the initial wrapper offset synchronously to avoid a 0 → measured
   // layout jump. Production stays single-column regardless of wrapper width.
@@ -110,11 +97,15 @@ export default function VirtualizedThreadList<T>({
       const rect = wrapperRef.current.getBoundingClientRect()
       setScrollMargin(rect.top + window.scrollY)
     }
-    setColumnCount(explicitColumnCount !== undefined ? Math.max(1, explicitColumnCount) : 1)
-  }, [explicitColumnCount])
+  }, [])
 
   // React to offset changes (e.g. window resize or layout shifts above the list).
+  // Guarded so server-side rendering and layout-less test environments
+  // (jsdom without a ResizeObserver stub) keep the initial synchronous
+  // measurement instead of crashing the whole queue.
   useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return
+
     let rafId: number | null = null
 
     const observer = new ResizeObserver(() => {
@@ -137,7 +128,7 @@ export default function VirtualizedThreadList<T>({
     }
   }, [])
 
-  const rowCount = Math.ceil(threads.length / columnCount)
+  const rowCount = threads.length
 
   // Memoize virtualizer options to avoid unnecessary setOptions()
   // calls on every render.
@@ -239,7 +230,7 @@ export default function VirtualizedThreadList<T>({
         >
           {virtualizer.getVirtualItems().map((virtualItem) => {
             const rowIndex = virtualItem.index
-            return columnCount === 1 ? (
+            return (
               <div
                 key={virtualItem.key}
                 data-index={rowIndex}
@@ -254,32 +245,6 @@ export default function VirtualizedThreadList<T>({
                 }}
               >
                 {renderItem(threads[rowIndex], rowIndex)}
-              </div>
-            ) : (
-              <div
-                key={virtualItem.key}
-                data-index={rowIndex}
-                ref={virtualizer.measureElement}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  paddingBottom: `${ROW_GAP}px`,
-                  transform: `translateY(${virtualItem.start - scrollMargin}px)`,
-                }}
-              >
-                <div
-                  className="grid gap-4"
-                  style={{
-                    gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
-                    rowGap: `${ROW_GAP}px`,
-                  }}
-                >
-                  {getRowThreads(threads, rowIndex, columnCount).map(
-                    (thread, colIndex) => renderItem(thread, rowIndex * columnCount + colIndex),
-                  )}
-                </div>
               </div>
             )
           })}

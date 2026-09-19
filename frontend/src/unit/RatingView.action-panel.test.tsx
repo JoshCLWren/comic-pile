@@ -24,14 +24,18 @@ vi.mock('../pages/RollPage/components/ComicVineIssueCard', () => ({
 vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
   ReadingRouteExplanation: () => null,
 }))
-vi.mock('../hooks/useReaderContext', () => ({
-  useReaderContext: () => ({
-    context: null,
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
-  }),
-}))
+vi.mock('../hooks/useReaderContext', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks/useReaderContext')>()
+  return {
+    ...actual,
+    useReaderContext: () => ({
+      context: null,
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    }),
+  }
+})
 
 interface RatingViewOverride {
   activeRatingThread?: Partial<RatingThread> | null

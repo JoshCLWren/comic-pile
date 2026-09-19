@@ -1088,6 +1088,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/creators/{creator_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Creator Detail Endpoint
+         * @description Return full personal creator detail for the specified canonical key.
+         *
+         *     Args:
+         *         creator_key: Canonical creator key (e.g. ``creator:12345``).
+         *         current_user: Authenticated user owning the library.
+         *         limit: Max number of issues per collection.
+         *         offset: Pagination offset.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         The full creator detail response including summary, role stats, and issue lists.
+         *
+         *     Raises:
+         *         HTTPException: When the key is malformed or the creator is not found
+         *         in the user's library.
+         */
+        get: operations["get_creator_detail_endpoint_api_v1_creators__creator_key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/crossover-templates/adopt": {
         parameters: {
             query?: never;
@@ -1122,6 +1156,118 @@ export interface paths {
          * @description Preview a derived crossover template from active CBL lists. Read-only: never mutates user data or continuity rules.
          */
         post: operations["preview_crossover_template_api_v1_crossover_templates_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-cbls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Custom Cbl Lists
+         * @description List the authenticated user's editable custom CBLs.
+         */
+        get: operations["list_custom_cbl_lists_api_v1_custom_cbls_get"];
+        put?: never;
+        /**
+         * Create Custom Cbl
+         * @description Create an editable CBL from real issues without creating synthetic threads.
+         */
+        post: operations["create_custom_cbl_api_v1_custom_cbls_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-cbls/issue-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Custom Cbl Issues
+         * @description Search only the user's canonical issue library for custom-list membership.
+         */
+        get: operations["search_custom_cbl_issues_api_v1_custom_cbls_issue_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-cbls/{list_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Custom Cbl
+         * @description Return one owned custom CBL.
+         */
+        get: operations["get_custom_cbl_api_v1_custom_cbls__list_id__get"];
+        /**
+         * Update Custom Cbl
+         * @description Replace custom CBL metadata and exact ordered membership atomically.
+         */
+        put: operations["update_custom_cbl_api_v1_custom_cbls__list_id__put"];
+        post?: never;
+        /**
+         * Delete Custom Cbl
+         * @description Delete one user-owned custom CBL without touching its comics or Reading Plans.
+         */
+        delete: operations["delete_custom_cbl_api_v1_custom_cbls__list_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-cbls/{list_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Custom Cbl
+         * @description Export one custom list as a portable .cbl XML document.
+         */
+        get: operations["export_custom_cbl_api_v1_custom_cbls__list_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Custom Cbl
+         * @description Explicitly merge one custom CBL into an existing canonical Reading Plan.
+         */
+        post: operations["apply_custom_cbl_api_v1_custom_cbls__list_id__reading_plans__plan_id__apply_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1902,6 +2048,50 @@ export interface paths {
          * @description Return simple performance metrics.
          */
         get: operations["metrics_api_v1_metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/performance-metrics/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Query Metrics
+         * @description Query performance metrics with optional filters.
+         */
+        get: operations["query_metrics_api_v1_performance_metrics__get"];
+        put?: never;
+        /**
+         * Record Metric
+         * @description Record a performance metric from a production request.
+         */
+        post: operations["record_metric_api_v1_performance_metrics__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/performance-metrics/comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cold Warm Comparison
+         * @description Get cold vs warm response time comparison for a metric type.
+         */
+        get: operations["cold_warm_comparison_api_v1_performance_metrics_comparison_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3880,7 +4070,7 @@ export interface paths {
          *         db: Database session.
          *
          *     Returns:
-         *         Snapshot metadata in reverse chronological order.
+         *         Typed snapshot list in reverse chronological order.
          *
          *     Raises:
          *         HTTPException: If the session is not owned by the current user.
@@ -5163,6 +5353,113 @@ export interface components {
             partial_coverage: boolean;
         };
         /**
+         * CreatorDetailResponse
+         * @description Full detail response for a single creator identity.
+         */
+        CreatorDetailResponse: {
+            /** @description Metadata coverage state (from #2028). */
+            coverage: components["schemas"]["CreatorSummaryCoverage"];
+            /**
+             * Next Cursor
+             * @description Cursor for paginating long collections.
+             */
+            next_cursor?: string | null;
+            /**
+             * Rated Issues
+             * @description Bounded list of rated issues, recent-first.
+             */
+            rated_issues?: components["schemas"]["CreatorIssueRow"][];
+            /**
+             * Read Unrated Issues
+             * @description Bounded list of read-but-unrated issues.
+             */
+            read_unrated_issues?: components["schemas"]["CreatorIssueRow"][];
+            /**
+             * Role Stats
+             * @description Breakdown of statistics per role.
+             */
+            role_stats?: components["schemas"]["CreatorRoleStat"][];
+            /** @description The headline summary for the creator (from #2028). */
+            summary: components["schemas"]["CreatorSummaryItem"];
+            /**
+             * Upcoming Issues
+             * @description Bounded list of upcoming unread issues.
+             */
+            upcoming_issues?: components["schemas"]["CreatorIssueRow"][];
+        };
+        /**
+         * CreatorIssueRow
+         * @description Detail for a specific issue attributed to the creator.
+         */
+        CreatorIssueRow: {
+            /**
+             * Effective Rating
+             * @description The latest effective rating for this issue, if any.
+             */
+            effective_rating?: number | null;
+            /**
+             * Issue Id
+             * @description Local ComicPile issue ID.
+             */
+            issue_id: number;
+            /**
+             * Issue Number
+             * @description Issue number of the comic.
+             */
+            issue_number: string;
+            /**
+             * Rating Timestamp
+             * @description Timestamp of the effective rating event, if any.
+             */
+            rating_timestamp?: string | null;
+            /**
+             * Roles
+             * @description Roles the creator held on this specific issue.
+             */
+            roles: string[];
+            /**
+             * Sort Key
+             * @description Deterministic local ordering information for the UI.
+             */
+            sort_key: string;
+            /**
+             * Status
+             * @description Read/unread status.
+             */
+            status: string;
+            /**
+             * Thread Id
+             * @description Local ComicPile thread ID.
+             */
+            thread_id: number;
+            /**
+             * Thread Title
+             * @description Title of the containing thread.
+             */
+            thread_title: string;
+        };
+        /**
+         * CreatorRoleStat
+         * @description Statistics for a specific role for a creator.
+         */
+        CreatorRoleStat: {
+            /**
+             * Average Rating
+             * @description Average rating for issues where the creator held this specific role.
+             */
+            average_rating?: number | null;
+            /**
+             * Issue Count
+             * @description Number of issues the creator held this role on.
+             */
+            issue_count: number;
+            /**
+             * Role
+             * @description The normalized role name.
+             */
+            role: string;
+        };
+        /**
          * CreatorSummariesResponse
          * @description Response body for the batch creator summary API.
          */
@@ -5426,6 +5723,145 @@ export interface components {
             series_name: string;
             /** Source Path */
             source_path: string;
+        };
+        /**
+         * CustomCBLApplyRequest
+         * @description Options for explicitly applying a custom CBL to an existing Reading Plan.
+         */
+        CustomCBLApplyRequest: {
+            /** Lane Id */
+            lane_id?: string | null;
+        };
+        /**
+         * CustomCBLApplyResponse
+         * @description Updated Reading Plan after custom CBL material is merged into it.
+         */
+        CustomCBLApplyResponse: {
+            /** Added Issue Ids */
+            added_issue_ids: number[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Lanes */
+            lanes: components["schemas"]["ContinuityPlanLane"][];
+            /** Name */
+            name: string;
+            /** Nodes */
+            nodes?: components["schemas"]["ContinuityPlanNode"][];
+            /**
+             * Ordering Mode
+             * @default informational
+             * @enum {string}
+             */
+            ordering_mode: "informational" | "strict_sequential";
+            /** Skipped Existing Issue Ids */
+            skipped_existing_issue_ids: number[];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** User Id */
+            user_id: number;
+        };
+        /**
+         * CustomCBLEntryResponse
+         * @description One resolved custom CBL entry.
+         */
+        CustomCBLEntryResponse: {
+            /** Id */
+            id: number;
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Position */
+            position: number;
+            /** Series Name */
+            series_name: string;
+            /** Status */
+            status: string;
+            /** Thread Id */
+            thread_id: number;
+        };
+        /**
+         * CustomCBLIssueSearchResult
+         * @description Owned canonical issue candidate available for custom CBL authoring.
+         */
+        CustomCBLIssueSearchResult: {
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Series Name */
+            series_name: string;
+            /** Status */
+            status: string;
+            /** Thread Id */
+            thread_id: number;
+        };
+        /**
+         * CustomCBLListItem
+         * @description Compact list-row representation for the custom CBL picker.
+         */
+        CustomCBLListItem: {
+            /** Description */
+            description: string | null;
+            /** Id */
+            id: number;
+            /** Issue Count */
+            issue_count: number;
+            /** Name */
+            name: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * CustomCBLResponse
+         * @description Full custom CBL including its ordered canonical issue references.
+         */
+        CustomCBLResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string | null;
+            /** Entries */
+            entries: components["schemas"]["CustomCBLEntryResponse"][];
+            /** Id */
+            id: number;
+            /** Issue Count */
+            issue_count: number;
+            /** Name */
+            name: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** User Id */
+            user_id: number;
+        };
+        /**
+         * CustomCBLWrite
+         * @description Create or replace one custom CBL and its ordered issue membership.
+         */
+        CustomCBLWrite: {
+            /** Description */
+            description?: string | null;
+            /** Issue Ids */
+            issue_ids?: number[];
+            /** Name */
+            name: string;
         };
         /**
          * DependencyCreate
@@ -6632,6 +7068,98 @@ export interface components {
             thread_id: number;
         };
         /**
+         * PerformanceMetricComparison
+         * @description Schema for cold vs warm comparison response.
+         */
+        PerformanceMetricComparison: {
+            /**
+             * Cold
+             * @description Cold statistics: count, min, max, median, p95
+             */
+            cold: {
+                [key: string]: unknown;
+            };
+            /**
+             * Total
+             * @description Total number of metrics
+             */
+            total: number;
+            /**
+             * Warm
+             * @description Warm statistics: count, min, max, median, p95
+             */
+            warm: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * PerformanceMetricCreate
+         * @description Schema for creating a performance metric record.
+         *
+         *     Args:
+         *         metric_type: Type of metric (e.g. "initial_response", "shell_render",
+         *             "auth_completion", "api_response", "queue_load").
+         *         response_time_ms: Response time in milliseconds.
+         *         request_path: The request path being measured (optional).
+         *         deployment_id: Deployment or commit identifier (optional).
+         *         success: Whether the request succeeded (default True).
+         */
+        PerformanceMetricCreate: {
+            /**
+             * Deployment Id
+             * @description Deployment or commit identifier
+             */
+            deployment_id?: string | null;
+            /**
+             * Metric Type
+             * @description Type of metric being recorded
+             */
+            metric_type: string;
+            /**
+             * Request Path
+             * @description The request path being measured
+             */
+            request_path?: string | null;
+            /**
+             * Response Time Ms
+             * @description Response time in milliseconds
+             */
+            response_time_ms: number;
+            /**
+             * Success
+             * @description Whether the request succeeded
+             * @default true
+             */
+            success: boolean;
+        };
+        /**
+         * PerformanceMetricSummary
+         * @description Schema for performance metric summary response.
+         */
+        PerformanceMetricSummary: {
+            /**
+             * By Cold
+             * @description Count of metrics grouped by cold/warm classification
+             */
+            by_cold: {
+                [key: string]: number;
+            };
+            /**
+             * By Cold Stats
+             * @description Response time stats (min, max, median, p95) grouped by cold/warm
+             */
+            by_cold_stats: {
+                [key: string]: {
+                    [key: string]: number | null;
+                };
+            };
+            /**
+             * Count
+             * @description Total number of metrics
+             */
+            count: number;
+        };
+        /**
          * PositionRequest
          * @description Schema for position update request.
          */
@@ -6720,8 +7248,17 @@ export interface components {
         /**
          * QueueThreadListResponse
          * @description Schema for paginated thread list response using the queue-optimized item.
+         *
+         *     ``active_count`` is the authoritative total number of active threads in the
+         *     user's queue. It is computed from the whole queue, never from the loaded
+         *     page, and is independent of any search or sort filter (see issue #2568).
          */
         QueueThreadListResponse: {
+            /**
+             * Active Count
+             * @default 0
+             */
+            active_count: number;
             /** Next Page Token */
             next_page_token?: string | null;
             /** Threads */
@@ -8040,6 +8577,8 @@ export interface components {
             created_at: string;
             /** Description */
             description: string | null;
+            /** Event Id */
+            event_id?: number | null;
             /** Id */
             id: number;
             /** Session Id */
@@ -10018,6 +10557,40 @@ export interface operations {
             };
         };
     };
+    get_creator_detail_endpoint_api_v1_creators__creator_key__get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number | null;
+            };
+            header?: never;
+            path: {
+                creator_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     adopt_crossover_template_api_v1_crossover_templates_adopt_post: {
         parameters: {
             query?: never;
@@ -10071,6 +10644,253 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DerivedCrossoverTemplatePreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_custom_cbl_lists_api_v1_custom_cbls_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomCBLListItem"][];
+                };
+            };
+        };
+    };
+    create_custom_cbl_api_v1_custom_cbls_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomCBLWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomCBLResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_custom_cbl_issues_api_v1_custom_cbls_issue_search_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomCBLIssueSearchResult"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_custom_cbl_api_v1_custom_cbls__list_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomCBLResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_custom_cbl_api_v1_custom_cbls__list_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomCBLWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomCBLResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_custom_cbl_api_v1_custom_cbls__list_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_custom_cbl_api_v1_custom_cbls__list_id__export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_custom_cbl_api_v1_custom_cbls__list_id__reading_plans__plan_id__apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                list_id: number;
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomCBLApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomCBLApplyResponse"];
                 };
             };
             /** @description Validation Error */
@@ -11077,6 +11897,110 @@ export interface operations {
                     "application/json": {
                         [key: string]: number | null;
                     };
+                };
+            };
+        };
+    };
+    query_metrics_api_v1_performance_metrics__get: {
+        parameters: {
+            query?: {
+                metric_type?: string | null;
+                cold?: boolean | null;
+                deployment_id?: string | null;
+                start_time?: string | null;
+                end_time?: string | null;
+                days?: number | null;
+                limit?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerformanceMetricSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_metric_api_v1_performance_metrics__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PerformanceMetricCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cold_warm_comparison_api_v1_performance_metrics_comparison_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by metric type */
+                metric_type?: string | null;
+                /** @description Filter by deployment/commit identifier */
+                deployment_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerformanceMetricComparison"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -13498,9 +14422,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["SnapshotsListResponse"];
                 };
             };
             /** @description Validation Error */

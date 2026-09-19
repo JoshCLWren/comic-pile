@@ -1,21 +1,22 @@
-import { FormEvent, useCallback, useEffect, useRef, useState, type ComponentType } from 'react'
+import { FormEvent, useCallback, useEffect, useState, type ComponentType } from 'react'
 import axios from 'axios'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   ContinuityIssueSelector,
   ContinuityThreadSelector,
 } from '../components/continuity'
-import { continuityPlansApi, type ContinuityPlan, type ContinuityPlanNode, type ContinuityPlanNodeType, type ContinuityPlanOrderingMode } from '../services/api-continuity-plans'
-import { dependencyGroupsApi, type DependencyGroup } from '../services/api-dependency-groups'
+import { type ContinuityPlan, type ContinuityPlanNode, type ContinuityPlanNodeType, type ContinuityPlanOrderingMode } from '../services/api-continuity-plans'
 import { issuesApi } from '../services/api-issues'
 import type { IssueListParams } from '../services/api-issues'
-import { threadsApi } from '../services/api'
 import PlanProjectionDialog from '../components/PlanProjectionDialog'
 import ReadingPlanAddMaterial, { type ReadingPlanAddMaterialProps } from '../components/ReadingPlanAddMaterial'
 import GlossaryLink from '../components/GlossaryLink'
 import type { Issue, Thread } from '../types'
 import { isObject, isString } from '../utils/runtimeChecks'
 import { useSaveReadingPlan } from '../hooks/useReadingPlans'
+import { useAllThreads, useAllDependencyGroups, useContinuityPlan } from '../hooks/useContinuityPlannerData'
+import { queryKeys } from '../query/queryKeys'
 
 const LAST_PLAN_KEY = 'comic-pile:last-continuity-plan'
 const DEFAULT_LANE_ID = 'main'
@@ -90,38 +91,6 @@ function getConflictMessage(
   return error instanceof Error && error.message ? error.message : 'Unable to save this continuity plan.'
 }
 
-async function fetchAllThreads(): Promise<Thread[]> {
-  const result: Thread[] = []
-  const seen = new Set<string>()
-  let token: string | null = null
-  do {
-    const page = await threadsApi.list({ page_size: 100 }, token)
-    result.push(...page.threads)
-    token = page.next_page_token
-    if (token && seen.has(token)) break
-    if (token) seen.add(token)
-  } while (token)
-  return result
-}
-
-async function fetchAllIssues(threadId: number): Promise<Issue[]> {
-  const result: Issue[] = []
-  const seen = new Set<string>()
-  let token: string | null = null
-  do {
-    const params: IssueListParams = { page_size: 100 }
-    if (token) {
-      params.page_token = token
-    }
-    const page = await issuesApi.list(threadId, params)
-    result.push(...page.issues)
-    token = page.next_page_token
-    if (token && seen.has(token)) break
-    if (token) seen.add(token)
-  } while (token)
-  return result
-}
-
 function normalizePositions(nodeList: PlannerNode[]): PlannerNode[] {
   // Reassign contiguous 0-based positions per lane while preserving order.
   const byLane: Record<string, PlannerNode[]> = {}
@@ -190,6 +159,40 @@ export default function ContinuityPlannerPage({
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
   const isInvalidRoute = id !== undefined && parsedId !== null && (!Number.isInteger(parsedId) || parsedId <= 0)
 
+  // Server collections from React Query hooks — must be called unconditionally
+  const { data: threads = [], isPending: threadsPending, error: threadsError } = useAllThreads()
+  const { data: groups = [], isPending: groupsPending, error: groupsError } = useAllDependencyGroups()
+  const { data: planData, isPending: planPending, error: planError } = useContinuityPlan(planId)
+
+  // Issues for the selected thread — driven by local selection state
+  const [selectedThreadId, setSelectedThreadId] = useState<number | null>(null)
+  const {
+    data: issues = [],
+    isPending: issuesPending,
+    error: issuesQueryError,
+  } = useQuery({
+    queryKey: selectedThreadId != null ? queryKeys.thread.issuePage(selectedThreadId, { pageSize: 100, status: undefined }) : [],
+    queryFn: async (): Promise<Issue[]> => {
+      const result: Issue[] = []
+      const seen = new Set<string>()
+      let token: string | null = null
+      do {
+        const params: IssueListParams = { page_size: 100 }
+        if (token) {
+          params.page_token = token
+        }
+        const page = await issuesApi.list(selectedThreadId!, params)
+        result.push(...page.issues)
+        token = page.next_page_token
+        if (token && seen.has(token)) break
+        if (token) seen.add(token)
+      } while (token)
+      return result
+    },
+    enabled: selectedThreadId != null,
+  })
+
+  // Local UI/editor state
   const [name, setName] = useState(DEFAULT_PLAN_NAME)
   const [orderingMode, setOrderingMode] = useState<ContinuityPlanOrderingMode>('informational')
   const [lanes, setLanes] = useState<PlannerLane[]>([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
@@ -199,32 +202,18 @@ export default function ContinuityPlannerPage({
   const [savedLanes, setSavedLanes] = useState<PlannerLane[]>([])
   const [savedNodes, setSavedNodes] = useState<PlannerNode[]>([])
   const [savedOrderingMode, setSavedOrderingMode] = useState<ContinuityPlanOrderingMode>('informational')
-  const [threads, setThreads] = useState<Thread[]>([])
-  const [groups, setGroups] = useState<DependencyGroup[]>([])
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
-  const [issues, setIssues] = useState<Issue[]>([])
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
   const [selectedGroupId, setSelectedGroupId] = useState('')
-  const [isLoading, setIsLoading] = useState(Boolean(planId))
-  const [isLoadingIssues, setIsLoadingIssues] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [issueLoadError, setIssueLoadError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [cblCommitPending, setCblCommitPending] = useState(false)
   const [isProjectionOpen, setIsProjectionOpen] = useState(false)
   const [laneSeq, setLaneSeq] = useState(0)
   const [editingGateNodeId, setEditingGateNodeId] = useState<string | null>(null)
   const lastPlanId = typeof window === 'undefined' ? null : window.localStorage.getItem(LAST_PLAN_KEY)
-  const issueRequestRef = useRef<AbortController | null>(null)
   const savePlan = useSaveReadingPlan(planId)
 
-  const isDirty =
-    name !== savedName ||
-    orderingMode !== savedOrderingMode ||
-    JSON.stringify(lanes) !== JSON.stringify(savedLanes) ||
-    JSON.stringify(nodes) !== JSON.stringify(savedNodes)
-
-  const hydrateLabels = useCallback((rawNodes: ContinuityPlanNode[], loadedGroups: DependencyGroup[]): PlannerNode[] => {
+  const hydrateLabels = useCallback((rawNodes: ContinuityPlanNode[], loadedGroups: typeof groups): PlannerNode[] => {
     const groupNames = new Map(loadedGroups.map((group) => [group.id, group.name]))
     return rawNodes.map((node): PlannerNode => {
       // SAFETY: rawNodes are ContinuityPlanNode and PlannerNode only adds optional display fields set below.
@@ -243,83 +232,71 @@ export default function ContinuityPlannerPage({
     })
   }, [])
 
+  // Hydrate editor state from plan data when it arrives
+  const planLoaded = planData != null && !planPending
+  const groupsLoaded = !groupsPending
+  const [planHydrated, setPlanHydrated] = useState(false)
+
+  useEffect(() => {
+    setPlanHydrated(false)
+  }, [planId])
+
+  useEffect(() => {
+    if (isInvalidRoute) {
+      return
+    }
+    if (planId == null && !planHydrated && !threadsPending && groupsLoaded) {
+      setSavedName(DEFAULT_PLAN_NAME)
+      setSavedLanes([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
+      setSavedNodes([])
+      setSavedOrderingMode('informational')
+      setPlanHydrated(true)
+      return
+    }
+    if (planLoaded && groupsLoaded && !planHydrated && planData) {
+      const loadedLanes = (planData.lanes.length > 0
+        ? planData.lanes
+        : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
+      ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
+        .sort((a, b) => a.order - b.order)
+      const hydrated = hydrateLabels(
+        [...planData.nodes].sort((a, b) => a.position - b.position),
+        groups,
+      )
+      setName(planData.name)
+      setLanes(loadedLanes)
+      setNodes(normalizePositions(hydrated))
+      setOrderingMode(planData.ordering_mode)
+      setSavedName(planData.name)
+      setSavedLanes(loadedLanes)
+      setSavedNodes(normalizePositions(hydrated))
+      setSavedOrderingMode(planData.ordering_mode)
+      setActiveLaneId(loadedLanes[0]?.id ?? DEFAULT_LANE_ID)
+      window.localStorage.setItem(LAST_PLAN_KEY, String(planData.id))
+      setPlanHydrated(true)
+    }
+  }, [planLoaded, groupsLoaded, planHydrated, planData, planId, isInvalidRoute, threadsPending, groups, hydrateLabels])
+
+  // Immediate invalid-route error after hooks (hooks must be called unconditionally)
+  if (isInvalidRoute) {
+    return <div role="alert" className="rounded-2xl border border-red-800 bg-red-950/30 p-4 text-red-200">Invalid continuity plan ID.</div>
+  }
+
+  const isDirty =
+    name !== savedName ||
+    orderingMode !== savedOrderingMode ||
+    JSON.stringify(lanes) !== JSON.stringify(savedLanes) ||
+    JSON.stringify(nodes) !== JSON.stringify(savedNodes)
+
   const orderedLanes = [...lanes].sort((a, b) => a.order - b.order)
   const targetLaneId = orderedLanes.some((lane) => lane.id === activeLaneId)
     ? activeLaneId
     : orderedLanes[0]?.id ?? DEFAULT_LANE_ID
 
-  useEffect(() => {
-    let active = true
-    void Promise.all([fetchAllThreads(), dependencyGroupsApi.list()])
-      .then(async ([loadedThreads, loadedGroups]) => {
-        if (!active) return
-        setThreads(loadedThreads)
-        setGroups(loadedGroups)
-        if (isInvalidRoute) {
-          active && setLoadError('Invalid continuity plan ID.')
-          active && setIsLoading(false)
-          return
-        }
-
-        if (!planId) {
-          setSavedName(DEFAULT_PLAN_NAME)
-          setSavedLanes([{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }])
-          setSavedNodes([])
-          setOrderingMode('informational')
-          setSavedOrderingMode('informational')
-          setActiveLaneId(DEFAULT_LANE_ID)
-          return
-        }
-        const plan = await continuityPlansApi.get(planId)
-        const loadedLanes = (plan.lanes.length > 0
-          ? plan.lanes
-          : [{ id: DEFAULT_LANE_ID, name: DEFAULT_LANE_NAME, order: 0 }]
-        ).map((lane) => ({ id: lane.id, name: lane.name, order: lane.order }))
-          .sort((a, b) => a.order - b.order)
-        const hydrated = hydrateLabels(
-          [...plan.nodes].sort((a, b) => a.position - b.position),
-          loadedGroups,
-        )
-        if (!active) return
-        setName(plan.name)
-        setLanes(loadedLanes)
-        setNodes(normalizePositions(hydrated))
-        setOrderingMode(plan.ordering_mode)
-        setSavedName(plan.name)
-        setSavedLanes(loadedLanes)
-        setSavedNodes(normalizePositions(hydrated))
-        setSavedOrderingMode(plan.ordering_mode)
-        setActiveLaneId(loadedLanes[0]?.id ?? DEFAULT_LANE_ID)
-        window.localStorage.setItem(LAST_PLAN_KEY, String(plan.id))
-      })
-      .catch((error) => active && setLoadError(errorMessage(error, 'Unable to load the continuity planner.')))
-      .finally(() => active && setIsLoading(false))
-    return () => { active = false }
-  }, [hydrateLabels, planId, isInvalidRoute])
-
-  const selectThread = async (thread: Thread | null) => {
+  const selectThread = (thread: Thread | null) => {
     setSelectedThread(thread)
     setSelectedIssue(null)
-    setIssues([])
-    setIssueLoadError(null)
-    if (!thread) {
-      setIsLoadingIssues(false)
-      return
-    }
-    if (issueRequestRef.current) issueRequestRef.current.abort()
-    const controller = new AbortController()
-    issueRequestRef.current = controller
-    setIsLoadingIssues(true)
-    try {
-      const loadedIssues = await fetchAllIssues(thread.id)
-      if (controller.signal.aborted) return
-      setIssues(loadedIssues)
-    } catch (error) {
-      if (controller.signal.aborted) return
-      setIssueLoadError(errorMessage(error, 'Unable to load issues for that comic.'))
-    } finally {
-      if (!controller.signal.aborted) setIsLoadingIssues(false)
-    }
+    setSelectedThreadId(thread?.id ?? null)
   }
 
   const addNode = (node: Omit<PlannerNode, 'lane_id' | 'position' | 'label'>, label: string) => {
@@ -525,6 +502,22 @@ export default function ContinuityPlannerPage({
     setSaveError(null)
   }
 
+  // New plans render immediately (as before the React Query migration) so the
+  // editor stays usable while server collections stream in. Existing plans wait
+  // for their plan payload plus supporting collections before hydrating.
+  const isLoading = planId != null && (threadsPending || groupsPending || planPending)
+  const loadError = threadsError
+    ? errorMessage(threadsError, 'Unable to load the continuity planner.')
+    : groupsError
+      ? errorMessage(groupsError, 'Unable to load the continuity planner.')
+      : planError
+        ? errorMessage(planError, 'Unable to load the continuity planner.')
+        : null
+  const isLoadingIssues = issuesPending
+  const issueLoadError = issuesQueryError
+    ? errorMessage(issuesQueryError, 'Unable to load issues for that comic.')
+    : null
+
   const isSaving = savePlan.isPending || cblCommitPending
   const statusText = isSaving ? 'Saving…' : saveError ? null : isDirty ? 'Unsaved changes' : planId ? 'Saved' : 'New plan'
 
@@ -658,7 +651,7 @@ export default function ContinuityPlannerPage({
         <div className="mt-4 grid gap-6 md:grid-cols-2 md:divide-x md:divide-[var(--theme-border)]">
           <form onSubmit={addIssue} className="space-y-3 md:pr-6" aria-label="Add an issue">
             <h3 className="text-sm font-bold text-[var(--theme-text-primary)]">Issue</h3>
-            <ContinuityThreadSelector threads={threads} value={selectedThread} onChange={(thread) => void selectThread(thread)} label="Comic series" />
+            <ContinuityThreadSelector threads={threads} value={selectedThread} onChange={(thread) => selectThread(thread)} label="Comic series" />
             <ContinuityIssueSelector issues={issues} value={selectedIssue} onChange={setSelectedIssue} isLoading={isLoadingIssues} disabled={!selectedThread || orderedLanes.length === 0} error={issueLoadError} />
             <button type="submit" disabled={!selectedIssue || orderedLanes.length === 0} className="min-h-11 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-panel)] disabled:opacity-50">Add issue</button>
             {orderedLanes.length === 0 && <p className="text-xs text-[var(--theme-text-muted)]">Add a lane first to add issues.</p>}

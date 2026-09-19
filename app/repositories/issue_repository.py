@@ -103,6 +103,33 @@ async def issues_ordered(db: AsyncSession, thread_id: int) -> list[Issue]:
     return list(result.scalars().all())
 
 
+async def issues_for_threads(
+    db: AsyncSession, thread_ids: set[int]
+) -> dict[int, list[Issue]]:
+    """Load every issue for a set of threads in one query, grouped by thread.
+
+    Args:
+        db: Database session.
+        thread_ids: Threads whose issues are loaded; an empty set returns an
+            empty mapping.
+
+    Returns:
+        Mapping of thread ID to that thread's issues in canonical position
+        order. Threads without issues are absent from the mapping.
+    """
+    if not thread_ids:
+        return {}
+    result = await db.execute(
+        select(Issue)
+        .where(Issue.thread_id.in_(thread_ids))
+        .order_by(Issue.thread_id, Issue.position)
+    )
+    issues_by_thread: dict[int, list[Issue]] = {}
+    for issue in result.scalars().all():
+        issues_by_thread.setdefault(issue.thread_id, []).append(issue)
+    return issues_by_thread
+
+
 async def locked_issues(db: AsyncSession, thread_id: int) -> list[Issue]:
     """Lock and return every issue of a thread in canonical order.
 

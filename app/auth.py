@@ -7,14 +7,15 @@ import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_auth_settings
 from app.database import get_db
-from app.models.revoked_token import RevokedToken
 from app.models.user import User
+from app.repositories.revoked_token_repository import (
+    add_revoked_token,
+    get_user_by_username_with_revocation_check,
+)
 
 _auth_settings = get_auth_settings()
 
@@ -132,16 +133,7 @@ async def revoke_token(db: AsyncSession, token: str, user_id: int) -> None:
         return
 
     expires_at = datetime.fromtimestamp(payload["exp"], tz=UTC)
-    revoked_token = RevokedToken(
-        user_id=user_id,
-        jti=jti,
-        expires_at=expires_at,
-    )
-    try:
-        db.add(revoked_token)
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
+    await add_revoked_token(db, user_id=user_id, jti=jti, expires_at=expires_at)
 
 
 async def get_current_user(
@@ -195,31 +187,22 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # One round trip replaces the former sequential revoked-token lookup by
-    # JTI and user lookup by username (see issue #1261). The LEFT JOIN keeps
-    # the existing semantics: a revoked token always wins, and a missing user
-    # is reported before endpoint logic.
-    result = await db.execute(
-        select(User, RevokedToken.id)
-        .outerjoin(RevokedToken, RevokedToken.jti == jti)
-        .where(User.username == username)
-        .limit(1)
-    )
-    row = result.one_or_none()
-    if row is None:
+    try:
+        user, is_revoked = await get_user_by_username_with_revocation_check(
+            db, username, jti
+        )
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
             headers={"WWW-Authenticate": "Bearer"},
-        )
-    user = row[0]
-    revoked_token_id = row[1]
-    if revoked_token_id is not None:
+        ) from None
+
+    if is_revoked:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has been revoked",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    _ = user.id  # Preload ID in async context to avoid MissingGreenlet
     return user

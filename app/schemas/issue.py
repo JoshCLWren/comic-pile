@@ -76,6 +76,28 @@ class IssueReorderRequest(BaseModel):
     )
 
 
+class IssueBulkMarkReadRequest(BaseModel):
+    """Schema for bulk marking issues as read."""
+
+    issue_ids: list[int] = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Broadcast list of issue IDs to mark read.",
+    )
+
+
+class IssueBulkMarkUnreadRequest(BaseModel):
+    """Schema for bulk marking issues as unread."""
+
+    issue_ids: list[int] = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Broadcast list of issue IDs to mark unread.",
+    )
+
+
 class IssueOrderValidationResponse(BaseModel):
     """Schema for reporting in-thread dependency ordering conflicts."""
 

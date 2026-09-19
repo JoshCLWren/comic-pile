@@ -6,22 +6,17 @@ import random
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from typing import Annotated, Any
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy import Text, func, or_, select
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Annotated, Any
 
-from app.api.session import (
-    _invalidate_session_caches,
-    build_ladder_path,
-    get_session_with_thread_safe,
-)
-from app.api.snooze import build_session_response
 from app.auth import get_current_user
+from app.cache_invalidation import invalidate_session_caches
 from app.config import get_recommendation_settings
-
 from app.database import get_db
 from app.middleware import limiter
 from app.models import DependencyGroup, DependencyGroupMembership, Event, Issue, Session, Snapshot, Thread
@@ -36,6 +31,12 @@ from app.services.reading_effort import (
     compute_effort_estimate,
 )
 from app.services.recommendation_explanation import RecommendationExplanationProjection
+from app.services.roll_service import RollService
+from app.services.session_response import (
+    build_ladder_path,
+    build_session_response,
+    get_session_with_thread_safe,
+)
 from app.schemas import (
     ExplainableFactorResponse,
     OverrideRequest,
@@ -50,33 +51,21 @@ from app.schemas import (
     SessionResponse,
 )
 from app.schemas.recommendation_context import (
-    CandidateFactor,
     RecommendationContextCreate,
 )
 from app.schemas.session import build_session_bandwidth_state, build_session_intent_state, SnoozedThreadInfo
-from app.momentum import MomentumCandidateWeight
-from app.services.bandwidth_selection import select_bandwidth_weighted
-from comic_pile.queue import get_bounded_roll_pool_rows
 from comic_pile.recommendation_selection import (
     DEFAULT_BANDWIDTH,
     DEFAULT_INTENT,
-    SelectionMode,
-    normalize_bandwidth,
-    normalize_intent,
-    resolve_selection_mode,
-    select_from_pool,
 )
 from comic_pile.recommendation_version import (
     CONTROL_MODE_CONTEXTUAL,
-    FORCED_LEGACY_REASON_CODE,
-    FORCED_LEGACY_SELECTION_METHOD,
     RECOMMENDATION_ALGORITHM_VERSION,
     recommendation_algorithm_version,
 )
 from comic_pile.session import get_current_die_for_session, get_or_create
 
 router = APIRouter(tags=["roll"])
-
 logger = logging.getLogger(__name__)
 
 
@@ -143,286 +132,38 @@ async def _select_pending_thread(
 ) -> _SelectionArtifacts:
     """Run the weighted bounded-pool selection shared by roll and skip endpoints.
 
-    Computes the bounded pool, runs pure-random / bandwidth / momentum
-    selection, builds the per-candidate effort estimates, the JSON snapshot
-    payload, the bounded-pool rolling context, and the ``Event`` and
-    ``RecommendationContextCreate`` records. Returns the bundled artifacts
-    without committing; the caller assigns ``pending_thread_id`` and commits.
-
-    Args:
-        db: Async database session.
-        user_id: Owner of the bounded pool.
-        current_session: Active session used for event linkage and stored mode.
-        current_die: Current die size from the dice ladder.
-        excluded_ids: Thread IDs to exclude from the bounded pool.
-        selection_bandwidth: Bandwidth value to resolve a selection mode with.
-        selection_intent: Intent value to resolve a selection mode with.
-        selection_method_override: When set, write this as the ``Event.selection_method``
-            instead of deriving it from the resolved mode. Skip uses this to label
-            its draw as ``"skip"`` while preserving the underlying reason codes.
-        empty_pool_detail: 400 detail message when the bounded pool is empty.
-            Callers customize this for the roll vs. skip user-facing language.
-
-    Returns:
-        ``_SelectionArtifacts`` ready for the caller to commit and convert into a
-        ``RollResponse``.
-
-    Raises:
-        HTTPException: 400 when the bounded pool is empty.
+    Delegates to ``RollService.select_pending_thread`` and wraps the
+    result in a ``_SelectionArtifacts`` instance.
     """
-    bounded_rows = await get_bounded_roll_pool_rows(user_id, db, current_die, excluded_ids)
-    if not bounded_rows:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=empty_pool_detail,
-        )
-
-    # Phase 9 (issue #1767): the operator control mode is the highest-level
-    # selection switch. In "legacy" mode every draw uses the unweighted path
-    # inside the existing bounded pool while instrumentation stays active.
-    recommendation_settings = get_recommendation_settings()
-    control_mode = recommendation_settings.control_mode
-    algorithm_version = recommendation_algorithm_version(control_mode)
-
-    pool_size = len(bounded_rows)
-    resolved_mode = resolve_selection_mode(selection_bandwidth, selection_intent, control_mode)
-
-    max_bonus = 0.0
-    weights_applied = False
-    candidate_weights: list = []
-    if resolved_mode is SelectionMode.FORCED_LEGACY:
-        selection = select_from_pool(
-            pool_size,
-            bandwidth=selection_bandwidth,
-            intent=selection_intent,
-            control_mode=control_mode,
-        )
-        selected_index = selection.index
-        candidate_weights = [
-            MomentumCandidateWeight(
-                candidate_id=row[0].id if isinstance(row, tuple) else row.id,
-                weight=1.0,
-                factors=(),
-            )
-            for row in bounded_rows
-        ]
-    elif resolved_mode is SelectionMode.PURE_RANDOM_BYPASS:
-        selection = select_from_pool(
-            pool_size,
-            bandwidth=selection_bandwidth,
-            intent=selection_intent,
-        )
-        selected_index = selection.index
-        candidate_weights = [
-            MomentumCandidateWeight(
-                candidate_id=row[0].id if isinstance(row, tuple) else row.id,
-                weight=1.0,
-                factors=(),
-            )
-            for row in bounded_rows
-        ]
-    else:
-        session_events_result = await db.execute(
-            select(Event).where(Event.session_id == current_session.id)
-        )
-        session_events = list(session_events_result.scalars().all())
-        selected = await select_bandwidth_weighted(
-            db=db,
-            bounded_rows=bounded_rows,
-            user_id=user_id,
-            session_events=session_events,
-            bandwidth=selection_bandwidth,
-            intent=selection_intent,
-            now=datetime.now(UTC),
-        )
-        selected_index = selected.selected_index
-        max_bonus = selected.max_bonus
-        candidate_weights = selected.weights
-        weights_applied = selected.weights_applied
-
-    if resolved_mode is SelectionMode.FORCED_LEGACY:
-        recommendation_reason_codes = [FORCED_LEGACY_REASON_CODE]
-    elif resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
-        if selection_bandwidth in ("light", "deep"):
-            recommendation_reason_codes = ["bandwidth_weighted"]
-        else:
-            recommendation_reason_codes = ["momentum_weighted"]
-    else:
-        recommendation_reason_codes = ["pure_random"]
-
-    selected_thread, unread_count, issue_number = bounded_rows[selected_index]
-    bounded_candidate_ids = [
-        row[0].id if isinstance(row, tuple) else row.id for row in bounded_rows
-    ]
-
-    selected_thread_issue_id = None
-    selected_thread_issue_number = None
-    if selected_thread.uses_issue_tracking() and selected_thread.next_unread_issue_id:
-        if unread_count > 0 and issue_number is not None:
-            selected_thread_issue_id = selected_thread.next_unread_issue_id
-            selected_thread_issue_number = issue_number
-        else:
-            issue_result = await db.execute(
-                select(Issue).where(Issue.id == selected_thread.next_unread_issue_id)
-            )
-            next_issue = issue_result.scalar_one_or_none()
-            if next_issue and next_issue.status == "unread":
-                selected_thread_issue_id = next_issue.id
-                selected_thread_issue_number = next_issue.issue_number
-
-    effort_estimates: list[EffortEstimate] = []
-    for thread, _unread_count, _issue_number in bounded_rows:
-        issue_id = thread.next_unread_issue_id if thread.uses_issue_tracking() else None
-        effort_estimate = await compute_effort_estimate(
-            db,
-            user_id=user_id,
-            thread_id=thread.id,
-            issue_id=issue_id,
-        )
-        effort_estimates.append(effort_estimate)
-    selected_effort_estimate = effort_estimates[selected_index]
-
-    json_candidate_weights: list[dict[str, object]] | None = None
-    json_selected_weight: float | None = None
-    if candidate_weights:
-        json_candidate_weights = [
-            {
-                "candidate_id": entry.candidate_id,
-                "weight": round(float(entry.weight), 4),
-                "reasons": list(entry.factors),
-                "factors": list(entry.factors),
-            }
-            for entry in candidate_weights
-        ]
-        json_selected_weight = float(candidate_weights[selected_index].weight)
-    recommendation_context = build_recommendation_context(
-        selected_effort_estimate,
-        thread_id=selected_thread.id,
-        issue_id=selected_thread_issue_id,
-        issue_number=selected_thread_issue_number,
-        candidate_weights=json_candidate_weights,
-        bandwidth=normalize_bandwidth(selection_bandwidth).value,
-        bandwidth_source=current_session.bandwidth_source or "default",
-        bandwidth_confidence=current_session.bandwidth_confidence or 0.0,
-        random_bypass=not weights_applied,
-        balanced_neutrality=not weights_applied,
-        selected_weight=json_selected_weight,
-        algorithm_version=algorithm_version,
-        control_mode=control_mode,
+    service = RollService(db)
+    artifacts = await service.select_pending_thread(
+        user_id=user_id,
+        current_session=current_session,
+        current_die=current_die,
+        excluded_ids=excluded_ids,
+        selection_bandwidth=selection_bandwidth,
+        selection_intent=selection_intent,
+        selection_method_override=selection_method_override,
+        empty_pool_detail=empty_pool_detail,
     )
-
-    if selection_method_override is not None:
-        selection_method = selection_method_override
-    elif resolved_mode is SelectionMode.FORCED_LEGACY:
-        selection_method = FORCED_LEGACY_SELECTION_METHOD
-    elif resolved_mode is not SelectionMode.PURE_RANDOM_BYPASS and weights_applied:
-        selection_method = "bandwidth" if selection_bandwidth in ("light", "deep") else "momentum"
-    else:
-        selection_method = "random"
-
-    effort_estimate_str = (
-        selected_effort_estimate.band
-        if isinstance(selected_effort_estimate, EffortEstimate)
-        else selected_effort_estimate
-    )
-    event = Event(
-        type="roll",
-        session_id=current_session.id,
-        selected_thread_id=selected_thread.id,
-        die=current_die,
-        result=selected_index + 1,
-        selection_method=selection_method,
-        recommendation_reason_codes=recommendation_reason_codes,
-        recommendation_context=recommendation_context,
-        issue_id=selected_thread_issue_id,
-        issue_number=selected_thread_issue_number,
-        rolling_recommendation_context=_build_rolling_recommendation_context(
-            die_size=current_die,
-            selected_queue_position=selected_thread.queue_position,
-            bounded_candidate_ids=bounded_candidate_ids,
-            selected_index=selected_index,
-            selection_method=selection_method,
-            session_timezone=current_session.timezone,
-            selected_thread_last_rating=selected_thread.last_rating,
-            selected_thread_last_activity_at=selected_thread.last_activity_at,
-            effort_estimate=effort_estimate_str,
-            algorithm_version=algorithm_version,
-            control_mode=control_mode,
-        ),
-    )
-    db.add(event)
-
-    logger.info(
-        "roll selection mode=%s bandwidth=%s intent=%s max_bonus=%.3f pool_size=%s",
-        resolved_mode.value,
-        normalize_bandwidth(selection_bandwidth).value,
-        normalize_intent(selection_intent).value,
-        max_bonus,
-        pool_size,
-    )
-
-    has_explicit_mode = bool(current_session.active_intent)
-    rec_context_create = RecommendationContextCreate(
-        schema_version=2,
-        intent=normalize_intent(selection_intent).value,
-        intent_source=current_session.intent_source or "default",
-        intent_confidence=1.0 if has_explicit_mode else 0.0,
-        bandwidth=normalize_bandwidth(selection_bandwidth).value,
-        bandwidth_source=current_session.bandwidth_source or "default",
-        bandwidth_confidence=current_session.bandwidth_confidence or 0.0,
-        candidate_factors=[
-            CandidateFactor(
-                candidate_id=breakdown.candidate_id,
-                factors=list(breakdown.factors),
-                weight=breakdown.weight,
-                effort_minutes=(
-                    round(effort_estimate.minutes, 2)
-                    if effort_estimate.minutes is not None
-                    else None
-                ),
-                effort_band=effort_estimate.band,
-                effort_source=effort_estimate.source.value,
-                effort_confidence=round(effort_estimate.confidence, 3),
-                effort_sample_count=effort_estimate.sample_count,
-            )
-            for breakdown, effort_estimate in zip(candidate_weights, effort_estimates, strict=True)
-        ]
-        if candidate_weights
-        else None,
-        final_weight=(
-            candidate_weights[selected_index].weight if candidate_weights else None
-        ),
-        random_bypass=not weights_applied,
-        balanced_neutrality=not weights_applied,
-        effort_minutes=(
-            round(selected_effort_estimate.minutes, 2)
-            if selected_effort_estimate.minutes is not None
-            else None
-        ),
-        effort_band=selected_effort_estimate.band,
-        effort_source=selected_effort_estimate.source.value,
-        effort_confidence=round(selected_effort_estimate.confidence, 3),
-        effort_sample_count=selected_effort_estimate.sample_count,
-    )
-
     return _SelectionArtifacts(
-        selected_thread=selected_thread,
-        unread_count=unread_count,
-        issue_number=issue_number,
-        selected_thread_issue_id=selected_thread_issue_id,
-        selected_thread_issue_number=selected_thread_issue_number,
-        bounded_rows=bounded_rows,
-        selected_index=selected_index,
-        bounded_candidate_ids=bounded_candidate_ids,
-        candidate_weights=candidate_weights,
-        selected_effort_estimate=selected_effort_estimate,
-        json_candidate_weights=json_candidate_weights,
-        json_selected_weight=json_selected_weight,
-        recommendation_context=recommendation_context,
-        recommendation_reason_codes=recommendation_reason_codes,
-        selection_method=selection_method,
-        event=event,
-        rec_context_create=rec_context_create,
+        selected_thread=artifacts["selected_thread"],
+        unread_count=artifacts["unread_count"],
+        issue_number=artifacts["issue_number"],
+        selected_thread_issue_id=artifacts["selected_thread_issue_id"],
+        selected_thread_issue_number=artifacts["selected_thread_issue_number"],
+        bounded_rows=artifacts["bounded_rows"],
+        selected_index=artifacts["selected_index"],
+        bounded_candidate_ids=artifacts["bounded_candidate_ids"],
+        candidate_weights=artifacts["candidate_weights"],
+        selected_effort_estimate=artifacts["selected_effort_estimate"],
+        json_candidate_weights=artifacts["json_candidate_weights"],
+        json_selected_weight=artifacts["json_selected_weight"],
+        recommendation_context=artifacts["recommendation_context"],
+        recommendation_reason_codes=artifacts["recommendation_reason_codes"],
+        selection_method=artifacts["selection_method"],
+        event=artifacts["event"],
+        rec_context_create=artifacts["rec_context_create"],
     )
 
 
@@ -461,7 +202,10 @@ def _get_local_hour_from_timezone(timezone: str | None) -> int | None:
         timezone: IANA timezone string (e.g., "America/Chicago")
 
     Returns:
-        Local hour (0-23) or None if timezone is invalid/unavailable.
+        Local hour (0-23) or None if timezone is invalid/unavailable. Invalid or
+        unavailable timezone values are soft failures: the error is logged and the
+        caller continues with no local-hour signal.
+
     """
     if timezone is None:
         return None
@@ -469,6 +213,7 @@ def _get_local_hour_from_timezone(timezone: str | None) -> int | None:
         tz = ZoneInfo(timezone)
         return datetime.now(tz).hour
     except Exception:
+        logger.exception("Failed to derive local hour from timezone %s", timezone)
         return None
 
 
@@ -508,7 +253,6 @@ def _build_rolling_recommendation_context(
         Dictionary suitable for JSON storage as rolling_recommendation_context
     """
     local_hour = _get_local_hour_from_timezone(session_timezone)
-
     return {
         "schema_version": 1,
         "algorithm_version": algorithm_version or RECOMMENDATION_ALGORITHM_VERSION,
@@ -522,8 +266,7 @@ def _build_rolling_recommendation_context(
         "local_hour": local_hour,
         "selected_thread_last_rating": selected_thread_last_rating,
         "selected_thread_last_activity_at": selected_thread_last_activity_at.isoformat()
-        if selected_thread_last_activity_at
-        else None,
+        if selected_thread_last_activity_at else None,
         "effort_estimate": effort_estimate,
     }
 
@@ -574,11 +317,6 @@ async def roll_dice(
     snoozed_ids = current_session.snoozed_thread_ids or []
     skipped_ids = current_session.skipped_thread_ids or []
 
-    # The active session mode is the durable, user-controlled override. A per-roll
-    # request value wins when supplied; otherwise the session's canonical
-    # active_bandwidth/active_intent drives selection so a manual "random" intent
-    # (or any inferred mode) actually changes this roll. Legacy sessions with null
-    # session mode fall back to the balanced defaults, preserving old behavior.
     selection_bandwidth = (
         roll_request.bandwidth
         if roll_request.bandwidth is not None
@@ -601,6 +339,7 @@ async def roll_dice(
         selection_method_override=None,
     )
 
+    db.add(artifacts.event)
     await db.flush()
     rec_context = RecommendationContext(
         event_id=artifacts.event.id,
@@ -612,8 +351,7 @@ async def roll_dice(
         bandwidth_source=artifacts.rec_context_create.bandwidth_source,
         bandwidth_confidence=artifacts.rec_context_create.bandwidth_confidence,
         candidate_factors=[f.model_dump() for f in artifacts.rec_context_create.candidate_factors]
-        if artifacts.rec_context_create.candidate_factors
-        else None,
+        if artifacts.rec_context_create.candidate_factors else None,
         final_weight=artifacts.rec_context_create.final_weight,
         random_bypass=artifacts.rec_context_create.random_bypass,
         balanced_neutrality=artifacts.rec_context_create.balanced_neutrality,
@@ -628,7 +366,7 @@ async def roll_dice(
     current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
-    await _invalidate_session_caches(current_user.id)
+    await invalidate_session_caches(current_user.id)
 
     return _build_roll_response(
         artifacts=artifacts,
@@ -648,12 +386,9 @@ async def dismiss_pending_roll(
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
     """
-    current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
-    current_session.pending_thread_id = None
-    current_session.pending_thread_updated_at = None
-    await db.commit()
-
-    await _invalidate_session_caches(current_user.id)
+    from app.services.roll_service import RollService
+    service = RollService(db)
+    await service.execute_dismiss_pending(current_user.id)
 
 
 @router.post("/skip", response_model=RollResponse)
@@ -710,6 +445,7 @@ async def skip_roll(
         empty_pool_detail="No alternative threads available to skip to",
     )
 
+    db.add(artifacts.event)
     await db.flush()
     rec_context = RecommendationContext(
         event_id=artifacts.event.id,
@@ -721,8 +457,7 @@ async def skip_roll(
         bandwidth_source=artifacts.rec_context_create.bandwidth_source,
         bandwidth_confidence=artifacts.rec_context_create.bandwidth_confidence,
         candidate_factors=[f.model_dump() for f in artifacts.rec_context_create.candidate_factors]
-        if artifacts.rec_context_create.candidate_factors
-        else None,
+        if artifacts.rec_context_create.candidate_factors else None,
         final_weight=artifacts.rec_context_create.final_weight,
         random_bypass=artifacts.rec_context_create.random_bypass,
         balanced_neutrality=artifacts.rec_context_create.balanced_neutrality,
@@ -733,10 +468,6 @@ async def skip_roll(
         effort_sample_count=artifacts.rec_context_create.effort_sample_count,
     )
     db.add(rec_context)
-    # Advance pending to the newly selected thread; do not mark the skipped
-    # issue/thread as read and do not mutate dependencies.
-    # Persist the skipped thread for the current session so the Roll pool
-    # continues to exclude it and the UI can offer an explicit unskip.
     if skipped_thread_id not in existing_skipped_ids:
         existing_skipped_ids.append(skipped_thread_id)
         current_session.skipped_thread_ids = existing_skipped_ids
@@ -744,7 +475,7 @@ async def skip_roll(
     current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
-    await _invalidate_session_caches(current_user.id)
+    await invalidate_session_caches(current_user.id)
 
     return _build_roll_response(
         artifacts=artifacts,
@@ -866,7 +597,7 @@ async def unskip_thread(
         ]
 
     await db.commit()
-    await _invalidate_session_caches(user_id)
+    await invalidate_session_caches(user_id)
 
     return SessionResponse(
         id=session_id,
@@ -962,12 +693,10 @@ async def override_roll(
     override_thread_queue_position = override_thread.queue_position
 
     override_thread_issues_remaining = await override_thread.get_issues_remaining(db)
-
     override_thread_total_issues = override_thread.total_issues
     override_thread_reading_progress = override_thread.reading_progress
     override_thread_next_unread_issue_id = override_thread.next_unread_issue_id
 
-    # For override we don't have the enriched pool row; resolve directly.
     override_thread_issue_id = None
     override_thread_issue_number = None
     if override_thread.uses_issue_tracking() and override_thread_next_unread_issue_id:
@@ -997,10 +726,6 @@ async def override_roll(
         thread_id=override_thread_id,
         issue_id=override_thread_issue_id,
     )
-    # Versioned JSON context for override: single bounded candidate, neutral
-    # weighting but explicit manual-override bandwidth source (issue #1718).
-    # Phase 9 (issue #1767): the operator control state at decision time is
-    # recorded even though manual overrides bypass the selection algorithm.
     recommendation_settings = get_recommendation_settings()
     control_mode = recommendation_settings.control_mode
     algorithm_version = recommendation_algorithm_version(control_mode)
@@ -1028,7 +753,6 @@ async def override_roll(
         control_mode=control_mode,
     )
 
-    # Extract effort estimate band as string for JSON serialization
     effort_estimate_str = effort_estimate.band if isinstance(effort_estimate, EffortEstimate) else effort_estimate
 
     event = Event(
@@ -1058,8 +782,6 @@ async def override_roll(
     )
     db.add(event)
 
-    # Record recommendation context for override selection
-    # Override is a manual selection, not a weighted recommendation
     context_data = RecommendationContextCreate(
         schema_version=2,
         intent="balanced",
@@ -1079,7 +801,6 @@ async def override_roll(
         effort_sample_count=effort_estimate.sample_count,
     )
 
-    # Flush event to get its ID for the recommendation context FK
     await db.flush()
 
     rec_context = RecommendationContext(
@@ -1092,8 +813,7 @@ async def override_roll(
         bandwidth_source=context_data.bandwidth_source,
         bandwidth_confidence=context_data.bandwidth_confidence,
         candidate_factors=[f.model_dump() for f in context_data.candidate_factors]
-        if context_data.candidate_factors
-        else None,
+        if context_data.candidate_factors else None,
         final_weight=context_data.final_weight,
         random_bypass=context_data.random_bypass,
         balanced_neutrality=context_data.balanced_neutrality,
@@ -1109,7 +829,7 @@ async def override_roll(
     current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
-    await _invalidate_session_caches(current_user.id)
+    await invalidate_session_caches(current_user.id)
 
     snoozed_count = len(snoozed_ids)
     offset = snoozed_count
@@ -1163,8 +883,7 @@ async def set_manual_die(
 
     current_session.manual_die = die
     await db.commit()
-
-    await _invalidate_session_caches(current_user.id)
+    await invalidate_session_caches(current_user.id)
     return f"d{die}"
 
 
@@ -1186,8 +905,7 @@ async def clear_manual_die(
 
     current_session.manual_die = None
     await db.commit()
-
-    await _invalidate_session_caches(current_user.id)
+    await invalidate_session_caches(current_user.id)
 
     await db.refresh(current_session)
     current_die = await get_current_die_for_session(current_session, db)
@@ -1282,7 +1000,7 @@ async def update_session_mode(
             )
         )
     await db.commit()
-    await _invalidate_session_caches(current_user.id)
+    await invalidate_session_caches(current_user.id)
 
     return SessionModeResponse(
         active_bandwidth=active_bandwidth,
@@ -1315,7 +1033,7 @@ async def roll_bootstrap(
         db: Async database session.
         timezone: Optional browser-resolved IANA timezone identifier captured once
             per active reading session. Invalid or unusable values leave the field
-            unset and never break the bootstrap response.
+            unset and never break the roll.
 
     Returns:
         RollBootstrapResponse with session state, bounded pool, snoozed/blocked/stale summaries.
@@ -1324,26 +1042,19 @@ async def roll_bootstrap(
     current_session = await get_or_create(db, user_id=user_id, existing_user=current_user)
     await db.refresh(current_session)
 
-    # Capture browser IANA timezone once for the active session if not already set.
-    # Invalid values fail safely: the field remains unset and roll continues.
     if timezone is not None and current_session.timezone is None:
         try:
             candidate_timezone = timezone.strip()
             if candidate_timezone and len(candidate_timezone) <= 100:
-                # Resolving through ZoneInfo rejects malformed identifiers such as
-                # "Not/AZone" while accepting real IANA names like "America/Chicago".
                 ZoneInfo(candidate_timezone)
                 current_session.timezone = candidate_timezone
                 await db.commit()
                 await db.refresh(current_session)
         except Exception:
-            # Any failure during timezone persistence must not break roll.
-            pass
+            logger.exception("Failed to update session timezone from browser value %s", timezone)
 
     current_session_id = current_session.id
 
-    # Extract bandwidth state before any further awaits; nullable columns on
-    # legacy sessions serialize to a safe all-null canonical shape.
     bandwidth_state = build_session_bandwidth_state(
         predicted_bandwidth=current_session.predicted_bandwidth,
         active_bandwidth=current_session.active_bandwidth,

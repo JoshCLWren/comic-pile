@@ -17,14 +17,18 @@ vi.mock('../components/IssueCorrectionDialog', () => ({ default: ({ isOpen, onCl
 vi.mock('../hooks/useRollBootstrap', () => ({
   useRollBootstrap: () => ({ data: null, isPending: false, isError: false, error: null }),
 }))
-vi.mock('../hooks/useReaderContext', () => ({
-  useReaderContext: () => ({
-    context: null,
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
-  }),
-}))
+vi.mock('../hooks/useReaderContext', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks/useReaderContext')>()
+  return {
+    ...actual,
+    useReaderContext: () => ({
+      context: null,
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    }),
+  }
+})
 
 const thread: Thread = {
   id: 1,

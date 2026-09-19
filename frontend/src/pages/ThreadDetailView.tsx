@@ -1,15 +1,19 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { CrossoverTags } from '../components/CrossoverTags'
-import { dependenciesApi, threadsApi } from '../services/api'
-import { issuesApi } from '../services/api-issues'
-import type { IssueListParams } from '../services/api-issues'
-import type { ConnectedThreadInfo, Thread, Issue } from '../types'
 import { FormatSelect } from '../pages/QueuePage/FormatSelect'
 import { useCrossoverGroups } from '../hooks/useCrossoverGroups'
-import { useUpdateThread } from '../hooks/useThread'
+import { useThread, useUpdateThread } from '../hooks/useThread'
+import { useConnectedThreads } from '../hooks/useReaderContext'
+import { useThreadIssuePages } from '../hooks/useThreadIssues'
+import {
+  applyEditedThreadToQueuePages,
+  applyIssueReadSnapshotToCache,
+  invalidateAfterDependencyChange,
+} from '../query/cacheEffects'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from '../pages/QueuePage/types'
@@ -22,98 +26,49 @@ export default function ThreadDetailView() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const location = useLocation()
+  const client = useQueryClient()
   const updateMutation = useUpdateThread()
   const activeThreadIdRef = useRef<number | null>(null)
   const editAutoOpenRef = useRef(false)
 
-  const [thread, setThread] = useState<Thread | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [isEditOpen, setIsEditOpen] = useState(false)
-  const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
-  const [issues, setIssues] = useState<Issue[]>([])
-  const [issuesExpanded, setIssuesExpanded] = useState(false)
-  const [issuesLoading, setIssuesLoading] = useState(false)
-  const [issuesError, setIssuesError] = useState<string | null>(null)
-  const [issuesLoaded, setIssuesLoaded] = useState(false)
-  const [nextPageToken, setNextPageToken] = useState<string | null>(null)
-  const [issuesTotal, setIssuesTotal] = useState(0)
-  const [isDependencyOpen, setIsDependencyOpen] = useState(false)
+  // Normalize malformed ids (non-numeric, fractional, or non-positive) to null
+  // so the view renders "Thread not found" instead of stalling on the loading
+  // spinner: the thread/connected/issues hooks stay disabled with no error.
+  const parsedThreadId = id ? Number(id) : NaN
+  const threadId =
+    Number.isInteger(parsedThreadId) && parsedThreadId > 0 ? parsedThreadId : null
+
+  const { data: thread, error: threadError } = useThread(threadId)
+  const {
+    connectedThreads,
+    isPending: connectedPending,
+    isError: connectedError,
+  } = useConnectedThreads(threadId)
   const {
     groupsByThreadId: crossoverGroupsByThreadId,
     isPending: crossoversPending,
     error: crossoversError,
   } = useCrossoverGroups(thread ? [thread.id] : [])
 
-  const [connectedThreads, setConnectedThreads] = useState<ConnectedThreadInfo[] | null>(null)
-  const [connectedError, setConnectedError] = useState(false)
-  const activeThreadId = thread?.id ?? null
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
+  const [issuesExpanded, setIssuesExpanded] = useState(false)
+  const [isDependencyOpen, setIsDependencyOpen] = useState(false)
+
+  const issuesQuery = useThreadIssuePages(threadId, issuesExpanded)
+  const issues = issuesQuery.issues
+  const issuesTotal = issuesQuery.totalCount
+  const issuesLoading = issuesQuery.isPending
+  const issuesError = issuesQuery.isError
+  const issuesLoaded = issuesQuery.pages.length > 0
+  const nextPageToken = issuesQuery.nextPageToken
 
   useEffect(() => {
-    if (activeThreadId === null) {
-      setConnectedThreads(null)
-      setConnectedError(false)
-      return
+    if (activeThreadIdRef.current !== threadId) {
+      activeThreadIdRef.current = threadId
+      setIssuesExpanded(false)
     }
-
-    let cancelled = false
-    setConnectedThreads(null)
-    setConnectedError(false)
-
-    dependenciesApi
-      .getConnectedThreads(activeThreadId)
-      .then((response) => {
-        if (!cancelled && activeThreadIdRef.current === activeThreadId) {
-          setConnectedThreads(response.connected_threads)
-        }
-      })
-      .catch(() => {
-        if (!cancelled && activeThreadIdRef.current === activeThreadId) {
-          setConnectedError(true)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [activeThreadId])
-
-  useEffect(() => {
-    const threadId = id ? Number(id) : null
-    activeThreadIdRef.current = threadId
-    setThread(null)
-    setError(null)
-    setIssues([])
-    setIssuesExpanded(false)
-    setIssuesLoading(false)
-    setIssuesError(null)
-    setIssuesLoaded(false)
-    setNextPageToken(null)
-    setIssuesTotal(0)
-
-    async function fetchThread() {
-      if (threadId === null) {
-        setIsLoading(false)
-        return
-      }
-
-      try {
-        setIsLoading(true)
-        const threadData = await threadsApi.get(threadId)
-        if (activeThreadIdRef.current !== threadId) return
-        setThread(threadData)
-      } catch (err: unknown) {
-        if (activeThreadIdRef.current !== threadId) return
-        setError(getApiErrorDetail(err))
-      } finally {
-        if (activeThreadIdRef.current === threadId) {
-          setIsLoading(false)
-        }
-      }
-    }
-
-    fetchThread()
-  }, [id])
+  }, [threadId])
 
   useEffect(() => {
     if (location.state?.openEditModal !== true || editAutoOpenRef.current || !thread) return
@@ -129,47 +84,18 @@ export default function ThreadDetailView() {
     setIsEditOpen(true)
   }, [location.state, thread])
 
-  async function loadIssuesPage(threadId: number, pageToken: string | null) {
-    setIssuesLoading(true)
-    setIssuesError(null)
-    try {
-      const params: IssueListParams = { page_size: 100 }
-      if (pageToken) {
-        params.page_token = pageToken
-      }
-      const data = await issuesApi.list(threadId, params)
-      if (activeThreadIdRef.current !== threadId) return
-      setIssues((prev) => (pageToken ? [...prev, ...data.issues] : data.issues))
-      setNextPageToken(data.next_page_token)
-      setIssuesTotal(data.total_count)
-      setIssuesLoaded(true)
-    } catch {
-      if (activeThreadIdRef.current !== threadId) return
-      setIssuesError('Failed to load issues')
-    } finally {
-      if (activeThreadIdRef.current === threadId) {
-        setIssuesLoading(false)
-      }
-    }
-  }
-
   function handleToggleIssues() {
-    const next = !issuesExpanded
-    setIssuesExpanded(next)
-    if (next && thread && thread.total_issues !== null && !issuesLoaded) {
-      void loadIssuesPage(thread.id, null)
-    }
+    setIssuesExpanded((prev) => !prev)
   }
 
   function handleLoadMore() {
     if (thread && thread.total_issues !== null && nextPageToken) {
-      void loadIssuesPage(thread.id, nextPageToken)
+      void issuesQuery.fetchNextPage()
     }
   }
 
   function handleIssueSnapshotChange(snapshot: IssueMutationSnapshot) {
-    setIssues(snapshot.issues)
-    setThread(snapshot.thread)
+    applyIssueReadSnapshotToCache(client, snapshot)
   }
 
   const handleEditSubmit = async (event: FormEvent) => {
@@ -192,13 +118,11 @@ export default function ThreadDetailView() {
         data: updateData,
       })
 
-      setThread(updatedThread)
+      applyEditedThreadToQueuePages(client, updatedThread)
       setIsEditOpen(false)
 
       if (updatedThread.total_issues !== null && issuesLoaded) {
-        setIssues([])
-        setNextPageToken(null)
-        await loadIssuesPage(updatedThread.id, null)
+        await issuesQuery.refetch()
       }
     } catch {
       console.error('Failed to update thread')
@@ -220,26 +144,27 @@ export default function ThreadDetailView() {
   }
 
   const getProgressPercentage = (): string | null => {
-    if (!thread || thread.total_issues === null) return null
-
-    const readCount = thread.total_issues - thread.issues_remaining
-    const percentage = Math.round((readCount / thread.total_issues) * 100)
-
-    return `${percentage}%`
+    if (thread && thread.total_issues !== null) {
+      const readCount = thread.total_issues - thread.issues_remaining
+      const percentage = Math.round((readCount / thread.total_issues) * 100)
+      return `${percentage}%`
+    }
+    return null
   }
 
   const getIssuesReadCount = (): string | null => {
-    if (!thread || thread.total_issues === null) return null
-
-    const readCount = thread.total_issues - thread.issues_remaining
-    return `${readCount} of ${thread.total_issues} issues read`
+    if (thread && thread.total_issues !== null) {
+      const readCount = thread.total_issues - thread.issues_remaining
+      return `${readCount} of ${thread.total_issues} issues read`
+    }
+    return null
   }
 
-  if (isLoading) {
-    return <LoadingSpinner fullScreen />
-  }
+  if (threadId === null || !thread) {
+    if (threadId !== null && !thread && !threadError) {
+      return <LoadingSpinner fullScreen />
+    }
 
-  if (error || !thread) {
     return (
       <div className="space-y-6 md:space-y-8 pb-20">
         <header className="px-2">
@@ -250,7 +175,9 @@ export default function ThreadDetailView() {
             View thread information
           </p>
         </header>
-        <div className="text-center text-stone-500">{error || 'Thread not found'}</div>
+        <div className="text-center text-stone-500">
+          {threadError ? getApiErrorDetail(threadError) : 'Thread not found'}
+        </div>
       </div>
     )
   }
@@ -322,13 +249,13 @@ export default function ThreadDetailView() {
           {connectedError && (
             <p className="text-xs text-red-400" role="alert">Unable to load dependencies.</p>
           )}
-          {!connectedError && connectedThreads === null && (
+          {!connectedError && connectedPending && (
             <p className="text-xs text-stone-500">Loading dependencies...</p>
           )}
-          {connectedThreads !== null && connectedThreads.length === 0 && (
+          {!connectedError && !connectedPending && connectedThreads.length === 0 && (
             <p className="text-xs text-stone-500">No series dependencies</p>
           )}
-          {connectedThreads !== null && connectedThreads.length > 0 && (
+          {!connectedError && !connectedPending && connectedThreads.length > 0 && (
             <div className="space-y-3">
               {(() => {
                 const blockedBy = connectedThreads.filter((t) => t.connection_type.includes('blocked_by'))
@@ -423,15 +350,11 @@ export default function ThreadDetailView() {
 
                 {issuesError && !issuesLoading && (
                   <div className="space-y-2">
-                    <p className="text-xs text-red-400">{issuesError}</p>
+                    <p className="text-xs text-red-400">Failed to load issues</p>
                     <button
                       type="button"
                       onClick={() => {
-                        if (thread.total_issues !== null) {
-                          setIssues([])
-                          setNextPageToken(null)
-                          void loadIssuesPage(thread.id, null)
-                        }
+                        void issuesQuery.refetch()
                       }}
                       className="text-xs font-black uppercase tracking-widest text-amber-400 hover:text-amber-300"
                     >
@@ -607,9 +530,8 @@ export default function ThreadDetailView() {
         isOpen={isDependencyOpen}
         onClose={() => setIsDependencyOpen(false)}
         onChanged={() => {
-          // Refresh thread data when dependencies change
           if (thread) {
-            threadsApi.get(thread.id).then((updated) => setThread(updated)).catch(() => undefined)
+            void invalidateAfterDependencyChange(client, thread.id)
           }
         }}
       />

@@ -9,7 +9,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cbl_ingest import CBLBook, CBLList
-from app.external_identities import upsert_external_identity
+from app.external_identities import (
+    ExternalIdentitySpec,
+    upsert_external_identities,
+)
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 
 
@@ -23,7 +26,57 @@ class CBLSyncSummary:
     deactivated_lists: int
     unchanged_lists: int
     entries_written: int
+    identities_upserted: int
     dry_run: bool
+
+
+class _IdentityCache:
+    """In-run memoization cache for external identity upserts."""
+
+    def __init__(self) -> None:
+        self._cache: dict[tuple[str, str, str], int] = {}
+        self._pending_specs: dict[tuple[str, str, str], ExternalIdentitySpec] = {}
+        self._upserted_count = 0
+
+    def get(self, provider: str, entity_type: str, external_id: str) -> int | None:
+        key = (provider.strip().lower(), entity_type.strip().lower(), external_id.strip())
+        return self._cache.get(key)
+
+    def add_pending(
+        self,
+        provider: str,
+        entity_type: str,
+        external_id: str,
+        *,
+        external_url: str | None = None,
+        metadata_json: dict[str, object] | None = None,
+        provider_updated_at: datetime | None = None,
+    ) -> None:
+        key = (provider.strip().lower(), entity_type.strip().lower(), external_id.strip())
+        if key not in self._cache and key not in self._pending_specs:
+            self._pending_specs[key] = ExternalIdentitySpec(
+                provider=provider,
+                entity_type=entity_type,
+                external_id=external_id,
+                external_url=external_url,
+                metadata_json=metadata_json,
+                provider_updated_at=provider_updated_at,
+            )
+
+    async def flush(self, db: AsyncSession) -> int:
+        if not self._pending_specs:
+            return 0
+        specs = list(self._pending_specs.values())
+        self._pending_specs.clear()
+        results = await upsert_external_identities(db, specs=specs)
+        for key, identity in results.items():
+            self._cache[key] = identity.id
+        self._upserted_count += len(results)
+        return len(results)
+
+    @property
+    def upserted_count(self) -> int:
+        return self._upserted_count
 
 
 async def sync_cbl_lists(
@@ -132,6 +185,7 @@ async def sync_cbl_lists(
             deactivated_lists=deactivated,
             unchanged_lists=unchanged,
             entries_written=entries_written,
+            identities_upserted=0,
             dry_run=True,
         )
 
@@ -148,6 +202,23 @@ async def sync_cbl_lists(
         source.revision_sha = normalized_revision
         source.synced_at = now
 
+    identity_cache = _IdentityCache()
+
+    # First pass: collect all identity specs from all books that will be written
+    for parsed in parsed_lists:
+        stored = existing_by_path.get(parsed.source_path)
+        if stored is not None and stored.active and stored.content_hash == parsed.content_hash:
+            continue
+        for book in parsed.books:
+            if book.comicvine_series_id is not None:
+                identity_cache.add_pending("comicvine", "series", book.comicvine_series_id)
+            if book.comicvine_issue_id is not None:
+                identity_cache.add_pending("comicvine", "issue", book.comicvine_issue_id)
+
+    # Flush identity cache to persist all unique identities
+    await identity_cache.flush(db)
+
+    # Second pass: create/update lists and entries with resolved identity IDs
     for parsed in parsed_lists:
         stored = existing_by_path.get(parsed.source_path)
         if stored is not None and stored.active and stored.content_hash == parsed.content_hash:
@@ -174,7 +245,7 @@ async def sync_cbl_lists(
             await db.execute(delete(CBLSourceEntry).where(CBLSourceEntry.list_id == stored.id))
 
         for book in parsed.books:
-            db.add(await _build_entry(db, list_id=stored.id, book=book))
+            db.add(_build_entry(stored.id, book, identity_cache))
 
     for stored in existing_lists:
         if (
@@ -193,37 +264,25 @@ async def sync_cbl_lists(
         deactivated_lists=deactivated,
         unchanged_lists=unchanged,
         entries_written=entries_written,
+        identities_upserted=identity_cache.upserted_count,
         dry_run=False,
     )
 
 
-async def _build_entry(
-    db: AsyncSession,
-    *,
+def _build_entry(
     list_id: int,
     book: CBLBook,
+    identity_cache: _IdentityCache,
 ) -> CBLSourceEntry:
-    """Build one ordered entry and retain embedded ComicVine identity evidence."""
-    series_identity_id: int | None = None
-    issue_identity_id: int | None = None
+    """Build one ordered entry with resolved ComicVine identity IDs."""
+    series_identity_id = None
+    issue_identity_id = None
 
     if book.comicvine_series_id is not None:
-        identity = await upsert_external_identity(
-            db,
-            provider="comicvine",
-            entity_type="series",
-            external_id=book.comicvine_series_id,
-        )
-        series_identity_id = identity.id
+        series_identity_id = identity_cache.get("comicvine", "series", book.comicvine_series_id)
 
     if book.comicvine_issue_id is not None:
-        identity = await upsert_external_identity(
-            db,
-            provider="comicvine",
-            entity_type="issue",
-            external_id=book.comicvine_issue_id,
-        )
-        issue_identity_id = identity.id
+        issue_identity_id = identity_cache.get("comicvine", "issue", book.comicvine_issue_id)
 
     return CBLSourceEntry(
         list_id=list_id,

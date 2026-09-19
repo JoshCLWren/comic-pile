@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
+import Modal from './Modal'
 import './MigrationDialog.css'
 
 interface SimpleMigrationDialogProps {
@@ -14,22 +15,6 @@ export default function SimpleMigrationDialog({
 }: SimpleMigrationDialogProps) {
   const [issueNumber, setIssueNumber] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
-
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
 
   const validate = (): boolean => {
     setError(null)
@@ -52,34 +37,8 @@ export default function SimpleMigrationDialog({
     onComplete(issueNumber)
   }
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose()
-    }
-  }
-
   return (
-    <div
-      className="migration-dialog__overlay"
-      onClick={handleBackdropClick}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="simple-migration-dialog-title"
-    >
-      <div className="migration-dialog">
-        <div className="migration-dialog__header">
-          <h2 id="simple-migration-dialog-title" className="migration-dialog__title">
-            Track Issues for "{threadTitle}"
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="migration-dialog__close-btn"
-            aria-label="Close dialog"
-          >
-            &times;
-          </button>
-        </div>
+    <Modal isOpen title={`Track Issues for "${threadTitle}"`} onClose={onClose} data-testid="simple-migration-dialog">
 
         <form onSubmit={handleSubmit} className="migration-dialog__form">
           <div className="migration-dialog__field">
@@ -87,13 +46,13 @@ export default function SimpleMigrationDialog({
               What issue number did you just read? <span className="migration-dialog__required">*</span>
             </label>
             <input
-              ref={inputRef}
               id="issue-number"
               type="text"
               value={issueNumber}
               onChange={(e) => setIssueNumber(e.target.value)}
               placeholder="e.g., 42"
               className="migration-dialog__input"
+              autoFocus
             />
             <span className="migration-dialog__hint">
               We'll infer total issues from your remaining count
@@ -115,7 +74,6 @@ export default function SimpleMigrationDialog({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }

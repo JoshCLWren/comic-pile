@@ -11,6 +11,7 @@ Covers the acceptance criteria for issue #931:
 from datetime import UTC, datetime, timedelta
 from inspect import unwrap
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -21,6 +22,7 @@ from app.models import Thread
 from app.models.user import User
 from app.services.queue_pagination import (
     QueueCursor,
+    QueueSort,
     build_cursor_filter,
     build_cursor_values_from_row,
     build_sort_order,
@@ -52,18 +54,33 @@ class TestNormalizeQueueSearch:
 class TestCursorRoundTrip:
     """Verify encode/decode round-trips for every sort mode."""
 
-    @pytest.mark.parametrize("sort", ["position", "title", "created"])
-    def test_round_trip_preserves_values(self, sort: str) -> None:
-        cursor = QueueCursor(sort=sort, search="batman", values=("42", "7"))
+    @pytest.mark.parametrize(
+        ("sort", "values"),
+        [
+            ("position", ("0", "42", "7")),
+            ("title", ("42", "7")),
+            ("created", ("42", "7")),
+        ],
+    )
+    def test_round_trip_preserves_values(self, sort: str, values: tuple[str, ...]) -> None:
+        cursor = QueueCursor(sort=cast(QueueSort, sort), search="batman", values=values)
         token = encode_queue_cursor(cursor)
-        decoded = decode_queue_cursor(token, sort=sort, search="batman")
-        assert decoded == QueueCursor(sort=sort, search="batman", values=("42", "7"))
+        decoded = decode_queue_cursor(token, sort=cast(QueueSort, sort), search="batman")
+        assert decoded == QueueCursor(
+            sort=cast(QueueSort, sort), search="batman", values=values
+        )
 
     def test_position_cursor_values(self) -> None:
-        cursor = QueueCursor(sort="position", search="", values=("5", "12"))
+        cursor = QueueCursor(sort="position", search="", values=("0", "5", "12"))
         token = encode_queue_cursor(cursor)
         decoded = decode_queue_cursor(token, sort="position", search=None)
-        assert decoded.values == ("5", "12")
+        assert decoded.values == ("0", "5", "12")
+
+    def test_position_cursor_values_for_blocked_row(self) -> None:
+        cursor = QueueCursor(sort="position", search="", values=("1", "5", "12"))
+        token = encode_queue_cursor(cursor)
+        decoded = decode_queue_cursor(token, sort="position", search=None)
+        assert decoded.values == ("1", "5", "12")
 
     def test_title_cursor_values(self) -> None:
         cursor = QueueCursor(sort="title", search="", values=("Batman", "3"))
@@ -84,7 +101,7 @@ class TestCursorRejection:
 
     def test_rejects_sort_change(self) -> None:
         token = encode_queue_cursor(
-            QueueCursor(sort="position", search="", values=("1", "1"))
+            QueueCursor(sort="position", search="", values=("0", "1", "1"))
         )
         with pytest.raises(ValueError, match="does not match"):
             decode_queue_cursor(token, sort="title", search=None)
@@ -115,7 +132,8 @@ class TestBuildSortOrder:
 
     def test_position_sort(self) -> None:
         cols = build_sort_order("position")
-        assert len(cols) == 2
+        # blocked grouping key + queue position + deterministic id tie-breaker
+        assert len(cols) == 3
 
     def test_title_sort(self) -> None:
         cols = build_sort_order("title")
@@ -130,7 +148,12 @@ class TestBuildCursorFilter:
     """Verify cursor WHERE clauses compile without errors."""
 
     def test_position_cursor_filter(self) -> None:
-        cursor = QueueCursor(sort="position", search="", values=("5", "10"))
+        cursor = QueueCursor(sort="position", search="", values=("0", "5", "10"))
+        expr = build_cursor_filter(cursor)
+        assert expr is not None
+
+    def test_position_cursor_filter_for_blocked_row(self) -> None:
+        cursor = QueueCursor(sort="position", search="", values=("1", "5", "10"))
         expr = build_cursor_filter(cursor)
         assert expr is not None
 
@@ -150,19 +173,36 @@ class TestBuildCursorValuesFromRow:
     """Verify cursor value extraction from Thread rows."""
 
     def test_position_values(self) -> None:
-        thread = SimpleNamespace(queue_position=5, id=10, title="X", created_at=datetime.now(UTC))
-        values = build_cursor_values_from_row("position", thread)  # type: ignore[arg-type]
-        assert values == ("5", "10")
+        thread = SimpleNamespace(
+            queue_position=5,
+            id=10,
+            title="X",
+            created_at=datetime.now(UTC),
+            is_blocked=False,
+        )
+        values = build_cursor_values_from_row("position", cast(Thread, thread))
+        assert values == ("0", "5", "10")
+
+    def test_position_values_for_blocked_row(self) -> None:
+        thread = SimpleNamespace(
+            queue_position=5,
+            id=10,
+            title="X",
+            created_at=datetime.now(UTC),
+            is_blocked=True,
+        )
+        values = build_cursor_values_from_row("position", cast(Thread, thread))
+        assert values == ("1", "5", "10")
 
     def test_title_values(self) -> None:
         thread = SimpleNamespace(queue_position=1, id=3, title="Batman", created_at=datetime.now(UTC))
-        values = build_cursor_values_from_row("title", thread)  # type: ignore[arg-type]
+        values = build_cursor_values_from_row("title", cast(Thread, thread))
         assert values == ("Batman", "3")
 
     def test_created_values(self) -> None:
         now = datetime.now(UTC)
         thread = SimpleNamespace(queue_position=1, id=5, title="X", created_at=now)
-        values = build_cursor_values_from_row("created", thread)  # type: ignore[arg-type]
+        values = build_cursor_values_from_row("created", cast(Thread, thread))
         assert values[0] == now.isoformat()
         assert values[1] == "5"
 
@@ -962,4 +1002,259 @@ async def test_list_threads_cursor_values_match_last_row(
     cursor = decode_queue_cursor(response.next_page_token, sort="position", search=None)
     # Last item in page 1 has position=2, and its id
     last = response.threads[-1]
-    assert cursor.values == (str(last.queue_position), str(last.id))
+    assert cursor.values == (
+        "1" if last.is_blocked else "0",
+        str(last.queue_position),
+        str(last.id),
+    )
+
+
+def _queue_request() -> Request:
+    """Build a minimal GET request for direct list_threads invocation."""
+    return Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/api/v1/threads/",
+            "headers": [],
+            "query_string": b"",
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_threads_position_blocked_grouping_across_page_boundary(
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+) -> None:
+    """Blocked rows sort after unblocked rows even when the page boundary splits them."""
+    user = await get_or_create_user_async(async_db)
+    async_db.add_all(
+        [
+            Thread(
+                user_id=user.id,
+                title="Unblocked-Back",
+                format="Comic",
+                issues_remaining=0,
+                queue_position=5,
+                status="active",
+                is_blocked=False,
+                created_at=datetime.now(UTC),
+            ),
+            Thread(
+                user_id=user.id,
+                title="Unblocked-Front",
+                format="Comic",
+                issues_remaining=0,
+                queue_position=1,
+                status="active",
+                is_blocked=False,
+                created_at=datetime.now(UTC),
+            ),
+            Thread(
+                user_id=user.id,
+                title="Blocked-A",
+                format="Comic",
+                issues_remaining=0,
+                queue_position=2,
+                status="active",
+                is_blocked=True,
+                created_at=datetime.now(UTC),
+            ),
+            Thread(
+                user_id=user.id,
+                title="Blocked-B",
+                format="Comic",
+                issues_remaining=0,
+                queue_position=4,
+                status="active",
+                is_blocked=True,
+                created_at=datetime.now(UTC),
+            ),
+        ]
+    )
+    await async_db.flush()
+    await async_db.commit()
+
+    request = _queue_request()
+    route = unwrap(list_threads)
+
+    first_page_titles: list[str] = []
+    all_titles: list[str] = []
+    all_ids: list[int] = []
+    blocked_flags: list[bool] = []
+    token = None
+    for page_index in range(5):
+        response = await route(
+            request=request,
+            current_user=SimpleNamespace(id=user.id),
+            db=async_db,
+            search=None,
+            sort="position",
+            page_size=2,
+            page_token=token,
+        )
+        page_titles = [t.title for t in response.threads]
+        if page_index == 0:
+            first_page_titles = page_titles
+        all_titles.extend(page_titles)
+        all_ids.extend(t.id for t in response.threads)
+        blocked_flags.extend(t.is_blocked for t in response.threads)
+        token = response.next_page_token
+        if token is None:
+            break
+
+    # Feasible-only order: unblocked by position, then blocked by position.
+    assert all_titles == [
+        "Unblocked-Front",
+        "Unblocked-Back",
+        "Blocked-A",
+        "Blocked-B",
+    ]
+    assert blocked_flags == [False, False, True, True]
+    assert len(all_ids) == 4 and len(set(all_ids)) == 4
+    # Appending page 2 must not insert a row ahead of an already displayed row.
+    assert first_page_titles == ["Unblocked-Front", "Unblocked-Back"]
+    assert all_titles[: len(first_page_titles)] == first_page_titles
+
+
+@pytest.mark.asyncio
+async def test_list_threads_position_tied_sort_across_page_boundary(
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+) -> None:
+    """Threads sharing a position paginate by id with no skips across the boundary."""
+    user = await get_or_create_user_async(async_db)
+    for i in range(1, 4):
+        async_db.add(
+            Thread(
+                user_id=user.id,
+                title=f"Tied-Position-{i}",
+                format="Comic",
+                issues_remaining=0,
+                queue_position=7,
+                status="active",
+                is_blocked=False,
+                created_at=datetime.now(UTC),
+            )
+        )
+    await async_db.flush()
+    await async_db.commit()
+
+    request = _queue_request()
+    route = unwrap(list_threads)
+
+    all_ids: list[int] = []
+    token = None
+    for _ in range(5):
+        response = await route(
+            request=request,
+            current_user=SimpleNamespace(id=user.id),
+            db=async_db,
+            search=None,
+            sort="position",
+            page_size=2,
+            page_token=token,
+        )
+        all_ids.extend(t.id for t in response.threads)
+        token = response.next_page_token
+        if token is None:
+            break
+
+    assert len(all_ids) == 3
+    assert all_ids == sorted(all_ids)
+
+
+@pytest.mark.asyncio
+async def test_list_threads_title_tied_sort_across_page_boundary(
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+) -> None:
+    """Threads sharing a title paginate by id with no skips across the boundary."""
+    user = await get_or_create_user_async(async_db)
+    for i in range(1, 4):
+        async_db.add(
+            Thread(
+                user_id=user.id,
+                title="Same Title",
+                format="Comic",
+                issues_remaining=0,
+                queue_position=i,
+                status="active",
+                is_blocked=False,
+                created_at=datetime.now(UTC),
+            )
+        )
+    await async_db.flush()
+    await async_db.commit()
+
+    request = _queue_request()
+    route = unwrap(list_threads)
+
+    all_ids: list[int] = []
+    token = None
+    for _ in range(5):
+        response = await route(
+            request=request,
+            current_user=SimpleNamespace(id=user.id),
+            db=async_db,
+            search=None,
+            sort="title",
+            page_size=2,
+            page_token=token,
+        )
+        all_ids.extend(t.id for t in response.threads)
+        token = response.next_page_token
+        if token is None:
+            break
+
+    assert len(all_ids) == 3
+    assert all_ids == sorted(all_ids)
+
+
+@pytest.mark.asyncio
+async def test_list_threads_created_tied_sort_across_page_boundary(
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+) -> None:
+    """Created sort tie-breaks by id descending with no skips across the boundary."""
+    user = await get_or_create_user_async(async_db)
+    shared_created = datetime.now(UTC)
+    for i in range(1, 4):
+        async_db.add(
+            Thread(
+                user_id=user.id,
+                title=f"Tied-Created-{i}",
+                format="Comic",
+                issues_remaining=0,
+                queue_position=i,
+                status="active",
+                is_blocked=False,
+                created_at=shared_created,
+            )
+        )
+    await async_db.flush()
+    await async_db.commit()
+
+    request = _queue_request()
+    route = unwrap(list_threads)
+
+    all_ids: list[int] = []
+    token = None
+    for _ in range(5):
+        response = await route(
+            request=request,
+            current_user=SimpleNamespace(id=user.id),
+            db=async_db,
+            search=None,
+            sort="created",
+            page_size=2,
+            page_token=token,
+        )
+        all_ids.extend(t.id for t in response.threads)
+        token = response.next_page_token
+        if token is None:
+            break
+
+    assert len(all_ids) == 3
+    assert all_ids == sorted(all_ids, reverse=True)

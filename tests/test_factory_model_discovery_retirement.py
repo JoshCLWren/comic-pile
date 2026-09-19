@@ -1023,34 +1023,30 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_dots_note() -> None
     assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
 
 
-def test_committed_tsv_converts_surplus_pickle_to_openrouter_stealth_union_alpha() -> None:
-    """Worker 23 stays expected and pins Harvy-smoked OpenRouter Stealth Union Alpha."""
+def test_stealth_union_alpha_lock_stays_consistent_with_roster() -> None:
+    """Worker 23's stealth/union-alpha pin is either live or lock-retired.
+
+    A live-TSV snapshot that required worker 23 to stay expected broke the
+    next catalog apply (#2657). This contract holds before and after that
+    pin disappears from ``opencode models openrouter``.
+    """
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
     by_worker = {row["worker"]: row for row in rows}
+    live = by_worker.get("23")
 
-    assert 23 in lock["expected_workers"]
-    assert 23 not in lock["retired_workers"]
-    assert by_worker["46"]["source"] == "kilo-auto"
-    assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["54"]["source"] == "z-ai"
-    assert by_worker["54"]["model"] == "glm-4.5-flash"
-    assert by_worker["55"]["source"] == "ollama-cloud"
-    assert by_worker["55"]["model"] == "nemotron-3-nano:30b"
-    assert by_worker["56"]["source"] == "openrouter-free"
-    assert by_worker["56"]["model"] == "dots-studio/dots-3-note-preview:free"
-    assert by_worker["23"] == {
-        "worker": "23",
-        "source": "openrouter-free",
-        "model": "stealth/union-alpha",
-        "minute": "55",
-        "scheduler": "dispatcher",
-        "display_name": "OpenRouter Stealth Union Alpha",
-    }
-    assert by_worker["23"]["model"] not in lock["retired_models"]
-    assert "stealth/union-alpha" not in lock["retired_models"]
-    assert not by_worker["23"]["model"].endswith(":free")
-    assert ROSTER.openrouter_model_is_free(by_worker["23"]["model"])
+    if live is not None:
+        assert live["source"] == "openrouter-free"
+        assert live["model"] == "stealth/union-alpha"
+        assert 23 in lock["expected_workers"]
+        assert 23 not in lock["retired_workers"]
+        assert "stealth/union-alpha" not in lock["retired_models"]
+        assert not live["model"].endswith(":free")
+        assert ROSTER.openrouter_model_is_free(live["model"])
+    else:
+        assert 23 not in lock["expected_workers"]
+        assert 23 in lock["retired_workers"]
+        assert "stealth/union-alpha" in lock["retired_models"]
     assert ROSTER.schedule_is_balanced(rows)
     assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
 

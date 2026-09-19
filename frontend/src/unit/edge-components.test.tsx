@@ -5,7 +5,7 @@ import { MarqueeTitle } from '../components/MarqueeTitle'
 import IssueCorrectionDialog from '../components/IssueCorrectionDialog'
 import MigrationDialog from '../components/MigrationDialog'
 
-const issuesApi = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), move: vi.fn(), markRead: vi.fn(), markUnread: vi.fn() }))
+const issuesApi = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), move: vi.fn(), markRead: vi.fn(), markUnread: vi.fn(), bulkMarkRead: vi.fn(), bulkMarkUnread: vi.fn() }))
 vi.mock('../services/api-issues', () => ({ issuesApi }))
 const migration = vi.hoisted(() => ({ migrateThread: vi.fn() }))
 vi.mock('../services/api', () => ({ migrationApi: migration }))
@@ -92,7 +92,9 @@ describe('edge component behavior', () => {
     await user.type(screen.getByLabelText(/Total Issues/), '0')
     fireEvent.submit(screen.getByRole('button', { name: 'Start Tracking' }).closest('form')!)
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/negative|greater than 0/))
-    fireEvent.click(screen.getByRole('dialog'))
-    expect(onClose).toHaveBeenCalled()
+    const dialog = screen.getByRole('dialog')
+    const backdrop = dialog.previousElementSibling as HTMLElement
+    fireEvent.click(backdrop)
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 })

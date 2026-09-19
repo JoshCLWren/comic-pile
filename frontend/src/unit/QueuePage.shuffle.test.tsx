@@ -47,6 +47,8 @@ vi.mock('../services/api-issues', () => ({
   issuesApi: {
     create: vi.fn().mockResolvedValue({ issues: [] }),
     markRead: vi.fn().mockResolvedValue(undefined),
+    bulkMarkRead: vi.fn().mockResolvedValue(undefined),
+    bulkMarkUnread: vi.fn().mockResolvedValue(undefined),
     migrateThread: vi.fn().mockResolvedValue({}),
   },
 }))
@@ -135,6 +137,20 @@ describe('Queue shuffle availability', () => {
         { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
         { id: 2, title: 'Spawn', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 5 },
       ],
+      isLoading: false,
+      refetch: vi.fn(),
+    })
+    mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
+
+    renderQueue()
+
+    expect(screen.getByRole('button', { name: 'Shuffle' })).toBeEnabled()
+  })
+
+  it('enables shuffle from the authoritative count even when only one thread is loaded', () => {
+    mockedUseQueueThreads.mockReturnValue({
+      data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 }],
+      activeCount: 120,
       isLoading: false,
       refetch: vi.fn(),
     })

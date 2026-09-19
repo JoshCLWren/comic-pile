@@ -3,33 +3,37 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import IdentityInboxPage from '../pages/IdentityInboxPage'
+import type { IdentityInboxItem } from '../services/api'
 
-const mockGet = vi.fn()
-const mockPost = vi.fn()
-const mockSetAccessToken = vi.fn()
-const mockClearAccessToken = vi.fn()
-const mockGetAccessToken = vi.fn(() => 'test-token')
+const mockUseIdentityInbox = vi.fn()
+type MockMutationResult = {
+  mutate: ReturnType<typeof vi.fn>
+  mutateAsync: ReturnType<typeof vi.fn>
+  isPending: boolean
+  isError: boolean
+  error: Error | null
+  data: unknown
+  reset: ReturnType<typeof vi.fn>
+}
+const mockConfirmMutation: MockMutationResult = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() }
+const mockRejectMutation: MockMutationResult = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() }
+const mockDeferMutation: MockMutationResult = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() }
+const mockSkipMutation: MockMutationResult = { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() }
 
-vi.mock('../services/api', () => {
-  return {
-    default: {
-      get: (...args: Parameters<typeof mockGet>) => mockGet(...args),
-      post: (...args: Parameters<typeof mockPost>) => mockPost(...args),
-      put: vi.fn(),
-      delete: vi.fn(),
-      interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
-    },
-    setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) =>
-      mockSetAccessToken(...args),
-    clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) =>
-      mockClearAccessToken(...args),
-    getAccessToken: () => mockGetAccessToken(),
-    refreshSession: vi.fn(),
-    isSessionRefreshRejected: () => false,
-  }
-})
+const mockUseConfirmInboxCandidate = vi.fn(() => mockConfirmMutation)
+const mockUseRejectInboxCandidate = vi.fn(() => mockRejectMutation)
+const mockUseDeferInboxItem = vi.fn(() => mockDeferMutation)
+const mockUseSkipInboxItem = vi.fn(() => mockSkipMutation)
 
-const inboxItem = (overrides = {}) => ({
+vi.mock('../hooks/useIdentityInbox', () => ({
+  useIdentityInbox: (offset: number) => mockUseIdentityInbox(offset),
+  useConfirmInboxCandidate: () => mockUseConfirmInboxCandidate(),
+  useRejectInboxCandidate: () => mockUseRejectInboxCandidate(),
+  useDeferInboxItem: () => mockUseDeferInboxItem(),
+  useSkipInboxItem: () => mockUseSkipInboxItem(),
+}))
+
+const inboxItem = (overrides: Partial<IdentityInboxItem> = {}): IdentityInboxItem => ({
   mapping_id: 1,
   issue_id: 10,
   thread_id: 100,
@@ -58,23 +62,44 @@ const inboxItem = (overrides = {}) => ({
   ...overrides,
 })
 
+function mockQueryResult(data: IdentityInboxItem[] = [], total = 0) {
+  mockUseIdentityInbox.mockReturnValue({
+    data: { items: data, total, offset: 0, limit: 20 },
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+}
+
+function mockLoadingState() {
+  mockUseIdentityInbox.mockReturnValue({
+    data: undefined,
+    isPending: true,
+    isError: false,
+    error: null,
+  })
+}
+
+function mockErrorState(message: string) {
+  mockUseIdentityInbox.mockReturnValue({
+    data: undefined,
+    isPending: false,
+    isError: true,
+    error: new Error(message),
+  })
+}
+
 beforeEach(() => {
-  mockGet.mockReset()
-  mockPost.mockReset()
-  mockSetAccessToken.mockReset()
-  mockClearAccessToken.mockReset()
-  window.localStorage.clear()
+  vi.clearAllMocks()
+  mockUseConfirmInboxCandidate.mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() })
+  mockUseRejectInboxCandidate.mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() })
+  mockUseDeferInboxItem.mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() })
+  mockUseSkipInboxItem.mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() })
 })
 
 describe('IdentityInboxPage', () => {
-  it('renders loading state while fetching items', async () => {
-    let resolve: (value: { items: typeof inboxItem[]; total: number; offset: number; limit: number }) => void
-    mockGet.mockImplementationOnce(
-      () =>
-        new Promise((r) => {
-          resolve = r
-        }),
-    )
+  it('renders loading state while fetching items', () => {
+    mockLoadingState()
 
     render(
       <MemoryRouter initialEntries={['/identity-inbox']}>
@@ -85,12 +110,10 @@ describe('IdentityInboxPage', () => {
     )
 
     expect(screen.getByText('Loading...')).toBeInTheDocument()
-    resolve!({ items: [], total: 0, offset: 0, limit: 20 })
-    await waitFor(() => expect(screen.getByText('All clear!')).toBeInTheDocument())
   })
 
-  it('surfaces an error when fetching items fails', async () => {
-    mockGet.mockRejectedValueOnce(new Error('network error'))
+  it('surfaces an error when fetching items fails', () => {
+    mockErrorState('network error')
 
     render(
       <MemoryRouter initialEntries={['/identity-inbox']}>
@@ -100,11 +123,11 @@ describe('IdentityInboxPage', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => expect(screen.getByText(/network error/i)).toBeInTheDocument())
+    expect(screen.getByText(/network error/i)).toBeInTheDocument()
   })
 
-  it('shows an empty state when there are no inbox items', async () => {
-    mockGet.mockResolvedValueOnce({ items: [], total: 0, offset: 0, limit: 20 })
+  it('shows an empty state when there are no inbox items', () => {
+    mockQueryResult([], 0)
 
     render(
       <MemoryRouter initialEntries={['/identity-inbox']}>
@@ -114,11 +137,11 @@ describe('IdentityInboxPage', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => expect(screen.getByText('All clear!')).toBeInTheDocument())
+    expect(screen.getByText('All clear!')).toBeInTheDocument()
   })
 
-  it('renders inbox items as expandable cards', async () => {
-    mockGet.mockResolvedValueOnce({ items: [inboxItem()], total: 1, offset: 0, limit: 20 })
+  it('renders inbox items as expandable cards', () => {
+    mockQueryResult([inboxItem()], 1)
 
     render(
       <MemoryRouter initialEntries={['/identity-inbox']}>
@@ -128,14 +151,13 @@ describe('IdentityInboxPage', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => expect(screen.getByText('Mister Miracle')).toBeInTheDocument())
+    expect(screen.getByText('Mister Miracle')).toBeInTheDocument()
     expect(screen.getByText('#Annual 1')).toBeInTheDocument()
     expect(screen.getByText('No validated local candidate')).toBeInTheDocument()
-    // Candidates section is only visible when expanded
   })
 
   it('expands an item to reveal its action buttons', async () => {
-    mockGet.mockResolvedValueOnce({ items: [inboxItem()], total: 1, offset: 0, limit: 20 })
+    mockQueryResult([inboxItem()], 1)
 
     render(
       <MemoryRouter initialEntries={['/identity-inbox']}>
@@ -145,7 +167,6 @@ describe('IdentityInboxPage', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => expect(screen.getByText('Mister Miracle')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Mister Miracle'))
 
     await waitFor(() => expect(screen.getByText('Confirm')).toBeInTheDocument())
@@ -154,10 +175,10 @@ describe('IdentityInboxPage', () => {
     expect(screen.getByText('Skip')).toBeInTheDocument()
   })
 
-  it('calls the confirm endpoint and refreshes the list', async () => {
-    mockGet.mockResolvedValueOnce({ items: [inboxItem()], total: 1, offset: 0, limit: 20 })
-    mockPost.mockResolvedValueOnce({})
-    mockGet.mockResolvedValueOnce({ items: [], total: 0, offset: 0, limit: 20 })
+  it('calls the confirm mutation when Confirm is clicked', async () => {
+    const confirmMutate = vi.fn()
+    mockUseConfirmInboxCandidate.mockReturnValue({ mutate: confirmMutate, mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() })
+    mockQueryResult([inboxItem()], 1)
 
     render(
       <MemoryRouter initialEntries={['/identity-inbox']}>
@@ -167,20 +188,20 @@ describe('IdentityInboxPage', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => expect(screen.getByText('Mister Miracle')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Mister Miracle'))
     const confirmButton = await screen.findByText('Confirm')
     await userEvent.click(confirmButton)
 
     await waitFor(() =>
-      expect(mockPost).toHaveBeenCalledWith('/v1/identity-inbox/1/confirm', {
-        external_identity_id: 501,
+      expect(confirmMutate).toHaveBeenCalledWith({
+        mappingId: 1,
+        payload: { external_identity_id: 501 },
       }),
     )
   })
 
   it('shows a reject form when Reject is clicked without a reason', async () => {
-    mockGet.mockResolvedValueOnce({ items: [inboxItem()], total: 1, offset: 0, limit: 20 })
+    mockQueryResult([inboxItem()], 1)
 
     render(
       <MemoryRouter initialEntries={['/identity-inbox']}>
@@ -190,7 +211,6 @@ describe('IdentityInboxPage', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => expect(screen.getByText('Mister Miracle')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Mister Miracle'))
     const rejectButton = await screen.findByText('Reject')
     await userEvent.click(rejectButton)
@@ -198,10 +218,10 @@ describe('IdentityInboxPage', () => {
     expect(screen.getByPlaceholderText('Why is this candidate wrong?')).toBeInTheDocument()
   })
 
-  it('calls the defer endpoint when Defer is clicked', async () => {
-    mockGet.mockResolvedValueOnce({ items: [inboxItem()], total: 1, offset: 0, limit: 20 })
-    mockPost.mockResolvedValueOnce({})
-    mockGet.mockResolvedValueOnce({ items: [], total: 0, offset: 0, limit: 20 })
+  it('calls the defer mutation when Defer is clicked', async () => {
+    const deferMutate = vi.fn()
+    mockUseDeferInboxItem.mockReturnValue({ mutate: deferMutate, mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() })
+    mockQueryResult([inboxItem()], 1)
 
     render(
       <MemoryRouter initialEntries={['/identity-inbox']}>
@@ -211,20 +231,17 @@ describe('IdentityInboxPage', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => expect(screen.getByText('Mister Miracle')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Mister Miracle'))
     const deferButton = await screen.findByText('Defer')
     await userEvent.click(deferButton)
 
-    await waitFor(() =>
-      expect(mockPost).toHaveBeenCalledWith('/v1/identity-inbox/1/defer'),
-    )
+    await waitFor(() => expect(deferMutate).toHaveBeenCalledWith(1))
   })
 
-  it('calls the skip endpoint when Skip is clicked', async () => {
-    mockGet.mockResolvedValueOnce({ items: [inboxItem()], total: 1, offset: 0, limit: 20 })
-    mockPost.mockResolvedValueOnce({})
-    mockGet.mockResolvedValueOnce({ items: [], total: 0, offset: 0, limit: 20 })
+  it('calls the skip mutation when Skip is clicked', async () => {
+    const skipMutate = vi.fn()
+    mockUseSkipInboxItem.mockReturnValue({ mutate: skipMutate, mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() })
+    mockQueryResult([inboxItem()], 1)
 
     render(
       <MemoryRouter initialEntries={['/identity-inbox']}>
@@ -234,23 +251,18 @@ describe('IdentityInboxPage', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => expect(screen.getByText('Mister Miracle')).toBeInTheDocument())
     await userEvent.click(screen.getByText('Mister Miracle'))
     const skipButton = await screen.findByText('Skip')
     await userEvent.click(skipButton)
 
-    await waitFor(() =>
-      expect(mockPost).toHaveBeenCalledWith('/v1/identity-inbox/1/skip'),
-    )
+    await waitFor(() => expect(skipMutate).toHaveBeenCalledWith(1))
   })
 
-  it('shows pagination controls when there are multiple pages', async () => {
-    mockGet.mockResolvedValueOnce({
-      items: Array.from({ length: 20 }, (_, i) => inboxItem({ mapping_id: i })),
-      total: 50,
-      offset: 0,
-      limit: 20,
-    })
+  it('shows pagination controls when there are multiple pages', () => {
+    mockQueryResult(
+      Array.from({ length: 20 }, (_, i) => inboxItem({ mapping_id: i })),
+      50,
+    )
 
     render(
       <MemoryRouter initialEntries={['/identity-inbox']}>
@@ -260,13 +272,13 @@ describe('IdentityInboxPage', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => expect(screen.getByText('50 unresolved items')).toBeInTheDocument())
+    expect(screen.getByText('50 unresolved items')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled()
   })
 
-  it('renders the page heading and description', async () => {
-    mockGet.mockResolvedValueOnce({ items: [], total: 0, offset: 0, limit: 20 })
+  it('renders the page heading and description', () => {
+    mockQueryResult([], 0)
 
     render(
       <MemoryRouter initialEntries={['/identity-inbox']}>
@@ -276,14 +288,12 @@ describe('IdentityInboxPage', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: 'Identity Inbox' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Identity Inbox' })).toBeInTheDocument()
     expect(screen.getByText(/Resolve unmatched or ambiguous external comic identities/i)).toBeInTheDocument()
   })
 
-  it('surfaces an action error without discarding the current list', async () => {
-    mockGet.mockResolvedValueOnce({ items: [inboxItem()], total: 1, offset: 0, limit: 20 })
-    mockPost.mockRejectedValueOnce(new Error('action failed'))
-    mockGet.mockResolvedValueOnce({ items: [inboxItem()], total: 1, offset: 0, limit: 20 })
+  it('uses the useIdentityInbox hook with offset', () => {
+    mockQueryResult([], 0)
 
     render(
       <MemoryRouter initialEntries={['/identity-inbox']}>
@@ -293,22 +303,33 @@ describe('IdentityInboxPage', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => expect(screen.getByText('Mister Miracle')).toBeInTheDocument())
-    await userEvent.click(screen.getByText('Mister Miracle'))
-    const confirmButton = await screen.findByText('Confirm')
-    await userEvent.click(confirmButton)
+    expect(mockUseIdentityInbox).toHaveBeenCalledWith(0)
+  })
 
-    await waitFor(() => expect(screen.getByText(/action failed/i)).toBeInTheDocument())
+  it('surfaces an action error without discarding the current list', () => {
+    mockUseConfirmInboxCandidate.mockReturnValue({
+      mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false,
+      isError: true, error: new Error('action failed'), data: undefined, reset: vi.fn(),
+    })
+    mockQueryResult([inboxItem()], 1)
+
+    render(
+      <MemoryRouter initialEntries={['/identity-inbox']}>
+        <Routes>
+          <Route path="/identity-inbox" element={<IdentityInboxPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText(/action failed/i)).toBeInTheDocument()
     expect(screen.getByText('Mister Miracle')).toBeInTheDocument()
   })
 
   it('navigates to the next page via the Next button', async () => {
-    mockGet.mockResolvedValueOnce({
-      items: Array.from({ length: 20 }, (_, i) => inboxItem({ mapping_id: i })),
-      total: 50,
-      offset: 0,
-      limit: 20,
-    })
+    mockQueryResult(
+      Array.from({ length: 20 }, (_, i) => inboxItem({ mapping_id: i })),
+      50,
+    )
 
     render(
       <MemoryRouter initialEntries={['/identity-inbox']}>
@@ -318,14 +339,10 @@ describe('IdentityInboxPage', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => expect(screen.getByText('50 unresolved items')).toBeInTheDocument())
+    expect(screen.getByText('50 unresolved items')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Next' }))
 
-    await waitFor(() =>
-      expect(mockGet).toHaveBeenLastCalledWith('/v1/identity-inbox', {
-        params: { offset: 20, limit: 20 },
-      }),
-    )
+    await waitFor(() => expect(mockUseIdentityInbox).toHaveBeenLastCalledWith(20))
   })
 
   it('keeps only one item expanded at a time', async () => {
@@ -355,7 +372,7 @@ describe('IdentityInboxPage', () => {
       thread_title: 'New Gods',
       candidates: [candidate(601, '4002', ['new gods volume match'])],
     })
-    mockGet.mockResolvedValueOnce({ items: [itemA, itemB], total: 2, offset: 0, limit: 20 })
+    mockQueryResult([itemA, itemB], 2)
 
     render(
       <MemoryRouter initialEntries={['/identity-inbox']}>
@@ -365,12 +382,6 @@ describe('IdentityInboxPage', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => expect(screen.getByText('Mister Miracle')).toBeInTheDocument())
-    expect(
-      screen
-        .getAllByRole('button')
-        .filter((button) => button.textContent?.includes('Mister Miracle')),
-    ).toHaveLength(1)
     await userEvent.click(screen.getByText('Mister Miracle'))
     await waitFor(() =>
       expect(screen.getByText('mister miracle title match')).toBeInTheDocument(),

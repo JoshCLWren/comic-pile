@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
 import type { BlockingDependency } from '../../../types'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 
@@ -64,7 +65,10 @@ export function ThreadPool({
     wasRatingView.current = isRatingView
 
     if (returnedToRoll) {
-      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      // Explicit semantic scroll for the intentional rating→dice transition
+      // (#2582). Gated by the scroll coordinator so it defers while a route
+      // restore is actively settling instead of racing it.
+      scrollToTopSemantic()
     }
   }, [isRatingView])
 

@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useLocation, useNavigationType } from 'react-router-dom'
+import {
+  beginRouteRestore,
+  restoreRouteScrollPosition,
+  waitForLayoutSettled,
+} from '../scroll/scrollCoordinator'
 
 const SESSION_STORAGE_KEY = 'comic-pile:scroll-positions'
 
@@ -36,6 +41,13 @@ function writeStore(store: ScrollPositions): void {
  * backgrounded or reloaded screen, and scrolls to the top when opening a new
  * screen. Positions are tracked per pathname so a return to the app lands the
  * user exactly where they were instead of at the top of the page.
+ *
+ * Scroll ownership (#2582): this hook is the sole owner of route/resume
+ * restoration. All viewport writes flow through the shared scroll
+ * coordinator (`restoreRouteScrollPosition`), restoration settles against an
+ * explicit layout-readiness contract (`waitForLayoutSettled`) rather than a
+ * guessed delay, and feature semantic scrolling defers while a restore is
+ * actively settling.
  */
 export function useScrollRestoration(): void {
   const location = useLocation()
@@ -98,45 +110,74 @@ export function useScrollRestoration(): void {
   }, [saveCurrentScroll])
 
   // Restore on navigation (including the initial load / reload).
+  // The target is applied immediately, then re-applied while deferred layout
+  // is still shifting: late renders can grow the scrollable area and unclamp
+  // a restore that the browser clamped on the first pass. The settle loop is
+  // an explicit readiness contract (stable layout frames) — never a fixed
+  // timeout. A user-driven gesture (wheel / touch / keys) ends the watch so
+  // restoration never fights an intentional scroll.
   useEffect(() => {
     if (typeof window === 'undefined') {
       return
     }
-    const restore = () => {
+    // Back/forward and reloads return to the prior position; new screens start at the top.
+    const saved = readStore()[pathname] ?? 0
+    const target = navType === 'POP' ? saved : 0
+    const endRestore = beginRouteRestore()
+    let cancelled = false
+    let userMoved = false
+    const markUserMoved = () => {
+      userMoved = true
+    }
+
+    const applyRestore = () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
         return
       }
-      if (typeof window === 'undefined') {
-        return
-      }
-      const saved = readStore()[pathname] ?? 0
-      // Back/forward and reloads return to the prior position; new screens start at the top.
-      window.scrollTo(0, navType === 'POP' ? saved : 0)
+      restoreRouteScrollPosition(target)
     }
 
     if (!('requestAnimationFrame' in window)) {
-      restore()
-      return
+      applyRestore()
+      endRestore()
+      return endRestore
     }
     const raf = window.requestAnimationFrame(() => {
-      restore()
-      // Late layout (deferred data renders) can shrink the scrollable area and
-      // clamp the restored offset; re-apply once the screen has settled.
-      if (navType === 'POP' && 'setTimeout' in window) {
-        window.setTimeout(restore, 150)
-      } else if (navType === 'POP' && 'setTimeout' in globalThis) {
-        // Fallback when window is gone but global setTimeout survives teardown
-        globalThis.setTimeout(restore, 150)
+      if (cancelled) {
+        return
       }
+      applyRestore()
+      void waitForLayoutSettled({
+        isCancelled: () => cancelled || userMoved,
+        needsReapply: () =>
+          !userMoved && !cancelled && typeof window !== 'undefined' && window.scrollY !== target,
+        reapply: applyRestore,
+      }).then(() => {
+        endRestore()
+      })
     })
+    if (typeof window !== 'undefined') {
+      window.addEventListener('wheel', markUserMoved, { passive: true })
+      window.addEventListener('touchmove', markUserMoved, { passive: true })
+      window.addEventListener('keydown', markUserMoved)
+    }
     return () => {
+      cancelled = true
       if ('cancelAnimationFrame' in window) {
         window.cancelAnimationFrame(raf)
       }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('wheel', markUserMoved)
+        window.removeEventListener('touchmove', markUserMoved)
+        window.removeEventListener('keydown', markUserMoved)
+      }
+      endRestore()
     }
   }, [currentKey, navType, pathname])
 
   // Restore immediately when returning to a backgrounded or restored tab.
+  // Owned by the same restoration contract: the viewport write flows through
+  // the coordinator so resume recovery (data-only) can never race it.
   useEffect(() => {
     if (typeof window === 'undefined') {
       return
@@ -149,7 +190,9 @@ export function useScrollRestoration(): void {
         return
       }
       const saved = readStore()[pathname] ?? 0
-      window.scrollTo(0, saved)
+      const endRestore = beginRouteRestore()
+      restoreRouteScrollPosition(saved)
+      endRestore()
     }
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {

@@ -11,7 +11,7 @@ import {
 } from '../hooks/useSession'
 import { sessionApi } from '../services/api'
 import { ToastProvider } from '../contexts/ToastProvider'
-import { CacheProvider } from '../contexts/CacheContext'
+import { queryKeys } from '../query/queryKeys'
 
 vi.mock('../services/api', () => ({
   sessionApi: {
@@ -30,12 +30,22 @@ function renderWithProvider<T>(hook: () => T): { result: { current: T } } {
   return renderHook(hook, {
     wrapper: ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={client}>
-        <CacheProvider>
-          <ToastProvider>{children}</ToastProvider>
-        </CacheProvider>
+        <ToastProvider>{children}</ToastProvider>
       </QueryClientProvider>
     ),
   })
+}
+
+function renderWithClient<T>(hook: () => T) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  const rendered = renderHook(hook, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>
+        <ToastProvider>{children}</ToastProvider>
+      </QueryClientProvider>
+    ),
+  })
+  return { result: rendered.result, client }
 }
 
 beforeEach(() => {
@@ -59,6 +69,32 @@ it('loads first page of sessions', async () => {
   await waitFor(() => expect(result.current.data).toEqual([{ id: 2 }]))
   expect(mockedSessionApi.list).toHaveBeenCalledWith({ status: 'done' }, null)
   expect(result.current.hasMore).toBe(false)
+})
+
+it('is invalidated by queryKeys.session.pages() and queryKeys.session.all', async () => {
+  mockedSessionApi.list
+    .mockReset()
+    .mockResolvedValueOnce({ sessions: [{ id: 1 }], next_page_token: null } as never)
+    .mockResolvedValueOnce({ sessions: [{ id: 2 }], next_page_token: null } as never)
+
+  const { result, client } = renderWithClient(() => useSessions())
+
+  await waitFor(() => expect(result.current.data).toEqual([{ id: 1 }]))
+  expect(mockedSessionApi.list).toHaveBeenCalledTimes(1)
+
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: queryKeys.session.pages() })
+  })
+
+  await waitFor(() => expect(mockedSessionApi.list).toHaveBeenCalledTimes(2))
+  await waitFor(() => expect(result.current.data).toEqual([{ id: 2 }]))
+
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: queryKeys.session.all })
+  })
+
+  await waitFor(() => expect(mockedSessionApi.list).toHaveBeenCalledTimes(3))
+  await waitFor(() => expect(result.current.data).toEqual([{ id: 2 }]))
 })
 
 it('paginates with loadMore and deduplicates sessions', async () => {

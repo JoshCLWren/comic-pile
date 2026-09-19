@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, useMemo } from 'react'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
+import { canonicalCreatorKey, useCreatorSummaries } from '../../../hooks/useCreatorSummaries'
 import { type ComicVineRelatedIssue } from '../../../services/api'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
@@ -28,6 +29,11 @@ const STORY_ARC_LIMIT = 3
 const RELATED_ISSUES_PER_ARC_LIMIT = 5
 const COVER_HEIGHT_CAP_VH = 45
 const COVER_RATIO_FALLBACK = 2 / 3
+
+function formatRating(value: number): string {
+  const normalized = parseFloat(value.toFixed(2))
+  return Number.isFinite(normalized) ? String(normalized) : String(value)
+}
 
 export function ComicIdentity({ issueId }: ComicIdentityProps) {
   const { metadata, isLoading, refetch } = useComicVineIssueIntelligence(issueId)
@@ -93,6 +99,27 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     })
     setAddDialogOpen(true)
   }
+
+  const creatorKeys = useMemo(() => {
+    if (!metadata) return [] as string[]
+    const seen = new Set<string>()
+    const keys: string[] = []
+    for (const creator of metadata.creators) {
+      if (creator.creator_id == null) continue
+      const key = canonicalCreatorKey(creator.creator_id)
+      if (!seen.has(key)) {
+        seen.add(key)
+        keys.push(key)
+      }
+    }
+    return keys
+  }, [metadata])
+
+  const { data: creatorSummaries } = useCreatorSummaries(
+    creatorKeys.length > 0 ? creatorKeys : undefined,
+  )
+  const summaries = creatorSummaries?.summaries ?? {}
+  const coverage = creatorSummaries?.coverage ?? null
 
   if (!issueId || (!isLoading && !metadata)) return null
   if (isLoading) {
@@ -189,9 +216,89 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
               <span className="ml-auto text-stone-500 group-open:rotate-180 transition-transform" aria-hidden="true">⌄</span>
             </summary>
             <div id="creators-list" className="pl-6 pr-2 pb-2 space-y-1 border-l border-white/10">
-              {creatorsToShow.map((creator, index) => (
-                <CreatorName key={`${creator.name}-${index}`} creator={creator} />
-              ))}
+              {creatorsToShow.map((creator, index) => {
+                const stableKey = creator.creator_id != null ? canonicalCreatorKey(creator.creator_id) : null
+                const summary = stableKey ? summaries[stableKey] : undefined
+                const hasRatedStats = summary != null
+                const upcomingVisible =
+                  summary != null &&
+                  coverage != null &&
+                  (coverage.upcoming_complete || summary.upcoming_count > 0)
+                return (
+                  <p
+                    key={`${creator.name}-${index}`}
+                    data-testid="creator-row"
+                    className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs text-stone-300 min-w-0 break-words"
+                  >
+                    <span className="font-bold break-words min-w-0">{creator.name}</span>
+                    {creator.roles.length > 0 && (
+                      <span className="text-stone-500 break-words min-w-0">· {creator.roles.join(', ')}</span>
+                    )}
+                    {hasRatedStats ? (
+                      summary.average_rating != null ? (
+                        <>
+                          <span className="text-stone-500" aria-hidden="true">
+                            ·
+                          </span>
+                          <span
+                            className="inline-flex items-center gap-0.5"
+                            aria-label={`Average rating ${formatRating(summary.average_rating)} out of 5 from ${summary.ratings_count} ${summary.ratings_count === 1 ? 'rating' : 'ratings'}${coverage && !coverage.ratings_complete ? ', partial coverage' : ''}`}
+                          >
+                            <span aria-hidden="true" className="text-amber-400/90">
+                              ★
+                            </span>
+                            <span>{formatRating(summary.average_rating)}</span>
+                          </span>
+                          <span className="text-stone-500" aria-hidden="true">
+                            ·
+                          </span>
+                          <span
+                            aria-label={
+                              coverage && !coverage.ratings_complete
+                                ? `${summary.ratings_count} rated, partial coverage — lower bound`
+                                : `${summary.ratings_count} rated`
+                            }
+                          >
+                            {summary.ratings_count}
+                            {coverage && !coverage.ratings_complete && summary.ratings_count > 0 ? '+' : ''} rated
+                          </span>
+                          {coverage && !coverage.ratings_complete && summary.ratings_count > 0 && (
+                            <span className="sr-only"> partial coverage</span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-stone-500" aria-hidden="true">
+                            ·
+                          </span>
+                          <span>0 rated</span>
+                        </>
+                      )
+                    ) : null}
+                    {upcomingVisible ? (
+                      coverage!.upcoming_complete ? (
+                        <>
+                          <span className="text-stone-500" aria-hidden="true">
+                            ·
+                          </span>
+                          <span>{summary!.upcoming_count} unread</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-stone-500" aria-hidden="true">
+                            ·
+                          </span>
+                          <span
+                            aria-label={`At least ${summary!.upcoming_count} unread, partial coverage`}
+                          >
+                            {summary!.upcoming_count}+ unread
+                          </span>
+                        </>
+                      )
+                    ) : null}
+                  </p>
+                )
+              })}
             </div>
             {hasMoreCreators && (
               <button

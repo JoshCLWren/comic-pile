@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { fireEvent, render } from '@testing-library/react'
+import { act, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRollViewport } from '../pages/RollPage/useRollViewport'
+import { beginRouteRestore } from '../scroll/scrollCoordinator'
 import { cast } from '../utils/cast'
 
 function Harness() {
@@ -149,5 +150,21 @@ describe('useRollViewport (issue #2286)', () => {
     const { container } = render(<Harness />)
     expect(container.querySelector('[data-testid="die-anchor"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="rating-top-anchor"]')).not.toBeNull()
+  })
+
+  it('defers the transition scroll while a route restore is settling, then applies it', () => {
+    // Roll semantic scrolling is the narrow exception to route scroll
+    // ownership (#2582): it must never race an actively settling restore, but
+    // the intentional transition still lands once the restore ends.
+    const endRestore = beginRouteRestore()
+    const { getByRole, getByTestId } = render(<Harness />)
+    fireEvent.click(getByRole('button', { name: 'toggle rating' }))
+    expect(scrollIntoView).not.toHaveBeenCalled()
+
+    act(() => {
+      endRestore()
+    })
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(scrollIntoView.mock.instances[0]).toBe(getByTestId('rating-top-anchor'))
   })
 })

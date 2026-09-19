@@ -121,7 +121,7 @@ async def test_refresh_logs_revoked_token_and_success(
     Returns:
         None.
     """
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO)
     register_response = await client.post(
         "/api/v1/auth/register",
         json={
@@ -135,6 +135,10 @@ async def test_refresh_logs_revoked_token_and_success(
     refresh_response = await client.post("/api/v1/auth/refresh")
     assert refresh_response.status_code == 200
     assert "refreshed" in _auth_reasons(caplog)
+
+    success_record = next(r for r in caplog.records if r.levelname == "INFO" and "auth_refresh" in r.__dict__.get("event", ""))
+    assert success_record.__dict__["auth_outcome"] == "success"
+    assert success_record.__dict__["level"] == "INFO"
 
     access_token = refresh_response.json()["access_token"]
     refresh_token = refresh_response.json()["refresh_token"]
@@ -157,6 +161,10 @@ async def test_refresh_logs_revoked_token_and_success(
     assert revoked_response.status_code == 401
     assert "revoked_token" in _auth_reasons(caplog)
     assert refresh_token not in caplog.text
+
+    revoked_record = next(r for r in caplog.records if r.levelname == "WARNING" and "auth_refresh" in r.__dict__.get("event", "") and r.__dict__.get("auth_reason") == "revoked_token")
+    assert revoked_record.__dict__["auth_outcome"] == "rejected"
+    assert revoked_record.__dict__["level"] == "WARNING"
 
 
 @pytest.mark.asyncio

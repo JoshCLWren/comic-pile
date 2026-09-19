@@ -1,11 +1,10 @@
 """Issue CRUD API endpoints."""
 
 import logging
-from datetime import UTC, datetime
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,10 +12,11 @@ from app.auth import get_current_user
 from app.cache import TTL, cached
 from app.cache_invalidation import invalidate_user_view
 from app.database import get_db
-from app.models import Event, Issue, Thread
+from app.models import Issue
 from app.models.user import User
-from app.repositories import issue_repository
 from app.schemas import (
+    IssueBulkMarkReadRequest,
+    IssueBulkMarkUnreadRequest,
     IssueCreateRange,
     IssueListResponse,
     IssueMoveRequest,
@@ -26,15 +26,11 @@ from app.schemas import (
 )
 from app.schemas.comicvine import ComicVineIssueIntelligence
 from app.schemas.reader_context import ReaderContextResponse
+from app.services import issue as issue_service
 from app.services.comicvine_intelligence import get_issue_intelligence
-from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.reader_context import get_reader_context
-from app.utils.issue_parser import parse_issue_ranges
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
-from comic_pile.dependencies import (
-    refresh_user_blocked_status,
-    validate_position_dependency_consistency,
-)
+from comic_pile.dependencies import validate_position_dependency_consistency
 
 logger = logging.getLogger(__name__)
 
@@ -133,70 +129,6 @@ def _is_issue_thread_number_conflict(exc: IntegrityError) -> bool:
     )
 
 
-async def _get_locked_thread_with_issues(
-    thread_id: int,
-    current_user: User,
-    db: AsyncSession,
-) -> tuple[Thread, list[Issue]]:
-    """Lock a thread and all of its issues, validating ownership."""
-    thread = await get_owned_thread_or_404(db, current_user.id, thread_id, for_update=True)
-
-    issues_result = await db.execute(
-        select(Issue)
-        .where(Issue.thread_id == thread_id)
-        .order_by(Issue.position, Issue.id)
-        .with_for_update()
-    )
-    return thread, list(issues_result.scalars().all())
-
-
-async def _get_issue_thread_id(
-    issue_id: int,
-    current_user: User,
-    db: AsyncSession,
-) -> int:
-    """Resolve an issue's thread ID with ownership validation before taking thread locks."""
-    issue_thread_result = await db.execute(
-        select(Issue.thread_id)
-        .join(Thread, Thread.id == Issue.thread_id)
-        .where(Issue.id == issue_id, Thread.user_id == current_user.id)
-    )
-    thread_id = issue_thread_result.scalar_one_or_none()
-    if thread_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        )
-    return thread_id
-
-
-def _assign_issue_positions(issues: list[Issue]) -> None:
-    """Rewrite positions so the given issue order becomes canonical."""
-    for position, issue in enumerate(issues, start=1):
-        issue.position = position
-
-
-def _recalculate_next_unread_issue_id(thread: Thread, issues: list[Issue]) -> None:
-    """Update a thread's next unread pointer from the current in-memory issue order."""
-    next_unread_issue = next(
-        (issue for issue in issues if issue.status == "unread"),
-        None,
-    )
-    thread.next_unread_issue_id = next_unread_issue.id if next_unread_issue else None
-
-
-def _recalculate_thread_issue_tracking_state(thread: Thread, issues: list[Issue]) -> None:
-    """Recalculate issue-tracking metadata from the current in-memory issue state."""
-    state = apply_thread_issue_tracking_state(thread, issues)
-
-    if state.issues_remaining == 0:
-        thread.status = "completed"
-        return
-
-    if thread.status == "completed":
-        thread.status = "active"
-
-
 @router.get("/threads/{thread_id}/issues", response_model=IssueListResponse)
 @cached(ttl=TTL.SHORT)
 async def list_issues(
@@ -223,54 +155,11 @@ async def list_issues(
     Raises:
         HTTPException: If thread not found.
     """
-    await get_owned_thread_or_404(db, current_user.id, thread_id)
+    issues, total_count, next_token = await issue_service.list_issues(
+        db, thread_id, current_user.id, status_filter, page_size, page_token
+    )
 
-    query = select(Issue).where(Issue.thread_id == thread_id)
-
-    if status_filter:
-        query = query.where(Issue.status == status_filter)
-
-    query = query.order_by(Issue.position)
-
-    if page_token:
-        try:
-            parts = page_token.split(",")
-            if len(parts) != 2:
-                raise ValueError("Invalid format")
-            cursor_position = int(parts[0])
-            cursor_id = int(parts[1])
-            query = query.where(
-                or_(
-                    Issue.position > cursor_position,
-                    (Issue.position == cursor_position) & (Issue.id > cursor_id),
-                )
-            )
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid page_token format",
-            ) from None
-
-    query = query.limit(page_size + 1)
-
-    result = await db.execute(query)
-    issues = result.scalars().all()
-
-    has_more = len(issues) > page_size
-    issues_to_return = issues[:page_size]
-
-    issue_responses = [issue_to_response(issue) for issue in issues_to_return]
-
-    count_query = select(func.count()).select_from(Issue).where(Issue.thread_id == thread_id)
-    if status_filter:
-        count_query = count_query.where(Issue.status == status_filter)
-    total_count_result = await db.execute(count_query)
-    total_count = total_count_result.scalar() or 0
-
-    next_token = None
-    if has_more and issues_to_return:
-        last = issues_to_return[-1]
-        next_token = f"{last.position},{last.id}"
+    issue_responses = [issue_to_response(issue) for issue in issues]
 
     return IssueListResponse(
         issues=issue_responses,
@@ -339,114 +228,10 @@ async def create_issues(
         HTTPException: If thread not found, all issues already exist,
                       position collision detected, or issue range is invalid.
     """
-    thread = await get_owned_thread_or_404(db, current_user.id, thread_id, for_update=True)
-
     try:
-        issue_numbers = parse_issue_ranges(request.issue_range)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
-        ) from None
-
-    if not issue_numbers:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Issue range cannot be empty",
+        new_issues, total_issue_count = await issue_service.create_issues(
+            db, thread_id, current_user.id, request.issue_range, request.insert_after_issue_id
         )
-
-    existing_issues_result = await db.execute(
-        select(Issue.id, Issue.issue_number, Issue.position)
-        .where(Issue.thread_id == thread_id)
-        .with_for_update()
-        .order_by(Issue.position)
-    )
-    existing_issue_rows = existing_issues_result.all()
-    existing_issues = {row.issue_number: row.position for row in existing_issue_rows}
-
-    max_position = max((row.position for row in existing_issue_rows), default=0)
-    insert_position = max_position
-
-    if request.insert_after_issue_id is not None:
-        insert_after_issue = next(
-            (row for row in existing_issue_rows if row.id == request.insert_after_issue_id),
-            None,
-        )
-        if insert_after_issue is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Issue {request.insert_after_issue_id} not found",
-            )
-        insert_position = insert_after_issue.position
-
-    new_issue_numbers = [
-        issue_number for issue_number in issue_numbers if issue_number not in existing_issues
-    ]
-
-    if not new_issue_numbers:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="All issues in range already exist",
-        )
-
-    new_issues_count = len(new_issue_numbers)
-
-    if request.insert_after_issue_id is not None:
-        await db.execute(text("SET CONSTRAINTS uq_issue_thread_position DEFERRED"))
-        await db.execute(
-            update(Issue)
-            .where(Issue.thread_id == thread_id, Issue.position > insert_position)
-            .values(position=Issue.position + new_issues_count)
-        )
-
-    new_issues = []
-    next_new_position = insert_position + 1
-
-    for issue_number in new_issue_numbers:
-        issue = Issue(
-            thread_id=thread_id,
-            issue_number=issue_number,
-            position=next_new_position,
-            status="unread",
-        )
-        db.add(issue)
-        new_issues.append(issue)
-        next_new_position += 1
-
-    position_values = [issue.position for issue in new_issues]
-    if len(position_values) != len(set(position_values)):
-        logger.error(
-            "Position collision within new issues",
-            extra={
-                "thread_id": thread_id,
-                "requested_positions": position_values,
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal error: Duplicate positions calculated",
-        )
-
-    reserved_positions = [
-        row.position for row in existing_issue_rows if row.position <= insert_position
-    ]
-    conflicting_positions = [p for p in position_values if p in reserved_positions]
-    if conflicting_positions:
-        logger.error(
-            "Position collision with existing issues",
-            extra={
-                "thread_id": thread_id,
-                "requested_positions": position_values,
-                "conflicting_positions": conflicting_positions,
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal error: Position conflict with existing issues",
-        )
-
-    try:
-        adopted_issues = await issue_repository.issues_ordered(db, thread_id)
     except IntegrityError as e:
         await db.rollback()
         if _is_issue_thread_number_conflict(e):
@@ -456,69 +241,17 @@ async def create_issues(
             ) from e
         logger.error(
             "Database integrity error during issue creation",
-            extra={
-                "thread_id": thread_id,
-                "error": str(e),
-                "position_values": position_values,
-            },
+            extra={"thread_id": thread_id, "error": str(e)},
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal error: Database constraint violation",
         ) from e
-
-    was_unmigrated = thread.total_issues is None
-    had_next_unread_issue = thread.next_unread_issue_id is not None
-    tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
-    total_issue_count = tracking_state.total_issues
-
-    if tracking_state.next_unread_issue_id is None:
-        thread.status = "completed"
-    elif was_unmigrated or not had_next_unread_issue:
-        if not was_unmigrated and thread.status == "completed":
-            await db.execute(
-                update(Thread)
-                .where(Thread.user_id == current_user.id)
-                .where(Thread.status == "active")
-                .values(queue_position=Thread.queue_position + 1)
-            )
-            thread.queue_position = 1
-        thread.status = "active"
-
-    thread_id_val = thread.id
-
-    event = Event(
-        type="issues_created",
-        timestamp=datetime.now(UTC),
-        thread_id=thread_id_val,
-    )
-    db.add(event)
 
     issue_responses = [issue_to_response(issue) for issue in new_issues]
 
-    await refresh_user_blocked_status(current_user.id, db)
-    try:
-        await db.commit()
-        await _invalidate_issue_caches(current_user.id)
-    except IntegrityError as e:
-        await db.rollback()
-        if _is_issue_thread_number_conflict(e):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Issue number already exists in this thread",
-            ) from e
-        logger.error(
-            "Database integrity error during issue creation",
-            extra={
-                "thread_id": thread_id,
-                "error": str(e),
-                "position_values": position_values,
-            },
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal error: Database constraint violation",
-        ) from e
+    await db.commit()
+    await _invalidate_issue_caches(current_user.id)
 
     return IssueListResponse(
         issues=issue_responses,
@@ -574,51 +307,10 @@ async def move_issue(
     Raises:
         HTTPException: If the issue or requested target issue is not found.
     """
-    thread_id = await _get_issue_thread_id(issue_id, current_user, db)
-    thread, thread_issues = await _get_locked_thread_with_issues(thread_id, current_user, db)
+    await issue_service.move_issue(
+        db, issue_id, current_user.id, request.after_issue_id
+    )
 
-    issue_map = {issue.id: issue for issue in thread_issues}
-    issue = issue_map.get(issue_id)
-    if issue is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        )
-
-    if request.after_issue_id == issue_id:
-        _recalculate_next_unread_issue_id(thread, thread_issues)
-        await refresh_user_blocked_status(current_user.id, db)
-        await db.commit()
-        await _invalidate_issue_caches(current_user.id)
-        return
-
-    reordered_issues = [
-        existing_issue for existing_issue in thread_issues if existing_issue.id != issue_id
-    ]
-
-    if request.after_issue_id is None:
-        insert_index = 0
-    else:
-        after_issue = issue_map.get(request.after_issue_id)
-        if after_issue is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Issue {request.after_issue_id} not found",
-            )
-        insert_index = (
-            next(
-                index
-                for index, existing_issue in enumerate(reordered_issues)
-                if existing_issue.id == after_issue.id
-            )
-            + 1
-        )
-
-    reordered_issues.insert(insert_index, issue)
-    _assign_issue_positions(reordered_issues)
-    _recalculate_next_unread_issue_id(thread, reordered_issues)
-
-    await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
     await _invalidate_issue_caches(current_user.id)
 
@@ -644,27 +336,10 @@ async def reorder_issues(
     Raises:
         HTTPException: If the thread is not found or the issue IDs are invalid.
     """
-    thread, thread_issues = await _get_locked_thread_with_issues(thread_id, current_user, db)
+    await issue_service.reorder_issues(
+        db, thread_id, current_user.id, request.issue_ids
+    )
 
-    existing_issue_ids = [issue.id for issue in thread_issues]
-    requested_issue_ids = request.issue_ids
-    if (
-        len(requested_issue_ids) != len(existing_issue_ids)
-        or len(set(requested_issue_ids)) != len(requested_issue_ids)
-        or set(requested_issue_ids) != set(existing_issue_ids)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="issue_ids must contain every issue in the thread exactly once",
-        )
-
-    issue_map = {issue.id: issue for issue in thread_issues}
-    reordered_issues = [issue_map[issue_id] for issue_id in requested_issue_ids]
-
-    _assign_issue_positions(reordered_issues)
-    _recalculate_next_unread_issue_id(thread, reordered_issues)
-
-    await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
     await _invalidate_issue_caches(current_user.id)
 
@@ -688,95 +363,8 @@ async def delete_issue(
     Raises:
         HTTPException: If the issue does not exist or is not owned by the user.
     """
-    thread_id = await _get_issue_thread_id(issue_id, current_user, db)
-    thread, thread_issues = await _get_locked_thread_with_issues(thread_id, current_user, db)
+    await issue_service.delete_issue(db, issue_id, current_user.id)
 
-    issue_map = {issue.id: issue for issue in thread_issues}
-    issue = issue_map.get(issue_id)
-    if issue is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        )
-
-    deleted_position = issue.position
-    deleted_issue_number = issue.issue_number
-    remaining_issues = [
-        existing_issue for existing_issue in thread_issues if existing_issue.id != issue_id
-    ]
-
-    await db.delete(issue)
-
-    for remaining_issue in remaining_issues:
-        if remaining_issue.position > deleted_position:
-            remaining_issue.position -= 1
-
-    _recalculate_thread_issue_tracking_state(thread, remaining_issues)
-
-    db.add(
-        Event(
-            type="issue_deleted",
-            timestamp=datetime.now(UTC),
-            thread_id=thread.id,
-            issue_number=deleted_issue_number,
-        )
-    )
-
-    # Prune continuity plans that reference the deleted issue.
-    from app.models.continuity_plan import ContinuityPlan
-    from app.models.continuity_rule import ContinuityRule
-    from sqlalchemy import delete as sa_delete
-
-    plans_result = await db.execute(
-        select(ContinuityPlan).where(ContinuityPlan.user_id == current_user.id)
-    )
-    for plan in plans_result.scalars().all():
-        original = list(plan.nodes_json or [])
-        pruned = [n for n in original if not (str(n.get("node_type", "")) == "issue" and int(n.get("ref_id", 0) or 0) == issue_id)]
-        if len(pruned) != len(original):
-            by_lane: dict[str, list[dict[str, object]]] = {}
-            for n in pruned:
-                by_lane.setdefault(str(n.get("lane_id", "")), []).append(n)
-            normalized: list[dict[str, object]] = []
-            for lane_nodes in by_lane.values():
-                lane_nodes.sort(key=lambda x: int(x.get("position", 0)))  # type: ignore[arg-type]
-                for idx, n in enumerate(lane_nodes):
-                    n["position"] = idx
-                    normalized.append(n)
-            plan.nodes_json = normalized
-            marker = f"continuity-plan:{plan.id}"
-            await db.execute(
-                sa_delete(ContinuityRule).where(
-                    ContinuityRule.user_id == current_user.id,
-                    ContinuityRule.note == marker,
-                    (
-                        (ContinuityRule.source_type == "issue") & (ContinuityRule.source_id == issue_id)
-                    )
-                    | (
-                        (ContinuityRule.target_type == "issue") & (ContinuityRule.target_id == issue_id)
-                    ),
-                )
-            )
-            if len(pruned) < 2:
-                await db.execute(
-                    sa_delete(ContinuityRule).where(
-                        ContinuityRule.user_id == current_user.id,
-                        ContinuityRule.note == marker,
-                    )
-                )
-    await db.execute(
-        sa_delete(ContinuityRule).where(
-            ContinuityRule.user_id == current_user.id,
-            (
-                (ContinuityRule.source_type == "issue") & (ContinuityRule.source_id == issue_id)
-            )
-            | (
-                (ContinuityRule.target_type == "issue") & (ContinuityRule.target_id == issue_id)
-            ),
-        )
-    )
-
-    await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
     await _invalidate_issue_caches(current_user.id)
 
@@ -797,51 +385,7 @@ async def mark_issue_read(
     Raises:
         HTTPException: If issue not found, thread not found, or issue already read.
     """
-    issue = await get_owned_issue_or_404(db, current_user.id, issue_id)
-    thread = await get_owned_thread_or_404(db, current_user.id, issue.thread_id)
-
-    if issue.status == "read":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Issue {issue_id} is already marked as read",
-        )
-
-    issue.status = "read"
-    issue.read_at = datetime.now(UTC)
-
-    thread_id = thread.id
-
-    next_unread_result = await db.execute(
-        select(Issue)
-        .where(
-            Issue.thread_id == thread_id,
-            Issue.status == "unread",
-        )
-        .order_by(Issue.position)
-        .limit(1)
-    )
-    next_unread = next_unread_result.scalar_one_or_none()
-
-    if next_unread:
-        thread.next_unread_issue_id = next_unread.id
-        thread.reading_progress = "in_progress"
-        thread.issues_remaining = await thread.get_issues_remaining(db)
-    else:
-        thread.next_unread_issue_id = None
-        thread.reading_progress = "completed"
-        thread.issues_remaining = 0
-        thread.status = "completed"
-
-    event = Event(
-        type="issue_read",
-        timestamp=datetime.now(UTC),
-        thread_id=thread_id,
-        issue_id=issue_id,
-        issue_number=issue.issue_number,
-    )
-    db.add(event)
-
-    await refresh_user_blocked_status(current_user.id, db)
+    await issue_service.mark_issue_read(db, issue_id, current_user.id)
     await db.commit()
     await _invalidate_issue_caches(current_user.id)
 
@@ -864,68 +408,49 @@ async def mark_issue_unread(
     Raises:
         HTTPException: If issue not found, thread not found, or issue already unread.
     """
-    issue = await get_owned_issue_or_404(db, current_user.id, issue_id)
-    thread = await get_owned_thread_or_404(db, current_user.id, issue.thread_id)
-
-    if issue.status == "unread":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Issue {issue_id} is already marked as unread",
-        )
-
-    issue.status = "unread"
-    issue.read_at = None
-
-    thread_id = thread.id
-    thread_was_completed = thread.status == "completed"
-
-    if thread.next_unread_issue_id is None or await should_update_next_unread(
-        issue.id, thread.next_unread_issue_id, db
-    ):
-        thread.next_unread_issue_id = issue.id
-
-    thread.reading_progress = "in_progress"
-    thread.issues_remaining = await thread.get_issues_remaining(db)
-
-    if thread_was_completed:
-        thread.status = "active"
-
-    event = Event(
-        type="issue_unread",
-        timestamp=datetime.now(UTC),
-        thread_id=thread_id,
-        issue_id=issue_id,
-        issue_number=issue.issue_number,
-    )
-    db.add(event)
-
-    await refresh_user_blocked_status(current_user.id, db)
+    await issue_service.mark_issue_unread(db, issue_id, current_user.id)
     await db.commit()
     await _invalidate_issue_caches(current_user.id)
 
 
-async def should_update_next_unread(
-    issue_id: int, next_unread_issue_id: int, db: AsyncSession
-) -> bool:
-    """Check if next_unread_issue_id should be updated to the given issue.
-
-    Returns True if the issue should become the next unread
-    (i.e., its position is earlier than the current next unread).
+@router.post("/issues:bulkMarkRead", status_code=status.HTTP_204_NO_CONTENT)
+async def bulk_mark_issue_read(
+    request: IssueBulkMarkReadRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Bulk mark issues as read.
 
     Args:
-        issue_id: Issue ID to check.
-        next_unread_issue_id: Current next unread issue ID.
+        request: Bounded list of issue IDs.
+        current_user: Authenticated user.
         db: Database session.
 
-    Returns:
-        True if issue position is earlier than current next unread issue.
+    Raises:
+        HTTPException: If any issue is invalid or already read.
     """
-    next_issue = await db.get(Issue, next_unread_issue_id)
-    if not next_issue:
-        return True
+    await issue_service.bulk_mark_issue_read(db, request.issue_ids, current_user.id)
+    await db.commit()
+    await _invalidate_issue_caches(current_user.id)
 
-    issue = await db.get(Issue, issue_id)
-    if not issue:
-        return False
 
-    return issue.position < next_issue.position
+@router.post("/issues:bulkMarkUnread", status_code=status.HTTP_204_NO_CONTENT)
+async def bulk_mark_issue_unread(
+    request: IssueBulkMarkUnreadRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Bulk mark issues as unread.
+
+    Args:
+        request: Bounded list of issue IDs.
+        current_user: Authenticated user.
+        db: Database session.
+
+    Raises:
+        HTTPException: If any issue is invalid or already unread.
+    """
+    await issue_service.bulk_mark_issue_unread(db, request.issue_ids, current_user.id)
+    await db.commit()
+    await _invalidate_issue_caches(current_user.id)
+

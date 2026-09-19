@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { KeyboardEvent } from 'react'
 import Modal from './Modal'
 import { issuesApi } from '../services/api-issues'
@@ -14,6 +14,8 @@ export interface IssueCorrectionIssuesApi {
   ) => Promise<IssueListResponse>
   markRead: (issueId: number) => Promise<void>
   markUnread: (issueId: number) => Promise<void>
+  bulkMarkRead: (issueIds: number[]) => Promise<void>
+  bulkMarkUnread: (issueIds: number[]) => Promise<void>
   move: (issueId: number, afterIssueId: number | null) => Promise<void>
 }
 
@@ -148,7 +150,9 @@ export default function IssueCorrectionDialog({
 
       const issuesBeforeTarget = orderedIssues.slice(0, targetIndex)
       const unreadBeforeTarget = issuesBeforeTarget.filter((issue) => issue.status !== 'read')
-      await Promise.all(unreadBeforeTarget.map((issue) => issuesService.markRead(issue.id)))
+      if (unreadBeforeTarget.length > 0) {
+        await issuesService.bulkMarkRead(unreadBeforeTarget.map((issue) => issue.id))
+      }
 
       if (targetIssue.status === 'read') {
         await issuesService.markUnread(targetIssue.id)

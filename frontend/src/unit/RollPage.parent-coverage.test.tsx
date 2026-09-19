@@ -85,9 +85,13 @@ vi.mock('../services/api-taste', () => ({
     submitVerdict: vi.fn().mockResolvedValue({}),
   },
 }))
-vi.mock('../hooks/useReaderContext', () => ({
-  useReaderContext: () => ({ context: null, isLoading: false, error: null, refetch: vi.fn() }),
-}))
+vi.mock('../hooks/useReaderContext', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks/useReaderContext')>()
+  return {
+    ...actual,
+    useReaderContext: () => ({ context: null, isLoading: false, error: null, refetch: vi.fn() }),
+  }
+})
 vi.mock('../services/api', () => ({ default: {}, threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }], next_page_token: null }) }, dependenciesApi: { getConnectedThreads: relatedApi.connectedThreads, getBlockingInfo: relatedApi.blockingInfo, getBatchBlockingInfo: relatedApi.batchBlockingInfo }, skipApi: { skip: vi.fn().mockResolvedValue(undefined), unskip: vi.fn().mockResolvedValue(undefined) }, sessionApi: { updateMode: vi.fn().mockResolvedValue({}) } }))
 vi.mock('../services/api-reading-orders', () => ({ readingOrdersApi: { getForThread: relatedApi.readingOrders } }))
 vi.mock('../components/LazyDice3D', () => ({
@@ -683,7 +687,6 @@ describe('RollPage parent handlers', () => {
   })
 
   it('keeps rating view usable when related thread data requests fail', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     relatedApi.readingOrders.mockRejectedValueOnce(new Error('orders failed'))
     relatedApi.connectedThreads.mockRejectedValueOnce(new Error('connections failed'))
     const user = userEvent.setup()
@@ -692,9 +695,7 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     await user.click(screen.getByTestId('reading-context-button'))
-    await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('Failed to fetch reading orders:', expect.any(Error)))
-    expect(errorSpy).toHaveBeenCalledWith('Failed to fetch connected threads:', expect.any(Error))
-    errorSpy.mockRestore()
+    await waitFor(() => expect(screen.getByText(/Failed to load reading orders: orders failed/)).toBeInTheDocument())
   })
 
   it('restores a pending session into the rating view on initial load', async () => {
@@ -1069,7 +1070,6 @@ describe('RollPage parent handlers', () => {
   })
 
   it('handles related-thread request failures while fetching reading details', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     relatedApi.readingOrders.mockRejectedValueOnce(new Error('orders failed'))
     relatedApi.connectedThreads.mockRejectedValueOnce(new Error('connected failed'))
     const user = userEvent.setup()
@@ -1078,9 +1078,7 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     await user.click(screen.getByTestId('reading-context-button'))
-    await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('Failed to fetch reading orders:', expect.any(Error)))
-    expect(errorSpy).toHaveBeenCalledWith('Failed to fetch connected threads:', expect.any(Error))
-    errorSpy.mockRestore()
+    await waitFor(() => expect(screen.getByText(/Failed to load reading orders: orders failed/)).toBeInTheDocument())
   })
 
   it('retries a non-401 bootstrap error and reopens the roll view', async () => {

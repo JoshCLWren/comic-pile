@@ -1,6 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import axios from 'axios'
 import BugReportButton from './BugReportButton'
 import type { ReportType } from './BugReportModal'
 import { useAuth } from '../App'
@@ -10,8 +9,9 @@ import { useToast } from '../contexts/useToast'
 import { DEFAULT_THEME, getAppliedTheme, isSupportedTheme, readStoredThemePreference, selectTheme } from '../services/theme'
 import { persistThemePreference } from '../services/themePreferenceSync'
 import type { ThemeId } from '../services/theme'
-import type { AuthUser } from '../types'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
+import { useResponsive } from '../utils/responsive'
+import OverlayPortal from './OverlayPortal'
 
 type BugReportSubmit = (
   reportType: ReportType,
@@ -157,27 +157,17 @@ function NavIcon({ name }: { name: NavIconName }) {
 
 export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const location = useLocation()
-  const { isAuthenticated, logout } = useAuth()
+  const { isAuthenticated, isLoading, user, logout } = useAuth()
   const { collapsed, toggleCollapsed } = useNavCollapse()
   const navigate = useNavigate()
-  const [username, setUsername] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [hasError, setHasError] = useState(false)
+  const { isMobile } = useResponsive()
   const [isMoreOpen, setIsMoreOpen] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
   const [activeTheme, setActiveTheme] = useState<ThemeId>(
     () => getAppliedTheme() ?? readStoredThemePreference() ?? DEFAULT_THEME,
   )
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const moreMenuRef = useRef<HTMLElement>(null)
   const { showToast } = useToast()
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768)
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
 
   useEffect(() => {
     const root = document.documentElement
@@ -204,30 +194,17 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
       setIsMoreOpen(false)
     }
 
-    document.addEventListener('pointerdown', dismissMoreMenu)
-    return () => document.removeEventListener('pointerdown', dismissMoreMenu)
-  }, [isMoreOpen])
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      setIsLoading(true)
-      setHasError(false)
-      api.get<AuthUser>('/v1/auth/me', { skipAuthRedirect: true })
-        .then(user => {
-          setUsername(user.username || '')
-          setHasError(false)
-        })
-        .catch((err: unknown) => {
-          console.error('Failed to fetch user:', err)
-          if (axios.isAxiosError(err) && err.response?.status === 401) logout()
-          else setHasError(true)
-        })
-        .finally(() => setIsLoading(false))
-    } else {
-      setUsername('')
-      setHasError(false)
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsMoreOpen(false)
     }
-  }, [isAuthenticated, logout])
+
+    document.addEventListener('pointerdown', dismissMoreMenu)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('pointerdown', dismissMoreMenu)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [isMoreOpen])
 
   const isActive = (path: string) => location.pathname === path
   const isMoreRoute = SECONDARY_NAV_ITEMS.some((item) =>
@@ -353,12 +330,12 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
             <div className="flex flex-col items-center gap-2">
               {isLoading ? (
                 <span className="text-xs font-medium text-[var(--theme-text-muted)]">…</span>
-              ) : username ? (
+              ) : user?.username ? (
                 <span
                   className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-xs font-bold uppercase text-[var(--theme-text-primary)]"
-                  title={username}
+                  title={user.username}
                 >
-                  {username.charAt(0)}
+                  {user.username.charAt(0)}
                 </span>
               ) : null}
               <div
@@ -407,10 +384,8 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
             <>
               {isLoading ? (
                 <span className="text-xs font-medium text-[var(--theme-text-muted)]">Loading...</span>
-              ) : hasError ? (
-                <span className="text-xs font-medium text-amber-500" title="Failed to load user data">User</span>
-              ) : username ? (
-                <span className="block truncate text-xs font-medium text-[var(--theme-text-muted)]">{username}</span>
+              ) : user?.username ? (
+                <span className="block truncate text-xs font-medium text-[var(--theme-text-muted)]">{user.username}</span>
               ) : null}
               <div
                 className="mt-2 flex flex-wrap items-center justify-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
@@ -470,12 +445,13 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
       </nav>
 
       {isMoreOpen && (
-        <nav
-          ref={moreMenuRef}
-          id="secondary-navigation"
-          aria-label="More pages"
-          className="fixed bottom-16 right-3 z-50 w-56 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-2 shadow-2xl md:bottom-24 md:right-6"
-        >
+        <OverlayPortal>
+          <nav
+            ref={moreMenuRef}
+            id="secondary-navigation"
+            aria-label="More pages"
+            className="fixed bottom-16 right-3 w-56 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-2 shadow-2xl md:bottom-24 md:right-6"
+          >
           {SECONDARY_NAV_ITEMS.map((item) => (
             <Link
               key={item.path}
@@ -514,7 +490,8 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               </button>
             ))}
           </div>
-        </nav>
+          </nav>
+        </OverlayPortal>
       )}
     </>
   )

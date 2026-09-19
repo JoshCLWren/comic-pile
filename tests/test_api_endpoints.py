@@ -50,7 +50,7 @@ async def test_create_thread_validation(auth_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_list_threads(auth_client: AsyncClient, sample_data: dict) -> None:
-    """Test GET /api/v1/threads/ returns all threads."""
+    """Test GET /api/v1/threads/ returns active Queue threads only (#2567)."""
     _ = sample_data
     response = await auth_client.get("/api/v1/threads/")
     assert response.status_code == 200
@@ -58,17 +58,17 @@ async def test_list_threads(auth_client: AsyncClient, sample_data: dict) -> None
     data = response.json()
     assert "threads" in data
     threads = data["threads"]
-    assert len(threads) == 5
+    assert len(threads) == 4
     assert threads[0]["title"] == "Superman"
     assert threads[1]["title"] == "Batman"
-    assert threads[2]["title"] == "Wonder Woman"
-    assert threads[3]["title"] == "Flash"
-    assert threads[4]["title"] == "Aquaman"
+    assert threads[2]["title"] == "Flash"
+    assert threads[3]["title"] == "Aquaman"
+    assert all(thread["status"] == "active" for thread in threads)
 
 
 @pytest.mark.asyncio
 async def test_list_threads_search(auth_client: AsyncClient, sample_data: dict) -> None:
-    """Test GET /api/v1/threads/?search= filters threads by title."""
+    """Test GET /api/v1/threads/?search= filters active threads by title (#2567)."""
     _ = sample_data
 
     response = await auth_client.get("/api/v1/threads/", params={"search": "man"})
@@ -78,7 +78,8 @@ async def test_list_threads_search(auth_client: AsyncClient, sample_data: dict) 
     assert "threads" in data
     threads = data["threads"]
     titles = {thread["title"] for thread in threads}
-    assert titles == {"Superman", "Batman", "Aquaman", "Wonder Woman"}
+    # Wonder Woman is completed, so it must not leak into active Queue search.
+    assert titles == {"Superman", "Batman", "Aquaman"}
 
 
 @pytest.mark.asyncio
@@ -87,7 +88,122 @@ async def test_list_threads_empty(auth_client: AsyncClient) -> None:
     response = await auth_client.get("/api/v1/threads/")
     assert response.status_code == 200
     data = response.json()
-    assert data == {"threads": [], "next_page_token": None}
+    assert data == {"threads": [], "next_page_token": None, "active_count": 0}
+
+
+@pytest.mark.asyncio
+async def test_list_completed_threads(auth_client: AsyncClient, sample_data: dict) -> None:
+    """Test GET /api/v1/threads/completed/threads returns completed rows only (#2567)."""
+    _ = sample_data
+    response = await auth_client.get("/api/v1/threads/completed/threads")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert "threads" in data
+    threads = data["threads"]
+    assert len(threads) == 1
+    assert threads[0]["title"] == "Wonder Woman"
+    assert threads[0]["status"] == "completed"
+    assert data["next_page_token"] is None
+
+
+@pytest.mark.asyncio
+async def test_completed_threads_json_is_v1_only(
+    auth_client: AsyncClient, sample_data: dict
+) -> None:
+    """New client resources must not gain a bare /api/* twin (versioning)."""
+    _ = sample_data
+    response = await auth_client.get("/api/threads/completed/threads")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_queue_and_completed_paginate_independently(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Active Queue and Finished Series page as independent collections (#2567).
+
+    Seeds enough active and completed rows to span several pages, then
+    verifies: active pages never contain completed rows, scrolling active
+    pages never changes the Finished Series count, every completed thread is
+    reachable on its own, and the ``position`` sort alias pages cleanly.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    user_id = sample_data["user"].id
+    base = datetime.now(UTC)
+    for i in range(6):
+        async_db.add(
+            Thread(
+                title=f"Active Extra {i}",
+                format="Comic",
+                issues_remaining=1,
+                queue_position=100 + i,
+                status="active",
+                user_id=user_id,
+                created_at=base + timedelta(seconds=i),
+            )
+        )
+    for i in range(5):
+        async_db.add(
+            Thread(
+                title=f"Finished Extra {i}",
+                format="Comic",
+                issues_remaining=0,
+                queue_position=200 + i,
+                status="completed",
+                user_id=user_id,
+                created_at=base + timedelta(seconds=100 + i),
+            )
+        )
+    await async_db.commit()
+
+    async def collect(path: str, params: dict) -> list:
+        """Walk every page of a collection and return all rows."""
+        seen: list = []
+        token: str | None = None
+        for _ in range(10):
+            query = dict(params)
+            if token is not None:
+                query["page_token"] = token
+            response = await auth_client.get(path, params=query)
+            assert response.status_code == 200
+            body = response.json()
+            seen.extend(body["threads"])
+            token = body["next_page_token"]
+            if token is None:
+                break
+        return seen
+
+    completed_path = "/api/v1/threads/completed/threads"
+    before = await auth_client.get(completed_path, params={"page_size": 50})
+    assert before.status_code == 200
+    count_before = len(before.json()["threads"])
+
+    active = await collect("/api/v1/threads/", {"page_size": 2})
+    assert len(active) == 10
+    assert all(thread["status"] == "active" for thread in active)
+    assert len({thread["id"] for thread in active}) == 10
+
+    after = await auth_client.get(completed_path, params={"page_size": 50})
+    assert after.status_code == 200
+    assert len(after.json()["threads"]) == count_before
+
+    completed = await collect(completed_path, {"page_size": 2})
+    assert len(completed) == 6
+    assert all(thread["status"] == "completed" for thread in completed)
+    assert len({thread["id"] for thread in completed}) == 6
+    assert {thread["id"] for thread in completed}.isdisjoint(
+        {thread["id"] for thread in active}
+    )
+
+    completed_by_position = await collect(
+        completed_path, {"page_size": 2, "sort": "position"}
+    )
+    assert len(completed_by_position) == 6
+    assert {thread["id"] for thread in completed_by_position} == {
+        thread["id"] for thread in completed
+    }
 
 
 @pytest.mark.asyncio

@@ -186,7 +186,12 @@ export type IntentSource = 'manual' | 'inferred' | 'snooze' | 'quiz' | null
 
 export type SessionModeCorrectionGuidance = Record<string, string>
 
-export interface SessionModeResponse {
+/**
+ * Canonical session reading-mode snapshot shared by the Roll bootstrap and the
+ * roll session-mode API. All fields are null when the session is in the legacy
+ * default state. Roll and API-client consumers must stay on this single shape.
+ */
+export interface SessionMode {
   active_bandwidth: ReadingBandwidth | string | null
   predicted_bandwidth: ReadingBandwidth | string | null
   bandwidth_confidence: number | null
@@ -199,6 +204,9 @@ export interface SessionModeResponse {
   intent_version: string | null
   session_mode_correction_guidance: SessionModeCorrectionGuidance | null
 }
+
+/** API-client alias for the canonical session mode snapshot. */
+export type SessionModeResponse = SessionMode
 
 export interface SessionModeUpdateRequest {
   bandwidth?: ReadingBandwidth | null
@@ -250,11 +258,14 @@ export interface SessionEvent {
 
 export interface SessionSnapshot {
   id: number;
+  session_id?: number;
   description?: string | null;
   created_at: string;
+  event_id?: number | null;
 }
 
 export interface SessionSnapshotsResponse {
+  session_id?: number;
   snapshots: SessionSnapshot[];
 }
 
@@ -297,6 +308,12 @@ export interface AnalyticsMetrics {
 export interface ThreadListResponse {
   threads: Thread[];
   next_page_token: string | null;
+  /**
+   * Authoritative whole-queue active count, independent of loaded page/search/sort.
+   * Optional so older cached responses and test fixtures degrade to the loaded
+   * slice via the caller's fallback (issue #2568).
+   */
+  active_count?: number;
 }
 
 export interface SessionListResponse {

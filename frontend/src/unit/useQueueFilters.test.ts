@@ -20,7 +20,7 @@ function makeThread(overrides: Partial<Thread>): Thread {
 }
 
 describe('useQueueFilters', () => {
-  it('partitions active and completed threads and defaults to position sort', () => {
+  it('partitions active and completed threads without reordering the server sequence', () => {
     const active1 = makeThread({ id: 1, title: 'Alpha', queue_position: 2 })
     const active2 = makeThread({ id: 2, title: 'Beta', queue_position: 1 })
     const completed = makeThread({
@@ -34,10 +34,10 @@ describe('useQueueFilters', () => {
       useQueueFilters([active1, active2, completed], 'position'),
     )
 
-    expect(result.current.activeThreads.map((t) => t.id)).toEqual([2, 1])
+    expect(result.current.activeThreads.map((t) => t.id)).toEqual([1, 2])
     expect(result.current.completedThreads.map((t) => t.id)).toEqual([3])
-    expect(result.current.sortedThreads.map((t) => t.id)).toEqual([2, 1])
-    expect(result.current.filteredThreads.map((t) => t.id)).toEqual([2, 1])
+    expect(result.current.sortedThreads.map((t) => t.id)).toEqual([1, 2])
+    expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2])
   })
 
   it('returns empty arrays when the page query has no threads yet', () => {
@@ -74,16 +74,41 @@ describe('useQueueFilters', () => {
     expect(result.current.filteredThreads.map((t) => t.id)).toEqual([1, 2])
   })
 
-  it('sorts position with feasible-only ordering (unblocked before blocked)', () => {
-    const blockedFirst = makeThread({ id: 1, title: 'Blocked', queue_position: 1, is_blocked: true })
-    const unblockedSecond = makeThread({ id: 2, title: 'Readable', queue_position: 2, is_blocked: false })
-    const blockedThird = makeThread({ id: 3, title: 'Blocked Later', queue_position: 3, is_blocked: true })
-    const unblockedFourth = makeThread({ id: 4, title: 'Readable Later', queue_position: 4, is_blocked: false })
+  it('preserves the server feasible-only order (unblocked before blocked) without client re-sort', () => {
+    // The backend ORDER BY is is_blocked ASC, queue_position ASC, id ASC. The
+    // client must present that exact sequence; re-grouping here would let a
+    // later cursor page insert rows ahead of already displayed rows (#2566).
+    const unblockedFront = makeThread({ id: 2, title: 'Readable', queue_position: 1, is_blocked: false })
+    const unblockedBack = makeThread({ id: 4, title: 'Readable Later', queue_position: 2, is_blocked: false })
+    const blockedA = makeThread({ id: 1, title: 'Blocked', queue_position: 3, is_blocked: true })
+    const blockedB = makeThread({ id: 3, title: 'Blocked Later', queue_position: 4, is_blocked: true })
 
     const { result } = renderHook(() =>
-      useQueueFilters([blockedFirst, unblockedSecond, blockedThird, unblockedFourth], 'position'),
+      useQueueFilters([unblockedFront, unblockedBack, blockedA, blockedB], 'position'),
     )
     expect(result.current.sortedThreads.map((t) => t.id)).toEqual([2, 4, 1, 3])
+    expect(result.current.filteredThreads.map((t) => t.id)).toEqual([2, 4, 1, 3])
+  })
+
+  it('does not reorder concatenated position pages when blocked rows cross the boundary', () => {
+    // Page 1 ends with the last unblocked row; page 2 begins with blocked rows.
+    // Concatenating must keep page 1 as an exact prefix of the displayed list.
+    const page1 = [
+      makeThread({ id: 2, title: 'Readable', queue_position: 1, is_blocked: false }),
+      makeThread({ id: 4, title: 'Readable Later', queue_position: 2, is_blocked: false }),
+    ]
+    const page2 = [
+      makeThread({ id: 1, title: 'Blocked', queue_position: 3, is_blocked: true }),
+      makeThread({ id: 3, title: 'Blocked Later', queue_position: 4, is_blocked: true }),
+    ]
+
+    const { result } = renderHook(() =>
+      useQueueFilters([...page1, ...page2], 'position'),
+    )
+
+    const displayed = result.current.filteredThreads.map((t) => t.id)
+    expect(displayed).toEqual([2, 4, 1, 3])
+    expect(displayed.slice(0, page1.length)).toEqual(page1.map((t) => t.id))
   })
 
   it('returns all active threads when no search filter applied', () => {

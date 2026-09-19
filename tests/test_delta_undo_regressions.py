@@ -490,7 +490,7 @@ async def test_delta_snapshot_requires_rated_thread_id(
     Returns:
         None.
     """
-    from app.api.rate import snapshot_thread_states
+    from app.services.rate_service import snapshot_thread_states
 
     session = SessionModel(start_die=6, user_id=default_user.id)
     async_db.add(session)
