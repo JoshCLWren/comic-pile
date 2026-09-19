@@ -1,33 +1,66 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import DependencyBuilder, {
-  type DependencyBuilderDependenciesApi,
-  type DependencyBuilderIssuesApi,
-  type DependencyBuilderThreadsApi,
-} from '../components/DependencyBuilder'
+import DependencyBuilder from '../components/DependencyBuilder'
 import { ToastProvider } from '../contexts/ToastProvider'
 import type { Issue, IssueListResponse, Thread } from '../types'
 
-const dependenciesApi = {
+const mocks = vi.hoisted(() => ({
   listThreadDependencies: vi.fn(),
   listBlockedThreadIds: vi.fn(),
   createDependency: vi.fn(),
   deleteDependency: vi.fn(),
   updateDependency: vi.fn(),
-}
-
-const threadsApi = {
-  list: vi.fn(),
-}
-
-const issuesApi = {
-  list: vi.fn(),
+  listThreads: vi.fn(),
+  listIssues: vi.fn(),
   migrateThread: vi.fn(),
-}
+}))
+
+vi.mock('../services/api', async () => {
+  const actual = await vi.importActual<typeof import('../services/api')>(
+    '../services/api'
+  )
+  return {
+    ...actual,
+    dependenciesApi: {
+      listThreadDependencies: mocks.listThreadDependencies,
+      listBlockedThreadIds: mocks.listBlockedThreadIds,
+      createDependency: mocks.createDependency,
+      deleteDependency: mocks.deleteDependency,
+      updateDependency: mocks.updateDependency,
+    },
+    threadsApi: {
+      list: mocks.listThreads,
+    },
+  }
+})
+
+vi.mock('../services/api-issues', async () => {
+  const actual = await vi.importActual<typeof import('../services/api-issues')>(
+    '../services/api-issues'
+  )
+  return {
+    ...actual,
+    issuesApi: {
+      list: mocks.listIssues,
+    },
+    migrationApi: {
+      migrateThread: mocks.migrateThread,
+    },
+  }
+})
+
+const mockedListThreadDependencies = vi.mocked(mocks.listThreadDependencies)
+const mockedListBlockedThreadIds = vi.mocked(mocks.listBlockedThreadIds)
+const mockedCreateDependency = vi.mocked(mocks.createDependency)
+const mockedDeleteDependency = vi.mocked(mocks.deleteDependency)
+const mockedUpdateDependency = vi.mocked(mocks.updateDependency)
+const mockedListThreads = vi.mocked(mocks.listThreads)
+const mockedListIssues = vi.mocked(mocks.listIssues)
+const mockedMigrateThread = vi.mocked(mocks.migrateThread)
 
 function makeThread(overrides: Partial<Thread> & { id: number; title: string }): Thread {
-  // SAFETY: test helper supplies only the fields the component reads
   return {
     format: 'comic',
     status: 'active',
@@ -44,17 +77,7 @@ function makeThread(overrides: Partial<Thread> & { id: number; title: string }):
   } as Thread
 }
 
-const TARGET_THREAD = makeThread({ id: 1, title: 'Target Thread', queue_position: 1 })
-const PREREQ_THREAD = makeThread({
-  id: 2,
-  title: 'Prereq Thread',
-  queue_position: 2,
-  issues_remaining: 5,
-  total_issues: 5,
-})
-
 function makeIssue(overrides: Partial<Issue> & { id: number; thread_id: number }): Issue {
-  // SAFETY: test helper supplies only the fields the component reads
   return {
     issue_number: String(overrides.id),
     status: 'unread',
@@ -76,25 +99,29 @@ function buildListResponse(
   }
 }
 
-interface RenderBuilderProps {
-  dependenciesApi?: DependencyBuilderDependenciesApi
-  threadsApi?: DependencyBuilderThreadsApi
-  issuesApi?: DependencyBuilderIssuesApi
-}
+const TARGET_THREAD = makeThread({ id: 1, title: 'Target Thread', queue_position: 1 })
+const PREREQ_THREAD = makeThread({
+  id: 2,
+  title: 'Prereq Thread',
+  queue_position: 2,
+  issues_remaining: 5,
+  total_issues: 5,
+})
 
-function renderBuilder(props: RenderBuilderProps = {}) {
+function renderBuilder() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
   return render(
-    <ToastProvider>
-      <DependencyBuilder
-        thread={TARGET_THREAD}
-        isOpen
-        onClose={() => {}}
-        dependenciesApi={dependenciesApi}
-        threadsApi={threadsApi}
-        issuesApi={issuesApi}
-        {...props}
-      />
-    </ToastProvider>
+    <QueryClientProvider client={client}>
+      <ToastProvider>
+        <DependencyBuilder
+          thread={TARGET_THREAD}
+          isOpen
+          onClose={() => {}}
+        />
+      </ToastProvider>
+    </QueryClientProvider>,
   )
 }
 
@@ -108,12 +135,12 @@ async function selectPrerequisiteThread() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  dependenciesApi.listThreadDependencies.mockResolvedValue({
+  mockedListThreadDependencies.mockResolvedValue({
     blocking: [],
     blocked_by: [],
   })
-  dependenciesApi.listBlockedThreadIds.mockResolvedValue([])
-  threadsApi.list.mockResolvedValue({
+  mockedListBlockedThreadIds.mockResolvedValue([])
+  mockedListThreads.mockResolvedValue({
     threads: [PREREQ_THREAD],
     next_page_token: null,
   })
@@ -121,7 +148,7 @@ beforeEach(() => {
 
 describe('DependencyBuilder issue selection', () => {
   it('explains that issue dependencies block only when the target issue is next unread', async () => {
-    issuesApi.list.mockResolvedValue(buildListResponse([]))
+    mockedListIssues.mockResolvedValue(buildListResponse([]))
 
     renderBuilder()
 
@@ -131,16 +158,16 @@ describe('DependencyBuilder issue selection', () => {
   })
 
   it('fetches source and target issues with status=unread filter', async () => {
-    issuesApi.list.mockResolvedValue(buildListResponse([]))
+    mockedListIssues.mockResolvedValue(buildListResponse([]))
     renderBuilder()
 
     await selectPrerequisiteThread()
 
     await waitFor(() => {
-      expect(issuesApi.list).toHaveBeenCalled()
+      expect(mockedListIssues).toHaveBeenCalled()
     })
 
-    for (const call of issuesApi.list.mock.calls) {
+    for (const call of mockedListIssues.mock.calls) {
       const params = call[1]
       expect(params).toMatchObject({ status: 'unread', page_size: 100 })
     }
@@ -158,7 +185,7 @@ describe('DependencyBuilder issue selection', () => {
       makeIssue({ id: 101, thread_id: TARGET_THREAD.id, issue_number: '1' }),
     ]
 
-    issuesApi.list.mockImplementation(
+    mockedListIssues.mockImplementation(
       async (threadId: number, params?: { page_token?: string }) => {
         if (threadId === PREREQ_THREAD.id) {
           return params?.page_token
@@ -178,7 +205,7 @@ describe('DependencyBuilder issue selection', () => {
       expect(sourceSelect.querySelectorAll('option').length).toBe(4)
     })
 
-    const prereqCalls = issuesApi.list.mock.calls.filter((c) => c[0] === PREREQ_THREAD.id)
+    const prereqCalls = mockedListIssues.mock.calls.filter((c) => c[0] === PREREQ_THREAD.id)
     expect(prereqCalls).toHaveLength(2)
     expect(prereqCalls[1][1]).toMatchObject({ page_token: 'page-2' })
   })
@@ -190,7 +217,7 @@ describe('DependencyBuilder issue selection', () => {
       issue_number: '1',
     })
 
-    issuesApi.list.mockImplementation(async (threadId: number) => {
+    mockedListIssues.mockImplementation(async (threadId: number) => {
       if (threadId === PREREQ_THREAD.id) {
         return buildListResponse([unreadIssue])
       }
@@ -213,7 +240,7 @@ describe('DependencyBuilder issue selection', () => {
     expect(optionLabels.some((label) => label.includes('#1'))).toBe(true)
     expect(optionLabels.every((label) => !label.includes('✅'))).toBe(true)
 
-    const readCalls = issuesApi.list.mock.calls.filter((c) => c[1]?.status === 'read')
+    const readCalls = mockedListIssues.mock.calls.filter((c) => c[1]?.status === 'read')
     expect(readCalls).toHaveLength(0)
   })
 })

@@ -435,3 +435,16 @@ export async function invalidateAfterCrossoverMutation(
 ): Promise<void> {
   await client.invalidateQueries({ queryKey: queryKeys.crossover.all })
 }
+
+/**
+ * Apply a migrated thread to the cache and invalidate thread list.
+ * Used after a thread is migrated to issue tracking.
+ */
+export async function applyMigratedThreadCache(
+  client: QueryClient,
+  thread: Thread,
+): Promise<void> {
+  client.setQueryData(queryKeys.thread.detail(thread.id), thread)
+  client.setQueryData(queryKeys.thread.summary(thread.id), thread)
+  await client.invalidateQueries({ queryKey: queryKeys.thread.list() })
+}
