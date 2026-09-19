@@ -163,6 +163,8 @@ async def find_duplicate_physical_issues(
             )
         )
     return anomalies
+
+
 async def list_duplicate_physical_issues(
     db: AsyncSession,
     *,

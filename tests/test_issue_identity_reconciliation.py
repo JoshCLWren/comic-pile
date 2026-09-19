@@ -472,25 +472,22 @@ async def test_cbl_entries_without_matching_owned_issue_are_unresolved_not_dropp
 
 
 @pytest.mark.asyncio
-async def test_anomalies_endpoint_respects_page_size_limit(async_db) -> None:
+async def test_anomalies_endpoint_respects_page_size_limit(
+    async_db, client
+) -> None:
     """Anomalies endpoint respects hard page size limit (max 100)."""
     fixture = await _make_ultimate_universe_fixture(async_db)
     user = cast(User, fixture["user"])
     token = create_access_token(data={"sub": user.username, "jti": "test"})
+    client.headers["Authorization"] = f"Bearer {token}"
 
-    from fastapi.testclient import TestClient
-    from app.main import app
-
-    client = TestClient(app)
-    response = client.get(
+    response = await client.get(
         "/api/v1/issue-identity/anomalies?page=1&size=150",
-        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 422
 
-    response = client.get(
+    response = await client.get(
         "/api/v1/issue-identity/anomalies?page=1&size=50",
-        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -506,12 +503,15 @@ async def test_anomalies_endpoint_respects_page_size_limit(async_db) -> None:
 
 
 @pytest.mark.asyncio
-async def test_conflicts_endpoint_respects_page_size_limit(async_db) -> None:
+async def test_conflicts_endpoint_respects_page_size_limit(
+    async_db, client
+) -> None:
     """Conflicts endpoint respects hard page size limit (max 100)."""
     fixture = await _make_ultimate_universe_fixture(async_db)
     user = cast(User, fixture["user"])
     legacy_issues = cast(list[Issue], fixture["legacy_issues"])
     token = create_access_token(data={"sub": user.username, "jti": "test"})
+    client.headers["Authorization"] = f"Bearer {token}"
 
     from app.models.external_identity import IssueExternalIdentityMapping
 
@@ -530,19 +530,13 @@ async def test_conflicts_endpoint_respects_page_size_limit(async_db) -> None:
     )
     await async_db.flush()
 
-    from fastapi.testclient import TestClient
-    from app.main import app
-
-    client = TestClient(app)
-    response = client.get(
+    response = await client.get(
         "/api/v1/issue-identity/conflicts?page=1&size=150",
-        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 422
 
-    response = client.get(
+    response = await client.get(
         "/api/v1/issue-identity/conflicts?page=1&size=25",
-        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -565,11 +559,14 @@ async def test_conflicts_endpoint_respects_page_size_limit(async_db) -> None:
 
 
 @pytest.mark.asyncio
-async def test_cbl_reconciliation_endpoint_respects_page_size_limit(async_db) -> None:
+async def test_cbl_reconciliation_endpoint_respects_page_size_limit(
+    async_db, client
+) -> None:
     """CBL reconciliation endpoint respects hard page size limit (max 200)."""
     fixture = await _make_ultimate_universe_fixture(async_db)
     user = cast(User, fixture["user"])
     token = create_access_token(data={"sub": user.username, "jti": "test"})
+    client.headers["Authorization"] = f"Bearer {token}"
 
     from app.models.cbl_reference import CBLSource, CBLSourceList
 
@@ -595,19 +592,13 @@ async def test_cbl_reconciliation_endpoint_respects_page_size_limit(async_db) ->
         )
     await async_db.flush()
 
-    from fastapi.testclient import TestClient
-    from app.main import app
-
-    client = TestClient(app)
-    response = client.get(
+    response = await client.get(
         f"/api/v1/issue-identity/cbl/{cbl_list.id}/reconciliation?page=1&size=300",
-        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 422
 
-    response = client.get(
+    response = await client.get(
         f"/api/v1/issue-identity/cbl/{cbl_list.id}/reconciliation?page=1&size=30",
-        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -624,9 +615,8 @@ async def test_cbl_reconciliation_endpoint_respects_page_size_limit(async_db) ->
     assert data["has_next"] is True
     assert data["has_prev"] is False
 
-    response = client.get(
+    response = await client.get(
         f"/api/v1/issue-identity/cbl/{cbl_list.id}/reconciliation?page=2&size=30",
-        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -638,20 +628,17 @@ async def test_cbl_reconciliation_endpoint_respects_page_size_limit(async_db) ->
 
 
 @pytest.mark.asyncio
-async def test_anomalies_pagination_works_correctly(async_db) -> None:
+async def test_anomalies_pagination_works_correctly(
+    async_db, client
+) -> None:
     """Anomalies pagination returns correct page information and items."""
     fixture = await _make_ultimate_universe_fixture(async_db)
     user = cast(User, fixture["user"])
     token = create_access_token(data={"sub": user.username, "jti": "test"})
+    client.headers["Authorization"] = f"Bearer {token}"
 
-    from fastapi.testclient import TestClient
-    from app.main import app
-
-    client = TestClient(app)
-
-    response = client.get(
+    response = await client.get(
         "/api/v1/issue-identity/anomalies?page=1&size=5",
-        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -662,9 +649,8 @@ async def test_anomalies_pagination_works_correctly(async_db) -> None:
     assert data["has_prev"] is False
     assert len(data["items"]) == 5
 
-    response = client.get(
+    response = await client.get(
         "/api/v1/issue-identity/anomalies?page=2&size=5",
-        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -677,12 +663,15 @@ async def test_anomalies_pagination_works_correctly(async_db) -> None:
 
 
 @pytest.mark.asyncio
-async def test_conflicts_pagination_works_correctly(async_db) -> None:
+async def test_conflicts_pagination_works_correctly(
+    async_db, client
+) -> None:
     """Conflicts pagination returns correct page information and items."""
     fixture = await _make_ultimate_universe_fixture(async_db)
     user = cast(User, fixture["user"])
     legacy_issues = cast(list[Issue], fixture["legacy_issues"])
     token = create_access_token(data={"sub": user.username, "jti": "test"})
+    client.headers["Authorization"] = f"Bearer {token}"
 
     from app.models.external_identity import IssueExternalIdentityMapping
 
@@ -702,14 +691,8 @@ async def test_conflicts_pagination_works_correctly(async_db) -> None:
         )
     await async_db.flush()
 
-    from fastapi.testclient import TestClient
-    from app.main import app
-
-    client = TestClient(app)
-
-    response = client.get(
+    response = await client.get(
         "/api/v1/issue-identity/conflicts?page=1&size=2",
-        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
     data = response.json()
@@ -720,9 +703,8 @@ async def test_conflicts_pagination_works_correctly(async_db) -> None:
     assert data["has_prev"] is False
     assert len(data["items"]) == 2
 
-    response = client.get(
+    response = await client.get(
         "/api/v1/issue-identity/conflicts?page=2&size=2",
-        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
     data = response.json()
