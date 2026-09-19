@@ -3,7 +3,7 @@
 Incident #2727 proved that independent assignment writers could observe the
 same worker as idle and lease unrelated targets to it. Assignment authority is
 therefore centralized in Fixed Model Factory Dispatcher; event workflows may
-only signal that dispatcher.
+plan or recover capacity but may only signal that dispatcher for new leases.
 """
 
 from pathlib import Path
@@ -11,6 +11,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
+SCRIPTS = REPO_ROOT / ".github" / "scripts"
 ASSIGN_MARKER = 'python3 "$controller" assign --worker "$worker"'
 DISPATCHER = "fixed-model-factory-dispatch.yml"
 
@@ -26,28 +27,34 @@ def test_dispatcher_is_the_only_workflow_with_assignment_authority() -> None:
     assert writers == [DISPATCHER]
 
 
-def test_completion_drain_only_signals_dispatcher() -> None:
-    """Completion events must wake the writer instead of claiming work directly."""
+def test_completion_drain_plans_read_only_then_signals_dispatcher() -> None:
+    """Completion health/ranking survives while lease mutation stays centralized."""
     text = (WORKFLOWS / "factory-completion-drain.yml").read_text(encoding="utf-8")
+    planner = (SCRIPTS / "factory_full_completion_controller.py").read_text(
+        encoding="utf-8"
+    )
 
+    assert "factory_full_completion_controller.py" in text
     assert "gh workflow run fixed-model-factory-dispatch.yml" in text
-    assert "factory_full_completion_controller.py" not in text
-    assert "free-model-factory-entry.yml" not in text
-    assert "factory-work-controller.py" not in text
+    assert "gh workflow run free-model-factory-entry.yml" not in text
+    assert ASSIGN_MARKER not in text
     assert 'workflows: ["Fixed Model Factory Entry"]' in text
     assert '"Fixed Model Factory Dispatcher"' not in text
+    assert "plan_completion_workers" in planner
+    assert "assign_candidate" not in planner
+    assert "assign_completion_batch" not in planner
 
 
-def test_capacity_refill_only_signals_dispatcher() -> None:
-    """Capacity events may select a worker hint but never mutate leases themselves."""
+def test_capacity_refill_recovers_then_signals_dispatcher() -> None:
+    """Capacity recovery may release stale leases but never create new ones."""
     text = (WORKFLOWS / "fixed-model-factory-capacity-refill.yml").read_text(
         encoding="utf-8"
     )
 
     assert "gh workflow run fixed-model-factory-dispatch.yml" in text
+    assert 'python3 "$controller" reconcile || true' in text
     assert ASSIGN_MARKER not in text
     assert "gh workflow run free-model-factory-entry.yml" not in text
-    assert "factory-work-controller.py" not in text
 
 
 def test_event_workflows_do_not_share_dispatcher_writer_lock() -> None:
@@ -61,3 +68,16 @@ def test_event_workflows_do_not_share_dispatcher_writer_lock() -> None:
 
     assert "group: fixed-model-factory-dispatch" not in completion
     assert "group: fixed-model-factory-dispatch" not in refill
+
+
+def test_targeted_signals_do_not_start_roster_chains() -> None:
+    """Explicit worker delegation must not multiply self-perpetuating roster runs."""
+    completion = (WORKFLOWS / "factory-completion-drain.yml").read_text(
+        encoding="utf-8"
+    )
+    refill = (WORKFLOWS / "fixed-model-factory-capacity-refill.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert '-f mode=smoke -f worker="$worker"' in completion
+    assert '-f mode=smoke -f worker="$worker"' in refill
