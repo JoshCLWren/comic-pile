@@ -18,9 +18,10 @@ import {
 import { issuesApi } from '../services/api-issues'
 import { issueDependenciesApi } from '../services/api-dependencies'
 import type { IssueListResponse } from '../services/api-issues'
-import type { Issue } from '../types'
+import type { Issue, Thread } from '../types'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
+import { applyIssueReadSnapshotToCache } from '../query/cacheEffects'
 
 vi.mock('../services/api-issues', () => ({
   issuesApi: {
@@ -319,5 +320,100 @@ describe('mutations', () => {
       await result.current.mutateAsync([80, 999])
     })
     expect(mockedIssuesApi.reorder).toHaveBeenCalledWith(15, [80, 999])
+  })
+})
+
+describe('disabled and unseeded cache paths', () => {
+  it('stays disabled for null thread id without fetching', () => {
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useThreadIssuePages(null), { wrapper })
+
+    expect(result.current.issues).toEqual([])
+    expect(result.current.totalCount).toBe(0)
+    expect(mockedIssuesApi.list).not.toHaveBeenCalled()
+  })
+
+  it('stays disabled when enabled is false without fetching', () => {
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useThreadIssuePages(21, { enabled: false }), { wrapper })
+
+    expect(result.current.issues).toEqual([])
+    expect(result.current.totalCount).toBe(0)
+    expect(mockedIssuesApi.list).not.toHaveBeenCalled()
+  })
+
+  it('toggles, deletes, and reorders with an empty cache and no-op rollback', async () => {
+    const issue = makeIssue({ id: 90, issue_number: '90', status: 'unread' })
+    mockedIssuesApi.markRead.mockResolvedValue(undefined)
+    mockedIssuesApi.delete.mockResolvedValue(undefined)
+    mockedIssuesApi.reorder.mockResolvedValue(undefined)
+
+    const wrapper = createWrapper()
+    const { result: toggle } = renderHook(() => useToggleIssueStatus(90), { wrapper })
+    await act(async () => {
+      await toggle.current.mutateAsync({ issue, nextStatus: 'read' })
+    })
+    expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(90)
+    expect(queryClient.getQueryData(queryKeys.thread.issuePagesAll(90))).toBeUndefined()
+
+    mockedIssuesApi.markRead.mockRejectedValueOnce(new Error('toggle fail'))
+    await expect(
+      act(async () => toggle.current.mutateAsync({ issue, nextStatus: 'read' })),
+    ).rejects.toThrow()
+    expect(queryClient.getQueryData(queryKeys.thread.issuePagesAll(90))).toBeUndefined()
+
+    const { result: deleter } = renderHook(() => useDeleteIssue(91), { wrapper })
+    await act(async () => {
+      await deleter.current.mutateAsync(901)
+    })
+    expect(mockedIssuesApi.delete).toHaveBeenCalledWith(901)
+
+    mockedIssuesApi.delete.mockRejectedValueOnce(new Error('delete fail'))
+    await expect(act(async () => deleter.current.mutateAsync(901))).rejects.toThrow()
+
+    const { result: reorderer } = renderHook(() => useReorderIssues(92), { wrapper })
+    await act(async () => {
+      await reorderer.current.mutateAsync([902, 903])
+    })
+    expect(mockedIssuesApi.reorder).toHaveBeenCalledWith(92, [902, 903])
+
+    mockedIssuesApi.reorder.mockRejectedValueOnce(new Error('reorder fail'))
+    await expect(act(async () => reorderer.current.mutateAsync([902]))).rejects.toThrow()
+  })
+
+  it('patches infinite pages while skipping non-page caches', () => {
+    const stale = makeIssue({ id: 100, issue_number: '100', status: 'unread' })
+    const updated = makeIssue({ id: 100, issue_number: '100', status: 'read' })
+    const thread = cast<Thread>({
+      id: 95,
+      title: 'T',
+      format: 'issue',
+      issues_remaining: 0,
+      total_issues: 1,
+      queue_position: 1,
+      status: 'active',
+      is_blocked: false,
+      blocking_reasons: [],
+      created_at: new Date().toISOString(),
+    })
+
+    queryClient.setQueryData<Issue[]>(queryKeys.thread.issuePagesAll(95), [stale])
+    queryClient.setQueryData<InfiniteData<IssueListResponse>>(queryKeys.thread.issuePages(95), {
+      pages: [{ issues: [stale], total_count: 1, page_size: 100, next_page_token: null }],
+      pageParams: [null],
+    })
+    queryClient.setQueryData(
+      queryKeys.thread.issuePage(95, { pageToken: null, pageSize: 100 }),
+      cast<IssueListResponse>({}),
+    )
+
+    applyIssueReadSnapshotToCache(queryClient, { issues: [updated], thread })
+
+    expect(queryClient.getQueryData<Issue[]>(queryKeys.thread.issuePagesAll(95))).toEqual([stale])
+    const pages = queryClient.getQueryData<InfiniteData<IssueListResponse>>(
+      queryKeys.thread.issuePages(95),
+    )
+    expect(pages?.pages[0].issues).toEqual([updated])
+    expect(queryClient.getQueryData(queryKeys.thread.detail(95))).toEqual(thread)
   })
 })
