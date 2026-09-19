@@ -16,7 +16,8 @@ from pathlib import Path
 from filelock import FileLock
 
 COMICVINE_BASE_URL = "https://comicvine.gamespot.com/api"
-DEFAULT_REQUESTS_PER_HOUR = 180
+DEFAULT_REQUESTS_PER_HOUR = 195
+DEFAULT_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS = 1.05
 COLLECTION_PAGE_LIMIT = 100
 DEEP_ISSUE_FIELDS = (
     "id",
@@ -130,6 +131,9 @@ class ComicVineClient:
         cache_dir: str | Path,
         *,
         requests_per_hour: int = DEFAULT_REQUESTS_PER_HOUR,
+        minimum_live_request_interval_seconds: float = (
+            DEFAULT_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS
+        ),
         base_url: str = COMICVINE_BASE_URL,
         timeout_seconds: float = 30.0,
     ) -> None:
@@ -138,20 +142,26 @@ class ComicVineClient:
         Args:
             api_key: ComicVine API key. It is never included in cache keys or persisted payload metadata.
             cache_dir: Directory for raw successful response cache and request ledger.
-            requests_per_hour: Conservative rolling-hour budget per endpoint path.
+            requests_per_hour: Rolling-hour budget per endpoint path.
+            minimum_live_request_interval_seconds: Minimum delay between uncached live request starts.
             base_url: Provider API base URL.
             timeout_seconds: Network timeout per request.
         """
         if not api_key.strip():
             raise ValueError("api_key is required")
+        if minimum_live_request_interval_seconds < 0:
+            raise ValueError("minimum_live_request_interval_seconds must be non-negative")
         self.api_key = api_key
         self.cache_dir = Path(cache_dir)
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
+        self.minimum_live_request_interval_seconds = minimum_live_request_interval_seconds
         self.limiter = PersistentEndpointLimiter(
             self.cache_dir / "request-ledger.json",
             requests_per_hour=requests_per_hour,
         )
+        self._live_request_lock = asyncio.Lock()
+        self._last_live_request_started_at: float | None = None
 
     @staticmethod
     def _cache_key(endpoint: str, params: Mapping[str, object]) -> str:
@@ -179,6 +189,20 @@ class ComicVineClient:
         temp = path.with_suffix(".tmp")
         temp.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
         temp.replace(path)
+
+    async def _pace_live_request(self) -> None:
+        """Space uncached live request starts to avoid provider velocity bursts."""
+        interval = self.minimum_live_request_interval_seconds
+        if interval <= 0:
+            return
+        async with self._live_request_lock:
+            loop = asyncio.get_running_loop()
+            now = loop.time()
+            if self._last_live_request_started_at is not None:
+                delay = self._last_live_request_started_at + interval - now
+                if delay > 0:
+                    await asyncio.sleep(delay)
+            self._last_live_request_started_at = loop.time()
 
     def _request_sync(self, endpoint: str, params: Mapping[str, object]) -> dict[str, object]:
         query = {
@@ -230,6 +254,7 @@ class ComicVineClient:
             cached = self._read_cache(cache_key)
             if cached is not None:
                 return ComicVineResponse(cached, True, cache_key)
+        await self._pace_live_request()
         self.limiter.acquire(endpoint_bucket)
         payload = await asyncio.to_thread(self._request_sync, endpoint, params)
         self._write_cache(cache_key, payload)
