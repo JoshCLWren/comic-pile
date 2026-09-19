@@ -67,12 +67,26 @@ def test_control_plane_deploy_requests_broad_dispatcher_refill() -> None:
     assert '-f mode=roster' in text
 
 
-def test_refill_has_no_direct_assignment_or_entry_authority() -> None:
-    """The refill workflow is an event router, not a lease or worker launcher."""
+def test_stale_entry_runs_are_force_cancelled_before_reconciliation() -> None:
+    """A ghost queued run must not preserve fixed-model leases forever."""
     text = _workflow_text()
 
-    assert 'factory-work-controller.py' not in text
-    assert ' assign --worker ' not in text
+    stale_scan = 'for status in queued in_progress; do'
+    force_cancel = '/actions/runs/${run_id}/force-cancel'
+    reconcile = 'python3 "$controller" reconcile || true'
+
+    assert 'stale_run_seconds=7200' in text
+    assert stale_scan in text
+    assert force_cancel in text
+    assert reconcile in text
+    assert text.index(stale_scan) < text.index(force_cancel) < text.index(reconcile)
+
+
+def test_refill_recovery_has_no_direct_assignment_or_entry_authority() -> None:
+    """Recovery may release stale leases but may not create or launch assignments."""
+    text = _workflow_text()
+
+    assert 'python3 "$controller" reconcile || true' in text
+    assert 'python3 "$controller" assign --worker "$worker"' not in text
     assert 'gh workflow run free-model-factory-entry.yml' not in text
-    assert 'issues: write' not in text
-    assert 'pull-requests: write' not in text
+    assert 'gh workflow run fixed-model-factory-dispatch.yml' in text
