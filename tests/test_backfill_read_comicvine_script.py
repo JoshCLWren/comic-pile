@@ -6,6 +6,7 @@ import importlib.util
 from pathlib import Path
 import sys
 from types import ModuleType
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -36,7 +37,7 @@ def _module() -> ModuleType:
     return module
 
 
-def _issue(cli: ModuleType, **overrides: object) -> object:
+def _issue(cli: ModuleType, **overrides: object) -> Any:
     """Build one unmapped read issue with confirmed series evidence."""
     values: dict[str, object] = {
         "issue_id": 7,
