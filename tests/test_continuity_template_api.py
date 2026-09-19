@@ -481,7 +481,7 @@ async def test_adopt_rejects_boolean_source_list_id(
     assert "positive integers" in response.text
 
 
-@ pytest.mark.asyncio
+@pytest.mark.asyncio
 async def test_adopt_multi_item_template_batched_ownership_check(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
@@ -518,7 +518,7 @@ async def test_adopt_multi_item_template_batched_ownership_check(
     assert plan_count == 1, "plan is created for multi-item adoption"
 
 
-@ pytest.mark.asyncio
+@pytest.mark.asyncio
 async def test_adopt_multi_item_rejects_first_unowned_in_batch(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
