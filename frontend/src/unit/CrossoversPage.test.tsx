@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
@@ -162,9 +162,11 @@ describe('CrossoversPage', () => {
 
   it('blocks competing mutations while a rename is pending', async () => {
     const secretWars = { ...annihilation, id: 8, name: 'Secret Wars' }
-    let resolveRename: ((group: typeof annihilation) => void) | undefined
     groupsApi.list.mockResolvedValue([annihilation, secretWars])
-    groupsApi.rename.mockImplementation(() => new Promise((resolve) => { resolveRename = resolve }))
+    // Use a delayed resolution to simulate a pending mutation
+    groupsApi.rename.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve({ ...annihilation, name: 'Annihilation Conquest' }), 10))
+    )
     renderPage()
 
     await screen.findByText('Annihilation')
@@ -179,7 +181,7 @@ describe('CrossoversPage', () => {
     expect(screen.queryByLabelText('Rename Secret Wars')).not.toBeInTheDocument()
 
     groupsApi.list.mockResolvedValue([{ ...annihilation, name: 'Annihilation Conquest' }, secretWars])
-    resolveRename?.({ ...annihilation, name: 'Annihilation Conquest' })
+    await waitFor(() => expect(screen.queryByLabelText('Rename Annihilation')).not.toBeInTheDocument(), { timeout: 2000 })
     await screen.findByRole('button', { name: /Annihilation Conquest.*2 members/ })
     expect(screen.getAllByRole('button', { name: 'Rename' })[1]).toBeEnabled()
   })

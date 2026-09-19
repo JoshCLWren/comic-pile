@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
@@ -130,9 +131,16 @@ const issues = [
 ]
 
 async function selectThread(label: string, query: string, title: string) {
-  fireEvent.change(screen.getByLabelText(label), { target: { value: query } })
+  const user = userEvent.setup()
+  const input = screen.getByLabelText(label)
+  await user.type(input, query)
   const listbox = await screen.findByRole('listbox', { name: `${label} results` })
-  fireEvent.click(within(listbox).getByRole('option', { name: new RegExp(title) }))
+  const option = within(listbox).getByRole('option', { name: new RegExp(title) })
+  await user.click(option)
+  await waitFor(() => {
+    const searchbox = screen.getByRole('searchbox', { name: label })
+    expect(searchbox).toHaveValue(title)
+  }, { timeout: 3000 })
 }
 
 beforeEach(() => {
