@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RollHeader } from '../pages/RollPage/components/RollHeader'
 import { ReadingModeControl } from '../pages/RollPage/components/ReadingModeControl'
 import type { RollBootstrapResponse, SessionMode, SessionModeState } from '../types/rollBootstrap'
+import type { SessionModeResponse } from '../types'
 import { formatSessionMode, readingModeLabel } from '../types/rollBootstrap'
 
 function toSessionMode(state: SessionModeState | null | undefined): SessionMode {
@@ -78,6 +79,17 @@ const headerBaseProps = {
 }
 
 describe('reading mode label helpers', () => {
+  it('keeps the Roll bootstrap and API-client session mode shapes aligned on one canonical type', () => {
+    // Type-level regression for #2632: the bootstrap payload and the session-mode
+    // API client must both stay on the same canonical SessionMode shape, so the
+    // values here flow through both surfaces without a separate duplicate type.
+    const apiMode: SessionModeResponse = toSessionMode({ bandwidth: 'light', intent: 'momentum' })
+    const bootstrapMode: SessionMode = apiMode
+    expect(bootstrapMode.active_bandwidth).toBe('light')
+    expect(apiMode.active_intent).toBe('momentum')
+    expect(apiMode).toEqual(bootstrapMode)
+  })
+
   it('maps canonical bandwidth and intent values to human-readable labels', () => {
     expect(readingModeLabel('light')).toBe('Light')
     expect(readingModeLabel('BALANCED')).toBe('Balanced')
