@@ -135,10 +135,6 @@ record_agent_failure_outcome() {
   fi
 }
 
-
-# A PR branch may predate the Kilo integration entirely. Stage the backend
-# runner from trusted main before any checkout so cross-worker takeover never
-# executes a missing or stale branch copy, mirroring the trusted guard model.
 stage_trusted_kilo_helper() {
   [[ "$SOURCE" == 'kilo-auto' ]] || return 0
   TRUSTED_KILO_HELPER="${TRUSTED_KILO_HELPER:-}"
@@ -149,10 +145,6 @@ stage_trusted_kilo_helper() {
   chmod +x "$TRUSTED_KILO_HELPER"
 }
 
-# Semantic state transitions are more privileged than the reviewed branch.
-# Copy the controller and its pure policy module from trusted main before any
-# checkout_target switch so a stale or contaminated PR cannot replace the
-# authority code that interprets its model verdict.
 stage_trusted_review_controller() {
   local trusted_dir
   trusted_dir="$(mktemp -d /tmp/comic-pile-review-controller.XXXXXX)"
@@ -163,8 +155,6 @@ stage_trusted_review_controller() {
   export TRUSTED_REVIEW_CONTROLLER
 }
 
-# Keep the established OpenCode/NVIDIA implementation untouched. Kilo needs a
-# small override only so it invokes the trusted helper staged from main.
 eval "$(declare -f run_agent | sed '1s/^run_agent /legacy_run_agent /')"
 run_agent() {
   local mode="$1" number="$2" timeout_seconds="$3"
@@ -190,6 +180,13 @@ run_agent() {
     "$prompt" \
     "/tmp/opencode-factory-${WORKER}.log" || status=$?
   return "$status"
+}
+
+release_accidental_issue_lease() {
+  local issue="$1" reason="$2" stage
+  current_owner_is_self "$issue" || return 1
+  stage="$(current_stage "$issue" 'factory:building')"
+  release_target "$issue" "$stage" "$reason" 'issue'
 }
 
 select_controller_assignment() {
@@ -242,8 +239,11 @@ select_controller_assignment() {
     for issue in "${issues[@]:-}"; do
       [[ -n "$issue" ]] || continue
       if [[ -z "$linked_issue" || "$issue" != "$linked_issue" ]]; then
-        log "controller invariant failed: ${OWNER} owns PR #${pr} plus unrelated issue #${issue}"
-        return 2
+        log "controller invariant repair: ${OWNER} owns canonical PR #${pr} plus unrelated issue #${issue}; releasing only the accidental issue lease"
+        if ! release_accidental_issue_lease "$issue" 'controller-conflict-extra-issue'; then
+          log "unable to safely release accidental issue #${issue}; refusing ambiguous recovery"
+          return 2
+        fi
       fi
     done
 
@@ -265,7 +265,11 @@ select_controller_assignment() {
       return 3
     fi
     if [[ -n "$canonical_pr" ]]; then
-      log "controller invariant failed: ${OWNER} owns orphaned issue lease #${issue} while canonical open PR #${canonical_pr} exists"
+      log "controller invariant repair: ${OWNER} owns orphaned issue lease #${issue} while canonical open PR #${canonical_pr} exists; releasing only the accidental issue lease"
+      if release_accidental_issue_lease "$issue" 'controller-conflict-orphaned-issue'; then
+        return 1
+      fi
+      log "unable to safely release orphaned issue #${issue}; refusing ambiguous recovery"
       return 2
     fi
 
@@ -306,8 +310,9 @@ if (( assignment_status == 1 )); then
 fi
 
 if (( assignment_status != 0 )); then
-  # Exit 2 and 3 are reserved for controller invariant/read failures. The
-  # trusted workflow wrapper persists this source result after the process exits.
+  # Exit 2 and 3 are reserved for ambiguous controller invariant/read failures.
+  # Recoverable single-PR/single-issue conflicts are repaired in
+  # select_controller_assignment before reaching this fallback.
   release_owned_targets 'controller-assignment-read-failed' || true
   exit "$assignment_status"
 fi
@@ -456,12 +461,6 @@ fi
 review_log="/tmp/opencode-factory-${WORKER}.log"
 sanitized_review_log="/tmp/opencode-factory-${WORKER}.sanitized.log"
 factory_sanitize_review_log "$review_log" "$sanitized_review_log"
-# Append authoritative PR diff evidence after sanitize so the review controller
-# can attest inspection even when the model used file reads instead of `gh pr
-# diff`. review_excerpt keeps only the last 7000 chars, so the marker and the
-# `gh pr diff` command line MUST come after the dumped hunks — putting them
-# first caused every honest approve to soft-fail as diff-inspection-required
-# once the dump exceeded the excerpt window (incident #2309 follow-up).
 {
   printf '\n# comic-pile-factory-authoritative-diff-evidence\n'
   printf 'gh pr diff %s\n' "$NUMBER"
@@ -469,8 +468,6 @@ factory_sanitize_review_log "$review_log" "$sanitized_review_log"
   printf '\n# comic-pile-factory-authoritative-diff-evidence\n'
   printf 'gh pr diff %s\n' "$NUMBER"
 } >> "$sanitized_review_log"
-# Retain the terminal token for diagnostics; the merge controller remains the
-# only component authorized to decide whether a PR can merge.
 last_token="$(factory_terminal_marker "$review_log" || true)"
 
 current_head="$(gh pr view "$NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
