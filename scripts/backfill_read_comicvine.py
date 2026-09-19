@@ -9,8 +9,10 @@ This is the single operator entrypoint. It runs two resumable internal phases:
 Both phases target the explicitly exported ``DATABASE_URL`` and share one
 resource-aware ComicVine client. Live requests are paced at 1.5 seconds between
 starts. HTTP 420/429 throttles block only the affected ComicVine resource. When
-ComicVine supplies Retry-After, that resource's deadline is honored and
-persisted across reruns while cached and unrelated resources remain usable.
+ComicVine supplies Retry-After, that resource's deadline is honored. When it
+omits Retry-After, the operator uses a short fallback cooldown instead of
+blacklisting the resource for the rest of the run. The triggering request is
+retried after the cooldown, so the backfill continues without a manual rerun.
 
 Examples:
     uv run python scripts/backfill_read_comicvine.py --user-id 1 --dry-run
@@ -22,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from collections.abc import Mapping
 from dataclasses import asdict
 import importlib.util
 import json
@@ -43,6 +46,7 @@ from comic_pile.comicvine_provider import (  # noqa: E402
     ComicVineClient as BaseComicVineClient,
     ComicVineError,
     ComicVineRateLimitError,
+    ComicVineResponse,
 )
 
 CREATOR_HELPER = SCRIPT_DIR / "_backfill_read_comicvine_creators.py"
@@ -50,6 +54,7 @@ RESOLUTION_HELPER = SCRIPT_DIR / "resolve_read_comicvine_series.py"
 DEFAULT_REPORT = Path("/tmp/comicpile-read-comicvine-backfill.json")
 DEFAULT_RESOLUTION_REPORT = Path("/tmp/comicpile-read-comicvine-series-resolution.json")
 OPERATOR_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS = 1.5
+OPERATOR_FALLBACK_RETRY_AFTER_SECONDS = 60
 
 
 def _load_script_module(name: str, path: Path) -> ModuleType:
@@ -97,6 +102,40 @@ class OperatorComicVineClient(BaseComicVineClient):
             base_url=base_url,
             timeout_seconds=timeout_seconds,
         )
+
+    async def request(
+        self,
+        endpoint_bucket: str,
+        endpoint: str,
+        params: Mapping[str, object],
+        *,
+        refresh: bool = False,
+    ) -> ComicVineResponse:
+        """Retry one throttled resource after Retry-After or a bounded fallback delay."""
+        while True:
+            try:
+                return await super().request(
+                    endpoint_bucket,
+                    endpoint,
+                    params,
+                    refresh=refresh,
+                )
+            except ComicVineRateLimitError as exc:
+                resource = exc.resource or endpoint_bucket
+                delay = exc.retry_after_seconds
+                if delay is None:
+                    delay = OPERATOR_FALLBACK_RETRY_AFTER_SECONDS
+                    self._block_resource(resource, delay)
+                    print(
+                        f"ComicVine resource {resource!r} returned a throttle without "
+                        f"Retry-After; backing off {delay}s before retrying this request."
+                    )
+                else:
+                    print(
+                        f"ComicVine resource {resource!r} is throttled for another "
+                        f"{delay}s; retrying this request after the cooldown."
+                    )
+                await asyncio.sleep(max(1, delay))
 
 
 def _parser() -> argparse.ArgumentParser:
