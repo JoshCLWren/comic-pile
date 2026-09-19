@@ -310,9 +310,6 @@ if (( assignment_status == 1 )); then
 fi
 
 if (( assignment_status != 0 )); then
-  # Exit 2 and 3 are reserved for ambiguous controller invariant/read failures.
-  # Recoverable single-PR/single-issue conflicts are repaired in
-  # select_controller_assignment before reaching this fallback.
   release_owned_targets 'controller-assignment-read-failed' || true
   exit "$assignment_status"
 fi
@@ -468,6 +465,9 @@ factory_sanitize_review_log "$review_log" "$sanitized_review_log"
   printf '\n# comic-pile-factory-authoritative-diff-evidence\n'
   printf 'gh pr diff %s\n' "$NUMBER"
 } >> "$sanitized_review_log"
+resanitized_review_log="$(mktemp "/tmp/opencode-factory-${WORKER}.sanitized.XXXXXX.log")"
+factory_sanitize_review_log "$sanitized_review_log" "$resanitized_review_log"
+mv "$resanitized_review_log" "$sanitized_review_log"
 last_token="$(factory_terminal_marker "$review_log" || true)"
 
 current_head="$(gh pr view "$NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null || true)"
