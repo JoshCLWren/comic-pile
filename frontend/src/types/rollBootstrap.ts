@@ -1,4 +1,6 @@
-import type { SessionThread } from './index'
+import type { ReadingBandwidth, ReadingIntent, SessionMode, SessionThread } from './index'
+
+export type { ReadingBandwidth, ReadingIntent, SessionMode, SessionModeCorrectionGuidance } from './index'
 
 /** Lightweight thread summary returned by the Roll bootstrap endpoint. */
 export interface RollBootstrapThread {
@@ -72,32 +74,6 @@ export interface RollPrerequisiteSwitchResponse {
   target_issue_number: string
   changed: boolean
 }
-
-export type SessionModeCorrectionGuidance = Record<string, string>
-
-/** Compact band+intent reading mode record exposed at Roll bootstrap. */
-export interface SessionMode {
-  active_bandwidth: string | null
-  predicted_bandwidth: string | null
-  bandwidth_confidence: number | null
-  bandwidth_source: 'manual' | 'inferred' | null
-  bandwidth_version: string | null
-  active_intent: string | null
-  predicted_intent: string | null
-  intent_confidence: number | null
-  intent_source: 'inferred' | 'manual' | 'snooze' | 'quiz' | null
-  intent_version: string | null
-  session_mode_correction_guidance: SessionModeCorrectionGuidance | null
-}
-
-/** Reader bandwidth for the current session: how demanding comics feel right now. */
-export type ReadingBandwidth = 'light' | 'balanced' | 'deep'
-
-/**
- * Reading intent for the current session: what kind of pick the reader wants.
- * `random` is the clean escape hatch reproducing legacy unweighted selection.
- */
-export type ReadingIntent = 'balanced' | 'momentum' | 'familiar' | 'explore' | 'random'
 
 /**
  * Canonical session reading-mode snapshot returned by Roll bootstrap.
