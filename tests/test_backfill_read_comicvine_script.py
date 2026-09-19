@@ -350,3 +350,120 @@ async def test_unmapped_resolution_refuses_ambiguous_duplicate_matches(
 
     assert result is None
     persist.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_local_identity_resolution_uses_snapshot_for_existing_volume_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Confirmed-volume work can map from local cv_issue rows without a provider method."""
+    cli = _module()
+    resolver = cli._load_script_module(
+        "_test_resolve_read_comicvine_series",
+        cli.RESOLUTION_HELPER,
+    )
+    work = resolver.ThreadWork(
+        thread_id=3,
+        title="Example (2020)",
+        issues=[resolver.IssueWork(issue_id=7, issue_number="5", position=5)],
+        confirmed_series=[
+            resolver.SeriesEvidence(
+                volume_id=123,
+                name="Example",
+                start_year=2020,
+                source="confirmed-series",
+            )
+        ],
+    )
+
+    class LocalOnlyClient:
+        """Expose only local APIs so accidental provider use fails the test."""
+
+        _local_db = object()
+
+        def _fetch_local_volume_issues(
+            self,
+            volume_id: int,
+        ) -> list[dict[str, object]] | None:
+            assert volume_id == 123
+            return [
+                {
+                    "id": 4005,
+                    "issue_number": "5",
+                    "volume": {"id": 123, "name": "Example"},
+                }
+            ]
+
+    persist = AsyncMock(return_value=True)
+    monkeypatch.setattr(resolver, "_persist_issue_mapping", persist)
+
+    result = await cli._resolve_thread_from_local_evidence(
+        resolver,
+        object(),
+        LocalOnlyClient(),
+        user_id=1,
+        work=work,
+        roster_cache={},
+    )
+
+    assert result is not None
+    assert result.status == "resolved"
+    assert result.mapped == 1
+    assert result.volume_ids == [123]
+    persist.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_pipeline_finishes_both_local_sweeps_before_provider_sweeps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No provider-dependent phase may run before identities and creators exhaust local work."""
+    cli = _module()
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "postgresql://owner:secret@ep-prod-pooler.example.neon.tech/neondb?sslmode=require",
+    )
+    monkeypatch.setenv("COMICVINE_API_KEY", "test-key")
+
+    fake_client = object()
+    monkeypatch.setattr(cli, "OperatorComicVineClient", lambda *args, **kwargs: fake_client)
+    calls: list[tuple[str, bool]] = []
+
+    async def fake_resolution_phase(
+        args: object,
+        resolver: object,
+        *,
+        database_url: str,
+        client: object,
+        local_only: bool = False,
+    ) -> int:
+        assert database_url
+        assert client is fake_client
+        calls.append(("identity", local_only))
+        return 0
+
+    async def fake_creator_phase(
+        args: object,
+        *,
+        database_url: str,
+        client: object,
+        local_only: bool = False,
+    ) -> int:
+        assert database_url
+        assert client is fake_client
+        calls.append(("creator", local_only))
+        return 0
+
+    monkeypatch.setattr(cli, "_run_resolution_phase", fake_resolution_phase)
+    monkeypatch.setattr(cli, "_run_creator_phase", fake_creator_phase)
+
+    args = cli._parser().parse_args(["--user-id", "1"])
+    exit_code = await cli._run_pipeline(args)
+
+    assert exit_code == 0
+    assert calls == [
+        ("identity", True),
+        ("creator", True),
+        ("identity", False),
+        ("creator", False),
+    ]
