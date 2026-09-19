@@ -150,39 +150,19 @@ async def find_duplicate_physical_issues(
     )
     anomalies: list[DuplicateIdentityAnomaly] = []
     for raw in raw_anomalies:
-        issue_ids = cast(tuple[int, ...], raw["issue_ids"])
-        thread_ids = cast(tuple[int, ...], raw["thread_ids"])
-        statuses = cast(tuple[str, ...], raw["statuses"])
-        issue_numbers = list(cast(tuple[object, ...], raw["issue_numbers"]))
-        thread_titles = list(cast(tuple[object, ...], raw["thread_titles"]))
-        read_ats = list(cast(tuple[object, ...], raw["read_ats"]))
-        details: list[dict[str, object]] = []
-        for idx, iid in enumerate(issue_ids):
-            details.append(
-                {
-                    "issue_id": iid,
-                    "thread_id": thread_ids[idx] if idx < len(thread_ids) else None,
-                    "thread_title": thread_titles[idx] if idx < len(thread_titles) else None,
-                    "issue_number": issue_numbers[idx] if idx < len(issue_numbers) else None,
-                    "status": statuses[idx] if idx < len(statuses) else None,
-                    "read_at": read_ats[idx] if idx < len(read_ats) else None,
-                }
-            )
         anomalies.append(
             DuplicateIdentityAnomaly(
                 comicvine_issue_id=str(raw["comicvine_issue_id"]),
                 external_identity_id=int(raw["external_identity_id"]),
-                issue_ids=issue_ids,
-                thread_ids=thread_ids,
-                statuses=statuses,
-                has_read="read" in statuses,
-                has_unread="unread" in statuses,
-                issue_details=tuple(details),
+                issue_ids=cast(tuple[int, ...], raw["issue_ids"]),
+                thread_ids=cast(tuple[int, ...], raw["thread_ids"]),
+                statuses=cast(tuple[str, ...], raw["statuses"]),
+                has_read=raw["has_read"],
+                has_unread=raw["has_unread"],
+                issue_details=raw["issue_details"],
             )
         )
     return anomalies
-
-
 async def list_duplicate_physical_issues(
     db: AsyncSession,
     *,
