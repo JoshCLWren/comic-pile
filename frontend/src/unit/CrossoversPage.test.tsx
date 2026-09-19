@@ -180,7 +180,7 @@ describe('CrossoversPage', () => {
 
     resolveRename?.({ ...annihilation, name: 'Annihilation Conquest' })
     groupsApi.list.mockResolvedValue([{ ...annihilation, name: 'Annihilation Conquest' }, secretWars])
-    await screen.queryByLabelText('Rename Annihilation')
+    await screen.findByText('Annihilation Conquest')
     await screen.findByRole('button', { name: /Annihilation Conquest.*2 members/ })
     expect(screen.getAllByRole('button', { name: 'Rename' })[1]).toBeEnabled()
   })
@@ -265,10 +265,9 @@ describe('CrossoversPage', () => {
 
   it('uses API detail messages and safe fallbacks for non-Error failures', async () => {
     const axiosFailure = (detail: string) => {
-      const error = new Error()
-      const shaped = error as unknown as Record<string, unknown>
-      shaped.isAxiosError = true
-      shaped.response = { data: { detail } }
+      const error = new Error() as Error & { isAxiosError?: boolean; response?: { data: { detail: string } } }
+      error.isAxiosError = true
+      error.response = { data: { detail } }
       return error
     }
     groupsApi.list
