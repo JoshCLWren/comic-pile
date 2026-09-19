@@ -7,12 +7,14 @@ This is the single operator entrypoint. It runs two resumable internal phases:
 2. hydrate confirmed ComicVine issues with normalized creator metadata.
 
 Both phases target the explicitly exported ``DATABASE_URL`` and share one
-resource-aware ComicVine client. Live requests are paced at 1.5 seconds between
-starts. HTTP 420/429 throttles block only the affected ComicVine resource. When
-ComicVine supplies Retry-After, that resource's deadline is honored. When it
-omits Retry-After, the operator uses a short fallback cooldown instead of
-blacklisting the resource for the rest of the run. The triggering request is
-retried after the cooldown, so the backfill continues without a manual rerun.
+resource-aware ComicVine client. Creator hydration checks a local ComicVine
+SQLite snapshot before spending a live ``/issue`` request. Live requests are
+paced at 1.5 seconds between starts. HTTP 420/429 throttles block only the
+affected ComicVine resource. When ComicVine supplies Retry-After, that
+resource's deadline is honored. When it omits Retry-After, the operator uses a
+short fallback cooldown instead of blacklisting the resource for the rest of
+the run. The triggering request is retried after the cooldown, so the backfill
+continues without a manual rerun.
 
 Examples:
     uv run python scripts/backfill_read_comicvine.py --user-id 1 --dry-run
@@ -30,6 +32,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import sqlite3
 import sys
 from types import ModuleType
 from typing import Any
@@ -53,6 +56,9 @@ CREATOR_HELPER = SCRIPT_DIR / "_backfill_read_comicvine_creators.py"
 RESOLUTION_HELPER = SCRIPT_DIR / "resolve_read_comicvine_series.py"
 DEFAULT_REPORT = Path("/tmp/comicpile-read-comicvine-backfill.json")
 DEFAULT_RESOLUTION_REPORT = Path("/tmp/comicpile-read-comicvine-series-resolution.json")
+DEFAULT_LOCAL_COMICVINE_DB = Path(
+    "/mnt/bigdata/downloads/localcvdb_20260109/localcv.db"
+)
 OPERATOR_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS = 1.5
 OPERATOR_FALLBACK_RETRY_AFTER_SECONDS = 60
 
@@ -78,6 +84,17 @@ for _name, _value in vars(_creator_helper).items():
     globals().setdefault(_name, _value)
 
 
+def _decode_local_list(value: object) -> list[object]:
+    """Decode one JSON relationship array from the local ComicVine snapshot."""
+    if not isinstance(value, str) or not value.strip():
+        return []
+    try:
+        decoded = json.loads(value)
+    except json.JSONDecodeError:
+        return []
+    return decoded if isinstance(decoded, list) else []
+
+
 class OperatorComicVineClient(BaseComicVineClient):
     """ComicVine client policy for long-running operator backfills."""
 
@@ -86,6 +103,7 @@ class OperatorComicVineClient(BaseComicVineClient):
         api_key: str,
         cache_dir: str | Path,
         *,
+        local_db_path: str | Path | None = None,
         requests_per_hour: int | None = None,
         minimum_live_request_interval_seconds: float = (
             OPERATOR_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS
@@ -93,7 +111,7 @@ class OperatorComicVineClient(BaseComicVineClient):
         base_url: str = COMICVINE_BASE_URL,
         timeout_seconds: float = 30.0,
     ) -> None:
-        """Use slower pacing while inheriting resource-aware throttle handling."""
+        """Use local issue data first, then slower resource-aware live requests."""
         super().__init__(
             api_key,
             cache_dir,
@@ -102,6 +120,80 @@ class OperatorComicVineClient(BaseComicVineClient):
             base_url=base_url,
             timeout_seconds=timeout_seconds,
         )
+        self.local_db_path = Path(local_db_path) if local_db_path is not None else None
+        self._local_db: sqlite3.Connection | None = None
+        if self.local_db_path is not None and self.local_db_path.is_file():
+            uri = f"file:{self.local_db_path}?mode=ro"
+            self._local_db = sqlite3.connect(uri, uri=True)
+            self._local_db.row_factory = sqlite3.Row
+            print(f"Local ComicVine snapshot: {self.local_db_path}")
+
+    def _fetch_local_issue(self, issue_id: int) -> ComicVineResponse | None:
+        """Return one creator-capable local issue row without spending API quota."""
+        if self._local_db is None:
+            return None
+        row = self._local_db.execute(
+            """
+            SELECT
+                id,
+                volume_id,
+                name,
+                issue_number,
+                cover_date,
+                store_date,
+                image_url,
+                site_detail_url,
+                character_credits,
+                person_credits,
+                team_credits,
+                story_arc_credits
+            FROM cv_issue
+            WHERE id = ?
+            LIMIT 1
+            """,
+            (issue_id,),
+        ).fetchone()
+        if row is None:
+            return None
+
+        person_credits = _decode_local_list(row["person_credits"])
+        if not person_credits:
+            return None
+
+        image_url = row["image_url"]
+        payload: dict[str, object] = {
+            "id": int(row["id"]),
+            "name": row["name"],
+            "issue_number": row["issue_number"],
+            "cover_date": row["cover_date"],
+            "store_date": row["store_date"],
+            "image": {"original_url": image_url} if image_url else None,
+            "volume": {"id": int(row["volume_id"])},
+            "person_credits": person_credits,
+            "character_credits": _decode_local_list(row["character_credits"]),
+            "team_credits": _decode_local_list(row["team_credits"]),
+            "story_arc_credits": _decode_local_list(row["story_arc_credits"]),
+            "site_detail_url": row["site_detail_url"],
+            "date_last_updated": None,
+        }
+        return ComicVineResponse(
+            payload={"status_code": 1, "results": payload},
+            from_cache=True,
+            cache_key=f"localcv-issue-{issue_id}",
+        )
+
+    async def fetch_issue(
+        self,
+        issue_id: int,
+        *,
+        refresh: bool = False,
+    ) -> ComicVineResponse:
+        """Prefer the local snapshot, then cache/live ComicVine on a miss."""
+        if not refresh:
+            local = self._fetch_local_issue(issue_id)
+            if local is not None:
+                return local
+        return await super().fetch_issue(issue_id, refresh=refresh)
 
     async def request(
         self,
@@ -409,9 +501,13 @@ async def _run_pipeline(args: argparse.Namespace) -> int:
 
     client: OperatorComicVineClient | None = None
     if not args.dry_run:
+        local_db_path = Path(
+            os.environ.get("COMICVINE_LOCAL_DB", str(DEFAULT_LOCAL_COMICVINE_DB))
+        )
         client = OperatorComicVineClient(
             api_key,
             Path(os.environ.get("COMICVINE_CACHE_DIR", "/tmp/comicpile-comicvine")),
+            local_db_path=local_db_path,
             timeout_seconds=10.0,
         )
 
