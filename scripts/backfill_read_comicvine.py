@@ -505,6 +505,38 @@ def _select_local_evidence_candidate(
     return survivors[0] if len(survivors) == 1 else None
 
 
+def _exact_local_candidate_rosters(
+    resolver: ModuleType,
+    client: OperatorComicVineClient,
+    *,
+    hint: Any,
+    candidates: list[dict[str, object]],
+) -> tuple[list[dict[str, object]], dict[int, list[dict[str, object]]], bool]:
+    """Load every exact-title local candidate roster and report whether evidence is complete."""
+    exact_candidates = [
+        candidate
+        for candidate in candidates
+        if _local_candidate_has_exact_title(
+            resolver,
+            candidate,
+            query_title=hint.query_title,
+        )
+    ]
+    rosters: dict[int, list[dict[str, object]]] = {}
+    complete = True
+    for candidate in exact_candidates:
+        volume_id = resolver._integer(candidate.get("id"))
+        if volume_id is None:
+            complete = False
+            continue
+        roster = client._fetch_local_volume_issues(volume_id)
+        if roster is None:
+            complete = False
+            continue
+        rosters[volume_id] = roster
+    return exact_candidates, rosters, complete
+
+
 async def _map_local_rosters(
     resolver: ModuleType,
     db: AsyncSession,
@@ -513,10 +545,11 @@ async def _map_local_rosters(
     work: Any,
     rosters: dict[int, list[dict[str, object]]],
     evidence_source: str,
-) -> int:
-    """Persist only exact-label issue mappings that are unique across complete local rosters."""
-    mapped = 0
-    for issue in work.issues:
+    issues: list[Any] | None = None,
+) -> set[int]:
+    """Persist exact-label mappings unique across the supplied complete local rosters."""
+    mapped_issue_ids: set[int] = set()
+    for issue in work.issues if issues is None else issues:
         matches = resolver._candidate_issue_rows(rosters, issue.issue_number)
         if len(matches) != 1:
             continue
@@ -530,8 +563,8 @@ async def _map_local_rosters(
             provider_row=provider_row,
             evidence_source=evidence_source,
         ):
-            mapped += 1
-    return mapped
+            mapped_issue_ids.add(issue.issue_id)
+    return mapped_issue_ids
 
 
 async def _resolve_thread_from_local_evidence(
@@ -548,131 +581,213 @@ async def _resolve_thread_from_local_evidence(
     if client._local_db is None:
         return None
 
-    if existing_volume_ids:
-        rosters: dict[int, list[dict[str, object]]] = {}
-        for volume_id in existing_volume_ids:
-            roster = client._fetch_local_volume_issues(volume_id)
-            if roster is None:
-                # Multi-volume uniqueness is only safe when every candidate roster
-                # is locally present. The provider pass may fill the missing evidence.
-                return None
-            rosters[volume_id] = roster
-            roster_cache[volume_id] = roster
+    mapped_issue_ids: set[int] = set()
+    used_volume_ids: set[int] = set()
+    existing_rosters: dict[int, list[dict[str, object]]] = {}
+    existing_rosters_complete = True
 
-        if not work.confirmed_series and len(existing_volume_ids) == 1:
+    # Existing confirmed/sibling volume IDs are useful evidence, but they are not
+    # allowed to veto stronger local evidence. A thread may cross a ComicVine
+    # volume boundary, and stale/wrong sibling mappings can otherwise poison every
+    # unresolved issue in that thread.
+    for volume_id in existing_volume_ids:
+        roster = client._fetch_local_volume_issues(volume_id)
+        if roster is None:
+            existing_rosters_complete = False
+            continue
+        existing_rosters[volume_id] = roster
+        roster_cache[volume_id] = roster
+
+    if existing_volume_ids and existing_rosters_complete and existing_rosters:
+        existing_matchable = [
+            issue
+            for issue in work.issues
+            if len(resolver._candidate_issue_rows(existing_rosters, issue.issue_number)) == 1
+        ]
+
+        # Never promote sibling evidence into a thread series mapping merely
+        # because there is one candidate ID. Require at least one unresolved
+        # issue label to actually match that local roster first.
+        if (
+            existing_matchable
+            and not work.confirmed_series
+            and len(existing_volume_ids) == 1
+        ):
             volume_id = existing_volume_ids[0]
             evidence = next(
                 (item for item in work.sibling_volumes if item.volume_id == volume_id),
                 None,
             )
-            evidence_source = "local_snapshot_sibling_issue_volume_resolution"
             await resolver._persist_thread_series(
                 db,
                 user_id=user_id,
                 thread_id=work.thread_id,
                 volume_id=volume_id,
-                evidence_source=evidence_source,
+                evidence_source="local_snapshot_sibling_issue_volume_resolution",
                 search_row=None,
                 evidence_name=evidence.name if evidence is not None else None,
             )
-        elif len(existing_volume_ids) > 1:
+
+        if len(existing_volume_ids) > 1:
             evidence_source = "local_snapshot_multi_volume_exact_label_resolution"
         else:
             evidence_source = "local_snapshot_confirmed_series_exact_label_resolution"
 
-        mapped = await _map_local_rosters(
+        existing_mapped = await _map_local_rosters(
             resolver,
             db,
             user_id=user_id,
             work=work,
-            rosters=rosters,
+            rosters=existing_rosters,
             evidence_source=evidence_source,
         )
-        remaining = len(work.issues) - mapped
+        mapped_issue_ids.update(existing_mapped)
+        for issue in work.issues:
+            if issue.issue_id not in existing_mapped:
+                continue
+            matches = resolver._candidate_issue_rows(existing_rosters, issue.issue_number)
+            if len(matches) == 1:
+                used_volume_ids.add(matches[0][0])
+
+    remaining_issues = [
+        issue for issue in work.issues if issue.issue_id not in mapped_issue_ids
+    ]
+    if not remaining_issues:
         return resolver.ThreadResult(
             thread_id=work.thread_id,
             title=work.title,
             unresolved_before=len(work.issues),
-            status="resolved" if remaining == 0 else ("partial" if mapped else "unresolved"),
-            mapped=mapped,
-            remaining=remaining,
+            status="resolved",
+            mapped=len(mapped_issue_ids),
+            remaining=0,
             evidence=f"local-{route}",
-            volume_ids=existing_volume_ids,
-            detail="Used only complete local ComicVine rosters; no provider request was allowed.",
+            volume_ids=sorted(used_volume_ids),
+            detail="Resolved entirely from complete local ComicVine rosters; no provider request was allowed.",
         )
 
+    # Crucially, continue into title/alias discovery even when existing volume
+    # evidence was present. This is what lets a continuity-spanning thread use a
+    # predecessor/successor volume that the thread-level anchor does not represent.
     hint = resolver._parse_title_hint(work.title)
     local_candidates = client.search_local_volumes(hint.query_title)
-    if not local_candidates:
-        return None
-    if len(local_candidates) > LOCAL_VOLUME_CANDIDATE_LIMIT:
-        return None
+    if len(local_candidates) <= LOCAL_VOLUME_CANDIDATE_LIMIT:
+        exact_candidates, candidate_rosters, candidate_rosters_complete = (
+            _exact_local_candidate_rosters(
+                resolver,
+                client,
+                hint=hint,
+                candidates=local_candidates,
+            )
+        )
+        for volume_id, roster in candidate_rosters.items():
+            roster_cache[volume_id] = roster
 
-    rosters = {}
-    for candidate in local_candidates:
-        if not _local_candidate_has_exact_title(
+        selected = _select_local_evidence_candidate(
             resolver,
-            candidate,
-            query_title=hint.query_title,
+            hint=hint,
+            candidates=local_candidates,
+            rosters=candidate_rosters,
+            issues=remaining_issues,
+        )
+        if selected is not None:
+            volume_id = resolver._integer(selected.get("id"))
+            if volume_id is not None:
+                roster = candidate_rosters[volume_id]
+                evidence_source = (
+                    "local_snapshot_title_volume_roster_resolution"
+                    if hint.volume_hint is not None
+                    else "local_snapshot_title_roster_resolution"
+                )
+
+                # A single thread-series anchor cannot represent a continuity
+                # boundary. Only create the anchor when no other volume evidence
+                # already exists. Issue mappings can still safely cross the anchor.
+                if not existing_volume_ids:
+                    await resolver._persist_thread_series(
+                        db,
+                        user_id=user_id,
+                        thread_id=work.thread_id,
+                        volume_id=volume_id,
+                        evidence_source=evidence_source,
+                        search_row=selected,
+                        evidence_name=resolver._string(selected.get("name")),
+                    )
+
+                discovered_mapped = await _map_local_rosters(
+                    resolver,
+                    db,
+                    user_id=user_id,
+                    work=work,
+                    rosters={volume_id: roster},
+                    evidence_source=evidence_source,
+                    issues=remaining_issues,
+                )
+                mapped_issue_ids.update(discovered_mapped)
+                if discovered_mapped:
+                    used_volume_ids.add(volume_id)
+
+        # Even when no one candidate covers the entire remainder, an individual
+        # issue can still be proven if its label occurs exactly once across every
+        # exact-title/alias candidate and every one of those candidate rosters is
+        # present locally. FTS discovers candidates; uniqueness authorizes writes.
+        remaining_issues = [
+            issue for issue in work.issues if issue.issue_id not in mapped_issue_ids
+        ]
+        if (
+            remaining_issues
+            and exact_candidates
+            and candidate_rosters_complete
+            and len(candidate_rosters) == len(exact_candidates)
         ):
-            continue
-        volume_id = resolver._integer(candidate.get("id"))
-        if volume_id is None:
-            continue
-        roster = client._fetch_local_volume_issues(volume_id)
-        if roster is not None:
-            rosters[volume_id] = roster
+            unique_mapped = await _map_local_rosters(
+                resolver,
+                db,
+                user_id=user_id,
+                work=work,
+                rosters=candidate_rosters,
+                evidence_source="local_snapshot_title_candidate_unique_label_resolution",
+                issues=remaining_issues,
+            )
+            mapped_issue_ids.update(unique_mapped)
+            for issue in remaining_issues:
+                if issue.issue_id not in unique_mapped:
+                    continue
+                matches = resolver._candidate_issue_rows(candidate_rosters, issue.issue_number)
+                if len(matches) == 1:
+                    used_volume_ids.add(matches[0][0])
 
-    selected = _select_local_evidence_candidate(
-        resolver,
-        hint=hint,
-        candidates=local_candidates,
-        rosters=rosters,
-        issues=work.issues,
-    )
-    if selected is None:
-        return None
+    remaining = len(work.issues) - len(mapped_issue_ids)
+    if mapped_issue_ids:
+        return resolver.ThreadResult(
+            thread_id=work.thread_id,
+            title=work.title,
+            unresolved_before=len(work.issues),
+            status="resolved" if remaining == 0 else "partial",
+            mapped=len(mapped_issue_ids),
+            remaining=remaining,
+            evidence="local-continuity-evidence",
+            volume_ids=sorted(used_volume_ids),
+            detail=(
+                "Mapped from local ComicVine rosters while treating existing sibling/series "
+                "volume IDs as evidence rather than a veto; no provider request was allowed."
+            ),
+        )
 
-    volume_id = resolver._integer(selected.get("id"))
-    if volume_id is None:
-        return None
-    roster = rosters[volume_id]
-    roster_cache[volume_id] = roster
-    evidence_source = (
-        "local_snapshot_title_volume_roster_resolution"
-        if hint.volume_hint is not None
-        else "local_snapshot_title_roster_resolution"
-    )
-    await resolver._persist_thread_series(
-        db,
-        user_id=user_id,
-        thread_id=work.thread_id,
-        volume_id=volume_id,
-        evidence_source=evidence_source,
-        search_row=selected,
-        evidence_name=resolver._string(selected.get("name")),
-    )
-
-    mapped = await _map_local_rosters(
-        resolver,
-        db,
-        user_id=user_id,
-        work=work,
-        rosters={volume_id: roster},
-        evidence_source=evidence_source,
-    )
-    remaining = len(work.issues) - mapped
-    return resolver.ThreadResult(
-        thread_id=work.thread_id,
-        title=work.title,
-        unresolved_before=len(work.issues),
-        status="resolved" if remaining == 0 else ("partial" if mapped else "unresolved"),
-        mapped=mapped,
-        remaining=remaining,
-        evidence="local-evidence",
-        volume_ids=[volume_id],
-        detail="Resolved from local ComicVine title/roster evidence without provider search.",
-    )
+    if existing_volume_ids:
+        return resolver.ThreadResult(
+            thread_id=work.thread_id,
+            title=work.title,
+            unresolved_before=len(work.issues),
+            status="unresolved",
+            remaining=len(work.issues),
+            evidence=f"local-{route}",
+            volume_ids=existing_volume_ids,
+            detail=(
+                "Existing local volume evidence did not uniquely match the unresolved labels, "
+                "and local title/alias roster discovery could not prove an alternative."
+            ),
+        )
+    return None
 
 
 def _parser() -> argparse.ArgumentParser:
