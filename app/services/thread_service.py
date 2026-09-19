@@ -216,6 +216,95 @@ async def list_stale_thread_responses(
     return await threads_to_responses(threads, db)
 
 
+async def list_stale_threads_paginated(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    days: int,
+    snoozed_ids: list[int] | None,
+    page_size: int,
+    page_token: str | None,
+) -> QueueThreadListResponse:
+    """List STALE threads with deterministic cursor-based pagination.
+
+    Stale threads are always ordered by oldest activity first (nulls first)
+    with thread ID as a tie-breaker. The cursor contract is based on
+    (last_activity_at, thread_id) pairs.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        days: Number of days to consider threads stale.
+        snoozed_ids: Thread IDs currently snoozed in the session; these are
+            excluded from the stale result.
+        page_size: Number of threads to return per page (max 200).
+        page_token: Opaque cursor token for pagination continuation.
+
+    Returns:
+        QueueThreadListResponse with paginated stale threads and next_page_token if
+        more pages exist.
+
+    Raises:
+        InvalidRequestError: When the page token is stale or malformed.
+    """
+    cutoff_date = datetime.now(UTC) - timedelta(days=days)
+
+    cursor = None
+    if page_token:
+        try:
+            # Simple cursor format for stale threads: "last_activity_at_isoformat:thread_id"
+            # or "null:thread_id" for null last_activity_at entries
+            parts = page_token.split(":")
+            if len(parts) != 2:
+                raise ValueError("Invalid stale page token")
+            
+            if parts[0] == "null":
+                last_activity_at = None
+            else:
+                last_activity_at = datetime.fromisoformat(parts[0])
+            
+            thread_id = int(parts[1])
+            cursor = (last_activity_at, thread_id)
+        except (ValueError, TypeError) as exc:
+            raise InvalidRequestError(str(exc)) from exc
+
+    threads = await thread_repository.fetch_stale_page(
+        db,
+        user_id,
+        cutoff_date=cutoff_date,
+        snoozed_ids=snoozed_ids,
+        cursor=cursor,
+        limit=page_size + 1,
+    )
+
+    has_more = len(threads) > page_size
+    threads_to_return = threads[:page_size]
+
+    thread_responses = await threads_to_responses(threads_to_return, db)
+    queue_items = [to_queue_list_item(tr) for tr in thread_responses]
+
+    next_token = None
+    if has_more and threads_to_return:
+        last = threads_to_return[-1]
+        if last.last_activity_at is None:
+            # For null last_activity_at entries, use "null:thread_id"
+            cursor_values = (None, last.id)
+        else:
+            # For non-null entries, use "isoformat:thread_id"
+            cursor_values = (last.last_activity_at, last.id)
+        
+        # Encode cursor as "last_activity_at_isoformat:thread_id" or "null:thread_id"
+        if cursor_values[0] is None:
+            next_token = f"null:{cursor_values[1]}"
+        else:
+            next_token = f"{cursor_values[0].isoformat()}:{cursor_values[1]}"
+
+    return QueueThreadListResponse(
+        threads=queue_items,
+        next_page_token=next_token,
+    )
+
+
 async def list_queue_threads(
     db: AsyncSession,
     user_id: int,
