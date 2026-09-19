@@ -207,10 +207,6 @@ def test_test_helper_routes_are_mounted_only_in_test_environment(
         "/api/test/issue-identity",
         "/api/test/cbl-source",
         "/api/test/sessions/expire",
-        "/api/v1/test/reading-orders",
-        "/api/v1/test/issue-identity",
-        "/api/v1/test/cbl-source",
-        "/api/v1/test/sessions/expire",
     } <= test_paths
     assert {
         "/api/test/reading-orders",

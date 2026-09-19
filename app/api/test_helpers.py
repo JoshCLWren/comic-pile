@@ -16,7 +16,7 @@ from app.services.test_helpers import (
     expire_current_session as expire_test_session,
 )
 
-router = APIRouter(tags=["test"])
+router = APIRouter(prefix="/test", tags=["test"])
 
 
 @router.post("/reading-orders")
