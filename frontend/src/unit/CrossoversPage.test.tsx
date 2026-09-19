@@ -170,16 +170,17 @@ describe('CrossoversPage', () => {
     await screen.findByText('Annihilation')
     await screen.findByText('Secret Wars')
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Rename' })[0]) // click rename on Annihilation
+    fireEvent.click(screen.getAllByRole('button', { name: 'Rename' })[0])
     fireEvent.change(screen.getByLabelText('Rename Annihilation'), { target: { value: 'Annihilation Conquest' } })
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' })) // click rename on Secret Wars
-    fireEvent.change(screen.getByLabelText('Rename Secret Wars'), { target: { value: 'Secret Wars Renamed' } })
-    expect(screen.getByRole('button', { name: 'Save' })).not.toBeEnabled() // Should be blocked
+    groupsApi.list.mockResolvedValue([{ ...annihilation, name: 'Annihilation Conquest' }, secretWars])
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-    resolveRename?.({ ...annihilation, name: 'Annihilation Conquest' }) // Resolve the first rename
-    expect(await screen.findByText('Annihilation Conquest')).toBeInTheDocument() // Verify first rename completed
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled() // Verify second rename is no longer blocked
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getAllByRole('button', { name: 'Rename' })[1]).toBeDisabled()
+
+    resolveRename?.({ ...annihilation, name: 'Annihilation Conquest' })
+    expect(await screen.findByText('Annihilation Conquest')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Rename' })[1]).toBeEnabled())
   })
 
   it('opens crossover detail with member count', async () => {

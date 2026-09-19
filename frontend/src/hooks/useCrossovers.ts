@@ -78,7 +78,7 @@ export function useAllThreads() {
 
 export function useCrossoverIssuesForRange(threadId: number | null) {
   return useQuery({
-    queryKey: threadId != null ? queryKeys.crossover.issues(threadId) : [],
+    queryKey: threadId != null ? queryKeys.crossover.issues(threadId) : queryKeys.crossover.issues(-1),
     queryFn: async () => {
       try {
         return await fetchAllIssues(threadId!)

@@ -103,6 +103,9 @@ export default function CrossoversPage() {
     addRangeMutation.isPending ||
     removeMemberMutation.isPending
 
+  const mutationGuardRef = useRef(false)
+  const isBlocked = isAnyMutationPending || mutationGuardRef.current
+
   useEffect(() => {
     if (deepLinkAppliedRef.current) return
     if (!requestedGroupId || groups.length === 0) return
@@ -125,7 +128,7 @@ export default function CrossoversPage() {
   }
 
   const toggleExpanded = (groupId: number) => {
-    if (isAnyMutationPending) return
+    if (isBlocked) return
     setExpandedId((current) => (current === groupId ? null : groupId))
     clearMembershipState()
     setMutationError(null)
@@ -138,12 +141,16 @@ export default function CrossoversPage() {
       setCreateError('Enter a crossover name.')
       return
     }
+    if (isBlocked) return
+    mutationGuardRef.current = true
     setCreateError(null)
     try {
       await createMutation.mutateAsync(trimmedName)
       setName('')
     } catch (error) {
       setCreateError(errorMessage(error, 'Unable to create crossover.'))
+    } finally {
+      mutationGuardRef.current = false
     }
   }
 
@@ -153,6 +160,8 @@ export default function CrossoversPage() {
       setMutationError('Enter a crossover name.')
       return
     }
+    if (isBlocked) return
+    mutationGuardRef.current = true
     setMutationError(null)
     try {
       await renameMutation.mutateAsync({ groupId, name: trimmedName })
@@ -160,17 +169,22 @@ export default function CrossoversPage() {
       setEditingName('')
     } catch (error) {
       setMutationError(errorMessage(error, 'Unable to rename crossover.'))
+    } finally {
+      mutationGuardRef.current = false
     }
   }
 
   const deleteGroup = async (group: DependencyGroup) => {
-    if (isAnyMutationPending || !window.confirm(`Delete "${group.name}"? Its comic memberships will be removed.`)) return
+    if (isBlocked || !window.confirm(`Delete "${group.name}"? Its comic memberships will be removed.`)) return
+    mutationGuardRef.current = true
     setMutationError(null)
     try {
       await deleteMutation.mutateAsync(group.id)
       if (expandedId === group.id) setExpandedId(null)
     } catch (error) {
       setMutationError(errorMessage(error, 'Unable to delete crossover.'))
+    } finally {
+      mutationGuardRef.current = false
     }
   }
 
@@ -180,6 +194,8 @@ export default function CrossoversPage() {
       setMutationError('Choose a comic series to add.')
       return
     }
+    if (isBlocked) return
+    mutationGuardRef.current = true
     setMutationError(null)
     setMembershipMessage(null)
     try {
@@ -192,6 +208,8 @@ export default function CrossoversPage() {
       setMembershipMessage(`${threadTitle} added to crossover as 1 thread member.`)
     } catch (error) {
       setMutationError(errorMessage(error, 'Unable to add thread to crossover.'))
+    } finally {
+      mutationGuardRef.current = false
     }
   }
 
@@ -214,6 +232,8 @@ export default function CrossoversPage() {
       setMutationError('Choose a valid issue range in reading order.')
       return
     }
+    if (isBlocked) return
+    mutationGuardRef.current = true
     setMutationError(null)
     setMembershipMessage(null)
     try {
@@ -228,11 +248,14 @@ export default function CrossoversPage() {
       clearRangeState()
     } catch (error) {
       setMutationError(errorMessage(error, 'Unable to add issue range.'))
+    } finally {
+      mutationGuardRef.current = false
     }
   }
 
   const removeMember = async (groupId: number, memberId: number) => {
-    if (isAnyMutationPending) return
+    if (isBlocked) return
+    mutationGuardRef.current = true
     setMutationError(null)
     setMembershipMessage(null)
     try {
@@ -240,6 +263,8 @@ export default function CrossoversPage() {
       setMembershipMessage('Comic removed from crossover.')
     } catch (error) {
       setMutationError(errorMessage(error, 'Unable to remove crossover member.'))
+    } finally {
+      mutationGuardRef.current = false
     }
   }
 
