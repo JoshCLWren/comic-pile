@@ -676,7 +676,10 @@ async def test_conflicts_pagination_works_correctly(
     from app.models.external_identity import IssueExternalIdentityMapping
 
     legacy_issues = cast(list[Issue], fixture["legacy_issues"])
-    for i, issue in enumerate(legacy_issues[:3]):
+    # Use issues that already have a confirmed ComicVine mapping in the fixture:
+    # legacy_issues[0] (#1) -> 96901, legacy_issues[6] (#7) -> 97001, legacy_issues[7] (#8) -> 97002
+    conflict_issues = [legacy_issues[0], legacy_issues[6], legacy_issues[7]]
+    for i, issue in enumerate(conflict_issues):
         # To create a conflict, we need at least TWO confirmed mappings for the SAME issue
         # The fixture already gave these issues one confirmed mapping.
         identity2 = await upsert_external_identity(
