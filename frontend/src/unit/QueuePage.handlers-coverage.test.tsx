@@ -16,7 +16,7 @@ vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
 vi.mock('../services/api', () => ({ threadsApi: { setPending: vi.fn() }, dependenciesApi: { listBlockedThreadIds: vi.fn(), getBlockingInfo: vi.fn() } }))
 vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
-vi.mock('../services/api-issues', () => ({ issuesApi: { create: vi.fn(), markRead: vi.fn(), migrateThread: vi.fn() } }))
+vi.mock('../services/api-issues', () => ({ issuesApi: { create: vi.fn(), markRead: vi.fn(), bulkMarkRead: vi.fn(), bulkMarkUnread: vi.fn(), migrateThread: vi.fn() } }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: () => ({ setRestoreAction: vi.fn(), clearRestoreAction: vi.fn() }) }))
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }) }))
 type CardProps = Record<string, string | (() => void) | ((event: unknown) => void)>
@@ -84,6 +84,7 @@ beforeEach(() => {
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(issuesApi.create).mockResolvedValue({ issues: [] } as never)
   vi.mocked(issuesApi.markRead).mockResolvedValue(undefined)
+  vi.mocked(issuesApi.bulkMarkRead).mockResolvedValue(undefined)
   // SAFETY: as never is used for type narrowing in mock data
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(issuesApi.migrateThread).mockResolvedValue({} as never)
@@ -241,7 +242,7 @@ describe('QueuePage callback coverage', () => {
     await user.type(screen.getByLabelText(/Issues already read/i), '1')
     expect(screen.getByText(/Will create/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /create series/i }))
-    await waitFor(() => expect(issuesApi.markRead).toHaveBeenCalledWith(21))
+    await waitFor(() => expect(issuesApi.bulkMarkRead).toHaveBeenCalledWith([21]))
 
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'Invalid')

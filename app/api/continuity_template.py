@@ -161,21 +161,29 @@ async def adopt_crossover_template(
 
     lane = {"id": request.lane_id, "name": request.lane_name, "order": 0}
     nodes = []
-    for position, item in enumerate(template.items):
+
+    issue_ids = [item.issue_id for item in template.items]
+    if issue_ids:
         result = await db.execute(
             select(Issue.id)
             .join(Thread, Thread.id == Issue.thread_id)
-            .where(Issue.id == item.issue_id, Thread.user_id == current_user.id)
+            .where(Issue.id.in_(issue_ids), Thread.user_id == current_user.id)
         )
-        if result.scalar_one_or_none() is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={
-                    "code": "template_item_not_owned",
-                    "issue_id": item.issue_id,
-                    "position": position,
-                },
-            )
+        owned_issue_ids = set(result.scalars())
+        missing_issue_ids = [iid for iid in issue_ids if iid not in owned_issue_ids]
+        if missing_issue_ids:
+            for position, item in enumerate(template.items):
+                if item.issue_id in missing_issue_ids:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail={
+                            "code": "template_item_not_owned",
+                            "issue_id": item.issue_id,
+                            "position": position,
+                        },
+                    )
+
+    for position, item in enumerate(template.items):
         nodes.append(
             {
                 "id": f"{request.issue_node_id_prefix}{item.issue_id}",

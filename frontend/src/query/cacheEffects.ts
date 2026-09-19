@@ -3,6 +3,7 @@ import type { InfiniteData } from '@tanstack/react-query'
 import type { Thread, ThreadListResponse, Issue } from '../types'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
 import type { CustomCBL, CustomCBLListItem } from '../services/api-custom-cbl'
+import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
 
@@ -306,6 +307,60 @@ export function applyEditedThreadToQueuePages(
 
   client.setQueryData(queryKeys.thread.detail(updatedThread.id), updatedThread)
   client.setQueryData(queryKeys.thread.summary(updatedThread.id), updatedThread)
+}
+
+/**
+ * Apply an authoritative issue read-status result to the cache so the thread
+ * detail view reflects a toggle without refetching every loaded issue page.
+ *
+ * The snapshot carries the reconciled visible issues plus the server-refreshed
+ * thread; the issues are patched in-place across every loaded page (keyed via
+ * `queryKeys.thread.issuePages`) and the thread is pushed through
+ * `applyEditedThreadToQueuePages` (detail, summary, and queue rows).
+ */
+export function applyIssueReadSnapshotToCache(
+  client: QueryClient,
+  snapshot: IssueMutationSnapshot,
+): void {
+  const { issues: snapshotIssues, thread: updatedThread } = snapshot
+  const issuesById = new Map(snapshotIssues.map((issue) => [issue.id, issue]))
+
+  client.setQueriesData<InfiniteData<IssueListResponse>>(
+    { queryKey: queryKeys.thread.issuePages(updatedThread.id) },
+    (old) => {
+      if (!old) return old
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          issues: page.issues.map((issue: Issue) => issuesById.get(issue.id) ?? issue),
+        })),
+      }
+    },
+  )
+
+  applyEditedThreadToQueuePages(client, updatedThread)
+}
+
+/**
+ * Refresh the retained data a DependencyBuilder change can affect: the thread
+ * detail/summary, dependency and crossover groups, reading orders, current
+ * session, and queue pages. Replaces the previous one-off thread refetch in the
+ * thread detail view.
+ */
+export async function invalidateAfterDependencyChange(
+  client: QueryClient,
+  threadId: number,
+): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
+    client.invalidateQueries({ queryKey: queryKeys.crossover.all }),
+    client.invalidateQueries({ queryKey: queryKeys.thread.detail(threadId), exact: true }),
+    client.invalidateQueries({ queryKey: queryKeys.thread.summary(threadId), exact: true }),
+    client.invalidateQueries({ queryKey: queryKeys.readingOrders.forThread(threadId) }),
+    client.invalidateQueries({ queryKey: queryKeys.session.current(), exact: true }),
+    client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
+  ])
 }
 
 /**

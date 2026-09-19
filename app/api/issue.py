@@ -15,6 +15,8 @@ from app.database import get_db
 from app.models import Issue
 from app.models.user import User
 from app.schemas import (
+    IssueBulkMarkReadRequest,
+    IssueBulkMarkUnreadRequest,
     IssueCreateRange,
     IssueListResponse,
     IssueMoveRequest,
@@ -410,4 +412,45 @@ async def mark_issue_unread(
     await db.commit()
     await _invalidate_issue_caches(current_user.id)
 
+
+@router.post("/issues:bulkMarkRead", status_code=status.HTTP_204_NO_CONTENT)
+async def bulk_mark_issue_read(
+    request: IssueBulkMarkReadRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Bulk mark issues as read.
+
+    Args:
+        request: Bounded list of issue IDs.
+        current_user: Authenticated user.
+        db: Database session.
+
+    Raises:
+        HTTPException: If any issue is invalid or already read.
+    """
+    await issue_service.bulk_mark_issue_read(db, request.issue_ids, current_user.id)
+    await db.commit()
+    await _invalidate_issue_caches(current_user.id)
+
+
+@router.post("/issues:bulkMarkUnread", status_code=status.HTTP_204_NO_CONTENT)
+async def bulk_mark_issue_unread(
+    request: IssueBulkMarkUnreadRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Bulk mark issues as unread.
+
+    Args:
+        request: Bounded list of issue IDs.
+        current_user: Authenticated user.
+        db: Database session.
+
+    Raises:
+        HTTPException: If any issue is invalid or already unread.
+    """
+    await issue_service.bulk_mark_issue_unread(db, request.issue_ids, current_user.id)
+    await db.commit()
+    await _invalidate_issue_caches(current_user.id)
 

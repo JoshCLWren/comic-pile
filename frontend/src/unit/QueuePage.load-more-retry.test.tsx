@@ -55,6 +55,8 @@ vi.mock('../services/api-issues', () => ({
   issuesApi: {
     create: vi.fn().mockResolvedValue({ issues: [] }),
     markRead: vi.fn().mockResolvedValue(undefined),
+    bulkMarkRead: vi.fn().mockResolvedValue(undefined),
+    bulkMarkUnread: vi.fn().mockResolvedValue(undefined),
     migrateThread: vi.fn().mockResolvedValue({}),
   },
 }))
