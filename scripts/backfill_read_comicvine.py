@@ -13,9 +13,9 @@ stored/local-satisfiable creator work before provider-dependent leftovers. Live
 requests are paced at 1.5 seconds between starts. HTTP 420/429 throttles block
 only the affected ComicVine resource. When ComicVine supplies Retry-After, that
 resource's deadline is honored. When it omits Retry-After, the operator uses a
-short fallback cooldown instead of blacklisting the resource for the rest of
-the run. The triggering request is retried after the cooldown, so the backfill
-continues without a manual rerun.
+per-resource exponential fallback of 60, 120, 240, 480, 960, 1920, then 3600
+seconds. The fallback stays at one hour until that resource succeeds, then
+resets to 60 seconds.
 
 Examples:
     uv run python scripts/backfill_read_comicvine.py --user-id 1 --dry-run
@@ -62,6 +62,7 @@ DEFAULT_LOCAL_COMICVINE_DB = Path(
 )
 OPERATOR_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS = 1.5
 OPERATOR_FALLBACK_RETRY_AFTER_SECONDS = 60
+OPERATOR_MAX_FALLBACK_RETRY_AFTER_SECONDS = 3600
 
 
 def _load_script_module(name: str, path: Path) -> ModuleType:
@@ -123,6 +124,7 @@ class OperatorComicVineClient(BaseComicVineClient):
         )
         self.local_db_path = Path(local_db_path) if local_db_path is not None else None
         self._local_db: sqlite3.Connection | None = None
+        self._fallback_backoff_seconds: dict[str, int] = {}
         if self.local_db_path is not None and self.local_db_path.is_file():
             uri = f"file:{self.local_db_path}?mode=ro"
             self._local_db = sqlite3.connect(uri, uri=True)
@@ -208,20 +210,29 @@ class OperatorComicVineClient(BaseComicVineClient):
         *,
         refresh: bool = False,
     ) -> ComicVineResponse:
-        """Retry one throttled resource after Retry-After or a bounded fallback delay."""
+        """Retry throttled resources with Retry-After or exponential fallback."""
         while True:
             try:
-                return await super().request(
+                response = await super().request(
                     endpoint_bucket,
                     endpoint,
                     params,
                     refresh=refresh,
                 )
+                self._fallback_backoff_seconds.pop(endpoint_bucket, None)
+                return response
             except ComicVineRateLimitError as exc:
                 resource = exc.resource or endpoint_bucket
                 delay = exc.retry_after_seconds
                 if delay is None:
-                    delay = OPERATOR_FALLBACK_RETRY_AFTER_SECONDS
+                    delay = self._fallback_backoff_seconds.get(
+                        resource,
+                        OPERATOR_FALLBACK_RETRY_AFTER_SECONDS,
+                    )
+                    self._fallback_backoff_seconds[resource] = min(
+                        delay * 2,
+                        OPERATOR_MAX_FALLBACK_RETRY_AFTER_SECONDS,
+                    )
                     self._block_resource(resource, delay)
                     print(
                         f"ComicVine resource {resource!r} returned a throttle without "
