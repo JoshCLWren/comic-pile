@@ -27,7 +27,7 @@ concurrency:
 jobs:
   drain:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Checkout trusted main
         uses: actions/checkout@v6
@@ -69,43 +69,10 @@ jobs:
           WORKERS: ${{ steps.plan.outputs.workers }}
         run: |
           set -Eeuo pipefail
-
-          wait_for_dispatcher_idle() {
-            local attempt active
-            for attempt in {1..180}; do
-              active=0
-              for status in queued in_progress; do
-                count="$(
-                  gh run list --workflow fixed-model-factory-dispatch.yml \
-                    --status "$status" --limit 20 --json databaseId \
-                    --jq 'length' 2>/dev/null || echo 1
-                )"
-                active=$((active + count))
-              done
-              (( active == 0 )) && return 0
-              sleep 5
-            done
-            echo 'Timed out waiting for central dispatcher serialization lane' >&2
-            return 1
-          }
-
-          delegated=0
-          while IFS= read -r worker; do
-            [[ -n "$worker" ]] || continue
-            wait_for_dispatcher_idle
-            echo "Delegating completion-selected Factory ${worker} to central dispatcher"
-            gh workflow run fixed-model-factory-dispatch.yml \
-              --repo "$GITHUB_REPOSITORY" --ref main \
-              -f mode=smoke -f worker="$worker"
-            # Ensure this request becomes visible before considering the next
-            # worker. GitHub concurrency retains only one pending run per group,
-            # so serial signaling prevents our own batch from coalescing away.
-            sleep 5
-            wait_for_dispatcher_idle
-            delegated=$((delegated + 1))
-          done < <(jq -r '.[]' <<< "$WORKERS")
-
-          echo "Delegated ${delegated} completion-selected worker(s) through the single assignment writer"
+          echo "Delegating completion-selected batch ${WORKERS} to central dispatcher"
+          gh workflow run fixed-model-factory-dispatch.yml \
+            --repo "$GITHUB_REPOSITORY" --ref main \
+            -f mode=smoke -f workers="$WORKERS"
 
       - name: Report demand-driven plan
         shell: bash
