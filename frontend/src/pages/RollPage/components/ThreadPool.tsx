@@ -89,7 +89,7 @@ export function ThreadPool({
           onClick={onShuffle}
           disabled={shuffleIsPending || pool.length < 2}
           aria-describedby="shuffle-queue-description"
-          className="h-8 px-3 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-[var(--theme-bg-panel)] disabled:opacity-50"
+          className="h-8 px-3 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-50"
         >
           Shuffle queue
         </button>
@@ -149,7 +149,7 @@ export function ThreadPool({
                 role="button"
                 tabIndex={0}
                 aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${thread.route_labels?.length ? `, connected to ${thread.route_labels.join(', ')}` : ''}. Open series actions.`}
-                className={`flex items-center gap-3 px-4 py-3 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl group transition-all cursor-pointer hover:bg-[var(--theme-bg-panel)] ${isSelected ? 'pool-thread-selected border-[var(--theme-comic-accent)]/30' : ''
+                className={`flex items-center gap-3 px-4 py-3 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-[var(--theme-comic-accent)]/30' : ''
                   }`}
               >
                 <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
