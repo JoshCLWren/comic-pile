@@ -221,25 +221,23 @@ export function ContinuityIssueRangeSelector({
     setDraftEnd(value?.endIssue ?? null)
   }, [value])
 
+  useEffect(() => {
+    if (draftStart && draftEnd) {
+      const startIndex = issues.findIndex((issue) => issue.id === draftStart.id)
+      const endIndex = issues.findIndex((issue) => issue.id === draftEnd.id)
+      if (startIndex < 0 || endIndex < 0 || startIndex > endIndex) {
+        onChange(null)
+      } else {
+        onChange({ thread, startIssue: draftStart, endIssue: draftEnd })
+      }
+    } else {
+      onChange(null)
+    }
+  }, [draftStart, draftEnd, issues, thread, onChange])
+
   const startIndex = draftStart ? issues.findIndex((issue) => issue.id === draftStart.id) : -1
   const endIndex = draftEnd ? issues.findIndex((issue) => issue.id === draftEnd.id) : -1
   const isReversed = startIndex >= 0 && endIndex >= 0 && startIndex > endIndex
-
-  function publishRange(nextStart: Issue | null, nextEnd: Issue | null) {
-    if (!nextStart || !nextEnd) {
-      onChange(null)
-      return
-    }
-
-    const nextStartIndex = issues.findIndex((issue) => issue.id === nextStart.id)
-    const nextEndIndex = issues.findIndex((issue) => issue.id === nextEnd.id)
-    if (nextStartIndex < 0 || nextEndIndex < 0 || nextStartIndex > nextEndIndex) {
-      onChange(null)
-      return
-    }
-
-    onChange({ thread, startIssue: nextStart, endIssue: nextEnd })
-  }
 
   return (
     <fieldset className="space-y-2" disabled={disabled}>
@@ -249,10 +247,7 @@ export function ContinuityIssueRangeSelector({
           label="First issue"
           issues={issues}
           value={draftStart}
-          onChange={(issue) => {
-            setDraftStart(issue)
-            publishRange(issue, draftEnd)
-          }}
+          onChange={setDraftStart}
           isLoading={isLoading}
           disabled={disabled}
         />
@@ -260,17 +255,14 @@ export function ContinuityIssueRangeSelector({
           label="Last issue"
           issues={issues}
           value={draftEnd}
-          onChange={(issue) => {
-            setDraftEnd(issue)
-            publishRange(draftStart, issue)
-          }}
+          onChange={setDraftEnd}
           isLoading={isLoading}
           disabled={disabled}
         />
       </div>
       {isReversed && (
         <p role="alert" className="text-xs text-amber-300">
-          #{draftStart?.issue_number} comes after #{draftEnd?.issue_number} in {thread.title}. Choose a later ending issue.
+          Choose a valid issue range in reading order.
         </p>
       )}
       {error && <p role="alert" className="text-xs text-red-400">{error}</p>}

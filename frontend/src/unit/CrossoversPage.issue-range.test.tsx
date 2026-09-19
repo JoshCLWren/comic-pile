@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
@@ -55,19 +56,19 @@ const threadApi = vi.mocked(threadsApi)
 const issueApi = vi.mocked(issuesApi)
 
 function createWrapper() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={client}>{children}</QueryClientProvider>
-  }
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+    return function Wrapper({ children }: { children: ReactNode }) {
+        return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    }
 }
 
 function renderPage() {
-  return render(
-    <MemoryRouter>
-      <CrossoversPage />
-    </MemoryRouter>,
-    { wrapper: createWrapper() },
-  )
+    return render(
+        <MemoryRouter>
+            <CrossoversPage />
+        </MemoryRouter>,
+        { wrapper: createWrapper() },
+    )
 }
 
 const crossover = {
@@ -140,8 +141,8 @@ async function loadIssues() {
 }
 
 function selectRange(firstIssueId: string, lastIssueId: string) {
-  fireEvent.change(screen.getByLabelText('First issue'), { target: { value: firstIssueId } })
-  fireEvent.change(screen.getByLabelText('Last issue'), { target: { value: lastIssueId } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'First issue' }), { target: { value: firstIssueId } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Last issue' }), { target: { value: lastIssueId } })
 }
 
 beforeEach(() => {
@@ -401,10 +402,10 @@ describe('CrossoversPage issue ranges', () => {
     await screen.findByText('Annihilation')
     openRangeForm()
     await loadIssues()
+    groupsApi.list.mockResolvedValue([])
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
     await waitFor(() => expect(groupsApi.delete).toHaveBeenCalledWith(7))
-    groupsApi.list.mockResolvedValue([])
     await waitFor(() => expect(screen.queryByText('Annihilation')).not.toBeInTheDocument())
     expect(screen.queryByRole('form', { name: 'Add issue range to Annihilation' })).not.toBeInTheDocument()
   })
