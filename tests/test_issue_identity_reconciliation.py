@@ -677,6 +677,8 @@ async def test_conflicts_pagination_works_correctly(
 
     legacy_issues = cast(list[Issue], fixture["legacy_issues"])
     for i, issue in enumerate(legacy_issues[:3]):
+        # To create a conflict, we need at least TWO confirmed mappings for the SAME issue
+        # The fixture already gave these issues one confirmed mapping.
         identity2 = await upsert_external_identity(
             async_db, provider="comicvine", entity_type="issue", external_id=f"{99990 + i}"
         )
@@ -690,6 +692,7 @@ async def test_conflicts_pagination_works_correctly(
             )
         )
     await async_db.flush()
+    await async_db.commit()
 
     response = await client.get(
         "/api/v1/issue-identity/conflicts?page=1&size=2",

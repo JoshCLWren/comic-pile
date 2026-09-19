@@ -159,7 +159,7 @@ async def find_duplicate_physical_issues(
                 statuses=cast(tuple[str, ...], raw["statuses"]),
                 has_read=raw["has_read"],
                 has_unread=raw["has_unread"],
-                issue_details=raw["issue_details"],
+                issue_details=tuple(raw["issue_details"]),
             )
         )
     return anomalies
@@ -175,9 +175,24 @@ async def list_duplicate_physical_issues(
     """Return a capped, paginated page of duplicate physical-issue anomalies."""
     total = await repo_count_duplicates(db, user_id=user_id)
     offset = (page - 1) * size
-    anomalies = await repo_find_duplicates(
+    raw_anomalies = await repo_find_duplicates(
         db, user_id=user_id, limit=size, offset=offset
     )
+    # Convert raw dicts to DuplicateIdentityAnomaly dataclasses
+    anomalies: list[DuplicateIdentityAnomaly] = []
+    for raw in raw_anomalies:
+        anomalies.append(
+            DuplicateIdentityAnomaly(
+                comicvine_issue_id=str(raw["comicvine_issue_id"]),
+                external_identity_id=int(raw["external_identity_id"]),
+                issue_ids=cast(tuple[int, ...], raw["issue_ids"]),
+                thread_ids=cast(tuple[int, ...], raw["thread_ids"]),
+                statuses=cast(tuple[str, ...], raw["statuses"]),
+                has_read=raw["has_read"],
+                has_unread=raw["has_unread"],
+                issue_details=tuple(raw["issue_details"]),
+            )
+        )
     return DuplicatePhysicalIssuePage(
         anomalies=tuple(anomalies), total=total
     )
