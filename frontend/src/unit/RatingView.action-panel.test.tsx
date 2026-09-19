@@ -112,8 +112,8 @@ describe('RatingView action panel (issue #1406)', () => {
   it('Snooze remains neutral styling', () => {
     render(ratingView())
     const snooze = screen.getByRole('button', { name: /snooze/i })
-    expect(snooze.className).toContain('border-white/10')
-    expect(snooze.className).toContain('bg-white/5')
+    expect(snooze.className).toContain('border-[var(--theme-border)]')
+    expect(snooze.className).toContain('bg-[var(--theme-bg-panel)]')
     expect(snooze.className).toContain('text-stone-300')
   })
 

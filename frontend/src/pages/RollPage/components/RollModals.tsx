@@ -254,7 +254,7 @@ export function RollModals({
               onCloseDieModal()
             }}
             disabled={clearManualDiePending}
-              className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
+            className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
                 manualDie ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-[var(--theme-bg-panel)] border-[var(--theme-border)] hover:bg-white/10'
               }`}
           >
