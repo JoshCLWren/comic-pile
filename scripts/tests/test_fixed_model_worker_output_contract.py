@@ -133,14 +133,34 @@ def test_checkout_target_records_expected_head() -> None:
     assert 'EXPECTED_HEAD="$(git rev-parse HEAD)"' in body
 
 
-def test_worker_rejects_orphaned_issue_lease_when_canonical_pr_exists() -> None:
-    """A concurrent PR lease release cannot turn repair work into new issue work."""
+def test_worker_repairs_orphaned_issue_lease_when_canonical_pr_exists() -> None:
+    """An orphan issue lease is released without touching the canonical PR."""
     body = _function_body('select_controller_assignment')
 
     assert 'gh pr list --state open --limit 500 --json number,headRefName' in body
     assert 'test("^factory/[0-9]+-" + $issue + "-")' in body
     assert 'owns orphaned issue lease' in body
-    assert 'while canonical open PR #${canonical_pr} exists' in body
+    assert 'releasing only the accidental issue lease' in body
+    assert "release_accidental_issue_lease \"$issue\" 'controller-conflict-orphaned-issue'" in body
+
+
+def test_worker_preserves_canonical_pr_when_unrelated_issue_is_accidental() -> None:
+    """The incident shape keeps the legitimate PR and releases only the stray issue."""
+    body = _function_body('select_controller_assignment')
+
+    assert 'owns canonical PR #${pr} plus unrelated issue #${issue}' in body
+    assert 'releasing only the accidental issue lease' in body
+    assert "release_accidental_issue_lease \"$issue\" 'controller-conflict-extra-issue'" in body
+    assert "MODE='pr'" in body
+    assert 'NUMBER="$pr"' in body
+
+
+def test_selective_conflict_recovery_verifies_current_owner_before_release() -> None:
+    """Recovery may release a target only while this worker still owns it."""
+    body = _function_body('release_accidental_issue_lease')
+
+    assert 'current_owner_is_self "$issue" || return 1' in body
+    assert 'release_target "$issue"' in body
 
 
 def test_omniroute_and_nvidia_workers_reject_unclean_git_state() -> None:
