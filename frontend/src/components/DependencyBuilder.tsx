@@ -74,44 +74,15 @@ export default function DependencyBuilder({
     isPending: isLoadingDeps,
     error: depsError,
     refetch: refetchDependencies,
-  } = useThreadDependencies(threadId)
+  } = useThreadDependencies(threadId, isOpen)
 
-  const { data: blockedIdsData } = useBlockedThreadIds()
+  const { data: blockedIdsData } = useBlockedThreadIds(isOpen && showReadingOrder)
 
   const {
     data: searchResultsData,
     isPending: isSearching,
     error: searchError,
-  } = useSearchThreads(searchQuery)
-
-  const {
-    data: sourceIssues,
-    isPending: isLoadingSourceIssues,
-    error: sourceIssuesError,
-    refetch: refetchSourceIssues,
-  } = useThreadIssuesForDependency(selectedThreadId)
-
-  const {
-    data: targetIssues,
-    isPending: isLoadingTargetIssues,
-    error: targetIssuesError,
-    refetch: refetchTargetIssues,
-  } = useThreadIssuesForDependency(threadId)
-
-  const createDependencyMutation = useCreateDependency(threadId)
-  const deleteDependencyMutation = useDeleteDependency(threadId)
-  const updateDependencyMutation = useUpdateDependency(threadId)
-  const migrateThreadMutation = useMigrateThread()
-
-  const dependencies = useMemo(
-    () => dependenciesData ?? { blocking: [], blocked_by: [] },
-    [dependenciesData]
-  )
-
-  const blockedIds = useMemo(
-    () => new Set(blockedIdsData ?? []),
-    [blockedIdsData]
-  )
+  } = useSearchThreads(searchQuery, isOpen)
 
   const searchResults = useMemo(
     () => (searchResultsData?.threads ?? []).filter((candidate) => candidate.id !== threadId),
@@ -127,6 +98,37 @@ export default function DependencyBuilder({
     if (!selectedThread) return false
     return selectedThread.total_issues === null || selectedThread.total_issues === undefined
   }, [selectedThread])
+
+  const issuesEnabled = isOpen && selectedThreadId != null && !selectedThreadNeedsMigration
+
+  const {
+    data: sourceIssues,
+    isPending: isLoadingSourceIssues,
+    error: sourceIssuesError,
+    refetch: refetchSourceIssues,
+  } = useThreadIssuesForDependency(selectedThreadId, issuesEnabled)
+
+  const {
+    data: targetIssues,
+    isPending: isLoadingTargetIssues,
+    error: targetIssuesError,
+    refetch: refetchTargetIssues,
+  } = useThreadIssuesForDependency(threadId, issuesEnabled)
+
+  const createDependencyMutation = useCreateDependency(threadId)
+  const deleteDependencyMutation = useDeleteDependency(threadId)
+  const updateDependencyMutation = useUpdateDependency(threadId)
+  const migrateThreadMutation = useMigrateThread()
+
+  const dependencies = useMemo(
+    () => dependenciesData ?? { blocking: [], blocked_by: [] },
+    [dependenciesData]
+  )
+
+  const blockedIds = useMemo(
+    () => new Set(blockedIdsData ?? []),
+    [blockedIdsData]
+  )
 
   const isSaving = createDependencyMutation.isPending
   const isMigrating = migrateThreadMutation.isPending
@@ -279,6 +281,19 @@ export default function DependencyBuilder({
       setError(getApiErrorDetail(searchError))
     }
   }, [sourceIssuesError, targetIssuesError, depsError, searchError])
+
+  // Preserve the legacy default of selecting the first loaded prerequisite and
+  // target issue once issue-level tracking is available, without clobbering an
+  // explicit user selection when the loaded issue lists change.
+  useEffect(() => {
+    if (!isOpen || !selectedThread || selectedThreadNeedsMigration) return
+    const selectFirst = (current: number | null, issues: Issue[] | undefined): number | null => {
+      if (current != null && issues?.some((issue) => issue.id === current)) return current
+      return issues?.[0]?.id ?? null
+    }
+    setSourceIssueId((current) => selectFirst(current, sourceIssues))
+    setTargetIssueId((current) => selectFirst(current, targetIssues))
+  }, [isOpen, selectedThread, selectedThreadNeedsMigration, sourceIssues, targetIssues])
 
   function isDuplicateDependency(): boolean {
     if (!threadId || !selectedThreadId) return false

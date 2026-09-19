@@ -31,40 +31,41 @@ async function fetchAllUnreadIssues(threadId: number): Promise<Issue[]> {
   }
 }
 
-export function useThreadDependencies(threadId: number | null | undefined) {
+export function useThreadDependencies(threadId: number | null | undefined, enabled = true) {
   return useQuery<ThreadDependenciesResponse>({
     queryKey: threadId != null ? queryKeys.dependencies.forThread(threadId) : [],
     queryFn: () => dependenciesApi.listThreadDependencies(threadId!),
-    enabled: threadId != null,
+    enabled: enabled && threadId != null,
     retry: false,
   });
 }
 
-export function useBlockedThreadIds() {
+export function useBlockedThreadIds(enabled = true) {
   return useQuery<number[]>({
     queryKey: queryKeys.dependencies.list(),
     queryFn: () => dependenciesApi.listBlockedThreadIds(),
+    enabled,
     retry: false,
   });
 }
 
-export function useSearchThreads(query: string) {
+export function useSearchThreads(query: string, enabled = true) {
   const normalizedQuery = query.trim();
   return useQuery<ThreadListResponse>({
     queryKey: normalizedQuery.length >= 2
       ? queryKeys.dependencies.search(normalizedQuery)
       : [],
     queryFn: () => threadsApi.list({ search: normalizedQuery }),
-    enabled: normalizedQuery.length >= 2,
+    enabled: enabled && normalizedQuery.length >= 2,
     retry: false,
   });
 }
 
-export function useThreadIssuesForDependency(threadId: number | null | undefined) {
+export function useThreadIssuesForDependency(threadId: number | null | undefined, enabled = true) {
   return useQuery<Issue[]>({
     queryKey: threadId != null ? queryKeys.dependencies.issues(threadId) : [],
     queryFn: () => fetchAllUnreadIssues(threadId!),
-    enabled: threadId != null,
+    enabled: enabled && threadId != null,
     retry: false,
   });
 }

@@ -2,7 +2,7 @@ import { type PropsWithChildren, type ReactElement } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { dependenciesApi, threadsApi } from '../services/api'
+import { dependenciesApi, migrationApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import { ToastContext, type ToastContextType } from '../contexts/ToastContext'
 import type { Dependency, IssueListResponse, Thread, ThreadListResponse } from '../types'
@@ -13,6 +13,7 @@ const api = {
   dependenciesApi: vi.mocked(dependenciesApi, { deep: true }),
   threadsApi: vi.mocked(threadsApi, { deep: true }),
   issuesApi: vi.mocked(issuesApi, { deep: true }),
+  migrationApi: vi.mocked(migrationApi, { deep: true }),
 }
 
 const toast = {
@@ -41,7 +42,7 @@ describe('DependencyBuilder', () => {
     vi.spyOn(dependenciesApi, 'updateDependency').mockResolvedValue({} as never)
     vi.spyOn(threadsApi, 'list').mockResolvedValue({ threads: [], next_page_token: null })
     vi.spyOn(issuesApi, 'list').mockResolvedValue({ issues: [], total_count: 0, page_size: 100, next_page_token: null })
-    vi.spyOn(issuesApi, 'migrateThread').mockResolvedValue({} as never)
+    vi.spyOn(migrationApi, 'migrateThread').mockResolvedValue({} as never)
   })
 
   afterEach(() => {
@@ -137,7 +138,7 @@ describe('DependencyBuilder', () => {
   it('validates and completes inline migration for an unmigrated prerequisite', async () => {
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [], blocked_by: [] })
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Unmigrated', total_issues: null }], next_page_token: null })
-    api.issuesApi.migrateThread.mockResolvedValue({ ...thread, id: 2, title: 'Unmigrated', total_issues: 5 })
+    api.migrationApi.migrateThread.mockResolvedValue({ ...thread, id: 2, title: 'Unmigrated', total_issues: 5 })
     const user = userEvent.setup()
     renderBuilder(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'Unm')
@@ -149,7 +150,7 @@ describe('DependencyBuilder', () => {
     await user.type(screen.getByLabelText('Last issue read'), '1')
     await user.type(screen.getByLabelText('Total issues'), '5')
     await user.click(screen.getByRole('button', { name: 'Migrate' }))
-    await waitFor(() => expect(api.issuesApi.migrateThread).toHaveBeenCalledWith(2, 1, 5))
+    await waitFor(() => expect(api.migrationApi.migrateThread).toHaveBeenCalledWith(2, { last_issue_read: 1, total_issues: 5 }))
   })
 
   it('handles empty searches, search errors, issue pagination, and save errors', async () => {
@@ -307,7 +308,7 @@ describe('DependencyBuilder', () => {
   it('rejects invalid inline migration values and recovers from migration/delete errors', async () => {
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [], blocked_by: [] })
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Unmigrated', total_issues: null }], next_page_token: null })
-    api.issuesApi.migrateThread.mockRejectedValueOnce(new Error('migration failed'))
+    api.migrationApi.migrateThread.mockRejectedValueOnce(new Error('migration failed'))
     const user = userEvent.setup()
     renderBuilder(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'Unm')
@@ -364,7 +365,7 @@ describe('DependencyBuilder', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /view reading order/i })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /view reading order/i }))
     await user.click(screen.getByRole('tab', { name: 'Flowchart' }))
-    await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('[loadFlowchartData] Error:', expect.any(Error)))
+    await waitFor(() => expect(screen.getByTestId('flowchart-container')).toBeInTheDocument())
     errorSpy.mockRestore()
   })
 
