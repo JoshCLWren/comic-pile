@@ -38,7 +38,8 @@ async def test_expire_current_session_ends_active_session() -> None:
     db = AsyncMock(spec=AsyncSession)
     db.execute.return_value = result
 
-    response = await expire_current_session(db, user_id=1)
+    current_user = SimpleNamespace(id=1)
+    response = await expire_current_session(current_user, db)
 
     assert response == {"status": "success", "message": "Session expired"}
     assert session.ended_at is not None

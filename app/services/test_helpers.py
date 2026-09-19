@@ -230,7 +230,7 @@ async def expire_current_session(
 ) -> dict[str, str]:
     """Expire the current active session for an E2E notification test."""
     _require_test_environment()
- 
+
     session_result = await db.execute(
         select(SessionModel)
         .where(SessionModel.user_id == current_user.id)
