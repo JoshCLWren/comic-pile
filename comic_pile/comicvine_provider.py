@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import timezone
+from datetime import UTC
 from email.utils import parsedate_to_datetime
 import hashlib
 import json
@@ -53,6 +53,7 @@ class ComicVineRateLimitError(ComicVineError):
         status_code: int | None = None,
         retry_after_seconds: int | None = None,
     ) -> None:
+        """Attach resource and Retry-After metadata to one throttle failure."""
         super().__init__(message)
         self.resource = resource
         self.status_code = status_code
@@ -86,7 +87,7 @@ def _retry_after_seconds(headers: object, *, now: float | None = None) -> int | 
     except (TypeError, ValueError, OverflowError):
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
     current = time.time() if now is None else now
     return max(0, math.ceil(parsed.timestamp() - current))
 
