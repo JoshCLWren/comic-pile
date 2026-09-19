@@ -96,3 +96,4 @@ class QueueThreadListResponse(BaseModel):
 
     threads: list[QueueThreadListItem]
     next_page_token: str | None = None
+    active_count: int
