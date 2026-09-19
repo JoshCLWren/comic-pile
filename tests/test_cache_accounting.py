@@ -491,10 +491,10 @@ class TestHealthEndpointDurable:
 
     @pytest.mark.asyncio
     async def test_health_response_includes_degraded_field(self) -> None:
-        """CacheQuotaHealthResponse now carries a degraded boolean."""
-        from app.api.health import CacheQuotaHealthResponse
+        """CacheQuotaHealthResult now carries a degraded boolean."""
+        from app.services.health_probe import CacheQuotaHealthResult
 
-        response = CacheQuotaHealthResponse(
+        response = CacheQuotaHealthResult(
             status="ok",
             observed_commands=0,
             budget=350_000,
@@ -508,10 +508,10 @@ class TestHealthEndpointDurable:
 
     @pytest.mark.asyncio
     async def test_health_response_degraded_defaults_false(self) -> None:
-        """CacheQuotaHealthResponse defaults degraded to False."""
-        from app.api.health import CacheQuotaHealthResponse
+        """CacheQuotaHealthResult defaults degraded to False."""
+        from app.services.health_probe import CacheQuotaHealthResult
 
-        response = CacheQuotaHealthResponse(
+        response = CacheQuotaHealthResult(
             status="ok",
             observed_commands=0,
             budget=350_000,
