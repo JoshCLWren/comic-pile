@@ -189,4 +189,3 @@ export function useReorderIssues(threadId: number) {
     },
   })
 }
-}
