@@ -474,7 +474,7 @@ async def test_stale_endpoint_excludes_blocked_threads(
     response = await auth_client.get("/api/v1/threads/stale?days=30")
     assert response.status_code == 200
     data = response.json()
-    thread_ids = {t["id"] for t in data}
+    thread_ids = {t["id"] for t in data["threads"]}
     assert blocked_thread.id not in thread_ids
 
 
@@ -504,7 +504,7 @@ async def test_stale_endpoint_includes_unblocked_stale_threads(
     response = await auth_client.get("/api/v1/threads/stale?days=30")
     assert response.status_code == 200
     data = response.json()
-    thread_ids = {t["id"] for t in data}
+    thread_ids = {t["id"] for t in data["threads"]}
     assert unblocked_thread.id in thread_ids
 
 
@@ -693,15 +693,15 @@ async def test_stale_endpoint_pagination_invalid_token(
 
     # Invalid token format
     response = await auth_client.get("/api/v1/threads/stale?days=30&page_token=invalid")
-    assert response.status_code == 422
+    assert response.status_code == 400
 
     # Token with wrong number of parts
     response = await auth_client.get("/api/v1/threads/stale?days=30&page_token=only_one_part")
-    assert response.status_code == 422
+    assert response.status_code == 400
 
     # Token with non-integer thread ID
     response = await auth_client.get("/api/v1/threads/stale?days=30&page_token=2023-01-01:not_a_number")
-    assert response.status_code == 422
+    assert response.status_code == 400
 
 
 @pytest.mark.asyncio

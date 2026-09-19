@@ -37,6 +37,9 @@ from app.schemas import (
     ThreadUpdate,
 )
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
+import base64
+import binascii
+import json
 from app.services.queue_pagination import (
     QueueCursor,
     QueueSort,
@@ -50,6 +53,65 @@ from comic_pile.session import get_current_die, get_or_create
 from comic_pile.dependencies import format_blocking_reason, get_blocking_explanations
 
 logger = logging.getLogger(__name__)
+
+
+def _encode_stale_cursor(last_activity_at: datetime | None, thread_id: int) -> str:
+    """Encode a stale cursor as URL-safe opaque text.
+
+    Args:
+        last_activity_at: The last activity timestamp, or None for null.
+        thread_id: The thread ID.
+
+    Returns:
+        URL-safe base64 text without padding.
+    """
+    payload = {
+        "last_activity_at": last_activity_at.isoformat() if last_activity_at else None,
+        "thread_id": thread_id,
+    }
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def _decode_stale_cursor(token: str) -> tuple[datetime | None, int]:
+    """Decode and validate a stale cursor.
+
+    Args:
+        token: URL-safe opaque stale cursor text.
+
+    Returns:
+        Tuple of (last_activity_at, thread_id).
+
+    Raises:
+        ValueError: If the token is malformed.
+    """
+    try:
+        padded = token + "=" * (-len(token) % 4)
+        decoded = base64.b64decode(padded.encode(), altchars=b"-_", validate=True)
+        payload = json.loads(decoded.decode())
+        last_activity_at_raw = payload["last_activity_at"]
+        thread_id = payload["thread_id"]
+    except (
+        binascii.Error,
+        KeyError,
+        TypeError,
+        UnicodeDecodeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as exc:
+        raise ValueError("Invalid stale page token") from exc
+
+    if last_activity_at_raw is None:
+        last_activity_at = None
+    elif isinstance(last_activity_at_raw, str):
+        last_activity_at = datetime.fromisoformat(last_activity_at_raw)
+    else:
+        raise ValueError("Invalid stale page token")
+
+    if not isinstance(thread_id, int):
+        raise ValueError("Invalid stale page token")
+
+    return (last_activity_at, thread_id)
 
 
 async def _require_owned_thread(
@@ -252,20 +314,8 @@ async def list_stale_threads_paginated(
     cursor = None
     if page_token:
         try:
-            # Simple cursor format for stale threads: "last_activity_at_isoformat:thread_id"
-            # or "null:thread_id" for null last_activity_at entries
-            parts = page_token.split(":")
-            if len(parts) != 2:
-                raise ValueError("Invalid stale page token")
-            
-            if parts[0] == "null":
-                last_activity_at = None
-            else:
-                last_activity_at = datetime.fromisoformat(parts[0])
-            
-            thread_id = int(parts[1])
-            cursor = (last_activity_at, thread_id)
-        except (ValueError, TypeError) as exc:
+            cursor = _decode_stale_cursor(page_token)
+        except ValueError as exc:
             raise InvalidRequestError(str(exc)) from exc
 
     threads = await thread_repository.fetch_stale_page(
@@ -286,18 +336,7 @@ async def list_stale_threads_paginated(
     next_token = None
     if has_more and threads_to_return:
         last = threads_to_return[-1]
-        if last.last_activity_at is None:
-            # For null last_activity_at entries, use "null:thread_id"
-            cursor_values = (None, last.id)
-        else:
-            # For non-null entries, use "isoformat:thread_id"
-            cursor_values = (last.last_activity_at, last.id)
-        
-        # Encode cursor as "last_activity_at_isoformat:thread_id" or "null:thread_id"
-        if cursor_values[0] is None:
-            next_token = f"null:{cursor_values[1]}"
-        else:
-            next_token = f"{cursor_values[0].isoformat()}:{cursor_values[1]}"
+        next_token = _encode_stale_cursor(last.last_activity_at, last.id)
 
     return QueueThreadListResponse(
         threads=queue_items,
