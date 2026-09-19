@@ -1,8 +1,8 @@
 import { useInfiniteCollection } from '../pagination'
 import type { InfiniteCollectionState } from '../pagination'
-import { issuesApi, type IssueListParams, type IssueListResponse } from '../services/api-issues'
+import { issuesApi, type IssueListParams } from '../services/api-issues'
 import { queryKeys } from '../query/queryKeys'
-import type { Issue } from '../types'
+import type { Issue, IssueListResponse } from '../types'
 
 /** Bounded page size for thread issue listings (matches the Queue page size). */
 export const THREAD_ISSUES_PAGE_SIZE = 100
