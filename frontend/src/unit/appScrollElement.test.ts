@@ -77,9 +77,7 @@ describe('app page scroller (issue #2725)', () => {
     root.scrollTop = 3600
     root.dispatchEvent(new Event('scroll'))
     expect(offsets).toEqual([1200, 3600])
-    if (typeof unsubscribe === 'function') {
-      unsubscribe()
-    }
+    unsubscribe()
   })
 
   it('scrolls #root instead of the window', () => {

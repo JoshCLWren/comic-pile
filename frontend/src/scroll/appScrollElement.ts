@@ -14,7 +14,7 @@ import type { Virtualizer } from '@tanstack/react-virtual'
 type ObserveAppScrollOffset = (
   instance: Virtualizer<Window, Element>,
   cb: (offset: number, isScrolling: boolean) => void,
-) => void | (() => void)
+) => () => void
 
 type ScrollAppToOffset = (
   offset: number,
