@@ -132,9 +132,11 @@ jobs:
               echo "Durable outcome named unknown worker ${worker}; refusing refill" >&2
               exit 1
             }
+            # Explicit-worker smoke mode uses the same dispatcher assignment
+            # path without starting an independent self-perpetuating roster chain.
             gh workflow run fixed-model-factory-dispatch.yml \
               --repo "$GITHUB_REPOSITORY" --ref main \
-              -f mode=roster -f worker="$worker"
+              -f mode=smoke -f worker="$worker"
             exit 0
           fi
 
