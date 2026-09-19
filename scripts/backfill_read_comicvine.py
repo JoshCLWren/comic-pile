@@ -29,6 +29,7 @@ import os
 from pathlib import Path
 import sys
 from types import ModuleType
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -168,7 +169,7 @@ async def _run_resolution_phase(
     print(f"Database target: host={host} database={database}")
     engine = resolver._engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-    results: list[object] = []
+    results: list[Any] = []
     roster_cache: dict[int, list[dict[str, object]]] = {}
     announced_throttles: set[str] = set()
 
@@ -277,7 +278,7 @@ async def _run_creator_phase(
     print(f"Database target: host={host} database={database}")
     engine = helper._engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-    results: list[object] = []
+    results: list[Any] = []
     announced_throttles: set[str] = set()
 
     try:
