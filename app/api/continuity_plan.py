@@ -5,15 +5,16 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.continuity import _refresh_blocked_state, _to_plan_response as _to_response
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.continuity_plan import ContinuityPlan
-from app.models.continuity_rule import ContinuityRule
 from app.models.user import User
+from app.repositories.continuity_repository import (
+    delete_continuity_plan_rules_for_marker,
+    get_continuity_plan as repo_get_continuity_plan,
+)
 from app.schemas.continuity_plan import (
     ContinuityPlanListItem,
     ContinuityPlanResponse,
@@ -39,14 +40,7 @@ def _marker(plan_id: int) -> str:
 
 async def _get_owned_plan(db: AsyncSession, user_id: int, plan_id: int) -> ContinuityPlan:
     """Load one plan without leaking another user's identifiers."""
-    plan = (
-        await db.execute(
-            select(ContinuityPlan).where(
-                ContinuityPlan.id == plan_id,
-                ContinuityPlan.user_id == user_id,
-            )
-        )
-    ).scalar_one_or_none()
+    plan = await repo_get_continuity_plan(db, user_id=user_id, plan_id=plan_id)
     if plan is None:
         raise HTTPException(status_code=404, detail=f"Continuity plan {plan_id} not found")
     return plan
@@ -189,11 +183,8 @@ async def delete_continuity_plan(
 ) -> Response:
     """Delete one plan and only the hard rules compiled by that plan."""
     plan = await _get_owned_plan(db, current_user.id, plan_id)
-    await db.execute(
-        delete(ContinuityRule).where(
-            ContinuityRule.user_id == current_user.id,
-            ContinuityRule.note == _marker(plan.id),
-        )
+    await delete_continuity_plan_rules_for_marker(
+        db, user_id=current_user.id, marker=_marker(plan.id)
     )
     await db.delete(plan)
     await db.commit()

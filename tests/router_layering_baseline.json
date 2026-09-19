@@ -1,7 +1,4 @@
 {
-  "continuity_plan": ["execute-call", "query-import"],
-  "continuity_rule": ["execute-call", "query-import"],
-  "continuity_template": ["execute-call", "query-import"],
   "dependency": ["execute-call", "query-import"],
   "dependency_group": ["execute-call", "query-import"],
   "dependency_group_batch": ["execute-call", "query-import"],
