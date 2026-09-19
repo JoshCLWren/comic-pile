@@ -19,6 +19,10 @@ on:
         description: Optional active external Factory; blank runs the strategy smoke set
         required: false
         type: string
+      workers:
+        description: Optional JSON array of active Factory IDs; processed as one serialized dispatcher batch
+        required: false
+        type: string
   push:
     branches: [main]
     paths:
@@ -252,6 +256,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           DEPLOY_SHA: ${{ github.sha }}
           DISPATCH_WORKER: ${{ inputs.worker }}
+          DISPATCH_WORKERS: ${{ inputs.workers }}
           DISPATCH_MODE: ${{ inputs.mode }}
         run: |
           set -Eeuo pipefail
@@ -440,7 +445,24 @@ jobs:
             done <<< "$stale_runs"
           fi
 
-          if [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKER:-}" ]]; then
+          if [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKERS:-}" ]]; then
+            if ! workers="$(jq -ce '
+              if type == "array" and length > 0 and all(.[]; type == "string" and test("^[0-9]+$"))
+              then unique_by(tonumber)
+              else error("workers must be a non-empty JSON array of numeric strings")
+              end
+            ' <<< "$DISPATCH_WORKERS")"; then
+              echo "DISPATCH_WORKERS must be a non-empty JSON array of numeric worker IDs" >&2
+              exit 1
+            fi
+            while IFS= read -r worker; do
+              awk -F '\t' -v worker="$worker" '$1 == worker {found=1} END {exit !found}' "$manifest" || {
+                echo "Unknown batched fixed-model worker ${worker}" >&2
+                exit 1
+              }
+            done < <(jq -r '.[]' <<< "$workers")
+            echo "Explicit dispatcher batch: ${workers}"
+          elif [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKER:-}" ]]; then
             awk -F '\t' -v worker="$DISPATCH_WORKER" '$1 == worker {found=1} END {exit !found}' "$manifest"
             workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]')"
           elif [[ "$EVENT_NAME" == schedule || ( "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster ) ]]; then
@@ -533,7 +555,7 @@ jobs:
           fi
 
       - name: Self-perpetuate roster cadence
-        if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster'))
+        if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster' && inputs.worker == '' && inputs.workers == ''))
         continue-on-error: true
         shell: bash
         env:
