@@ -69,6 +69,28 @@ def test_parse_thread_title_handles_present_range_without_volume_hint() -> None:
     assert hint.start_year == 2012
 
 
+def test_parse_thread_title_handles_single_year_with_volume_hint() -> None:
+    """One-year minis and specials should use their publication year as exact evidence."""
+    cli = _module()
+
+    hint = cli._parse_title_hint("Deadpool (Vol. 1) (1994)")
+
+    assert hint.query_title == "Deadpool"
+    assert hint.volume_hint == 1
+    assert hint.start_year == 1994
+
+
+def test_parse_thread_title_handles_single_year_without_volume_hint() -> None:
+    """Single-year titles such as Giant-Size X-Men are searchable instead of manual."""
+    cli = _module()
+
+    hint = cli._parse_title_hint("Giant-Size X-Men (1975)")
+
+    assert hint.query_title == "Giant-Size X-Men"
+    assert hint.volume_hint is None
+    assert hint.start_year == 1975
+
+
 def test_series_title_normalization_is_not_fuzzy() -> None:
     """Normalization handles punctuation/articles without accepting different title tokens."""
     cli = _module()
@@ -83,7 +105,7 @@ def test_series_title_normalization_is_not_fuzzy() -> None:
 
 
 def test_search_acceptance_requires_one_exact_title_and_start_year() -> None:
-    """Search is only authoritative when normalized title and start year identify one volume."""
+    """Search is authoritative when normalized title and start year identify one volume."""
     cli = _module()
     hint = cli.TitleHint(query_title="X-Factor", start_year=1985, volume_hint=1)
     rows = [
@@ -95,16 +117,67 @@ def test_search_acceptance_requires_one_exact_title_and_start_year() -> None:
     assert cli._unique_search_volume(rows, hint=hint) == rows[0]
 
 
-def test_search_refuses_duplicate_exact_title_year_matches() -> None:
-    """Provider ambiguity is preserved instead of selecting an arbitrary series."""
+def test_search_preserves_duplicate_exact_title_year_candidates_for_roster_check() -> None:
+    """Duplicate exact search hits are retained so issue rosters can disambiguate them."""
     cli = _module()
     hint = cli.TitleHint(query_title="Example", start_year=1994, volume_hint=1)
     rows = [
         {"id": 10, "name": "Example", "start_year": "1994"},
         {"id": 11, "name": "Example", "start_year": "1994"},
+        {"id": 12, "name": "Example", "start_year": "2004"},
     ]
 
+    assert cli._search_volume_candidates(rows, hint=hint) == rows[:2]
     assert cli._unique_search_volume(rows, hint=hint) is None
+
+
+def test_roster_disambiguation_accepts_only_candidate_covering_every_issue() -> None:
+    """One exact title/year candidate may win only through complete exact-label coverage."""
+    cli = _module()
+    candidates = [
+        {"id": 10, "name": "Example", "start_year": "1994"},
+        {"id": 11, "name": "Example", "start_year": "1994"},
+    ]
+    issues = [
+        cli.IssueWork(issue_id=1, issue_number="1", position=1),
+        cli.IssueWork(issue_id=2, issue_number="2", position=2),
+    ]
+    rosters = {
+        10: [
+            {"id": 1001, "issue_number": "1"},
+            {"id": 1002, "issue_number": "2"},
+        ],
+        11: [{"id": 1101, "issue_number": "1"}],
+    }
+
+    assert cli._unique_full_coverage_search_volume(
+        candidates,
+        rosters=rosters,
+        issues=issues,
+    ) == candidates[0]
+
+
+def test_roster_disambiguation_refuses_two_full_coverage_candidates() -> None:
+    """Matching every issue is still ambiguous when more than one volume does it."""
+    cli = _module()
+    candidates = [
+        {"id": 10, "name": "Example", "start_year": "1994"},
+        {"id": 11, "name": "Example", "start_year": "1994"},
+    ]
+    issues = [cli.IssueWork(issue_id=1, issue_number="1", position=1)]
+    rosters = {
+        10: [{"id": 1001, "issue_number": "1"}],
+        11: [{"id": 1101, "issue_number": "1"}],
+    }
+
+    assert (
+        cli._unique_full_coverage_search_volume(
+            candidates,
+            rosters=rosters,
+            issues=issues,
+        )
+        is None
+    )
 
 
 def test_issue_resolution_accepts_exact_special_label_when_unique() -> None:
@@ -174,5 +247,13 @@ def test_thread_classification_uses_title_year_only_without_provider_evidence() 
         thread_id=9,
         title="Excalibur (Vol. 1) (1988 - 1998)",
     )
+
+    assert cli._classify_thread(work) == ("title-year-search", [])
+
+
+def test_thread_classification_uses_single_year_title_hint() -> None:
+    """One-year publications no longer fall into the manual bucket."""
+    cli = _module()
+    work = cli.ThreadWork(thread_id=10, title="Abe Sapien: The Drowning (2008)")
 
     assert cli._classify_thread(work) == ("title-year-search", [])
