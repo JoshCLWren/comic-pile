@@ -8,9 +8,10 @@ This is the single operator entrypoint. It runs two resumable internal phases:
 
 Both phases target the explicitly exported ``DATABASE_URL`` and share one
 resource-aware ComicVine client. Creator hydration checks a local ComicVine
-SQLite snapshot before spending a live ``/issue`` request. Live requests are
-paced at 1.5 seconds between starts. HTTP 420/429 throttles block only the
-affected ComicVine resource. When ComicVine supplies Retry-After, that
+SQLite snapshot before spending a live ``/issue`` request, and processes all
+stored/local-satisfiable creator work before provider-dependent leftovers. Live
+requests are paced at 1.5 seconds between starts. HTTP 420/429 throttles block
+only the affected ComicVine resource. When ComicVine supplies Retry-After, that
 resource's deadline is honored. When it omits Retry-After, the operator uses a
 short fallback cooldown instead of blacklisting the resource for the rest of
 the run. The triggering request is retried after the cooldown, so the backfill
@@ -181,6 +182,10 @@ class OperatorComicVineClient(BaseComicVineClient):
             from_cache=True,
             cache_key=f"localcv-issue-{issue_id}",
         )
+
+    def has_local_issue(self, issue_id: int) -> bool:
+        """Return whether the local snapshot can satisfy creator hydration."""
+        return self._fetch_local_issue(issue_id) is not None
 
     async def fetch_issue(
         self,
@@ -404,7 +409,7 @@ async def _run_creator_phase(
     database_url: str,
     client: OperatorComicVineClient | None,
 ) -> int:
-    """Hydrate creators while skipping only currently blocked provider resources."""
+    """Hydrate all stored/local creator data before provider-dependent leftovers."""
     helper = _creator_helper
     host, database = helper._database_target(database_url)
     print(f"Database target: host={host} database={database}")
@@ -423,6 +428,29 @@ async def _run_creator_phase(
 
             issues = await helper._load_read_issues(db, user_id=args.user_id, limit=args.limit)
             print(f"Found {len(issues)} read non-test issues for user_id={args.user_id}.")
+
+            if not args.dry_run and not args.refresh and client is not None:
+                local_first: list[Any] = []
+                provider_dependent: list[Any] = []
+                for issue in issues:
+                    if issue.has_creator_credits or issue.has_person_credit_source:
+                        local_first.append(issue)
+                        continue
+                    provider_id = (
+                        helper._integer(issue.external_id.removeprefix("4000-"))
+                        if issue.external_id is not None
+                        else None
+                    )
+                    if provider_id is not None and client.has_local_issue(provider_id):
+                        local_first.append(issue)
+                    else:
+                        provider_dependent.append(issue)
+                issues = [*local_first, *provider_dependent]
+                print(
+                    "Creator pass order: "
+                    f"{len(local_first)} stored/local-satisfiable first; "
+                    f"{len(provider_dependent)} provider-dependent deferred to the end."
+                )
 
             for index, issue in enumerate(issues, start=1):
                 print(f"[{index}/{len(issues)}] {issue.thread_title} #{issue.issue_number}")
