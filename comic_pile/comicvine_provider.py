@@ -1,16 +1,19 @@
-"""Endpoint-aware ComicVine provider client with persistent cache and optional local rate limiting."""
+"""Endpoint-aware ComicVine provider client with persistent cache and resource throttling."""
 
 from __future__ import annotations
 
 import asyncio
+from email.utils import parsedate_to_datetime
 import hashlib
 import json
+import math
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import timezone
 from pathlib import Path
 
 from filelock import FileLock
@@ -40,7 +43,20 @@ class ComicVineError(RuntimeError):
 
 
 class ComicVineRateLimitError(ComicVineError):
-    """Raised when local or provider rate limiting prevents a request."""
+    """Raised when one ComicVine resource is temporarily unavailable."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        resource: str | None = None,
+        status_code: int | None = None,
+        retry_after_seconds: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.resource = resource
+        self.status_code = status_code
+        self.retry_after_seconds = retry_after_seconds
 
 
 @dataclass(frozen=True)
@@ -50,6 +66,29 @@ class ComicVineResponse:
     payload: dict[str, object]
     from_cache: bool
     cache_key: str
+
+
+def _retry_after_seconds(headers: object, *, now: float | None = None) -> int | None:
+    """Parse Retry-After as delta-seconds or an HTTP date."""
+    getter = getattr(headers, "get", None)
+    if getter is None:
+        return None
+    raw = getter("Retry-After")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    value = raw.strip()
+    try:
+        return max(0, int(value))
+    except ValueError:
+        pass
+    try:
+        parsed = parsedate_to_datetime(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    current = time.time() if now is None else now
+    return max(0, math.ceil(parsed.timestamp() - current))
 
 
 class PersistentEndpointLimiter:
@@ -62,13 +101,7 @@ class PersistentEndpointLimiter:
         requests_per_hour: int = DEFAULT_REQUESTS_PER_HOUR,
         clock: Callable[[], float] = time.time,
     ) -> None:
-        """Configure a persistent rolling-hour limiter.
-
-        Args:
-            path: JSON ledger path.
-            requests_per_hour: Maximum requests per endpoint in one rolling hour.
-            clock: Time source used by tests and production.
-        """
+        """Configure a persistent rolling-hour limiter."""
         if requests_per_hour <= 0:
             raise ValueError("requests_per_hour must be positive")
         self.path = Path(path)
@@ -100,14 +133,7 @@ class PersistentEndpointLimiter:
         temp.replace(self.path)
 
     def acquire(self, endpoint: str) -> None:
-        """Record one request or raise when the rolling endpoint budget is exhausted.
-
-        Args:
-            endpoint: Stable endpoint bucket such as ``issue`` or ``issues``.
-
-        Raises:
-            ComicVineRateLimitError: When the endpoint has exhausted its rolling-hour budget.
-        """
+        """Record one request or raise when the rolling endpoint budget is exhausted."""
         now = float(self._clock())
         cutoff = now - 3600
         with self._lock:
@@ -115,7 +141,8 @@ class PersistentEndpointLimiter:
             recent = [stamp for stamp in ledger.get(endpoint, []) if stamp > cutoff]
             if len(recent) >= self.requests_per_hour:
                 raise ComicVineRateLimitError(
-                    f"ComicVine local rate budget exhausted for endpoint {endpoint!r}"
+                    f"ComicVine local rate budget exhausted for resource {endpoint!r}",
+                    resource=endpoint,
                 )
             recent.append(now)
             ledger[endpoint] = recent
@@ -123,7 +150,7 @@ class PersistentEndpointLimiter:
 
 
 class ComicVineClient:
-    """Fetch ComicVine resources with endpoint-specific contracts and resumable caching."""
+    """Fetch ComicVine resources with caching and resource-specific throttle state."""
 
     def __init__(
         self,
@@ -137,17 +164,7 @@ class ComicVineClient:
         base_url: str = COMICVINE_BASE_URL,
         timeout_seconds: float = 30.0,
     ) -> None:
-        """Configure the provider client.
-
-        Args:
-            api_key: ComicVine API key. It is never included in cache keys or persisted payload metadata.
-            cache_dir: Directory for raw successful response cache and optional request ledger.
-            requests_per_hour: Optional local rolling-hour budget per endpoint path. ``None`` disables
-                the local hard cap while retaining pacing and provider-side rate-limit handling.
-            minimum_live_request_interval_seconds: Minimum delay between uncached live request starts.
-            base_url: Provider API base URL.
-            timeout_seconds: Network timeout per request.
-        """
+        """Configure the provider client."""
         if not api_key.strip():
             raise ValueError("api_key is required")
         if requests_per_hour is not None and requests_per_hour <= 0:
@@ -169,6 +186,9 @@ class ComicVineClient:
         )
         self._live_request_lock = asyncio.Lock()
         self._last_live_request_started_at: float | None = None
+        self._provider_limits_path = self.cache_dir / "provider-rate-limits.json"
+        self._provider_limits_lock = FileLock(f"{self._provider_limits_path}.lock")
+        self._blocked_resources: dict[str, float | None] = self._read_provider_limits()
 
     @staticmethod
     def _cache_key(endpoint: str, params: Mapping[str, object]) -> str:
@@ -197,6 +217,63 @@ class ComicVineClient:
         temp.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
         temp.replace(path)
 
+    def _read_provider_limits(self) -> dict[str, float | None]:
+        """Load only unexpired Retry-After deadlines from previous runs."""
+        if not self._provider_limits_path.exists():
+            return {}
+        try:
+            raw = json.loads(self._provider_limits_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        now = time.time()
+        result: dict[str, float | None] = {}
+        for resource, deadline in raw.items():
+            if (
+                isinstance(resource, str)
+                and isinstance(deadline, int | float)
+                and float(deadline) > now
+            ):
+                result[resource] = float(deadline)
+        return result
+
+    def _write_provider_limits(self) -> None:
+        """Persist finite provider Retry-After deadlines across process restarts."""
+        now = time.time()
+        payload = {
+            resource: deadline
+            for resource, deadline in self._blocked_resources.items()
+            if deadline is not None and deadline > now
+        }
+        self._provider_limits_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._provider_limits_lock:
+            temp = self._provider_limits_path.with_suffix(".tmp")
+            temp.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+            temp.replace(self._provider_limits_path)
+
+    def _block_resource(self, resource: str, retry_after_seconds: int | None) -> None:
+        """Block one resource, persisting the deadline when ComicVine supplied one."""
+        if retry_after_seconds is None:
+            self._blocked_resources[resource] = None
+        else:
+            self._blocked_resources[resource] = time.time() + retry_after_seconds
+        self._write_provider_limits()
+
+    def _resource_block(self, resource: str) -> tuple[bool, int | None]:
+        """Return current block state and remaining Retry-After seconds for one resource."""
+        if resource not in self._blocked_resources:
+            return False, None
+        deadline = self._blocked_resources[resource]
+        if deadline is None:
+            return True, None
+        remaining = math.ceil(deadline - time.time())
+        if remaining > 0:
+            return True, remaining
+        del self._blocked_resources[resource]
+        self._write_provider_limits()
+        return False, None
+
     async def _pace_live_request(self) -> None:
         """Space uncached live request starts to avoid provider velocity bursts."""
         interval = self.minimum_live_request_interval_seconds
@@ -223,8 +300,18 @@ class ComicVineClient:
             with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
                 decoded = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            if exc.code == 429:
-                raise ComicVineRateLimitError("ComicVine returned HTTP 429") from exc
+            if exc.code in {420, 429}:
+                resource = endpoint.lstrip("/").split("/", 1)[0]
+                retry_after = _retry_after_seconds(exc.headers)
+                suffix = (
+                    f"; Retry-After={retry_after}s" if retry_after is not None else ""
+                )
+                raise ComicVineRateLimitError(
+                    f"ComicVine returned HTTP {exc.code} for resource {resource!r}{suffix}",
+                    resource=resource,
+                    status_code=exc.code,
+                    retry_after_seconds=retry_after,
+                ) from exc
             raise ComicVineError(f"ComicVine HTTP {exc.code} for {endpoint}") from exc
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise ComicVineError(f"ComicVine request failed for {endpoint}: {exc}") from exc
@@ -245,26 +332,38 @@ class ComicVineClient:
         *,
         refresh: bool = False,
     ) -> ComicVineResponse:
-        """Fetch one provider resource, reusing a persisted successful response by default.
-
-        Args:
-            endpoint_bucket: Stable rate-limit bucket for the provider path.
-            endpoint: Relative API path.
-            params: Provider request parameters excluding credentials and output format.
-            refresh: Force a live request instead of using a cached successful payload.
-
-        Returns:
-            Decoded provider payload with cache provenance.
-        """
+        """Fetch one provider resource, respecting only that resource's throttle state."""
         cache_key = self._cache_key(endpoint, params)
         if not refresh:
             cached = self._read_cache(cache_key)
             if cached is not None:
                 return ComicVineResponse(cached, True, cache_key)
+
+        blocked, retry_after = self._resource_block(endpoint_bucket)
+        if blocked:
+            suffix = f" for another {retry_after}s" if retry_after is not None else ""
+            raise ComicVineRateLimitError(
+                f"ComicVine resource {endpoint_bucket!r} is blocked for this run{suffix}",
+                resource=endpoint_bucket,
+                retry_after_seconds=retry_after,
+            )
+
         await self._pace_live_request()
         if self.limiter is not None:
             self.limiter.acquire(endpoint_bucket)
-        payload = await asyncio.to_thread(self._request_sync, endpoint, params)
+        try:
+            payload = await asyncio.to_thread(self._request_sync, endpoint, params)
+        except ComicVineRateLimitError as exc:
+            retry_after = exc.retry_after_seconds
+            self._block_resource(endpoint_bucket, retry_after)
+            suffix = f"; Retry-After={retry_after}s" if retry_after is not None else ""
+            raise ComicVineRateLimitError(
+                f"ComicVine returned HTTP {exc.status_code or 'rate limit'} "
+                f"for resource {endpoint_bucket!r}{suffix}",
+                resource=endpoint_bucket,
+                status_code=exc.status_code,
+                retry_after_seconds=retry_after,
+            ) from exc
         self._write_cache(cache_key, payload)
         return ComicVineResponse(payload, False, cache_key)
 
@@ -291,19 +390,7 @@ class ComicVineClient:
         *,
         refresh: bool = False,
     ) -> list[dict[str, object]]:
-        """Fetch a complete volume issue roster using the documented 100-row page maximum.
-
-        Args:
-            volume_id: ComicVine volume ID.
-            refresh: Force live requests for every page.
-
-        Returns:
-            Ordered provider rows across all pages.
-
-        Raises:
-            ComicVineError: When pagination metadata is inconsistent or a returned row belongs to
-                a different volume, which indicates that the provider ignored the collection filter.
-        """
+        """Fetch a complete volume issue roster using the documented 100-row page maximum."""
         rows: list[dict[str, object]] = []
         offset = 0
         while True:
