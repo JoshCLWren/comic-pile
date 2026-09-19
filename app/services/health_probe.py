@@ -188,6 +188,9 @@ async def _timed_probe(operation: Callable[[], Awaitable[None]]) -> DependencyPr
         probe_status: Literal["healthy", "unavailable", "timeout", "not_configured"] = (
             "timeout"
         )
+    except ProbeTimeoutError as e:
+        logger.warning("Operational dependency probe timed out: %s", e)
+        probe_status = "timeout"
     except ProbeNotConfiguredError as e:
         logger.warning("Operational dependency probe not configured: %s", e)
         probe_status = "not_configured"
