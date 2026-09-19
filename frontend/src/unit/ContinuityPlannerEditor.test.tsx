@@ -57,7 +57,7 @@ const savedPlan = {
   ],
   created_at: '2026-08-12T00:00:00Z',
   updated_at: '2026-08-12T00:00:00Z',
-} as unknown as ContinuityPlan
+} as ContinuityPlan
 
 let queryClient: QueryClient
 
