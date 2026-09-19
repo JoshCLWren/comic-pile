@@ -10,11 +10,51 @@ import pytest
 
 from comic_pile.comicvine_provider import (
     COLLECTION_PAGE_LIMIT,
+    DEFAULT_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS,
+    DEFAULT_REQUESTS_PER_HOUR,
     ComicVineClient,
     ComicVineError,
     ComicVineRateLimitError,
     PersistentEndpointLimiter,
 )
+
+
+def test_provider_defaults_pace_without_imposing_a_local_hourly_cap(tmp_path: Path) -> None:
+    """Default provider behavior should pace live traffic and defer hard caps to ComicVine."""
+    client = ComicVineClient("secret", tmp_path)
+    capped = ComicVineClient("secret", tmp_path / "capped", requests_per_hour=195)
+
+    assert DEFAULT_REQUESTS_PER_HOUR == 195
+    assert DEFAULT_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS == 1.05
+    assert client.limiter is None
+    assert client.minimum_live_request_interval_seconds == 1.05
+    assert capped.limiter is not None
+    assert capped.limiter.requests_per_hour == 195
+
+
+@pytest.mark.asyncio
+async def test_live_request_pacing_waits_between_uncached_request_starts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Back-to-back live requests are spaced instead of bursting at the provider."""
+    client = ComicVineClient(
+        "secret",
+        tmp_path,
+        minimum_live_request_interval_seconds=0.25,
+    )
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr("comic_pile.comicvine_provider.asyncio.sleep", fake_sleep)
+
+    await client._pace_live_request()
+    await client._pace_live_request()
+
+    assert len(sleeps) == 1
+    assert 0 < sleeps[0] <= 0.25
 
 
 @pytest.mark.asyncio
@@ -71,8 +111,12 @@ def test_provider_configuration_and_corrupt_cache_fail_safely(tmp_path: Path) ->
     """Reject invalid configuration while treating corrupt persisted cache data as a miss."""
     with pytest.raises(ValueError, match="requests_per_hour must be positive"):
         PersistentEndpointLimiter(tmp_path / "ledger.json", requests_per_hour=0)
+    with pytest.raises(ValueError, match="requests_per_hour must be positive when provided"):
+        ComicVineClient("secret", tmp_path, requests_per_hour=0)
     with pytest.raises(ValueError, match="api_key is required"):
         ComicVineClient(" ", tmp_path)
+    with pytest.raises(ValueError, match="minimum_live_request_interval_seconds"):
+        ComicVineClient("secret", tmp_path, minimum_live_request_interval_seconds=-0.1)
 
     client = ComicVineClient("secret", tmp_path)
     key = client._cache_key("issue/4000-1", {})
@@ -167,7 +211,11 @@ async def test_volume_roster_paginates_at_documented_maximum(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Volume hydration should page at 100 and preserve provider ordering."""
-    client = ComicVineClient("secret", tmp_path)
+    client = ComicVineClient(
+        "secret",
+        tmp_path,
+        minimum_live_request_interval_seconds=0,
+    )
     offsets: list[int] = []
 
     def fake_request(endpoint: str, params: object) -> dict[str, object]:
