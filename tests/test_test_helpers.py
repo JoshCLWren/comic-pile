@@ -207,7 +207,7 @@ def test_test_helper_routes_are_mounted_only_in_test_environment(
         "/api/test/issue-identity",
         "/api/test/cbl-source",
         "/api/test/sessions/expire",
-    } <= test_paths
+    } <= set(test_app.openapi()["paths"])
     assert {
         "/api/test/reading-orders",
         "/api/test/issue-identity",
