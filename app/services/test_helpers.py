@@ -108,7 +108,8 @@ async def create_test_issue_identity(
                 detail=f"Thread {raw_thread_id} not found",
             )
         issues = list(
-            (await db.execute(select(Issue).where(Issue.thread_id == thread.id))).scalars()
+            (await db.execute(select(Issue).where(Issue.thread_id == thread.id)))
+            .scalars()
         )
     else:
         issue = (
@@ -135,9 +136,8 @@ async def create_test_issue_identity(
             detail="No issues matched the requested fixture scope",
         )
 
-    series_name = str(payload.get("series_name") or "Fixture Crossover").strip()
-    if not series_name:
-        series_name = "Fixture Crossover"
+    series_name_raw = str(payload.get("series_name") or "Fixture Crossover").strip()
+    series_name = series_name_raw if series_name_raw else "Fixture Crossover"
     series_id = int(payload.get("series_id") or (700_000 + len(series_name) * 31))
     image_value = payload.get("image_url")
     image_url = str(image_value) if image_value else None
