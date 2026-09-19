@@ -201,13 +201,6 @@ def test_test_helper_routes_are_mounted_only_in_test_environment(
 
     monkeypatch.setenv("TEST_ENVIRONMENT", "true")
     test_app = create_app(serve_frontend=False)
-    test_paths = {route.path for route in test_app.routes if isinstance(route, APIRoute)}
-    assert {
-        "/api/test/reading-orders",
-        "/api/test/issue-identity",
-        "/api/test/cbl-source",
-        "/api/test/sessions/expire",
-    } <= set(test_app.openapi()["paths"])
     assert {
         "/api/test/reading-orders",
         "/api/test/issue-identity",

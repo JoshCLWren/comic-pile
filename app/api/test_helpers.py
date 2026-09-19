@@ -90,7 +90,7 @@ async def expire_current_session(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, str]:
-    """Expire the current active session by setting started_at to an old timestamp.
+    """Expire the current active session by setting ended_at to now.
 
     This endpoint is only available in test environment and is used for E2E testing
     of session expiry notifications.
