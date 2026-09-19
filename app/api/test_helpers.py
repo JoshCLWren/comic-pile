@@ -105,4 +105,4 @@ async def expire_current_session(
     Raises:
         HTTPException: If not in test environment or no active session found.
     """
-    return await expire_test_session(db, user_id=current_user.id)
+    return await expire_test_session(current_user, db)

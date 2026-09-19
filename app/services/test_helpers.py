@@ -225,16 +225,15 @@ async def create_test_issue_identity(
 
 
 async def expire_current_session(
+    current_user: object,
     db: AsyncSession,
-    *,
-    user_id: int,
 ) -> dict[str, str]:
     """Expire the current active session for an E2E notification test."""
     _require_test_environment()
-
+ 
     session_result = await db.execute(
         select(SessionModel)
-        .where(SessionModel.user_id == user_id)
+        .where(SessionModel.user_id == current_user.id)
         .where(SessionModel.ended_at.is_(None))
     )
     session = session_result.scalar_one_or_none()
