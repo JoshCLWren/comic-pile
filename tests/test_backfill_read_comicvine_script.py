@@ -6,7 +6,7 @@ import importlib.util
 from pathlib import Path
 import sys
 from types import ModuleType
-from typing import Any
+from typing import Protocol
 from unittest.mock import AsyncMock
 
 import pytest
@@ -23,6 +23,14 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/backfill_read_comicvine.py"
 
 
+class _ReadIssueLike(Protocol):
+    """Creator-state attributes used by tests on dynamically imported issue objects."""
+
+    has_creator_credits: bool
+    has_person_credit_source: bool
+    creator_credit_count: int
+
+
 def _module() -> ModuleType:
     """Import the operator CLI without treating scripts/ as a package."""
     module_name = "backfill_read_comicvine"
@@ -37,7 +45,7 @@ def _module() -> ModuleType:
     return module
 
 
-def _issue(cli: ModuleType, **overrides: object) -> Any:
+def _issue(cli: ModuleType, **overrides: object) -> _ReadIssueLike:
     """Build one unmapped read issue with confirmed series evidence."""
     values: dict[str, object] = {
         "issue_id": 7,
