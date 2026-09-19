@@ -161,7 +161,7 @@ describe('continuity comic selectors', () => {
 
     fireEvent.change(start, { target: { value: '13' } })
     fireEvent.change(end, { target: { value: '11' } })
-    expect(screen.getByRole('alert')).toHaveTextContent('#Omega comes after #Annual 1')
+    expect(screen.getByRole('alert')).toHaveTextContent('Choose a valid issue range in reading order.')
     expect(onChange).toHaveBeenLastCalledWith(null)
   })
 

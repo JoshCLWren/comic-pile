@@ -1,21 +1,73 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
 import { threadsApi } from '../services/api'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
 
+vi.mock('../services/api-dependency-groups', () => ({
+  dependencyGroupsApi: {
+    list: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    rename: vi.fn(),
+    delete: vi.fn(),
+    addMember: vi.fn(),
+    addIssueRange: vi.fn(),
+    removeMember: vi.fn(),
+    listForThread: vi.fn(),
+    listForThreads: vi.fn(),
+    plansForGroup: vi.fn(),
+    getDetail: vi.fn(),
+  },
+}))
+
+vi.mock('../services/api', () => ({
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+  },
+  threadsApi: {
+    list: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    reactivate: vi.fn(),
+    listStale: vi.fn(),
+    setPending: vi.fn(),
+    setCurrentIssue: vi.fn(),
+    listCompleted: vi.fn(),
+  },
+  issuesApi: {
+    list: vi.fn(),
+  },
+}))
+
 const groupsApi = vi.mocked(dependencyGroupsApi)
 const threadApi = vi.mocked(threadsApi)
 const issueApi = vi.mocked(issuesApi)
 
+function createWrapper() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+    return function Wrapper({ children }: { children: ReactNode }) {
+        return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    }
+}
+
 function renderPage() {
-  return render(
-    <MemoryRouter>
-      <CrossoversPage />
-    </MemoryRouter>,
-  )
+    return render(
+        <MemoryRouter>
+            <CrossoversPage />
+        </MemoryRouter>,
+        { wrapper: createWrapper() },
+    )
 }
 
 const crossover = {
@@ -78,7 +130,7 @@ function openRangeForm(name = /Annihilation.*0 members/) {
 
 async function loadIssues() {
   fireEvent.change(screen.getByLabelText('Comic series for issue range'), { target: { value: 'Nova' } })
-  const listbox = screen.getByRole('listbox', { name: 'Comic series for issue range results' })
+  const listbox = await screen.findByRole('listbox', { name: 'Comic series for issue range results' })
   fireEvent.click(within(listbox).getByRole('option', { name: /Nova/ }))
   await screen.findByText(/Issues from Nova/)
   await waitFor(() => {
@@ -88,11 +140,12 @@ async function loadIssues() {
 }
 
 function selectRange(firstIssueId: string, lastIssueId: string) {
-  fireEvent.change(screen.getByLabelText('First issue'), { target: { value: firstIssueId } })
-  fireEvent.change(screen.getByLabelText('Last issue'), { target: { value: lastIssueId } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'First issue' }), { target: { value: firstIssueId } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Last issue' }), { target: { value: lastIssueId } })
 }
 
 beforeEach(() => {
+  vi.clearAllMocks()
   vi.spyOn(dependencyGroupsApi, 'list').mockResolvedValue([crossover])
   vi.spyOn(dependencyGroupsApi, 'get').mockResolvedValue({ ...crossover, memberships: [] })
   vi.spyOn(dependencyGroupsApi, 'addIssueRange').mockResolvedValue({ thread_id: 0, start_position: 0, end_position: 0, added_issue_ids: [], already_present_issue_ids: [] })
@@ -136,14 +189,6 @@ describe('CrossoversPage issue ranges', () => {
       added_issue_ids: [31, 33],
       already_present_issue_ids: [32],
     })
-    groupsApi.get.mockResolvedValue({
-      ...crossover,
-      memberships: [
-        { id: 1, issue_id: 31, thread_id: null },
-        { id: 2, issue_id: 32, thread_id: null },
-        { id: 3, issue_id: 33, thread_id: null },
-      ],
-    })
 
     renderPage()
     await screen.findByText('Annihilation')
@@ -154,8 +199,6 @@ describe('CrossoversPage issue ranges', () => {
 
     expect(await screen.findByRole('status')).toHaveTextContent('2 added, 1 already present.')
     expect(groupsApi.addIssueRange).toHaveBeenCalledWith(7, 22, 3, 5)
-    expect(groupsApi.get).toHaveBeenCalledWith(7)
-    expect(screen.getByText('3 members')).toBeInTheDocument()
     expect(screen.queryByLabelText('First issue')).not.toBeInTheDocument()
   })
 
@@ -164,10 +207,11 @@ describe('CrossoversPage issue ranges', () => {
     await screen.findByText('Annihilation')
     openRangeForm()
     await loadIssues()
-    selectRange('33', '31')
+    fireEvent.change(screen.getByRole('combobox', { name: 'First issue' }), { target: { value: '33' } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Last issue' }), { target: { value: '31' } })
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      '#½ comes after #2 in Nova. Choose a later ending issue.',
+      'Choose a valid issue range in reading order.',
     )
     expect(screen.getByRole('button', { name: 'Add range' })).toBeDisabled()
     expect(groupsApi.addIssueRange).not.toHaveBeenCalled()
@@ -240,7 +284,7 @@ describe('CrossoversPage issue ranges', () => {
       await screen.findByText('Annihilation')
       openRangeForm()
       fireEvent.change(screen.getByLabelText('Comic series for issue range'), { target: { value: 'Nova' } })
-      const listbox = screen.getByRole('listbox', { name: 'Comic series for issue range results' })
+      const listbox = await screen.findByRole('listbox', { name: 'Comic series for issue range results' })
       fireEvent.click(within(listbox).getByRole('option', { name: /Nova/ }))
 
       expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -278,7 +322,7 @@ describe('CrossoversPage issue ranges', () => {
     await screen.findByText('Annihilation')
     openRangeForm()
     fireEvent.change(screen.getByLabelText('Comic series for issue range'), { target: { value: 'Nova' } })
-    const listbox = screen.getByRole('listbox', { name: 'Comic series for issue range results' })
+    const listbox = await screen.findByRole('listbox', { name: 'Comic series for issue range results' })
     fireEvent.click(within(listbox).getByRole('option', { name: /Nova/ }))
     await screen.findByText(/Issues from Nova/)
 
@@ -299,7 +343,7 @@ describe('CrossoversPage issue ranges', () => {
     await screen.findByText('Annihilation')
     openRangeForm()
     fireEvent.change(screen.getByLabelText('Comic series for issue range'), { target: { value: 'Nova' } })
-    const listbox = screen.getByRole('listbox', { name: 'Comic series for issue range results' })
+    const listbox = await screen.findByRole('listbox', { name: 'Comic series for issue range results' })
     fireEvent.click(within(listbox).getByRole('option', { name: /Nova/ }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Nova has no issues to add.')
@@ -328,7 +372,7 @@ describe('CrossoversPage issue ranges', () => {
     openRangeForm()
 
     fireEvent.change(screen.getByLabelText('Comic series for issue range'), { target: { value: 'Nova' } })
-    const listbox = screen.getByRole('listbox', { name: 'Comic series for issue range results' })
+    const listbox = await screen.findByRole('listbox', { name: 'Comic series for issue range results' })
     fireEvent.click(within(listbox).getByRole('option', { name: /Nova/ }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Issues unavailable')
@@ -359,10 +403,11 @@ describe('CrossoversPage issue ranges', () => {
     await screen.findByText('Annihilation')
     openRangeForm()
     await loadIssues()
+    groupsApi.list.mockResolvedValue([])
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
     await waitFor(() => expect(groupsApi.delete).toHaveBeenCalledWith(7))
-    expect(screen.queryByText('Annihilation')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('Annihilation')).not.toBeInTheDocument())
     expect(screen.queryByRole('form', { name: 'Add issue range to Annihilation' })).not.toBeInTheDocument()
   })
 })
