@@ -40,9 +40,15 @@ async def test_invalidate_session_caches_delegates_to_user_view(monkeypatch: pyt
 async def test_invalidate_session_caches_rejects_non_positive_user_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Non-positive owners must not trigger any cache invalidation."""
+    """Non-positive owners must not trigger any cache invalidation.
+
+    The session helper delegates ownership validation to the real
+    ``invalidate_user_view`` boundary, so only the inner generation primitive is
+    mocked here. A non-positive owner must raise before any invalidation is
+    issued.
+    """
     invalidator = AsyncMock(return_value=True)
-    monkeypatch.setattr(cache_invalidation, "invalidate_user_view", invalidator)
+    monkeypatch.setattr(cache_invalidation, "invalidate_user_cache", invalidator)
 
     with pytest.raises(ValueError, match="user_id must be positive"):
         await cache_invalidation.invalidate_session_caches(0)
