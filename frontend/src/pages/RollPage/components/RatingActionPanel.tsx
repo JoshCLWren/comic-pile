@@ -112,7 +112,7 @@ export function RatingActionPanel({
           type="button"
           onClick={onSnooze}
           disabled={snoozeIsPending}
-          className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+          className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
         >
           {snoozeIsPending ? 'Snoozing…' : 'Snooze'}
         </button>
@@ -123,7 +123,7 @@ export function RatingActionPanel({
             disabled={skipIsPending}
             data-testid="skip-roll"
             aria-label="Skip current roll"
-            className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+            className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
           >
             {skipIsPending ? 'Skipping…' : 'Skip'}
           </button>
