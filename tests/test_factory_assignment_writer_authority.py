@@ -6,7 +6,7 @@ import importlib.util
 import sys
 import types
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -77,8 +77,8 @@ def test_dispatcher_actions_workflow_can_create_fixed_lease(
     controller.replace_factory_labels(2736, "factory:41", "factory:building")
 
     assert len(writes) == 1
-    assert isinstance(writes[0][1], dict)
-    assert "factory:41" in writes[0][1]["labels"]
+    payload = cast(dict[str, Any], writes[0][1])
+    assert "factory:41" in cast(list[str], payload["labels"])
 
 
 def test_release_to_unowned_is_allowed_outside_dispatcher(
