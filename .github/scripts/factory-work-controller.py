@@ -22,12 +22,12 @@ from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SEC
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 STRIKE_RESET_RE = re.compile(
-    r"comic-pile-factory-strike-reset-v1:issue-(?P<issue>\\d+):pr-(?P<pr>\\d+):"
-    r"excluded-producer-(?P<worker>\\d+|unknown)"
+    r"comic-pile-factory-strike-reset-v1:issue-(?P<issue>\d+):pr-(?P<pr>\d+):"
+    r"excluded-producer-(?P<worker>\d+|unknown)"
 )
 IMPLEMENT_CLAIM_RE = re.compile(
-    r"comic-pile-factory-implement-claim-v3:issue-(?P<issue>\\d+):"
-    r"opencode-(?:free-model|nvidia|omniroute)-factory-(?P<worker>\\d+):"
+    r"comic-pile-factory-implement-claim-v3:issue-(?P<issue>\d+):"
+    r"opencode-(?:free-model|nvidia|omniroute)-factory-(?P<worker>\d+):"
 )
 LEASE_ACTIVITY_PATTERNS = (
     re.compile(r"comic-pile-factory-implement-(?:claim|progress)-v3:issue-\d+:[^:>]+:(\d{10})"),
@@ -158,6 +158,7 @@ def issue_excludes_worker_on_strike_retry(number: int, worker: str) -> bool:
                 # Once a clean retry actually begins, the one-shot exclusion is spent.
                 reset_seen = False
                 reset_worker = None
+                continue
     return reset_seen and reset_worker == worker
 
 
