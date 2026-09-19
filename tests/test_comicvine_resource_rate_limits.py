@@ -133,3 +133,51 @@ async def test_cached_response_is_usable_while_its_resource_is_throttled(tmp_pat
 
     assert response.from_cache is True
     assert response.payload["results"] == {"id": 9}
+
+
+@pytest.mark.asyncio
+async def test_throttle_without_retry_after_is_current_process_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Missing Retry-After blocks repeated calls now but does not poison future runs forever."""
+    client = ComicVineClient(
+        "secret",
+        tmp_path,
+        minimum_live_request_interval_seconds=0,
+    )
+    live_calls = 0
+
+    def throttled(endpoint: str, params: object) -> dict[str, object]:
+        nonlocal live_calls
+        live_calls += 1
+        raise ComicVineRateLimitError(
+            "ComicVine returned HTTP 420",
+            resource="issue",
+            status_code=420,
+        )
+
+    monkeypatch.setattr(client, "_request_sync", throttled)
+    with pytest.raises(ComicVineRateLimitError):
+        await client.fetch_issue(10)
+    with pytest.raises(ComicVineRateLimitError):
+        await client.fetch_issue(11)
+    assert live_calls == 1
+
+    restarted = ComicVineClient(
+        "secret",
+        tmp_path,
+        minimum_live_request_interval_seconds=0,
+    )
+    restarted_calls = 0
+
+    def succeeds(endpoint: str, params: object) -> dict[str, object]:
+        nonlocal restarted_calls
+        restarted_calls += 1
+        return {"status_code": 1, "results": {"id": 11}}
+
+    monkeypatch.setattr(restarted, "_request_sync", succeeds)
+    response = await restarted.fetch_issue(11)
+
+    assert response.payload["results"] == {"id": 11}
+    assert restarted_calls == 1
