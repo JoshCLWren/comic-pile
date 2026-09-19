@@ -31,7 +31,12 @@ export default function ThreadDetailView() {
   const activeThreadIdRef = useRef<number | null>(null)
   const editAutoOpenRef = useRef(false)
 
-  const threadId = id ? Number(id) : null
+  // Normalize malformed ids (non-numeric, fractional, or non-positive) to null
+  // so the view renders "Thread not found" instead of stalling on the loading
+  // spinner: the thread/connected/issues hooks stay disabled with no error.
+  const parsedThreadId = id ? Number(id) : NaN
+  const threadId =
+    Number.isInteger(parsedThreadId) && parsedThreadId > 0 ? parsedThreadId : null
 
   const { data: thread, error: threadError } = useThread(threadId)
   const {

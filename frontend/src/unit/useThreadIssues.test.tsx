@@ -76,8 +76,10 @@ it('stays disabled for missing thread ids and until explicitly enabled', async (
 
   expect(disabled.result.current.issues).toEqual([])
   expect(missing.result.current.issues).toEqual([])
-  expect(disabled.result.current.isPending).toBe(false)
-  expect(missing.result.current.isPending).toBe(false)
+  // A disabled infinite query stays pending until its first fetch; the
+  // contract that matters here is that nothing is requested while disabled.
+  expect(disabled.result.current.isPending).toBe(true)
+  expect(missing.result.current.isPending).toBe(true)
   expect(mockedIssuesApiList).not.toHaveBeenCalled()
 })
 

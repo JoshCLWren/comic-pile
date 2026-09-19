@@ -131,13 +131,15 @@ it('keys thread and issue caches per thread so stale issue responses never leak'
   await waitFor(() => expect(screen.queryByText('#Saga 1')).not.toBeInTheDocument())
 
   await waitFor(() => {
-    const threadOne = queryClient.getQueryData<IssueListResponse>(
+    const threadOne = queryClient.getQueryData<{ pages: IssueListResponse[] }>(
       queryKeys.thread.issuePages(1),
     )
-    expect(threadOne?.issues[0]?.issue_number).toBe('Saga 1')
+    expect(threadOne?.pages[0]?.issues[0]?.issue_number).toBe('Saga 1')
   })
-  const threadTwo = queryClient.getQueryData<IssueListResponse>(queryKeys.thread.issuePages(2))
-  expect(threadTwo?.issues[0]?.issue_number).toBe('Monstress 1')
+  const threadTwo = queryClient.getQueryData<{ pages: IssueListResponse[] }>(
+    queryKeys.thread.issuePages(2),
+  )
+  expect(threadTwo?.pages[0]?.issues[0]?.issue_number).toBe('Monstress 1')
 })
 
 it('keys thread detail caches per thread so stale thread failures never leak', async () => {
@@ -171,6 +173,15 @@ it('keys thread detail caches per thread so stale thread failures never leak', a
 
 it('handles a route without a thread id without making requests', async () => {
   routeParams.id = ''
+  renderView()
+
+  await waitFor(() => expect(screen.getByText('Thread not found')).toBeInTheDocument())
+  expect(mockedThreadsApiGet).not.toHaveBeenCalled()
+  expect(mockedIssuesApiList).not.toHaveBeenCalled()
+})
+
+it('handles a non-numeric thread id without making requests', async () => {
+  routeParams.id = 'abc'
   renderView()
 
   await waitFor(() => expect(screen.getByText('Thread not found')).toBeInTheDocument())
