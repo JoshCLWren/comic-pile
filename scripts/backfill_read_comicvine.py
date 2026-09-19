@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """Run the complete ComicVine backfill for already-read ComicPile issues.
 
-This is the single operator entrypoint. It runs two resumable internal phases:
+This is the single operator entrypoint. It runs a local-first resumable pipeline:
 
-1. resolve missing ComicVine issue identities at the series/thread level;
-2. hydrate confirmed ComicVine issues with normalized creator metadata.
+1. resolve every ComicVine issue identity provable from local evidence;
+2. hydrate every creator record satisfiable from stored/local data;
+3. resolve only the remaining identities through ComicVine provider calls;
+4. hydrate creator metadata again, keeping newly local-satisfiable work ahead of
+   provider-dependent leftovers.
 
 Both phases target the explicitly exported ``DATABASE_URL`` and share one
-resource-aware ComicVine client. Creator hydration checks a local ComicVine
-SQLite snapshot before spending a live ``/issue`` request, and processes all
-stored/local-satisfiable creator work before provider-dependent leftovers. Live
-requests are paced at 1.5 seconds between starts. HTTP 420/429 throttles block
-only the affected ComicVine resource. When ComicVine supplies Retry-After, that
+resource-aware ComicVine client. The local ComicVine SQLite snapshot is
+exhausted before the first provider request is allowed, so a ComicVine throttle
+cannot strand work that could have been completed from disk. Live requests are
+paced at 1.5 seconds between starts. HTTP 420/429 throttles block only the
+affected ComicVine resource. When ComicVine supplies Retry-After, that
 resource's deadline is honored. When it omits Retry-After, the operator uses a
 per-resource exponential fallback of 60, 120, 240, 480, 960, 1920, then 3600
 seconds. The fallback stays at one hour until that resource succeeds, then
@@ -415,25 +418,34 @@ def _select_local_evidence_candidate(
     issues: list[Any],
 ) -> dict[str, object] | None:
     """Select exactly one locally provable volume, or refuse to guess."""
-    proven: list[dict[str, object]] = []
-    for candidate in candidates:
-        if not _local_candidate_has_exact_title(
+    exact_candidates = [
+        candidate
+        for candidate in candidates
+        if _local_candidate_has_exact_title(
             resolver,
             candidate,
             query_title=hint.query_title,
-        ):
-            continue
+        )
+    ]
+    if not exact_candidates:
+        return None
+
+    # A missing local roster means the snapshot cannot rule that exact-title
+    # candidate out. Refuse to manufacture uniqueness from incomplete local data.
+    for candidate in exact_candidates:
         volume_id = resolver._integer(candidate.get("id"))
         if volume_id is None or volume_id not in rosters:
-            continue
-        if not resolver._roster_uniquely_covers_all_issues(
-            volume_id=volume_id,
-            roster=rosters[volume_id],
-            issues=issues,
-        ):
-            continue
-        proven.append(candidate)
+            return None
 
+    proven = [
+        candidate
+        for candidate in exact_candidates
+        if resolver._roster_uniquely_covers_all_issues(
+            volume_id=resolver._integer(candidate.get("id")),
+            roster=rosters[resolver._integer(candidate.get("id"))],
+            issues=issues,
+        )
+    ]
     if not proven:
         return None
 
@@ -493,6 +505,35 @@ def _select_local_evidence_candidate(
     return survivors[0] if len(survivors) == 1 else None
 
 
+async def _map_local_rosters(
+    resolver: ModuleType,
+    db: AsyncSession,
+    *,
+    user_id: int,
+    work: Any,
+    rosters: dict[int, list[dict[str, object]]],
+    evidence_source: str,
+) -> int:
+    """Persist only exact-label issue mappings that are unique across complete local rosters."""
+    mapped = 0
+    for issue in work.issues:
+        matches = resolver._candidate_issue_rows(rosters, issue.issue_number)
+        if len(matches) != 1:
+            continue
+        volume_id, provider_row = matches[0]
+        if await resolver._persist_issue_mapping(
+            db,
+            user_id=user_id,
+            work=work,
+            issue=issue,
+            volume_id=volume_id,
+            provider_row=provider_row,
+            evidence_source=evidence_source,
+        ):
+            mapped += 1
+    return mapped
+
+
 async def _resolve_thread_from_local_evidence(
     resolver: ModuleType,
     db: AsyncSession,
@@ -502,10 +543,63 @@ async def _resolve_thread_from_local_evidence(
     work: Any,
     roster_cache: dict[int, list[dict[str, object]]],
 ) -> Any | None:
-    """Resolve one previously-unanchored thread entirely from local ComicVine evidence."""
-    _route, existing_volume_ids = resolver._classify_thread(work)
-    if existing_volume_ids or client._local_db is None:
+    """Resolve everything safely provable for one thread without any provider request."""
+    route, existing_volume_ids = resolver._classify_thread(work)
+    if client._local_db is None:
         return None
+
+    if existing_volume_ids:
+        rosters: dict[int, list[dict[str, object]]] = {}
+        for volume_id in existing_volume_ids:
+            roster = client._fetch_local_volume_issues(volume_id)
+            if roster is None:
+                # Multi-volume uniqueness is only safe when every candidate roster
+                # is locally present. The provider pass may fill the missing evidence.
+                return None
+            rosters[volume_id] = roster
+            roster_cache[volume_id] = roster
+
+        if not work.confirmed_series and len(existing_volume_ids) == 1:
+            volume_id = existing_volume_ids[0]
+            evidence = next(
+                (item for item in work.sibling_volumes if item.volume_id == volume_id),
+                None,
+            )
+            evidence_source = "local_snapshot_sibling_issue_volume_resolution"
+            await resolver._persist_thread_series(
+                db,
+                user_id=user_id,
+                thread_id=work.thread_id,
+                volume_id=volume_id,
+                evidence_source=evidence_source,
+                search_row=None,
+                evidence_name=evidence.name if evidence is not None else None,
+            )
+        elif len(existing_volume_ids) > 1:
+            evidence_source = "local_snapshot_multi_volume_exact_label_resolution"
+        else:
+            evidence_source = "local_snapshot_confirmed_series_exact_label_resolution"
+
+        mapped = await _map_local_rosters(
+            resolver,
+            db,
+            user_id=user_id,
+            work=work,
+            rosters=rosters,
+            evidence_source=evidence_source,
+        )
+        remaining = len(work.issues) - mapped
+        return resolver.ThreadResult(
+            thread_id=work.thread_id,
+            title=work.title,
+            unresolved_before=len(work.issues),
+            status="resolved" if remaining == 0 else ("partial" if mapped else "unresolved"),
+            mapped=mapped,
+            remaining=remaining,
+            evidence=f"local-{route}",
+            volume_ids=existing_volume_ids,
+            detail="Used only complete local ComicVine rosters; no provider request was allowed.",
+        )
 
     hint = resolver._parse_title_hint(work.title)
     local_candidates = client.search_local_volumes(hint.query_title)
@@ -514,7 +608,7 @@ async def _resolve_thread_from_local_evidence(
     if len(local_candidates) > LOCAL_VOLUME_CANDIDATE_LIMIT:
         return None
 
-    rosters: dict[int, list[dict[str, object]]] = {}
+    rosters = {}
     for candidate in local_candidates:
         if not _local_candidate_has_exact_title(
             resolver,
@@ -559,24 +653,14 @@ async def _resolve_thread_from_local_evidence(
         evidence_name=resolver._string(selected.get("name")),
     )
 
-    mapped = 0
-    scoped_roster = {volume_id: roster}
-    for issue in work.issues:
-        matches = resolver._candidate_issue_rows(scoped_roster, issue.issue_number)
-        if len(matches) != 1:
-            continue
-        _matched_volume_id, provider_row = matches[0]
-        if await resolver._persist_issue_mapping(
-            db,
-            user_id=user_id,
-            work=work,
-            issue=issue,
-            volume_id=volume_id,
-            provider_row=provider_row,
-            evidence_source=evidence_source,
-        ):
-            mapped += 1
-
+    mapped = await _map_local_rosters(
+        resolver,
+        db,
+        user_id=user_id,
+        work=work,
+        rosters={volume_id: roster},
+        evidence_source=evidence_source,
+    )
     remaining = len(work.issues) - mapped
     return resolver.ThreadResult(
         thread_id=work.thread_id,
@@ -656,8 +740,9 @@ async def _run_resolution_phase(
     *,
     database_url: str,
     client: OperatorComicVineClient | None,
+    local_only: bool = False,
 ) -> int:
-    """Resolve identities without letting one resource throttle stop other routes."""
+    """Run either a no-network local sweep or the provider-dependent resolution sweep."""
     host, database = resolver._database_target(database_url)
     print(f"Database target: host={host} database={database}")
     engine = resolver._engine(database_url)
@@ -704,18 +789,36 @@ async def _run_resolution_phase(
                     )
             else:
                 assert client is not None
+                mode = "local" if local_only else "provider"
                 for index, work in enumerate(works, start=1):
-                    print(f"[{index}/{len(works)}] {work.title} ({len(work.issues)} unresolved)")
+                    print(
+                        f"[{mode} {index}/{len(works)}] {work.title} "
+                        f"({len(work.issues)} unresolved)"
+                    )
                     try:
-                        result = await _resolve_thread_from_local_evidence(
-                            resolver,
-                            db,
-                            client,
-                            user_id=args.user_id,
-                            work=work,
-                            roster_cache=roster_cache,
-                        )
-                        if result is None:
+                        if local_only:
+                            result = await _resolve_thread_from_local_evidence(
+                                resolver,
+                                db,
+                                client,
+                                user_id=args.user_id,
+                                work=work,
+                                roster_cache=roster_cache,
+                            )
+                            if result is None:
+                                result = resolver.ThreadResult(
+                                    thread_id=work.thread_id,
+                                    title=work.title,
+                                    unresolved_before=len(work.issues),
+                                    status="deferred",
+                                    remaining=len(work.issues),
+                                    evidence="provider-dependent",
+                                    detail=(
+                                        "Local snapshot could not prove this thread completely; "
+                                        "deferred without making a provider request."
+                                    ),
+                                )
+                        else:
                             result = await resolver._resolve_thread(
                                 db,
                                 client,
@@ -733,7 +836,7 @@ async def _run_resolution_phase(
                             detail=str(exc),
                         )
                         _print_throttle(exc, announced_throttles)
-                    except (ComicVineError, TimeoutError, ValueError, RuntimeError) as exc:
+                    except (ComicVineError, TimeoutError, ValueError, RuntimeError, sqlite3.Error) as exc:
                         await db.rollback()
                         result = resolver.ThreadResult(
                             thread_id=work.thread_id,
@@ -760,6 +863,7 @@ async def _run_resolution_phase(
         "user_id": args.user_id,
         "database": {"host": host, "database": database},
         "dry_run": args.dry_run,
+        "local_only": local_only,
         "summary": summary,
         "threads": [asdict(result) for result in results],
     }
@@ -773,8 +877,9 @@ async def _run_creator_phase(
     *,
     database_url: str,
     client: OperatorComicVineClient | None,
+    local_only: bool = False,
 ) -> int:
-    """Hydrate all stored/local creator data before provider-dependent leftovers."""
+    """Hydrate local/stored creator data first, optionally stopping before provider work."""
     helper = _creator_helper
     host, database = helper._database_target(database_url)
     print(f"Database target: host={host} database={database}")
@@ -794,7 +899,7 @@ async def _run_creator_phase(
             issues = await helper._load_read_issues(db, user_id=args.user_id, limit=args.limit)
             print(f"Found {len(issues)} read non-test issues for user_id={args.user_id}.")
 
-            if not args.dry_run and not args.refresh and client is not None:
+            if not args.dry_run and client is not None:
                 local_first: list[Any] = []
                 provider_dependent: list[Any] = []
                 for issue in issues:
@@ -810,12 +915,21 @@ async def _run_creator_phase(
                         local_first.append(issue)
                     else:
                         provider_dependent.append(issue)
-                issues = [*local_first, *provider_dependent]
-                print(
-                    "Creator pass order: "
-                    f"{len(local_first)} stored/local-satisfiable first; "
-                    f"{len(provider_dependent)} provider-dependent deferred to the end."
-                )
+
+                if local_only:
+                    issues = local_first
+                    print(
+                        "Creator local-only pass: "
+                        f"{len(local_first)} stored/local-satisfiable; "
+                        f"{len(provider_dependent)} provider-dependent deferred without network."
+                    )
+                else:
+                    issues = [*local_first, *provider_dependent]
+                    print(
+                        "Creator pass order: "
+                        f"{len(local_first)} stored/local-satisfiable first; "
+                        f"{len(provider_dependent)} provider-dependent deferred to the end."
+                    )
 
             for index, issue in enumerate(issues, start=1):
                 print(f"[{index}/{len(issues)}] {issue.thread_title} #{issue.issue_number}")
@@ -826,7 +940,7 @@ async def _run_creator_phase(
                         user_id=args.user_id,
                         issue=issue,
                         dry_run=args.dry_run,
-                        refresh=args.refresh,
+                        refresh=False if local_only else args.refresh,
                     )
                 except ComicVineRateLimitError as exc:
                     result = helper.BackfillResult(
@@ -840,7 +954,7 @@ async def _run_creator_phase(
                         detail=str(exc),
                     )
                     _print_throttle(exc, announced_throttles)
-                except (ComicVineError, TimeoutError, ValueError, RuntimeError) as exc:
+                except (ComicVineError, TimeoutError, ValueError, RuntimeError, sqlite3.Error) as exc:
                     await db.rollback()
                     result = helper.BackfillResult(
                         issue_id=issue.issue_id,
@@ -876,6 +990,7 @@ async def _run_creator_phase(
         "database": {"host": host, "database": database},
         "dry_run": args.dry_run,
         "refresh": args.refresh,
+        "local_only": local_only,
         "summary": summary,
         "issues": [asdict(result) for result in results],
     }
@@ -885,7 +1000,7 @@ async def _run_creator_phase(
 
 
 async def _run_pipeline(args: argparse.Namespace) -> int:
-    """Run both phases with one resource-aware provider client."""
+    """Run all locally satisfiable work before allowing the first provider request."""
     resolver = _load_script_module("_resolve_read_comicvine_series", RESOLUTION_HELPER)
     database_url = _creator_helper._require_database_url(args.database_url)
     api_key = os.environ.get("COMICVINE_API_KEY", "").strip()
@@ -904,7 +1019,40 @@ async def _run_pipeline(args: argparse.Namespace) -> int:
             timeout_seconds=10.0,
         )
 
-    print("=== ComicVine phase 1/2: resolve missing issue identities ===")
+    if args.dry_run:
+        print("=== ComicVine phase 1/2: inventory missing issue identities ===")
+        resolution_exit = await _run_resolution_phase(
+            args,
+            resolver,
+            database_url=database_url,
+            client=client,
+        )
+        print("=== ComicVine phase 2/2: inventory creator metadata ===")
+        creator_exit = await _run_creator_phase(
+            args,
+            database_url=database_url,
+            client=client,
+        )
+        return 1 if resolution_exit != 0 or creator_exit != 0 else 0
+
+    print("=== ComicVine stage 1/4: exhaust local identity evidence ===")
+    local_resolution_exit = await _run_resolution_phase(
+        args,
+        resolver,
+        database_url=database_url,
+        client=client,
+        local_only=True,
+    )
+
+    print("=== ComicVine stage 2/4: exhaust stored/local creator metadata ===")
+    local_creator_exit = await _run_creator_phase(
+        args,
+        database_url=database_url,
+        client=client,
+        local_only=True,
+    )
+
+    print("=== ComicVine stage 3/4: provider-dependent identity leftovers ===")
     resolution_exit = await _run_resolution_phase(
         args,
         resolver,
@@ -912,13 +1060,21 @@ async def _run_pipeline(args: argparse.Namespace) -> int:
         client=client,
     )
 
-    print("=== ComicVine phase 2/2: hydrate creator metadata ===")
+    print("=== ComicVine stage 4/4: creator completion, local before provider leftovers ===")
     creator_exit = await _run_creator_phase(
         args,
         database_url=database_url,
         client=client,
     )
-    return 1 if resolution_exit != 0 or creator_exit != 0 else 0
+    return 1 if any(
+        exit_code != 0
+        for exit_code in (
+            local_resolution_exit,
+            local_creator_exit,
+            resolution_exit,
+            creator_exit,
+        )
+    ) else 0
 
 
 def main() -> int:
