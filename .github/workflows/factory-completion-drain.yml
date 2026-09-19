@@ -17,8 +17,6 @@ on:
 permissions:
   actions: write
   contents: read
-  issues: read
-  pull-requests: read
 
 concurrency:
   group: factory-completion-dispatch-signal
@@ -27,60 +25,14 @@ concurrency:
 jobs:
   drain:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
-      - name: Checkout trusted main
-        uses: actions/checkout@v6
-        with:
-          ref: main
-
-      - name: Install REST-backed factory GitHub reads
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          real_gh="$(command -v gh)"
-          shim_dir="$RUNNER_TEMP/factory-gh-rest"
-          mkdir -p "$shim_dir"
-          cp .github/scripts/factory-gh-rest-shim.sh "$shim_dir/gh"
-          chmod +x "$shim_dir/gh"
-          echo "FACTORY_REAL_GH=$real_gh" >> "$GITHUB_ENV"
-          echo "$shim_dir" >> "$GITHUB_PATH"
-
-      - name: Plan health-aware completion capacity
-        id: plan
+      - name: Wake central dispatcher for completion allocation
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          result="$(python3 .github/scripts/factory_full_completion_controller.py)"
-          echo "$result" | jq .
-          workers="$(jq -c '.selected_workers // []' <<< "$result")"
-          echo "workers=$workers" >> "$GITHUB_OUTPUT"
-          echo "completion_demand=$(jq -r '.completion_demand // 0' <<< "$result")" >> "$GITHUB_OUTPUT"
-          echo "production_demand=$(jq -r '.production_demand // 0' <<< "$result")" >> "$GITHUB_OUTPUT"
-          echo "completion_target=$(jq -r '.completion_target // 0' <<< "$result")" >> "$GITHUB_OUTPUT"
-
-      - name: Delegate selected workers to central dispatcher
-        if: steps.plan.outputs.workers != '[]'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          WORKERS: ${{ steps.plan.outputs.workers }}
-        run: |
-          set -Eeuo pipefail
-          echo "Delegating completion-selected batch ${WORKERS} to central dispatcher"
           gh workflow run fixed-model-factory-dispatch.yml \
-            --repo "$GITHUB_REPOSITORY" --ref main \
-            -f mode=smoke -f workers="$WORKERS"
-
-      - name: Report demand-driven plan
-        shell: bash
-        env:
-          COMPLETION: ${{ steps.plan.outputs.completion_demand }}
-          PRODUCTION: ${{ steps.plan.outputs.production_demand }}
-          TARGET: ${{ steps.plan.outputs.completion_target }}
-          WORKERS: ${{ steps.plan.outputs.workers }}
-        run: |
-          selected="$(jq -r 'length' <<< "${WORKERS:-[]}")"
-          echo "Demand completion=${COMPLETION:-0} production=${PRODUCTION:-0}; target=${TARGET:-0}; selected=${selected}; assignment authority=dispatcher"
+            --repo "$GITHUB_REPOSITORY" --ref main -f mode=completion
+          echo 'Completion allocation delegated to Fixed Model Factory Dispatcher'
