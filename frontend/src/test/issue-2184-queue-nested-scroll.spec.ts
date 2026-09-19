@@ -16,7 +16,7 @@
  */
 import { expect } from '@playwright/test'
 import { test } from './fixtures'
-import { scrollAppTo, scrollAppUntil, waitForQueueReady } from './helpers'
+import { scrollAppTo, scrollAppUntil, waitForQueueReady, queueThreadTitle } from './helpers'
 
 const NO_NESTED_VERTICAL = new Set(['auto', 'scroll'])
 
@@ -42,13 +42,13 @@ async function assertNoNestedScroll(page: import('@playwright/test').Page): Prom
   // Scroll the page scroller (`#root`) to trigger the next page load.
   await scrollAppUntil(
     page,
-    async () => page.getByText('Test Thread 60').isVisible(),
+    async () => queueThreadTitle(page, 'Test Thread 60').isVisible(),
     'thread 60 after crossing the first page',
   )
 
   // After the threshold is crossed the virtualized list remains the only
   // rendering path. The same no-nested-scroll contract must still hold.
-  await expect(page.getByText('Test Thread 60')).toBeVisible({ timeout: 10000 })
+  await expect(queueThreadTitle(page, 'Test Thread 60')).toBeVisible({ timeout: 10000 })
 
   const after = await container.evaluate((element) => {
     const style = window.getComputedStyle(element)
@@ -67,7 +67,7 @@ async function assertNoNestedScroll(page: import('@playwright/test').Page): Prom
 
   // Scroll back to the top to confirm the first thread remains reachable.
   await scrollAppTo(page, 0)
-  await expect(page.getByText('Test Thread 1')).toBeVisible()
+  await expect(queueThreadTitle(page, 'Test Thread 1')).toBeVisible()
 }
 
 test.describe('Queue nested scroll after threshold (#2184)', () => {

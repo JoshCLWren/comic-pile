@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures';
 import {
   queueCardMentionsTitle,
+  queueThreadTitle,
   readQueueViewport,
   scrollAppTo,
   scrollAppUntil,
@@ -27,7 +28,7 @@ test.describe('Queue pagination regression (#2571)', () => {
     await waitForQueueReady(page);
 
     await expect(page.getByTestId('queue-thread-item').first()).toBeVisible();
-    await expect(page.getByText('Test Thread 1')).toBeVisible();
+    await expect(queueThreadTitle(page, 'Test Thread 1')).toBeVisible();
     const initial = await readQueueViewport(page);
     expect(initial.visibleCount).toBeGreaterThan(0);
     expect(initial.mounted).toBeLessThan(250);
@@ -40,7 +41,7 @@ test.describe('Queue pagination regression (#2571)', () => {
     expect((await readQueueViewport(page)).visibleCount).toBeGreaterThan(0);
 
     await scrollAppTo(page, 0);
-    await expect(page.getByText('Test Thread 1')).toBeVisible();
+    await expect(queueThreadTitle(page, 'Test Thread 1')).toBeVisible();
 
     await scrollAppUntil(
       page,
@@ -62,7 +63,7 @@ test.describe('Queue pagination regression (#2571)', () => {
     await expect(page.getByTestId('queue-infinite-scroll-sentinel')).toHaveCount(0);
 
     await scrollAppTo(page, 0);
-    await expect(page.getByText('Test Thread 1')).toBeVisible();
+    await expect(queueThreadTitle(page, 'Test Thread 1')).toBeVisible();
 
     await scrollAppUntil(
       page,

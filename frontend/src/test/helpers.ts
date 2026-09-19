@@ -25,6 +25,11 @@ export async function waitForQueueReady(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Add Series' })).toBeVisible()
 }
 
+/** Exact Queue title locator. Substring `getByText('Test Thread 1')` also hits 10–19. */
+export function queueThreadTitle(page: Page, title: string): Locator {
+  return page.getByText(title, { exact: true })
+}
+
 /** Live geometry of the production page scroller (`#root`, not the window). */
 export type AppScrollState = {
   windowScrollY: number
