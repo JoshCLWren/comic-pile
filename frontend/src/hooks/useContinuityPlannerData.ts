@@ -2,9 +2,9 @@ import { useQuery } from '@tanstack/react-query'
 import { threadsApi } from '../services/api'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { continuityPlansApi } from '../services/api-continuity-plans'
+import { issuesApi, type IssueListParams } from '../services/api-issues'
 import { queryKeys } from '../query/queryKeys'
-import type { Thread } from '../types'
-import type { DependencyGroup } from '../services/api-dependency-groups'
+import type { Issue, Thread } from '../types'
 
 /**
  * Fetch all threads across all pages.
@@ -49,5 +49,36 @@ export function useContinuityPlan(planId: number | null) {
     queryKey: planId ? queryKeys.readingPlans.detail(planId) : [],
     queryFn: () => continuityPlansApi.get(planId!),
     enabled: planId != null,
+  })
+}
+
+/**
+ * Fetch every issue of the selected thread across all pages.
+ * Uses React Query keyed by thread so switching threads re-fetches cleanly.
+ */
+export function useThreadIssues(selectedThreadId: number | null) {
+  return useQuery({
+    queryKey:
+      selectedThreadId != null
+        ? queryKeys.thread.issuePage(selectedThreadId, { pageSize: 100, status: undefined })
+        : [],
+    queryFn: async (): Promise<Issue[]> => {
+      const result: Issue[] = []
+      const seen = new Set<string>()
+      let token: string | null = null
+      do {
+        const params: IssueListParams = { page_size: 100 }
+        if (token) {
+          params.page_token = token
+        }
+        const page = await issuesApi.list(selectedThreadId!, params)
+        result.push(...page.issues)
+        token = page.next_page_token
+        if (token && seen.has(token)) break
+        if (token) seen.add(token)
+      } while (token)
+      return result
+    },
+    enabled: selectedThreadId != null,
   })
 }
