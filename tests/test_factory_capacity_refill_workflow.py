@@ -25,7 +25,7 @@ def test_healthy_entry_completion_wakes_dispatcher_for_same_worker() -> None:
     assert 'types: [completed]' in text
     assert 'Attempt outcome: ' in text
     assert 'success|no_work|work_failure)' in _outcome_gate()
-    assert '-f mode=roster -f worker="$worker"' in text
+    assert '-f mode=smoke -f worker="$worker"' in text
     assert 'gh workflow run fixed-model-factory-dispatch.yml' in text
     assert 'python3 "$controller" assign --worker "$worker"' not in text
     assert 'gh workflow run free-model-factory-entry.yml' not in text
