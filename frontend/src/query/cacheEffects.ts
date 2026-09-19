@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
 import type { InfiniteData } from '@tanstack/react-query'
-import type { Thread, ThreadListResponse } from '../types'
+import type { Thread, ThreadListResponse, Issue } from '../types'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
 import type { CustomCBL, CustomCBLListItem } from '../services/api-custom-cbl'
 import { queryKeys } from './queryKeys'
@@ -367,4 +367,91 @@ export async function invalidateIdentityInbox(
   client: QueryClient,
 ): Promise<void> {
   await client.invalidateQueries({ queryKey: queryKeys.identityInbox.all })
+}
+
+export type IssueCacheRollback = () => void
+
+/**
+ * Optimistically update an issue's status in the cache.
+ * Used by useToggleIssueStatus mutation.
+ */
+export function optimisticallyUpdateIssueStatus(
+  client: QueryClient,
+  threadId: number,
+  issue: Issue,
+  nextStatus: 'read' | 'unread',
+): IssueCacheRollback {
+  const allIssuesKey = queryKeys.thread.issuePages(threadId)
+  const previousIssues = client.getQueryData<Issue[]>(allIssuesKey)
+
+  if (previousIssues) {
+    const updatedIssue: Issue = {
+      ...issue,
+      status: nextStatus,
+      read_at: nextStatus === 'read' ? new Date().toISOString() : null,
+    }
+    client.setQueryData<Issue[]>(
+      allIssuesKey,
+      previousIssues.map((i) => (i.id === issue.id ? updatedIssue : i)),
+    )
+  }
+
+  return () => {
+    if (previousIssues) {
+      client.setQueryData(allIssuesKey, previousIssues)
+    }
+  }
+}
+
+/**
+ * Optimistically delete an issue from the cache.
+ * Used by useDeleteIssue mutation.
+ */
+export function optimisticallyDeleteIssue(
+  client: QueryClient,
+  threadId: number,
+  issueId: number,
+): IssueCacheRollback {
+  const allIssuesKey = queryKeys.thread.issuePages(threadId)
+  const previousIssues = client.getQueryData<Issue[]>(allIssuesKey)
+
+  if (previousIssues) {
+    client.setQueryData<Issue[]>(
+      allIssuesKey,
+      previousIssues.filter((i) => i.id !== issueId),
+    )
+  }
+
+  return () => {
+    if (previousIssues) {
+      client.setQueryData(allIssuesKey, previousIssues)
+    }
+  }
+}
+
+/**
+ * Optimistically reorder issues in the cache.
+ * Used by useReorderIssues mutation.
+ */
+export function optimisticallyReorderIssues(
+  client: QueryClient,
+  threadId: number,
+  issueIds: number[],
+): IssueCacheRollback {
+  const allIssuesKey = queryKeys.thread.issuePages(threadId)
+  const previousIssues = client.getQueryData<Issue[]>(allIssuesKey)
+
+  if (previousIssues) {
+    const issueMap = new Map(previousIssues.map((i) => [i.id, i]))
+    const reordered = issueIds
+      .map((id) => issueMap.get(id))
+      .filter((i): i is Issue => i !== undefined)
+    client.setQueryData<Issue[]>(allIssuesKey, reordered)
+  }
+
+  return () => {
+    if (previousIssues) {
+      client.setQueryData(allIssuesKey, previousIssues)
+    }
+  }
 }

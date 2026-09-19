@@ -6,7 +6,7 @@ import type { IssueListParams, IssueListResponse } from '../services/api-issues'
 import type { Issue, IssueDependenciesResponse } from '../types'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
-import { invalidateAfterIssueEdit } from '../query/cacheEffects'
+import { invalidateAfterIssueEdit, optimisticallyUpdateIssueStatus, optimisticallyDeleteIssue, optimisticallyReorderIssues } from '../query/cacheEffects'
 
 const PAGE_SIZE = 50
 
@@ -117,27 +117,11 @@ export function useToggleIssueStatus(threadId: number) {
       return { issue, nextStatus }
     },
     onMutate: async ({ issue, nextStatus }) => {
-      const allIssuesKey = queryKeys.thread.issuePages(threadId)
-      const previousIssues = queryClient.getQueryData<Issue[]>(allIssuesKey)
-
-      if (previousIssues) {
-        const updatedIssue: Issue = {
-          ...issue,
-          status: nextStatus,
-          read_at: nextStatus === 'read' ? new Date().toISOString() : null,
-        }
-        queryClient.setQueryData<Issue[]>(
-          allIssuesKey,
-          previousIssues.map((i) => (i.id === issue.id ? updatedIssue : i)),
-        )
-      }
-
-      return { previousIssues }
+      const rollback = optimisticallyUpdateIssueStatus(queryClient, threadId, issue, nextStatus)
+      return { rollback }
     },
     onError: (_err, _vars, context) => {
-      if (context?.previousIssues) {
-        queryClient.setQueryData(queryKeys.thread.issuePages(threadId), context.previousIssues)
-      }
+      context?.rollback?.()
     },
     onSuccess: async () => {
       await invalidateAfterIssueEdit(queryClient, threadId)
@@ -172,22 +156,11 @@ export function useDeleteIssue(threadId: number) {
       return issueId
     },
     onMutate: async (issueId) => {
-      const allIssuesKey = queryKeys.thread.issuePages(threadId)
-      const previousIssues = queryClient.getQueryData<Issue[]>(allIssuesKey)
-
-      if (previousIssues) {
-        queryClient.setQueryData<Issue[]>(
-          allIssuesKey,
-          previousIssues.filter((i) => i.id !== issueId),
-        )
-      }
-
-      return { previousIssues }
+      const rollback = optimisticallyDeleteIssue(queryClient, threadId, issueId)
+      return { rollback }
     },
     onError: (_err, _vars, context) => {
-      if (context?.previousIssues) {
-        queryClient.setQueryData(queryKeys.thread.issuePages(threadId), context.previousIssues)
-      }
+      context?.rollback?.()
     },
     onSuccess: async () => {
       await invalidateAfterIssueEdit(queryClient, threadId)
@@ -205,23 +178,11 @@ export function useReorderIssues(threadId: number) {
       return issueIds
     },
     onMutate: async (issueIds) => {
-      const allIssuesKey = queryKeys.thread.issuePages(threadId)
-      const previousIssues = queryClient.getQueryData<Issue[]>(allIssuesKey)
-
-      if (previousIssues) {
-        const issueMap = new Map(previousIssues.map((i) => [i.id, i]))
-        const reordered = issueIds
-          .map((id) => issueMap.get(id))
-          .filter((i): i is Issue => i !== undefined)
-        queryClient.setQueryData<Issue[]>(allIssuesKey, reordered)
-      }
-
-      return { previousIssues }
+      const rollback = optimisticallyReorderIssues(queryClient, threadId, issueIds)
+      return { rollback }
     },
     onError: (_err, _vars, context) => {
-      if (context?.previousIssues) {
-        queryClient.setQueryData(queryKeys.thread.issuePages(threadId), context.previousIssues)
-      }
+      context?.rollback?.()
     },
     onSuccess: async () => {
       await invalidateAfterIssueEdit(queryClient, threadId)
