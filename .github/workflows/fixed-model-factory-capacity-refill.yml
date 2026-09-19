@@ -14,11 +14,12 @@ on:
 permissions:
   actions: write
   contents: read
-  issues: read
+  issues: write
+  pull-requests: write
 
-# Refill is an event router only. Assignment authority belongs exclusively to
-# Fixed Model Factory Dispatcher, whose own concurrency group serializes lease
-# decisions. Multiple refill signals may safely coalesce into dispatcher work.
+# Refill keeps recovery duties such as ghost-run cancellation and stale-lease
+# release, but assignment authority belongs exclusively to Fixed Model Factory
+# Dispatcher. Refill only signals that serialized writer after recovery.
 concurrency:
   group: fixed-model-factory-capacity-refill
   cancel-in-progress: false
@@ -26,12 +27,24 @@ concurrency:
 jobs:
   refill:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - name: Checkout trusted main
         uses: actions/checkout@v6
         with:
           ref: main
+
+      - name: Install REST-backed factory GitHub reads
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          real_gh="$(command -v gh)"
+          shim_dir="$RUNNER_TEMP/factory-gh-rest"
+          mkdir -p "$shim_dir"
+          cp .github/scripts/factory-gh-rest-shim.sh "$shim_dir/gh"
+          chmod +x "$shim_dir/gh"
+          echo "FACTORY_REAL_GH=$real_gh" >> "$GITHUB_ENV"
+          echo "$shim_dir" >> "$GITHUB_PATH"
 
       - name: Reconcile serialized migration finalization lane
         shell: bash
@@ -41,7 +54,7 @@ jobs:
           set -Eeuo pipefail
           python3 .github/scripts/factory_migration_lane.py reconcile
 
-      - name: Request dispatcher capacity refill
+      - name: Recover capacity and signal dispatcher
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -50,6 +63,37 @@ jobs:
         run: |
           set -Eeuo pipefail
           manifest='.github/free-model-factories.tsv'
+          controller='.github/scripts/factory-work-controller.py'
+          stale_run_seconds=7200
+
+          # A GitHub Actions run can occasionally remain visible as queued long
+          # after cancellation reports it terminal. Such a ghost must not keep
+          # every fixed-model lease fail-closed forever.
+          now_epoch="$(date -u +%s)"
+          for status in queued in_progress; do
+            while IFS=$'\t' read -r run_id created_at started_at; do
+              [[ "$run_id" =~ ^[0-9]+$ ]] || continue
+              timestamp="${started_at:-$created_at}"
+              created_epoch="$(date -u -d "$timestamp" +%s 2>/dev/null || echo 0)"
+              (( created_epoch > 0 )) || continue
+              age_seconds=$((now_epoch - created_epoch))
+              (( age_seconds >= stale_run_seconds )) || continue
+              echo "Force-canceling stale fixed-model entry run ${run_id} (${age_seconds}s old, status=${status})"
+              gh api --method POST \
+                "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/force-cancel" \
+                >/dev/null 2>&1 || true
+            done < <(
+              gh api --paginate \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/free-model-factory-entry.yml/runs?status=${status}&per_page=100" \
+                --jq '.workflow_runs[] | [.id, .created_at, (.run_started_at // "")] | @tsv'
+            )
+          done
+
+          # Give force-cancel a brief chance to update GitHub's active-run view,
+          # then release only leases the controller can prove stale. This moves
+          # work back to unowned; it does not assign a numbered worker.
+          sleep 2
+          python3 "$controller" reconcile || true
 
           if [[ "$EVENT_NAME" == workflow_run ]]; then
             [[ "$COMPLETED_RUN_ID" =~ ^[0-9]+$ ]] || {
@@ -95,7 +139,7 @@ jobs:
           fi
 
           # A control-plane deploy or explicit refill request wakes one broad
-          # roster pass. Busy workers are filtered by the canonical controller.
+          # roster pass. Busy workers are filtered by the canonical dispatcher.
           echo 'Requesting broad fixed-model capacity refill through dispatcher'
           gh workflow run fixed-model-factory-dispatch.yml \
             --repo "$GITHUB_REPOSITORY" --ref main -f mode=roster
