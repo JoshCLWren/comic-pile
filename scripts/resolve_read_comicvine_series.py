@@ -8,25 +8,27 @@ fills more of those identities at the thread/series level, then the existing
 
 The script is intentionally isolated from ``app.*`` and the Pydantic settings
 stack. It reads the already-exported ``DATABASE_URL`` from the process
-environment (for example, from direnv) and never falls back to a local or test
-database.
+environment and never falls back to a local or test database.
 
 Resolution is conservative and evidence-first:
 
 * confirmed ComicVine series mappings are reused;
-* otherwise, a thread may inherit a provider volume when all mapped sibling
-  issues point to a bounded set of ComicVine volumes;
+* otherwise, a thread may inherit provider volumes from confirmed sibling issue
+  mappings;
 * multiple sibling volumes are treated as per-issue candidates, not collapsed
   into one series;
-* when no provider evidence exists, a title containing a start year may search
-  ComicVine volumes, but auto-acceptance requires exactly one normalized-title
-  + exact-start-year result;
-* issue mappings require an exact issue-label match that is unique across all
-  candidate volumes for that thread;
+* titles ending in either ``(YYYY)`` or ``(YYYY - YYYY/Present)`` provide an
+  exact start-year search hint;
+* when title + start-year search returns multiple exact volume candidates, their
+  issue rosters are compared and a thread-level volume is accepted only when
+  exactly one candidate uniquely covers every unresolved issue label;
+* if multiple exact search candidates remain, individual issues may still map
+  when their exact label is unique across the candidate rosters;
+* issue mappings always require an exact provider issue-label match;
 * ambiguous or unprovable rows remain unresolved.
 
-The command is idempotent and resumable. ComicVine's existing persistent cache
-and per-endpoint rolling-hour limiter are reused.
+The command is idempotent and resumable. ComicVine's persistent cache, paced
+live requests, and per-endpoint rolling-hour limiter are reused.
 
 Examples:
     uv run python scripts/resolve_read_comicvine_series.py --user-id 1 --dry-run
@@ -64,8 +66,8 @@ from comic_pile.comicvine_provider import (  # noqa: E402
 )
 
 DEFAULT_REPORT = Path("/tmp/comicpile-read-comicvine-series-resolution.json")
-_YEAR_RANGE_RE = re.compile(
-    r"\s*\((?P<start>\d{4})\s*-\s*(?:\d{4}|present)\)\s*$",
+_YEAR_HINT_RE = re.compile(
+    r"\s*\((?P<start>\d{4})(?:\s*-\s*(?:\d{4}|present))?\)\s*$",
     re.IGNORECASE,
 )
 _VOLUME_HINT_RE = re.compile(r"\s*\(vol\.?\s*(?P<volume>\d+)\)\s*$", re.IGNORECASE)
@@ -221,7 +223,7 @@ def _parse_title_hint(title: str) -> TitleHint:
     start_year: int | None = None
     volume_hint: int | None = None
 
-    year_match = _YEAR_RANGE_RE.search(remaining)
+    year_match = _YEAR_HINT_RE.search(remaining)
     if year_match is not None:
         start_year = int(year_match.group("start"))
         remaining = remaining[: year_match.start()].rstrip()
@@ -265,14 +267,14 @@ def _series_row_metadata(row: dict[str, object]) -> dict[str, object]:
     }
 
 
-def _unique_search_volume(
+def _search_volume_candidates(
     rows: list[dict[str, object]],
     *,
     hint: TitleHint,
-) -> dict[str, object] | None:
-    """Accept exactly one provider volume with normalized-title and exact-year equality."""
+) -> list[dict[str, object]]:
+    """Return exact normalized-title + exact-start-year provider volumes."""
     if hint.start_year is None:
-        return None
+        return []
     expected_title = _normalize_series_title(hint.query_title)
     matches: dict[int, dict[str, object]] = {}
     for row in rows:
@@ -286,9 +288,17 @@ def _unique_search_volume(
         if start_year != hint.start_year:
             continue
         matches.setdefault(provider_id, row)
-    if len(matches) != 1:
-        return None
-    return next(iter(matches.values()))
+    return list(matches.values())
+
+
+def _unique_search_volume(
+    rows: list[dict[str, object]],
+    *,
+    hint: TitleHint,
+) -> dict[str, object] | None:
+    """Accept one provider volume when exact title + year are already unique."""
+    matches = _search_volume_candidates(rows, hint=hint)
+    return matches[0] if len(matches) == 1 else None
 
 
 def _candidate_issue_rows(
@@ -309,6 +319,40 @@ def _candidate_issue_rows(
                 continue
             matches.setdefault(provider_id, (volume_id, row))
     return list(matches.values())
+
+
+def _roster_uniquely_covers_all_issues(
+    *,
+    volume_id: int,
+    roster: list[dict[str, object]],
+    issues: list[IssueWork],
+) -> bool:
+    """Return whether one volume has exactly one provider row for every unresolved label."""
+    if not issues:
+        return False
+    scoped = {volume_id: roster}
+    return all(len(_candidate_issue_rows(scoped, issue.issue_number)) == 1 for issue in issues)
+
+
+def _unique_full_coverage_search_volume(
+    candidates: list[dict[str, object]],
+    *,
+    rosters: dict[int, list[dict[str, object]]],
+    issues: list[IssueWork],
+) -> dict[str, object] | None:
+    """Disambiguate exact title/year candidates only through complete exact roster coverage."""
+    full_coverage: list[dict[str, object]] = []
+    for candidate in candidates:
+        volume_id = _integer(candidate.get("id"))
+        if volume_id is None or volume_id not in rosters:
+            continue
+        if _roster_uniquely_covers_all_issues(
+            volume_id=volume_id,
+            roster=rosters[volume_id],
+            issues=issues,
+        ):
+            full_coverage.append(candidate)
+    return full_coverage[0] if len(full_coverage) == 1 else None
 
 
 def _classify_thread(work: ThreadWork) -> tuple[str, list[int]]:
@@ -532,12 +576,12 @@ async def _load_unresolved_threads(
     return works
 
 
-async def _search_series(
+async def _search_series_candidates(
     client: ComicVineClient,
     *,
     hint: TitleHint,
-) -> dict[str, object] | None:
-    """Search ComicVine and require one exact normalized-title + start-year volume."""
+) -> list[dict[str, object]]:
+    """Search ComicVine and retain all exact normalized-title + start-year volumes."""
     response = await client.request(
         "search",
         "search",
@@ -545,16 +589,14 @@ async def _search_series(
             "query": hint.query_title,
             "resources": "volume",
             "limit": 20,
-            "field_list": (
-                "id,name,publisher,start_year,count_of_issues,site_detail_url,image"
-            ),
+            "field_list": "id,name,publisher,start_year,count_of_issues,site_detail_url,image",
         },
     )
     rows = response.payload.get("results")
     if not isinstance(rows, list):
-        return None
+        return []
     candidates = [row for row in rows if isinstance(row, dict)]
-    return _unique_search_volume(candidates, hint=hint)
+    return _search_volume_candidates(candidates, hint=hint)
 
 
 async def _fetch_roster(
@@ -617,11 +659,7 @@ async def _persist_thread_series(
     metadata = (
         _series_row_metadata(search_row)
         if search_row is not None
-        else {
-            "id": volume_id,
-            "name": evidence_name,
-            "source": evidence_source,
-        }
+        else {"id": volume_id, "name": evidence_name, "source": evidence_source}
     )
     external_url = _string(search_row.get("site_detail_url")) if search_row is not None else None
     identity_id = await db.scalar(
@@ -715,16 +753,13 @@ async def _persist_issue_mapping(
     if owned is None:
         raise RuntimeError(f"issue {issue.issue_id} is not owned by user {user_id}")
 
+    volume = provider_row.get("volume")
     shallow_metadata = {
         "issue_number": _string(provider_row.get("issue_number")),
         "name": _string(provider_row.get("name")),
-        "volume": _compact_reference(provider_row.get("volume")),
+        "volume": _compact_reference(volume),
         "volume_id": volume_id,
-        "volume_name": _string(
-            provider_row.get("volume", {}).get("name")
-            if isinstance(provider_row.get("volume"), dict)
-            else None
-        ),
+        "volume_name": _string(volume.get("name")) if isinstance(volume, dict) else None,
         "source": evidence_source,
     }
     external_url = _string(provider_row.get("site_detail_url"))
@@ -827,7 +862,8 @@ async def _resolve_thread(
     """Resolve as many issues as possible from deterministic thread-level evidence."""
     route, volume_ids = _classify_thread(work)
     evidence_source = route
-    search_row: dict[str, object] | None = None
+    rosters: dict[int, list[dict[str, object]]] = {}
+    search_ambiguity = False
 
     if route == "manual":
         return ThreadResult(
@@ -842,8 +878,8 @@ async def _resolve_thread(
 
     if route == "title-year-search":
         hint = _parse_title_hint(work.title)
-        search_row = await _search_series(client, hint=hint)
-        if search_row is None:
+        search_candidates = await _search_series_candidates(client, hint=hint)
+        if not search_candidates:
             return ThreadResult(
                 thread_id=work.thread_id,
                 title=work.title,
@@ -851,29 +887,65 @@ async def _resolve_thread(
                 status="unresolved",
                 remaining=len(work.issues),
                 evidence="title-year-search",
-                detail="ComicVine search did not yield exactly one normalized-title + start-year volume.",
+                detail="ComicVine search found no exact normalized-title + start-year volume.",
             )
-        found_volume = _integer(search_row.get("id"))
-        if found_volume is None:
-            raise ComicVineError("accepted ComicVine search result did not contain a numeric volume ID")
-        volume_ids = [found_volume]
-        evidence_source = "thread_title_start_year_resolution"
-        await _persist_thread_series(
-            db,
-            user_id=user_id,
-            thread_id=work.thread_id,
-            volume_id=found_volume,
-            evidence_source=evidence_source,
-            search_row=search_row,
-            evidence_name=_string(search_row.get("name")),
-        )
+
+        candidate_by_volume = {
+            volume_id: row
+            for row in search_candidates
+            if (volume_id := _integer(row.get("id"))) is not None
+        }
+        volume_ids = sorted(candidate_by_volume)
+        if not volume_ids:
+            raise ComicVineError("exact ComicVine search candidates had no numeric volume IDs")
+
+        if len(volume_ids) > 1:
+            for volume_id in volume_ids:
+                rosters[volume_id] = await _fetch_roster(
+                    client,
+                    volume_id=volume_id,
+                    cache=roster_cache,
+                )
+            selected = _unique_full_coverage_search_volume(
+                search_candidates,
+                rosters=rosters,
+                issues=work.issues,
+            )
+            if selected is not None:
+                selected_volume = _integer(selected.get("id"))
+                if selected_volume is None:
+                    raise ComicVineError("roster-selected ComicVine volume had no numeric ID")
+                volume_ids = [selected_volume]
+                rosters = {selected_volume: rosters[selected_volume]}
+                evidence_source = "thread_title_start_year_roster_resolution"
+                await _persist_thread_series(
+                    db,
+                    user_id=user_id,
+                    thread_id=work.thread_id,
+                    volume_id=selected_volume,
+                    evidence_source=evidence_source,
+                    search_row=selected,
+                    evidence_name=_string(selected.get("name")),
+                )
+            else:
+                search_ambiguity = True
+                evidence_source = "title_year_candidate_exact_label_resolution"
+        else:
+            selected_volume = volume_ids[0]
+            selected = candidate_by_volume[selected_volume]
+            evidence_source = "thread_title_start_year_resolution"
+            await _persist_thread_series(
+                db,
+                user_id=user_id,
+                thread_id=work.thread_id,
+                volume_id=selected_volume,
+                evidence_source=evidence_source,
+                search_row=selected,
+                evidence_name=_string(selected.get("name")),
+            )
     elif not work.confirmed_series and len(volume_ids) == 1:
         evidence = next(
-            (
-                item
-                for item in work.sibling_volumes
-                if item.volume_id == volume_ids[0]
-            ),
+            (item for item in work.sibling_volumes if item.volume_id == volume_ids[0]),
             None,
         )
         evidence_source = "sibling_issue_volume_resolution"
@@ -891,13 +963,13 @@ async def _resolve_thread(
     else:
         evidence_source = "confirmed_series_exact_label_resolution"
 
-    rosters: dict[int, list[dict[str, object]]] = {}
     for volume_id in volume_ids:
-        rosters[volume_id] = await _fetch_roster(
-            client,
-            volume_id=volume_id,
-            cache=roster_cache,
-        )
+        if volume_id not in rosters:
+            rosters[volume_id] = await _fetch_roster(
+                client,
+                volume_id=volume_id,
+                cache=roster_cache,
+            )
 
     mapped = 0
     for issue in work.issues:
@@ -918,6 +990,16 @@ async def _resolve_thread(
 
     remaining = len(work.issues) - mapped
     status = "resolved" if remaining == 0 else ("partial" if mapped else "unresolved")
+    detail: str | None = None
+    if search_ambiguity and mapped == 0:
+        detail = (
+            "Multiple exact title/year volumes remained ambiguous after exact roster comparison."
+        )
+    elif search_ambiguity and remaining:
+        detail = "Mapped only issue labels unique across exact title/year candidate rosters."
+    elif mapped == 0:
+        detail = "No unresolved issue had exactly one exact-label provider match."
+
     return ThreadResult(
         thread_id=work.thread_id,
         title=work.title,
@@ -927,7 +1009,7 @@ async def _resolve_thread(
         remaining=remaining,
         evidence=route,
         volume_ids=volume_ids,
-        detail=None if mapped else "No unresolved issue had exactly one exact-label provider match.",
+        detail=detail,
     )
 
 
