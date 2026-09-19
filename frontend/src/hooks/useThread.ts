@@ -6,15 +6,18 @@ import { queryClient } from '../query/queryClient';
 import { queryKeys } from '../query/queryKeys';
 
 export function useThread(id?: number | null) {
-  const { data, isPending, isError, refetch } = useQuery({
+  const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: id ? queryKeys.thread.detail(id) : [],
     queryFn: () => threadsApi.get(id!),
     enabled: !!id,
-    // SAFETY: null is the intentional initialData while the thread query is loading or disabled.
+    // SAFETY: null is the intentional initialData placeholder while the thread
+    // query is loading; `initialDataUpdatedAt: 0` forces the initial fetch even
+    // under the app's 30s staleTime so a fresh thread always loads on mount.
     initialData: null as Thread | null,
+    initialDataUpdatedAt: 0,
   });
 
-  return { data, isPending, isError, refetch };
+  return { data, isPending, isError, error, refetch };
 }
 
 export function useStaleThreads(days?: number) {
