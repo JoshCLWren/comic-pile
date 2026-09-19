@@ -5,14 +5,13 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.continuity import _refresh_blocked_state, _to_plan_response as _to_response
 from app.auth import get_current_user
 from app.database import get_db
-from app.models.issue import Issue
-from app.models.thread import Thread
+from app.models.continuity_plan import ContinuityPlan
+from app.repositories.continuity_repository import owned_issue_ids_for_user
 from app.models.user import User
 from app.schemas.continuity_plan import (
     CrossoverTemplateConflictPreview,
@@ -164,12 +163,9 @@ async def adopt_crossover_template(
 
     issue_ids = [item.issue_id for item in template.items]
     if issue_ids:
-        result = await db.execute(
-            select(Issue.id)
-            .join(Thread, Thread.id == Issue.thread_id)
-            .where(Issue.id.in_(issue_ids), Thread.user_id == current_user.id)
+        owned_issue_ids = await owned_issue_ids_for_user(
+            db, user_id=current_user.id, issue_ids=issue_ids
         )
-        owned_issue_ids = set(result.scalars())
         missing_issue_ids = [iid for iid in issue_ids if iid not in owned_issue_ids]
         if missing_issue_ids:
             for position, item in enumerate(template.items):
@@ -204,7 +200,6 @@ async def adopt_crossover_template(
             }
         )
 
-    from app.models.continuity_plan import ContinuityPlan
     from app.services.continuity_plan_writer import (
         replace_compiled_rules,
         validate_node_ownership,

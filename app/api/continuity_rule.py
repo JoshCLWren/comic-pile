@@ -3,14 +3,11 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_user
 from app.cache_invalidation import invalidate_user_view
-from app.services.continuity import _refresh_blocked_state, _to_response
 from app.continuity_rules import (
     _would_create_cycle,
     ensure_owned_continuity_rule_references,
@@ -18,15 +15,20 @@ from app.continuity_rules import (
 from app.database import get_db
 from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
 from app.models.user import User
+from app.repositories.continuity_repository import (
+    get_continuity_rule as repo_get_continuity_rule,
+    lock_continuity_graph,
+    rules_for_user,
+)
 from app.schemas.continuity_rule import (
     ContinuityNodeType,
     ContinuityRuleCreate,
     ContinuityRuleResponse,
     ConvergenceTarget,
 )
+from app.services.continuity import _refresh_blocked_state, _to_response
 
 router = APIRouter(tags=["continuity"])
-CONTINUITY_LOCK_NAMESPACE = 1_129_274_964
 
 
 async def _invalidate_continuity_caches(user_id: int) -> None:
@@ -36,25 +38,13 @@ async def _invalidate_continuity_caches(user_id: int) -> None:
 
 async def _get_owned_rule(db: AsyncSession, user_id: int, rule_id: int) -> ContinuityRule:
     """Load one owned continuity rule with selected members."""
-    result = await db.execute(
-        select(ContinuityRule)
-        .options(selectinload(ContinuityRule.selected_members))
-        .where(ContinuityRule.id == rule_id, ContinuityRule.user_id == user_id)
-    )
-    rule = result.scalar_one_or_none()
+    rule = await repo_get_continuity_rule(db, user_id=user_id, rule_id=rule_id)
     if rule is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Continuity rule {rule_id} not found",
         )
     return rule
-
-
-async def _lock_continuity_graph(db: AsyncSession, user_id: int) -> None:
-    """Serialize continuity graph mutations for one user until transaction end."""
-    await db.execute(
-        select(func.pg_advisory_xact_lock(CONTINUITY_LOCK_NAMESPACE, user_id)),
-    )
 
 
 async def _would_create_convergence_cycle(
@@ -129,13 +119,8 @@ async def list_continuity_rules(
     Returns:
         Every continuity rule owned by the user, ordered by identifier.
     """
-    result = await db.execute(
-        select(ContinuityRule)
-        .options(selectinload(ContinuityRule.selected_members))
-        .where(ContinuityRule.user_id == current_user.id)
-        .order_by(ContinuityRule.id)
-    )
-    return [_to_response(rule) for rule in result.scalars().all()]
+    rules = await rules_for_user(db, user_id=current_user.id)
+    return [_to_response(rule) for rule in rules]
 
 
 @router.get(
@@ -185,7 +170,7 @@ async def create_continuity_rule(
     Raises:
         HTTPException: If references are invalid, a cycle exists, or the edge is duplicated.
     """
-    await _lock_continuity_graph(db, current_user.id)
+    await lock_continuity_graph(db, user_id=current_user.id)
     await ensure_owned_continuity_rule_references(db, user_id=current_user.id, payload=payload)
     if await _would_create_cycle(
         db,
@@ -264,7 +249,7 @@ async def update_continuity_rule(
     Raises:
         HTTPException: If references are invalid, a cycle exists, or the edge is duplicated.
     """
-    await _lock_continuity_graph(db, current_user.id)
+    await lock_continuity_graph(db, user_id=current_user.id)
     rule = await _get_owned_rule(db, current_user.id, rule_id)
     await ensure_owned_continuity_rule_references(db, user_id=current_user.id, payload=payload)
     if await _would_create_cycle(
@@ -339,7 +324,7 @@ async def delete_continuity_rule(
         HTTPException: If the continuity rule is not owned by the user.
     """
     user_id = current_user.id
-    await _lock_continuity_graph(db, user_id)
+    await lock_continuity_graph(db, user_id=user_id)
     rule = await _get_owned_rule(db, user_id, rule_id)
     await db.delete(rule)
     await db.commit()
