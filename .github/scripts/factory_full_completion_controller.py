@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Plan completion workers from current demand and idle fleet capacity."""
+"""Allocate completion workers from current demand and idle fleet capacity."""
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import json
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from factory_capacity_policy import (
@@ -14,9 +16,11 @@ from factory_capacity_policy import (
     completion_worker_target,
 )
 
+TELEMETRY_MARKER = "<!-- factory-completion-funnel:v1 -->"
+TELEMETRY_ISSUE = "1093"
+
 
 def load_controller():
-    """Load the completion scheduling helpers without granting assignment authority."""
     path = Path(__file__).resolve().with_name("factory_completion_controller.py")
     spec = importlib.util.spec_from_file_location("factory_completion_controller_full", path)
     if spec is None or spec.loader is None:
@@ -56,11 +60,7 @@ def raw_work_demand(policy, issues, prs) -> tuple[int, int]:
     return completion, production
 
 
-def current_demand(
-    controller,
-    *,
-    now_epoch: int | None = None,
-) -> tuple[FleetDemand, dict[str, object]]:
+def current_demand(controller, *, now_epoch: int | None = None) -> tuple[FleetDemand, dict[str, object]]:
     """Measure work demand against idle, evidence-backed executable capacity."""
     work_controller = controller.load_controller()
     policy = controller.load_policy()
@@ -137,72 +137,116 @@ def configure_demand_selection(controller, *, target: int) -> None:
     controller.select_completion_workers = select_workers
 
 
-def plan_completion_workers(
-    controller,
-    *,
-    target: int,
-    now_epoch: int | None = None,
-) -> list[str]:
-    """Return the health-aware idle worker batch without mutating any lease."""
-    if target <= 0:
-        return []
-
-    now_epoch = int(time.time()) if now_epoch is None else now_epoch
-    work_controller = controller.load_controller()
-    policy = controller.load_policy()
-    issues = work_controller.list_issues()
-    prs = work_controller.list_prs()
-    manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
-    candidates = controller.load_manifest_candidates(manifest)
-    workers = [candidate["worker"] for candidate in candidates]
-    owned = controller.owned_worker_ids([*issues, *prs])
-
-    try:
-        comments = controller.registry_comments()
-        health = controller.latest_worker_health(
-            comments,
-            trusted=policy.comment_is_trusted,
-            candidates=candidates,
-            now_epoch=now_epoch,
-        )
-    except RuntimeError as exc:
-        print(
-            f"[factory-completion] heartbeat health unavailable; failing closed: {exc}",
-            file=sys.stderr,
-        )
-        return []
-
-    configure_demand_selection(controller, target=target)
-    return controller.select_completion_workers(
-        workers,
-        review_backlog=policy.factory_review_backlog_count(prs),
-        owned_workers=owned,
-        health=health,
-        now_epoch=now_epoch,
+def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
+    """Persist demand, allocation, and claim results for operational verification."""
+    selected = list(result.get("selected_workers") or [])
+    assignments = list(result.get("assignments") or [])
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    body = "\n".join(
+        [
+            TELEMETRY_MARKER,
+            "## Factory completion funnel",
+            f"Completion demand: {result.get('completion_demand', 0)}",
+            f"Production demand: {result.get('production_demand', 0)}",
+            f"Idle executable workers: {result.get('idle_workers', 0)}",
+            f"Executable slot capacity: {result.get('executable_slot_capacity', 0)}",
+            "Slot health: "
+            + json.dumps(result.get("slot_health_counts", {}), sort_keys=True),
+            f"Executable provider/model candidates: "
+            f"{result.get('executable_candidate_count', 0)}",
+            "Candidate health: "
+            + json.dumps(result.get("candidate_health_counts", {}), sort_keys=True),
+            "Executable provider/models: "
+            + (
+                ", ".join(
+                    f"{item.get('provider')}/{item.get('model')}"
+                    for item in result.get("executable_provider_models", [])
+                    if isinstance(item, dict)
+                )
+                or "none"
+            ),
+            f"Completion share: {float(result.get('completion_share', 0.0)):.3f}",
+            f"Completion target: {result.get('completion_target', 0)}",
+            f"Workers selected: {len(selected)}",
+            f"PR claims succeeded: {len(assignments)}",
+            "Selected worker IDs: " + (", ".join(map(str, selected)) if selected else "none"),
+            "Assignments: "
+            + (
+                ", ".join(
+                    f"Factory {item.get('worker')} → PR #{item.get('number')}"
+                    for item in assignments
+                    if isinstance(item, dict)
+                )
+                if assignments
+                else "none"
+            ),
+            f"Updated: {now}",
+        ]
     )
+    try:
+        comments = controller.flatten_pages(
+            controller.gh_json(
+                [
+                    "api",
+                    "--paginate",
+                    "--slurp",
+                    f"repos/{controller.REPO}/issues/{TELEMETRY_ISSUE}/comments?per_page=100",
+                ]
+            )
+        )
+        existing = next(
+            (
+                str(comment.get("id"))
+                for comment in comments
+                if TELEMETRY_MARKER in str(comment.get("body") or "")
+            ),
+            "",
+        )
+        method = "PATCH" if existing else "POST"
+        endpoint = (
+            f"repos/{controller.REPO}/issues/comments/{existing}"
+            if existing
+            else f"repos/{controller.REPO}/issues/{TELEMETRY_ISSUE}/comments"
+        )
+        controller.run_gh(["api", "--method", method, endpoint, "-f", f"body={body}"])
+    except RuntimeError as exc:
+        print(f"[factory-completion] unable to persist funnel telemetry: {exc}", file=sys.stderr)
 
 
 def main() -> int:
-    """Emit a read-only completion-capacity plan for the central dispatcher."""
     controller = load_controller()
-    now_epoch = int(time.time())
-    demand, capacity = current_demand(controller, now_epoch=now_epoch)
+    demand, capacity = current_demand(controller)
     target = completion_worker_target(demand)
-    selected = plan_completion_workers(
-        controller,
-        target=target,
-        now_epoch=now_epoch,
+    configure_demand_selection(controller, target=target)
+
+    original_load_work_controller = controller.load_controller
+
+    def load_pr_only_work_controller():
+        work_controller = original_load_work_controller()
+        original_assign_candidate = work_controller.assign_candidate
+
+        def assign_completion_candidate(candidate, worker):
+            if candidate.kind == "pr" and candidate.linked_issue is not None:
+                candidate = dataclasses.replace(candidate, linked_issue=None)
+            return original_assign_candidate(candidate, worker)
+
+        work_controller.assign_candidate = assign_completion_candidate
+        return work_controller
+
+    controller.load_controller = load_pr_only_work_controller
+
+    result = controller.assign_completion_batch()
+    result.update(
+        {
+            "completion_demand": demand.completion,
+            "production_demand": demand.production,
+            "idle_workers": demand.idle_workers,
+            "completion_share": demand.completion_share,
+            "completion_target": target,
+            **capacity,
+        }
     )
-    result: dict[str, object] = {
-        "completion_demand": demand.completion,
-        "production_demand": demand.production,
-        "idle_workers": demand.idle_workers,
-        "completion_share": demand.completion_share,
-        "completion_target": target,
-        "selected_workers": selected,
-        "assignment_authority": "Fixed Model Factory Dispatcher",
-        **capacity,
-    }
+    persist_funnel_telemetry(controller, result)
     print(json.dumps(result, sort_keys=True))
     return 0
 
