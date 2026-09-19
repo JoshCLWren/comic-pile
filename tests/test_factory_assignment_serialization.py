@@ -19,7 +19,8 @@ DISPATCHER = "fixed-model-factory-dispatch.yml"
 def test_dispatcher_is_the_only_workflow_with_assignment_authority() -> None:
     """Only the central dispatcher may call the generic assignment mutation command."""
     writers = []
-    for workflow in WORKFLOWS.glob("*.yml"):
+    workflows = sorted((*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")))
+    for workflow in workflows:
         text = workflow.read_text(encoding="utf-8")
         if ASSIGN_MARKER in text:
             writers.append(workflow.name)
@@ -54,8 +55,6 @@ def test_dispatcher_owns_demand_driven_completion_allocation() -> None:
     assert "[.assignments[].worker]" in dispatcher
     assert 'dispatch_leased_worker "$worker"' in dispatcher
 
-    # Preserve the pre-incident completion semantics: demand-driven worker
-    # selection, PR-only claims, and no linked-issue lease for a completion PR.
     assert "completion_worker_target" in completion
     assert "assign_completion_batch" in completion
     assert "assign_completion_candidate" in completion
