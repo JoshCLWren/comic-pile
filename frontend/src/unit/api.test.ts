@@ -31,6 +31,9 @@ const requestInterceptor = apiMock.interceptors.request.use.mock.calls[0][0] as 
 const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] as (
   error: { config: { url: string; headers?: Record<string, string>; skipAuthRedirect?: boolean }; response: { status: number } },
 ) => Promise<Record<string, string | number | boolean | null>>
+const responseSuccessInterceptor = apiMock.interceptors.response.use.mock.calls[0][0] as (
+  response: { data: { ok?: boolean } },
+) => { ok?: boolean }
 
 beforeEach(() => {
   get.mockReset()
@@ -252,7 +255,7 @@ it('bootstraps a csrf token before protected requests when the cookie is missing
 })
 
 it('handles response success, network errors, validation errors, and auth errors', async () => {
-  const success = await (apiMock.interceptors.response.use.mock.calls[0][0] as (response: { data: { ok?: boolean } }) => { ok?: boolean })({ data: { ok: true } })
+  const success = await responseSuccessInterceptor({ data: { ok: true } })
   expect(success).toEqual({ ok: true })
   await expect(responseInterceptor({ config: { url: '/x' }, response: undefined } as never)).rejects.toThrow('Network error')
   await expect(responseInterceptor({ config: { url: '/x' }, response: { status: 400 } } as never)).rejects.toEqual(expect.objectContaining({ response: { status: 400 } }))
