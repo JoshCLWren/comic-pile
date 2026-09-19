@@ -5,7 +5,6 @@ from collections import defaultdict, deque
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache import TTL, cached
 from app.config import get_app_settings
 from app.continuity_blocking import (
     get_continuity_blocked_thread_ids,
