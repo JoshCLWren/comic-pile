@@ -5,6 +5,7 @@ from collections import defaultdict, deque
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache import TTL, cached
 from app.config import get_app_settings
 from app.continuity_blocking import (
     get_continuity_blocked_thread_ids,
@@ -60,8 +61,9 @@ async def _get_legacy_blocked_thread_ids_uncached(user_id: int, db: AsyncSession
     return {row[0] for row in issue_result.all()}
 
 
+@cached(ttl=TTL.SHORT)
 async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
-    """Return blocked thread IDs for non-transactional reads."""
+    """Return cached blocked thread IDs for non-transactional reads."""
     return await _get_blocked_thread_ids_uncached(user_id, db)
 
 
