@@ -82,6 +82,23 @@ def parse_review_marker(line: str) -> dict[str, str] | None:
     return match.groupdict() if match else None
 
 
+def semantic_repair_heads(
+    comments: Iterable[str],
+    *,
+    pr: int,
+) -> set[str]:
+    """Return distinct PR heads that received an authoritative repair verdict."""
+    heads: set[str] = set()
+    for body in comments:
+        first_line = str(body or "").splitlines()[0] if body else ""
+        marker = parse_review_marker(first_line)
+        if not marker or int(marker["pr"]) != pr:
+            continue
+        if marker["verdict"] == "repair":
+            heads.add(marker["head"])
+    return heads
+
+
 def current_head_approvers(
     comments: Iterable[str],
     *,

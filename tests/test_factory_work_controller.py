@@ -327,3 +327,22 @@ def test_controller_does_not_suppress_on_casual_hash_mention(
         candidate.kind == "issue" and candidate.number == 2127
         for candidate in candidates
     )
+
+
+def test_strike_retry_excludes_only_failed_producer_until_new_implementation_claim(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reset = {
+        "body": "<!-- comic-pile-factory-strike-reset-v1:issue-77:pr-88:excluded-producer-12 -->",
+        "performed_via_github_app": {"slug": "github-actions"},
+    }
+    monkeypatch.setattr(controller, "gh_json", lambda *args, **kwargs: [[reset]])
+    assert controller.issue_excludes_worker_on_strike_retry(77, "12") is True
+    assert controller.issue_excludes_worker_on_strike_retry(77, "13") is False
+
+    claim = {
+        "body": "<!-- comic-pile-factory-implement-claim-v3:issue-77:opencode-free-model-factory-13:1780000000:attempt-1 -->",
+        "performed_via_github_app": {"slug": "github-actions"},
+    }
+    monkeypatch.setattr(controller, "gh_json", lambda *args, **kwargs: [[reset, claim]])
+    assert controller.issue_excludes_worker_on_strike_retry(77, "12") is False
