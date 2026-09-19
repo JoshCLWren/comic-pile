@@ -159,11 +159,14 @@ it('keys thread detail caches per thread so stale thread failures never leak', a
   ))
   routeParams.id = '1'
   view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  routeParams.id = '2'
+  view.rerender(<ToastProvider><ThreadDetailView /></ToastProvider>)
+  await waitFor(() => expect(screen.getByText('Monstress')).toBeInTheDocument())
   firstRequest.resolve(threadResult(1))
-  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   rejectedRequest.reject(new Error('stale failure'))
+  // Suppress unhandled rejection from stale query that was unmounted
+  rejectedRequest.promise.catch(() => {})
   await waitFor(() => expect(screen.queryByText('stale failure')).not.toBeInTheDocument())
-
 
   const saga = queryClient.getQueryData<Thread>(queryKeys.thread.detail(1))
   expect(saga?.title).toBe('Saga')
