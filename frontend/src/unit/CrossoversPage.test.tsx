@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, act } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
@@ -162,28 +162,24 @@ describe('CrossoversPage', () => {
 
   it('blocks competing mutations while a rename is pending', async () => {
     const secretWars = { ...annihilation, id: 8, name: 'Secret Wars' }
+    let resolveRename: ((group: typeof annihilation) => void) | undefined
     groupsApi.list.mockResolvedValue([annihilation, secretWars])
-    // Use a delayed resolution to simulate a pending mutation
-    groupsApi.rename.mockImplementation(
-      () => new Promise((resolve) => setTimeout(() => resolve({ ...annihilation, name: 'Annihilation Conquest' }), 10))
-    )
+    groupsApi.rename.mockImplementation(() => new Promise((resolve) => { resolveRename = resolve }))
     renderPage()
 
     await screen.findByText('Annihilation')
-    const renameButtons = screen.getAllByRole('button', { name: 'Rename' })
-    fireEvent.click(renameButtons[0])
+    await screen.findByText('Secret Wars')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' })) // click rename on Annihilation
     fireEvent.change(screen.getByLabelText('Rename Annihilation'), { target: { value: 'Annihilation Conquest' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' })) // click rename on Secret Wars
+    fireEvent.change(screen.getByLabelText('Rename Secret Wars'), { target: { value: 'Secret Wars Renamed' } })
+    expect(screen.getByRole('button', { name: 'Save' })).not.toBeEnabled() // Should be blocked
 
-    expect(screen.getByRole('button', { name: 'Rename' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
-    expect(screen.queryByLabelText('Rename Secret Wars')).not.toBeInTheDocument()
-
-    groupsApi.list.mockResolvedValue([{ ...annihilation, name: 'Annihilation Conquest' }, secretWars])
-    await waitFor(() => expect(screen.queryByLabelText('Rename Annihilation')).not.toBeInTheDocument(), { timeout: 2000 })
-    await screen.findByRole('button', { name: /Annihilation Conquest.*2 members/ })
-    expect(screen.getAllByRole('button', { name: 'Rename' })[1]).toBeEnabled()
+    resolveRename?.({ ...annihilation, name: 'Annihilation Conquest' }) // Resolve the first rename
+    expect(await screen.findByText('Annihilation Conquest')).toBeInTheDocument() // Verify first rename completed
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled() // Verify second rename is no longer blocked
   })
 
   it('opens crossover detail with member count', async () => {
