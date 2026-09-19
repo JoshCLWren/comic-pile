@@ -13,19 +13,51 @@ const PAGE_SIZE = 50
 /**
  * Infinite query for paginated thread issue reads (used by IssueList).
  * Filter changes reset the query to the first page. Caller uses fetchNextPage.
+ *
+ * The second parameter accepts either a status filter or the legacy boolean
+ * `enabled` flag so existing callers (e.g. ThreadDetailView, which passes a
+ * boolean expand flag) keep working. The return value spreads the raw
+ * infinite-query result and adds flattened conveniences (`issues`,
+ * `totalCount`, `pages`, `nextPageToken`) matching the previous loader shape.
  */
-export function useThreadIssuePages(threadId: number, status?: 'read' | 'unread') {
-  return useInfiniteQuery<IssueListResponse>({
-    queryKey: [...queryKeys.thread.issuePages(threadId), 'paged', { status: status ?? null }],
+export function useThreadIssuePages(
+  threadId: number | null,
+  statusOrEnabled?: 'read' | 'unread' | boolean,
+  enabledOverride?: boolean,
+) {
+  const status = typeof statusOrEnabled === 'string' ? statusOrEnabled : undefined
+  const enabledFlag =
+    typeof statusOrEnabled === 'boolean' ? statusOrEnabled : (enabledOverride ?? true)
+  const enabled = threadId != null && enabledFlag
+  const query = useInfiniteQuery<IssueListResponse>({
+    queryKey:
+      threadId != null
+        ? [...queryKeys.thread.issuePages(threadId), 'paged', { status: status ?? null }]
+        : [],
     queryFn: ({ pageParam }) =>
-      issuesApi.list(threadId, {
+      issuesApi.list(threadId!, {
         status,
         page_size: PAGE_SIZE,
         page_token: (pageParam as string | null) ?? undefined,
       }),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_page_token,
+    enabled,
+    retry: false,
   })
+
+  const pages = query.data?.pages ?? []
+  const lastPage = pages[pages.length - 1] ?? null
+  const nextPageToken: string | null =
+    query.hasNextPage && lastPage ? (lastPage.next_page_token ?? null) : null
+
+  return {
+    ...query,
+    issues: flattenIssuePages(query.data),
+    totalCount: getIssueTotalCount(query.data),
+    pages,
+    nextPageToken,
+  }
 }
 
 /**
