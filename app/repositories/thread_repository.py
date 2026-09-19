@@ -168,9 +168,17 @@ async def fetch_stale_page(
     if cursor is not None:
         last_activity_at, thread_id = cursor
         if last_activity_at is None:
-            # Cursor points to a null last_activity_at - all nulls have been returned
-            # (nulls sort first with nullsfirst), so now we only want non-null values
-            query = query.where(Thread.last_activity_at.is_not(None))
+            # Cursor points to a null last_activity_at. Return remaining
+            # null-activity threads (by ID tie-break) plus all non-null threads.
+            query = query.where(
+                or_(
+                    and_(
+                        Thread.last_activity_at.is_(None),
+                        Thread.id > thread_id,
+                    ),
+                    Thread.last_activity_at.is_not(None),
+                )
+            )
         else:
             # Non-null cursor - filter on threads that sort after the cursor
             query = query.where(

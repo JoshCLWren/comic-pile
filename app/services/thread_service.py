@@ -7,6 +7,9 @@ status mapping lives in routers.
 """
 
 import asyncio
+import base64
+import binascii
+import json
 import logging
 import os
 from typing import cast
@@ -37,9 +40,6 @@ from app.schemas import (
     ThreadUpdate,
 )
 from app.services.errors import ForbiddenError, InvalidRequestError, NotFoundError
-import base64
-import binascii
-import json
 from app.services.queue_pagination import (
     QueueCursor,
     QueueSort,
