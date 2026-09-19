@@ -241,7 +241,7 @@ export function RollModals({
               disabled={setDiePending}
               className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
                 die === currentDie
-                  ? 'bg-amber-600/20 border-amber-600 text-amber-500'
+                  ? 'bg-[var(--theme-comic-accent)]/20 border-[var(--theme-comic-accent)] text-[var(--theme-comic-accent)]'
                   : 'bg-[var(--theme-bg-panel)] border-[var(--theme-border)] hover:bg-white/10'
               }`}
             >
@@ -255,8 +255,10 @@ export function RollModals({
             }}
             disabled={clearManualDiePending}
             className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
-                manualDie ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-[var(--theme-bg-panel)] border-[var(--theme-border)] hover:bg-white/10'
-              }`}
+              manualDie
+                ? 'bg-[var(--theme-comic-accent)]/20 border-[var(--theme-comic-accent)] text-[var(--theme-comic-accent)]'
+                : 'bg-[var(--theme-bg-panel)] border-[var(--theme-border)] hover:bg-white/10'
+            }`}
           >
             Auto
           </button>

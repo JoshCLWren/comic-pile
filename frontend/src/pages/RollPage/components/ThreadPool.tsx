@@ -77,7 +77,7 @@ export function ThreadPool({
       className={`px-3 md:px-4 pb-20 md:pb-28 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-[var(--theme-border)] pt-4 md:pt-8'}`}
     >
       {!isRatingView && <div className="flex items-center gap-2 shrink-0 mb-4">
-        <div className="w-2 h-2 rounded-full bg-amber-600 shadow-[0_0_15px_var(--accent-red)]"></div>
+        <div className="w-2 h-2 rounded-full bg-[var(--theme-comic-accent)] shadow-[0_0_15px_var(--accent-red)]"></div>
         <div className="flex-1">
           <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">{pool.length} ready to read</p>
           {dieSize && pool.length > 0 && pool.length < dieSize && (
@@ -108,7 +108,7 @@ export function ThreadPool({
             </div>
             <button
               onClick={() => navigate('/queue', { state: { openCreate: true } })}
-              className="w-full h-11 min-h-[44px] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-xs font-black uppercase tracking-widest text-amber-500 transition-colors"
+              className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors"
             >
               + Add a Series
             </button>
@@ -130,7 +130,7 @@ export function ThreadPool({
             </div>
             <button
               onClick={() => navigate('/queue')}
-              className="w-full h-11 min-h-[44px] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-xs font-black uppercase tracking-widest text-amber-500 transition-colors"
+              className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors"
             >
               Go to Queue
             </button>
@@ -225,7 +225,7 @@ export function ThreadPool({
       {staleThread && !isRatingView && (
         <div
           onClick={onReadStale}
-          className="mt-4 md:mt-8 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-amber-500/5 transition-colors rounded-xl"
+          className="mt-4 md:mt-8 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-[var(--theme-comic-accent)]/5 transition-colors rounded-xl"
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
@@ -235,16 +235,16 @@ export function ThreadPool({
             }
           }}
         >
-          <div className="px-4 py-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center gap-3">
-            <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center shrink-0">
+          <div className="px-4 py-3 bg-[var(--theme-comic-accent)]/5 border border-[var(--theme-comic-accent)]/10 rounded-xl flex items-center gap-3">
+            <div className="w-8 h-8 bg-[var(--theme-comic-accent)]/10 rounded-lg flex items-center justify-center shrink-0">
               <span className="text-sm">⏳</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold text-amber-200/70 uppercase tracking-wider leading-relaxed">
-                {staleThreadCount} series you haven&apos;t opened recently: <span className="text-amber-400 font-black">{staleThread.title}</span> · last opened{' '}
-                <span className="text-amber-400 font-black">{staleThread.days}</span> days ago
+              <p className="text-[10px] font-bold text-[var(--theme-comic-accent)]/70 uppercase tracking-wider leading-relaxed">
+                {staleThreadCount} series you haven&apos;t opened recently: <span className="text-[var(--theme-comic-accent)] font-black">{staleThread.title}</span> · last opened{' '}
+                <span className="text-[var(--theme-comic-accent)] font-black">{staleThread.days}</span> days ago
               </p>
-              <p className="text-[9px] text-amber-300/70 text-center mt-1">
+              <p className="text-[9px] text-[var(--theme-comic-accent)]/70 text-center mt-1">
                 Tap to read now
               </p>
             </div>
