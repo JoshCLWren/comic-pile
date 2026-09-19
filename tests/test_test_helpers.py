@@ -187,9 +187,11 @@ def test_test_helper_routes_are_mounted_only_in_test_environment(
 
     monkeypatch.delenv("TEST_ENVIRONMENT", raising=False)
     production_app = create_app(serve_frontend=False)
-    production_paths = {
-        route.path for route in production_app.routes if hasattr(route, "path")
-    }
+    production_paths: set[str] = set()
+    for route in production_app.routes:
+        route_path = getattr(route, "path", None)
+        if isinstance(route_path, str):
+            production_paths.add(route_path)
     assert not any(path.startswith("/api/test/") for path in production_paths)
     assert not {
         "/api/test/reading-orders",
@@ -200,7 +202,11 @@ def test_test_helper_routes_are_mounted_only_in_test_environment(
 
     monkeypatch.setenv("TEST_ENVIRONMENT", "true")
     test_app = create_app(serve_frontend=False)
-    test_paths = {route.path for route in test_app.routes if hasattr(route, "path")}
+    test_paths: set[str] = set()
+    for route in test_app.routes:
+        route_path = getattr(route, "path", None)
+        if isinstance(route_path, str):
+            test_paths.add(route_path)
     assert {
         "/api/test/reading-orders",
         "/api/test/issue-identity",
