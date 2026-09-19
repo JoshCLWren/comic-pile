@@ -16,7 +16,7 @@ from app.services.test_helpers import (
     expire_current_session as expire_test_session,
 )
 
-router = APIRouter(tags=["test"])
+router = APIRouter(prefix="/test", tags=["test"])
 
 
 @router.post("/reading-orders")
@@ -90,7 +90,7 @@ async def expire_current_session(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, str]:
-    """Expire the current active session by setting ended_at to now.
+    """Expire the current active session by setting started_at to an old timestamp.
 
     This endpoint is only available in test environment and is used for E2E testing
     of session expiry notifications.
@@ -105,4 +105,4 @@ async def expire_current_session(
     Raises:
         HTTPException: If not in test environment or no active session found.
     """
-    return await expire_test_session(current_user, db)
+    return await expire_test_session(db, user_id=current_user.id)

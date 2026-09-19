@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import HTTPException
-from fastapi.routing import APIRoute
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.test_helpers import (
@@ -38,8 +37,7 @@ async def test_expire_current_session_ends_active_session() -> None:
     db = AsyncMock(spec=AsyncSession)
     db.execute.return_value = result
 
-    current_user = SimpleNamespace(id=1)
-    response = await expire_current_session(current_user, db)
+    response = await expire_current_session(db, user_id=1)
 
     assert response == {"status": "success", "message": "Session expired"}
     assert session.ended_at is not None
@@ -190,7 +188,7 @@ def test_test_helper_routes_are_mounted_only_in_test_environment(
     monkeypatch.delenv("TEST_ENVIRONMENT", raising=False)
     production_app = create_app(serve_frontend=False)
     production_paths = {
-        route.path for route in production_app.routes if isinstance(route, APIRoute)
+        route.path for route in production_app.routes if hasattr(route, "path")
     }
     assert not any(path.startswith("/api/test/") for path in production_paths)
     assert not {
@@ -202,6 +200,13 @@ def test_test_helper_routes_are_mounted_only_in_test_environment(
 
     monkeypatch.setenv("TEST_ENVIRONMENT", "true")
     test_app = create_app(serve_frontend=False)
+    test_paths = {route.path for route in test_app.routes if hasattr(route, "path")}
+    assert {
+        "/api/test/reading-orders",
+        "/api/test/issue-identity",
+        "/api/test/cbl-source",
+        "/api/test/sessions/expire",
+    } <= test_paths
     assert {
         "/api/test/reading-orders",
         "/api/test/issue-identity",

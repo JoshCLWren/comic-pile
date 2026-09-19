@@ -305,8 +305,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     if os.getenv("TEST_ENVIRONMENT") == "true":
         from app.api.test_helpers import router as test_helpers_router
 
-        app.include_router(test_helpers_router, prefix="/api/test", tags=["test"])
-        app.include_router(test_helpers_router, prefix="/api/v1/test", tags=["test"])
+        app.include_router(test_helpers_router, prefix="/api", tags=["test"])
 
     def _assert_production_frontend_assets() -> None:
         """Ensure required frontend artifacts exist in production.

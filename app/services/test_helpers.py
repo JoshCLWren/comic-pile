@@ -17,7 +17,7 @@ from app.schemas.test_fixtures import TestCblSourceCreate, TestCblSourceResponse
 from app.services.test_cbl_source_seed import create_test_cbl_source as seed_test_cbl_source
 
 
-def  -> None:
+def _require_test_environment() -> None:
     """Reject test-only persistence outside the E2E environment."""
     if os.getenv("TEST_ENVIRONMENT") != "true":
         raise HTTPException(
@@ -36,7 +36,7 @@ async def create_test_cbl_source(
 
     Delegates to the dedicated seed helper after verifying the test-only gate.
     """
-    
+    _require_test_environment()
     return await seed_test_cbl_source(db, user_id=user_id, payload=payload)
 
 
@@ -47,7 +47,7 @@ async def create_test_reading_order(
     payload: dict[str, object],
 ) -> dict[str, object]:
     """Create a reading order and optional items for an E2E fixture."""
-    
+    _require_test_environment()
 
     name = str(payload.get("name") or "Test reading order")
     order = ReadingOrder(name=name, user_id=user_id)
@@ -82,7 +82,7 @@ async def create_test_issue_identity(
     payload: dict[str, object],
 ) -> dict[str, object]:
     """Confirm synthetic ComicVine identities for owned E2E fixture issues."""
-    
+    _require_test_environment()
 
     raw_issue_id = payload.get("issue_id")
     raw_thread_id = payload.get("thread_id")
@@ -225,15 +225,16 @@ async def create_test_issue_identity(
 
 
 async def expire_current_session(
-    current_user: object,
     db: AsyncSession,
+    *,
+    user_id: int,
 ) -> dict[str, str]:
     """Expire the current active session for an E2E notification test."""
-    
+    _require_test_environment()
 
     session_result = await db.execute(
         select(SessionModel)
-        .where(SessionModel.user_id == current_user.id)
+        .where(SessionModel.user_id == user_id)
         .where(SessionModel.ended_at.is_(None))
     )
     session = session_result.scalar_one_or_none()
