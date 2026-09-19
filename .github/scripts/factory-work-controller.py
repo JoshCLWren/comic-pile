@@ -21,6 +21,7 @@ from factory_capacity_policy import (
 from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments)
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
+ASSIGNMENT_WRITER_WORKFLOW_PATH = ".github/workflows/fixed-model-factory-dispatch.yml"
 STRIKE_RESET_RE = re.compile(
     r"comic-pile-factory-strike-reset-v1:issue-(?P<issue>\d+):pr-(?P<pr>\d+):"
     r"excluded-producer-(?P<worker>\d+|unknown)"
@@ -71,6 +72,23 @@ def target_json(number: int) -> dict[str, Any]:
     return cast(dict[str, Any], gh_json(['api', f'repos/{REPO}/issues/{number}']))
 
 
+def assignment_writer_authorized() -> bool:
+    """Return whether this process may create a fixed-model lease in Actions.
+
+    Local tests and operator diagnostics remain usable outside GitHub Actions.
+    In Actions, authorization is tied to the repository-qualified workflow file
+    identity rather than the non-unique workflow display name.
+    """
+    if os.environ.get("GITHUB_ACTIONS", "").strip().lower() != "true":
+        return True
+    repository = os.environ.get("GITHUB_REPOSITORY", "").strip()
+    workflow_ref = os.environ.get("GITHUB_WORKFLOW_REF", "").strip()
+    workflow_file = workflow_ref.partition("@")[0]
+    return bool(repository) and workflow_file == (
+        f"{repository}/{ASSIGNMENT_WRITER_WORKFLOW_PATH}"
+    )
+
+
 def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> None:
     """Atomically reconcile one target to exactly one owner and workflow stage.
 
@@ -79,6 +97,11 @@ def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> N
     intermediate owner states. A post-write claim verification is performed by
     ``assign_candidate``.
     """
+    if FIXED_OWNER_RE.fullmatch(owner) and not assignment_writer_authorized():
+        raise RuntimeError(
+            "fixed-model assignment mutations are restricted to "
+            f"{ASSIGNMENT_WRITER_WORKFLOW_PATH}"
+        )
     target = target_json(number)
     current = [label['name'] for label in target.get('labels', [])]
     existing_stage = next((label for label in current if label in STAGE_LABELS), None)
@@ -139,7 +162,6 @@ def issue_excludes_worker_on_strike_retry(number: int, worker: str) -> bool:
             ]
         )
     except RuntimeError:
-        # Do not stall unrelated issue intake on a transient comment read failure.
         return False
     reset_worker: str | None = None
     reset_seen = False
@@ -155,7 +177,6 @@ def issue_excludes_worker_on_strike_retry(number: int, worker: str) -> bool:
         if reset_seen:
             claim = IMPLEMENT_CLAIM_RE.search(body)
             if claim and int(claim.group("issue")) == number:
-                # Once a clean retry actually begins, the one-shot exclusion is spent.
                 reset_seen = False
                 reset_worker = None
                 continue
@@ -196,6 +217,9 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
     for number in numbers:
         if not target_still_unowned(number):
             return False
+
+    if worker_has_active_lease(worker):
+        return False
 
     def release_verified_claims(claimed_numbers: list[int]) -> None:
         """Release only labels this worker can still prove it owns."""

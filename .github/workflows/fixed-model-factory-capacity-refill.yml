@@ -17,11 +17,11 @@ permissions:
   issues: write
   pull-requests: write
 
-# Capacity refill directly calls the canonical assignment controller. Keep it
-# in the same serialization domain as the dispatcher and completion drain so a
-# worker cannot be leased by two writers from the same stale idle snapshot.
+# Refill keeps recovery duties such as ghost-run cancellation and stale-lease
+# release, but assignment authority belongs exclusively to Fixed Model Factory
+# Dispatcher. Refill only signals that serialized writer after recovery.
 concurrency:
-  group: fixed-model-factory-dispatch
+  group: fixed-model-factory-capacity-refill
   cancel-in-progress: false
 
 jobs:
@@ -54,7 +54,7 @@ jobs:
           set -Eeuo pipefail
           python3 .github/scripts/factory_migration_lane.py reconcile
 
-      - name: Refill work-conserving factory capacity
+      - name: Recover capacity and signal dispatcher
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -89,7 +89,12 @@ jobs:
             )
           done
 
-          workers='[]'
+          # Give force-cancel a brief chance to update GitHub's active-run view,
+          # then release only leases the controller can prove stale. This moves
+          # work back to unowned; it does not assign a numbered worker.
+          sleep 2
+          python3 "$controller" reconcile || true
+
           if [[ "$EVENT_NAME" == workflow_run ]]; then
             [[ "$COMPLETED_RUN_ID" =~ ^[0-9]+$ ]] || {
               echo 'Completed fixed-model run id is unavailable; refusing speculative refill'
@@ -116,7 +121,7 @@ jobs:
             worker="$(sed -n 's/^Worker: opencode-free-model-factory-//p' <<< "$attempt_body" | tail -1)"
             case "$attempt_outcome" in
               success|no_work|work_failure)
-                echo "Run ${COMPLETED_RUN_ID} ended as ${attempt_outcome}; Factory ${worker} capacity remains healthy"
+                echo "Run ${COMPLETED_RUN_ID} ended as ${attempt_outcome}; requesting immediate reuse for Factory ${worker}"
                 ;;
               *)
                 echo "Run ${COMPLETED_RUN_ID} ended as ${attempt_outcome:-unknown}; capacity is not proven healthy for immediate reuse"
@@ -127,72 +132,16 @@ jobs:
               echo "Durable outcome named unknown worker ${worker}; refusing refill" >&2
               exit 1
             }
-            workers="$(jq -nc --arg worker "$worker" '[$worker]')"
-            echo "Requesting Factory ${worker}'s next assignment immediately"
-          else
-            # Bootstrap is intentionally broad. GitHub has repeatedly dropped
-            # the dispatcher's five-minute cron ticks, so a control-plane deploy
-            # seeds every configured slot once. Controller ownership makes this
-            # safe: busy workers return `none`, while idle workers consume the
-            # current executable backlog.
-            workers="$(awk -F '\t' '$0 !~ /^#/ && NF >= 5 && $5 == "dispatcher" {print $1}' "$manifest" \
-              | jq -Rsc 'split("\n") | map(select(length > 0))')"
-            echo "Bootstrapping all configured fixed-model slots: ${workers}"
-          fi
-
-          # Give force-cancel a brief chance to update GitHub's active-run view,
-          # then let the canonical controller reconcile any provably stale lease.
-          sleep 2
-          python3 "$controller" reconcile || true
-
-          capacity="$(python3 "$controller" capacity)"
-          echo "OmniRoute free-entry capacity: ${capacity}"
-          remaining="$(jq -r '.remaining // empty' <<< "$capacity")"
-          [[ "$remaining" =~ ^[0-9]+$ ]] || {
-            echo "OmniRoute free-entry capacity snapshot is unusable; refusing refill" >&2
-            exit 1
-          }
-          workers="$(jq -c --argjson n "$remaining" '.[0:$n]' <<< "$workers")"
-          if [[ "$workers" == '[]' ]]; then
-            echo 'OmniRoute free-entry cap is exhausted; not starting additional Entry sessions'
+            # Explicit-worker smoke mode uses the same dispatcher assignment
+            # path without starting an independent self-perpetuating roster chain.
+            gh workflow run fixed-model-factory-dispatch.yml \
+              --repo "$GITHUB_REPOSITORY" --ref main \
+              -f mode=smoke -f worker="$worker"
             exit 0
           fi
 
-          failures=0
-          while IFS= read -r worker; do
-            [[ -n "$worker" ]] || continue
-            if ! assignment="$(python3 "$controller" assign --worker "$worker")"; then
-              echo "Factory ${worker}: controller assignment failed" >&2
-              failures=$((failures + 1))
-              continue
-            fi
-            kind="$(jq -r '.kind // empty' <<< "$assignment" 2>/dev/null || true)"
-            case "$kind" in
-              none)
-                echo "Factory ${worker}: no executable control-plane assignment"
-                continue
-                ;;
-              issue|pr)
-                echo "Factory ${worker} assignment: ${assignment}"
-                ;;
-              *)
-                echo "Factory ${worker}: unusable controller response: ${assignment:-<empty>}" >&2
-                python3 "$controller" release --worker "$worker" || true
-                failures=$((failures + 1))
-                continue
-                ;;
-            esac
-
-            if gh workflow run free-model-factory-entry.yml --ref main -f worker="$worker"; then
-              echo "Started Factory ${worker} replacement capacity"
-            else
-              echo "Unable to start Factory ${worker}; releasing its assignment" >&2
-              python3 "$controller" release --worker "$worker" || true
-              failures=$((failures + 1))
-            fi
-          done < <(jq -r '.[]' <<< "$workers")
-
-          if (( failures > 0 )); then
-            echo "${failures} capacity refill dispatch(es) failed; all other slots were still attempted" >&2
-            exit 1
-          fi
+          # A control-plane deploy or explicit refill request wakes one broad
+          # roster pass. Busy workers are filtered by the canonical dispatcher.
+          echo 'Requesting broad fixed-model capacity refill through dispatcher'
+          gh workflow run fixed-model-factory-dispatch.yml \
+            --repo "$GITHUB_REPOSITORY" --ref main -f mode=roster
