@@ -277,7 +277,7 @@ describe('CrossoversPage membership editing', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 
     selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
-    fireEvent.submit(screen.getByRole('form', { name: 'Add thread to Annihilation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Thread lookup unavailable')
     expect(screen.getByLabelText('Current thread of series')).toHaveValue('Uncanny X-Men')
@@ -328,8 +328,8 @@ describe('CrossoversPage membership editing', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove Nova #2 from Annihilation' }))
     fireEvent.click(screen.getByRole('button', { name: 'Remove Nova (whole series) from Annihilation' }))
     expect(api.removeMember).toHaveBeenCalledTimes(1)
-    resolveRemoval?.()
     api.list.mockResolvedValue([{ ...crossover, memberships: [crossover.memberships[1]] }])
+    resolveRemoval?.()
     await waitFor(() => expect(screen.queryByText('Nova #2')).not.toBeInTheDocument())
     expect(screen.getByText('Nova (whole series)')).toBeInTheDocument()
   })
@@ -354,10 +354,11 @@ describe('CrossoversPage membership editing', () => {
     expect(screen.queryByLabelText('Whole comic series')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Add series' })).not.toBeInTheDocument()
 
-    selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
+    await selectThread('Current thread of series', 'uncanny', 'Uncanny X-Men')
+    expect(screen.getByLabelText('Current thread of series')).toHaveValue('Uncanny X-Men')
     fireEvent.click(screen.getByRole('button', { name: 'Add thread' }))
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Uncanny X-Men added to crossover as 1 thread member.')
+    expect(screen.getByRole('status')).toHaveTextContent('Uncanny X-Men added to crossover as 1 thread member.')
   })
 
   it('shows no unfiltered dump on empty series search and requires typing', async () => {

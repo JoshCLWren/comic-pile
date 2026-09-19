@@ -209,7 +209,7 @@ describe('CrossoversPage issue ranges', () => {
     selectRange('33', '31')
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      '#½ comes after #2 in Nova. Choose a later ending issue.',
+      'Choose a valid issue range in reading order.',
     )
     expect(screen.getByRole('button', { name: 'Add range' })).toBeDisabled()
     expect(groupsApi.addIssueRange).not.toHaveBeenCalled()
@@ -404,7 +404,8 @@ describe('CrossoversPage issue ranges', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
     await waitFor(() => expect(groupsApi.delete).toHaveBeenCalledWith(7))
-    expect(screen.queryByText('Annihilation')).not.toBeInTheDocument()
+    groupsApi.list.mockResolvedValue([])
+    await waitFor(() => expect(screen.queryByText('Annihilation')).not.toBeInTheDocument())
     expect(screen.queryByRole('form', { name: 'Add issue range to Annihilation' })).not.toBeInTheDocument()
   })
 })

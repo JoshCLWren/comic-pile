@@ -178,9 +178,8 @@ describe('CrossoversPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
     expect(screen.queryByLabelText('Rename Secret Wars')).not.toBeInTheDocument()
 
-    resolveRename?.({ ...annihilation, name: 'Annihilation Conquest' })
     groupsApi.list.mockResolvedValue([{ ...annihilation, name: 'Annihilation Conquest' }, secretWars])
-    await screen.findByText('Annihilation Conquest')
+    resolveRename?.({ ...annihilation, name: 'Annihilation Conquest' })
     await screen.findByRole('button', { name: /Annihilation Conquest.*2 members/ })
     expect(screen.getAllByRole('button', { name: 'Rename' })[1]).toBeEnabled()
   })
