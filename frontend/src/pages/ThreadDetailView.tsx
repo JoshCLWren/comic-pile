@@ -55,7 +55,7 @@ export default function ThreadDetailView() {
   const [issuesExpanded, setIssuesExpanded] = useState(false)
   const [isDependencyOpen, setIsDependencyOpen] = useState(false)
 
-  const issuesQuery = useThreadIssuePages(threadId, issuesExpanded)
+  const issuesQuery = useThreadIssuePages(threadId, { enabled: issuesExpanded })
   const issues = issuesQuery.issues
   const issuesTotal = issuesQuery.totalCount
   const issuesLoading = issuesQuery.isPending
