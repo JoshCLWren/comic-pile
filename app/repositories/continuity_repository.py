@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.continuity_plan import ContinuityPlan
-from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMember
+from app.models.continuity_rule import ContinuityRule
 from app.models.issue import Issue
 from app.models.thread import Thread
 
