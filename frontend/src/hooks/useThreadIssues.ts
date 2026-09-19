@@ -2,7 +2,7 @@ import { useQuery, useMutation, useInfiniteQuery } from '@tanstack/react-query'
 import type { InfiniteData } from '@tanstack/react-query'
 import { issuesApi } from '../services/api-issues'
 import { issueDependenciesApi } from '../services/api-dependencies'
-import type { IssueListResponse } from '../services/api-issues'
+import type { IssueListParams, IssueListResponse } from '../services/api-issues'
 import type { Issue, IssueDependenciesResponse } from '../types'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
@@ -60,7 +60,7 @@ export function useThreadAllIssues(threadId: number) {
       let nextPageToken: string | null = null
 
       while (true) {
-        const params: { page_size: number; page_token?: string } = { page_size: 100 }
+        const params: IssueListParams = { page_size: 100 }
         if (nextPageToken) {
           params.page_token = nextPageToken
         }
