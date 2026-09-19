@@ -93,7 +93,7 @@ describe('useContinuityPlannerEditor', () => {
       { wrapper, initialProps: { inputs: { ...baseInputs, planId: 12, planData: savedPlan } } },
     )
 
-    await waitFor(() => expect(result.current.nodes).toHaveLength(1)))
+    await waitFor(() => expect(result.current.nodes).toHaveLength(1))
     expect(result.current.name).toBe('Kirby lane')
     expect(result.current.isDirty).toBe(false)
     expect(result.current.statusText).toBe('Saved')
@@ -172,7 +172,7 @@ describe('useContinuityPlannerEditor', () => {
       { wrapper, initialProps: { inputs: { ...baseInputs, planId: 12, planData: savedPlan } } },
     )
 
-    await waitFor(() => expect(result.current.nodes).toHaveLength(1)))
+    await waitFor(() => expect(result.current.nodes).toHaveLength(1))
 
     act(() => {
       result.current.selectThread(thread as never)
@@ -217,7 +217,7 @@ describe('useContinuityPlannerEditor', () => {
       { wrapper, initialProps: { inputs: { ...baseInputs, planId: 12, planData: savedPlan } } },
     )
 
-    await waitFor(() => expect(result.current.nodes).toHaveLength(1)))
+    await waitFor(() => expect(result.current.nodes).toHaveLength(1))
 
     act(() => {
       result.current.toggleCheckpoint('issue-40')
