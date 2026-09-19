@@ -365,7 +365,7 @@ describe('DependencyBuilder', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /view reading order/i })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /view reading order/i }))
     await user.click(screen.getByRole('tab', { name: 'Flowchart' }))
-    await waitFor(() => expect(screen.getByTestId('flowchart-container')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('flowchart-empty')).toBeInTheDocument())
     errorSpy.mockRestore()
   })
 
