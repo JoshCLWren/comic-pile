@@ -88,6 +88,7 @@ class OperatorComicVineClient(BaseComicVineClient):
         base_url: str = COMICVINE_BASE_URL,
         timeout_seconds: float = 30.0,
     ) -> None:
+        """Use slower pacing while inheriting resource-aware throttle handling."""
         super().__init__(
             api_key,
             cache_dir,
