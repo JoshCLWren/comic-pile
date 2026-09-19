@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,15 +19,27 @@ from app.services.cbl_reconciliation import (
     reconcile_cbl_source_list,
 )
 from app.services.issue_identity_reconciliation import (
+    DuplicateIdentityAnomaly,
     consolidate_duplicate_issues,
-    find_conflicting_provider_identities,
-    find_duplicate_physical_issues,
     get_identity_report,
+    list_conflicting_provider_identities,
+    list_duplicate_physical_issues,
     preview_consolidation,
     resolve_canonical_issue,
 )
 
 router = APIRouter(prefix="/api/v1/issue-identity", tags=["issue-identity"])
+
+
+class IssueDetailResponse(BaseModel):
+    """Read and ownership context for one issue in a duplicate identity group."""
+
+    issue_id: int
+    thread_id: int | None
+    thread_title: str | None
+    issue_number: str | None
+    status: str | None
+    read_at: datetime | None
 
 
 class DuplicateAnomalyResponse(BaseModel):
@@ -40,7 +52,7 @@ class DuplicateAnomalyResponse(BaseModel):
     statuses: list[str]
     has_read: bool
     has_unread: bool
-    issue_details: list[dict[str, object]]
+    issue_details: list[IssueDetailResponse]
 
 
 class IdentityReportResponse(BaseModel):
@@ -49,7 +61,7 @@ class IdentityReportResponse(BaseModel):
     total_duplicate_groups: int
     total_affected_issues: int
     anomalies: list[DuplicateAnomalyResponse]
-    conflicting_provider_ids: list[dict[str, object]]
+    conflicting_provider_ids: list[ConflictResponse]
 
 
 class CanonicalResolutionResponse(BaseModel):
@@ -76,6 +88,39 @@ class ConsolidationPreviewResponse(BaseModel):
     ratings_to_preserve: bool
     is_ambiguous: bool
     reason: str
+
+
+class ConflictResponse(BaseModel):
+    """One issue with conflicting confirmed ComicVine identities."""
+
+    issue_id: int
+    thread_id: int
+    thread_title: str
+    issue_number: str
+    comicvine_ids: list[str]
+    distinct_identities: int
+
+
+class PaginatedDuplicateAnomaliesResponse(BaseModel):
+    """Paginated list of duplicate anomaly responses."""
+
+    items: list[DuplicateAnomalyResponse]
+    total: int
+    page: int
+    size: int
+    has_next: bool
+    has_prev: bool
+
+
+class PaginatedConflictsResponse(BaseModel):
+    """Paginated list of conflict responses."""
+
+    items: list[ConflictResponse]
+    total: int
+    page: int
+    size: int
+    has_next: bool
+    has_prev: bool
 
 
 class ConsolidationRequest(BaseModel):
@@ -157,6 +202,22 @@ class CBLAdoptionPreviewResponse(BaseModel):
     summary: CBLAdoptionSummaryResponse
 
 
+def _duplicate_anomaly_response(anomaly: DuplicateIdentityAnomaly) -> DuplicateAnomalyResponse:
+    """Convert an internal duplicate anomaly into the public API model."""
+    return DuplicateAnomalyResponse(
+        comicvine_issue_id=anomaly.comicvine_issue_id,
+        external_identity_id=anomaly.external_identity_id,
+        issue_ids=list(anomaly.issue_ids),
+        thread_ids=list(anomaly.thread_ids),
+        statuses=list(anomaly.statuses),
+        has_read=anomaly.has_read,
+        has_unread=anomaly.has_unread,
+        issue_details=[
+            IssueDetailResponse.model_validate(detail) for detail in anomaly.issue_details
+        ],
+    )
+
+
 @router.get("/report", response_model=IdentityReportResponse)
 async def api_identity_report(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -187,59 +248,82 @@ async def api_identity_report(
                 statuses=list(a.statuses),
                 has_read=a.has_read,
                 has_unread=a.has_unread,
-                issue_details=list(a.issue_details),
+                issue_details=[
+                    IssueDetailResponse.model_validate(detail) for detail in a.issue_details
+                ],
             )
             for a in report.anomalies
         ],
-        conflicting_provider_ids=list(report.conflicting_provider_ids),
+        conflicting_provider_ids=[
+            ConflictResponse.model_validate(conflict) for conflict in report.conflicting_provider_ids
+        ],
     )
 
 
-@router.get("/anomalies", response_model=list[DuplicateAnomalyResponse])
+@router.get("/anomalies", response_model=PaginatedDuplicateAnomaliesResponse)
 async def api_list_anomalies(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> list[DuplicateAnomalyResponse]:
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(10, ge=1, le=100, description="Page size (max 100)"),
+) -> PaginatedDuplicateAnomaliesResponse:
     """List duplicate physical-issue anomalies for the authenticated user.
 
     Args:
         current_user: Authenticated owner.
         db: Async database session.
+        page: Page number (starting from 1).
+        size: Number of items per page (maximum 100).
 
     Returns:
-        One entry per duplicated ComicVine identity.
+        Paginated list of duplicated ComicVine identities.
     """
-    anomalies = await find_duplicate_physical_issues(db, user_id=current_user.id)
-    return [
-        DuplicateAnomalyResponse(
-            comicvine_issue_id=a.comicvine_issue_id,
-            external_identity_id=a.external_identity_id,
-            issue_ids=list(a.issue_ids),
-            thread_ids=list(a.thread_ids),
-            statuses=list(a.statuses),
-            has_read=a.has_read,
-            has_unread=a.has_unread,
-            issue_details=list(a.issue_details),
-        )
-        for a in anomalies
-    ]
+    page_data = await list_duplicate_physical_issues(
+        db, user_id=current_user.id, page=page, size=size
+    )
+
+    return PaginatedDuplicateAnomaliesResponse(
+        items=[_duplicate_anomaly_response(anomaly) for anomaly in page_data.anomalies],
+        total=page_data.total,
+        page=page,
+        size=size,
+        has_next=page * size < page_data.total,
+        has_prev=page > 1,
+    )
 
 
-@router.get("/conflicts", response_model=list[dict[str, object]])
+@router.get("/conflicts", response_model=PaginatedConflictsResponse)
 async def api_list_conflicts(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> list[dict[str, object]]:
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(10, ge=1, le=100, description="Page size (max 100)"),
+) -> PaginatedConflictsResponse:
     """List ambiguous conflicting provider identities for the user.
 
     Args:
         current_user: Authenticated owner.
         db: Async database session.
+        page: Page number (starting from 1).
+        size: Number of items per page (maximum 100).
 
     Returns:
-        One entry per Issue with multiple confirmed ComicVine IDs.
+        Paginated list of Issues with multiple confirmed ComicVine IDs.
     """
-    return await find_conflicting_provider_identities(db, user_id=current_user.id)
+    page_data = await list_conflicting_provider_identities(
+        db, user_id=current_user.id, page=page, size=size
+    )
+
+    return PaginatedConflictsResponse(
+        items=[
+            ConflictResponse.model_validate(conflict) for conflict in page_data.conflicts
+        ],
+        total=page_data.total,
+        page=page,
+        size=size,
+        has_next=page * size < page_data.total,
+        has_prev=page > 1,
+    )
 
 
 @router.get("/canonical/{comicvine_issue_id}", response_model=CanonicalResolutionResponse)
@@ -390,12 +474,60 @@ async def api_consolidate(
     )
 
 
-@router.get("/cbl/{list_id}/reconciliation")
+class CBLReconciliationEntryResponse(BaseModel):
+    """Typed reconciliation and read-state data for one CBL source position."""
+
+    cbl_position: int
+    series_name: str
+    issue_number: str
+    comicvine_issue_id: str | None
+    comicvine_series_id: str | None
+    series_provider: str | None
+    series_external_id: str | None
+    external_issue_identity_id: int | None
+    external_series_identity_id: int | None
+    cbl_entry_id: int
+    resolved_issue_id: int | None
+    canonical_issue_id: int | None
+    resolution_status: str
+    is_duplicate_identity: bool
+    read_status: str | None
+    read_at: datetime | None
+
+
+class CBLReconciliationResponse(BaseModel):
+    """Reconciled CBL source list with paginated entries."""
+
+    list_id: int
+    total_positions: int
+    resolved_count: int
+    unresolved_count: int
+    duplicate_identity_groups: int
+    ambiguous_count: int
+    entries: list[CBLReconciliationEntryResponse]
+    first_unread_position: int | None
+    first_unread_entry: CBLReconciliationEntryResponse | None
+    page: int
+    size: int
+    has_next: bool
+    has_prev: bool
+
+
+def _cbl_reconciliation_entry_response(
+    entry: dict[str, object],
+) -> CBLReconciliationEntryResponse:
+    """Convert a reconciliation entry to its API representation."""
+    return CBLReconciliationEntryResponse.model_validate(entry)
+
+
+@router.get("/cbl/{list_id}/reconciliation", response_model=CBLReconciliationResponse)
 async def api_cbl_reconciliation(
     list_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> dict[str, object]:
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(50, ge=1, le=200, description="Page size (max 200)"),
+) -> CBLReconciliationResponse:
     """Reconcile one CBL source list to canonical physical-issue identities.
 
     For every source position the response reports the ComicVine issue ID,
@@ -407,19 +539,39 @@ async def api_cbl_reconciliation(
         list_id: CBLSourceList identifier.
         current_user: Authenticated owner whose issues are eligible.
         db: Async database session.
+        page: Page number (starting from 1).
+        size: Number of items per page (maximum 200).
     """
     report = await reconcile_cbl_source_list(db, user_id=current_user.id, list_id=list_id)
-    return {
-        "list_id": list_id,
-        "total_positions": report.total_positions,
-        "resolved_count": report.resolved_count,
-        "unresolved_count": report.unresolved_count,
-        "duplicate_identity_groups": report.duplicate_identity_groups,
-        "ambiguous_count": report.ambiguous_count,
-        "entries": list(report.entries),
-        "first_unread_position": report.first_unread_position,
-        "first_unread_entry": report.first_unread_entry,
-    }
+
+    total_positions = report.total_positions
+    has_next = page * size < total_positions
+    has_prev = page > 1
+
+    start_idx = (page - 1) * size
+    end_idx = start_idx + size
+    paginated_entries = report.entries[start_idx:end_idx]
+
+    return CBLReconciliationResponse(
+        list_id=list_id,
+        total_positions=total_positions,
+        resolved_count=report.resolved_count,
+        unresolved_count=report.unresolved_count,
+        duplicate_identity_groups=report.duplicate_identity_groups,
+        ambiguous_count=report.ambiguous_count,
+        entries=[_cbl_reconciliation_entry_response(entry) for entry in paginated_entries],
+        first_unread_position=report.first_unread_position,
+        first_unread_entry=(
+            _cbl_reconciliation_entry_response(report.first_unread_entry)
+            if report.first_unread_entry is not None
+            else None
+        ),
+        page=page,
+        size=size,
+        has_next=has_next,
+        has_prev=has_prev,
+    )
+
 
 
 def _adoption_payload(

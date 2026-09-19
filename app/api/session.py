@@ -86,11 +86,6 @@ def _to_session_list_item(sr: SessionResponse) -> SessionListItem:
     )
 
 
-async def _invalidate_session_caches(user_id: int) -> None:
-    """Invalidate session-derived views with one bounded user generation bump."""
-    await invalidate_user_view(user_id)
-
-
 async def _fetch_thread_issue_metadata(
     thread: Thread, db: AsyncSession
 ) -> tuple[int | None, str | None]:

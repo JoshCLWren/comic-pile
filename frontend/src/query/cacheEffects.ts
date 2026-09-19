@@ -529,3 +529,15 @@ export function optimisticallyReorderIssues(
     }
   }
 }
+
+/**
+ * Invalidate crossover group caches after a mutation that changes group
+ * membership or metadata (create, rename, delete, addMember, addIssueRange,
+ * removeMember). The list query is invalidated so the CrossoversPage refetches
+ * the full group list with updated membership counts.
+ */
+export async function invalidateAfterCrossoverMutation(
+  client: QueryClient,
+): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.crossover.all })
+}

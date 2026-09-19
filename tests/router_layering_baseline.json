@@ -1,12 +1,7 @@
 {
-  "continuity_plan": ["execute-call", "query-import"],
-  "continuity_rule": ["execute-call", "query-import"],
-  "continuity_template": ["execute-call", "query-import"],
   "dependency": ["execute-call", "query-import"],
   "dependency_group": ["execute-call", "query-import"],
   "dependency_group_batch": ["execute-call", "query-import"],
-  "health": ["execute-call", "query-import"],
-
   "issue_dependency_batch": ["execute-call", "query-import"],
   "roll": ["execute-call", "query-import"],
   "session": ["execute-call", "query-import"],

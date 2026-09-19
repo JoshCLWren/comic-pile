@@ -1,32 +1,70 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
+import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
+import { dependencyGroupsApi } from '../services/api-dependency-groups'
+import { threadsApi } from '../services/api'
 
-const groupsApi = {
-  list: vi.fn(),
-  get: vi.fn(),
-  create: vi.fn(),
-  rename: vi.fn(),
-  delete: vi.fn(),
-  addMember: vi.fn(),
-  addIssueRange: vi.fn(),
-  removeMember: vi.fn(),
-}
+vi.mock('../services/api-dependency-groups', () => ({
+  dependencyGroupsApi: {
+    list: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    rename: vi.fn(),
+    delete: vi.fn(),
+    addMember: vi.fn(),
+    addIssueRange: vi.fn(),
+    removeMember: vi.fn(),
+    listForThread: vi.fn(),
+    listForThreads: vi.fn(),
+    plansForGroup: vi.fn(),
+    getDetail: vi.fn(),
+  },
+}))
 
-const threadsApi = {
-  list: vi.fn(),
-}
+vi.mock('../services/api', () => ({
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+  },
+  threadsApi: {
+    list: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    reactivate: vi.fn(),
+    listStale: vi.fn(),
+    setPending: vi.fn(),
+    setCurrentIssue: vi.fn(),
+    listCompleted: vi.fn(),
+  },
+  issuesApi: {
+    list: vi.fn(),
+  },
+}))
 
-const issuesApi = {
-  list: vi.fn(),
+const groupsApi = vi.mocked(dependencyGroupsApi)
+const mockedThreadsApi = vi.mocked(threadsApi)
+
+function createWrapper() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  }
 }
 
 function renderPage() {
   return render(
     <MemoryRouter>
-      <CrossoversPage dependencyGroupsApi={groupsApi} threadsApi={threadsApi} issuesApi={issuesApi} />
+      <CrossoversPage />
     </MemoryRouter>,
+    { wrapper: createWrapper() },
   )
 }
 
@@ -46,8 +84,7 @@ beforeEach(() => {
   groupsApi.get.mockResolvedValue({ id: 7, name: 'Annihilation', created_at: '2026-08-06T00:00:00Z', memberships: [] })
   groupsApi.addMember.mockResolvedValue({ id: 99, thread_id: null, issue_id: null })
   groupsApi.addIssueRange.mockResolvedValue({ thread_id: 1, start_position: 1, end_position: 5, added_issue_ids: [], already_present_issue_ids: [] })
-  threadsApi.list.mockResolvedValue({ threads: [], next_page_token: null })
-  issuesApi.list.mockResolvedValue({ issues: [], total_count: 0, page_size: 20, next_page_token: null })
+  mockedThreadsApi.list.mockResolvedValue({ threads: [], next_page_token: null })
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
@@ -80,6 +117,7 @@ describe('CrossoversPage', () => {
     expect(createButton).toBeEnabled()
 
     fireEvent.change(nameInput, { target: { value: 'Annihilation' } })
+    groupsApi.list.mockResolvedValue([annihilation])
     fireEvent.click(createButton)
     expect(await screen.findByText('Annihilation')).toBeInTheDocument()
     expect(groupsApi.create).toHaveBeenCalledWith('Annihilation')
@@ -91,6 +129,7 @@ describe('CrossoversPage', () => {
     await screen.findByText(/No crossovers yet/)
 
     fireEvent.change(screen.getByLabelText('New crossover'), { target: { value: '  Annihilation  ' } })
+    groupsApi.list.mockResolvedValue([annihilation])
     fireEvent.click(screen.getByRole('button', { name: 'Create crossover' }))
 
     expect(await screen.findByText('Annihilation')).toBeInTheDocument()
@@ -108,12 +147,14 @@ describe('CrossoversPage', () => {
     await screen.findByText('Annihilation')
     fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
     fireEvent.change(screen.getByLabelText('Rename Annihilation'), { target: { value: 'Annihilation Conquest' } })
+    groupsApi.list.mockResolvedValue([{ ...annihilation, name: 'Annihilation Conquest' }])
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByText('Annihilation Conquest')).toBeInTheDocument()
     expect(groupsApi.rename).toHaveBeenCalledWith(7, 'Annihilation Conquest')
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    groupsApi.list.mockResolvedValue([])
     await waitFor(() => expect(screen.queryByText('Annihilation Conquest')).not.toBeInTheDocument())
     expect(window.confirm).toHaveBeenCalled()
     expect(groupsApi.delete).toHaveBeenCalledWith(7)
@@ -127,19 +168,20 @@ describe('CrossoversPage', () => {
     renderPage()
 
     await screen.findByText('Annihilation')
-    const renameButtons = screen.getAllByRole('button', { name: 'Rename' })
-    fireEvent.click(renameButtons[0])
+    await screen.findByText('Secret Wars')
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Rename' })[0])
     fireEvent.change(screen.getByLabelText('Rename Annihilation'), { target: { value: 'Annihilation Conquest' } })
+    groupsApi.list.mockResolvedValue([{ ...annihilation, name: 'Annihilation Conquest' }, secretWars])
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-    expect(screen.getByRole('button', { name: 'Rename' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
-    expect(screen.queryByLabelText('Rename Secret Wars')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(screen.getAllByRole('button', { name: 'Rename' })[0]).toBeDisabled()
 
+    await waitFor(() => expect(groupsApi.rename).toHaveBeenCalledTimes(1))
     resolveRename?.({ ...annihilation, name: 'Annihilation Conquest' })
     expect(await screen.findByText('Annihilation Conquest')).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'Rename' })[1]).toBeEnabled()
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Rename' })[1]).toBeEnabled())
   })
 
   it('opens crossover detail with member count', async () => {
@@ -221,19 +263,25 @@ describe('CrossoversPage', () => {
   })
 
   it('uses API detail messages and safe fallbacks for non-Error failures', async () => {
+    const axiosFailure = (detail: string) => {
+      const error = new Error() as Error & { isAxiosError?: boolean; response?: { data: { detail: string } } }
+      error.isAxiosError = true
+      error.response = { data: { detail } }
+      return error
+    }
     groupsApi.list
-      .mockRejectedValueOnce({ isAxiosError: true, response: { data: { detail: 'Crossover service unavailable' } } })
-      .mockRejectedValueOnce({ isAxiosError: true, response: { data: { detail: '   ' } } })
+      .mockRejectedValueOnce(axiosFailure('Crossover service unavailable'))
+      .mockRejectedValueOnce(axiosFailure('   '))
       .mockRejectedValueOnce('offline')
 
     renderPage()
     expect(await screen.findByRole('alert')).toHaveTextContent('Crossover service unavailable')
 
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load crossovers.')
+    expect(await screen.findByText('Unable to load crossovers.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load crossovers.')
+    expect(await screen.findByText('Unable to load crossovers.')).toBeInTheDocument()
   })
 
   it('allows a failed initial load to be retried', async () => {

@@ -270,7 +270,7 @@ export function ContinuityIssueRangeSelector({
       </div>
       {isReversed && (
         <p role="alert" className="text-xs text-amber-300">
-          #{draftStart?.issue_number} comes after #{draftEnd?.issue_number} in {thread.title}. Choose a later ending issue.
+          Choose a valid issue range in reading order.
         </p>
       )}
       {error && <p role="alert" className="text-xs text-red-400">{error}</p>}

@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { FormEvent, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
@@ -6,97 +6,24 @@ import {
   ContinuityThreadSelector,
   type SelectedIssueRange,
 } from '../components/continuity'
-import { threadsApi as defaultThreadsApi } from '../services/api'
-import {
-  dependencyGroupsApi as defaultDependencyGroupsApi,
-  type DependencyGroup,
-  type DependencyGroupIssueRangeResult,
-  type DependencyGroupMember,
-  type DependencyGroupMemberTarget,
-} from '../services/api-dependency-groups'
-import { issuesApi as defaultIssuesApi } from '../services/api-issues'
-import type { IssueListParams, IssueListResponse } from '../services/api-issues'
+import { type DependencyGroup, type DependencyGroupMember } from '../services/api-dependency-groups'
+import type { Issue } from '../types'
 import GlossaryLink from '../components/GlossaryLink'
-import type { Issue, Thread, ThreadListResponse, ThreadQueryParams } from '../types'
+import type { Thread } from '../types'
 import { isString } from '../utils/runtimeChecks'
+import {
+  useCrossoverGroupsList,
+  useAllThreads,
+  useCrossoverIssuesForRange,
+  useCreateCrossoverGroup,
+  useRenameCrossoverGroup,
+  useDeleteCrossoverGroup,
+  useAddCrossoverMember,
+  useAddCrossoverIssueRange,
+  useRemoveCrossoverMember,
+} from '../hooks/useCrossovers'
 
 type PositionedIssue = Issue & { position: number }
-
-export interface CrossoversPageGroupsApi {
-  list: () => Promise<DependencyGroup[]>
-  get: (groupId: number) => Promise<DependencyGroup>
-  create: (name: string) => Promise<DependencyGroup>
-  rename: (groupId: number, name: string) => Promise<DependencyGroup>
-  delete: (groupId: number) => Promise<void>
-  addMember: (
-    groupId: number,
-    target: DependencyGroupMemberTarget,
-  ) => Promise<DependencyGroupMember>
-  addIssueRange: (
-    groupId: number,
-    threadId: number,
-    startPosition: number,
-    endPosition: number,
-  ) => Promise<DependencyGroupIssueRangeResult>
-  removeMember: (groupId: number, memberId: number) => Promise<void>
-}
-
-export interface CrossoversPageThreadsApi {
-  list: (
-    params?: ThreadQueryParams,
-    pageToken?: string | null,
-  ) => Promise<ThreadListResponse>
-}
-
-export interface CrossoversPageIssuesApi {
-  list: (threadId: number, params?: IssueListParams) => Promise<IssueListResponse>
-}
-
-interface CrossoversPageProps {
-  dependencyGroupsApi?: CrossoversPageGroupsApi
-  threadsApi?: CrossoversPageThreadsApi
-  issuesApi?: CrossoversPageIssuesApi
-}
-
-async function fetchAllIssues(
-  issuesService: CrossoversPageIssuesApi,
-  threadId: number,
-): Promise<PositionedIssue[]> {
-  const issues: PositionedIssue[] = []
-  const seenPageTokens = new Set<string>()
-  let nextPageToken: string | null = null
-
-  while (true) {
-    const params: IssueListParams = { page_size: 100 }
-    if (nextPageToken) {
-      params.page_token = nextPageToken
-    }
-    const data = await issuesService.list(threadId, params)
-    // SAFETY: the issues endpoint returns position-ordered issues; the integer-position check below enforces the contract.
-    const pageIssues = data.issues as PositionedIssue[]
-    if (pageIssues.some((issue) => !Number.isInteger(issue.position) || issue.position < 1)) {
-      throw new Error('Comic issue order is unavailable for this series.')
-    }
-    issues.push(...pageIssues)
-    if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) return issues
-    seenPageTokens.add(data.next_page_token)
-    nextPageToken = data.next_page_token
-  }
-}
-
-async function fetchAllThreads(threadsService: CrossoversPageThreadsApi): Promise<Thread[]> {
-  const threads: Thread[] = []
-  const seenPageTokens = new Set<string>()
-  let nextPageToken: string | null = null
-
-  while (true) {
-    const data = await threadsService.list({ page_size: 100 }, nextPageToken)
-    threads.push(...data.threads)
-    if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) return threads
-    seenPageTokens.add(data.next_page_token)
-    nextPageToken = data.next_page_token
-  }
-}
 
 function errorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
@@ -118,62 +45,65 @@ function memberLabel(member: DependencyGroupMember): string {
   return 'Unavailable comic'
 }
 
-export default function CrossoversPage({
-  dependencyGroupsApi = defaultDependencyGroupsApi,
-  threadsApi = defaultThreadsApi,
-  issuesApi = defaultIssuesApi,
-}: CrossoversPageProps = {}) {
-  const [groups, setGroups] = useState<DependencyGroup[]>([])
-  const [threads, setThreads] = useState<Thread[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [threadLoadError, setThreadLoadError] = useState<string | null>(null)
-  const [name, setName] = useState('')
-  const [createError, setCreateError] = useState<string | null>(null)
-  const [isCreating, setIsCreating] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [editingName, setEditingName] = useState('')
-  const [mutationError, setMutationError] = useState<string | null>(null)
-  const [busyId, setBusyId] = useState<number | null>(null)
-  const [expandedId, setExpandedId] = useState<number | null>(null)
-  const [memberThread, setMemberThread] = useState<Thread | null>(null)
-  const [rangeThread, setRangeThread] = useState<Thread | null>(null)
-  const [rangeIssues, setRangeIssues] = useState<PositionedIssue[]>([])
-  const [rangeSelection, setRangeSelection] = useState<SelectedIssueRange | null>(null)
-  const [isLoadingRangeIssues, setIsLoadingRangeIssues] = useState(false)
-  const [rangeLoadError, setRangeLoadError] = useState<string | null>(null)
-  const [membershipMessage, setMembershipMessage] = useState<string | null>(null)
+export default function CrossoversPage() {
   const [searchParams] = useSearchParams()
   const requestedGroupId = searchParams.get('group')
   const startsAtParam = searchParams.get('starts_at')
   const deepLinkAppliedRef = useRef(false)
 
-  const loadGroups = useCallback(async () => {
-    setIsLoading(true)
-    setLoadError(null)
-    try {
-      setGroups(await dependencyGroupsApi.list())
-    } catch (error) {
-      setLoadError(errorMessage(error, 'Unable to load crossovers.'))
-    } finally {
-      setIsLoading(false)
-    }
-  }, [dependencyGroupsApi])
+  const {
+    data: groups = [],
+    isPending: isLoadingGroups,
+    error: groupsError,
+    refetch: refetchGroups,
+  } = useCrossoverGroupsList()
 
-  const loadThreads = useCallback(async () => {
-    setThreadLoadError(null)
-    try {
-      setThreads(await fetchAllThreads(threadsApi))
-    } catch (error) {
-      setThreads([])
-      setThreadLoadError(errorMessage(error, 'Unable to load comics for selection.'))
-    }
-  }, [threadsApi])
+  const {
+    data: threads = [],
+    error: threadsError,
+  } = useAllThreads()
 
-  useEffect(() => {
-    void loadGroups()
-    void loadThreads()
-  }, [loadGroups, loadThreads])
+  const createMutation = useCreateCrossoverGroup()
+  const renameMutation = useRenameCrossoverGroup()
+  const deleteMutation = useDeleteCrossoverGroup()
+  const addMemberMutation = useAddCrossoverMember()
+  const addRangeMutation = useAddCrossoverIssueRange()
+  const removeMemberMutation = useRemoveCrossoverMember()
+
+  const [name, setName] = useState('')
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingName, setEditingName] = useState('')
+  const [mutationError, setMutationError] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [memberThread, setMemberThread] = useState<Thread | null>(null)
+  const [rangeThread, setRangeThread] = useState<Thread | null>(null)
+  const [rangeSelection, setRangeSelection] = useState<SelectedIssueRange | null>(null)
+  const [membershipMessage, setMembershipMessage] = useState<string | null>(null)
+
+  const {
+    data: rangeIssues = [],
+    isPending: isPendingRangeIssues,
+    error: rangeIssuesError,
+  } = useCrossoverIssuesForRange(rangeThread?.id ?? null)
+  const isLoadingRangeIssues = rangeThread !== null && isPendingRangeIssues
+
+  const threadLoadError = threadsError ? errorMessage(threadsError, 'Unable to load comics for selection.') : null
+  const rangeLoadError = rangeIssuesError
+    ? errorMessage(rangeIssuesError, 'Unable to load issues for this series.')
+    : rangeThread && rangeIssues.length === 0 && !isLoadingRangeIssues
+      ? `${rangeThread.title} has no issues to add.`
+      : null
+
+  const isAnyMutationPending =
+    createMutation.isPending ||
+    renameMutation.isPending ||
+    deleteMutation.isPending ||
+    addMemberMutation.isPending ||
+    addRangeMutation.isPending ||
+    removeMemberMutation.isPending
+
+  const mutationGuardRef = useRef(false)
 
   useEffect(() => {
     if (deepLinkAppliedRef.current) return
@@ -187,10 +117,7 @@ export default function CrossoversPage({
 
   const clearRangeState = () => {
     setRangeThread(null)
-    setRangeIssues([])
     setRangeSelection(null)
-    setRangeLoadError(null)
-    setIsLoadingRangeIssues(false)
   }
 
   const clearMembershipState = () => {
@@ -200,7 +127,7 @@ export default function CrossoversPage({
   }
 
   const toggleExpanded = (groupId: number) => {
-    if (busyId !== null) return
+    if (mutationGuardRef.current) return
     setExpandedId((current) => (current === groupId ? null : groupId))
     clearMembershipState()
     setMutationError(null)
@@ -213,16 +140,16 @@ export default function CrossoversPage({
       setCreateError('Enter a crossover name.')
       return
     }
+    if (mutationGuardRef.current) return
+    mutationGuardRef.current = true
     setCreateError(null)
-    setIsCreating(true)
     try {
-      const created = await dependencyGroupsApi.create(trimmedName)
-      setGroups((current) => [...current, created].sort((a, b) => a.name.localeCompare(b.name)))
+      await createMutation.mutateAsync(trimmedName)
       setName('')
     } catch (error) {
       setCreateError(errorMessage(error, 'Unable to create crossover.'))
     } finally {
-      setIsCreating(false)
+      mutationGuardRef.current = false
     }
   }
 
@@ -232,32 +159,31 @@ export default function CrossoversPage({
       setMutationError('Enter a crossover name.')
       return
     }
+    if (mutationGuardRef.current) return
+    mutationGuardRef.current = true
     setMutationError(null)
-    setBusyId(groupId)
     try {
-      const renamed = await dependencyGroupsApi.rename(groupId, trimmedName)
-      setGroups((current) => current.map((group) => (group.id === groupId ? renamed : group)).sort((a, b) => a.name.localeCompare(b.name)))
+      await renameMutation.mutateAsync({ groupId, name: trimmedName })
       setEditingId(null)
       setEditingName('')
     } catch (error) {
       setMutationError(errorMessage(error, 'Unable to rename crossover.'))
     } finally {
-      setBusyId(null)
+      mutationGuardRef.current = false
     }
   }
 
   const deleteGroup = async (group: DependencyGroup) => {
-    if (busyId !== null || !window.confirm(`Delete “${group.name}”? Its comic memberships will be removed.`)) return
+    if (mutationGuardRef.current || !window.confirm(`Delete "${group.name}"? Its comic memberships will be removed.`)) return
+    mutationGuardRef.current = true
     setMutationError(null)
-    setBusyId(group.id)
     try {
-      await dependencyGroupsApi.delete(group.id)
-      setGroups((current) => current.filter((item) => item.id !== group.id))
+      await deleteMutation.mutateAsync(group.id)
       if (expandedId === group.id) setExpandedId(null)
     } catch (error) {
       setMutationError(errorMessage(error, 'Unable to delete crossover.'))
     } finally {
-      setBusyId(null)
+      mutationGuardRef.current = false
     }
   }
 
@@ -267,39 +193,28 @@ export default function CrossoversPage({
       setMutationError('Choose a comic series to add.')
       return
     }
+    if (mutationGuardRef.current) return
+    mutationGuardRef.current = true
     setMutationError(null)
     setMembershipMessage(null)
-    setBusyId(groupId)
     try {
-      const member = await dependencyGroupsApi.addMember(groupId, { thread_id: memberThread.id })
+      await addMemberMutation.mutateAsync({
+        groupId,
+        target: { thread_id: memberThread.id },
+      })
       const threadTitle = memberThread.title
-      setGroups((current) => current.map((group) => group.id === groupId ? { ...group, memberships: [...group.memberships, member] } : group))
       setMemberThread(null)
       setMembershipMessage(`${threadTitle} added to crossover as 1 thread member.`)
     } catch (error) {
       setMutationError(errorMessage(error, 'Unable to add thread to crossover.'))
     } finally {
-      setBusyId(null)
+      mutationGuardRef.current = false
     }
   }
 
-  const selectRangeThread = async (thread: Thread | null) => {
+  const selectRangeThread = (thread: Thread | null) => {
     setRangeThread(thread)
-    setRangeIssues([])
     setRangeSelection(null)
-    setRangeLoadError(null)
-    if (!thread) return
-    setIsLoadingRangeIssues(true)
-    try {
-      const issues = await fetchAllIssues(issuesApi, thread.id)
-      setRangeIssues(issues)
-      if (issues.length === 0) setRangeLoadError(`${thread.title} has no issues to add.`)
-    } catch (error) {
-      setRangeIssues([])
-      setRangeLoadError(errorMessage(error, 'Unable to load issues for this series.'))
-    } finally {
-      setIsLoadingRangeIssues(false)
-    }
   }
 
   const addRange = async (event: FormEvent<HTMLFormElement>, groupId: number) => {
@@ -316,40 +231,39 @@ export default function CrossoversPage({
       setMutationError('Choose a valid issue range in reading order.')
       return
     }
+    if (mutationGuardRef.current) return
+    mutationGuardRef.current = true
     setMutationError(null)
     setMembershipMessage(null)
-    setBusyId(groupId)
     try {
-      const result = await dependencyGroupsApi.addIssueRange(groupId, rangeThread.id, startPosition, endPosition)
+      const result = await addRangeMutation.mutateAsync({
+        groupId,
+        threadId: rangeThread.id,
+        startPosition,
+        endPosition,
+      })
       const successMessage = `${result.added_issue_ids.length} added, ${result.already_present_issue_ids.length} already present.`
       setMembershipMessage(successMessage)
       clearRangeState()
-      try {
-        const refreshed = await dependencyGroupsApi.get(groupId)
-        setGroups((current) => current.map((group) => (group.id === groupId ? refreshed : group)))
-      } catch (error) {
-        setMembershipMessage(`${successMessage} Saved, but the latest memberships could not be refreshed: ${errorMessage(error, 'Unable to refresh crossover memberships.')}`)
-      }
     } catch (error) {
       setMutationError(errorMessage(error, 'Unable to add issue range.'))
     } finally {
-      setBusyId(null)
+      mutationGuardRef.current = false
     }
   }
 
   const removeMember = async (groupId: number, memberId: number) => {
-    if (busyId !== null) return
+    if (mutationGuardRef.current) return
+    mutationGuardRef.current = true
     setMutationError(null)
     setMembershipMessage(null)
-    setBusyId(groupId)
     try {
-      await dependencyGroupsApi.removeMember(groupId, memberId)
-      setGroups((current) => current.map((group) => group.id === groupId ? { ...group, memberships: group.memberships.filter((member) => member.id !== memberId) } : group))
+      await removeMemberMutation.mutateAsync({ groupId, memberId })
       setMembershipMessage('Comic removed from crossover.')
     } catch (error) {
       setMutationError(errorMessage(error, 'Unable to remove crossover member.'))
     } finally {
-      setBusyId(null)
+      mutationGuardRef.current = false
     }
   }
 
@@ -368,38 +282,36 @@ export default function CrossoversPage({
       <form onSubmit={createGroup} className="max-w-xl space-y-2" aria-label="Create crossover">
         <label htmlFor="crossover-name" className="block text-sm font-bold text-[var(--theme-text-primary)]">New crossover</label>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <input id="crossover-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className="min-w-0 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2.5 text-[var(--theme-text-primary)]" placeholder="Age of Apocalypse" disabled={isCreating || isLoading} />
-          <button type="submit" disabled={isCreating || isLoading} className="rounded-xl bg-[var(--theme-primary-action)] px-4 py-2.5 font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{isCreating ? 'Creating…' : 'Create crossover'}</button>
+          <input id="crossover-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} className="min-w-0 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2.5 text-[var(--theme-text-primary)]" placeholder="Age of Apocalypse" disabled={createMutation.isPending || isLoadingGroups} />
+          <button type="submit" disabled={createMutation.isPending || isLoadingGroups} className="rounded-xl bg-[var(--theme-primary-action)] px-4 py-2.5 font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{createMutation.isPending ? 'Creating…' : 'Create crossover'}</button>
         </div>
         {createError && <p role="alert" className="text-sm text-[var(--theme-danger)]">{createError}</p>}
       </form>
 
       {mutationError && <p role="alert" className="rounded-xl border border-[var(--theme-danger)] bg-[var(--theme-danger)]/10 p-3 text-sm text-[var(--theme-danger)]">{mutationError}</p>}
-      {isLoading ? <p role="status">Loading crossovers…</p> : loadError ? <div role="alert"><p>{loadError}</p><button type="button" onClick={() => void loadGroups()}>Try again</button></div> : groups.length === 0 ? <p className="max-w-xl text-sm text-[var(--theme-text-dim)]">No crossovers yet. Create your first one above to get started.</p> : (
+      {isLoadingGroups ? <p role="status">Loading crossovers…</p> : groupsError ? <div role="alert"><p>{errorMessage(groupsError, 'Unable to load crossovers.')}</p><button type="button" onClick={() => void refetchGroups()}>Try again</button></div> : groups.length === 0 ? <p className="max-w-xl text-sm text-[var(--theme-text-dim)]">No crossovers yet. Create your first one above to get started.</p> : (
         <ul className="grid gap-3" aria-label="Your crossovers">
           {groups.map((group) => {
             const isEditing = editingId === group.id
-            const isBusy = busyId === group.id
-            const hasPendingMutation = busyId !== null
             const isExpanded = expandedId === group.id
             return (
               <li key={group.id} className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4">
                 {isEditing ? (
                   <div className="flex gap-2">
-                    <input aria-label={`Rename ${group.name}`} value={editingName} onChange={(event) => setEditingName(event.target.value)} disabled={isBusy} className="min-w-0 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2" />
-                    <button type="button" onClick={() => void saveRename(group.id)} disabled={isBusy}>Save</button>
-                    <button type="button" onClick={() => setEditingId(null)} disabled={isBusy}>Cancel</button>
+                    <input aria-label={`Rename ${group.name}`} value={editingName} onChange={(event) => setEditingName(event.target.value)} disabled={isAnyMutationPending} className="min-w-0 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2" />
+                    <button type="button" onClick={() => void saveRename(group.id)} disabled={isAnyMutationPending}>Save</button>
+                    <button type="button" onClick={() => setEditingId(null)} disabled={isAnyMutationPending}>Cancel</button>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between gap-3">
-                    <button type="button" onClick={() => toggleExpanded(group.id)} disabled={hasPendingMutation} aria-expanded={isExpanded} className="min-w-0 text-left">
+                    <button type="button" onClick={() => toggleExpanded(group.id)} disabled={isAnyMutationPending} aria-expanded={isExpanded} className="min-w-0 text-left">
                       <span className="block text-lg font-black text-[var(--theme-text-primary)]">{group.name}</span>
                       <span className="text-sm text-[var(--theme-text-dim)]">{group.memberships.length} {group.memberships.length === 1 ? 'member' : 'members'}</span>
                     </button>
                     <div className="flex gap-2">
                       <Link to={`/crossovers/${group.id}`} className="rounded-lg bg-[var(--theme-primary-action)] px-3 py-1 text-sm font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)]">View</Link>
-                      <button type="button" onClick={() => { setEditingId(group.id); setEditingName(group.name) }} disabled={hasPendingMutation}>Rename</button>
-                      <button type="button" onClick={() => void deleteGroup(group)} disabled={hasPendingMutation}>Delete</button>
+                      <button type="button" onClick={() => { setEditingId(group.id); setEditingName(group.name) }} disabled={isAnyMutationPending}>Rename</button>
+                      <button type="button" onClick={() => void deleteGroup(group)} disabled={isAnyMutationPending}>Delete</button>
                     </div>
                   </div>
                 )}
@@ -416,7 +328,7 @@ export default function CrossoversPage({
                           return (
                             <li key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--theme-border)] px-3 py-2">
                               <span>{label}</span>
-                              <button type="button" onClick={() => void removeMember(group.id, member.id)} disabled={hasPendingMutation} aria-label={`Remove ${label} from ${group.name}`}>Remove</button>
+                              <button type="button" onClick={() => void removeMember(group.id, member.id)} disabled={isAnyMutationPending} aria-label={`Remove ${label} from ${group.name}`}>Remove</button>
                             </li>
                           )
                         })}
@@ -425,18 +337,18 @@ export default function CrossoversPage({
 
                     <form onSubmit={(event) => void addThreadMember(event, group.id)} aria-label={`Add thread to ${group.name}`} className="grid gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3 sm:grid-cols-[1fr_auto]">
                       <div className="min-w-0">
-                        <ContinuityThreadSelector threads={threads} value={memberThread} onChange={setMemberThread} label="Current thread of series" placeholder="Search comics by title" error={threadLoadError} disabled={hasPendingMutation} />
+                        <ContinuityThreadSelector threads={threads} value={memberThread} onChange={setMemberThread} label="Current thread of series" placeholder="Search comics by title" error={threadLoadError} disabled={isAnyMutationPending} />
                         <p className="mt-1 text-xs text-[var(--theme-text-dim)]">Adds one thread membership for the series. Use the issue range form below to add specific issues.</p>
                       </div>
-                      <button type="submit" disabled={hasPendingMutation || !memberThread} className="self-end rounded-lg bg-[var(--theme-primary-action)] px-3 py-2 font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{isBusy ? 'Saving…' : 'Add thread'}</button>
+                      <button type="submit" disabled={isAnyMutationPending || !memberThread} className="self-end rounded-lg bg-[var(--theme-primary-action)] px-3 py-2 font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{addMemberMutation.isPending ? 'Saving…' : 'Add thread'}</button>
                     </form>
 
                     <form onSubmit={(event) => void addRange(event, group.id)} aria-label={`Add issue range to ${group.name}`} className="grid gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
-                      <ContinuityThreadSelector threads={threads} value={rangeThread} onChange={(thread) => void selectRangeThread(thread)} label="Comic series for issue range" placeholder="Search comics by title" error={threadLoadError} disabled={hasPendingMutation || isLoadingRangeIssues} />
+                      <ContinuityThreadSelector threads={threads} value={rangeThread} onChange={(thread) => selectRangeThread(thread)} label="Comic series for issue range" placeholder="Search comics by title" error={threadLoadError} disabled={isAnyMutationPending || isLoadingRangeIssues} />
                       <div className="min-w-0">
-                        {rangeThread ? <ContinuityIssueRangeSelector thread={rangeThread} issues={rangeIssues} value={rangeSelection} onChange={setRangeSelection} label={`Issues from ${rangeThread.title}`} isLoading={isLoadingRangeIssues} error={rangeLoadError} disabled={hasPendingMutation} /> : <p className="text-xs text-[var(--theme-text-dim)]">Choose a comic series, then choose the first and last issue by comic issue number.</p>}
+                        {rangeThread ? <ContinuityIssueRangeSelector thread={rangeThread} issues={rangeIssues} value={rangeSelection} onChange={setRangeSelection} label={`Issues from ${rangeThread.title}`} isLoading={isLoadingRangeIssues} error={rangeLoadError} disabled={isAnyMutationPending} /> : <p className="text-xs text-[var(--theme-text-dim)]">Choose a comic series, then choose the first and last issue by comic issue number.</p>}
                       </div>
-                      <button type="submit" disabled={hasPendingMutation || isLoadingRangeIssues || !rangeSelection} className="self-end rounded-lg bg-[var(--theme-primary-action)] px-3 py-2 font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{isBusy ? 'Adding…' : 'Add range'}</button>
+                      <button type="submit" disabled={isAnyMutationPending || isLoadingRangeIssues || !rangeSelection} className="self-end rounded-lg bg-[var(--theme-primary-action)] px-3 py-2 font-bold text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50">{addRangeMutation.isPending ? 'Adding…' : 'Add range'}</button>
                     </form>
                     {membershipMessage && <p role="status" className="text-[var(--theme-personal-accent)]">{membershipMessage}</p>}
                   </div>
