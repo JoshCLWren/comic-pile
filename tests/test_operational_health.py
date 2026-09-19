@@ -309,7 +309,7 @@ async def test_warm_endpoint_handler_enabled_no_activity(
 
     mock_request = _make_mock_request(invocation=5)
     mock_db = AsyncMock()
-    mock_result = AsyncMock()
+    mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
     mock_db.execute = AsyncMock(return_value=mock_result)
 
@@ -348,7 +348,7 @@ async def test_warm_endpoint_handler_with_recent_activity(
 
     mock_request = _make_mock_request(invocation=10)
     mock_db = AsyncMock()
-    mock_result = AsyncMock()
+    mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = datetime.now(UTC)
     mock_db.execute = AsyncMock(return_value=mock_result)
 

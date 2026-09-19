@@ -6,6 +6,7 @@ Query construction lives in ``app/repositories/health_repository.py``.
 
 import asyncio
 import logging
+import secrets
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -18,6 +19,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 DEPENDENCY_TIMEOUT_SECONDS = 2.0
+
+_instance_id: str | None = None
+
+
+def _get_instance_id() -> str:
+    """Get or create a stable instance ID for process lifetime.
+
+    This ID is created once at module import and persists for the process lifetime,
+    allowing Vercel to measure instance reuse across requests.
+
+    Returns:
+        A stable instance identifier string.
+    """
+    global _instance_id
+    if _instance_id is None:
+        _instance_id = f"instance-{secrets.token_urlsafe(8)}"
+    return _instance_id
 
 
 class ProbeError(Exception):
@@ -319,7 +337,6 @@ async def get_warm_endpoint_result(
     Returns:
         WarmEndpointResult with instance diagnostics and activity status.
     """
-    import secrets
 
     if not _is_warm_endpoint_enabled():
         return WarmEndpointResult(
@@ -333,7 +350,7 @@ async def get_warm_endpoint_result(
             request_count_today=0,
         )
 
-    instance_id = f"instance-{secrets.token_urlsafe(8)}"
+    instance_id = _get_instance_id()
     snapshot = request_state_startup_snapshot
     request_count = getattr(snapshot, "invocation", 0)
 
