@@ -125,6 +125,43 @@ async function registerWithRetry(
   throw new Error('Registration retry failed');
 }
 
+type ThreadListPayload = {
+  threads?: Array<{ id: number }>
+  next_page_token?: string | null
+  active_count?: number
+}
+
+/**
+ * Walk cursor pages until the list is exhausted.
+ *
+ * The threads list API caps `page_size` at 200, so a 250-thread Queue fixture
+ * can never appear in a single response. Visibility checks must follow
+ * `next_page_token` (issue #2725).
+ */
+async function listAllActiveThreadIds(
+  request: APIRequestContext,
+  headers: Record<string, string>,
+): Promise<number[]> {
+  const ids: number[] = []
+  let pageToken: string | undefined
+  do {
+    const threadsResponse = await request.get('/api/threads/', {
+      headers,
+      params: pageToken
+        ? { page_size: 200, page_token: pageToken }
+        : { page_size: 200 },
+    })
+    if (!threadsResponse.ok()) {
+      return ids
+    }
+    const payload = (await threadsResponse.json()) as ThreadListPayload
+    const threads = payload.threads ?? []
+    ids.push(...threads.map((thread) => thread.id))
+    pageToken = payload.next_page_token ?? undefined
+  } while (pageToken)
+  return ids
+}
+
 async function createThreadsForUser(
   request: APIRequestContext,
   accessToken: string,
@@ -171,27 +208,22 @@ async function createThreadsForUser(
     }
   }
 
-	let attempts = 0;
-	let threadIds: number[] = [];
-	while (attempts < 10) {
-		const threadsResponse = await request.get('/api/threads/', {
-			headers,
-			params: { page_size: 200 },
-		});
-		if (threadsResponse.ok()) {
-			const response = await threadsResponse.json();
-			const threads = response.threads ?? response;
-			if (threads.length >= threadCount) {
-				threadIds = threads.slice(0, threadCount).map((t: { id: number }) => t.id);
-				break;
-			}
-		}
-		await new Promise(resolve => setTimeout(resolve, 500));
-		attempts++;
-	}
+  let attempts = 0;
+  let threadIds: number[] = [];
+  while (attempts < 20) {
+    threadIds = await listAllActiveThreadIds(request, headers);
+    if (threadIds.length >= threadCount) {
+      threadIds = threadIds.slice(0, threadCount);
+      break;
+    }
+    await new Promise(resolve => setTimeout(resolve, 500));
+    attempts++;
+  }
 
-  if (threadIds.length === 0) {
-    throw new Error('Threads not visible after creation');
+  if (threadIds.length < threadCount) {
+    throw new Error(
+      `Threads not visible after creation: expected ${threadCount}, found ${threadIds.length}`,
+    );
   }
 
   for (const threadId of threadIds) {

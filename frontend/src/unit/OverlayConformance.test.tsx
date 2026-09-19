@@ -12,9 +12,9 @@ const THIS_FILE = import.meta.filename
  * menus/popovers use `OverlayPortal` with `layer="menu"` (or a thin shared
  * Menu primitive built on it). Ad-hoc `role="dialog"` / `aria-modal` /
  * full-viewport `fixed inset-0` overlays outside the approved components are
- * forbidden. The files below are known debt allowlisted until the follow-up
- * migration ticket lands; each allowlist entry must still match its markers
- * so a completed migration fails loudly and the entry gets removed.
+ * forbidden. `KNOWN_DEBT` is the shrink-on-migrate allowlist: a completed
+ * migration must drop its entry, and new ad-hoc overlays outside
+ * `APPROVED_FILES` fail the scan.
  */
 
 const APPROVED_FILES = new Set([
@@ -29,11 +29,6 @@ const DIALOG_PATTERNS = [
   { label: 'fixed inset-0 overlay', regex: /fixed[^\n]*inset-0|inset-0[^\n]*fixed/ },
   { label: 'migration-dialog__overlay class', regex: /migration-dialog__overlay/ },
 ] as const
-
-const MORE_MENU_PATTERN = {
-  label: 'ad-hoc fixed z-50 menu',
-  regex: /fixed[^\n]*z-50/,
-} as const
 
 type DebtEntry = {
   file: string
