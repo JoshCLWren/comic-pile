@@ -20,6 +20,37 @@ async def test_invalidate_user_view_delegates_to_generation_boundary(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_invalidate_session_caches_delegates_to_user_view(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Session-affecting writes reuse the bounded user-view invalidation boundary.
+
+    Regression coverage for issue #2615: the session cache-invalidation helper
+    moved out of the router module and into the cache-invalidation package so
+    recovery and other non-router callers can invalidate without coupling to
+    ``app.api.session``.
+    """
+    invalidator = AsyncMock(return_value=True)
+    monkeypatch.setattr(cache_invalidation, "invalidate_user_view", invalidator)
+
+    await cache_invalidation.invalidate_session_caches(11)
+
+    invalidator.assert_awaited_once_with(11)
+
+
+@pytest.mark.asyncio
+async def test_invalidate_session_caches_rejects_non_positive_user_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-positive owners must not trigger any cache invalidation."""
+    invalidator = AsyncMock(return_value=True)
+    monkeypatch.setattr(cache_invalidation, "invalidate_user_view", invalidator)
+
+    with pytest.raises(ValueError, match="user_id must be positive"):
+        await cache_invalidation.invalidate_session_caches(0)
+
+    invalidator.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_invalidate_user_views_deduplicates_inside_generation_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

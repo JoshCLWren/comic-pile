@@ -8,7 +8,6 @@ living as private functions in session.py, snooze.py, and roll.py.
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cache_invalidation import invalidate_user_view
 from app.models import Event, Issue, Session as SessionModel, Snapshot, Thread
 from app.models.thread import normalize_format_value
 from app.schemas import ActiveThreadInfo, SessionResponse
@@ -19,11 +18,6 @@ from app.schemas.session import (
     build_session_intent_state,
 )
 from comic_pile.session import get_current_die
-
-
-async def _invalidate_session_caches(user_id: int) -> None:
-    """Invalidate session-derived views with one bounded user generation bump."""
-    await invalidate_user_view(user_id)
 
 
 async def build_ladder_path(
