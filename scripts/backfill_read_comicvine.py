@@ -33,6 +33,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import sqlite3
 import sys
 from types import ModuleType
@@ -63,6 +64,8 @@ DEFAULT_LOCAL_COMICVINE_DB = Path(
 OPERATOR_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS = 1.5
 OPERATOR_FALLBACK_RETRY_AFTER_SECONDS = 60
 OPERATOR_MAX_FALLBACK_RETRY_AFTER_SECONDS = 3600
+LOCAL_VOLUME_CANDIDATE_LIMIT = 250
+_LOCAL_DESCRIPTION_VOLUME_RE = re.compile(r"\b(?:volume|vol\.?)\s*(\d+)\b", re.IGNORECASE)
 
 
 def _load_script_module(name: str, path: Path) -> ModuleType:
@@ -95,6 +98,30 @@ def _decode_local_list(value: object) -> list[object]:
     except json.JSONDecodeError:
         return []
     return decoded if isinstance(decoded, list) else []
+
+
+def _local_alias_values(value: object) -> list[str]:
+    """Return individual local volume aliases without treating the whole field as proof."""
+    if not isinstance(value, str) or not value.strip():
+        return []
+    raw = value.strip()
+    try:
+        decoded = json.loads(raw)
+    except json.JSONDecodeError:
+        decoded = None
+    if isinstance(decoded, list):
+        return [str(item).strip() for item in decoded if str(item).strip()]
+    if isinstance(decoded, dict):
+        return [str(item).strip() for item in decoded.values() if str(item).strip()]
+    return [part.strip() for part in re.split(r"[\r\n|;]+", raw) if part.strip()]
+
+
+def _description_volume_number(value: object) -> int | None:
+    """Extract explicit local metadata such as ``Volume 1`` from a description."""
+    if not isinstance(value, str):
+        return None
+    match = _LOCAL_DESCRIPTION_VOLUME_RE.search(value)
+    return int(match.group(1)) if match is not None else None
 
 
 class OperatorComicVineClient(BaseComicVineClient):
@@ -189,6 +216,110 @@ class OperatorComicVineClient(BaseComicVineClient):
         """Return whether the local snapshot can satisfy creator hydration."""
         return self._fetch_local_issue(issue_id) is not None
 
+    def search_local_volumes(self, query_title: str) -> list[dict[str, object]]:
+        """Use local FTS only to discover possible volumes, never to authorize one."""
+        if self._local_db is None:
+            return []
+        normalized = query_title.casefold().replace("&", " and ")
+        tokens = re.findall(r"[a-z0-9]+", normalized)
+        if tokens and tokens[0] == "the":
+            tokens = tokens[1:]
+        if not tokens:
+            return []
+        fts_query = " AND ".join(f'"{token}"' for token in tokens)
+        rows = self._local_db.execute(
+            """
+            SELECT
+                v.id,
+                v.name,
+                v.aliases,
+                v.start_year,
+                v.publisher_id,
+                v.count_of_issues,
+                v.description,
+                v.image_url,
+                v.site_detail_url,
+                p.name AS publisher_name
+            FROM volume_fts
+            JOIN cv_volume v ON v.id = volume_fts.rowid
+            LEFT JOIN cv_publisher p ON p.id = v.publisher_id
+            WHERE volume_fts MATCH ?
+            ORDER BY bm25(volume_fts), v.id
+            LIMIT ?
+            """,
+            (fts_query, LOCAL_VOLUME_CANDIDATE_LIMIT + 1),
+        ).fetchall()
+        candidates: list[dict[str, object]] = []
+        for row in rows:
+            publisher_id = int(row["publisher_id"]) if row["publisher_id"] is not None else None
+            image_url = row["image_url"]
+            candidates.append(
+                {
+                    "id": int(row["id"]),
+                    "name": row["name"],
+                    "aliases": row["aliases"],
+                    "start_year": row["start_year"],
+                    "count_of_issues": row["count_of_issues"],
+                    "description": row["description"],
+                    "publisher": (
+                        {"id": publisher_id, "name": row["publisher_name"]}
+                        if publisher_id is not None or row["publisher_name"] is not None
+                        else None
+                    ),
+                    "image": {"medium_url": image_url} if image_url else None,
+                    "site_detail_url": row["site_detail_url"],
+                }
+            )
+        return candidates
+
+    def _fetch_local_volume_issues(self, volume_id: int) -> list[dict[str, object]] | None:
+        """Return a provider-shaped issue roster from the local snapshot when present."""
+        if self._local_db is None:
+            return None
+        volume = self._local_db.execute(
+            "SELECT id, name FROM cv_volume WHERE id = ? LIMIT 1",
+            (volume_id,),
+        ).fetchone()
+        if volume is None:
+            return None
+        rows = self._local_db.execute(
+            """
+            SELECT id, name, issue_number, cover_date, store_date, site_detail_url
+            FROM cv_issue
+            WHERE volume_id = ?
+            ORDER BY id
+            """,
+            (volume_id,),
+        ).fetchall()
+        if not rows:
+            return None
+        volume_ref = {"id": int(volume["id"]), "name": volume["name"]}
+        return [
+            {
+                "id": int(row["id"]),
+                "name": row["name"],
+                "issue_number": row["issue_number"],
+                "cover_date": row["cover_date"],
+                "store_date": row["store_date"],
+                "site_detail_url": row["site_detail_url"],
+                "volume": volume_ref,
+            }
+            for row in rows
+        ]
+
+    async def fetch_volume_issues(
+        self,
+        volume_id: int,
+        *,
+        refresh: bool = False,
+    ) -> list[dict[str, object]]:
+        """Prefer a complete local roster before spending a ComicVine volume request."""
+        if not refresh:
+            local = self._fetch_local_volume_issues(volume_id)
+            if local is not None:
+                return local
+        return await super().fetch_volume_issues(volume_id, refresh=refresh)
+
     async def fetch_issue(
         self,
         issue_id: int,
@@ -244,6 +375,220 @@ class OperatorComicVineClient(BaseComicVineClient):
                         f"{delay}s; retrying this request after the cooldown."
                     )
                 await asyncio.sleep(max(1, delay))
+
+
+def _local_candidate_has_exact_title(
+    resolver: ModuleType,
+    candidate: dict[str, object],
+    *,
+    query_title: str,
+) -> bool:
+    """Require exact normalized local name/alias equality after FTS discovery."""
+    expected = resolver._normalize_series_title(query_title)
+    values: list[str] = []
+    name = candidate.get("name")
+    if isinstance(name, str) and name.strip():
+        values.append(name)
+    values.extend(_local_alias_values(candidate.get("aliases")))
+    return any(resolver._normalize_series_title(value) == expected for value in values)
+
+
+def _local_year_distance(
+    resolver: ModuleType,
+    candidate: dict[str, object],
+    *,
+    start_year: int | None,
+) -> int | None:
+    """Return year distance as evidence without making year an identity key."""
+    if start_year is None:
+        return None
+    candidate_year = resolver._integer(candidate.get("start_year"))
+    return abs(candidate_year - start_year) if candidate_year is not None else None
+
+
+def _select_local_evidence_candidate(
+    resolver: ModuleType,
+    *,
+    hint: Any,
+    candidates: list[dict[str, object]],
+    rosters: dict[int, list[dict[str, object]]],
+    issues: list[Any],
+) -> dict[str, object] | None:
+    """Select exactly one locally provable volume, or refuse to guess."""
+    proven: list[dict[str, object]] = []
+    for candidate in candidates:
+        if not _local_candidate_has_exact_title(
+            resolver,
+            candidate,
+            query_title=hint.query_title,
+        ):
+            continue
+        volume_id = resolver._integer(candidate.get("id"))
+        if volume_id is None or volume_id not in rosters:
+            continue
+        if not resolver._roster_uniquely_covers_all_issues(
+            volume_id=volume_id,
+            roster=rosters[volume_id],
+            issues=issues,
+        ):
+            continue
+        proven.append(candidate)
+
+    if not proven:
+        return None
+
+    survivors = proven
+    if hint.volume_hint is not None:
+        explicit_matches = [
+            candidate
+            for candidate in survivors
+            if _description_volume_number(candidate.get("description")) == hint.volume_hint
+        ]
+        if explicit_matches:
+            survivors = explicit_matches
+        else:
+            survivors = [
+                candidate
+                for candidate in survivors
+                if _description_volume_number(candidate.get("description")) is None
+            ]
+
+    if len(survivors) == 1:
+        return survivors[0]
+
+    if hint.start_year is not None:
+        exact_year = [
+            candidate
+            for candidate in survivors
+            if _local_year_distance(
+                resolver,
+                candidate,
+                start_year=hint.start_year,
+            )
+            == 0
+        ]
+        if len(exact_year) == 1:
+            return exact_year[0]
+        if exact_year:
+            survivors = exact_year
+        else:
+            near_year = [
+                candidate
+                for candidate in survivors
+                if (
+                    (distance := _local_year_distance(
+                        resolver,
+                        candidate,
+                        start_year=hint.start_year,
+                    ))
+                    is not None
+                    and distance <= 1
+                )
+            ]
+            if len(near_year) == 1:
+                return near_year[0]
+            if near_year:
+                survivors = near_year
+
+    return survivors[0] if len(survivors) == 1 else None
+
+
+async def _resolve_thread_from_local_evidence(
+    resolver: ModuleType,
+    db: AsyncSession,
+    client: OperatorComicVineClient,
+    *,
+    user_id: int,
+    work: Any,
+    roster_cache: dict[int, list[dict[str, object]]],
+) -> Any | None:
+    """Resolve one previously-unanchored thread entirely from local ComicVine evidence."""
+    _route, existing_volume_ids = resolver._classify_thread(work)
+    if existing_volume_ids or client._local_db is None:
+        return None
+
+    hint = resolver._parse_title_hint(work.title)
+    local_candidates = client.search_local_volumes(hint.query_title)
+    if not local_candidates:
+        return None
+    if len(local_candidates) > LOCAL_VOLUME_CANDIDATE_LIMIT:
+        return None
+
+    rosters: dict[int, list[dict[str, object]]] = {}
+    for candidate in local_candidates:
+        if not _local_candidate_has_exact_title(
+            resolver,
+            candidate,
+            query_title=hint.query_title,
+        ):
+            continue
+        volume_id = resolver._integer(candidate.get("id"))
+        if volume_id is None:
+            continue
+        roster = client._fetch_local_volume_issues(volume_id)
+        if roster is not None:
+            rosters[volume_id] = roster
+
+    selected = _select_local_evidence_candidate(
+        resolver,
+        hint=hint,
+        candidates=local_candidates,
+        rosters=rosters,
+        issues=work.issues,
+    )
+    if selected is None:
+        return None
+
+    volume_id = resolver._integer(selected.get("id"))
+    if volume_id is None:
+        return None
+    roster = rosters[volume_id]
+    roster_cache[volume_id] = roster
+    evidence_source = (
+        "local_snapshot_title_volume_roster_resolution"
+        if hint.volume_hint is not None
+        else "local_snapshot_title_roster_resolution"
+    )
+    await resolver._persist_thread_series(
+        db,
+        user_id=user_id,
+        thread_id=work.thread_id,
+        volume_id=volume_id,
+        evidence_source=evidence_source,
+        search_row=selected,
+        evidence_name=resolver._string(selected.get("name")),
+    )
+
+    mapped = 0
+    scoped_roster = {volume_id: roster}
+    for issue in work.issues:
+        matches = resolver._candidate_issue_rows(scoped_roster, issue.issue_number)
+        if len(matches) != 1:
+            continue
+        _matched_volume_id, provider_row = matches[0]
+        if await resolver._persist_issue_mapping(
+            db,
+            user_id=user_id,
+            work=work,
+            issue=issue,
+            volume_id=volume_id,
+            provider_row=provider_row,
+            evidence_source=evidence_source,
+        ):
+            mapped += 1
+
+    remaining = len(work.issues) - mapped
+    return resolver.ThreadResult(
+        thread_id=work.thread_id,
+        title=work.title,
+        unresolved_before=len(work.issues),
+        status="resolved" if remaining == 0 else ("partial" if mapped else "unresolved"),
+        mapped=mapped,
+        remaining=remaining,
+        evidence="local-evidence",
+        volume_ids=[volume_id],
+        detail="Resolved from local ComicVine title/roster evidence without provider search.",
+    )
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -362,13 +707,22 @@ async def _run_resolution_phase(
                 for index, work in enumerate(works, start=1):
                     print(f"[{index}/{len(works)}] {work.title} ({len(work.issues)} unresolved)")
                     try:
-                        result = await resolver._resolve_thread(
+                        result = await _resolve_thread_from_local_evidence(
+                            resolver,
                             db,
                             client,
                             user_id=args.user_id,
                             work=work,
                             roster_cache=roster_cache,
                         )
+                        if result is None:
+                            result = await resolver._resolve_thread(
+                                db,
+                                client,
+                                user_id=args.user_id,
+                                work=work,
+                                roster_cache=roster_cache,
+                            )
                     except ComicVineRateLimitError as exc:
                         result = resolver.ThreadResult(
                             thread_id=work.thread_id,
