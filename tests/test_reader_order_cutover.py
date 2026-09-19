@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -283,36 +282,40 @@ async def test_cutover_fails_when_sequence_order_contributes_to_eligibility(
 
 
 @pytest.mark.asyncio
-async def test_runtime_switch_uses_only_canonical_rules_for_roll_eligibility(
+async def test_runtime_switch_uses_only_canonical_dependencies_for_roll_eligibility(
     async_db: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Turning off raw blocking ignores debris while canonical prerequisites remain."""
-    user_id, threads, _issues, reader_order, _standalone = await _two_dependency_families(
+    """Deleting ContinuityRule mirrors must not alter Dependency-authority blocking."""
+    user_id, threads, _issues, reader_order, standalone = await _two_dependency_families(
         async_db
     )
-    linked_reader_rule = await async_db.scalar(
-        select(ContinuityRule).where(
-            ContinuityRule.legacy_dependency_id == reader_order.id
-        )
+    linked_rules = list(
+        (
+            await async_db.scalars(
+                select(ContinuityRule).where(
+                    ContinuityRule.legacy_dependency_id.in_(
+                        [reader_order.id, standalone.id]
+                    )
+                )
+            )
+        ).all()
     )
-    assert linked_reader_rule is not None
+    assert len(linked_rules) == 2
     await async_db.execute(
-        delete(ContinuityRule).where(ContinuityRule.id == linked_reader_rule.id)
+        delete(ContinuityRule).where(
+            ContinuityRule.id.in_([rule.id for rule in linked_rules])
+        )
     )
     await async_db.commit()
 
-    monkeypatch.setattr(
-        dependencies,
-        "get_app_settings",
-        lambda: SimpleNamespace(legacy_dependency_blocking_enabled=False),
-    )
+    # ContinuityRule mirrors are inert triggers; canonical Dependency rows are
+    # the only authority for Roll eligibility.
     blocked = await dependencies._get_blocked_thread_ids_uncached(user_id, async_db)
-    assert threads[1].id not in blocked
+    assert threads[1].id in blocked
     assert threads[3].id in blocked
 
     await dependencies.refresh_user_blocked_status(user_id, async_db)
     await async_db.commit()
     roll_ids = {thread.id for thread in await get_roll_pool(user_id, async_db)}
-    assert threads[1].id in roll_ids
+    assert threads[1].id not in roll_ids
     assert threads[3].id not in roll_ids

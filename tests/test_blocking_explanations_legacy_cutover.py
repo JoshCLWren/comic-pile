@@ -1,14 +1,14 @@
-"""Blocking-explanation behavior after the legacy Dependency Roll switch is off."""
+"""Blocking-explanation behavior after the Dependency-only Roll cutover."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
 from comic_pile import dependencies
@@ -17,6 +17,7 @@ from comic_pile.dependencies import (
     get_blocking_explanations,
     get_blocking_explanations_batch,
     refresh_user_blocked_status,
+    update_thread_blocked_status,
 )
 from tests.conftest import get_or_create_user_async
 
@@ -53,52 +54,56 @@ async def _thread_issue(
     return thread, issue
 
 
+async def _add_dependency(
+    db: AsyncSession,
+    source_issue: Issue,
+    target_issue: Issue,
+    *,
+    note: str | None = None,
+    commit: bool = True,
+) -> Dependency:
+    """Insert a raw Dependency edge like the legacy cutover rows in production."""
+    dependency = Dependency(
+        source_issue_id=source_issue.id,
+        target_issue_id=target_issue.id,
+        note=note,
+    )
+    db.add(dependency)
+    if commit:
+        await db.flush()
+        await db.commit()
+    return dependency
+
+
 @pytest.mark.asyncio
-async def test_blocking_explanations_use_continuity_when_legacy_switch_disabled(
+async def test_blocking_explanations_use_canonical_dependencies(
     auth_client: AsyncClient,
     async_db: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Continuity-only blockers still produce human-readable getBlockingInfo copy."""
+    """Canonical Dependency edges still produce human-readable getBlockingInfo copy."""
     user = await get_or_create_user_async(async_db)
     source_thread, source_issue = await _thread_issue(
         async_db,
         user_id=user.id,
-        title="Continuity Source",
+        title="Dependency Source",
         queue_position=1,
     )
     target_thread, target_issue = await _thread_issue(
         async_db,
         user_id=user.id,
-        title="Continuity Target",
+        title="Dependency Target",
         queue_position=2,
     )
     await async_db.commit()
-
-    created = await auth_client.post(
-        "/api/v1/continuity-rules/",
-        json={
-            "source_type": "issue",
-            "source_id": source_issue.id,
-            "target_type": "issue",
-            "target_id": target_issue.id,
-            "satisfaction_type": "item_read",
-            "selected_member_issue_ids": [],
-        },
-    )
-    assert created.status_code == 201, created.text
+    await _add_dependency(async_db, source_issue, target_issue, note="preface")
+    await update_thread_blocked_status(target_thread.id, user.id, async_db)
+    await async_db.commit()
     await async_db.refresh(target_thread)
     assert target_thread.is_blocked is True
 
-    monkeypatch.setattr(
-        dependencies,
-        "get_app_settings",
-        lambda: SimpleNamespace(legacy_dependency_blocking_enabled=False),
-    )
-
     reasons = await get_blocking_explanations(target_thread.id, user.id, async_db)
     batched = await get_blocking_explanations_batch([target_thread.id], user.id, async_db)
-    expected = "Blocked by Continuity Source: #1"
+    expected = "Blocked by Dependency Source: #1"
     assert [format_blocking_reason(dep) for dep in reasons] == [expected]
     assert {
         thread_id: [format_blocking_reason(dep) for dep in deps]
@@ -112,7 +117,7 @@ async def test_blocking_explanations_use_continuity_when_legacy_switch_disabled(
     payload = response.json()
     assert payload["is_blocked"] is True
     assert payload["blocking_reasons"] == [expected]
-    assert payload["blocking_dependencies"][0]["thread_title"] == "Continuity Source"
+    assert payload["blocking_dependencies"][0]["thread_title"] == "Dependency Source"
     assert payload["blocking_dependencies"][0]["issue_number"] == "1"
 
     source_issue.status = "read"
@@ -134,11 +139,40 @@ async def test_blocking_explanations_use_continuity_when_legacy_switch_disabled(
 
 
 @pytest.mark.asyncio
+async def test_cbl_order_dependency_note_is_inert_for_blocking(
+    async_db: AsyncSession,
+) -> None:
+    """cbl-order:% dependency rows are inert historical materialization, not blockers."""
+    user = await get_or_create_user_async(async_db)
+    source_thread, source_issue = await _thread_issue(
+        async_db,
+        user_id=user.id,
+        title="CBL Source",
+        queue_position=1,
+    )
+    target_thread, target_issue = await _thread_issue(
+        async_db,
+        user_id=user.id,
+        title="CBL Target",
+        queue_position=2,
+    )
+    await async_db.commit()
+    await _add_dependency(
+        async_db, source_issue, target_issue, note="cbl-order:materialized"
+    )
+    await async_db.refresh(target_thread)
+    assert target_thread.is_blocked is False
+
+    blocked = await dependencies._get_blocked_thread_ids_uncached(user.id, async_db)
+    assert target_thread.id not in blocked
+    assert await get_blocking_explanations(target_thread.id, user.id, async_db) == []
+
+
+@pytest.mark.asyncio
 async def test_legacy_off_ignores_sequence_order_even_after_unread_reactivation(
     async_db: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """With legacy blocking off, sequence_order must not block Roll eligibility."""
+    """Sequence-order-only dependency groups must not block Roll eligibility."""
     from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
 
     user = await get_or_create_user_async(async_db)
@@ -172,12 +206,6 @@ async def test_legacy_off_ignores_sequence_order_even_after_unread_reactivation(
         ]
     )
     await async_db.commit()
-
-    monkeypatch.setattr(
-        dependencies,
-        "get_app_settings",
-        lambda: SimpleNamespace(legacy_dependency_blocking_enabled=False),
-    )
 
     blocked = await dependencies._get_blocked_thread_ids_uncached(user.id, async_db)
     assert later_thread.id not in blocked

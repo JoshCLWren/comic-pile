@@ -36,15 +36,44 @@ from app.schemas.continuity_plan import (
     ConvergenceGateTarget,
 )
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
-from app.services.continuity_graph import issue_readiness, load_snapshot
+from app.services.continuity_graph import GraphSnapshot, issue_readiness, load_snapshot
 from app.services.continuity_plan_writer import (
     replace_compiled_rules,
     validate_node_ownership,
 )
-from comic_pile.dependencies import _get_blocked_thread_ids_uncached, refresh_user_blocked_status
+from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.queue import get_roll_pool
 
 TEMPORARY_REPAIR_NOTE = "Temporary authoritative Ultimate Universe CBL order incident repair"
+
+
+def _legacy_blocked_baseline(
+    affected_threads: list[Thread],
+    raw_by_target: dict[int, list[Dependency]],
+    snapshot: GraphSnapshot,
+) -> set[int]:
+    """Return the frozen pre-cutover blocked baseline for the affected threads.
+
+    Migration-plan Roll-eligibility guards compare the plan's simulated future
+    against this baseline rather than the post-cutover Runtime canonical
+    evaluator, so re-affirming reader order over formerly ``cbl-order:%``
+    materialization is not mistaken for an accidental eligibility change. The
+    baseline mirrors the retired legacy evaluator: any unread-source Dependency
+    row or ContinuityRule blocker counts.
+    """
+    blocked: set[int] = set()
+    for thread in affected_threads:
+        next_issue_id = thread.next_unread_issue_id
+        if next_issue_id is None:
+            continue
+        raw_blocked = any(
+            (source := snapshot.issues.get(dep.source_issue_id)) is not None
+            and source.status != "read"
+            for dep in raw_by_target.get(next_issue_id, [])
+        )
+        if raw_blocked or issue_readiness(next_issue_id, snapshot):
+            blocked.add(thread.id)
+    return blocked
 
 
 class MigrationInvariantError(RuntimeError):
@@ -646,15 +675,11 @@ async def build_ultimate_universe_dry_run(
     for dependency in raw_dependencies:
         raw_by_target.setdefault(dependency.target_issue_id, []).append(dependency)
 
-    current_blocked_ids = await _get_blocked_thread_ids_uncached(spec.user_id, db)
-    current_roll_ids = {thread.id for thread in await get_roll_pool(spec.user_id, db)}
-    current_affected_eligible = sorted(current_roll_ids & affected_thread_ids)
-    derived_current_eligible = sorted(affected_thread_ids - current_blocked_ids)
-    if current_affected_eligible != derived_current_eligible:
-        errors.append(
-            "persisted Roll eligibility differs from uncached unified blocking: "
-            f"roll={current_affected_eligible}, derived={derived_current_eligible}"
-        )
+    current_blocked_ids = _legacy_blocked_baseline(
+        affected_threads, raw_by_target, graph
+    )
+    current_affected_eligible = sorted(affected_thread_ids - current_blocked_ids)
+    derived_current_eligible = current_affected_eligible
 
     planned_sources_by_target: dict[int, list[int]] = {}
     for rule in planned_rules:

@@ -161,10 +161,12 @@ class AppSettings(BaseSettings):
         json_schema_extra={"env": "ENABLE_INTERNAL_OPS_ROUTES"},
     )
     legacy_dependency_blocking_enabled: bool = Field(
-        default=True,
+        default=False,
         description=(
-            "Keep the raw Dependency Roll compatibility path enabled until the "
-            "reader-order migration cutover audit passes in production"
+            "Retired cutover switch. The raw Dependency Roll compatibility path "
+            "was removed; Roll blocking uses compiled ContinuityRule rows only. "
+            "Retained (default off) so existing environments referencing the "
+            "switch keep parsing instead of failing."
         ),
         json_schema_extra={"env": "LEGACY_DEPENDENCY_BLOCKING_ENABLED"},
     )

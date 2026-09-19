@@ -21,10 +21,37 @@ from app.services.explicit_reader_order_migration import (
     _generated_reader_order_patterns,
     _load_step14_index,
 )
-from comic_pile.dependencies import (
-    _get_legacy_blocked_thread_ids_uncached,
-    _invalidate_continuity_snapshot,
-)
+from comic_pile.dependencies import _invalidate_continuity_snapshot
+
+
+async def _legacy_blocked_thread_ids_for_audit(user_id: int, db: AsyncSession) -> set[int]:
+    """Read raw-Dependency blocked thread IDs for the cutover audit comparison.
+
+    The Roll runtime no longer consults raw Dependency rows; this query exists
+    only so the read-only release gate can prove ContinuityRule coverage
+    against the retired legacy behavior.
+    """
+    source_issue = Issue.__table__.alias("source_issue")
+    next_unread_issue = Issue.__table__.alias("next_unread_issue")
+    target_thread = Thread.__table__.alias("target_thread")
+    source = Thread.__table__.alias("source_thread")
+
+    issue_result = await db.execute(
+        select(target_thread.c.id)
+        .join(
+            next_unread_issue,
+            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
+        )
+        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(source, source_issue.c.thread_id == source.c.id)
+        .where(target_thread.c.user_id == user_id)
+        .where(source.c.user_id == user_id)
+        .where(source_issue.c.status != "read")
+        .where(target_thread.c.next_unread_issue_id.isnot(None))
+        .distinct()
+    )
+    return {row[0] for row in issue_result.all()}
 
 
 def _classification(
@@ -118,7 +145,7 @@ async def build_reader_order_cutover_audit(
             active[kind] += 1
             active_ids.setdefault(kind, []).append(dependency.id)
 
-    legacy_blocked = await _get_legacy_blocked_thread_ids_uncached(user_id, db)
+    legacy_blocked = await _legacy_blocked_thread_ids_for_audit(user_id, db)
     # Cutover must prove ContinuityRule coverage only. sequence_order is not a
     # Roll authority under the frozen architecture, so it cannot clear legacy_only.
     continuity_rule_blocked = await get_continuity_rule_blocked_thread_ids(user_id, db)

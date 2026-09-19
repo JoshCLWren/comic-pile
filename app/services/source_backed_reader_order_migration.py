@@ -13,13 +13,14 @@ from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
+from app.models.thread import Thread
 from app.schemas.continuity_plan import (
     ContinuityPlanLane,
     ContinuityPlanNode,
     ContinuityPlanWrite,
 )
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
-from app.services.continuity_graph import issue_readiness, load_snapshot
+from app.services.continuity_graph import GraphSnapshot, issue_readiness, load_snapshot
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
 from app.services.explicit_reader_order_migration import (
     _explicit_classifications,
@@ -48,6 +49,35 @@ from comic_pile.dependencies import (
 from comic_pile.queue import get_roll_pool
 
 _DEPENDENCY_ID_BATCH_SIZE = 10_000
+
+
+def _legacy_blocked_baseline(
+    affected_threads: list[Thread],
+    raw_by_target: dict[int, list[Dependency]],
+    snapshot: GraphSnapshot,
+) -> set[int]:
+    """Return the frozen pre-cutover blocked baseline for the affected threads.
+
+    Migration-plan Roll-eligibility guards compare the plan's simulated future
+    against this baseline rather than the post-cutover Runtime canonical
+    evaluator, so re-affirming reader order over formerly ``cbl-order:%``
+    materialization is not mistaken for an accidental eligibility change. The
+    baseline mirrors the retired legacy evaluator: any unread-source Dependency
+    row or ContinuityRule blocker counts.
+    """
+    blocked: set[int] = set()
+    for thread in affected_threads:
+        next_issue_id = thread.next_unread_issue_id
+        if next_issue_id is None:
+            continue
+        raw_blocked = any(
+            (source := snapshot.issues.get(dep.source_issue_id)) is not None
+            and source.status != "read"
+            for dep in raw_by_target.get(next_issue_id, [])
+        )
+        if raw_blocked or issue_readiness(next_issue_id, snapshot):
+            blocked.add(thread.id)
+    return blocked
 
 
 def _dependency_id_batches(dependency_ids: set[int] | list[int]) -> tuple[tuple[int, ...], ...]:
