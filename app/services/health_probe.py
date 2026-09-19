@@ -337,7 +337,6 @@ async def get_warm_endpoint_result(
     Returns:
         WarmEndpointResult with instance diagnostics and activity status.
     """
-
     if not _is_warm_endpoint_enabled():
         return WarmEndpointResult(
             status="no_activity",
