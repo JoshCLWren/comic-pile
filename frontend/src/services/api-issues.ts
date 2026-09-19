@@ -114,6 +114,14 @@ export function createIssuesApi(client: IssuesApiHttpClient) {
       await client.post(`/v1/issues/${issueId}:markUnread`)
     },
 
+    bulkMarkRead: async (issueIds: number[]): Promise<void> => {
+      await client.post(`/v1/issues:bulkMarkRead`, { issue_ids: issueIds })
+    },
+
+    bulkMarkUnread: async (issueIds: number[]): Promise<void> => {
+      await client.post(`/v1/issues:bulkMarkUnread`, { issue_ids: issueIds })
+    },
+
     /**
      * Move an issue to a new position within its thread
      * @param issueId - The issue ID to move

@@ -501,3 +501,119 @@ async def mark_issue_unread(
     db.add(event)
 
     await refresh_user_blocked_status(current_user_id, db)
+
+
+async def bulk_mark_issue_read(
+    db: AsyncSession,
+    issue_ids: list[int],
+    current_user_id: int,
+) -> None:
+    """Mark multiple issues as read atomically within a single transaction.
+
+    Args:
+        db: Database session.
+        issue_ids: Issue IDs to mark read.
+        current_user_id: User owning the issues.
+    """
+    if not issue_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="issue_ids must not be empty",
+        )
+
+    # Load and verify ownership for all requested IDs
+    issues: list[Issue] = []
+    for issue_id in issue_ids:
+        issue = await get_owned_issue_or_404(db, current_user_id, issue_id)
+        if issue.status == "read":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Issue {issue_id} is already marked as read",
+            )
+        issues.append(issue)
+
+    # Apply updates atomically before any thread-state recalculation
+    for issue in issues:
+        issue.status = "read"
+        issue.read_at = datetime.now(UTC)
+
+    # Gather unique threads to recalculate tracking once per thread
+    thread_ids = {issue.thread_id for issue in issues}
+    for thread_id in thread_ids:
+        thread = await get_owned_thread_or_404(db, current_user_id, thread_id)
+        adopted_issues = await issue_repository.issues_ordered(db, thread_id)
+        tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
+        if tracking_state.next_unread_issue_id is None:
+            thread.status = "completed"
+        else:
+            if thread.status == "completed":
+                thread.status = "active"
+
+    # Create events for each issue
+    for issue in issues:
+        event = Event(
+            type="issue_read",
+            timestamp=datetime.now(UTC),
+            thread_id=issue.thread_id,
+            issue_id=issue.id,
+            issue_number=issue.issue_number,
+        )
+        db.add(event)
+
+    await refresh_user_blocked_status(current_user_id, db)
+
+
+async def bulk_mark_issue_unread(
+    db: AsyncSession,
+    issue_ids: list[int],
+    current_user_id: int,
+) -> None:
+    """Mark multiple issues as unread atomically within a single transaction.
+
+    Args:
+        db: Database session.
+        issue_ids: Issue IDs to mark unread.
+        current_user_id: User owning the issues.
+    """
+    if not issue_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="issue_ids must not be empty",
+        )
+
+    issues: list[Issue] = []
+    for issue_id in issue_ids:
+        issue = await get_owned_issue_or_404(db, current_user_id, issue_id)
+        if issue.status == "unread":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Issue {issue_id} is already marked as unread",
+            )
+        issues.append(issue)
+
+    for issue in issues:
+        issue.status = "unread"
+        issue.read_at = None
+
+    thread_ids = {issue.thread_id for issue in issues}
+    for thread_id in thread_ids:
+        thread = await get_owned_thread_or_404(db, current_user_id, thread_id)
+        adopted_issues = await issue_repository.issues_ordered(db, thread_id)
+        tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
+        if tracking_state.next_unread_issue_id is None:
+            thread.status = "completed"
+        else:
+            if thread.status == "completed":
+                thread.status = "active"
+
+    for issue in issues:
+        event = Event(
+            type="issue_unread",
+            timestamp=datetime.now(UTC),
+            thread_id=issue.thread_id,
+            issue_id=issue.id,
+            issue_number=issue.issue_number,
+        )
+        db.add(event)
+
+    await refresh_user_blocked_status(current_user_id, db)
