@@ -7,6 +7,9 @@ status mapping lives in routers.
 """
 
 import asyncio
+import base64
+import binascii
+import json
 import logging
 import os
 from typing import cast
@@ -50,6 +53,65 @@ from comic_pile.session import get_current_die, get_or_create
 from comic_pile.dependencies import format_blocking_reason, get_blocking_explanations
 
 logger = logging.getLogger(__name__)
+
+
+def _encode_stale_cursor(last_activity_at: datetime | None, thread_id: int) -> str:
+    """Encode a stale cursor as URL-safe opaque text.
+
+    Args:
+        last_activity_at: The last activity timestamp, or None for null.
+        thread_id: The thread ID.
+
+    Returns:
+        URL-safe base64 text without padding.
+    """
+    payload = {
+        "last_activity_at": last_activity_at.isoformat() if last_activity_at else None,
+        "thread_id": thread_id,
+    }
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def _decode_stale_cursor(token: str) -> tuple[datetime | None, int]:
+    """Decode and validate a stale cursor.
+
+    Args:
+        token: URL-safe opaque stale cursor text.
+
+    Returns:
+        Tuple of (last_activity_at, thread_id).
+
+    Raises:
+        ValueError: If the token is malformed.
+    """
+    try:
+        padded = token + "=" * (-len(token) % 4)
+        decoded = base64.b64decode(padded.encode(), altchars=b"-_", validate=True)
+        payload = json.loads(decoded.decode())
+        last_activity_at_raw = payload["last_activity_at"]
+        thread_id = payload["thread_id"]
+    except (
+        binascii.Error,
+        KeyError,
+        TypeError,
+        UnicodeDecodeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as exc:
+        raise ValueError("Invalid stale page token") from exc
+
+    if last_activity_at_raw is None:
+        last_activity_at = None
+    elif isinstance(last_activity_at_raw, str):
+        last_activity_at = datetime.fromisoformat(last_activity_at_raw)
+    else:
+        raise ValueError("Invalid stale page token")
+
+    if not isinstance(thread_id, int):
+        raise ValueError("Invalid stale page token")
+
+    return (last_activity_at, thread_id)
 
 
 async def _require_owned_thread(
@@ -214,6 +276,72 @@ async def list_stale_thread_responses(
         db, user_id, cutoff_date, snoozed_ids=snoozed_ids
     )
     return await threads_to_responses(threads, db)
+
+
+async def list_stale_threads_paginated(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    days: int,
+    snoozed_ids: list[int] | None,
+    page_size: int,
+    page_token: str | None,
+) -> QueueThreadListResponse:
+    """List STALE threads with deterministic cursor-based pagination.
+
+    Stale threads are always ordered by oldest activity first (nulls first)
+    with thread ID as a tie-breaker. The cursor contract is based on
+    (last_activity_at, thread_id) pairs.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        days: Number of days to consider threads stale.
+        snoozed_ids: Thread IDs currently snoozed in the session; these are
+            excluded from the stale result.
+        page_size: Number of threads to return per page (max 200).
+        page_token: Opaque cursor token for pagination continuation.
+
+    Returns:
+        QueueThreadListResponse with paginated stale threads and next_page_token if
+        more pages exist.
+
+    Raises:
+        InvalidRequestError: When the page token is stale or malformed.
+    """
+    cutoff_date = datetime.now(UTC) - timedelta(days=days)
+
+    cursor = None
+    if page_token:
+        try:
+            cursor = _decode_stale_cursor(page_token)
+        except ValueError as exc:
+            raise InvalidRequestError(str(exc)) from exc
+
+    threads = await thread_repository.fetch_stale_page(
+        db,
+        user_id,
+        cutoff_date=cutoff_date,
+        snoozed_ids=snoozed_ids,
+        cursor=cursor,
+        limit=page_size + 1,
+    )
+
+    has_more = len(threads) > page_size
+    threads_to_return = threads[:page_size]
+
+    thread_responses = await threads_to_responses(threads_to_return, db)
+    queue_items = [to_queue_list_item(tr) for tr in thread_responses]
+
+    next_token = None
+    if has_more and threads_to_return:
+        last = threads_to_return[-1]
+        next_token = _encode_stale_cursor(last.last_activity_at, last.id)
+
+    return QueueThreadListResponse(
+        threads=queue_items,
+        next_page_token=next_token,
+    )
 
 
 async def list_queue_threads(

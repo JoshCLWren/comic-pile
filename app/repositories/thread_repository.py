@@ -128,6 +128,69 @@ async def fetch_stale_threads(
     return list(result.scalars().all())
 
 
+async def fetch_stale_page(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    cutoff_date: datetime,
+    snoozed_ids: list[int] | None,
+    cursor: tuple[datetime | None, int] | None,
+    limit: int,
+) -> list[Thread]:
+    """Fetch one deterministic page of a user's STALE threads for the stale list.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+        cutoff_date: Threads last read before this instant are stale.
+        snoozed_ids: Thread IDs currently snoozed in the session; these are
+            excluded from the stale result.
+        cursor: Decoded continuation cursor (last_activity_at, thread_id), or None for the first page.
+        limit: Maximum number of threads to return.
+
+    Returns:
+        Stale threads in canonical page order, at most ``limit`` rows.
+    """
+    query = select(Thread).where(
+        Thread.user_id == user_id,
+        Thread.status == "active",
+        Thread.is_blocked.is_(False),
+        ((Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None)))
+    )
+    
+    if snoozed_ids:
+        query = query.where(Thread.id.not_in(snoozed_ids))
+
+    # Apply deterministic sort order: oldest activity first, then by ID for tie-breaking
+    query = query.order_by(Thread.last_activity_at.asc().nullsfirst(), Thread.id.asc())
+
+    # Apply opaque cursor-based pagination
+    if cursor is not None:
+        last_activity_at, thread_id = cursor
+        if last_activity_at is None:
+            # Cursor points to a null last_activity_at. Return remaining
+            # null-activity threads (by ID tie-break) plus all non-null threads.
+            query = query.where(
+                or_(
+                    and_(
+                        Thread.last_activity_at.is_(None),
+                        Thread.id > thread_id,
+                    ),
+                    Thread.last_activity_at.is_not(None),
+                )
+            )
+        else:
+            # Non-null cursor - filter on threads that sort after the cursor
+            query = query.where(
+                (Thread.last_activity_at > last_activity_at) | 
+                ((Thread.last_activity_at == last_activity_at) & (Thread.id > thread_id))
+            )
+
+    query = query.limit(limit)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
 async def count_active_threads(db: AsyncSession, user_id: int) -> int:
     """Count a user's active queue threads (authoritative total).
 

@@ -67,19 +67,58 @@ def _map_service_error(exc: ServiceError) -> HTTPException:
     return HTTPException(status_code=_ERROR_STATUS[type(exc)], detail=exc.detail)
 
 
-@router.get("/stale", response_model=list[ThreadResponse])
+@router.get("/stale", response_model=QueueThreadListResponse)
+@limiter.limit("100/minute")
 async def list_stale_threads(
+    request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-    days: int = 30,
-) -> list[ThreadResponse]:
-    """List the authenticated user's threads not read in ``days`` (default 30)."""
+    days: int = Query(
+        default=30,
+        ge=1,
+        le=365,
+        description="Number of days to consider threads stale (default 30, max 365)",
+    ),
+    page_size: int = Query(
+        default=50,
+        ge=1,
+        le=200,
+        description="Number of threads to return per page (default 50, max 200)",
+    ),
+    page_token: str | None = Query(
+        default=None, description="Opaque cursor token for pagination continuation"
+    ),
+) -> QueueThreadListResponse:
+    """List the authenticated user's threads not read in ``days`` with pagination.
+
+    Stale threads are ordered by oldest activity first (nulls first) with deterministic
+    cursor-based pagination. The cursor is invalidated by changing the ``days`` parameter.
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        days: Number of days to consider threads stale (default 30, max 365).
+        page_size: Threads per page (default 50, max 200).
+        page_token: Opaque cursor token for pagination continuation.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Paginated stale threads plus ``next_page_token`` when more pages exist.
+
+    Raises:
+        HTTPException: If the page token is stale/malformed.
+    """
     try:
         session = await fetch_active_session(db, current_user.id)
         snoozed = session.snoozed_thread_ids if session else None
         snoozed_ids = list(snoozed) if snoozed else None
-        return await thread_service.list_stale_thread_responses(
-            db, current_user.id, days, snoozed_ids=snoozed_ids
+        return await thread_service.list_stale_threads_paginated(
+            db,
+            current_user.id,
+            days=days,
+            snoozed_ids=snoozed_ids,
+            page_size=page_size,
+            page_token=page_token,
         )
     except ServiceError as exc:
         raise _map_service_error(exc) from exc

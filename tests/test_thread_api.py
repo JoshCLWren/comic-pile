@@ -474,7 +474,7 @@ async def test_stale_endpoint_excludes_blocked_threads(
     response = await auth_client.get("/api/v1/threads/stale?days=30")
     assert response.status_code == 200
     data = response.json()
-    thread_ids = {t["id"] for t in data}
+    thread_ids = {t["id"] for t in data["threads"]}
     assert blocked_thread.id not in thread_ids
 
 
@@ -504,7 +504,7 @@ async def test_stale_endpoint_includes_unblocked_stale_threads(
     response = await auth_client.get("/api/v1/threads/stale?days=30")
     assert response.status_code == 200
     data = response.json()
-    thread_ids = {t["id"] for t in data}
+    thread_ids = {t["id"] for t in data["threads"]}
     assert unblocked_thread.id in thread_ids
 
 
@@ -551,9 +551,368 @@ async def test_stale_endpoint_excludes_snoozed_threads(
     response = await auth_client.get("/api/v1/threads/stale?days=30")
     assert response.status_code == 200
     data = response.json()
-    thread_ids = {t["id"] for t in data}
+    thread_ids = {t["id"] for t in data["threads"]}
     assert stale_thread.id in thread_ids
     assert snoozed_stale_thread.id not in thread_ids
+
+
+@pytest.mark.asyncio
+async def test_stale_endpoint_pagination_respects_page_size(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Stale endpoint respects page_size parameter."""
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=60)
+
+    # Create 7 stale threads
+    threads = []
+    for i in range(7):
+        thread = Thread(
+            title=f"Stale Thread {i}",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=i + 1,
+            status="active",
+            user_id=user.id,
+            last_activity_at=stale_date,
+            created_at=now,
+        )
+        threads.append(thread)
+        async_db.add(thread)
+    await async_db.commit()
+
+    # First page with page_size=3 should return 3 threads
+    response = await auth_client.get("/api/v1/threads/stale?days=30&page_size=3")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["threads"]) == 3
+    assert data["next_page_token"] is not None  # Should have more pages
+
+    # Second page should return next 3 threads
+    response = await auth_client.get(f"/api/v1/threads/stale?days=30&page_size=3&page_token={data['next_page_token']}")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["threads"]) == 3
+    assert data["next_page_token"] is not None  # Should have more pages
+
+    # Third page should return remaining 1 thread
+    response = await auth_client.get(f"/api/v1/threads/stale?days=30&page_size=3&page_token={data['next_page_token']}")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["threads"]) == 1
+    assert data["next_page_token"] is None  # No more pages
+
+
+@pytest.mark.asyncio
+async def test_stale_endpoint_pagination_with_null_activity(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Stale endpoint pagination handles threads with null last_activity_at."""
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=60)
+
+    # Create threads with mixed null and non-null last_activity_at
+    null_activity_thread = Thread(
+        title="Null Activity Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        last_activity_at=None,  # Null activity comes first
+        created_at=now,
+    )
+    
+    stale_thread1 = Thread(
+        title="Stale Thread 1",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+    
+    stale_thread2 = Thread(
+        title="Stale Thread 2",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=3,
+        status="active",
+        user_id=user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+    
+    async_db.add_all([null_activity_thread, stale_thread1, stale_thread2])
+    await async_db.commit()
+
+    # First page should return null activity thread first
+    response = await auth_client.get("/api/v1/threads/stale?days=30&page_size=2")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["threads"]) == 2
+    assert data["threads"][0]["title"] == "Null Activity Thread"
+    assert data["threads"][1]["title"] == "Stale Thread 1"
+    assert data["next_page_token"] is not None
+
+    # Second page should return remaining thread
+    response = await auth_client.get(f"/api/v1/threads/stale?days=30&page_size=2&page_token={data['next_page_token']}")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["threads"]) == 1
+    assert data["threads"][0]["title"] == "Stale Thread 2"
+    assert data["next_page_token"] is None
+
+
+@pytest.mark.asyncio
+async def test_stale_endpoint_pagination_null_cursor_page_size_one(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Stale endpoint pagination works when page_size=1 and first thread has null last_activity_at.
+
+    This tests the cursor encoding/decoding when the cursor points to a thread with
+    null last_activity_at, which previously caused a SQL filtering bug.
+    """
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=60)
+
+    # Create threads with mixed null and non-null last_activity_at
+    null_activity_thread = Thread(
+        title="Null Activity Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        last_activity_at=None,  # Null activity comes first
+        created_at=now,
+    )
+    
+    stale_thread1 = Thread(
+        title="Stale Thread 1",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+    
+    stale_thread2 = Thread(
+        title="Stale Thread 2",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=3,
+        status="active",
+        user_id=user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+    
+    async_db.add_all([null_activity_thread, stale_thread1, stale_thread2])
+    await async_db.commit()
+
+    # First page with page_size=1 should return only the null activity thread
+    response = await auth_client.get("/api/v1/threads/stale?days=30&page_size=1")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["threads"]) == 1
+    assert data["threads"][0]["title"] == "Null Activity Thread"
+    assert data["next_page_token"] is not None
+
+    # Second page should return Stale Thread 1 (cursor points to null activity thread)
+    response = await auth_client.get(f"/api/v1/threads/stale?days=30&page_size=1&page_token={data['next_page_token']}")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["threads"]) == 1
+    assert data["threads"][0]["title"] == "Stale Thread 1"
+    assert data["next_page_token"] is not None
+
+    # Third page should return Stale Thread 2
+    response = await auth_client.get(f"/api/v1/threads/stale?days=30&page_size=1&page_token={data['next_page_token']}")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["threads"]) == 1
+    assert data["threads"][0]["title"] == "Stale Thread 2"
+    assert data["next_page_token"] is None
+
+
+@pytest.mark.asyncio
+async def test_stale_endpoint_pagination_multi_null_activity_threads(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Stale endpoint pagination correctly returns all null-activity threads across pages.
+
+    Regression test: previously, a null cursor skipped remaining null-activity
+    threads and jumped straight to non-null threads.
+    """
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=60)
+
+    # Create 2 null-activity threads and 1 stale thread
+    null_thread_1 = Thread(
+        title="Null Activity Thread 1",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        last_activity_at=None,
+        created_at=now,
+    )
+    null_thread_2 = Thread(
+        title="Null Activity Thread 2",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        last_activity_at=None,
+        created_at=now,
+    )
+    stale_thread = Thread(
+        title="Stale Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=3,
+        status="active",
+        user_id=user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+    async_db.add_all([null_thread_1, null_thread_2, stale_thread])
+    await async_db.commit()
+
+    # Page 1: returns first null-activity thread
+    response = await auth_client.get("/api/v1/threads/stale?days=30&page_size=1")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["threads"]) == 1
+    assert data["threads"][0]["title"] == "Null Activity Thread 1"
+    assert data["next_page_token"] is not None
+
+    # Page 2: should return second null-activity thread, NOT skip to stale thread
+    response = await auth_client.get(
+        f"/api/v1/threads/stale?days=30&page_size=1&page_token={data['next_page_token']}"
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["threads"]) == 1
+    assert data["threads"][0]["title"] == "Null Activity Thread 2"
+    assert data["next_page_token"] is not None
+
+    # Page 3: should return the stale thread
+    response = await auth_client.get(
+        f"/api/v1/threads/stale?days=30&page_size=1&page_token={data['next_page_token']}"
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["threads"]) == 1
+    assert data["threads"][0]["title"] == "Stale Thread"
+    assert data["next_page_token"] is None
+
+
+@pytest.mark.asyncio
+async def test_stale_endpoint_pagination_invalid_token(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Stale endpoint returns 400 for invalid pagination tokens."""
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=60)
+
+    # Create one stale thread
+    thread = Thread(
+        title="Stale Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    # Invalid token format
+    response = await auth_client.get("/api/v1/threads/stale?days=30&page_token=invalid")
+    assert response.status_code == 400
+
+    # Token with wrong number of parts
+    response = await auth_client.get("/api/v1/threads/stale?days=30&page_token=only_one_part")
+    assert response.status_code == 400
+
+    # Token with non-integer thread ID
+    response = await auth_client.get("/api/v1/threads/stale?days=30&page_token=2023-01-01:not_a_number")
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_stale_endpoint_max_page_size_enforced(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Stale endpoint enforces maximum page_size of 200."""
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=60)
+
+    # Create one stale thread
+    thread = Thread(
+        title="Stale Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    # Request page_size larger than max (200)
+    response = await auth_client.get("/api/v1/threads/stale?days=30&page_size=300")
+    assert response.status_code == 422  # Validation error
+
+
+@pytest.mark.asyncio
+async def test_stale_endpoint_days_parameter_validation(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Stale endpoint validates days parameter range."""
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=60)
+
+    # Create one stale thread
+    thread = Thread(
+        title="Stale Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    # Days too small (minimum 1)
+    response = await auth_client.get("/api/v1/threads/stale?days=0")
+    assert response.status_code == 422
+
+    # Days too large (maximum 365)
+    response = await auth_client.get("/api/v1/threads/stale?days=400")
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio
