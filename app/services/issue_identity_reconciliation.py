@@ -118,71 +118,21 @@ async def find_duplicate_physical_issues(
         One anomaly per duplicated ComicVine issue identity, each listing all
         affected Issue rows for that user.
     """
-    result = await db.execute(
-        text(
-            """
-            SELECT
-                ei.external_id AS comicvine_issue_id,
-                ei.id AS external_identity_id,
-                array_agg(iem.issue_id ORDER BY iem.issue_id) AS issue_ids,
-                array_agg(i.thread_id ORDER BY iem.issue_id) AS thread_ids,
-                array_agg(i.status ORDER BY iem.issue_id) AS statuses,
-                array_agg(i.read_at ORDER BY iem.issue_id) AS read_ats,
-                array_agg(i.issue_number ORDER BY iem.issue_id) AS issue_numbers,
-                array_agg(t.title ORDER BY iem.issue_id) AS thread_titles
-            FROM external_identities ei
-            JOIN issue_external_identity_mappings iem
-                ON iem.external_identity_id = ei.id
-            JOIN issues i ON i.id = iem.issue_id
-            JOIN threads t ON t.id = i.thread_id
-            WHERE ei.provider = :provider
-              AND ei.entity_type = :entity_type
-              AND iem.status = :confirmed
-              AND t.user_id = :user_id
-            GROUP BY ei.id, ei.external_id
-            HAVING COUNT(DISTINCT iem.issue_id) > 1
-            ORDER BY ei.external_id
-            """
-        ),
-        {
-            "provider": "comicvine",
-            "entity_type": _COMICVINE_ISSUE_ENTITY,
-            "confirmed": _CONFIRMED_STATUS,
-            "user_id": user_id,
-        },
-    )
+    from app.repositories.issue_identity_repository import find_duplicate_physical_issues
+    
+    raw_anomalies = await find_duplicate_physical_issues(db, user_id=user_id)
     anomalies: list[DuplicateIdentityAnomaly] = []
-    for row in result.mappings():
-        issue_ids = tuple(int(v) for v in (row["issue_ids"] or []))
-        thread_ids = tuple(int(v) for v in (row["thread_ids"] or []))
-        statuses = tuple(str(v) for v in (row["statuses"] or []))
-        has_read = "read" in statuses
-        has_unread = "unread" in statuses
-        issue_numbers = list(row["issue_numbers"] or [])
-        thread_titles = list(row["thread_titles"] or [])
-        read_ats = list(row["read_ats"] or [])
-        details: list[dict[str, object]] = []
-        for idx, iid in enumerate(issue_ids):
-            details.append(
-                {
-                    "issue_id": iid,
-                    "thread_id": thread_ids[idx] if idx < len(thread_ids) else None,
-                    "thread_title": thread_titles[idx] if idx < len(thread_titles) else None,
-                    "issue_number": issue_numbers[idx] if idx < len(issue_numbers) else None,
-                    "status": statuses[idx] if idx < len(statuses) else None,
-                    "read_at": read_ats[idx] if idx < len(read_ats) else None,
-                }
-            )
+    for raw in raw_anomalies:
         anomalies.append(
             DuplicateIdentityAnomaly(
-                comicvine_issue_id=str(row["comicvine_issue_id"]),
-                external_identity_id=int(row["external_identity_id"]),
-                issue_ids=issue_ids,
-                thread_ids=thread_ids,
-                statuses=statuses,
-                has_read=has_read,
-                has_unread=has_unread,
-                issue_details=tuple(details),
+                comicvine_issue_id=raw["comicvine_issue_id"],
+                external_identity_id=raw["external_identity_id"],
+                issue_ids=raw["issue_ids"],
+                thread_ids=raw["thread_ids"],
+                statuses=raw["statuses"],
+                has_read=raw["has_read"],
+                has_unread=raw["has_unread"],
+                issue_details=raw["issue_details"],
             )
         )
     return anomalies
@@ -207,49 +157,9 @@ async def find_conflicting_provider_identities(
     Returns:
         One entry per Issue with conflicting confirmed ComicVine IDs.
     """
-    result = await db.execute(
-        text(
-            """
-            SELECT
-                i.id AS issue_id,
-                i.thread_id,
-                t.title AS thread_title,
-                i.issue_number,
-                array_agg(ei.external_id ORDER BY ei.external_id) AS comicvine_ids,
-                COUNT(DISTINCT ei.id) AS distinct_identities
-            FROM issues i
-            JOIN threads t ON t.id = i.thread_id
-            JOIN issue_external_identity_mappings iem ON iem.issue_id = i.id
-            JOIN external_identities ei ON ei.id = iem.external_identity_id
-            WHERE t.user_id = :user_id
-              AND ei.provider = :provider
-              AND ei.entity_type = :entity_type
-              AND iem.status = :confirmed
-            GROUP BY i.id, i.thread_id, t.title, i.issue_number
-            HAVING COUNT(DISTINCT ei.id) > 1
-            ORDER BY i.id
-            """
-        ),
-        {
-            "provider": "comicvine",
-            "entity_type": _COMICVINE_ISSUE_ENTITY,
-            "confirmed": _CONFIRMED_STATUS,
-            "user_id": user_id,
-        },
-    )
-    conflicts: list[dict[str, object]] = []
-    for row in result.mappings():
-        conflicts.append(
-            {
-                "issue_id": int(row["issue_id"]),
-                "thread_id": int(row["thread_id"]),
-                "thread_title": str(row["thread_title"] or ""),
-                "issue_number": str(row["issue_number"] or ""),
-                "comicvine_ids": list(row["comicvine_ids"] or []),
-                "distinct_identities": int(row["distinct_identities"]),
-            }
-        )
-    return conflicts
+    from app.repositories.issue_identity_repository import find_conflicting_provider_identities
+    
+    return await find_conflicting_provider_identities(db, user_id=user_id)
 
 
 async def resolve_canonical_issue(

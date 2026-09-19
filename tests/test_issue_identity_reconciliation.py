@@ -459,3 +459,264 @@ async def test_cbl_entries_without_matching_owned_issue_are_unresolved_not_dropp
     resolved = await resolve_cbl_entries_to_canonical(async_db, user_id=user.id, cbl_entries=entries)
     assert resolved[0].resolved_issue_id is None
     assert resolved[0].resolution_status in ("no_owned_issue_for_comicvine_id", "comicvine_identity_not_known")
+
+
+# ---------------------------------------------------------------------------
+# Tests for pagination and hard caps
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_anomalies_endpoint_respects_page_size_limit(async_db) -> None:
+    """Anomalies endpoint respects hard page size limit (max 100)."""
+    fixture = await _make_ultimate_universe_fixture(async_db)
+    user = cast(User, fixture["user"])
+    
+    # Test page size limit
+    from fastapi.testclient import TestClient
+    from app.main import app
+    
+    client = TestClient(app)
+    response = client.get(
+        f"/api/v1/issue-identity/anomalies?page=1&size=150",
+        headers={"Authorization": f"Bearer {user.get_test_token()}"}
+    )
+    assert response.status_code == 422  # Validation error for size > 100
+    
+    # Test valid page size within limit
+    response = client.get(
+        f"/api/v1/issue-identity/anomalies?page=1&size=50",
+        headers={"Authorization": f"Bearer {user.get_test_token()}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert "total" in data
+    assert "page" in data
+    assert "size" in data
+    assert "has_next" in data
+    assert "has_prev" in data
+    assert data["size"] == 50
+    assert data["page"] == 1
+    assert isinstance(data["total"], int)
+
+
+@pytest.mark.asyncio
+async def test_conflicts_endpoint_respects_page_size_limit(async_db) -> None:
+    """Conflicts endpoint respects hard page size limit (max 100)."""
+    fixture = await _make_ultimate_universe_fixture(async_db)
+    user = cast(User, fixture["user"])
+    
+    # Create a conflicting identity to test with
+    from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+    
+    # Add another conflicting ComicVine ID to an existing issue
+    issue = fixture["legacy_issues"][0]  # First issue from legacy
+    identity2 = await upsert_external_identity(
+        async_db, provider="comicvine", entity_type="issue", external_id="99999"
+    )
+    async_db.add(
+        IssueExternalIdentityMapping(
+            issue_id=issue.id,
+            external_identity_id=identity2.id,
+            status="confirmed",
+            confidence=1.0,
+            evidence_source="test-conflict",
+        )
+    )
+    await async_db.flush()
+    
+    from fastapi.testclient import TestClient
+    from app.main import app
+    
+    client = TestClient(app)
+    response = client.get(
+        f"/api/v1/issue-identity/conflicts?page=1&size=150",
+        headers={"Authorization": f"Bearer {user.get_test_token()}"}
+    )
+    assert response.status_code == 422  # Validation error for size > 100
+    
+    # Test valid page size within limit
+    response = client.get(
+        f"/api/v1/issue-identity/conflicts?page=1&size=25",
+        headers={"Authorization": f"Bearer {user.get_test_token()}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert "total" in data
+    assert "page" in data
+    assert "size" in data
+    assert "has_next" in data
+    assert "has_prev" in data
+    assert data["size"] == 25
+    assert data["page"] == 1
+    assert isinstance(data["total"], int)
+    # Verify typed response model
+    for item in data["items"]:
+        assert "issue_id" in item
+        assert "thread_id" in item
+        assert "thread_title" in item
+        assert "issue_number" in item
+        assert "comicvine_ids" in item
+        assert "distinct_identities" in item
+
+
+@pytest.mark.asyncio
+async def test_cbl_reconciliation_endpoint_respects_page_size_limit(async_db) -> None:
+    """CBL reconciliation endpoint respects hard page size limit (max 200)."""
+    fixture = await _make_ultimate_universe_fixture(async_db)
+    user = cast(User, fixture["user"])
+    
+    # Create a CBL source list with many entries
+    from app.models.cbl_reference import CBLSource, CBLSourceList
+    
+    source = CBLSource(repository="test/repo", revision_sha="abc123", synced_at=datetime.now(UTC))
+    async_db.add(source)
+    await async_db.flush()
+    
+    cbl_list = CBLSourceList(
+        source_id=source.id,
+        source_path="test.cbl",
+        name="Test List",
+        declared_issue_count=50,
+        content_hash="abc",
+        revision_sha="abc123",
+        active=True,
+    )
+    async_db.add(cbl_list)
+    await async_db.flush()
+    
+    # Add many entries to test pagination
+    for i in range(1, 51):
+        async_db.add(
+            CBLSourceEntry(list_id=cbl_list.id, position=i, series_name="Test Series", issue_number=str(i))
+        )
+    await async_db.flush()
+    
+    from fastapi.testclient import TestClient
+    from app.main import app
+    
+    client = TestClient(app)
+    response = client.get(
+        f"/api/v1/issue-identity/cbl/{cbl_list.id}/reconciliation?page=1&size=300",
+        headers={"Authorization": f"Bearer {user.get_test_token()}"}
+    )
+    assert response.status_code == 422  # Validation error for size > 200
+    
+    # Test valid page size within limit
+    response = client.get(
+        f"/api/v1/issue-identity/cbl/{cbl_list.id}/reconciliation?page=1&size=100",
+        headers={"Authorization": f"Bearer {user.get_test_token()}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "entries" in data
+    assert "total_positions" in data
+    assert "page" in data
+    assert "size" in data
+    assert "has_next" in data
+    assert "has_prev" in data
+    assert data["size"] == 100
+    assert data["page"] == 1
+    assert isinstance(data["total_positions"], int)
+    assert len(data["entries"]) <= 100  # Should respect page size
+
+
+@pytest.mark.asyncio
+async def test_anomalies_pagination_works_correctly(async_db) -> None:
+    """Anomalies pagination returns correct page information and items."""
+    fixture = await _make_ultimate_universe_fixture(async_db)
+    user = cast(User, fixture["user"])
+    
+    from fastapi.testclient import TestClient
+    from app.main import app
+    
+    client = TestClient(app)
+    
+    # First page - should show first 5 anomalies (we have 5 in fixture)
+    response = client.get(
+        f"/api/v1/issue-identity/anomalies?page=1&size=5",
+        headers={"Authorization": f"Bearer {user.get_test_token()}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 1
+    assert data["size"] == 5
+    assert data["total"] == 5  # 5 anomalies in fixture
+    assert data["has_next"] is False
+    assert data["has_prev"] is False
+    assert len(data["items"]) == 5
+    
+    # Test second page (should be empty since we only have 5 items)
+    response = client.get(
+        f"/api/v1/issue-identity/anomalies?page=2&size=5",
+        headers={"Authorization": f"Bearer {user.get_test_token()}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 2
+    assert data["size"] == 5
+    assert data["total"] == 5
+    assert data["has_next"] is False
+    assert data["has_prev"] is True
+    assert len(data["items"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_conflicts_pagination_works_correctly(async_db) -> None:
+    """Conflicts pagination returns correct page information and items."""
+    fixture = await _make_ultimate_universe_fixture(async_db)
+    user = cast(User, fixture["user"])
+    
+    # Create multiple conflicting identities
+    from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+    
+    # Add conflicting ComicVine IDs to multiple issues
+    for i, issue in enumerate(fixture["legacy_issues"][:3]):
+        identity2 = await upsert_external_identity(
+            async_db, provider="comicvine", entity_type="issue", external_id=f"{99990 + i}"
+        )
+        async_db.add(
+            IssueExternalIdentityMapping(
+                issue_id=issue.id,
+                external_identity_id=identity2.id,
+                status="confirmed",
+                confidence=1.0,
+                evidence_source="test-conflict",
+            )
+        )
+    await async_db.flush()
+    
+    from fastapi.testclient import TestClient
+    from app.main import app
+    
+    client = TestClient(app)
+    
+    # First page - should show first 2 conflicts
+    response = client.get(
+        f"/api/v1/issue-identity/conflicts?page=1&size=2",
+        headers={"Authorization": f"Bearer {user.get_test_token()}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 1
+    assert data["size"] == 2
+    assert data["total"] >= 2  # At least 2 conflicts
+    assert data["has_next"] is True  # More pages available
+    assert data["has_prev"] is False
+    assert len(data["items"]) == 2
+    
+    # Second page
+    response = client.get(
+        f"/api/v1/issue-identity/conflicts?page=2&size=2",
+        headers={"Authorization": f"Bearer {user.get_test_token()}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 2
+    assert data["size"] == 2
+    assert data["total"] >= 2
+    assert data["has_next"] is False  # No more pages
+    assert data["has_prev"] is True
+    assert len(data["items"]) >= 0
