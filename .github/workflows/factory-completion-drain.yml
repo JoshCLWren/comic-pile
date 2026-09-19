@@ -33,5 +33,5 @@ jobs:
         run: |
           set -Eeuo pipefail
           gh workflow run fixed-model-factory-dispatch.yml \
-            --repo "$GITHUB_REPOSITORY" --ref main -f mode=completion
+            --repo "$GITHUB_REPOSITORY" --ref main -f mode=roster
           echo 'Completion capacity delegated to Fixed Model Factory Dispatcher'
