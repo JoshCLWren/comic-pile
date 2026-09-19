@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import urllib.error
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from pathlib import Path
-import urllib.error
 
 import pytest
 
