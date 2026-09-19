@@ -529,15 +529,16 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
                 db, user_id, deleted_issue_ids
             )
 
-        from comic_pile.dependencies import refresh_user_blocked_status
+        from comic_pile.dependencies import refresh_legacy_blocked_status, refresh_user_blocked_status
 
         try:
             await refresh_user_blocked_status(user_id, db)
         except HTTPException as exc:
             if exc.status_code == 422 and isinstance(exc.detail, dict) and exc.detail.get("code") == "continuity_graph_too_large":
                 # Continuity graph is too large (user has too many threads/issues/etc.)
-                # Skip blocking refresh since we can't update either system
-                pass
+                # Skip continuity-based blocking refresh and use only dependency-based blocking
+                # since we've already cleaned up continuity data related to the deleted thread
+                await refresh_legacy_blocked_status(user_id, db)
             else:
                 raise
 
