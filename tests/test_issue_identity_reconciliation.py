@@ -186,12 +186,15 @@ async def _make_ultimate_universe_fixture(async_db) -> dict[str, object]:
 # ---------------------------------------------------------------------------
 
 
+async def _legacy_issues(fixture: dict[str, object]) -> list[Issue]:
+    return cast(list[Issue], fixture["legacy_issues"])
+
+
 @pytest.mark.asyncio
 async def test_duplicate_detection_finds_shared_comicvine_identity(async_db) -> None:
     """Same confirmed ComicVine issue cannot remain independent without being surfaced."""
     fixture = await _make_ultimate_universe_fixture(async_db)
     user = cast(User, fixture["user"])
-
     anomalies = await find_duplicate_physical_issues(async_db, user_id=user.id)
     # Five overlapping ComicVine IDs each duplicated across two issues.
     assert len(anomalies) == 5
@@ -233,6 +236,7 @@ async def test_history_survives_consolidation(async_db) -> None:
     """Historical read_at, rating, and event facts survive consolidation."""
     fixture = await _make_ultimate_universe_fixture(async_db)
     user = cast(User, fixture["user"])
+    legacy_issues = cast(list[Issue], fixture["legacy_issues"])
     newer_issues = cast(list[Issue], fixture["newer_issues"])
     newer_seven = next(iss for iss in newer_issues if iss.issue_number == "7")
 
@@ -506,11 +510,12 @@ async def test_conflicts_endpoint_respects_page_size_limit(async_db) -> None:
     """Conflicts endpoint respects hard page size limit (max 100)."""
     fixture = await _make_ultimate_universe_fixture(async_db)
     user = cast(User, fixture["user"])
+    legacy_issues = cast(list[Issue], fixture["legacy_issues"])
     token = create_access_token(data={"sub": user.username, "jti": "test"})
 
     from app.models.external_identity import IssueExternalIdentityMapping
 
-    issue = fixture["legacy_issues"][0]
+    issue = legacy_issues[0]
     identity2 = await upsert_external_identity(
         async_db, provider="comicvine", entity_type="issue", external_id="99999"
     )
@@ -601,7 +606,7 @@ async def test_cbl_reconciliation_endpoint_respects_page_size_limit(async_db) ->
     assert response.status_code == 422
 
     response = client.get(
-        f"/api/v1/issue-identity/cbl/{cbl_list.id}/reconciliation?page=1&size=100",
+        f"/api/v1/issue-identity/cbl/{cbl_list.id}/reconciliation?page=1&size=30",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
@@ -612,10 +617,24 @@ async def test_cbl_reconciliation_endpoint_respects_page_size_limit(async_db) ->
     assert "size" in data
     assert "has_next" in data
     assert "has_prev" in data
-    assert data["size"] == 100
+    assert data["size"] == 30
     assert data["page"] == 1
     assert isinstance(data["total_positions"], int)
-    assert len(data["entries"]) <= 100
+    assert len(data["entries"]) == 30
+    assert data["has_next"] is True
+    assert data["has_prev"] is False
+
+    response = client.get(
+        f"/api/v1/issue-identity/cbl/{cbl_list.id}/reconciliation?page=2&size=30",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 2
+    assert data["size"] == 30
+    assert data["has_next"] is False
+    assert data["has_prev"] is True
+    assert len(data["entries"]) == 20
 
 
 @pytest.mark.asyncio
@@ -662,11 +681,13 @@ async def test_conflicts_pagination_works_correctly(async_db) -> None:
     """Conflicts pagination returns correct page information and items."""
     fixture = await _make_ultimate_universe_fixture(async_db)
     user = cast(User, fixture["user"])
+    legacy_issues = cast(list[Issue], fixture["legacy_issues"])
     token = create_access_token(data={"sub": user.username, "jti": "test"})
 
     from app.models.external_identity import IssueExternalIdentityMapping
 
-    for i, issue in enumerate(fixture["legacy_issues"][:3]):
+    legacy_issues = cast(list[Issue], fixture["legacy_issues"])
+    for i, issue in enumerate(legacy_issues[:3]):
         identity2 = await upsert_external_identity(
             async_db, provider="comicvine", entity_type="issue", external_id=f"{99990 + i}"
         )

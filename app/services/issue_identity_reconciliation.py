@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +24,12 @@ from app.models.event import Event
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.models.issue import Issue
 from app.models.thread import Thread
+from app.repositories.issue_identity_repository import (
+    count_conflicting_provider_identities as repo_count_conflicts,
+    count_duplicate_physical_issues as repo_count_duplicates,
+    find_conflicting_provider_identities as repo_find_conflicts,
+    find_duplicate_physical_issues as repo_find_duplicates,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +100,22 @@ class IdentityReport:
     conflicting_provider_ids: tuple[dict[str, object], ...]
 
 
+@dataclass(frozen=True, slots=True)
+class DuplicatePhysicalIssuePage:
+    """Paginated duplicate physical-issue results for an authenticated user."""
+
+    anomalies: tuple[DuplicateIdentityAnomaly, ...]
+    total: int
+
+
+@dataclass(frozen=True, slots=True)
+class ConflictingProviderIdentityPage:
+    """Paginated conflicting provider identity results for an authenticated user."""
+
+    conflicts: tuple[dict[str, object], ...]
+    total: int
+
+
 _COMICVINE_ISSUE_ENTITY = "issue"
 _CONFIRMED_STATUS = "confirmed"
 
@@ -101,6 +124,8 @@ async def find_duplicate_physical_issues(
     db: AsyncSession,
     *,
     user_id: int,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[DuplicateIdentityAnomaly]:
     """Find confirmed ComicVine identities that map to multiple user-owned issues.
 
@@ -113,35 +138,75 @@ async def find_duplicate_physical_issues(
     Args:
         db: Async database session.
         user_id: Owner user ID to scope the anomaly search.
+        limit: Optional maximum number of anomaly groups to return.
+        offset: Number of anomaly groups to skip.
 
     Returns:
         One anomaly per duplicated ComicVine issue identity, each listing all
         affected Issue rows for that user.
     """
-    from app.repositories.issue_identity_repository import find_duplicate_physical_issues
-    
-    raw_anomalies = await find_duplicate_physical_issues(db, user_id=user_id)
+    raw_anomalies = await repo_find_duplicates(
+        db, user_id=user_id, limit=limit, offset=offset
+    )
     anomalies: list[DuplicateIdentityAnomaly] = []
     for raw in raw_anomalies:
+        issue_ids = cast(tuple[int, ...], raw["issue_ids"])
+        thread_ids = cast(tuple[int, ...], raw["thread_ids"])
+        statuses = cast(tuple[str, ...], raw["statuses"])
+        issue_numbers = list(cast(tuple[object, ...], raw["issue_numbers"]))
+        thread_titles = list(cast(tuple[object, ...], raw["thread_titles"]))
+        read_ats = list(cast(tuple[object, ...], raw["read_ats"]))
+        details: list[dict[str, object]] = []
+        for idx, iid in enumerate(issue_ids):
+            details.append(
+                {
+                    "issue_id": iid,
+                    "thread_id": thread_ids[idx] if idx < len(thread_ids) else None,
+                    "thread_title": thread_titles[idx] if idx < len(thread_titles) else None,
+                    "issue_number": issue_numbers[idx] if idx < len(issue_numbers) else None,
+                    "status": statuses[idx] if idx < len(statuses) else None,
+                    "read_at": read_ats[idx] if idx < len(read_ats) else None,
+                }
+            )
         anomalies.append(
             DuplicateIdentityAnomaly(
-                comicvine_issue_id=raw["comicvine_issue_id"],
-                external_identity_id=raw["external_identity_id"],
-                issue_ids=raw["issue_ids"],
-                thread_ids=raw["thread_ids"],
-                statuses=raw["statuses"],
-                has_read=raw["has_read"],
-                has_unread=raw["has_unread"],
-                issue_details=raw["issue_details"],
+                comicvine_issue_id=str(raw["comicvine_issue_id"]),
+                external_identity_id=int(raw["external_identity_id"]),
+                issue_ids=issue_ids,
+                thread_ids=thread_ids,
+                statuses=statuses,
+                has_read="read" in statuses,
+                has_unread="unread" in statuses,
+                issue_details=tuple(details),
             )
         )
     return anomalies
+
+
+async def list_duplicate_physical_issues(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    page: int = 1,
+    size: int = 100,
+) -> DuplicatePhysicalIssuePage:
+    """Return a capped, paginated page of duplicate physical-issue anomalies."""
+    total = await repo_count_duplicates(db, user_id=user_id)
+    offset = (page - 1) * size
+    anomalies = await repo_find_duplicates(
+        db, user_id=user_id, limit=size, offset=offset
+    )
+    return DuplicatePhysicalIssuePage(
+        anomalies=tuple(anomalies), total=total
+    )
 
 
 async def find_conflicting_provider_identities(
     db: AsyncSession,
     *,
     user_id: int,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[dict[str, object]]:
     """Find issues that have confirmed mappings to different ComicVine IDs.
 
@@ -153,13 +218,31 @@ async def find_conflicting_provider_identities(
     Args:
         db: Async database session.
         user_id: Owner user ID.
+        limit: Optional maximum number of conflicts to return.
+        offset: Number of conflict groups to skip.
 
     Returns:
         One entry per Issue with conflicting confirmed ComicVine IDs.
     """
-    from app.repositories.issue_identity_repository import find_conflicting_provider_identities
-    
-    return await find_conflicting_provider_identities(db, user_id=user_id)
+    return await repo_find_conflicts(db, user_id=user_id, limit=limit, offset=offset)
+
+
+async def list_conflicting_provider_identities(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    page: int = 1,
+    size: int = 100,
+) -> ConflictingProviderIdentityPage:
+    """Return a capped, paginated page of conflicting provider identities."""
+    total = await repo_count_conflicts(db, user_id=user_id)
+    offset = (page - 1) * size
+    conflicts = await repo_find_conflicts(
+        db, user_id=user_id, limit=size, offset=offset
+    )
+    return ConflictingProviderIdentityPage(
+        conflicts=tuple(conflicts), total=total
+    )
 
 
 async def resolve_canonical_issue(
