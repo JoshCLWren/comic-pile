@@ -91,7 +91,7 @@ async def list_stale_threads(
 ) -> QueueThreadListResponse:
     """List the authenticated user's threads not read in ``days`` with pagination.
 
-    Stale threads are ordered by oldest activity first (nulls last) with deterministic
+    Stale threads are ordered by oldest activity first (nulls first) with deterministic
     cursor-based pagination. The cursor is invalidated by changing the ``days`` parameter.
 
     Args:
