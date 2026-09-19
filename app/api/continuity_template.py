@@ -200,7 +200,6 @@ async def adopt_crossover_template(
             }
         )
 
-    from app.models.continuity_plan import ContinuityPlan
     from app.services.continuity_plan_writer import (
         replace_compiled_rules,
         validate_node_ownership,
