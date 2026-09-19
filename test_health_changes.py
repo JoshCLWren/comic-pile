@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 
+"""Tests for health probe changes."""
+
 import asyncio
-import time
-from app.services.health_probe import (
-    ProbeError, ProbeTimeoutError, ProbeUnavailableError, ProbeNotConfiguredError,
-    _timed_probe, database_probe, cache_probe, get_dependency_health
-)
-from unittest.mock import AsyncMock, MagicMock
+from app.services.health_probe import ProbeError, _timed_probe
 
 async def test_probe_timeout():
-    """Test that timeout handling works correctly"""
+    """Test that timeout handling works correctly."""
     async def failing_operation():
         # Sleep longer than the timeout to trigger the exception
         await asyncio.sleep(3.0)  # This will timeout after 2 seconds
@@ -19,7 +16,7 @@ async def test_probe_timeout():
     print("✓ Timeout probe test passed")
 
 async def test_probe_success():
-    """Test that successful probe works"""
+    """Test that successful probe works."""
     async def successful_operation():
         return "success"
     
@@ -28,7 +25,7 @@ async def test_probe_success():
     print("✓ Success probe test passed")
 
 async def test_probe_exception():
-    """Test that ProbeError is properly caught"""
+    """Test that ProbeError is properly caught."""
     async def failing_operation():
         raise ProbeError("test error")
     
@@ -37,6 +34,7 @@ async def test_probe_exception():
     print("✓ Exception probe test passed")
 
 async def main():
+    """Run all health probe tests."""
     print("Testing health probe changes...")
     await test_probe_timeout()
     await test_probe_success()
