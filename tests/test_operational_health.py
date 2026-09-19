@@ -311,7 +311,7 @@ async def test_warm_endpoint_handler_enabled_no_activity(
     mock_db = AsyncMock()
     mock_result = AsyncMock()
     mock_result.scalar_one_or_none.return_value = None
-    mock_db.execute.return_value = mock_result
+    mock_db.execute = AsyncMock(return_value=mock_result)
 
     result = await health_module.warm_endpoint(mock_request, mock_db)
 
@@ -350,7 +350,7 @@ async def test_warm_endpoint_handler_with_recent_activity(
     mock_db = AsyncMock()
     mock_result = AsyncMock()
     mock_result.scalar_one_or_none.return_value = datetime.now(UTC)
-    mock_db.execute.return_value = mock_result
+    mock_db.execute = AsyncMock(return_value=mock_result)
 
     result = await health_module.warm_endpoint(mock_request, mock_db)
 
@@ -384,6 +384,7 @@ async def test_warm_endpoint_handler_rate_limit_exceeded(
     # Request count exceeds the limit
     mock_request = _make_mock_request(invocation=10)
     mock_db = AsyncMock()
+    mock_db.execute = AsyncMock()
 
     result = await health_module.warm_endpoint(mock_request, mock_db)
 
