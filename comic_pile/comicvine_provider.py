@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from datetime import timezone
 from email.utils import parsedate_to_datetime
 import hashlib
 import json
 import math
+from pathlib import Path
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass
-from datetime import timezone
-from pathlib import Path
 
 from filelock import FileLock
 
