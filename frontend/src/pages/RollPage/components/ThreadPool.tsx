@@ -73,7 +73,7 @@ export function ThreadPool({
   }, [isRatingView])
 
   return (
-    <div className={`px-3 md:px-4 pb-20 md:pb-28 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-white/5 pt-4 md:pt-8'}`}>
+    <div className={`px-3 md:px-4 pb-20 md:pb-28 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-[var(--theme-border)] pt-4 md:pt-8'}`}>
       {!isRatingView && <div className="flex items-center gap-2 shrink-0 mb-4">
         <div className="w-2 h-2 rounded-full bg-amber-600 shadow-[0_0_15px_var(--accent-red)]"></div>
         <div className="flex-1">
@@ -89,7 +89,7 @@ export function ThreadPool({
           onClick={onShuffle}
           disabled={shuffleIsPending || pool.length < 2}
           aria-describedby="shuffle-queue-description"
-          className="h-8 px-3 rounded-lg border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-50"
+          className="h-8 px-3 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-[var(--theme-bg-panel)] disabled:opacity-50"
         >
           Shuffle queue
         </button>
@@ -110,7 +110,7 @@ export function ThreadPool({
             >
               + Add a Series
             </button>
-            <div className="text-left bg-white/5 rounded-xl p-4 mt-4">
+            <div className="text-left bg-[var(--theme-bg-panel)] rounded-xl p-4 mt-4">
               <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-2">How it works:</p>
               <ul className="text-xs text-stone-500 space-y-1">
                 <li>• Add the series you&apos;re reading</li>
@@ -149,7 +149,7 @@ export function ThreadPool({
                 role="button"
                 tabIndex={0}
                 aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${thread.route_labels?.length ? `, connected to ${thread.route_labels.join(', ')}` : ''}. Open series actions.`}
-                className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' : ''
+                className={`flex items-center gap-3 px-4 py-3 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl group transition-all cursor-pointer hover:bg-[var(--theme-bg-panel)] ${isSelected ? 'pool-thread-selected border-[var(--theme-comic-accent)]/30' : ''
                   }`}
               >
                 <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
@@ -194,7 +194,7 @@ export function ThreadPool({
               {blockedThreads.map((thread) => (
                 <div
                   key={thread.id}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+                  className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
                 >
                   <span className="text-sm">🔒</span>
                   <div className="flex-1 min-w-0">
@@ -271,7 +271,7 @@ export function ThreadPool({
               {snoozedThreads.map((thread) => (
                 <div
                   key={thread.id}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+                  className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
                 >
                   <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
                   <button
@@ -312,7 +312,7 @@ export function ThreadPool({
               {skippedThreads.map((thread) => (
                 <div
                   key={thread.id}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+                  className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
                 >
                   <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
                   <button

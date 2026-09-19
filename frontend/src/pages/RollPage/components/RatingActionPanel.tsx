@@ -55,7 +55,7 @@ export function RatingActionPanel({
 
   return (
     <div
-      className="rating-actions sticky bottom-0 -mx-3 space-y-2 border-t border-white/10 bg-white/[0.04] px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] backdrop-blur md:static md:-mx-4 md:px-4 md:pb-3"
+      className="rating-actions sticky bottom-0 -mx-3 space-y-2 border-t border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] backdrop-blur md:static md:-mx-4 md:px-4 md:pb-3"
       data-testid="rating-actions"
     >
       {threadTitle && issueNumber != null ? (
