@@ -184,7 +184,7 @@ async def _timed_probe(operation: Callable[[], Awaitable[None]]) -> DependencyPr
     try:
         async with asyncio.timeout(DEPENDENCY_TIMEOUT_SECONDS):
             await operation()
-    except asyncio.TimeoutError:
+    except TimeoutError:
         probe_status: Literal["healthy", "unavailable", "timeout", "not_configured"] = (
             "timeout"
         )
