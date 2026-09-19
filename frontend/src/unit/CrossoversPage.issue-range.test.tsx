@@ -1,5 +1,4 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
@@ -207,7 +206,8 @@ describe('CrossoversPage issue ranges', () => {
     await screen.findByText('Annihilation')
     openRangeForm()
     await loadIssues()
-    selectRange('33', '31')
+    fireEvent.change(screen.getByRole('combobox', { name: 'First issue' }), { target: { value: '33' } })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Last issue' }), { target: { value: '31' } })
 
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Choose a valid issue range in reading order.',

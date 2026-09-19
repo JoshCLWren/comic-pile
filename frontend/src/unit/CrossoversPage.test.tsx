@@ -170,7 +170,7 @@ describe('CrossoversPage', () => {
     await screen.findByText('Annihilation')
     await screen.findByText('Secret Wars')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' })) // click rename on Annihilation
+    fireEvent.click(screen.getAllByRole('button', { name: 'Rename' })[0]) // click rename on Annihilation
     fireEvent.change(screen.getByLabelText('Rename Annihilation'), { target: { value: 'Annihilation Conquest' } })
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: 'Rename' })) // click rename on Secret Wars
