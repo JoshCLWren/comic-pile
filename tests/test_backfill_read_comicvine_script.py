@@ -306,7 +306,7 @@ async def test_unmapped_resolution_requires_one_exact_numeric_volume_match(
             ]
 
     persist = AsyncMock(return_value=(55, "4005"))
-    monkeypatch.setattr(cli, "_persist_resolved_mapping", persist)
+    monkeypatch.setattr(cli._creator_helper, "_persist_resolved_mapping", persist)
 
     result = await cli._resolve_unmapped_issue(
         object(),
@@ -339,7 +339,7 @@ async def test_unmapped_resolution_refuses_ambiguous_duplicate_matches(
             ]
 
     persist = AsyncMock()
-    monkeypatch.setattr(cli, "_persist_resolved_mapping", persist)
+    monkeypatch.setattr(cli._creator_helper, "_persist_resolved_mapping", persist)
 
     result = await cli._resolve_unmapped_issue(
         object(),
