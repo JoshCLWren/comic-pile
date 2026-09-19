@@ -260,14 +260,6 @@ export default function DependencyBuilder({
   }, [isOpen, threadId, refetchDependencies, onChanged, pendingDeletion, toast])
 
   useEffect(() => {
-    if (!isOpen) return
-    const query = searchQuery.trim()
-    if (query.length < 2) {
-      return
-    }
-  }, [searchQuery, isOpen])
-
-  useEffect(() => {
     if (sourceIssuesError) {
       setError(getApiErrorDetail(sourceIssuesError))
     }
