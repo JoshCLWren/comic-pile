@@ -114,8 +114,8 @@ export default function DependencyBuilder({
   )
 
   const searchResults = useMemo(
-    () => searchResultsData?.threads ?? [],
-    [searchResultsData]
+    () => (searchResultsData?.threads ?? []).filter((candidate) => candidate.id !== threadId),
+    [searchResultsData, threadId]
   )
 
   const selectedThread = useMemo(
@@ -142,10 +142,7 @@ export default function DependencyBuilder({
     if (!threadId) return
     setIsGraphLoading(true)
     try {
-      const [depsData, allBlockedIds] = await Promise.all([
-        dependenciesApi.listThreadDependencies(threadId),
-        dependenciesApi.listBlockedThreadIds(),
-      ])
+      const depsData = await dependenciesApi.listThreadDependencies(threadId)
 
       const relatedIds = new Set([threadId])
       const allDeps = [...depsData.blocking, ...depsData.blocked_by]

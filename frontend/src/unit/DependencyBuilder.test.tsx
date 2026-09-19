@@ -53,12 +53,8 @@ vi.mock('../services/api-issues', async () => {
 
 const mockedListThreadDependencies = vi.mocked(mocks.listThreadDependencies)
 const mockedListBlockedThreadIds = vi.mocked(mocks.listBlockedThreadIds)
-const mockedCreateDependency = vi.mocked(mocks.createDependency)
-const mockedDeleteDependency = vi.mocked(mocks.deleteDependency)
-const mockedUpdateDependency = vi.mocked(mocks.updateDependency)
 const mockedListThreads = vi.mocked(mocks.listThreads)
 const mockedListIssues = vi.mocked(mocks.listIssues)
-const mockedMigrateThread = vi.mocked(mocks.migrateThread)
 
 function makeThread(overrides: Partial<Thread> & { id: number; title: string }): Thread {
   return {
