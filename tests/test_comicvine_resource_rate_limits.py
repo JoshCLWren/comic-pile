@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import urllib.error
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from email.utils import format_datetime
 from pathlib import Path
 
@@ -20,7 +20,7 @@ def test_retry_after_parses_delta_seconds_and_http_date() -> None:
     """ComicVine may express Retry-After as seconds or an absolute HTTP date."""
     assert _retry_after_seconds({"Retry-After": "123"}, now=1000.0) == 123
 
-    now = datetime(2026, 9, 19, 14, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 9, 19, 14, 0, tzinfo=UTC)
     retry_at = now + timedelta(seconds=90)
     assert (
         _retry_after_seconds(
