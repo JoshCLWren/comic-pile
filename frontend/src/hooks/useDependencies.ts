@@ -1,13 +1,13 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { dependenciesApi, threadsApi, migrationApi } from '../services/api';
 import { issuesApi, type IssueListParams } from '../services/api-issues';
-import type { Dependency, Thread, ThreadDependenciesResponse, ThreadListResponse } from '../types';
+import type { Dependency, Issue, Thread, ThreadDependenciesResponse, ThreadListResponse } from '../types';
 import { queryClient } from '../query/queryClient';
 import { queryKeys } from '../query/queryKeys';
 import { invalidateAfterDependencyChange, applyMigratedThreadCache } from '../query/cacheEffects';
 
-async function fetchAllUnreadIssues(threadId: number): Promise<import('../types').Issue[]> {
-  const allIssues: import('../types').Issue[] = [];
+async function fetchAllUnreadIssues(threadId: number): Promise<Issue[]> {
+  const allIssues: Issue[] = [];
   const seenPageTokens = new Set<string>();
   let nextPageToken: string | null = null;
 
@@ -52,7 +52,7 @@ export function useSearchThreads(query: string) {
   const normalizedQuery = query.trim();
   return useQuery<ThreadListResponse>({
     queryKey: normalizedQuery.length >= 2
-      ? ['dependencies', 'search', normalizedQuery]
+      ? queryKeys.dependencies.search(normalizedQuery)
       : [],
     queryFn: () => threadsApi.list({ search: normalizedQuery }),
     enabled: normalizedQuery.length >= 2,
@@ -61,8 +61,8 @@ export function useSearchThreads(query: string) {
 }
 
 export function useThreadIssuesForDependency(threadId: number | null | undefined) {
-  return useQuery<import('../types').Issue[]>({
-    queryKey: threadId != null ? ['dependencies', 'issues', threadId] : [],
+  return useQuery<Issue[]>({
+    queryKey: threadId != null ? queryKeys.dependencies.issues(threadId) : [],
     queryFn: () => fetchAllUnreadIssues(threadId!),
     enabled: threadId != null,
     retry: false,

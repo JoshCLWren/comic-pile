@@ -33,6 +33,9 @@ vi.mock('../services/api', async () => {
     threadsApi: {
       list: mocks.listThreads,
     },
+    migrationApi: {
+      migrateThread: mocks.migrateThread,
+    },
   }
 })
 
@@ -44,9 +47,6 @@ vi.mock('../services/api-issues', async () => {
     ...actual,
     issuesApi: {
       list: mocks.listIssues,
-    },
-    migrationApi: {
-      migrateThread: mocks.migrateThread,
     },
   }
 })
