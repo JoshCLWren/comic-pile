@@ -17,6 +17,7 @@ import pytest
 from sqlalchemy import select
 
 from app.external_identities import link_issue_external_identity, upsert_external_identity
+from app.auth import create_access_token
 from app.models.cbl_reference import CBLSource, CBLSourceEntry, CBLSourceList
 from app.models.event import Event
 from app.models.issue import Issue
@@ -185,12 +186,15 @@ async def _make_ultimate_universe_fixture(async_db) -> dict[str, object]:
 # ---------------------------------------------------------------------------
 
 
+async def _legacy_issues(fixture: dict[str, object]) -> list[Issue]:
+    return cast(list[Issue], fixture["legacy_issues"])
+
+
 @pytest.mark.asyncio
 async def test_duplicate_detection_finds_shared_comicvine_identity(async_db) -> None:
     """Same confirmed ComicVine issue cannot remain independent without being surfaced."""
     fixture = await _make_ultimate_universe_fixture(async_db)
     user = cast(User, fixture["user"])
-
     anomalies = await find_duplicate_physical_issues(async_db, user_id=user.id)
     # Five overlapping ComicVine IDs each duplicated across two issues.
     assert len(anomalies) == 5
@@ -232,6 +236,7 @@ async def test_history_survives_consolidation(async_db) -> None:
     """Historical read_at, rating, and event facts survive consolidation."""
     fixture = await _make_ultimate_universe_fixture(async_db)
     user = cast(User, fixture["user"])
+    legacy_issues = cast(list[Issue], fixture["legacy_issues"])
     newer_issues = cast(list[Issue], fixture["newer_issues"])
     newer_seven = next(iss for iss in newer_issues if iss.issue_number == "7")
 
@@ -459,3 +464,259 @@ async def test_cbl_entries_without_matching_owned_issue_are_unresolved_not_dropp
     resolved = await resolve_cbl_entries_to_canonical(async_db, user_id=user.id, cbl_entries=entries)
     assert resolved[0].resolved_issue_id is None
     assert resolved[0].resolution_status in ("no_owned_issue_for_comicvine_id", "comicvine_identity_not_known")
+
+
+# ---------------------------------------------------------------------------
+# Tests for pagination and hard caps
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_anomalies_endpoint_respects_page_size_limit(
+    async_db, client
+) -> None:
+    """Anomalies endpoint respects hard page size limit (max 100)."""
+    fixture = await _make_ultimate_universe_fixture(async_db)
+    user = cast(User, fixture["user"])
+    token = create_access_token(data={"sub": user.username, "jti": "test"})
+    client.headers["Authorization"] = f"Bearer {token}"
+
+    response = await client.get(
+        "/api/v1/issue-identity/anomalies?page=1&size=150",
+    )
+    assert response.status_code == 422
+
+    response = await client.get(
+        "/api/v1/issue-identity/anomalies?page=1&size=50",
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert "total" in data
+    assert "page" in data
+    assert "size" in data
+    assert "has_next" in data
+    assert "has_prev" in data
+    assert data["size"] == 50
+    assert data["page"] == 1
+    assert isinstance(data["total"], int)
+
+
+@pytest.mark.asyncio
+async def test_conflicts_endpoint_respects_page_size_limit(
+    async_db, client
+) -> None:
+    """Conflicts endpoint respects hard page size limit (max 100)."""
+    fixture = await _make_ultimate_universe_fixture(async_db)
+    user = cast(User, fixture["user"])
+    legacy_issues = cast(list[Issue], fixture["legacy_issues"])
+    token = create_access_token(data={"sub": user.username, "jti": "test"})
+    client.headers["Authorization"] = f"Bearer {token}"
+
+    from app.models.external_identity import IssueExternalIdentityMapping
+
+    issue = legacy_issues[0]
+    identity2 = await upsert_external_identity(
+        async_db, provider="comicvine", entity_type="issue", external_id="99999"
+    )
+    async_db.add(
+        IssueExternalIdentityMapping(
+            issue_id=issue.id,
+            external_identity_id=identity2.id,
+            status="confirmed",
+            confidence=1.0,
+            evidence_source="test-conflict",
+        )
+    )
+    await async_db.flush()
+
+    response = await client.get(
+        "/api/v1/issue-identity/conflicts?page=1&size=150",
+    )
+    assert response.status_code == 422
+
+    response = await client.get(
+        "/api/v1/issue-identity/conflicts?page=1&size=25",
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert "total" in data
+    assert "page" in data
+    assert "size" in data
+    assert "has_next" in data
+    assert "has_prev" in data
+    assert data["size"] == 25
+    assert data["page"] == 1
+    assert isinstance(data["total"], int)
+    for item in data["items"]:
+        assert "issue_id" in item
+        assert "thread_id" in item
+        assert "thread_title" in item
+        assert "issue_number" in item
+        assert "comicvine_ids" in item
+        assert "distinct_identities" in item
+
+
+@pytest.mark.asyncio
+async def test_cbl_reconciliation_endpoint_respects_page_size_limit(
+    async_db, client
+) -> None:
+    """CBL reconciliation endpoint respects hard page size limit (max 200)."""
+    fixture = await _make_ultimate_universe_fixture(async_db)
+    user = cast(User, fixture["user"])
+    token = create_access_token(data={"sub": user.username, "jti": "test"})
+    client.headers["Authorization"] = f"Bearer {token}"
+
+    from app.models.cbl_reference import CBLSource, CBLSourceList
+
+    source = CBLSource(repository="test/repo", revision_sha="abc123", synced_at=datetime.now(UTC))
+    async_db.add(source)
+    await async_db.flush()
+
+    cbl_list = CBLSourceList(
+        source_id=source.id,
+        source_path="test.cbl",
+        name="Test List",
+        declared_issue_count=50,
+        content_hash="abc",
+        revision_sha="abc123",
+        active=True,
+    )
+    async_db.add(cbl_list)
+    await async_db.flush()
+
+    for i in range(1, 51):
+        async_db.add(
+            CBLSourceEntry(list_id=cbl_list.id, position=i, series_name="Test Series", issue_number=str(i))
+        )
+    await async_db.flush()
+
+    response = await client.get(
+        f"/api/v1/issue-identity/cbl/{cbl_list.id}/reconciliation?page=1&size=300",
+    )
+    assert response.status_code == 422
+
+    response = await client.get(
+        f"/api/v1/issue-identity/cbl/{cbl_list.id}/reconciliation?page=1&size=30",
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "entries" in data
+    assert "total_positions" in data
+    assert "page" in data
+    assert "size" in data
+    assert "has_next" in data
+    assert "has_prev" in data
+    assert data["size"] == 30
+    assert data["page"] == 1
+    assert isinstance(data["total_positions"], int)
+    assert len(data["entries"]) == 30
+    assert data["has_next"] is True
+    assert data["has_prev"] is False
+
+    response = await client.get(
+        f"/api/v1/issue-identity/cbl/{cbl_list.id}/reconciliation?page=2&size=30",
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 2
+    assert data["size"] == 30
+    assert data["has_next"] is False
+    assert data["has_prev"] is True
+    assert len(data["entries"]) == 20
+
+
+@pytest.mark.asyncio
+async def test_anomalies_pagination_works_correctly(
+    async_db, client
+) -> None:
+    """Anomalies pagination returns correct page information and items."""
+    fixture = await _make_ultimate_universe_fixture(async_db)
+    user = cast(User, fixture["user"])
+    token = create_access_token(data={"sub": user.username, "jti": "test"})
+    client.headers["Authorization"] = f"Bearer {token}"
+
+    response = await client.get(
+        "/api/v1/issue-identity/anomalies?page=1&size=5",
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 1
+    assert data["size"] == 5
+    assert data["total"] == 5
+    assert data["has_next"] is False
+    assert data["has_prev"] is False
+    assert len(data["items"]) == 5
+
+    response = await client.get(
+        "/api/v1/issue-identity/anomalies?page=2&size=5",
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 2
+    assert data["size"] == 5
+    assert data["total"] == 5
+    assert data["has_next"] is False
+    assert data["has_prev"] is True
+    assert len(data["items"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_conflicts_pagination_works_correctly(
+    async_db, client
+) -> None:
+    """Conflicts pagination returns correct page information and items."""
+    fixture = await _make_ultimate_universe_fixture(async_db)
+    user = cast(User, fixture["user"])
+    legacy_issues = cast(list[Issue], fixture["legacy_issues"])
+    token = create_access_token(data={"sub": user.username, "jti": "test"})
+    client.headers["Authorization"] = f"Bearer {token}"
+
+    from app.models.external_identity import IssueExternalIdentityMapping
+
+    legacy_issues = cast(list[Issue], fixture["legacy_issues"])
+    # Use issues that already have a confirmed ComicVine mapping in the fixture:
+    # legacy_issues[0] (#1) -> 96901, legacy_issues[6] (#7) -> 97001, legacy_issues[7] (#8) -> 97002
+    conflict_issues = [legacy_issues[0], legacy_issues[6], legacy_issues[7]]
+    for i, issue in enumerate(conflict_issues):
+        # To create a conflict, we need at least TWO confirmed mappings for the SAME issue
+        # The fixture already gave these issues one confirmed mapping.
+        identity2 = await upsert_external_identity(
+            async_db, provider="comicvine", entity_type="issue", external_id=f"{99990 + i}"
+        )
+        async_db.add(
+            IssueExternalIdentityMapping(
+                issue_id=issue.id,
+                external_identity_id=identity2.id,
+                status="confirmed",
+                confidence=1.0,
+                evidence_source="test-conflict",
+            )
+        )
+    await async_db.flush()
+    await async_db.commit()
+
+    response = await client.get(
+        "/api/v1/issue-identity/conflicts?page=1&size=2",
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 1
+    assert data["size"] == 2
+    assert data["total"] >= 2
+    assert data["has_next"] is True
+    assert data["has_prev"] is False
+    assert len(data["items"]) == 2
+
+    response = await client.get(
+        "/api/v1/issue-identity/conflicts?page=2&size=2",
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 2
+    assert data["size"] == 2
+    assert data["total"] >= 2
+    assert data["has_next"] is False
+    assert data["has_prev"] is True
+    assert len(data["items"]) >= 0
