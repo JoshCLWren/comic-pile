@@ -30,7 +30,7 @@ async def test_liveness_does_not_probe_dependencies(
     async def fail_if_called() -> None:
         raise AssertionError("dependency probe must not run")
 
-    monkeypatch.setattr(health_probe, "_cache_probe", fail_if_called)
+    monkeypatch.setattr(health_probe, "cache_probe", fail_if_called)
     response = await client.get("/api/v1/health/live")
 
     assert response.status_code == 200
@@ -55,7 +55,7 @@ async def test_dependency_health_reports_independent_timings(
     async def healthy_cache() -> None:
         return None
 
-    monkeypatch.setattr(health_probe, "_cache_probe", healthy_cache)
+    monkeypatch.setattr(health_probe, "cache_probe", healthy_cache)
     response = await client.get("/api/v1/health/dependencies")
 
     assert response.status_code == 200

@@ -179,6 +179,9 @@ async def _timed_probe(operation: Callable[[], Awaitable[None]]) -> DependencyPr
     except ProbeError as e:
         logger.warning("Operational dependency probe failed: %s", e)
         probe_status = "unavailable"
+    except Exception as e:
+        logger.warning("Operational dependency probe failed: %s", e, exc_info=True)
+        probe_status = "unavailable"
     else:
         probe_status = "healthy"
     return DependencyProbeResult(
