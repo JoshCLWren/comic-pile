@@ -13,9 +13,8 @@ from app.models.external_identity import (
     IssueExternalIdentityMapping,
 )
 from app.models.reading_order import ReadingOrder, ReadingOrderItem
+from app.schemas.test_fixtures import TestCblSourceCreate, TestCblSourceResponse
 from app.services.test_cbl_source_seed import create_test_cbl_source as seed_test_cbl_source
-
-create_test_cbl_source = seed_test_cbl_source
 
 
 def _require_test_environment() -> None:
@@ -27,6 +26,20 @@ def _require_test_environment() -> None:
         )
 
 
+async def create_test_cbl_source(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    payload: TestCblSourceCreate,
+) -> TestCblSourceResponse:
+    """Seed one discoverable CBL source list for browser golden-path coverage.
+
+    Delegates to the dedicated seed helper after verifying the test-only gate.
+    """
+    _require_test_environment()
+    return await seed_test_cbl_source(db, user_id=user_id, payload=payload)
+
+
 async def create_test_reading_order(
     db: AsyncSession,
     *,
@@ -34,7 +47,7 @@ async def create_test_reading_order(
     payload: dict[str, object],
 ) -> dict[str, object]:
     """Create a reading order and optional items for an E2E fixture."""
-    await _require_test_environment()
+    _require_test_environment()
 
     name = str(payload.get("name") or "Test reading order")
     order = ReadingOrder(name=name, user_id=user_id)
@@ -69,7 +82,7 @@ async def create_test_issue_identity(
     payload: dict[str, object],
 ) -> dict[str, object]:
     """Confirm synthetic ComicVine identities for owned E2E fixture issues."""
-    await _require_test_environment()
+    _require_test_environment()
 
     raw_issue_id = payload.get("issue_id")
     raw_thread_id = payload.get("thread_id")
@@ -217,7 +230,7 @@ async def expire_current_session(
     user_id: int,
 ) -> dict[str, str]:
     """Expire the current active session for an E2E notification test."""
-    await _require_test_environment()
+    _require_test_environment()
 
     session_result = await db.execute(
         select(SessionModel)
