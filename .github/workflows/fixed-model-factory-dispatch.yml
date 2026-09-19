@@ -15,12 +15,9 @@ on:
         options:
           - smoke
           - roster
+          - completion
       worker:
-        description: Optional active external Factory; blank runs the strategy smoke set
-        required: false
-        type: string
-      workers:
-        description: Optional JSON array of active Factory IDs; processed as one serialized dispatcher batch
+        description: Optional active external Factory; blank runs the selected strategy
         required: false
         type: string
   push:
@@ -39,6 +36,9 @@ on:
       - '.github/scripts/free-model-factory-worker-primitives.sh'
       - '.github/scripts/factory_provider_candidates.py'
       - '.github/scripts/factory_candidate_health.py'
+      - '.github/scripts/factory_completion_controller.py'
+      - '.github/scripts/factory_full_completion_controller.py'
+      - '.github/scripts/factory_capacity_policy.py'
       - '.github/scripts/kilo-auto-factory-run.sh'
       - '.github/free-model-factories.tsv'
 
@@ -256,7 +256,6 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           DEPLOY_SHA: ${{ github.sha }}
           DISPATCH_WORKER: ${{ inputs.worker }}
-          DISPATCH_WORKERS: ${{ inputs.workers }}
           DISPATCH_MODE: ${{ inputs.mode }}
         run: |
           set -Eeuo pipefail
@@ -325,6 +324,25 @@ jobs:
             )
           }
 
+          dispatch_leased_worker() {
+            local worker="$1"
+            local attempt=1
+            while (( attempt <= 3 )); do
+              echo "Starting already-leased Factory ${worker} (dispatch attempt ${attempt}/3)"
+              if gh workflow run free-model-factory-entry.yml --ref main -f worker="$worker"; then
+                return 0
+              fi
+              if (( attempt < 3 )); then
+                sleep $((attempt * 3))
+              fi
+              attempt=$((attempt + 1))
+            done
+
+            echo "Unable to dispatch already-leased Factory ${worker}; releasing its assignment" >&2
+            python3 "$controller" release --worker "$worker" || true
+            return 1
+          }
+
           dispatch_assigned_worker() {
             local worker="$1"
             local assignment kind attempt=1
@@ -348,20 +366,7 @@ jobs:
             esac
 
             echo "Factory ${worker} assignment: ${assignment}"
-            while (( attempt <= 3 )); do
-              echo "Starting Factory ${worker} (dispatch attempt ${attempt}/3)"
-              if gh workflow run free-model-factory-entry.yml --ref main -f worker="$worker"; then
-                return 0
-              fi
-              if (( attempt < 3 )); then
-                sleep $((attempt * 3))
-              fi
-              attempt=$((attempt + 1))
-            done
-
-            echo "Unable to dispatch Factory ${worker}; releasing its assignment and continuing the batch" >&2
-            python3 "$controller" release --worker "$worker" || true
-            return 1
+            dispatch_leased_worker "$worker"
           }
 
           if [[ "$EVENT_NAME" == push ]]; then
@@ -445,24 +450,32 @@ jobs:
             done <<< "$stale_runs"
           fi
 
-          if [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKERS:-}" ]]; then
-            if ! workers="$(jq -ce '
-              if type == "array" and length > 0 and all(.[]; type == "string" and test("^[0-9]+$"))
-              then unique_by(tonumber)
-              else error("workers must be a non-empty JSON array of numeric strings")
-              end
-            ' <<< "$DISPATCH_WORKERS")"; then
-              echo "DISPATCH_WORKERS must be a non-empty JSON array of numeric worker IDs" >&2
+          if [[ "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == completion ]]; then
+            [[ -z "${DISPATCH_WORKER:-}" ]] || {
+              echo 'completion mode does not accept an explicit worker' >&2
+              exit 1
+            }
+            echo 'Allocating completion capacity inside the single dispatcher writer lane'
+            completion_result="$(python3 .github/scripts/factory_full_completion_controller.py)"
+            echo "$completion_result" | jq .
+            workers="$(jq -c '[.assignments[].worker]' <<< "$completion_result")"
+            if [[ "$workers" == '[]' ]]; then
+              echo 'No completion-stage assignments available'
+              exit 0
+            fi
+            completion_failures=0
+            while IFS= read -r worker; do
+              [[ -n "$worker" ]] || continue
+              dispatch_leased_worker "$worker" || completion_failures=$((completion_failures + 1))
+            done < <(jq -r '.[]' <<< "$workers")
+            if (( completion_failures > 0 )); then
+              echo "${completion_failures} completion worker dispatch(es) failed" >&2
               exit 1
             fi
-            while IFS= read -r worker; do
-              awk -F '\t' -v worker="$worker" '$1 == worker {found=1} END {exit !found}' "$manifest" || {
-                echo "Unknown batched fixed-model worker ${worker}" >&2
-                exit 1
-              }
-            done < <(jq -r '.[]' <<< "$workers")
-            echo "Explicit dispatcher batch: ${workers}"
-          elif [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKER:-}" ]]; then
+            exit 0
+          fi
+
+          if [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKER:-}" ]]; then
             awk -F '\t' -v worker="$DISPATCH_WORKER" '$1 == worker {found=1} END {exit !found}' "$manifest"
             workers="$(jq -nc --arg worker "$DISPATCH_WORKER" '[$worker]')"
           elif [[ "$EVENT_NAME" == schedule || ( "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster ) ]]; then
@@ -555,7 +568,7 @@ jobs:
           fi
 
       - name: Self-perpetuate roster cadence
-        if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster' && inputs.worker == '' && inputs.workers == ''))
+        if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster' && inputs.worker == ''))
         continue-on-error: true
         shell: bash
         env:
