@@ -62,6 +62,7 @@ function createWrapper() {
 beforeEach(() => {
   vi.clearAllMocks()
   queryClient.clear()
+  mockedIssuesApi.list.mockReset()
 })
 
 describe('flattenIssuePages and getIssueTotalCount', () => {
