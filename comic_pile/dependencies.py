@@ -9,7 +9,7 @@ from app.cache import TTL, cached
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
-from app.services.continuity_blocking import get_continuity_rule_blocked_thread_ids
+from app.continuity_blocking import get_continuity_rule_blocked_thread_ids
 from app.services.continuity_graph import SNAPSHOT_SESSION_KEY
 
 # Historical CBL materialization is inert unless separately proven or promoted
