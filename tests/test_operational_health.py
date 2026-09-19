@@ -9,6 +9,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import health_probe
+from app.services.health_probe import ProbeUnavailableError
 from app.startup_diagnostics import StartupSnapshot
 
 
@@ -84,7 +85,7 @@ async def test_dependency_health_reports_partial_failure(
     """
 
     async def unavailable_cache() -> None:
-        raise ConnectionError("cache offline")
+        raise ProbeUnavailableError("cache offline")
 
     monkeypatch.setattr(health_probe, "cache_probe", unavailable_cache)
     response = await client.get("/api/v1/health/dependencies")
@@ -113,7 +114,7 @@ async def test_dependency_health_reports_database_unavailable(
     """
 
     async def unavailable_database(_: AsyncSession) -> None:
-        raise ConnectionError("database offline")
+        raise ProbeUnavailableError("database offline")
 
     async def healthy_cache() -> None:
         return None
