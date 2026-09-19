@@ -329,8 +329,9 @@ def test_controller_does_not_suppress_on_casual_hash_mention(
     )
 
 
-def test_strike_retry_excludes_only_failed_producer_until_new_implementation_claim(monkeypatch):
-    controller = load_controller()
+def test_strike_retry_excludes_only_failed_producer_until_new_implementation_claim(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
     reset = {
         "body": "<!-- comic-pile-factory-strike-reset-v1:issue-77:pr-88:excluded-producer-12 -->",
         "performed_via_github_app": {"slug": "github-actions"},
