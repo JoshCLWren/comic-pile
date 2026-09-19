@@ -55,7 +55,7 @@ export function RatingActionPanel({
 
   return (
     <div
-      className="rating-actions sticky bottom-0 -mx-3 space-y-2 border-t border-white/10 bg-white/[0.04] px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] backdrop-blur md:static md:-mx-4 md:px-4 md:pb-3"
+      className="rating-actions sticky bottom-0 -mx-3 space-y-2 border-t border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] backdrop-blur md:static md:-mx-4 md:px-4 md:pb-3"
       data-testid="rating-actions"
     >
       {threadTitle && issueNumber != null ? (
@@ -64,7 +64,7 @@ export function RatingActionPanel({
             type="button"
             onClick={handleCopyComicReference}
             disabled={!threadTitle}
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)] transition hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-amber-500 disabled:opacity-40"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)] transition hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-40"
             aria-label={`Copy ${threadTitle} ${issueNumber}`}
           >
             <svg
@@ -103,7 +103,7 @@ export function RatingActionPanel({
         onClick={() => onSubmitRating(false)}
         disabled={rateIsPending}
         data-testid="save-and-continue"
-        className="w-full rounded-xl border border-amber-600/50 bg-amber-600/25 py-3.5 text-xs font-black uppercase tracking-[0.15em] transition hover:bg-amber-600/35 focus:ring-2 focus:ring-amber-500 disabled:opacity-50 active:scale-[0.98]"
+        className="w-full rounded-xl border border-[var(--theme-comic-accent)]/50 bg-[var(--theme-comic-accent)]/25 py-3.5 text-xs font-black uppercase tracking-[0.15em] transition hover:bg-[var(--theme-comic-accent)]/35 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50 active:scale-[0.98]"
       >
         {rateIsPending ? 'Saving…' : issuesRemaining === 1 ? 'Mark read & complete' : 'Mark read & save'}
       </button>
@@ -112,7 +112,7 @@ export function RatingActionPanel({
           type="button"
           onClick={onSnooze}
           disabled={snoozeIsPending}
-          className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+          className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
         >
           {snoozeIsPending ? 'Snoozing…' : 'Snooze'}
         </button>
@@ -123,7 +123,7 @@ export function RatingActionPanel({
             disabled={skipIsPending}
             data-testid="skip-roll"
             aria-label="Skip current roll"
-            className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+            className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
           >
             {skipIsPending ? 'Skipping…' : 'Skip'}
           </button>
@@ -132,7 +132,7 @@ export function RatingActionPanel({
           type="button"
           onClick={onCancel}
           disabled={dismissIsPending}
-          className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-transparent py-3 text-xs font-black uppercase tracking-[0.15em] text-[var(--theme-text-muted)] transition hover:bg-white/10 hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+          className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-transparent py-3 text-xs font-black uppercase tracking-[0.15em] text-[var(--theme-text-muted)] transition hover:bg-white/10 hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
         >
           Cancel roll
         </button>

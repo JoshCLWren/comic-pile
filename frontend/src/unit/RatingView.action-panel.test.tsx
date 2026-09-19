@@ -112,8 +112,8 @@ describe('RatingView action panel (issue #1406)', () => {
   it('Snooze remains neutral styling', () => {
     render(ratingView())
     const snooze = screen.getByRole('button', { name: /snooze/i })
-    expect(snooze.className).toContain('border-white/10')
-    expect(snooze.className).toContain('bg-white/5')
+    expect(snooze.className).toContain('border-[var(--theme-border)]')
+    expect(snooze.className).toContain('bg-[var(--theme-bg-panel)]')
     expect(snooze.className).toContain('text-stone-300')
   })
 
@@ -129,7 +129,7 @@ describe('RatingView action panel (issue #1406)', () => {
     render(ratingView())
     const save = screen.getByRole('button', { name: /mark read & save/i })
     const cancel = screen.getByRole('button', { name: /cancel roll/i })
-    const primary = save.classList.contains('bg-amber-600/25')
+    const primary = save.classList.contains('bg-[var(--theme-comic-accent)]/25')
     const cancelIsDemoted =
       cancel.classList.contains('bg-transparent') &&
       cancel.classList.contains('text-[var(--theme-text-muted)]')
