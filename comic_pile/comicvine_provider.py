@@ -1,4 +1,4 @@
-"""Endpoint-aware ComicVine provider client with persistent cache and rate limiting."""
+"""Endpoint-aware ComicVine provider client with persistent cache and optional local rate limiting."""
 
 from __future__ import annotations
 
@@ -130,7 +130,7 @@ class ComicVineClient:
         api_key: str,
         cache_dir: str | Path,
         *,
-        requests_per_hour: int = DEFAULT_REQUESTS_PER_HOUR,
+        requests_per_hour: int | None = None,
         minimum_live_request_interval_seconds: float = (
             DEFAULT_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS
         ),
@@ -141,14 +141,17 @@ class ComicVineClient:
 
         Args:
             api_key: ComicVine API key. It is never included in cache keys or persisted payload metadata.
-            cache_dir: Directory for raw successful response cache and request ledger.
-            requests_per_hour: Rolling-hour budget per endpoint path.
+            cache_dir: Directory for raw successful response cache and optional request ledger.
+            requests_per_hour: Optional local rolling-hour budget per endpoint path. ``None`` disables
+                the local hard cap while retaining pacing and provider-side rate-limit handling.
             minimum_live_request_interval_seconds: Minimum delay between uncached live request starts.
             base_url: Provider API base URL.
             timeout_seconds: Network timeout per request.
         """
         if not api_key.strip():
             raise ValueError("api_key is required")
+        if requests_per_hour is not None and requests_per_hour <= 0:
+            raise ValueError("requests_per_hour must be positive when provided")
         if minimum_live_request_interval_seconds < 0:
             raise ValueError("minimum_live_request_interval_seconds must be non-negative")
         self.api_key = api_key
@@ -156,9 +159,13 @@ class ComicVineClient:
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
         self.minimum_live_request_interval_seconds = minimum_live_request_interval_seconds
-        self.limiter = PersistentEndpointLimiter(
-            self.cache_dir / "request-ledger.json",
-            requests_per_hour=requests_per_hour,
+        self.limiter = (
+            PersistentEndpointLimiter(
+                self.cache_dir / "request-ledger.json",
+                requests_per_hour=requests_per_hour,
+            )
+            if requests_per_hour is not None
+            else None
         )
         self._live_request_lock = asyncio.Lock()
         self._last_live_request_started_at: float | None = None
@@ -255,7 +262,8 @@ class ComicVineClient:
             if cached is not None:
                 return ComicVineResponse(cached, True, cache_key)
         await self._pace_live_request()
-        self.limiter.acquire(endpoint_bucket)
+        if self.limiter is not None:
+            self.limiter.acquire(endpoint_bucket)
         payload = await asyncio.to_thread(self._request_sync, endpoint, params)
         self._write_cache(cache_key, payload)
         return ComicVineResponse(payload, False, cache_key)

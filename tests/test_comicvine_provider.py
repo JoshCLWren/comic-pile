@@ -19,14 +19,17 @@ from comic_pile.comicvine_provider import (
 )
 
 
-def test_provider_defaults_leave_small_headroom_and_pace_live_requests(tmp_path: Path) -> None:
-    """Default policy should stay just below ComicVine's ceiling and avoid burst traffic."""
+def test_provider_defaults_pace_without_imposing_a_local_hourly_cap(tmp_path: Path) -> None:
+    """Default provider behavior should pace live traffic and defer hard caps to ComicVine."""
     client = ComicVineClient("secret", tmp_path)
+    capped = ComicVineClient("secret", tmp_path / "capped", requests_per_hour=195)
 
     assert DEFAULT_REQUESTS_PER_HOUR == 195
     assert DEFAULT_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS == 1.05
-    assert client.limiter.requests_per_hour == 195
+    assert client.limiter is None
     assert client.minimum_live_request_interval_seconds == 1.05
+    assert capped.limiter is not None
+    assert capped.limiter.requests_per_hour == 195
 
 
 @pytest.mark.asyncio
@@ -108,6 +111,8 @@ def test_provider_configuration_and_corrupt_cache_fail_safely(tmp_path: Path) ->
     """Reject invalid configuration while treating corrupt persisted cache data as a miss."""
     with pytest.raises(ValueError, match="requests_per_hour must be positive"):
         PersistentEndpointLimiter(tmp_path / "ledger.json", requests_per_hour=0)
+    with pytest.raises(ValueError, match="requests_per_hour must be positive when provided"):
+        ComicVineClient("secret", tmp_path, requests_per_hour=0)
     with pytest.raises(ValueError, match="api_key is required"):
         ComicVineClient(" ", tmp_path)
     with pytest.raises(ValueError, match="minimum_live_request_interval_seconds"):
