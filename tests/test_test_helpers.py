@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import HTTPException
+from fastapi.routing import APIRoute
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.test_helpers import (
@@ -188,7 +189,7 @@ def test_test_helper_routes_are_mounted_only_in_test_environment(
     monkeypatch.delenv("TEST_ENVIRONMENT", raising=False)
     production_app = create_app(serve_frontend=False)
     production_paths = {
-        route.path for route in production_app.routes if hasattr(route, "path")
+        route.path for route in production_app.routes if isinstance(route, APIRoute)
     }
     assert not any(path.startswith("/api/test/") for path in production_paths)
     assert not {
@@ -200,7 +201,7 @@ def test_test_helper_routes_are_mounted_only_in_test_environment(
 
     monkeypatch.setenv("TEST_ENVIRONMENT", "true")
     test_app = create_app(serve_frontend=False)
-    test_paths = {route.path for route in test_app.routes if hasattr(route, "path")}
+    test_paths = {route.path for route in test_app.routes if isinstance(route, APIRoute)}
     assert {
         "/api/test/reading-orders",
         "/api/test/issue-identity",
