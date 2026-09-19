@@ -40,25 +40,7 @@ type DebtEntry = {
   markers: readonly { label: string; regex: RegExp }[]
 }
 
-<<<<<<< HEAD
-const KNOWN_DEBT: DebtEntry[] = [
-  {
-    file: 'components/MigrationDialog.tsx',
-    markers: [DIALOG_PATTERNS[0], DIALOG_PATTERNS[1], DIALOG_PATTERNS[3]],
-  },
-  {
-    file: 'components/SimpleMigrationDialog.tsx',
-    markers: [DIALOG_PATTERNS[0], DIALOG_PATTERNS[1], DIALOG_PATTERNS[3]],
-  },
-  {
-    file: 'pages/ContinuityPlansIndexPage.tsx',
-    markers: [DIALOG_PATTERNS[0], DIALOG_PATTERNS[1], DIALOG_PATTERNS[2]],
-  },
-  {
-    file: 'components/Navigation.tsx',
-    markers: [MORE_MENU_PATTERN],
-  },
-]
+const KNOWN_DEBT: DebtEntry[] = []
 
 const KNOWN_DEBT_FILES = new Set(KNOWN_DEBT.map((entry) => entry.file))
 
@@ -120,5 +102,4 @@ describe('Overlay conformance', () => {
     }
     expect(stale, stale.join('\n')).toHaveLength(0)
   })
-<<<<<<< HEAD
 })
