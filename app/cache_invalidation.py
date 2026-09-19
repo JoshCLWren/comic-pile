@@ -27,6 +27,22 @@ async def invalidate_user_view(user_id: int) -> bool:
     return await invalidate_user_cache(user_id)
 
 
+async def invalidate_session_caches(user_id: int) -> None:
+    """Invalidate session-derived views with one bounded user generation bump.
+
+    This is the public mutation-boundary entry point for session-affecting
+    writes. It lives next to the other invalidation primitives so callers never
+    need to reach into a router module for cache invalidation.
+
+    Args:
+        user_id: Authenticated user identifier.
+
+    Returns:
+        None.
+    """
+    await invalidate_user_view(user_id)
+
+
 async def invalidate_user_views(user_ids: Iterable[int]) -> int:
     """Invalidate each distinct user namespace at most once.
 
