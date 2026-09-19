@@ -4,9 +4,8 @@
     "lib": ["ES2022", "ESNext.Disposable", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "baseUrl": ".",
     "paths": {
-      "three": ["src/@types/three"]
+      "three": ["./src/@types/three"]
     },
     "jsx": "react-jsx",
     "allowJs": false,
@@ -16,7 +15,7 @@
     "strict": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["vite/client"]
+    
   },
   "include": ["src"],
   "exclude": ["src/test", "src/unit"]
