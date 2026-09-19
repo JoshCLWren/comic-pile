@@ -20,8 +20,11 @@ permissions:
   pull-requests: write
   checks: read
 
+# This workflow directly claims factory work through the completion controller.
+# Serialize it with every other assignment writer so two controllers cannot
+# observe the same worker idle and lease unrelated targets to it concurrently.
 concurrency:
-  group: factory-completion-drain
+  group: fixed-model-factory-dispatch
   cancel-in-progress: false
 
 jobs:
