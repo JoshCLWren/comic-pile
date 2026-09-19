@@ -58,8 +58,8 @@ def _legacy_blocked_baseline(
     against this baseline rather than the post-cutover Runtime canonical
     evaluator, so re-affirming reader order over formerly ``cbl-order:%``
     materialization is not mistaken for an accidental eligibility change. The
-    baseline mirrors the canonical evaluator: only non-cbl-order Dependency rows
-    and ContinuityRule blockers count.
+    baseline mirrors the retired legacy evaluator: any unread-source Dependency
+    row or ContinuityRule blocker counts.
     """
     blocked: set[int] = set()
     for thread in affected_threads:
@@ -69,7 +69,6 @@ def _legacy_blocked_baseline(
         raw_blocked = any(
             (source := snapshot.issues.get(dep.source_issue_id)) is not None
             and source.status != "read"
-            and (dep.note is None or not dep.note.startswith("cbl-order:"))
             for dep in raw_by_target.get(next_issue_id, [])
         )
         if raw_blocked or issue_readiness(next_issue_id, snapshot):
