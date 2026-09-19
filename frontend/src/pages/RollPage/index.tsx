@@ -378,17 +378,11 @@ export default function RollPage() {
                 rolledResult={state.rolledResult}
                 rating={state.rating}
                 predictedDie={computePredictedDie(state.currentDie, state.rating)}
-                hasValidRolledResult={hasValidRolledResult}
-                poolSize={pool.length}
                 errorMessage={state.errorMessage}
                 rateIsPending={rateMutation.isPending}
                 snoozeIsPending={snoozeMutation.isPending}
                 dismissIsPending={dismissPendingMutation.isPending}
                 skipIsPending={skipMutation.isPending}
-                readingOrders={rating.readingOrders}
-                connectedThreads={rating.connectedThreads}
-                onFetchReadingContext={rating.fetchReadingContext}
-                onFetchReadingBoundaries={rating.fetchReadingBoundaries}
                 onUpdateRating={rating.updateRatingUI}
                 onSubmitRating={rating.handleSubmitRating}
                 onSnooze={snooze.handleSnooze}
@@ -397,7 +391,6 @@ export default function RollPage() {
                 onRefreshThread={rating.handleRefreshThread}
                 readerContext={readerContext}
                 isReaderContextLoading={isReaderContextLoading}
-                readerContextError={readerContextError?.message ?? null}
               />
             )}
 

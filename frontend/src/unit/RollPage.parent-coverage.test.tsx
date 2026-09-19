@@ -114,24 +114,6 @@ vi.mock('../pages/RollPage/components/RatingView', () => ({ RatingView: (props: 
     <span data-testid="rating-thread-metadata">{thread?.title ?? 'missing'}:{thread?.issue_number ?? 'none'}</span>
     {props.errorMessage ? <span>{String(props.errorMessage)}</span> : null}
     <button onClick={() => (props.onUpdateRating as (value: string) => void)('5')}>update rating</button><button onClick={() => (props.onUpdateRating as (value: string) => void)('4')}>threshold rating</button><button onClick={() => (props.onUpdateRating as (value: string) => void)('1')}>update low rating</button><button onClick={() => (props.onSubmitRating as (finish?: boolean) => void)(false)}>save rating</button><button onClick={() => (props.onSubmitRating as (finish?: boolean) => void)(true)}>finish rating</button><button onClick={props.onSnooze as () => void}>snooze rating</button><button onClick={props.onCancel as () => void}>cancel rating</button><button onClick={props.onRefreshThread as () => void}>refresh rating</button>
-    <button
-      data-testid="reading-context-button"
-      onClick={() => {
-        const cb = (props.onFetchReadingContext as ((id: number | null) => void) | undefined) ?? (props.onFetchReadingDetails as ((id: number | null) => void) | undefined)
-        cb?.((thread as { id?: number } | null)?.id ?? 1)
-      }}
-    >
-      Reading Context
-    </button>
-    <button
-      data-testid="reading-boundaries-button"
-      onClick={() => {
-        const cb = (props.onFetchReadingBoundaries as ((id: number | null) => void) | undefined) ?? (props.onFetchReadingDetails as ((id: number | null) => void) | undefined)
-        cb?.((thread as { id?: number } | null)?.id ?? 1)
-      }}
-    >
-      Reading Boundaries
-    </button>
   </div>
 } }))
 
@@ -686,16 +668,18 @@ describe('RollPage parent handlers', () => {
     expect(spies.navigate).toHaveBeenCalledWith('/login')
   })
 
-  it('keeps rating view usable when related thread data requests fail', async () => {
-    relatedApi.readingOrders.mockRejectedValueOnce(new Error('orders failed'))
-    relatedApi.connectedThreads.mockRejectedValueOnce(new Error('connections failed'))
+  it('keeps rating view usable without reading context controls (#2711)', async () => {
     const user = userEvent.setup()
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
-    await user.click(screen.getByTestId('reading-context-button'))
-    await waitFor(() => expect(screen.getByText(/Failed to load reading orders: orders failed/)).toBeInTheDocument())
+    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
+    expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
+    // Rating workflow remains usable even though reading context requests are not made
+    expect(relatedApi.readingOrders).not.toHaveBeenCalled()
+    expect(relatedApi.connectedThreads).not.toHaveBeenCalled()
   })
 
   it('restores a pending session into the rating view on initial load', async () => {
