@@ -145,6 +145,7 @@ function selectRange(firstIssueId: string, lastIssueId: string) {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks()
   vi.spyOn(dependencyGroupsApi, 'list').mockResolvedValue([crossover])
   vi.spyOn(dependencyGroupsApi, 'get').mockResolvedValue({ ...crossover, memberships: [] })
   vi.spyOn(dependencyGroupsApi, 'addIssueRange').mockResolvedValue({ thread_id: 0, start_position: 0, end_position: 0, added_issue_ids: [], already_present_issue_ids: [] })

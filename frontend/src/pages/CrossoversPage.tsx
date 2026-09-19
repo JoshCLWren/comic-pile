@@ -104,7 +104,6 @@ export default function CrossoversPage() {
     removeMemberMutation.isPending
 
   const mutationGuardRef = useRef(false)
-  const isBlocked = isAnyMutationPending || mutationGuardRef.current
 
   useEffect(() => {
     if (deepLinkAppliedRef.current) return
@@ -128,7 +127,7 @@ export default function CrossoversPage() {
   }
 
   const toggleExpanded = (groupId: number) => {
-    if (isBlocked) return
+    if (mutationGuardRef.current) return
     setExpandedId((current) => (current === groupId ? null : groupId))
     clearMembershipState()
     setMutationError(null)
@@ -141,7 +140,7 @@ export default function CrossoversPage() {
       setCreateError('Enter a crossover name.')
       return
     }
-    if (isBlocked) return
+    if (mutationGuardRef.current) return
     mutationGuardRef.current = true
     setCreateError(null)
     try {
@@ -160,7 +159,7 @@ export default function CrossoversPage() {
       setMutationError('Enter a crossover name.')
       return
     }
-    if (isBlocked) return
+    if (mutationGuardRef.current) return
     mutationGuardRef.current = true
     setMutationError(null)
     try {
@@ -175,7 +174,7 @@ export default function CrossoversPage() {
   }
 
   const deleteGroup = async (group: DependencyGroup) => {
-    if (isBlocked || !window.confirm(`Delete "${group.name}"? Its comic memberships will be removed.`)) return
+    if (mutationGuardRef.current || !window.confirm(`Delete "${group.name}"? Its comic memberships will be removed.`)) return
     mutationGuardRef.current = true
     setMutationError(null)
     try {
@@ -194,7 +193,7 @@ export default function CrossoversPage() {
       setMutationError('Choose a comic series to add.')
       return
     }
-    if (isBlocked) return
+    if (mutationGuardRef.current) return
     mutationGuardRef.current = true
     setMutationError(null)
     setMembershipMessage(null)
@@ -232,7 +231,7 @@ export default function CrossoversPage() {
       setMutationError('Choose a valid issue range in reading order.')
       return
     }
-    if (isBlocked) return
+    if (mutationGuardRef.current) return
     mutationGuardRef.current = true
     setMutationError(null)
     setMembershipMessage(null)
@@ -254,7 +253,7 @@ export default function CrossoversPage() {
   }
 
   const removeMember = async (groupId: number, memberId: number) => {
-    if (isBlocked) return
+    if (mutationGuardRef.current) return
     mutationGuardRef.current = true
     setMutationError(null)
     setMembershipMessage(null)

@@ -144,6 +144,7 @@ async function selectThread(label: string, query: string, title: string) {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks()
   vi.spyOn(dependencyGroupsApi, 'list').mockResolvedValue([crossover])
   vi.spyOn(dependencyGroupsApi, 'get').mockResolvedValue(crossover)
   vi.spyOn(dependencyGroupsApi, 'create').mockResolvedValue({ id: 0, name: '', created_at: '', memberships: [] })
@@ -342,7 +343,7 @@ describe('CrossoversPage membership editing', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove Nova #2 from Annihilation' }))
     fireEvent.click(screen.getByRole('button', { name: 'Remove Nova (whole series) from Annihilation' }))
-    expect(api.removeMember).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(api.removeMember).toHaveBeenCalledTimes(1))
     api.list.mockResolvedValue([{ ...crossover, memberships: [crossover.memberships[1]] }])
     resolveRemoval?.()
     await waitFor(() => expect(screen.queryByText('Nova #2')).not.toBeInTheDocument())

@@ -176,8 +176,9 @@ describe('CrossoversPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
-    expect(screen.getAllByRole('button', { name: 'Rename' })[1]).toBeDisabled()
+    expect(screen.getAllByRole('button', { name: 'Rename' })[0]).toBeDisabled()
 
+    await waitFor(() => expect(groupsApi.rename).toHaveBeenCalledTimes(1))
     resolveRename?.({ ...annihilation, name: 'Annihilation Conquest' })
     expect(await screen.findByText('Annihilation Conquest')).toBeInTheDocument()
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Rename' })[1]).toBeEnabled())
