@@ -36,7 +36,7 @@ from app.schemas.continuity_plan import (
     ConvergenceGateTarget,
 )
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
-from app.services.continuity_graph import GraphSnapshot, issue_readiness, issue_rule_readiness, load_snapshot
+from app.services.continuity_graph import GraphSnapshot, issue_readiness, load_snapshot
 from app.services.continuity_plan_writer import (
     replace_compiled_rules,
     validate_node_ownership,
@@ -72,7 +72,7 @@ def _legacy_blocked_baseline(
             and (dep.note is None or not dep.note.startswith("cbl-order:"))
             for dep in raw_by_target.get(next_issue_id, [])
         )
-        if raw_blocked or issue_rule_readiness(next_issue_id, snapshot):
+        if raw_blocked or issue_readiness(next_issue_id, snapshot):
             blocked.add(thread.id)
     return blocked
 
