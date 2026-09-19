@@ -2,6 +2,8 @@ import { type Page, type Locator, expect } from '@playwright/test';
 import type { Thread, ThreadCreatePayload } from '../types';
 import { isObject, isString } from '../utils/runtimeChecks';
 
+export { queueCardMentionsTitle } from './queueCardTitle';
+
 type Violation = {
   id: string;
   description: string;
@@ -21,6 +23,112 @@ type TestUser = {
 export async function waitForQueueReady(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Queue' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Add Series' })).toBeVisible()
+}
+
+/** Live geometry of the production page scroller (`#root`, not the window). */
+export type AppScrollState = {
+  windowScrollY: number
+  rootScrollTop: number
+  rootScrollHeight: number
+  rootClientHeight: number
+  rootOverflowY: string | null
+}
+
+/** Painted Queue cards currently intersecting the viewport. */
+export type QueueViewportSnapshot = {
+  mounted: number
+  visibleCount: number
+  visibleIndexes: number[]
+  visibleTitles: string[]
+}
+
+/**
+ * Read the real page scroller. Queue scrolling lives on `#root`
+ * (`overflow-y: auto`); `window.scrollY` stays 0 (issue #2725).
+ */
+export async function readAppScrollState(page: Page): Promise<AppScrollState> {
+  return page.evaluate(() => {
+    const root = document.getElementById('root')
+    return {
+      windowScrollY: window.scrollY,
+      rootScrollTop: root?.scrollTop ?? 0,
+      rootScrollHeight: root?.scrollHeight ?? 0,
+      rootClientHeight: root?.clientHeight ?? 0,
+      rootOverflowY: root ? window.getComputedStyle(root).overflowY : null,
+    }
+  })
+}
+
+/** Scroll the production page scroller. `window.scrollTo` is a no-op here. */
+export async function scrollAppTo(page: Page, top: number): Promise<void> {
+  await page.evaluate(async (y) => {
+    const root = document.getElementById('root')
+    if (root) {
+      root.scrollTop = y
+      root.dispatchEvent(new Event('scroll'))
+    }
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve())
+      })
+    })
+  }, top)
+}
+
+export async function readQueueViewport(page: Page): Promise<QueueViewportSnapshot> {
+  return page.evaluate(() => {
+    const cards = Array.from(document.querySelectorAll('[data-testid="queue-thread-item"]'))
+    const visible = cards.filter((el) => {
+      const rect = el.getBoundingClientRect()
+      return rect.bottom > 0 && rect.top < window.innerHeight && rect.height > 0
+    })
+    return {
+      mounted: cards.length,
+      visibleCount: visible.length,
+      visibleIndexes: visible.map((el) => {
+        const raw = el.closest('[data-index]')?.getAttribute('data-index')
+        return raw == null ? -1 : Number(raw)
+      }),
+      visibleTitles: visible.map((el) => el.getAttribute('aria-label') ?? el.textContent ?? ''),
+    }
+  })
+}
+
+/**
+ * Scroll `#root` until `predicate` is true or the scroller cannot move further.
+ * Uses the real sentinel/virtualizer path — never a fake load-more click.
+ */
+export async function scrollAppUntil(
+  page: Page,
+  predicate: () => Promise<boolean>,
+  label: string,
+  maxSteps = 200,
+): Promise<void> {
+  for (let step = 0; step < maxSteps; step += 1) {
+    if (await predicate()) {
+      return
+    }
+    const state = await readAppScrollState(page)
+    const stride = Math.max(360, Math.floor(state.rootClientHeight * 0.7))
+    const maxTop = Math.max(0, state.rootScrollHeight - state.rootClientHeight)
+    const next = Math.min(state.rootScrollTop + stride, maxTop)
+    if (next <= state.rootScrollTop + 1) {
+      const sentinelCount = await page.getByTestId('queue-infinite-scroll-sentinel').count()
+      if (sentinelCount === 0) {
+        break
+      }
+      const previousHeight = state.rootScrollHeight
+      await page.waitForFunction((prev) => {
+        const root = document.getElementById('root')
+        return (root?.scrollHeight ?? 0) > prev
+      }, previousHeight, { timeout: 15000 })
+      continue
+    }
+    await scrollAppTo(page, next)
+  }
+  if (!(await predicate())) {
+    throw new Error(`Timed out while scrolling the Queue page scroller: ${label}`)
+  }
 }
 
 export async function gotoQueue(page: Page): Promise<void> {

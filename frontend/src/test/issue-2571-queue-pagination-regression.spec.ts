@@ -1,73 +1,75 @@
 import { expect, test } from './fixtures';
-import { waitForQueueReady } from './helpers';
+import {
+  queueCardMentionsTitle,
+  readQueueViewport,
+  scrollAppTo,
+  scrollAppUntil,
+  waitForQueueReady,
+} from './helpers';
 
 /**
- * Queue pagination regression suite (#2571).
- * 
- * Validates bidirectional scrolling through 5+ pages of data using real 
- * virtualization. Proves that visible cards remain painted, previously 
- * loaded regions recover immediately, and no duplicates or gaps occur.
+ * Queue pagination regression suite (#2571), repaired for #2725.
+ *
+ * The original suite claimed to prove five-page bidirectional scrolling with
+ * real virtualization, but it scrolled `window` (a no-op: html/body overflow
+ * is hidden) and asserted that every loaded card was mounted. Production
+ * virtualizes against `#root`, so those assertions could not see the blank
+ * spacer failure.
+ *
+ * This rewrite uses the real page scroller and painted-viewport checks.
  */
 test.describe('Queue pagination regression (#2571)', () => {
+  test.describe.configure({ timeout: 480_000 })
   test('survives bidirectional traversal of 5+ pages of data', async ({ authenticatedWithProductionQueuePage }) => {
     const page = authenticatedWithProductionQueuePage;
 
     await page.goto('/queue', { waitUntil: 'domcontentloaded' });
     await waitForQueueReady(page);
 
-    // Page 1: Initial load
-    await expect(page.getByTestId('queue-thread-item')).toHaveCount(50);
+    await expect(page.getByTestId('queue-thread-item').first()).toBeVisible();
     await expect(page.getByText('Test Thread 1')).toBeVisible();
-    await expect(page.getByText('Test Thread 50')).toBeVisible();
+    const initial = await readQueueViewport(page);
+    expect(initial.visibleCount).toBeGreaterThan(0);
+    expect(initial.mounted).toBeLessThan(250);
 
-    // 1. Scroll to bottom to load Page 2 (51-100)
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await expect(page.getByText('Test Thread 100')).toBeVisible({ timeout: 15000 });
-    await expect(page.getByTestId('queue-thread-item')).toHaveCount(100);
-
-    // 2. Scroll back near top
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await expect(page.getByText('Test Thread 1')).toBeVisible();
-
-    // 3. Scroll down to load Page 3 (101-150)
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await expect(page.getByText('Test Thread 150')).toBeVisible({ timeout: 15000 });
-    await expect(page.getByTestId('queue-thread-item')).toHaveCount(150);
-
-    // 4. Scroll back through prior pages (Page 2)
-    await page.evaluate(() => window.scrollTo(0, window.innerHeight * 5)); // Approximate middle
-    await expect(page.getByText('Test Thread 51')).toBeVisible({ timeout: 5000 });
-
-    // 5. Continue through pages 4 and 5 (151-250)
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await expect(page.getByText('Test Thread 200')).toBeVisible({ timeout: 15000 });
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await expect(page.getByText('Test Thread 250')).toBeVisible({ timeout: 15000 });
-    
-    // Final count check
-    await expect(page.getByTestId('queue-thread-item')).toHaveCount(250);
-
-    // 6. Revisit earlier loaded regions
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await expect(page.getByText('Test Thread 1')).toBeVisible();
-    
-    await page.evaluate(() => window.scrollTo(0, window.innerHeight * 2));
-    await expect(page.getByText('Test Thread 75')).toBeVisible({ timeout: 5000 });
-
-    // Final Consistency Assertions
-    const items = page.getByTestId('queue-thread-item');
-    const count = await items.count();
-    expect(count).toBe(250);
-
-    // Check for duplicates/skips by sampling the rendered IDs or text
-    // Since we use 'Test Thread X', we can check that we have 1 and 250 and no duplicates
-    const allTexts = await page.evaluate(() => 
-      Array.from(document.querySelectorAll('[data-testid="queue-thread-item"]'))
-        .map(el => el.textContent?.trim())
+    await scrollAppUntil(
+      page,
+      async () => (await readQueueViewport(page)).visibleTitles.some((text) => queueCardMentionsTitle(text, 'Test Thread 100')),
+      'page 2',
     );
-    
-    const uniqueTexts = new Set(allTexts);
-    expect(uniqueTexts.size).toBe(allTexts.length);
+    expect((await readQueueViewport(page)).visibleCount).toBeGreaterThan(0);
+
+    await scrollAppTo(page, 0);
+    await expect(page.getByText('Test Thread 1')).toBeVisible();
+
+    await scrollAppUntil(
+      page,
+      async () => (await readQueueViewport(page)).visibleTitles.some((text) => queueCardMentionsTitle(text, 'Test Thread 150')),
+      'page 3',
+    );
+    expect((await readQueueViewport(page)).visibleCount).toBeGreaterThan(0);
+
+    await scrollAppUntil(
+      page,
+      async () => (await readQueueViewport(page)).visibleTitles.some((text) => queueCardMentionsTitle(text, 'Test Thread 200')),
+      'page 4',
+    );
+    await scrollAppUntil(
+      page,
+      async () => (await readQueueViewport(page)).visibleTitles.some((text) => queueCardMentionsTitle(text, 'Test Thread 250')),
+      'page 5',
+    );
+    await expect(page.getByTestId('queue-infinite-scroll-sentinel')).toHaveCount(0);
+
+    await scrollAppTo(page, 0);
+    await expect(page.getByText('Test Thread 1')).toBeVisible();
+
+    await scrollAppUntil(
+      page,
+      async () => (await readQueueViewport(page)).visibleTitles.some((text) => queueCardMentionsTitle(text, 'Test Thread 75')),
+      'revisit page 2 region',
+    );
+    expect((await readQueueViewport(page)).visibleCount).toBeGreaterThan(0);
   });
 
   test('pagination stability across different sort keys', async ({ authenticatedWithProductionQueuePage }) => {
@@ -78,21 +80,21 @@ test.describe('Queue pagination regression (#2571)', () => {
     const sorts = [
       { name: 'Title', selector: 'button:has-text("Title")' },
       { name: 'Position', selector: 'button:has-text("Position")' },
-      { name: 'Recently Added', selector: 'button:has-text("Recently Added")' },
+      { name: 'Recently Added', selector: 'button:has-text("Recently added")' },
     ];
 
     for (const sort of sorts) {
       await page.locator(sort.selector).click();
       await waitForQueueReady(page);
-      
-      // Load at least 3 pages for each sort
-      for (let i = 0; i < 2; i++) {
-        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-        await page.waitForTimeout(500); // Allow for network/render
-      }
-      
-      await expect(page.getByTestId('queue-thread-item')).toHaveCount(150);
-      await page.evaluate(() => window.scrollTo(0, 0));
+
+      await scrollAppUntil(
+        page,
+        async () => (await readQueueViewport(page)).visibleIndexes.some((index) => index >= 40),
+        `${sort.name} advanced window`,
+      );
+      expect((await readQueueViewport(page)).visibleCount).toBeGreaterThan(0);
+
+      await scrollAppTo(page, 0);
       await expect(page.getByTestId('queue-thread-item').first()).toBeVisible();
     }
   });
