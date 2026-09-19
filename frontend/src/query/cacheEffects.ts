@@ -443,9 +443,10 @@ export function optimisticallyReorderIssues(
 
   if (previousIssues) {
     const issueMap = new Map(previousIssues.map((i) => [i.id, i]))
-    const reordered = issueIds
-      .map((id) => issueMap.get(id))
-      .filter((i): i is Issue => i !== undefined)
+    const reordered = issueIds.flatMap((id) => {
+      const issue = issueMap.get(id)
+      return issue ? [issue] : []
+    })
     client.setQueryData<Issue[]>(allIssuesKey, reordered)
   }
 

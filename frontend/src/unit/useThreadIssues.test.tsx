@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import type { InfiniteData } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi, describe } from 'vitest'
+import { cast } from '../utils/cast'
 import {
   flattenIssuePages,
   getIssueTotalCount,
@@ -70,23 +71,23 @@ describe('flattenIssuePages and getIssueTotalCount', () => {
 
     const issueA = makeIssue({ id: 1, issue_number: '1' })
     const issueB = makeIssue({ id: 2, issue_number: '2' })
-    const data = {
+    const data = cast<InfiniteData<IssueListResponse>>({
       pages: [
         { issues: [issueA], total_count: 2, page_size: 50, next_page_token: 'tok' },
         { issues: [issueB], total_count: 2, page_size: 50, next_page_token: null },
       ],
       pageParams: [null, 'tok'],
-    } as unknown as InfiniteData<IssueListResponse>
+    })
 
     expect(flattenIssuePages(data)).toEqual([issueA, issueB])
     expect(getIssueTotalCount(data)).toBe(2)
   })
 
   it('handles empty pages and missing total_count', () => {
-    const empty = { pages: [], pageParams: [] } as unknown as InfiniteData<IssueListResponse>
+    const empty = cast<InfiniteData<IssueListResponse>>({ pages: [], pageParams: [] })
     expect(flattenIssuePages(empty)).toEqual([])
     expect(getIssueTotalCount(empty)).toBe(0)
-    expect(flattenIssuePages({} as InfiniteData<IssueListResponse>)).toEqual([])
+    expect(flattenIssuePages(cast<InfiniteData<IssueListResponse>>({}))).toEqual([])
   })
 })
 
