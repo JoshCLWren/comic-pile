@@ -4,7 +4,7 @@
 20	nvidia	openai/gpt-oss-20b	45	dispatcher	GPT OSS 20B
 21	nvidia	google/gemma-4-31b-it	50	dispatcher	Gemma 4 31B
 29	opencode-free	big-pickle	0	dispatcher	Catalog Free Slot 29
-39	opencode-free	big-pickle	5	dispatcher	OpenCode Big Pickle
+39	opencode-free	jev-1.13-free	5	dispatcher	OpenCode Jev 1.13 Free
 41	opencode-free	mimo-v2.5-free	15	dispatcher	OpenCode MiMo V2.5 Free
 42	opencode-free	nemotron-3-ultra-free	20	dispatcher	OpenCode Nemotron 3 Ultra Free
 45	opencode-free	nemotron-3.5-lightning-free	35	dispatcher	OpenCode Nemotron 3.5 Lightning Free
