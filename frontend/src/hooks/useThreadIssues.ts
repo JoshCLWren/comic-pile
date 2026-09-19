@@ -1,0 +1,230 @@
+import { useQuery, useMutation, useInfiniteQuery } from '@tanstack/react-query'
+import type { InfiniteData } from '@tanstack/react-query'
+import { issuesApi } from '../services/api-issues'
+import { issueDependenciesApi } from '../services/api-dependencies'
+import type { IssueListResponse } from '../services/api-issues'
+import type { Issue, IssueDependenciesResponse } from '../types'
+import { queryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
+import { invalidateAfterIssueEdit } from '../query/cacheEffects'
+
+const PAGE_SIZE = 50
+
+/**
+ * Infinite query for paginated thread issue reads (used by IssueList).
+ * Filter changes reset the query to the first page. Caller uses fetchNextPage.
+ */
+export function useThreadIssuePages(threadId: number, status?: 'read' | 'unread') {
+  return useInfiniteQuery<IssueListResponse>({
+    queryKey: [...queryKeys.thread.issuePages(threadId), 'paged', { status: status ?? null }],
+    queryFn: ({ pageParam }) =>
+      issuesApi.list(threadId, {
+        status,
+        page_size: PAGE_SIZE,
+        page_token: (pageParam as string | null) ?? undefined,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.next_page_token,
+  })
+}
+
+/**
+ * Flattens all loaded pages from useThreadIssuePages into a single Issue[] array.
+ */
+export function flattenIssuePages(
+  data: InfiniteData<IssueListResponse> | undefined,
+): Issue[] {
+  if (!data?.pages) return []
+  return data.pages.flatMap((page) => page.issues)
+}
+
+/**
+ * Returns the total_count from the first page of an infinite query.
+ */
+export function getIssueTotalCount(
+  data: InfiniteData<IssueListResponse> | undefined,
+): number {
+  return data?.pages?.[0]?.total_count ?? 0
+}
+
+/**
+ * Query for all issues in a thread (all-pages drain, used by IssueToggleList).
+ * Fetches all pages at once and returns the flattened list.
+ */
+export function useThreadAllIssues(threadId: number) {
+  return useQuery<Issue[]>({
+    queryKey: queryKeys.thread.issuePages(threadId),
+    queryFn: async () => {
+      const allIssues: Issue[] = []
+      const seenPageTokens = new Set<string>()
+      let nextPageToken: string | null = null
+
+      while (true) {
+        const params: { page_size: number; page_token?: string } = { page_size: 100 }
+        if (nextPageToken) {
+          params.page_token = nextPageToken
+        }
+        const data = await issuesApi.list(threadId, params)
+        allIssues.push(...data.issues)
+
+        if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
+          return allIssues
+        }
+
+        seenPageTokens.add(data.next_page_token)
+        nextPageToken = data.next_page_token
+      }
+    },
+  })
+}
+
+/**
+ * Query for thread issue dependencies.
+ */
+export function useThreadDependencies(threadId: number) {
+  return useQuery<Record<number, IssueDependenciesResponse>>({
+    queryKey: queryKeys.dependencies.forThread(threadId),
+    queryFn: async () => {
+      const response = await issueDependenciesApi.listForThread(threadId)
+      const depsMap: Record<number, IssueDependenciesResponse> = {}
+
+      for (const issueDependencies of response.issues) {
+        if (
+          issueDependencies.incoming.length > 0
+          || issueDependencies.outgoing.length > 0
+        ) {
+          depsMap[issueDependencies.issue_id] = issueDependencies
+        }
+      }
+
+      return depsMap
+    },
+  })
+}
+
+/**
+ * Mutation to toggle an issue's read/unread status.
+ * Uses optimistic updates on the all-issues cache and invalidates related caches.
+ */
+export function useToggleIssueStatus(threadId: number) {
+  return useMutation({
+    mutationFn: async ({ issue, nextStatus }: { issue: Issue; nextStatus: 'read' | 'unread' }) => {
+      if (nextStatus === 'read') {
+        await issuesApi.markRead(issue.id)
+      } else {
+        await issuesApi.markUnread(issue.id)
+      }
+      return { issue, nextStatus }
+    },
+    onMutate: async ({ issue, nextStatus }) => {
+      const allIssuesKey = queryKeys.thread.issuePages(threadId)
+      const previousIssues = queryClient.getQueryData<Issue[]>(allIssuesKey)
+
+      if (previousIssues) {
+        const updatedIssue: Issue = {
+          ...issue,
+          status: nextStatus,
+          read_at: nextStatus === 'read' ? new Date().toISOString() : null,
+        }
+        queryClient.setQueryData<Issue[]>(
+          allIssuesKey,
+          previousIssues.map((i) => (i.id === issue.id ? updatedIssue : i)),
+        )
+      }
+
+      return { previousIssues }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousIssues) {
+        queryClient.setQueryData(queryKeys.thread.issuePages(threadId), context.previousIssues)
+      }
+    },
+    onSuccess: async () => {
+      await invalidateAfterIssueEdit(queryClient, threadId)
+    },
+  })
+}
+
+/**
+ * Mutation to create issues from a range string.
+ */
+export function useCreateIssues(threadId: number) {
+  return useMutation({
+    mutationFn: async ({
+      issueRange,
+      insertAfterIssueId,
+    }: { issueRange: string; insertAfterIssueId?: number | null }) => {
+      return issuesApi.create(threadId, issueRange, { insert_after_issue_id: insertAfterIssueId })
+    },
+    onSuccess: async () => {
+      await invalidateAfterIssueEdit(queryClient, threadId)
+    },
+  })
+}
+
+/**
+ * Mutation to delete an issue.
+ */
+export function useDeleteIssue(threadId: number) {
+  return useMutation({
+    mutationFn: async (issueId: number) => {
+      await issuesApi.delete(issueId)
+      return issueId
+    },
+    onMutate: async (issueId) => {
+      const allIssuesKey = queryKeys.thread.issuePages(threadId)
+      const previousIssues = queryClient.getQueryData<Issue[]>(allIssuesKey)
+
+      if (previousIssues) {
+        queryClient.setQueryData<Issue[]>(
+          allIssuesKey,
+          previousIssues.filter((i) => i.id !== issueId),
+        )
+      }
+
+      return { previousIssues }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousIssues) {
+        queryClient.setQueryData(queryKeys.thread.issuePages(threadId), context.previousIssues)
+      }
+    },
+    onSuccess: async () => {
+      await invalidateAfterIssueEdit(queryClient, threadId)
+    },
+  })
+}
+
+/**
+ * Mutation to reorder issues in a thread.
+ */
+export function useReorderIssues(threadId: number) {
+  return useMutation({
+    mutationFn: async (issueIds: number[]) => {
+      await issuesApi.reorder(threadId, issueIds)
+      return issueIds
+    },
+    onMutate: async (issueIds) => {
+      const allIssuesKey = queryKeys.thread.issuePages(threadId)
+      const previousIssues = queryClient.getQueryData<Issue[]>(allIssuesKey)
+
+      if (previousIssues) {
+        const issueMap = new Map(previousIssues.map((i) => [i.id, i]))
+        const reordered = issueIds
+          .map((id) => issueMap.get(id))
+          .filter((i): i is Issue => i !== undefined)
+        queryClient.setQueryData<Issue[]>(allIssuesKey, reordered)
+      }
+
+      return { previousIssues }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousIssues) {
+        queryClient.setQueryData(queryKeys.thread.issuePages(threadId), context.previousIssues)
+      }
+    },
+    onSuccess: async () => {
+      await invalidateAfterIssueEdit(queryClient, threadId)
+    },
+  })
+}
