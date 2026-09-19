@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -243,8 +243,8 @@ async def api_identity_report(
 async def api_list_anomalies(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-    page: int = Field(1, ge=1, description="Page number"),
-    size: int = Field(10, ge=1, le=100, description="Page size (max 100)"),
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(10, ge=1, le=100, description="Page size (max 100)"),
 ) -> PaginatedDuplicateAnomaliesResponse:
     """List duplicate physical-issue anomalies for the authenticated user.
 
@@ -257,47 +257,20 @@ async def api_list_anomalies(
     Returns:
         Paginated list of duplicated ComicVine identities.
     """
-    from app.repositories.issue_identity_repository import find_duplicate_physical_issues
-    
-    # Get total count first
-    total_result = await db.execute(
-        text(
-            """
-            SELECT COUNT(DISTINCT ei.id) as total
-            FROM external_identities ei
-            JOIN issue_external_identity_mappings iem ON iem.external_identity_id = ei.id
-            JOIN issues i ON i.id = iem.issue_id
-            JOIN threads t ON t.id = i.thread_id
-            WHERE ei.provider = :provider
-              AND ei.entity_type = :entity_type
-              AND iem.status = :confirmed
-              AND t.user_id = :user_id
-              AND EXISTS (
-                  SELECT 1 FROM issue_external_identity_mappings iem2
-                  WHERE iem2.external_identity_id = ei.id
-                  GROUP BY iem2.external_identity_id
-                  HAVING COUNT(DISTINCT iem2.issue_id) > 1
-              )
-            """
-        ),
-        {
-            "provider": "comicvine",
-            "entity_type": "issue",
-            "confirmed": "confirmed",
-            "user_id": current_user.id,
-        },
+    from app.repositories.issue_identity_repository import (
+        count_duplicate_physical_issues,
+        find_duplicate_physical_issues,
     )
-    total = total_result.scalar() or 0
-    
-    # Get paginated anomalies
+
+    total = await count_duplicate_physical_issues(db, user_id=current_user.id)
+    offset = (page - 1) * size
     anomalies = await find_duplicate_physical_issues(
-        db, user_id=current_user.id, limit=size
+        db, user_id=current_user.id, limit=size, offset=offset,
     )
-    
-    # Calculate pagination info
+
     has_next = page * size < total
     has_prev = page > 1
-    
+
     return PaginatedDuplicateAnomaliesResponse(
         items=[
             DuplicateAnomalyResponse(
@@ -324,8 +297,8 @@ async def api_list_anomalies(
 async def api_list_conflicts(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-    page: int = Field(1, ge=1, description="Page number"),
-    size: int = Field(10, ge=1, le=100, description="Page size (max 100)"),
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(10, ge=1, le=100, description="Page size (max 100)"),
 ) -> PaginatedConflictsResponse:
     """List ambiguous conflicting provider identities for the user.
 
@@ -338,47 +311,20 @@ async def api_list_conflicts(
     Returns:
         Paginated list of Issues with multiple confirmed ComicVine IDs.
     """
-    from app.repositories.issue_identity_repository import find_conflicting_provider_identities
-    
-    # Get total count first
-    total_result = await db.execute(
-        text(
-            """
-            SELECT COUNT(DISTINCT i.id) as total
-            FROM issues i
-            JOIN threads t ON t.id = i.thread_id
-            JOIN issue_external_identity_mappings iem ON iem.issue_id = i.id
-            JOIN external_identities ei ON ei.id = iem.external_identity_id
-            WHERE t.user_id = :user_id
-              AND ei.provider = :provider
-              AND ei.entity_type = :entity_type
-              AND iem.status = :confirmed
-              AND EXISTS (
-                  SELECT 1 FROM issue_external_identity_mappings iem2
-                  WHERE iem2.issue_id = i.id
-                  GROUP BY iem2.issue_id
-                  HAVING COUNT(DISTINCT iem2.external_identity_id) > 1
-              )
-            """
-        ),
-        {
-            "provider": "comicvine",
-            "entity_type": "issue",
-            "confirmed": "confirmed",
-            "user_id": current_user.id,
-        },
+    from app.repositories.issue_identity_repository import (
+        count_conflicting_provider_identities,
+        find_conflicting_provider_identities,
     )
-    total = total_result.scalar() or 0
-    
-    # Get paginated conflicts
+
+    total = await count_conflicting_provider_identities(db, user_id=current_user.id)
+    offset = (page - 1) * size
     conflicts = await find_conflicting_provider_identities(
-        db, user_id=current_user.id, limit=size
+        db, user_id=current_user.id, limit=size, offset=offset,
     )
-    
-    # Calculate pagination info
+
     has_next = page * size < total
     has_prev = page > 1
-    
+
     return PaginatedConflictsResponse(
         items=[
             ConflictResponse(
@@ -570,8 +516,8 @@ async def api_cbl_reconciliation(
     list_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-    page: int = Field(1, ge=1, description="Page number"),
-    size: int = Field(50, ge=1, le=200, description="Page size (max 200)"),
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(50, ge=1, le=200, description="Page size (max 200)"),
 ) -> CBLReconciliationResponse:
     """Reconcile one CBL source list to canonical physical-issue identities.
 
