@@ -29,14 +29,18 @@ from pathlib import Path
 import sys
 from types import ModuleType
 
-from comic_pile.comicvine_provider import (
+SCRIPT_DIR = Path(__file__).resolve().parent
+ROOT = SCRIPT_DIR.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from comic_pile.comicvine_provider import (  # noqa: E402
     COMICVINE_BASE_URL,
     ComicVineClient as BaseComicVineClient,
     ComicVineError,
     ComicVineRateLimitError,
 )
 
-SCRIPT_DIR = Path(__file__).resolve().parent
 CREATOR_HELPER = SCRIPT_DIR / "_backfill_read_comicvine_creators.py"
 RESOLUTION_HELPER = SCRIPT_DIR / "resolve_read_comicvine_series.py"
 DEFAULT_REPORT = Path("/tmp/comicpile-read-comicvine-backfill.json")
@@ -145,7 +149,10 @@ def _resolution_was_rate_limited(report_path: Path) -> bool:
     if not isinstance(summary, dict):
         return False
     statuses = summary.get("threads_by_status")
-    return isinstance(statuses, dict) and int(statuses.get("rate-limited", 0)) > 0
+    if not isinstance(statuses, dict):
+        return False
+    rate_limited = statuses.get("rate-limited")
+    return isinstance(rate_limited, int) and rate_limited > 0
 
 
 async def _run_pipeline(args: argparse.Namespace) -> int:
