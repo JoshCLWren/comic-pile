@@ -1,11 +1,9 @@
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
-import type { ReadingOrder } from '../services/api-reading-orders'
 import type { RatingThread } from '../pages/RollPage/types'
-import type { ConnectedThreadInfo, ReaderContextResponse } from '../types'
+import type { ReaderContextResponse } from '../types'
 
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -40,26 +38,6 @@ vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
     refetch: vi.fn(),
   }),
 }))
-
-function readingOrders(count: number) {
-  return Array.from({ length: count }, (_, index) => ({
-    id: 10 + index,
-    name: `Reading order ${index + 1}`,
-    description: null,
-    total_items: 8,
-    completed_items: 3,
-    items: [],
-  }))
-}
-
-function connectedThreads(count: number) {
-  return Array.from({ length: count }, (_, index) => ({
-    thread_id: 200 + index,
-    title: `Connected thread ${index + 1}`,
-    connection_type: 'blocked_by' as const,
-    dependency_id: 1 + index,
-  }))
-}
 
 function richReaderContext(): ReaderContextResponse {
   return {
@@ -113,30 +91,6 @@ function richReaderContext(): ReaderContextResponse {
   }
 }
 
-function sparseReaderContext(): ReaderContextResponse {
-  return {
-    issue_id: 100,
-    series: {
-      identity_source: 'unavailable',
-      canonical_series_id: null,
-      series_name: null,
-      average_rating: null,
-      ratings_count: 0,
-      previous_issue: null,
-      recent_ratings: [],
-      highest_rating: null,
-      lowest_rating: null,
-    },
-    crossovers: [],
-    local_chain: {
-      issues: [
-        { issue_id: 100, issue_number: '3', position: 1, status: 'unread', relation: 'current', rating: null, crossover_memberships: [] },
-      ],
-      edges: [],
-    },
-  }
-}
-
 interface RatingViewOverride {
   activeRatingThread?: Partial<RatingThread> | null
   currentDie?: number
@@ -147,8 +101,6 @@ interface RatingViewOverride {
   rateIsPending?: boolean
   snoozeIsPending?: boolean
   dismissIsPending?: boolean
-  readingOrders?: ReadingOrder[]
-  connectedThreads?: ConnectedThreadInfo[]
   onUpdateRating?: (value: string) => void
   onSubmitRating?: (finishSession: boolean) => void
   onSnooze?: () => void
@@ -181,8 +133,6 @@ function ratingView(overrides: RatingViewOverride = {}) {
     rateIsPending: false,
     snoozeIsPending: false,
     dismissIsPending: false,
-    readingOrders: [],
-    connectedThreads: [],
     onUpdateRating: vi.fn(),
     onSubmitRating: vi.fn(),
     onSnooze: vi.fn(),
@@ -201,46 +151,26 @@ function gridChildren(container: HTMLElement) {
   return { grid, cells: Array.from(grid!.querySelectorAll<HTMLElement>(':scope > div')) }
 }
 
-interface LayoutStateCase {
-  name: string
-  readingOrders: number
-  connectedThreads: number
-  readerContext: ReaderContextResponse | null
-  expectReadingContextRegion: boolean
-}
-
-const layoutCases: LayoutStateCase[] = [
-  { name: 'rich continuity state', readingOrders: 2, connectedThreads: 2, readerContext: richReaderContext(), expectReadingContextRegion: true },
-  { name: 'sparse continuity state', readingOrders: 1, connectedThreads: 1, readerContext: sparseReaderContext(), expectReadingContextRegion: true },
-  { name: 'no meaningful reading context state', readingOrders: 0, connectedThreads: 0, readerContext: null, expectReadingContextRegion: false },
-  { name: 'cover-heavy state', readingOrders: 0, connectedThreads: 0, readerContext: null, expectReadingContextRegion: false },
-]
-
-describe('RatingView desktop layout respects state instead of reserving fixed coordinates (issue #1943)', () => {
-  it.each(layoutCases)('packs regions without fixed coordinates in $name', async (state) => {
-    const { container } = render(
-      ratingView({
-        readingOrders: readingOrders(state.readingOrders),
-        connectedThreads: connectedThreads(state.connectedThreads),
-        readerContext: state.readerContext,
-      }),
-    )
-    if (state.expectReadingContextRegion) {
-      await userEvent.setup().click(screen.getByTestId('reading-context-button'))
-    }
+describe('RatingView desktop layout respects state instead of reserving fixed coordinates (#2711 revises #1943)', () => {
+  it('packs regions without fixed coordinates and reserves no middle column', () => {
+    const { container } = render(ratingView({ readerContext: richReaderContext() }))
     const { grid, cells } = gridChildren(container)
     expect(grid).not.toBeNull()
     expect(grid!.className).toContain('grid')
     expect(grid!.className).toContain('items-start')
-    expect(grid!.className).toContain('xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]')
+    expect(grid!.className).toContain('lg:grid-cols-2')
+    expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
     expect(grid!.className).not.toMatch(/minmax\(0,\d+fr\)/)
 
-    const expectedRegionCount = 3
-    expect(cells.length).toBe(expectedRegionCount)
+    // After #2711, only Comic and Your Context remain (2 cells)
+    expect(cells.length).toBe(2)
 
     expect(cells[0].dataset.testid).toBe('rating-region-comic')
-    expect(cells[1].dataset.testid).toBe('rating-region-reading-optional')
-    expect(cells[2].dataset.testid).toBe('rating-region-your-context')
+    expect(cells[1].dataset.testid).toBe('rating-region-your-context')
+    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
+    expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
 
     for (const cell of cells) {
       expect(cell.className).not.toMatch(/\b(?:md:|xl:)?(?:col-start|row-start|col-end|row-end|row-span)-\d+\b/)
@@ -248,35 +178,15 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     }
   })
 
-  it.each(layoutCases)('gives every region a min-w-0 wrapper so content packs without overflow in $name', async (state) => {
-    const { container } = render(
-      ratingView({
-        readingOrders: readingOrders(state.readingOrders),
-        connectedThreads: connectedThreads(state.connectedThreads),
-        readerContext: state.readerContext,
-      }),
-    )
-    if (state.expectReadingContextRegion) {
-      await userEvent.setup().click(screen.getByTestId('reading-context-button'))
-    }
+  it('gives every region a min-w-0 wrapper so content packs without overflow', () => {
+    const { container } = render(ratingView({ readerContext: richReaderContext() }))
     expect(container.querySelector('[data-testid="rating-region-comic"]')!.className).toContain('min-w-0')
     expect(container.querySelector('[data-testid="rating-region-your-context"]')!.className).toContain('min-w-0')
-    expect(container.querySelector('[data-testid="rating-region-reading-optional"]')!.className).toContain('min-w-0')
-    if (state.expectReadingContextRegion) {
-      const wrapper = container.querySelector('[data-testid="rating-region-reading-context"]')
-      expect(wrapper).not.toBeNull()
-      expect(wrapper!.className).toContain('min-w-0')
-    }
+    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
   })
 
   it('stacks the action panel with Your Context instead of below the tallest desktop pillar', () => {
-    const { container } = render(
-      ratingView({
-        readingOrders: readingOrders(2),
-        connectedThreads: connectedThreads(2),
-        readerContext: richReaderContext(),
-      }),
-    )
+    const { container } = render(ratingView({ readerContext: richReaderContext() }))
     const yourContext = container.querySelector('[data-testid="rating-region-your-context"]')
     const actions = container.querySelector('[data-testid="rating-actions-grid-cell"]')
     expect(yourContext).not.toBeNull()
@@ -312,31 +222,31 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     expect(yourContext).not.toBeNull()
     expect(comicRegion!.contains(cover)).toBe(true)
     expect(yourContext!.contains(actions)).toBe(true)
-    // Cover uses inline viewport-relative styles: aspect-ratio 2/3, width min(100%, 30vh)
-    const coverStyle = cover!.getAttribute('style') ?? ''
-    expect(coverStyle).toContain('aspect-ratio')
-    expect(coverStyle).toContain('30vh')
+    const aspectRatioAttr = cover!.getAttribute('data-cover-aspect-ratio')
+    const heightCapAttr = cover!.getAttribute('data-cover-height-cap-vh')
+    const widthCapAttr = cover!.getAttribute('data-cover-width-cap-vh')
+    const aspectRatio = Number(aspectRatioAttr)
+    const heightCap = Number(heightCapAttr)
+    const widthCap = Number(widthCapAttr)
+    expect(Number.isFinite(aspectRatio)).toBe(true)
+    expect(aspectRatio).toBeGreaterThan(0)
+    expect(heightCap).toBe(45)
+    expect(Number.isFinite(widthCap)).toBe(true)
+    expect(widthCap).toBeGreaterThan(0)
+    expect(widthCap).toBeCloseTo(heightCap * aspectRatio)
     expect(cover!.className).not.toContain('max-h-')
   })
 })
 
-describe('RatingView reading-context presence contract (issue #1943 prerequisite)', () => {
-  it('shows lazy controls even when no meaningful continuity content, but hides pillar until expanded', async () => {
+describe('RatingView reading-context affordances retired (#2711)', () => {
+  it('contains no Why this?, Reading Context or Reading Boundaries affordance', () => {
     render(ratingView())
-    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
-    expect(screen.queryByTestId('rating-region-reading-context')).not.toBeInTheDocument()
-  })
-
-  it('renders the Reading Context region when reading orders exist after expansion', async () => {
-    render(ratingView({ readingOrders: readingOrders(1) }))
-    await userEvent.setup().click(screen.getByTestId('reading-context-button'))
-    expect(screen.getByText('Reading Context')).toBeInTheDocument()
-  })
-
-  it('renders the Reading Context region when connected threads exist even with no reading orders after expansion', async () => {
-    render(ratingView({ connectedThreads: connectedThreads(1) }))
-    await userEvent.setup().click(screen.getByTestId('reading-context-button'))
-    expect(screen.getByText('Reading Context')).toBeInTheDocument()
+    expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reading Boundaries')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
   })
 })
 

@@ -58,11 +58,8 @@ function renderRatingView() {
         rateIsPending={false}
         snoozeIsPending={false}
         dismissIsPending={false}
-        readingOrders={[]}
-        connectedThreads={[]}
         readerContext={null}
         isReaderContextLoading={false}
-        readerContextError={null}
         {...callbacks}
       />
     </MemoryRouter>,
