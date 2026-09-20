@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from hashlib import sha256
 import json
 from typing import Any, Protocol, cast
 
@@ -41,14 +40,28 @@ from app.services.continuity_plan_writer import (
     replace_compiled_rules,
     validate_node_ownership,
 )
-from comic_pile.dependencies import _get_blocked_thread_ids_uncached, refresh_user_blocked_status
+from app.services.migration_shared import (
+    MigrationInvariantError,
+    coerce_int,
+    dep_snapshot as _dep,
+    json_value as _json_value,
+    legacy_prefix as _legacy_prefix,
+    plan_fingerprint as _plan_fingerprint,
+    plan_fingerprint_from_payload as _plan_fingerprint_from_payload,
+    planned_rule_descriptor as _planned_rule_descriptor,
+    refresh_blocked_status as _refresh_blocked_status,
+    require_snapshot_token as _require_reviewed_snapshot,
+    rule_descriptor as _rule_descriptor,
+    rule_snapshot as _rule_snapshot,
+    rules_fingerprint as _rules_fingerprint,
+    stable_hash as _stable_hash,
+)
+from comic_pile.dependencies import _get_blocked_thread_ids_uncached
 from comic_pile.queue import get_roll_pool
 
 TEMPORARY_REPAIR_NOTE = "Temporary authoritative Ultimate Universe CBL order incident repair"
 
-
-class MigrationInvariantError(RuntimeError):
-    """Raised when live state no longer matches the reviewed migration contract."""
+# Re-export shared helpers for backward compatibility
 
 
 @dataclass(frozen=True)
@@ -78,24 +91,6 @@ PRODUCTION_ULTIMATE_UNIVERSE_SPEC = UltimateUniverseDryRunSpec(
 )
 
 
-def _json_value(value: object) -> object:
-    if isinstance(value, datetime):
-        return value.isoformat()
-    return value
-
-
-def _stable_hash(value: object) -> str:
-    payload = json.dumps(
-        value,
-        sort_keys=True,
-        separators=(",", ":"),
-        default=_json_value,
-    )
-    return sha256(payload.encode("utf-8")).hexdigest()
-
-
-def _legacy_prefix(content_hash: str) -> str:
-    return f"cbl-order:source:{content_hash}:"
 
 
 def _resolved_entries(report_entries: tuple[dict[str, object], ...]) -> list[dict[str, object]]:
@@ -105,7 +100,7 @@ def _resolved_entries(report_entries: tuple[dict[str, object], ...]) -> list[dic
             for entry in report_entries
             if isinstance(entry.get("resolved_issue_id"), int)
         ],
-        key=lambda entry: int(cast(int, entry["cbl_position"])),
+        key=lambda entry: coerce_int(entry["cbl_position"]),
     )
 
 
@@ -125,10 +120,10 @@ def _derive_gap_bridges(entries: list[dict[str, object]]) -> list[dict[str, int]
         ):
             bridges.append(
                 {
-                    "source_position": int(cast(int, latest_unread["cbl_position"])),
-                    "source_issue_id": int(cast(int, latest_unread["resolved_issue_id"])),
-                    "target_position": int(cast(int, entry["cbl_position"])),
-                    "target_issue_id": int(cast(int, entry["resolved_issue_id"])),
+                    "source_position": coerce_int(latest_unread["cbl_position"]),
+                    "source_issue_id": coerce_int(latest_unread["resolved_issue_id"]),
+                    "target_position": coerce_int(entry["cbl_position"]),
+                    "target_issue_id": coerce_int(entry["resolved_issue_id"]),
                 }
             )
         latest_unread = entry
@@ -148,8 +143,8 @@ def _build_plan(
     }
     nodes: list[ContinuityPlanNode] = []
     for position, entry in enumerate(entries):
-        issue_id = int(cast(int, entry["resolved_issue_id"]))
-        source_position = int(cast(int, entry["cbl_position"]))
+        issue_id = coerce_int(entry["resolved_issue_id"])
+        source_position = coerce_int(entry["cbl_position"])
         bridge_source = bridge_source_by_target.get(issue_id)
         convergence_gate = (
             [
@@ -214,21 +209,6 @@ def _planned_rules(
     return rules
 
 
-def _rule_snapshot(rule: ContinuityRule) -> dict[str, object]:
-    return {
-        "id": rule.id,
-        "legacy_dependency_id": rule.legacy_dependency_id,
-        "source_type": rule.source_type,
-        "source_id": rule.source_id,
-        "target_type": rule.target_type,
-        "target_id": rule.target_id,
-        "satisfaction_type": rule.satisfaction_type,
-        "checkpoint_issue_id": rule.checkpoint_issue_id,
-        "convergence_targets": rule.convergence_targets,
-        "note": rule.note,
-        "created_at": _json_value(rule.created_at),
-        "updated_at": _json_value(rule.updated_at),
-    }
 
 
 async def _factual_snapshot(
@@ -441,7 +421,7 @@ async def build_ultimate_universe_dry_run(
             f"unresolved={report.unresolved_count}, ambiguous={report.ambiguous_count}"
         )
     resolved_issue_ids = [
-        int(cast(int, entry["resolved_issue_id"])) for entry in entries
+        coerce_int(entry["resolved_issue_id"]) for entry in entries
     ]
     if len(resolved_issue_ids) != len(set(resolved_issue_ids)):
         errors.append("source positions do not resolve one-to-one to canonical issues")
@@ -674,7 +654,7 @@ async def build_ultimate_universe_dry_run(
     planned_direct_targets: set[int] = set()
     lost_source_protection: list[int] = []
     for thread in sorted(affected_threads, key=lambda row: row.id):
-        next_issue_id = cast(int, thread.next_unread_issue_id)
+        next_issue_id = coerce_int(thread.next_unread_issue_id)
         raw_rows = raw_by_target.get(next_issue_id, [])
         source_raw_blockers = [
             dep.id
@@ -834,87 +814,14 @@ async def build_ultimate_universe_dry_run(
     }
 
 
-def _require_reviewed_snapshot(snapshot: dict[str, Any]) -> None:
-    """Validate a Step 23A snapshot is a clean, reviewable cutover contract."""
-    token = snapshot.get("snapshot_token")
-    if not isinstance(token, str) or not token:
-        raise MigrationInvariantError("dry-run snapshot is missing snapshot_token")
-    if snapshot.get("ok") is not True:
-        raise MigrationInvariantError(
-            f"dry-run snapshot was not clean: {snapshot.get('errors')!r}"
-        )
 
 
-def _parse_datetime(value: object) -> datetime:
-    if not isinstance(value, str):
-        raise MigrationInvariantError(f"expected ISO timestamp, got {value!r}")
-    return datetime.fromisoformat(value)
-
-
-def _plan_fingerprint(plan: ContinuityPlan) -> str:
-    """Return the exact storage fingerprint of one migrated Reading Plan."""
-    return _stable_hash(
-        {
-            "name": plan.name,
-            "ordering_mode": plan.ordering_mode,
-            "nodes": plan.nodes_json,
-            "lanes": plan.lanes_json,
-        }
-    )
-
-
-def _plan_fingerprint_from_payload(payload: dict[str, object]) -> str:
-    """Return the fingerprint a snapshot expects the migrated plan to store."""
-    return _stable_hash(
-        {
-            "name": payload["name"],
-            "ordering_mode": payload["ordering_mode"],
-            "nodes": payload["nodes"],
-            "lanes": payload["lanes"],
-        }
-    )
-
-
-def _rule_descriptor(rule: ContinuityRule) -> dict[str, object]:
-    """Return the blocking semantics of one compiled rule for fingerprinting."""
-    return {
-        "source_type": rule.source_type,
-        "source_id": rule.source_id,
-        "target_type": rule.target_type,
-        "target_id": rule.target_id,
-        "satisfaction_type": rule.satisfaction_type,
-        "checkpoint_issue_id": rule.checkpoint_issue_id,
-        "convergence_targets": rule.convergence_targets,
-    }
-
-
-def _rules_fingerprint(rules: list[ContinuityRule]) -> str:
-    """Return a stable fingerprint over an ordered set of compiled rules."""
-    return _stable_hash(
-        [
-            _rule_descriptor(rule)
-            for rule in sorted(rules, key=lambda row: row.id)
-        ]
-    )
-
-
-def _planned_rule_descriptor(rule: dict[str, object]) -> dict[str, object]:
-    """Project a dry-run planned rule into the compiled rule descriptor space."""
-    return {
-        "source_type": rule["source_type"],
-        "source_id": int(cast(int, rule["source_id"])),
-        "target_type": rule["target_type"],
-        "target_id": int(cast(int, rule["target_id"])),
-        "satisfaction_type": rule["satisfaction_type"],
-        "checkpoint_issue_id": None,
-        "convergence_targets": rule.get("convergence_targets"),
-    }
 
 
 def _achieve_node_issue_ids(snapshot: dict[str, Any]) -> list[int]:
     """Return the reviewed source-ordered canonical issue IDs for the cutover."""
     return [
-        int(cast(int, node["ref_id"]))
+        coerce_int(node["ref_id"])
         for node in snapshot["planned"]["plan"]["nodes"]
     ]
 
@@ -922,7 +829,7 @@ def _achieve_node_issue_ids(snapshot: dict[str, Any]) -> list[int]:
 def _snapshot_reusable_edges(snapshot: dict[str, Any]) -> set[tuple[int, int]]:
     """Return edges already satisfied by surviving standalone prerequisite rules."""
     return {
-        (int(cast(int, row["source_id"])), int(cast(int, row["target_id"])))
+        (coerce_int(row["source_id"]), coerce_int(row["target_id"]))
         for row in snapshot.get("reused_standalone_rules", [])
     }
 
@@ -951,9 +858,9 @@ async def apply_ultimate_universe_migration(
     issue_ids = _achieve_node_issue_ids(snapshot)
     issue_id_set = set(issue_ids)
 
-    source_ids = [int(cast(int, row["id"])) for row in snapshot["source_legacy_dependencies"]]
+    source_ids = [coerce_int(row["id"]) for row in snapshot["source_legacy_dependencies"]]
     temporary_ids = [
-        int(cast(int, row["id"])) for row in snapshot["temporary_repair_dependencies"]
+        coerce_int(row["id"]) for row in snapshot["temporary_repair_dependencies"]
     ]
 
     if source_ids:
@@ -994,7 +901,7 @@ async def apply_ultimate_universe_migration(
                 f"{surviving_temporary_rules}"
             )
         for row in snapshot.get("temporary_repair_rules", []):
-            rule = await db.get(ContinuityRule, int(cast(int, row["id"])))
+            rule = await db.get(ContinuityRule, coerce_int(row["id"]))
             if rule is not None:
                 await db.delete(rule)
         await db.flush()
@@ -1022,7 +929,7 @@ async def apply_ultimate_universe_migration(
         nodes=nodes,
         ordering_mode="strict_sequential",
     )
-    await refresh_user_blocked_status(spec.user_id, db)
+    await _refresh_blocked_status(spec.user_id, db)
     await db.flush()
 
     plan_rules = list(
@@ -1040,7 +947,7 @@ async def apply_ultimate_universe_migration(
         .all()
     )
 
-    expected_count = int(cast(int, snapshot["planned"]["expected_new_plan_rule_count"]))
+    expected_count = coerce_int(snapshot["planned"]["expected_new_plan_rule_count"])
     if len(plan_rules) != expected_count:
         raise MigrationInvariantError(
             f"expected {expected_count} plan-owned rules, found {len(plan_rules)}"
@@ -1051,8 +958,8 @@ async def apply_ultimate_universe_migration(
         _planned_rule_descriptor(rule)
         for rule in snapshot["planned"]["rules"]
         if (
-            int(cast(int, rule["source_id"])),
-            int(cast(int, rule["target_id"])),
+            coerce_int(rule["source_id"]),
+            coerce_int(rule["target_id"]),
         )
         not in reusable_edges
     ]
@@ -1098,7 +1005,7 @@ async def apply_ultimate_universe_migration(
         )
 
     for row in snapshot["reused_standalone_rules"]:
-        rule = await db.get(ContinuityRule, int(cast(int, row["id"])))
+        rule = await db.get(ContinuityRule, coerce_int(row["id"]))
         if rule is None or _rule_snapshot(rule) != row:
             raise MigrationInvariantError(
                 f"reused standalone rule {row['id']} changed during cutover"
@@ -1137,7 +1044,7 @@ async def apply_ultimate_universe_migration(
             )
 
     affected_thread_ids = {
-        int(cast(int, thread_id))
+        coerce_int(thread_id)
         for thread_id in snapshot["runtime_behavior"]["affected_thread_ids"]
     }
     roll_ids = {thread.id for thread in await get_roll_pool(spec.user_id, db)}
@@ -1245,7 +1152,7 @@ async def rollback_ultimate_universe_migration(
             await db.execute(
                 select(ContinuityRule)
                 .where(
-                    ContinuityRule.id == int(cast(int, row["id"])),
+                    ContinuityRule.id == coerce_int(row["id"]),
                     ContinuityRule.user_id == spec.user_id,
                 )
                 .execution_options(populate_existing=True)
@@ -1291,11 +1198,11 @@ async def rollback_ultimate_universe_migration(
     ):
         raise MigrationInvariantError("dry-run snapshot lacks rollback rows")
 
-    dependency_ids = {int(cast(int, row["id"])) for row in source_rows}
-    dependency_ids.update(int(cast(int, row["id"])) for row in temporary_rows)
+    dependency_ids = {coerce_int(row["id"]) for row in source_rows}
+    dependency_ids.update(coerce_int(row["id"]) for row in temporary_rows)
     edge_filters = [
-        (Dependency.source_issue_id == int(cast(int, row["source_issue_id"])))
-        & (Dependency.target_issue_id == int(cast(int, row["target_issue_id"])))
+        (Dependency.source_issue_id == coerce_int(row["source_issue_id"]))
+        & (Dependency.target_issue_id == coerce_int(row["target_issue_id"]))
         for row in [*source_rows, *temporary_rows]
     ]
     conflicting_dependencies = list(
@@ -1318,9 +1225,9 @@ async def rollback_ultimate_universe_migration(
     for row in source_rows:
         db.add(
             Dependency(
-                id=int(cast(int, row["id"])),
-                source_issue_id=int(cast(int, row["source_issue_id"])),
-                target_issue_id=int(cast(int, row["target_issue_id"])),
+                id=coerce_int(row["id"]),
+                source_issue_id=coerce_int(row["source_issue_id"]),
+                target_issue_id=coerce_int(row["target_issue_id"]),
                 created_at=_parse_datetime(row["created_at"]),
                 note=row.get("note"),
             )
@@ -1330,9 +1237,9 @@ async def rollback_ultimate_universe_migration(
     for row in temporary_rows:
         db.add(
             Dependency(
-                id=int(cast(int, row["id"])),
-                source_issue_id=int(cast(int, row["source_issue_id"])),
-                target_issue_id=int(cast(int, row["target_issue_id"])),
+                id=coerce_int(row["id"]),
+                source_issue_id=coerce_int(row["source_issue_id"]),
+                target_issue_id=coerce_int(row["target_issue_id"]),
                 created_at=_parse_datetime(row["created_at"]),
                 note=row.get("note"),
             )
@@ -1341,7 +1248,7 @@ async def rollback_ultimate_universe_migration(
 
     restored_rule_ids: set[int] = set()
     for row in temporary_rule_rows:
-        legacy_dependency_id = int(cast(int, row["legacy_dependency_id"]))
+        legacy_dependency_id = coerce_int(row["legacy_dependency_id"])
         rule = (
             await db.execute(
                 select(ContinuityRule).where(
@@ -1351,13 +1258,13 @@ async def rollback_ultimate_universe_migration(
         ).scalar_one_or_none()
         if rule is None:
             rule = ContinuityRule(
-                id=int(cast(int, row["id"])),
+                id=coerce_int(row["id"]),
                 user_id=spec.user_id,
                 legacy_dependency_id=legacy_dependency_id,
                 source_type=str(row["source_type"]),
-                source_id=int(cast(int, row["source_id"])),
+                source_id=coerce_int(row["source_id"]),
                 target_type=str(row["target_type"]),
-                target_id=int(cast(int, row["target_id"])),
+                target_id=coerce_int(row["target_id"]),
                 satisfaction_type=str(row["satisfaction_type"]),
                 checkpoint_issue_id=row.get("checkpoint_issue_id"),
                 convergence_targets=row.get("convergence_targets"),
@@ -1370,9 +1277,9 @@ async def rollback_ultimate_universe_migration(
             expected_edge = (
                 spec.user_id,
                 str(row["source_type"]),
-                int(cast(int, row["source_id"])),
+                coerce_int(row["source_id"]),
                 str(row["target_type"]),
-                int(cast(int, row["target_id"])),
+                coerce_int(row["target_id"]),
             )
             actual_edge = (
                 rule.user_id,
@@ -1386,17 +1293,17 @@ async def rollback_ultimate_universe_migration(
                     "legacy dependency trigger restored an unexpected rule edge: "
                     f"expected {expected_edge!r}, got {actual_edge!r}"
                 )
-            rule.id = int(cast(int, row["id"]))
+            rule.id = coerce_int(row["id"])
             rule.satisfaction_type = str(row["satisfaction_type"])
             rule.checkpoint_issue_id = row.get("checkpoint_issue_id")
             rule.convergence_targets = row.get("convergence_targets")
             rule.note = row.get("note")
             rule.created_at = _parse_datetime(row["created_at"])
             rule.updated_at = _parse_datetime(row["updated_at"])
-        restored_rule_ids.add(int(cast(int, row["id"])))
+        restored_rule_ids.add(coerce_int(row["id"]))
     await db.flush()
 
-    temporary_dependency_ids = {int(cast(int, row["id"])) for row in temporary_rows}
+    temporary_dependency_ids = {coerce_int(row["id"]) for row in temporary_rows}
     actual_restored_rule_ids = set(
         (
             await db.execute(
@@ -1414,20 +1321,20 @@ async def rollback_ultimate_universe_migration(
             f"{sorted(actual_restored_rule_ids)}"
         )
     for row in temporary_rule_rows:
-        rule = await db.get(ContinuityRule, int(cast(int, row["id"])))
+        rule = await db.get(ContinuityRule, coerce_int(row["id"]))
         if rule is None or _rule_snapshot(rule) != row:
             raise MigrationInvariantError(
                 f"rollback failed to restore exact temporary rule {row['id']}"
             )
 
-    source_restored_ids = {int(cast(int, row["id"])) for row in source_rows}
+    source_restored_ids = {coerce_int(row["id"]) for row in source_rows}
     if source_restored_ids:
         for row in snapshot.get("reused_standalone_rules", []):
             rule = (
                 await db.execute(
                     select(ContinuityRule)
                     .where(
-                        ContinuityRule.id == int(cast(int, row["id"])),
+                        ContinuityRule.id == coerce_int(row["id"]),
                         ContinuityRule.user_id == spec.user_id,
                     )
                     .execution_options(populate_existing=True)
@@ -1438,12 +1345,12 @@ async def rollback_ultimate_universe_migration(
                     f"reusable standalone rule {row['id']} no longer exists"
                 )
             if _rule_snapshot(rule) != row:
-                rule.id = int(cast(int, row["id"]))
+                rule.id = coerce_int(row["id"])
                 rule.legacy_dependency_id = None
                 rule.source_type = str(row["source_type"])
-                rule.source_id = int(cast(int, row["source_id"]))
+                rule.source_id = coerce_int(row["source_id"])
                 rule.target_type = str(row["target_type"])
-                rule.target_id = int(cast(int, row["target_id"]))
+                rule.target_id = coerce_int(row["target_id"])
                 rule.satisfaction_type = str(row["satisfaction_type"])
                 rule.checkpoint_issue_id = row.get("checkpoint_issue_id")
                 rule.convergence_targets = row.get("convergence_targets")
@@ -1487,7 +1394,7 @@ async def rollback_ultimate_universe_migration(
                 f"attached to restored source dependencies: {remaining_source_linked_ids}"
             )
 
-    await refresh_user_blocked_status(spec.user_id, db)
+    await _refresh_blocked_status(spec.user_id, db)
     await db.flush()
 
     restored_dependency_ids = set(
@@ -1528,7 +1435,7 @@ async def rollback_ultimate_universe_migration(
             )
 
     affected_thread_ids = {
-        int(cast(int, thread_id))
+        coerce_int(thread_id)
         for thread_id in snapshot["runtime_behavior"]["affected_thread_ids"]
     }
     roll_ids = {thread.id for thread in await get_roll_pool(spec.user_id, db)}

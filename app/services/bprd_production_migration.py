@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from hashlib import sha256
-import json
 from typing import Any
 
 from sqlalchemy import delete, or_, select
@@ -31,11 +29,17 @@ from app.services.continuity_plan_writer import (
     replace_compiled_rules,
     validate_node_ownership,
 )
-from comic_pile.dependencies import refresh_user_blocked_status
+from app.services.migration_shared import (
+    MigrationInvariantError,
+    json_value as _json_value,
+    plan_fingerprint as _plan_fingerprint,
+    refresh_blocked_status as _refresh_blocked_status,
+    require_snapshot_token as _require_snapshot,
+    stable_hash as _stable_hash,
+)
+from comic_pile.dependencies import _refresh_blocked_status as _legacy_refresh
 
 
-class MigrationInvariantError(RuntimeError):
-    """Raised when live state no longer matches the reviewed migration contract."""
 
 
 @dataclass(frozen=True)
@@ -185,20 +189,6 @@ PRODUCTION_BPRD_SPEC = BPRDMigrationSpec(
 )
 
 
-def _json_value(value: object) -> object:
-    if isinstance(value, datetime):
-        return value.isoformat()
-    return value
-
-
-def _stable_hash(value: object) -> str:
-    payload = json.dumps(
-        value,
-        sort_keys=True,
-        separators=(",", ":"),
-        default=_json_value,
-    )
-    return sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _plan_nodes(spec: BPRDMigrationSpec) -> list[ContinuityPlanNode]:
@@ -219,15 +209,6 @@ def _plan_lanes() -> list[ContinuityPlanLane]:
     return [ContinuityPlanLane(id="main", name="Reading order", order=0)]
 
 
-def _plan_fingerprint(plan: ContinuityPlan) -> str:
-    return _stable_hash(
-        {
-            "name": plan.name,
-            "ordering_mode": plan.ordering_mode,
-            "nodes": plan.nodes_json,
-            "lanes": plan.lanes_json,
-        }
-    )
 
 
 def _planned_edges(spec: BPRDMigrationSpec) -> list[tuple[int, int]]:
@@ -700,15 +681,6 @@ async def build_bprd_dry_run(
     }
 
 
-def _require_snapshot(snapshot: dict[str, Any]) -> str:
-    token = snapshot.get("snapshot_token")
-    if not isinstance(token, str) or not token:
-        raise MigrationInvariantError("dry-run snapshot is missing snapshot_token")
-    if snapshot.get("ok") is not True:
-        raise MigrationInvariantError(
-            f"dry-run snapshot was not clean: {snapshot.get('errors')!r}"
-        )
-    return token
 
 
 async def apply_bprd_migration(
@@ -758,7 +730,7 @@ async def apply_bprd_migration(
         nodes=nodes,
         ordering_mode="strict_sequential",
     )
-    await refresh_user_blocked_status(spec.user_id, db)
+    await _refresh_blocked_status(spec.user_id, db)
     await db.flush()
 
     marker = f"continuity-plan:{plan.id}"
@@ -1002,7 +974,7 @@ async def rollback_bprd_migration(
             "rollback failed to restore exact legacy continuity rules: "
             f"{sorted(actual_restored_rule_ids)}"
         )
-    await refresh_user_blocked_status(spec.user_id, db)
+    await _refresh_blocked_status(spec.user_id, db)
     await db.flush()
 
     restored_ids = set(
