@@ -119,11 +119,9 @@ it('keeps paginated queue items as full-width rows on a wide viewport', async ()
 /**
  * Acceptance criterion for #2565: Queue must use one virtualized rendering
  * path from the first page onward. Appending pages must not replace the scroll
- * owner or rebuild the list. The fixture spans five pages (250 rows) and
- * traverses page boundaries in both directions, proving the same user-facing
- * scroll surface (the window) owns Queue throughout — no nested vertical
- * scroll channel or fixed-height box is introduced — and that rows stay
- * painted without requiring a scroll-away/back to recover.
+ * owner or rebuild the list. This unit fixture still uses a deterministic
+ * virtualizer double so jsdom can assert the composition contract (windowed
+ * DOM geometry belongs to the Playwright suite in issue #2725).
  */
 it('keeps a single scroll surface while the queue grows and shrinks across pages', async () => {
   const page = (count: number): Thread[] =>
@@ -353,6 +351,62 @@ it('paints virtual rows at natural document offsets when the wrapper sits below 
     const sentinel = screen.getByTestId('queue-infinite-scroll-sentinel')
     expect(sentinel.style.top).toBe(`${threads.length * ROW_HEIGHT_WITH_GAP}px`)
   } finally {
+    Object.defineProperty(window, 'scrollY', {
+      value: previousScrollY,
+      writable: true,
+      configurable: true,
+    })
+  }
+})
+
+it('observes #root.scrollTop so the visible range can leave the first painted window', async () => {
+  const root = document.createElement('div')
+  root.id = 'root'
+  document.body.appendChild(root)
+  const previousScrollY = window.scrollY
+  Object.defineProperty(window, 'scrollY', { value: 0, writable: true, configurable: true })
+  root.scrollTop = 2400
+
+  const offsets: number[] = []
+  const capturingUseVirtualizer = (
+    options: UseWindowVirtualizerOptions,
+  ): QueueVirtualizer => {
+    options.observeElementOffset?.(
+      // SAFETY: the observer ignores the virtualizer instance and only reads the page scroller.
+      {} as never,
+      (offset: number) => {
+        offsets.push(offset)
+      },
+    )
+    return {
+      getVirtualItems: () => virtualItems,
+      getTotalSize: () => 9600,
+      measureElement: vi.fn(),
+      scrollToIndex: vi.fn(),
+    }
+  }
+
+  try {
+    render(
+      <VirtualizedThreadList
+        threads={threads}
+        renderItem={(thread, index) => (
+          <div data-testid="queue-thread-item" key={thread.id}>
+            {thread.title} #{index + 1}
+          </div>
+        )}
+        useVirtualizer={capturingUseVirtualizer}
+      />,
+    )
+
+    expect(offsets.at(0)).toBe(2400)
+    root.scrollTop = 4800
+    act(() => {
+      root.dispatchEvent(new Event('scroll'))
+    })
+    expect(offsets.at(-1)).toBe(4800)
+  } finally {
+    root.remove()
     Object.defineProperty(window, 'scrollY', {
       value: previousScrollY,
       writable: true,

@@ -2,6 +2,8 @@
 
 Thanks for contributing to Comic Pile. This project values clear APIs, mobile-first UX, and approachable code. Please follow the checks below for any code change.
 
+Participation in Comic Pile project spaces is also governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Pre-commit hook
 
 A pre-commit hook is installed in `.git/hooks/pre-commit` that automatically runs:

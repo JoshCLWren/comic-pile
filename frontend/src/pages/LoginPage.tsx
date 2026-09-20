@@ -68,8 +68,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-[var(--theme-bg-page)]">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[var(--theme-primary-action)]">Comic Pile · Roll to read. Rotate your stack.</p>
           <h1 className="text-4xl font-black tracking-tighter text-glow uppercase">Welcome Back</h1>
-          <p className="text-sm text-[var(--theme-text-muted)]">Sign in to continue your journey</p>
+          <p className="text-sm text-[var(--theme-text-muted)]">An open-source, dice-driven comic reading tracker. Sign in to continue your journey.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-6">
@@ -125,12 +126,23 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="text-center">
+        <div className="text-center space-y-3">
           <p className="text-sm text-[var(--theme-text-muted)]">
             Don't have an account?{' '}
             <Link to="/register" className="text-[var(--theme-primary-action)] hover:opacity-80 font-bold transition-opacity">
               Sign up
             </Link>
+          </p>
+          <p className="text-xs text-[var(--theme-text-muted)]">
+            Comic Pile is MIT-licensed and built in public.{' '}
+            <a
+              href="https://github.com/JoshCLWren/comic-pile"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[var(--theme-primary-action)] hover:opacity-80 font-bold transition-opacity"
+            >
+              View the source on GitHub
+            </a>
           </p>
         </div>
       </div>

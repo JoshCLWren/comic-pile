@@ -1,0 +1,118 @@
+# Weekly grouped dependency updates for uv + pnpm + GitHub Actions.
+# Majors for the frontend toolchain stay ungrouped/ignored so they remain planned work.
+#
+# Factory labels: Dependabot branches are not factory/* so the bare `factory`
+# label admits them to the work queue. Start at factory:review + factory:unowned
+# so workers can claim, fix CI, promote, and merge. `infrastructure` keeps them
+# in provenance lane 5 (behind product bugs). Do not use the product
+# `dependencies` label (that means the dependency-blocking feature).
+version: 2
+
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - factory
+      - factory:review
+      - factory:unowned
+      - infrastructure
+    groups:
+      python-minor-patch:
+        update-types:
+          - minor
+          - patch
+      python-major:
+        update-types:
+          - major
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - factory
+      - factory:review
+      - factory:unowned
+      - infrastructure
+    ignore:
+      # Dev-only bot/tooling; noisy and outside the product path.
+      - dependency-name: testdriverai
+    groups:
+      js-root-minor-patch:
+        update-types:
+          - minor
+          - patch
+      js-root-major:
+        update-types:
+          - major
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - factory
+      - factory:review
+      - factory:unowned
+      - infrastructure
+    ignore:
+      # Planned toolchain majors — bump in dedicated PRs, not weekly noise.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+      - dependency-name: vite
+        update-types:
+          - version-update:semver-major
+      - dependency-name: vitest
+        update-types:
+          - version-update:semver-major
+      - dependency-name: "@vitest/*"
+        update-types:
+          - version-update:semver-major
+      - dependency-name: eslint
+        update-types:
+          - version-update:semver-major
+      - dependency-name: "@eslint/*"
+        update-types:
+          - version-update:semver-major
+      - dependency-name: "@vitejs/plugin-react"
+        update-types:
+          - version-update:semver-major
+    groups:
+      frontend-prod-minor-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      frontend-dev-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      frontend-major:
+        update-types:
+          - major
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - factory
+      - factory:review
+      - factory:unowned
+      - infrastructure
+    groups:
+      github-actions:
+        patterns:
+          - "*"

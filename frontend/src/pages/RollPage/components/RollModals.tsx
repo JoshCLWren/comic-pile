@@ -241,8 +241,8 @@ export function RollModals({
               disabled={setDiePending}
               className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
                 die === currentDie
-                  ? 'bg-amber-600/20 border-amber-600 text-amber-500'
-                  : 'bg-white/5 border-white/10 hover:bg-white/10'
+                  ? 'bg-[var(--theme-comic-accent)]/20 border-[var(--theme-comic-accent)] text-[var(--theme-comic-accent)]'
+                  : 'bg-[var(--theme-bg-panel)] border-[var(--theme-border)] hover:bg-white/10'
               }`}
             >
               d{die}
@@ -255,7 +255,9 @@ export function RollModals({
             }}
             disabled={clearManualDiePending}
             className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
-              manualDie ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'
+              manualDie
+                ? 'bg-[var(--theme-comic-accent)]/20 border-[var(--theme-comic-accent)] text-[var(--theme-comic-accent)]'
+                : 'bg-[var(--theme-bg-panel)] border-[var(--theme-border)] hover:bg-white/10'
             }`}
           >
             Auto
@@ -272,7 +274,7 @@ export function RollModals({
           <button
             type="button"
             onClick={() => onAction('read')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
             <span className="text-lg">📖</span>
             <span>Read Now</span>
@@ -280,7 +282,7 @@ export function RollModals({
           <button
             type="button"
             onClick={() => onAction('set-current-issue')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
             <span className="text-lg">🎯</span>
             <span>Set Current Issue</span>
@@ -288,7 +290,7 @@ export function RollModals({
           <button
             type="button"
             onClick={() => onAction('move-front')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
             <span className="text-lg">⬆️</span>
             <span>Move to Front</span>
@@ -296,7 +298,7 @@ export function RollModals({
           <button
             type="button"
             onClick={() => onAction('move-back')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
             <span className="text-lg">⬇️</span>
             <span>Move to Back</span>
@@ -304,7 +306,7 @@ export function RollModals({
           <button
             type="button"
             onClick={() => onAction('snooze')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
             <span className="text-lg">
               {snoozedThreads.some((thread) => thread.id === selectedThread?.id) ? '🔔' : '😴'}
@@ -318,7 +320,7 @@ export function RollModals({
           <button
             type="button"
             onClick={() => onAction('edit')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
             <span className="text-lg">✏️</span>
             <span>Edit Series</span>

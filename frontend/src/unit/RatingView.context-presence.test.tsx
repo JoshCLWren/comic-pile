@@ -8,9 +8,8 @@ import {
   hasReadingContextContent,
   hasReadingContextInformation,
 } from '../pages/RollPage/readingContextContent'
-import type { ReadingOrder } from '../services/api-reading-orders'
 import type { RatingThread } from '../pages/RollPage/types'
-import type { ConnectedThreadInfo, ReaderContextResponse } from '../types'
+import type { ReaderContextResponse } from '../types'
 
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -44,8 +43,6 @@ interface RatingViewOverride {
   rateIsPending?: boolean
   snoozeIsPending?: boolean
   dismissIsPending?: boolean
-  readingOrders?: ReadingOrder[]
-  connectedThreads?: ConnectedThreadInfo[]
   onUpdateRating?: (value: string) => void
   onSubmitRating?: (finishSession: boolean) => void
   onSnooze?: () => void
@@ -78,8 +75,6 @@ function renderRatingView(overrides: RatingViewOverride = {}) {
     rateIsPending: false,
     snoozeIsPending: false,
     dismissIsPending: false,
-    readingOrders: [],
-    connectedThreads: [],
     readerContext: null,
     isReaderContextLoading: false,
     readerContextError: null,
@@ -171,93 +166,104 @@ const minimalContext: ReaderContextResponse = {
   },
 }
 
-describe('Reading Context content-driven presence (#1942)', () => {
-  it('shows lazy controls even for empty context and requires explicit expansion to reveal pillar', async () => {
-    const user = userEvent.setup()
+describe('RatingView post-#2711: removed Reading Context/Boundaries/WhyThis surfaces', () => {
+  it('contains no Why this?, Reading Context or Reading Boundaries affordance and no middle column', () => {
     const { container } = renderRatingView()
-    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
-    expect(screen.getByTestId('reading-boundaries-button')).toBeInTheDocument()
+    expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-context')).not.toBeInTheDocument()
-    await user.click(screen.getByTestId('reading-context-button'))
-    expect(screen.getByText('No reading context available.')).toBeInTheDocument()
+    expect(screen.queryByTestId('rating-region-reading-boundaries')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reading Boundaries')).not.toBeInTheDocument()
+    expect(screen.queryByText('Your Reading Boundaries')).not.toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
-    expect(grid!.contains(screen.getByTestId('rating-region-reading-context'))).toBe(true)
+    expect(grid).not.toBeNull()
+    expect(grid!.className).toContain('lg:grid-cols-2')
+    expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
+    expect(grid!.contains(screen.getByTestId('rating-region-comic'))).toBe(true)
+    expect(grid!.contains(screen.getByTestId('rating-region-decision'))).toBe(true)
   })
 
-  it('renders a bounded status card while reading context loads after expansion, distinct from empty', async () => {
-    const user = userEvent.setup()
-    const { container } = renderRatingView({ isReaderContextLoading: true })
-    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
-    await user.click(screen.getByTestId('reading-context-button'))
-    expect(screen.getByText('Checking reading context…')).toBeInTheDocument()
-    expect(container.querySelector('.animate-pulse')).not.toBeNull()
+  it('still renders rating workflow without removed surfaces even when readerContext is populated', () => {
+    renderRatingView({ readerContext: populatedContext })
+    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
+    expect(screen.getByText('Your rating')).toBeInTheDocument()
+    expect(screen.getByRole('slider')).toBeInTheDocument()
+    expect(screen.getByTestId('rating-region-comic')).toBeInTheDocument()
   })
 
-  it('renders a bounded failure card when reading context is unavailable after expansion, distinct from empty', async () => {
-    const user = userEvent.setup()
-    renderRatingView({ readerContextError: 'Reader context service offline' })
-    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
-    await user.click(screen.getByTestId('reading-context-button'))
-    expect(screen.getByText('Local reading context unavailable')).toBeInTheDocument()
-    expect(screen.getByText('Reader context service offline')).toBeInTheDocument()
-  })
-
-  it('exposes all continuity information when a reader context alone populates the region after expansion', async () => {
-    const user = userEvent.setup()
-    const { container } = renderRatingView({ readerContext: populatedContext })
-    await user.click(screen.getByTestId('reading-context-button'))
-    expect(screen.getByText('Reading Context')).toBeInTheDocument()
-    expect(screen.getByText('Where you are in Ultimate Black Panther')).toBeInTheDocument()
-    await user.click(screen.getByTestId('reading-boundaries-button'))
-    expect(screen.getByText('Your Reading Boundaries')).toBeInTheDocument()
-    expect(screen.getByText('Rolled 5 on d6')).toBeInTheDocument()
-    const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
-    expect(grid!.className).toContain('xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]')
-  })
-
-  it('renders reading routes when reading orders populate the region after expansion', async () => {
-    const user = userEvent.setup()
-    renderRatingView({
-      readingOrders: [
-        { id: 7, name: 'Main route', description: null, total_items: 2, completed_items: 1, items: [] },
-      ],
-    })
-    await user.click(screen.getByTestId('reading-context-button'))
-    expect(screen.getByText('Reading Context')).toBeInTheDocument()
-    expect(screen.getByText('Your Reading Paths')).toBeInTheDocument()
-    expect(screen.getByText('Main route')).toBeInTheDocument()
-  })
-
-  it('does not render pillar content for a loaded but continuity-free context even after expansion', async () => {
-    const user = userEvent.setup()
+  it('does not render Reading Context pillar content for loaded but empty context', () => {
     renderRatingView({ readerContext: minimalContext })
-    await user.click(screen.getByTestId('reading-context-button'))
-    expect(screen.getByText('No reading context available.')).toBeInTheDocument()
-    expect(screen.queryByText('Your Place in the Story')).not.toBeInTheDocument()
+    expect(screen.queryByText('No reading context available.')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
   })
 })
 
-describe('Your Context content-driven presence (#1942)', () => {
-  it('renders no YOUR CONTEXT heading when only the rating form is meaningful', () => {
+describe('Connection history disclosure (#2714)', () => {
+  it('renders no narrative heading when only the rating form is meaningful', () => {
     renderRatingView()
     expect(screen.queryByText('Your Context')).not.toBeInTheDocument()
+    expect(screen.queryByText('Series history & crossovers')).not.toBeInTheDocument()
     expect(screen.getByText('Your rating')).toBeInTheDocument()
     expect(screen.getByRole('slider')).toBeInTheDocument()
   })
 
-  it('renders the YOUR CONTEXT heading with series history when context exists', () => {
-    renderRatingView({ readerContext: populatedContext })
-    expect(screen.getByText('Your Context')).toBeInTheDocument()
-    expect(screen.getByText('Ultimate Black Panther history')).toBeInTheDocument()
-  })
-
-  it('keeps series history and rating content in a populated roll state', async () => {
+  it('keeps series history hidden behind the disclosure until it is opened', async () => {
     const user = userEvent.setup()
-    renderRatingView({ readerContext: populatedContext, readingOrders: [{ id: 7, name: 'Main route', description: null, total_items: 2, completed_items: 1, items: [] }] })
+    renderRatingView({ readerContext: populatedContext })
+    expect(screen.queryByText('Ultimate Black Panther history')).not.toBeInTheDocument()
+    expect(screen.getByText('Your rating')).toBeInTheDocument()
+    expect(screen.queryByTestId('context-disclosure-content')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /series history & crossovers/i }))
+    expect(screen.getByTestId('context-disclosure-content')).toBeVisible()
     expect(screen.getByText('Ultimate Black Panther history')).toBeInTheDocument()
     expect(screen.getByText('Your rating')).toBeInTheDocument()
-    await user.click(screen.getByTestId('reading-context-button'))
-    expect(screen.getByText('Your Reading Paths')).toBeInTheDocument()
+  })
+
+  it('shows a loading skeleton while reader context loads', () => {
+    const { container } = renderRatingView({ isReaderContextLoading: true })
+    expect(container.querySelector('.animate-pulse')).not.toBeNull()
+    expect(screen.getByRole('slider')).toBeInTheDocument()
+  })
+
+  it('reveals crossover analytics inside the disclosure when crossovers exist', async () => {
+    const user = userEvent.setup()
+    const crossoverContext: ReaderContextResponse = {
+      ...populatedContext,
+      series: {
+        identity_source: 'unavailable',
+        canonical_series_id: null,
+        series_name: null,
+        average_rating: null,
+        ratings_count: 0,
+        previous_issue: null,
+        recent_ratings: [],
+        highest_rating: null,
+        lowest_rating: null,
+      },
+      crossovers: [
+        {
+          id: 500,
+          name: 'Secret Wars',
+          applies_to_current_issue: true,
+          membership_kind: 'issue',
+          next_member: null,
+          average_rating: 4.0,
+          ratings_count: 3,
+          read_count: 2,
+        },
+      ],
+    }
+    renderRatingView({ readerContext: crossoverContext })
+    expect(screen.queryByText('Crossovers')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /series history & crossovers/i }))
+    expect(screen.getByText('Crossovers')).toBeInTheDocument()
+    expect(screen.getByText('Secret Wars')).toBeInTheDocument()
   })
 })
 

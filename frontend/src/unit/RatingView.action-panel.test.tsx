@@ -4,9 +4,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import { RATING_THRESHOLD } from '../pages/RollPage/utils'
-import type { ReadingOrder } from '../services/api-reading-orders'
 import type { RatingThread } from '../pages/RollPage/types'
-import type { ConnectedThreadInfo, ReaderContextResponse } from '../types'
+import type { ReaderContextResponse } from '../types'
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -47,8 +46,6 @@ interface RatingViewOverride {
   rateIsPending?: boolean
   snoozeIsPending?: boolean
   dismissIsPending?: boolean
-  readingOrders?: ReadingOrder[]
-  connectedThreads?: ConnectedThreadInfo[]
   onUpdateRating?: (value: string) => void
   onSubmitRating?: (finishSession: boolean) => void
   onSnooze?: () => void
@@ -60,6 +57,24 @@ interface RatingViewOverride {
   // SAFETY: legacy stray override key only read by tests; the component reads issues_remaining from activeRatingThread.
   issues_remaining?: number
 }
+
+const populatedReaderContext: ReaderContextResponse = {
+  issue_id: 100,
+  series: {
+    identity_source: 'comicvine',
+    canonical_series_id: 's1',
+    series_name: 'Saga',
+    average_rating: 4,
+    ratings_count: 1,
+    previous_issue: null,
+    recent_ratings: [],
+    highest_rating: 5,
+    lowest_rating: 1,
+  },
+  crossovers: [],
+  local_chain: { issues: [], edges: [] },
+}
+
 function ratingView(overrides: RatingViewOverride = {}) {
   const defaults = {
     activeRatingThread: {
@@ -83,8 +98,6 @@ function ratingView(overrides: RatingViewOverride = {}) {
     rateIsPending: false,
     snoozeIsPending: false,
     dismissIsPending: false,
-    readingOrders: [],
-    connectedThreads: [],
     onUpdateRating: vi.fn(),
     onSubmitRating: vi.fn(),
     onSnooze: vi.fn(),
@@ -112,8 +125,8 @@ describe('RatingView action panel (issue #1406)', () => {
   it('Snooze remains neutral styling', () => {
     render(ratingView())
     const snooze = screen.getByRole('button', { name: /snooze/i })
-    expect(snooze.className).toContain('border-white/10')
-    expect(snooze.className).toContain('bg-white/5')
+    expect(snooze.className).toContain('border-[var(--theme-border)]')
+    expect(snooze.className).toContain('bg-[var(--theme-bg-panel)]')
     expect(snooze.className).toContain('text-stone-300')
   })
 
@@ -129,7 +142,7 @@ describe('RatingView action panel (issue #1406)', () => {
     render(ratingView())
     const save = screen.getByRole('button', { name: /mark read & save/i })
     const cancel = screen.getByRole('button', { name: /cancel roll/i })
-    const primary = save.classList.contains('bg-amber-600/25')
+    const primary = save.classList.contains('bg-[var(--theme-comic-accent)]/25')
     const cancelIsDemoted =
       cancel.classList.contains('bg-transparent') &&
       cancel.classList.contains('text-[var(--theme-text-muted)]')
@@ -268,91 +281,57 @@ describe('RatingView action panel (issue #1406)', () => {
   })
 })
 
-describe('RatingView desktop layout contract (issue #1943)', () => {
-  it('uses an algorithmic auto-fit desktop grid instead of fixed fractional templates', () => {
+describe('RatingView desktop layout contract (#2711 revises #1943)', () => {
+  it('uses a two-column grid without reserving a middle column for removed surfaces', () => {
     const { container } = render(ratingView())
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     expect(grid).not.toBeNull()
     expect(grid!.className).toContain('grid')
     expect(grid!.className).toContain('items-start')
-    expect(grid!.className).toContain('xl:grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))]')
+    expect(grid!.className).toContain('lg:grid-cols-2')
+    expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
     expect(grid!.className).not.toMatch(/minmax\(0,\d+fr\)/)
+    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
   })
 
-  it('keeps region cards content-sized instead of stretching to equal-height rows', async () => {
-    const { container } = render(
-      ratingView({
-        readingOrders: [
-          {
-            id: 7,
-            name: 'Main route',
-            description: null,
-            total_items: 2,
-            completed_items: 1,
-            items: [],
-          },
-        ],
-      }),
-    )
-    await userEvent.setup().click(screen.getByTestId('reading-context-button'))
+  it('keeps region cards content-sized instead of stretching to equal-height rows', () => {
+    const { container } = render(ratingView())
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     expect(grid!.className).toContain('items-start')
-    for (const testId of ['rating-region-comic', 'rating-region-reading-context', 'rating-region-your-context']) {
+    for (const testId of ['rating-region-comic', 'rating-region-decision']) {
       expect(container.querySelector(`[data-testid="${testId}"]`)!.className).toContain('min-w-0')
     }
   })
 
   it('avoids fixed grid-row/grid-column placement that reserves holes when regions shrink', () => {
-    const { container } = render(
-      ratingView({
-        readingOrders: [
-          {
-            id: 7,
-            name: 'Main route',
-            description: null,
-            total_items: 2,
-            completed_items: 1,
-            items: [],
-          },
-        ],
-      }),
-    )
+    const { container } = render(ratingView())
     const grid = container.querySelector<HTMLElement>('[data-testid="rating-pillars-grid"]')
     expect(grid).not.toBeNull()
     const cells = Array.from(grid!.querySelectorAll<HTMLDivElement>(':scope > div'))
-    expect(cells.length).toBeGreaterThanOrEqual(3)
+    expect(cells.length).toBe(2)
     for (const cell of cells) {
       expect(cell.className).not.toMatch(/\b(?:md:|xl:)?(?:col-start|row-start|col-end|row-end|row-span)-\d+\b/)
       expect(cell.className).not.toContain('md:row-span-2')
     }
   })
 
-  it('stacks the action panel with Your Context instead of spanning the full grid width', () => {
-    const { container } = render(
-      ratingView({
-        readingOrders: [
-          {
-            id: 7,
-            name: 'Main route',
-            description: null,
-            total_items: 2,
-            completed_items: 1,
-            items: [],
-          },
-        ],
-      }),
-    )
-    const yourContext = container.querySelector<HTMLElement>('[data-testid="rating-region-your-context"]')
-    const actions = container.querySelector<HTMLElement>('[data-testid="rating-actions-grid-cell"]')
-    expect(yourContext).not.toBeNull()
-    expect(actions).not.toBeNull()
-    expect(yourContext!.contains(actions)).toBe(true)
-    expect(actions!.className).not.toContain('xl:col-span-full')
+  it('stacks the decision card and context disclosure in the decision region', () => {
+    const { container } = render(ratingView({ readerContext: populatedReaderContext }))
+    const decisionRegion = container.querySelector<HTMLElement>('[data-testid="rating-region-decision"]')
+    const decisionCard = container.querySelector<HTMLElement>('[data-testid="decision-card"]')
+    const contextDisclosure = container.querySelector<HTMLElement>('[data-testid="context-disclosure"]')
+    expect(decisionRegion).not.toBeNull()
+    expect(decisionCard).not.toBeNull()
+    expect(contextDisclosure).not.toBeNull()
+    expect(decisionRegion!.contains(decisionCard)).toBe(true)
+    expect(decisionRegion!.contains(contextDisclosure)).toBe(true)
+    expect(decisionCard!.className).not.toContain('xl:col-span-full')
   })
 
-  it('does not render Reading Context pillar when empty but shows lazy controls - rating form follows The Comic directly', () => {
+  it('does not render Reading Context pillar when empty - rating form follows The Comic directly without removed surfaces', () => {
     const { container } = render(ratingView())
-    expect(screen.getByTestId('reading-context-button')).toBeInTheDocument()
+    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-context')).not.toBeInTheDocument()
     expect(screen.queryByText('Your Context')).not.toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
@@ -361,29 +340,16 @@ describe('RatingView desktop layout contract (issue #1943)', () => {
     expect(text.indexOf('Your rating')).toBeGreaterThan(-1)
     expect(text.indexOf('The Comic')).toBeLessThan(text.indexOf('Your rating'))
     expect(text).not.toMatch(/\b0[123]\b/)
+    expect(text).not.toContain('Reading Context')
+    expect(text).not.toContain('Reading Boundaries')
+    expect(text).not.toContain('Why this?')
   })
 
-  it('keeps the pillars in DOM order without decorative numeric prefixes when Reading Context has content after expansion', async () => {
-    const { container } = render(
-      ratingView({
-        readingOrders: [
-          {
-            id: 7,
-            name: 'Main route',
-            description: null,
-            total_items: 2,
-            completed_items: 1,
-            items: [],
-          },
-        ],
-      }),
-    )
-    await userEvent.setup().click(screen.getByTestId('reading-context-button'))
-    const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
-    const text = grid!.textContent ?? ''
-    expect(text.indexOf('The Comic')).toBeLessThan(text.indexOf('Reading Context'))
-    expect(text.indexOf('Reading Context')).toBeLessThan(text.indexOf('Your rating'))
-    expect(screen.getByText('Reading Context')).toBeInTheDocument()
-    expect(text).not.toMatch(/\b0[123]\b/)
+  it('contains no Why this?, Reading Context or Reading Boundaries affordance even with populated props', () => {
+    const { container } = render(ratingView({ readerContext: { issue_id: 100, series: { identity_source: 'comicvine', canonical_series_id: 's1', series_name: 'Saga', average_rating: 4, ratings_count: 1, previous_issue: null, recent_ratings: [], highest_rating: 5, lowest_rating: 1 }, crossovers: [], local_chain: { issues: [], edges: [] } } as ReaderContextResponse }))
+    expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reading Boundaries')).not.toBeInTheDocument()
+    expect(container.querySelector('[data-testid="rating-pillars-grid"]')!.className).toContain('lg:grid-cols-2')
   })
 })

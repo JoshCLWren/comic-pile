@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { waitForQueueReady } from './helpers';
+import { queueThreadTitle, scrollAppTo, scrollAppUntil, waitForQueueReady } from './helpers';
 
 /**
  * Bounded incremental Queue loading (#932).
@@ -17,9 +17,10 @@ test.describe('Bounded incremental Queue loading (#932)', () => {
     await page.goto('/queue', { waitUntil: 'domcontentloaded' });
     await waitForQueueReady(page);
 
-    // The first page is bounded (page_size 50) and renders in the plain grid
-    // before the virtualization threshold, so every card is mounted.
-    await expect(page.getByTestId('queue-thread-item')).toHaveCount(50);
+    // The first page is bounded (page_size 50). Virtualization windows the
+    // painted cards, so the assertion is "some cards + sentinel", not 50
+    // mounted DOM nodes (issue #2725).
+    await expect(page.getByTestId('queue-thread-item').first()).toBeVisible();
     await expect(page.getByTestId('queue-infinite-scroll-sentinel')).toBeVisible();
   });
 
@@ -29,17 +30,20 @@ test.describe('Bounded incremental Queue loading (#932)', () => {
     await page.goto('/queue', { waitUntil: 'domcontentloaded' });
     await waitForQueueReady(page);
 
-    // Scroll the window to the bottom so the sentinel triggers the next page.
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    // Scroll the page scroller (`#root`) so the sentinel triggers the next page.
+    await scrollAppUntil(
+      page,
+      async () => queueThreadTitle(page, 'Test Thread 60').isVisible(),
+      'final thread of the 60-item fixture',
+    );
 
     // The second page (threads 51-60) is appended; the final thread becomes
-    // visible without discarding the first page. After #2184 the window owns
-    // scrolling before and after the virtualization threshold.
-    await expect(page.getByText('Test Thread 60')).toBeVisible({ timeout: 10000 });
+    // visible without discarding the first page.
+    await expect(queueThreadTitle(page, 'Test Thread 60')).toBeVisible({ timeout: 10000 });
 
     // Returning to the top keeps the first page intact (no scroll loss).
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await expect(page.getByText('Test Thread 1')).toBeVisible();
+    await scrollAppTo(page, 0);
+    await expect(queueThreadTitle(page, 'Test Thread 1')).toBeVisible();
 
     // After the final page there is no further cursor, so the sentinel is gone.
     await expect(page.getByTestId('queue-infinite-scroll-sentinel')).toHaveCount(0);
@@ -57,8 +61,8 @@ test.describe('Bounded incremental Queue loading (#932)', () => {
     // The search term does not match the tail of the library, so the
     // out-of-range thread must disappear and the list must reload from the
     // first compatible page.
-    await expect(page.getByText('Test Thread 60')).toHaveCount(0);
-    await expect(page.getByText('Test Thread 1')).toBeVisible();
+    await expect(queueThreadTitle(page, 'Test Thread 60')).toHaveCount(0);
+    await expect(queueThreadTitle(page, 'Test Thread 1')).toBeVisible();
   });
 
   test('resets the loaded pages when the sort order changes', async ({ authenticatedWithLargeQueuePage }) => {
@@ -71,12 +75,19 @@ test.describe('Bounded incremental Queue loading (#932)', () => {
 
     // The sort change is a distinct query key, so the loader resets to the
     // first compatible page and keeps the queue intact.
-    await expect(page.getByText('Test Thread 1')).toBeVisible();
+    await expect(queueThreadTitle(page, 'Test Thread 1')).toBeVisible();
     await expect(page.getByTestId('queue-thread-item').first()).toBeVisible();
   });
 
-  test('offers a retry affordance when the next-page request fails and recovers', async ({ authenticatedWithLargeQueuePage }) => {
+  test('offers a retry affordance when the next-page request fails and recovers', async ({
+    authenticatedWithLargeQueuePage,
+    allowExpectedBrowserFailures,
+  }) => {
     const page = authenticatedWithLargeQueuePage;
+    allowExpectedBrowserFailures.allow(
+      { category: 'requestfailed', message: 'page_token' },
+      { category: 'console', message: 'page_token' },
+    );
 
     // Only abort cursor-paginated continuation requests; let the first page load.
     await page.route('**/v1/threads/**', async (route) => {
@@ -91,7 +102,11 @@ test.describe('Bounded incremental Queue loading (#932)', () => {
     await page.goto('/queue', { waitUntil: 'domcontentloaded' });
     await waitForQueueReady(page);
 
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await scrollAppUntil(
+      page,
+      async () => page.getByTestId('queue-load-more-retry').isVisible(),
+      'retry affordance after a failed next-page fetch',
+    );
 
     const retry = page.getByTestId('queue-load-more-retry');
     await expect(retry).toBeVisible({ timeout: 10000 });
@@ -100,7 +115,12 @@ test.describe('Bounded incremental Queue loading (#932)', () => {
     await page.unroute('**/v1/threads/**');
     await retry.click();
 
-    await expect(page.getByText('Test Thread 60')).toBeVisible({ timeout: 10000 });
+    await scrollAppUntil(
+      page,
+      async () => queueThreadTitle(page, 'Test Thread 60').isVisible(),
+      'thread 60 after retry',
+    );
+    await expect(queueThreadTitle(page, 'Test Thread 60')).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId('queue-infinite-scroll-sentinel')).toHaveCount(0);
   });
 });

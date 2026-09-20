@@ -13,80 +13,49 @@ from app.models.continuity_plan import ContinuityPlan
 from app.models.continuity_rule import ContinuityRule
 from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
-from app.models.thread import Thread
 from app.schemas.continuity_plan import (
     ContinuityPlanLane,
     ContinuityPlanNode,
     ContinuityPlanWrite,
 )
 from app.services.cbl_reconciliation import reconcile_cbl_source_list
-from app.services.continuity_graph import GraphSnapshot, issue_readiness, load_snapshot
+from app.services.continuity_graph import issue_readiness, load_snapshot
 from app.services.continuity_plan_writer import replace_compiled_rules, validate_node_ownership
 from app.services.explicit_reader_order_migration import (
     _explicit_classifications,
     _load_step14_index,
 )
-from app.services.ultimate_universe_production_migration import (
+from app.services.migration_shared import (
     MigrationInvariantError,
+    coerce_int,
+    dependency_id_batches,
+    dep_snapshot,
+    invalidate_continuity_snapshot,
+    legacy_prefix,
+    plan_fingerprint,
+    plan_fingerprint_from_payload,
+    planned_rule_descriptor,
+    refresh_blocked_status,
+    require_clean_snapshot,
+    rule_snapshot,
+    rules_fingerprint,
+    stable_hash,
+)
+from app.services.ultimate_universe_production_migration import (
     _build_plan,
     _derive_gap_bridges,
     _factual_snapshot,
-    _legacy_prefix,
-    _plan_fingerprint,
-    _plan_fingerprint_from_payload,
-    _planned_rule_descriptor,
     _planned_rules,
     _resolved_entries,
-    _rule_snapshot,
-    _rules_fingerprint,
-    _stable_hash,
 )
-from comic_pile.dependencies import (
-    _get_blocked_thread_ids_uncached,
-    _invalidate_continuity_snapshot,
-    refresh_user_blocked_status,
-)
+from comic_pile.dependencies import _get_blocked_thread_ids_uncached
 from comic_pile.queue import get_roll_pool
 
-_DEPENDENCY_ID_BATCH_SIZE = 10_000
-
-
-def _legacy_blocked_baseline(
-    affected_threads: list[Thread],
-    raw_by_target: dict[int, list[Dependency]],
-    snapshot: GraphSnapshot,
-) -> set[int]:
-    """Return the frozen pre-cutover blocked baseline for the affected threads.
-
-    Migration-plan Roll-eligibility guards compare the plan's simulated future
-    against this baseline rather than the post-cutover Runtime canonical
-    evaluator, so re-affirming reader order over formerly ``cbl-order:%``
-    materialization is not mistaken for an accidental eligibility change. The
-    baseline mirrors the retired legacy evaluator: any unread-source Dependency
-    row or ContinuityRule blocker counts.
-    """
-    blocked: set[int] = set()
-    for thread in affected_threads:
-        next_issue_id = thread.next_unread_issue_id
-        if next_issue_id is None:
-            continue
-        raw_blocked = any(
-            (source := snapshot.issues.get(dep.source_issue_id)) is not None
-            and source.status != "read"
-            for dep in raw_by_target.get(next_issue_id, [])
-        )
-        if raw_blocked or issue_readiness(next_issue_id, snapshot):
-            blocked.add(thread.id)
-    return blocked
-
-
-def _dependency_id_batches(dependency_ids: set[int] | list[int]) -> tuple[tuple[int, ...], ...]:
-    """Split dependency IDs below asyncpg's 32,767 bind-argument limit."""
-    ordered = sorted(set(dependency_ids))
-    return tuple(
-        tuple(ordered[offset : offset + _DEPENDENCY_ID_BATCH_SIZE])
-        for offset in range(0, len(ordered), _DEPENDENCY_ID_BATCH_SIZE)
-    )
+# Backward-compat aliases for external imports
+_dep = dep_snapshot
+_rule_snapshot = rule_snapshot
+_dependency_id_batches = dependency_id_batches
+_require_clean = require_clean_snapshot
 
 
 @dataclass(frozen=True)
@@ -202,21 +171,6 @@ PRODUCTION_SOURCE_BACKED_SPECS: dict[str, SourceBackedReaderOrderSpec] = {
 }
 
 
-def _dep(dep: Dependency) -> dict[str, object]:
-    return {
-        "id": dep.id,
-        "source_issue_id": dep.source_issue_id,
-        "target_issue_id": dep.target_issue_id,
-        "note": dep.note,
-        "created_at": dep.created_at.isoformat(),
-    }
-
-
-def _require_clean(snapshot: dict[str, Any]) -> None:
-    if snapshot.get("ok") is not True or not snapshot.get("snapshot_token"):
-        raise MigrationInvariantError(
-            f"snapshot is not clean: {snapshot.get('errors')!r}"
-        )
 
 
 async def build_source_backed_reader_order_dry_run(
@@ -224,7 +178,7 @@ async def build_source_backed_reader_order_dry_run(
     spec: SourceBackedReaderOrderSpec,
 ) -> dict[str, Any]:
     """Build a deterministic read-only migration snapshot for one manifest."""
-    _invalidate_continuity_snapshot(spec.user_id, db)
+    invalidate_continuity_snapshot(spec.user_id, db)
     errors: list[str] = []
     if spec.source_list_id is None:
         matching_sources = list(
@@ -313,7 +267,7 @@ async def build_source_backed_reader_order_dry_run(
         baseline_member_issue_ids=tuple(sorted(member_issue_ids)),
     )
     entries = _resolved_entries(report.entries)
-    issue_ids = [int(cast(int, entry["resolved_issue_id"])) for entry in entries]
+    issue_ids = [coerce_int(entry["resolved_issue_id"]) for entry in entries]
     issue_set = set(issue_ids)
     if (
         report.total_positions != spec.expected_positions
@@ -378,7 +332,7 @@ async def build_source_backed_reader_order_dry_run(
     if overlaps:
         errors.append(f"existing Reading Plan overlap: {overlaps}")
 
-    prefixes = [_legacy_prefix(source.content_hash)]
+    prefixes = [legacy_prefix(source.content_hash)]
     if spec.dependency_group_id is not None:
         prefixes.append(
             f"cbl-order:group-{spec.dependency_group_id}:{source.content_hash}:"
@@ -445,7 +399,7 @@ async def build_source_backed_reader_order_dry_run(
         dependency.id for dependency in [*source_deps, *explicit_deps]
     }
     removed_rules: list[ContinuityRule] = []
-    for dependency_ids in _dependency_id_batches(removal_ids):
+    for dependency_ids in dependency_id_batches(removal_ids):
         removed_rules.extend(
             (
                 await db.execute(
@@ -465,8 +419,8 @@ async def build_source_backed_reader_order_dry_run(
 
     graph = await load_snapshot(db, spec.user_id)
     positions = {
-        int(cast(int, entry["resolved_issue_id"])): int(
-            cast(int, entry["cbl_position"])
+        coerce_int(entry["resolved_issue_id"]): int(
+            coerce_int(entry["cbl_position"])
         )
         for entry in entries
     }
@@ -500,7 +454,7 @@ async def build_source_backed_reader_order_dry_run(
             )
         explicit_semantics.append(
             {
-                **_dep(dependency),
+                **dep_snapshot(dependency),
                 "endpoints_owned": endpoints_owned,
                 "source_status": None if source_issue is None else source_issue.status,
                 "target_status": None if target_issue is None else target_issue.status,
@@ -648,7 +602,7 @@ async def build_source_backed_reader_order_dry_run(
     future_blocked: set[int] = set()
     behavior: list[dict[str, object]] = []
     for thread in affected:
-        next_issue_id = cast(int, thread.next_unread_issue_id)
+        next_issue_id = coerce_int(thread.next_unread_issue_id)
         removed = [
             dependency.id
             for dependency in raw_by_target.get(next_issue_id, [])
@@ -738,17 +692,17 @@ async def build_source_backed_reader_order_dry_run(
         },
         "factual": factual,
         "overlapping_plans": overlaps,
-        "source_legacy_dependencies": [_dep(dependency) for dependency in source_deps],
+        "source_legacy_dependencies": [dep_snapshot(dependency) for dependency in source_deps],
         "explicit_reader_order_dependencies": explicit_semantics,
         "preserved_standalone_dependencies": [
-            _dep(dependency) for dependency in preserved_standalone
+            dep_snapshot(dependency) for dependency in preserved_standalone
         ],
-        "needs_review_dependencies": [_dep(dependency) for dependency in needs_review],
+        "needs_review_dependencies": [dep_snapshot(dependency) for dependency in needs_review],
         "removed_linked_continuity_rules": [
-            _rule_snapshot(rule) for rule in removed_rules
+            rule_snapshot(rule) for rule in removed_rules
         ],
-        "reused_standalone_rules": [_rule_snapshot(rule) for rule in reusable],
-        "conflicting_rules": [_rule_snapshot(rule) for rule in conflicts],
+        "reused_standalone_rules": [rule_snapshot(rule) for rule in reusable],
+        "conflicting_rules": [rule_snapshot(rule) for rule in conflicts],
         "historical_gap_bridges": bridges,
         "planned": {
             "plan": plan_payload,
@@ -770,7 +724,7 @@ async def build_source_backed_reader_order_dry_run(
     return {
         "ok": not errors,
         "errors": errors,
-        "snapshot_token": _stable_hash(state),
+        "snapshot_token": stable_hash(state),
         **state,
     }
 
@@ -782,7 +736,7 @@ async def apply_source_backed_reader_order_migration(
     spec: SourceBackedReaderOrderSpec,
 ) -> dict[str, Any]:
     """Apply one reviewed snapshot inside the caller-owned transaction."""
-    _require_clean(snapshot)
+    require_clean_snapshot(snapshot)
     current = await build_source_backed_reader_order_dry_run(db, spec)
     if (
         current.get("snapshot_token") != snapshot["snapshot_token"]
@@ -794,10 +748,10 @@ async def apply_source_backed_reader_order_migration(
         *snapshot["source_legacy_dependencies"],
         *snapshot["explicit_reader_order_dependencies"],
     ]
-    removal_ids = [int(cast(int, row["id"])) for row in removed_rows]
+    removal_ids = [coerce_int(row["id"]) for row in removed_rows]
     if removal_ids:
         removed_count = 0
-        for dependency_ids in _dependency_id_batches(removal_ids):
+        for dependency_ids in dependency_id_batches(removal_ids):
             result = await db.execute(
                 delete(Dependency).where(Dependency.id.in_(dependency_ids))
             )
@@ -811,7 +765,7 @@ async def apply_source_backed_reader_order_migration(
 
     if removal_ids:
         surviving: list[int] = []
-        for dependency_ids in _dependency_id_batches(removal_ids):
+        for dependency_ids in dependency_id_batches(removal_ids):
             surviving.extend(
                 (
                     await db.execute(
@@ -852,7 +806,7 @@ async def apply_source_backed_reader_order_migration(
         nodes=nodes,
         ordering_mode="strict_sequential",
     )
-    await refresh_user_blocked_status(spec.user_id, db)
+    await refresh_blocked_status(spec.user_id, db)
     await db.flush()
 
     rules = list(
@@ -870,7 +824,7 @@ async def apply_source_backed_reader_order_migration(
         .all()
     )
     expected_count = int(
-        cast(int, snapshot["planned"]["expected_new_plan_rule_count"])
+        coerce_int(snapshot["planned"]["expected_new_plan_rule_count"])
     )
     if len(rules) != expected_count:
         raise MigrationInvariantError(
@@ -878,20 +832,20 @@ async def apply_source_backed_reader_order_migration(
         )
 
     reusable_edges = {
-        (int(cast(int, row["source_id"])), int(cast(int, row["target_id"])))
+        (coerce_int(row["source_id"]), coerce_int(row["target_id"]))
         for row in snapshot["reused_standalone_rules"]
     }
     expected = {
-        _stable_hash(_planned_rule_descriptor(rule))
+        stable_hash(planned_rule_descriptor(rule))
         for rule in snapshot["planned"]["rules"]
         if (
-            int(cast(int, rule["source_id"])),
-            int(cast(int, rule["target_id"])),
+            coerce_int(rule["source_id"]),
+            coerce_int(rule["target_id"]),
         )
         not in reusable_edges
     }
     actual = {
-        _stable_hash(
+        stable_hash(
             {
                 "source_type": rule.source_type,
                 "source_id": rule.source_id,
@@ -908,7 +862,7 @@ async def apply_source_backed_reader_order_migration(
         raise MigrationInvariantError(
             "compiled rule semantics diverge from reviewed snapshot"
         )
-    if _plan_fingerprint(plan) != _plan_fingerprint_from_payload(payload):
+    if plan_fingerprint(plan) != plan_fingerprint_from_payload(payload):
         raise MigrationInvariantError(
             "persisted Reading Plan diverges from reviewed snapshot"
         )
@@ -932,19 +886,19 @@ async def apply_source_backed_reader_order_migration(
         raise MigrationInvariantError("sequence_order changed during migration")
 
     for row in snapshot["reused_standalone_rules"]:
-        rule = await db.get(ContinuityRule, int(cast(int, row["id"])))
-        if rule is None or _rule_snapshot(rule) != row:
+        rule = await db.get(ContinuityRule, coerce_int(row["id"]))
+        if rule is None or rule_snapshot(rule) != row:
             raise MigrationInvariantError(f"standalone rule {row['id']} changed")
 
     for row in snapshot["preserved_standalone_dependencies"]:
         dependency = await db.get(Dependency, int(row["id"]))
-        if dependency is None or _dep(dependency) != row:
+        if dependency is None or dep_snapshot(dependency) != row:
             raise MigrationInvariantError(
                 f"standalone prerequisite {row['id']} changed"
             )
 
     issue_ids = [
-        int(cast(int, node["ref_id"])) for node in payload["nodes"]
+        coerce_int(node["ref_id"]) for node in payload["nodes"]
     ]
     factual = await _factual_snapshot(
         db,
@@ -961,7 +915,7 @@ async def apply_source_backed_reader_order_migration(
             raise MigrationInvariantError(f"protected reader state changed: {key}")
 
     affected_ids = {
-        int(cast(int, thread_id))
+        coerce_int(thread_id)
         for thread_id in snapshot["runtime_behavior"]["affected_thread_ids"]
     }
     eligible = sorted(
@@ -977,9 +931,9 @@ async def apply_source_backed_reader_order_migration(
     return {
         "plan_id": plan.id,
         "plan_marker": marker,
-        "plan_fingerprint": _plan_fingerprint(plan),
+        "plan_fingerprint": plan_fingerprint(plan),
         "plan_rule_count": len(rules),
-        "plan_rule_fingerprint": _rules_fingerprint(rules),
+        "plan_rule_fingerprint": rules_fingerprint(rules),
         "expected_new_plan_rule_count": expected_count,
         "removed_source_dependency_count": len(snapshot["source_legacy_dependencies"]),
         "removed_explicit_reader_order_dependency_count": len(

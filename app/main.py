@@ -48,7 +48,6 @@ from app.api import (
     session,
     snooze,
     taste,
-    test_helpers,
     thread,
     traffic_metrics,
     undo,
@@ -304,7 +303,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(issue_identity.router, tags=["issue-identity"])
     app.include_router(cbl_plan_adoption.router, tags=["cbl-adoption-commit"])
     if os.getenv("TEST_ENVIRONMENT") == "true":
-        app.include_router(test_helpers.router, prefix="/api", tags=["test"])
+        from app.api.test_helpers import router as test_helpers_router
+
+        app.include_router(test_helpers_router, prefix="/api", tags=["test"])
 
     def _assert_production_frontend_assets() -> None:
         """Ensure required frontend artifacts exist in production.
