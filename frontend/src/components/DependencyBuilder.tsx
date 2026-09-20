@@ -105,14 +105,12 @@ export default function DependencyBuilder({
     data: sourceIssues,
     isPending: isLoadingSourceIssues,
     error: sourceIssuesError,
-    refetch: refetchSourceIssues,
   } = useThreadIssuesForDependency(selectedThreadId, issuesEnabled)
 
   const {
     data: targetIssues,
     isPending: isLoadingTargetIssues,
     error: targetIssuesError,
-    refetch: refetchTargetIssues,
   } = useThreadIssuesForDependency(threadId, issuesEnabled)
 
   const createDependencyMutation = useCreateDependency(threadId)
@@ -365,9 +363,8 @@ export default function DependencyBuilder({
       setSelectedThreadId(null)
       setSourceIssueId(null)
       setTargetIssueId(null)
-      await refetchDependencies()
-      await refetchSourceIssues()
-      await refetchTargetIssues()
+      // Refresh is covered by useCreateDependency's
+      // invalidateAfterDependencyChange; no manual refetch loop.
       onChanged?.()
     } catch (saveError: unknown) {
       setError(getApiErrorDetail(saveError))
@@ -391,7 +388,8 @@ export default function DependencyBuilder({
         try {
           await deleteDependencyMutation.mutateAsync(dependencyId)
           setPendingDeletion(null)
-          await refetchDependencies()
+          // Refresh is covered by useDeleteDependency's
+          // invalidateAfterDependencyChange; no manual refetch loop.
           onChanged?.()
         } catch (deleteError: unknown) {
           setError(getApiErrorDetail(deleteError))
