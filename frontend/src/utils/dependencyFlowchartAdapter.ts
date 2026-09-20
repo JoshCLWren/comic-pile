@@ -12,21 +12,6 @@ export interface ThreadDependenciesData {
   blocked_by: Dependency[]
 }
 
-function makeFlowchartNodeFromDependency(
-  dep: Dependency,
-  labelKey: 'source_label' | 'target_label',
-): FlowchartNode | null {
-  const issueId = labelKey === 'source_label' ? dep.source_issue_id : dep.target_issue_id
-  const threadId = labelKey === 'source_label' ? dep.source_issue_thread_id : dep.target_issue_thread_id
-  const label = dep[labelKey]
-  
-  if (issueId == null || threadId == null) return null
-  
-  return {
-    id: -issueId,
-    title: label ?? `Issue #${issueId}`,
-    x: 0,
-    y: 0,
     isBlocked: false,
     isIssueNode: true,
     parentThreadId: threadId,
