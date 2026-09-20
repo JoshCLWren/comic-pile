@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import { RATING_THRESHOLD } from '../pages/RollPage/utils'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
+import type { ReaderContextResponse } from '../types'
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -34,6 +35,23 @@ vi.mock('../hooks/useReaderContext', async (importOriginal) => {
     }),
   }
 })
+
+const populatedReaderContext: ReaderContextResponse = {
+  issue_id: 100,
+  series: {
+    identity_source: 'comicvine',
+    canonical_series_id: 's1',
+    series_name: 'Saga',
+    average_rating: 4,
+    ratings_count: 1,
+    previous_issue: null,
+    recent_ratings: [],
+    highest_rating: 5,
+    lowest_rating: 1,
+  },
+  crossovers: [],
+  local_chain: { issues: [], edges: [] },
+}
 
 function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingViewData {
   const thread = overrides.activeRatingThread ?? {

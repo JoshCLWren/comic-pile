@@ -35,21 +35,29 @@ from app.services.legacy_reading_order_production_migration import (
     load_reviewed_step23a_contract,
     reviewed_reading_plan_order_rows,
 )
-from app.services.ultimate_universe_production_migration import (
+from app.services.migration_shared import (
     MigrationInvariantError,
+    coerce_int,
+    dep_snapshot,
+    invalidate_continuity_snapshot,
+    plan_fingerprint,
+    plan_fingerprint_from_payload,
+    refresh_blocked_status,
+    require_clean_snapshot,
+    rule_snapshot,
+    rules_fingerprint,
+    stable_hash,
+)
+from app.services.ultimate_universe_production_migration import (
     _factual_snapshot,
-    _plan_fingerprint,
-    _plan_fingerprint_from_payload,
-    _rule_snapshot,
-    _rules_fingerprint,
-    _stable_hash,
 )
-from comic_pile.dependencies import (
-    _get_blocked_thread_ids_uncached,
-    _invalidate_continuity_snapshot,
-    refresh_user_blocked_status,
-)
+from comic_pile.dependencies import _get_blocked_thread_ids_uncached
 from comic_pile.queue import get_roll_pool
+
+# Backward-compat aliases for external imports
+_dep = dep_snapshot
+_rule_snapshot = rule_snapshot
+_require_clean = require_clean_snapshot
 
 ROOT = Path(__file__).resolve().parents[2]
 STEP14_INDEX = ROOT / "docs/recovery/step14-final-classification-index.json"
@@ -226,16 +234,6 @@ PRODUCTION_EXPLICIT_READER_ORDER_SPECS: dict[str, ExplicitReaderOrderSpec] = {
 }
 
 
-def _dep(dependency: Dependency) -> dict[str, object]:
-    return {
-        "id": dependency.id,
-        "source_issue_id": dependency.source_issue_id,
-        "target_issue_id": dependency.target_issue_id,
-        "note": dependency.note,
-        "created_at": dependency.created_at.isoformat(),
-    }
-
-
 def _load_step14_index() -> dict[str, Any]:
     value = json.loads(STEP14_INDEX.read_text(encoding="utf-8"))
     if not isinstance(value, dict) or value.get("result") != "PASS":
@@ -355,8 +353,8 @@ def _migration_contract(
     edge_pairs = sorted(
         {
             (
-                int(cast(int, row["source_issue_id"])),
-                int(cast(int, row["target_issue_id"])),
+                coerce_int(row["source_issue_id"]),
+                coerce_int(row["target_issue_id"]),
             )
             for row in selected_rows
         }
@@ -372,12 +370,12 @@ def _migration_contract(
         "kind": "explicit_reader_order",
         "classification_family_keys": list(spec.classification_family_keys),
         "selected_dependency_ids": [
-            int(cast(int, row["id"])) for row in selected_rows
+            coerce_int(row["id"]) for row in selected_rows
         ],
         "issue_ids": issue_ids,
         "edges": [list(edge) for edge in edge_pairs],
-        "issue_fingerprint": _stable_hash(issue_ids),
-        "edge_fingerprint": _stable_hash(edge_pairs),
+        "issue_fingerprint": stable_hash(issue_ids),
+        "edge_fingerprint": stable_hash(edge_pairs),
     }
 
 
@@ -405,13 +403,6 @@ def _reviewed_step23b_plan_names() -> set[str]:
     return set(_reviewed_step23b_writer_payloads())
 
 
-def _require_clean(snapshot: dict[str, Any]) -> None:
-    if snapshot.get("ok") is not True or not snapshot.get("snapshot_token"):
-        raise MigrationInvariantError(
-            f"snapshot is not clean: {snapshot.get('errors')!r}"
-        )
-
-
 async def build_explicit_reader_order_dry_run(
     db: AsyncSession,
     spec: ExplicitReaderOrderSpec,
@@ -429,7 +420,7 @@ async def build_explicit_reader_order_dry_run(
     one-shot); informational Step 23B node positions are not Roll authority. If
     restoring those gates would change eligibility, report a Roll mismatch.
     """
-    _invalidate_continuity_snapshot(spec.user_id, db)
+    invalidate_continuity_snapshot(spec.user_id, db)
     errors: list[str] = []
     index = _load_step14_index()
     by_id, by_family = _explicit_classifications(index)
@@ -439,7 +430,7 @@ async def build_explicit_reader_order_dry_run(
     reviewed_covered_rows: dict[int, dict[str, object]] = {}
     if tolerate_step23b_covered_absence:
         reviewed_covered_rows = {
-            int(cast(int, row["dependency_id"])): row
+            coerce_int(row["dependency_id"]): row
             for row in reviewed_reading_plan_order_rows(load_reviewed_step23a_contract())
         }
         step23b_covered_ids = set(reviewed_covered_rows) & set(selected_ids)
@@ -534,7 +525,7 @@ async def build_explicit_reader_order_dry_run(
         edge_set.add((dependency.source_issue_id, dependency.target_issue_id))
         selected_semantics.append(
             {
-                **_dep(dependency),
+                **dep_snapshot(dependency),
                 "source_status": source_issue.status,
                 "target_status": target_issue.status,
                 "source_in_manifest_groups": dependency.source_issue_id in group_issue_ids,
@@ -544,8 +535,8 @@ async def build_explicit_reader_order_dry_run(
 
     for dependency_id in tolerated_missing:
         row = reviewed_covered_rows[dependency_id]
-        source_issue_id = int(cast(int, row["source_issue_id"]))
-        target_issue_id = int(cast(int, row["target_issue_id"]))
+        source_issue_id = coerce_int(row["source_issue_id"])
+        target_issue_id = coerce_int(row["target_issue_id"])
         source_issue = graph.issues.get(source_issue_id)
         target_issue = graph.issues.get(target_issue_id)
         if source_issue is None or target_issue is None:
@@ -569,7 +560,7 @@ async def build_explicit_reader_order_dry_run(
                 "retired_by_step23b": True,
             }
         )
-    selected_semantics.sort(key=lambda row: int(cast(int, row["id"])))
+    selected_semantics.sort(key=lambda row: coerce_int(row["id"]))
 
     if spec.expected_issue_ids:
         issue_ids.update(spec.expected_issue_ids)
@@ -619,8 +610,8 @@ async def build_explicit_reader_order_dry_run(
                 and plan.name in reviewed_payloads
             ):
                 reviewed_payload = reviewed_payloads[plan.name]
-                live_fingerprint = _plan_fingerprint(plan)
-                expected_fingerprint = _plan_fingerprint_from_payload(reviewed_payload)
+                live_fingerprint = plan_fingerprint(plan)
+                expected_fingerprint = plan_fingerprint_from_payload(reviewed_payload)
                 if live_fingerprint != expected_fingerprint:
                     errors.append(
                         "Step 23B canonical plan drifted from reviewed fingerprint: "
@@ -907,7 +898,7 @@ async def build_explicit_reader_order_dry_run(
     future_blocked: set[int] = set()
     behavior: list[dict[str, object]] = []
     for thread in affected:
-        next_issue_id = cast(int, thread.next_unread_issue_id)
+        next_issue_id = coerce_int(thread.next_unread_issue_id)
         removed = [
             dependency.id
             for dependency in raw_by_target.get(next_issue_id, [])
@@ -983,20 +974,20 @@ async def build_explicit_reader_order_dry_run(
         "ordered_membership_count": len(ordered_membership_ids),
         "selected_reader_order_dependencies": selected_semantics,
         "preserved_standalone_dependencies": [
-            _dep(dependency) for dependency in preserved_standalone
+            dep_snapshot(dependency) for dependency in preserved_standalone
         ],
-        "needs_review_dependencies": [_dep(dependency) for dependency in needs_review],
+        "needs_review_dependencies": [dep_snapshot(dependency) for dependency in needs_review],
         "unselected_reader_order_dependencies": [
-            _dep(dependency) for dependency in unselected_reader_order
+            dep_snapshot(dependency) for dependency in unselected_reader_order
         ],
         "generated_internal_dependencies": [
-            _dep(dependency) for dependency in generated_internal
+            dep_snapshot(dependency) for dependency in generated_internal
         ],
         "unclassified_internal_dependencies": [
-            _dep(dependency) for dependency in unknown_internal
+            dep_snapshot(dependency) for dependency in unknown_internal
         ],
         "removed_linked_continuity_rules": [
-            _rule_snapshot(rule) for rule in removed_rules
+            rule_snapshot(rule) for rule in removed_rules
         ],
         "overlapping_plans": overlapping_plans,
         "existing_canonical_plan": existing_canonical_plan,
@@ -1017,7 +1008,7 @@ async def build_explicit_reader_order_dry_run(
     return {
         "ok": not errors,
         "errors": errors,
-        "snapshot_token": _stable_hash(state),
+        "snapshot_token": stable_hash(state),
         **state,
     }
 
@@ -1029,7 +1020,7 @@ async def apply_explicit_reader_order_migration(
     spec: ExplicitReaderOrderSpec,
 ) -> dict[str, Any]:
     """Apply one reviewed classified reader-order snapshot transactionally."""
-    _require_clean(snapshot)
+    require_clean_snapshot(snapshot)
     current = await build_explicit_reader_order_dry_run(db, spec)
     if (
         current.get("snapshot_token") != snapshot["snapshot_token"]
@@ -1038,7 +1029,7 @@ async def apply_explicit_reader_order_migration(
         raise MigrationInvariantError("live state changed since dry-run")
 
     removed_rows = list(snapshot["selected_reader_order_dependencies"])
-    removal_ids = [int(cast(int, row["id"])) for row in removed_rows]
+    removal_ids = [coerce_int(row["id"]) for row in removed_rows]
     if removal_ids:
         result = await db.execute(delete(Dependency).where(Dependency.id.in_(removal_ids)))
         if getattr(result, "rowcount", None) != len(removal_ids):
@@ -1085,7 +1076,7 @@ async def apply_explicit_reader_order_migration(
         nodes=nodes,
         ordering_mode="informational",
     )
-    await refresh_user_blocked_status(spec.user_id, db)
+    await refresh_blocked_status(spec.user_id, db)
     await db.flush()
 
     rules = list(
@@ -1102,18 +1093,18 @@ async def apply_explicit_reader_order_migration(
         .scalars()
         .all()
     )
-    expected_count = int(cast(int, snapshot["planned"]["rule_count"]))
+    expected_count = coerce_int(snapshot["planned"]["rule_count"])
     if len(rules) != expected_count:
         raise MigrationInvariantError(
             f"expected {expected_count} plan rules, found {len(rules)}"
         )
 
     expected = {
-        _stable_hash(rule)
+        stable_hash(rule)
         for rule in cast(list[dict[str, object]], snapshot["planned"]["rules"])
     }
     actual = {
-        _stable_hash(
+        stable_hash(
             {
                 "source_type": rule.source_type,
                 "source_id": rule.source_id,
@@ -1133,7 +1124,7 @@ async def apply_explicit_reader_order_migration(
         raise MigrationInvariantError(
             "compiled rule semantics diverge from reviewed snapshot"
         )
-    if _plan_fingerprint(plan) != _plan_fingerprint_from_payload(payload):
+    if plan_fingerprint(plan) != plan_fingerprint_from_payload(payload):
         raise MigrationInvariantError(
             "persisted Reading Plan diverges from reviewed snapshot"
         )
@@ -1166,13 +1157,13 @@ async def apply_explicit_reader_order_migration(
         raise MigrationInvariantError("sequence_order changed during migration")
 
     for row in snapshot["preserved_standalone_dependencies"]:
-        dependency = await db.get(Dependency, int(cast(int, row["id"])))
-        if dependency is None or _dep(dependency) != row:
+        dependency = await db.get(Dependency, coerce_int(row["id"]))
+        if dependency is None or dep_snapshot(dependency) != row:
             raise MigrationInvariantError(
                 f"standalone prerequisite {row['id']} changed"
             )
 
-    issue_ids = [int(cast(int, node["ref_id"])) for node in payload["nodes"]]
+    issue_ids = [coerce_int(node["ref_id"]) for node in payload["nodes"]]
     factual = await _factual_snapshot(
         db,
         spec=spec,
@@ -1188,7 +1179,7 @@ async def apply_explicit_reader_order_migration(
             raise MigrationInvariantError(f"protected reader state changed: {key}")
 
     affected_ids = {
-        int(cast(int, thread_id))
+        coerce_int(thread_id)
         for thread_id in snapshot["runtime_behavior"]["affected_thread_ids"]
     }
     eligible = sorted(
@@ -1204,9 +1195,9 @@ async def apply_explicit_reader_order_migration(
     return {
         "plan_id": plan.id,
         "plan_marker": marker,
-        "plan_fingerprint": _plan_fingerprint(plan),
+        "plan_fingerprint": plan_fingerprint(plan),
         "plan_rule_count": len(rules),
-        "plan_rule_fingerprint": _rules_fingerprint(rules),
+        "plan_rule_fingerprint": rules_fingerprint(rules),
         "removed_reader_order_dependency_count": len(removed_rows),
         "removed_dependencies": removed_rows,
         "removed_linked_continuity_rules": snapshot["removed_linked_continuity_rules"],

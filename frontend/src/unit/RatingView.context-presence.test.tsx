@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
@@ -184,7 +185,7 @@ describe('RatingView post-#2711: removed Reading Context/Boundaries/WhyThis surf
     expect(grid!.className).toContain('lg:grid-cols-2')
     expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
     expect(grid!.contains(screen.getByTestId('rating-region-comic'))).toBe(true)
-    expect(grid!.contains(screen.getByTestId('rating-region-your-context'))).toBe(true)
+    expect(grid!.contains(screen.getByTestId('rating-region-decision'))).toBe(true)
   })
 
   it('still renders rating workflow without removed surfaces even when readerContext is populated', () => {
@@ -203,24 +204,68 @@ describe('RatingView post-#2711: removed Reading Context/Boundaries/WhyThis surf
   })
 })
 
-describe('Your Context content-driven presence (#1942, preserved after #2711)', () => {
-  it('renders no YOUR CONTEXT heading when only the rating form is meaningful', () => {
+describe('Connection history disclosure (#2714)', () => {
+  it('renders no narrative heading when only the rating form is meaningful', () => {
     renderRatingView()
     expect(screen.queryByText('Your Context')).not.toBeInTheDocument()
+    expect(screen.queryByText('Series history & crossovers')).not.toBeInTheDocument()
     expect(screen.getByText('Your rating')).toBeInTheDocument()
     expect(screen.getByRole('slider')).toBeInTheDocument()
   })
 
-  it('renders the YOUR CONTEXT heading with series history when context exists', () => {
+  it('keeps series history hidden behind the disclosure until it is opened', async () => {
+    const user = userEvent.setup()
     renderRatingView({ readerContext: populatedContext })
-    expect(screen.getByText('Your Context')).toBeInTheDocument()
-    expect(screen.getByText('Ultimate Black Panther history')).toBeInTheDocument()
-  })
+    expect(screen.queryByText('Ultimate Black Panther history')).not.toBeInTheDocument()
+    expect(screen.getByText('Your rating')).toBeInTheDocument()
+    expect(screen.queryByTestId('context-disclosure-content')).not.toBeInTheDocument()
 
-  it('keeps series history and rating content in a populated roll state', () => {
-    renderRatingView({ readerContext: populatedContext })
+    await user.click(screen.getByRole('button', { name: /series history & crossovers/i }))
+    expect(screen.getByTestId('context-disclosure-content')).toBeVisible()
     expect(screen.getByText('Ultimate Black Panther history')).toBeInTheDocument()
     expect(screen.getByText('Your rating')).toBeInTheDocument()
+  })
+
+  it('shows a loading skeleton while reader context loads', () => {
+    const { container } = renderRatingView({ isReaderContextLoading: true })
+    expect(container.querySelector('.animate-pulse')).not.toBeNull()
+    expect(screen.getByRole('slider')).toBeInTheDocument()
+  })
+
+  it('reveals crossover analytics inside the disclosure when crossovers exist', async () => {
+    const user = userEvent.setup()
+    const crossoverContext: ReaderContextResponse = {
+      ...populatedContext,
+      series: {
+        identity_source: 'unavailable',
+        canonical_series_id: null,
+        series_name: null,
+        average_rating: null,
+        ratings_count: 0,
+        previous_issue: null,
+        recent_ratings: [],
+        highest_rating: null,
+        lowest_rating: null,
+      },
+      crossovers: [
+        {
+          id: 500,
+          name: 'Secret Wars',
+          applies_to_current_issue: true,
+          membership_kind: 'issue',
+          next_member: null,
+          average_rating: 4.0,
+          ratings_count: 3,
+          read_count: 2,
+        },
+      ],
+    }
+    renderRatingView({ readerContext: crossoverContext })
+    expect(screen.queryByText('Crossovers')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /series history & crossovers/i }))
+    expect(screen.getByText('Crossovers')).toBeInTheDocument()
+    expect(screen.getByText('Secret Wars')).toBeInTheDocument()
   })
 })
 

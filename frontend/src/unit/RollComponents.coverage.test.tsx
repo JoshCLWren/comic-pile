@@ -227,6 +227,6 @@ describe('RatingView', () => {
     expect(screen.queryByTestId('rating-region-reading-boundaries')).not.toBeInTheDocument()
     expect(screen.getByTestId('rating-pillars-grid').className).not.toContain('xl:grid-cols-[repeat(auto-fit')
     expect(screen.getByTestId('rating-region-comic')).toBeInTheDocument()
-    expect(screen.getByTestId('rating-region-your-context')).toBeInTheDocument()
+    expect(screen.getByTestId('rating-region-decision')).toBeInTheDocument()
   })
 })

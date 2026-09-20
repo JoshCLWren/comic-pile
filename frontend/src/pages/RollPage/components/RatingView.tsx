@@ -11,7 +11,7 @@ export function RatingView({ data }: RatingViewProps) {
   const {
     activeRatingThread,
     currentDie,
-    rolledResult,
+    rolledResult: _rolledResult,
     rating,
     predictedDie,
     errorMessage,

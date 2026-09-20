@@ -159,10 +159,10 @@ describe('RatingView Reading Boundaries retired control (#2711 supersedes #2519)
     expect(screen.queryByText('Continuity:')).not.toBeInTheDocument()
   })
 
-  it('still renders comic and your-context regions and rating actions', () => {
+  it('still renders comic and decision regions and rating actions', () => {
     render(ratingView({ readerContext: makeContext([], 'Saga') }))
     expect(screen.getByTestId('rating-region-comic')).toBeInTheDocument()
-    expect(screen.getByTestId('rating-region-your-context')).toBeInTheDocument()
+    expect(screen.getByTestId('rating-region-decision')).toBeInTheDocument()
     expect(screen.getByRole('slider')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /mark read & save/i })).toBeInTheDocument()
   })

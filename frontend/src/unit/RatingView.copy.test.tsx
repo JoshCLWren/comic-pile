@@ -96,7 +96,7 @@ describe('RatingView copy comic reference', () => {
     expect(writeText).toHaveBeenCalledWith('Ultimate X-Men 12')
     expect(screen.getByText('Copied')).toBeInTheDocument()
     expect(copyButton.getAttribute('aria-label')).toBe('Copy Ultimate X-Men 12')
-    expect(copyButton.className).toContain('min-h-11')
+    expect(copyButton.className).toContain('min-h-9')
   })
 
   it('shows a failure state when clipboard writing fails', async () => {
@@ -107,22 +107,19 @@ describe('RatingView copy comic reference', () => {
     await user.click(screen.getByRole('button', { name: 'Copy Ultimate X-Men 12' }))
 
     expect(screen.getByText(/Copy failed/)).toBeInTheDocument()
-    expect(screen.getByText('Retry copy')).toBeInTheDocument()
+    expect(screen.getByText('Retry')).toBeInTheDocument()
     expect(screen.getByText(/Copy failed/).getAttribute('role')).toBe('status')
   })
 
   it('is visually colocated with the rating controls on the post-roll surface', async () => {
     renderRatingView()
 
+    const decisionCard = screen.getByTestId('decision-card')
+    const copyButton = within(decisionCard).getByRole('button', { name: 'Copy Ultimate X-Men 12' })
     const ratingActions = screen.getByTestId('rating-actions')
-    const copyRow = screen.getByTestId('copy-title-row')
-    const copyButton = within(ratingActions).getByRole('button', { name: 'Copy Ultimate X-Men 12' })
 
-    expect(ratingActions.contains(copyRow)).toBe(true)
-    expect(copyRow.contains(copyButton)).toBe(true)
-    // The rating actions grid cell wraps the panel; ensures colocation with rating workflow
-    const actionsGridCell = screen.getByTestId('rating-actions-grid-cell')
-    expect(actionsGridCell.contains(ratingActions)).toBe(true)
+    expect(decisionCard.contains(copyButton)).toBe(true)
+    expect(decisionCard.contains(ratingActions)).toBe(true)
 
     // Old placement in the Comic pillar is removed
     const comicControls = screen.getByTestId('comic-header-controls')
@@ -141,9 +138,9 @@ describe('RatingView copy comic reference', () => {
     expect(document.activeElement).toBe(copyButton)
 
     await user.keyboard('{Enter}')
-    expect(screen.getByText('Retry copy')).toBeInTheDocument()
+    expect(screen.getByText('Retry')).toBeInTheDocument()
 
-    // Retry succeeds — aria-label stays "Copy …" even when button text is "Retry copy"
+    // Retry succeeds — aria-label stays "Copy …" even when button text is "Retry"
     vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValueOnce(undefined)
     await user.click(screen.getByRole('button', { name: 'Copy Ultimate X-Men 12' }))
     expect(screen.getByText('Copied')).toBeInTheDocument()

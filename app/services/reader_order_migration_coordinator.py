@@ -22,7 +22,6 @@ from app.services.continuity_plan_writer import (
 )
 from app.services.explicit_reader_order_migration import (
     ExplicitReaderOrderSpec,
-    _dep,
     _explicit_classifications,
     _load_step14_index,
     _migration_contract,
@@ -41,16 +40,18 @@ from app.services.source_backed_reader_order_migration import (
     SourceBackedReaderOrderSpec,
     build_source_backed_reader_order_dry_run,
 )
-from app.services.ultimate_universe_production_migration import (
+from app.services.migration_shared import (
     MigrationInvariantError,
-    _legacy_prefix,
-    _plan_fingerprint,
-    _plan_fingerprint_from_payload,
-    _planned_rule_descriptor,
-    _rule_descriptor,
-    _stable_hash,
+    coerce_int,
+    dep_snapshot as _dep,
+    legacy_prefix as _legacy_prefix,
+    plan_fingerprint as _plan_fingerprint,
+    plan_fingerprint_from_payload as _plan_fingerprint_from_payload,
+    planned_rule_descriptor as _planned_rule_descriptor,
+    refresh_blocked_status,
+    rule_descriptor as _rule_descriptor,
+    stable_hash as _stable_hash,
 )
-from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.queue import get_roll_pool
 
 
@@ -94,7 +95,7 @@ def manifest_reader_order_dependency_ids(report: dict[str, Any]) -> set[int]:
     if not isinstance(overlap, list):
         return set()
     return {
-        int(cast(int, row["dependency_id"]))
+        coerce_int(row["dependency_id"])
         for row in overlap
         if isinstance(row, dict)
         and row.get("step14_classification") == "reading_plan_order"
@@ -115,7 +116,7 @@ def _planned_issue_ids(report: dict[str, Any]) -> set[int]:
     if not isinstance(nodes, list):
         return set()
     return {
-        int(cast(int, node["ref_id"]))
+        coerce_int(node["ref_id"])
         for node in nodes
         if isinstance(node, dict)
         and node.get("node_type") == "issue"
@@ -141,7 +142,7 @@ def _legacy_target_issue_ids(report: dict[str, Any]) -> dict[str, set[int]]:
         if not isinstance(name, str) or not isinstance(nodes, list):
             continue
         result[name] = {
-            int(cast(int, node["ref_id"]))
+            coerce_int(node["ref_id"])
             for node in nodes
             if isinstance(node, dict)
             and node.get("node_type") == "issue"
@@ -154,7 +155,7 @@ def _legacy_target_issue_ids(report: dict[str, Any]) -> dict[str, set[int]]:
 def _reviewed_step23b_dependency_ids() -> set[int]:
     """Return the nine Step 23A reading_plan_order IDs owned by Step 23B."""
     return {
-        int(cast(int, row["dependency_id"]))
+        coerce_int(row["dependency_id"])
         for row in reviewed_reading_plan_order_rows(load_reviewed_step23a_contract())
     }
 
@@ -309,7 +310,7 @@ async def _plan_owned_rule_hashes(
                     **descriptor,
                     "convergence_targets": sorted(
                         cast(list[dict[str, object]], targets),
-                        key=lambda target: (str(target["type"]), int(cast(int, target["id"]))),
+                        key=lambda target: (str(target["type"]), coerce_int(target["id"])),
                     ),
                 }
         hashes.add(_stable_hash(descriptor))
@@ -450,7 +451,7 @@ async def _explicit_already_migrated(
         return False
 
     node_issue_ids = {
-        int(cast(int, node["ref_id"]))
+        coerce_int(node["ref_id"])
         for node in nodes
         if isinstance(node, dict)
         and node.get("node_type") == "issue"
@@ -517,7 +518,7 @@ async def apply_explicit_reader_order_overlay(
         if isinstance(row, dict)
     ]
     selected_by_id = {
-        int(cast(int, row["id"])): row
+        coerce_int(row["id"]): row
         for row in selected_rows
         if isinstance(row.get("id"), int) and not isinstance(row.get("id"), bool)
     }
@@ -713,7 +714,7 @@ async def apply_explicit_reader_order_overlay(
         nodes=existing_nodes,
         ordering_mode="informational",
     )
-    await refresh_user_blocked_status(spec.user_id, db)
+    await refresh_blocked_status(spec.user_id, db)
     await db.flush()
 
     expected_rules = {
@@ -732,7 +733,7 @@ async def apply_explicit_reader_order_overlay(
         )
 
     affected_ids = {
-        int(cast(int, thread_id))
+        coerce_int(thread_id)
         for thread_id in snapshot["runtime_behavior"]["affected_thread_ids"]
     }
     eligible = sorted(
@@ -854,7 +855,7 @@ async def _source_already_migrated(
         return False
 
     reusable_edges = {
-        (int(cast(int, row["source_id"])), int(cast(int, row["target_id"])))
+        (coerce_int(row["source_id"]), coerce_int(row["target_id"]))
         for row in report.get("reused_standalone_rules", [])
         if isinstance(row, dict)
     }
@@ -863,8 +864,8 @@ async def _source_already_migrated(
         for rule in planned_rules
         if isinstance(rule, dict)
         and (
-            int(cast(int, rule["source_id"])),
-            int(cast(int, rule["target_id"])),
+            coerce_int(rule["source_id"]),
+            coerce_int(rule["target_id"]),
         )
         not in reusable_edges
     }
@@ -917,7 +918,7 @@ async def _legacy_already_migrated(
 
     evidence = load_reviewed_step23a_contract()
     retired_ids = [
-        int(cast(int, row["dependency_id"]))
+        coerce_int(row["dependency_id"])
         for row in reviewed_reading_plan_order_rows(evidence)
     ]
     remaining = await db.scalar(

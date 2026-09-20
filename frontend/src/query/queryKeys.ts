@@ -159,6 +159,8 @@ export const queryKeys = {
     blockingBatch: (threadIds: number[]) =>
       ['dependencies', 'blocking-batch', [...threadIds].sort((a, b) => a - b)] as const,
     connected: (threadId: number) => ['dependencies', 'connected', threadId] as const,
+    search: (query: string) => ['dependencies', 'search', normalizedSearch(query)] as const,
+    issues: (threadId: number) => ['dependencies', 'issues', threadId] as const,
   },
   readingOrders: {
     all: ['readingOrders'] as const,
