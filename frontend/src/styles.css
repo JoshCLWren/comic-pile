@@ -493,3 +493,92 @@ body {
     animation: none;
   }
 }
+
+/* Range slider styling for the rating input (#2763) */
+.rating-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  width: 100%;
+  accent-color: var(--theme-comic-accent);
+}
+
+.rating-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(
+    to right,
+    var(--theme-comic-accent) 0%,
+    var(--theme-comic-accent) var(--slider-fill, 50%),
+    var(--theme-border) var(--slider-fill, 50%),
+    var(--theme-border) 100%
+  );
+}
+
+.rating-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--theme-comic-accent);
+  border: 2px solid var(--theme-bg-panel);
+  margin-top: -7px;
+  box-shadow: 0 0 0 2px var(--theme-comic-accent);
+  transition: transform 0.15s ease;
+}
+
+.rating-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.rating-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--theme-border);
+}
+
+.rating-slider::-moz-range-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--theme-comic-accent);
+}
+
+.rating-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--theme-comic-accent);
+  border: 2px solid var(--theme-bg-panel);
+  box-shadow: 0 0 0 2px var(--theme-comic-accent);
+  transition: transform 0.15s ease;
+}
+
+.rating-slider::-moz-range-thumb:hover {
+  transform: scale(1.15);
+}
+
+.rating-slider:focus {
+  outline: none;
+}
+
+.rating-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px var(--theme-comic-accent), 0 0 0 4px var(--theme-focus-ring);
+}
+
+.rating-slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 2px var(--theme-comic-accent), 0 0 0 4px var(--theme-focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rating-slider::-webkit-slider-thumb,
+  .rating-slider::-moz-range-thumb {
+    transition: none;
+  }
+
+  .rating-slider::-webkit-slider-thumb:hover,
+  .rating-slider::-moz-range-thumb:hover {
+    transform: none;
+  }
+}

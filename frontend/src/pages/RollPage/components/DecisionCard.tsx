@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import Modal from '../../../components/Modal'
 import Tooltip from '../../../components/Tooltip'
 import GlossaryLink from '../../../components/GlossaryLink'
@@ -43,6 +43,10 @@ export function DecisionCard({
   const threadTitle = activeRatingThread?.title ?? null
   const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
   const dieDirection = getDieDirection(currentDie, predictedDie)
+  const ratingFillPct = Math.min(
+    100,
+    Math.max(0, ((rating - 0.5) / (5.0 - 0.5)) * 100),
+  )
 
   const [isSkipConfirmOpen, setIsSkipConfirmOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
@@ -82,7 +86,7 @@ export function DecisionCard({
             type="button"
             onClick={handleCopyComicReference}
             disabled={!threadTitle}
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2.5 text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)] transition hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-40 shrink-0"
+            className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-black uppercase tracking-wider transition focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-40 shrink-0 ${copyStatus === 'copied' ? 'border-[var(--theme-continuity-accent)]/40 bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]' : copyStatus === 'failed' ? 'border-[var(--theme-danger)]/30 bg-[var(--theme-danger)]/10 text-[var(--theme-danger)]' : 'border-[var(--theme-border)] bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]'}`}
             aria-label={`Copy ${threadTitle} ${issueNumber}`}
             data-testid="copy-title-button"
           >
@@ -100,7 +104,7 @@ export function DecisionCard({
               <path d="M20 4.5A2.5 2.5 0 0 0 17.5 2H14"></path>
               <path d="M20 4.5v17A2.5 2.5 0 0 0 17.5 19H14"></path>
             </svg>
-            {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Retry' : 'Copy title'}
+            {copyStatus === 'copied' ? 'COPIED' : copyStatus === 'failed' ? 'Retry' : 'Copy title'}
           </button>
         )}
       </div>
@@ -112,21 +116,17 @@ export function DecisionCard({
       ) : null}
 
       <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 space-y-1">
           <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the series to the front of the queue and step the die down. Lower ratings move it past the next roll range and step the die up.`}>
-            <div className="space-y-1">
-              <p id="rating-value" className={`text-4xl font-black ${rating >= RATING_THRESHOLD ? 'text-amber-500' : 'text-red-600'}`}>
-                {rating.toFixed(1)}
-              </p>
-              <p className="text-[11px] font-bold text-stone-400">
-                <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
-              </p>
-            </div>
+            <p id="rating-value" className={`text-5xl font-black ${rating >= RATING_THRESHOLD ? 'text-[var(--theme-personal-accent)]' : 'text-[var(--theme-danger)]'}`}>
+              {rating.toFixed(1)}
+            </p>
           </Tooltip>
+          <p className="text-[11px] font-bold text-stone-400">
+            <GlossaryLink id="die-ladder">d{currentDie} → d{predictedDie}</GlossaryLink>
+          </p>
         </div>
-        <div className="text-right shrink-0">
-          <p className="text-[10px] font-bold text-stone-500">{dieDirection}</p>
-        </div>
+        <p className="text-[10px] font-bold text-stone-500 shrink-0">{dieDirection}</p>
       </div>
 
       <input
@@ -137,7 +137,8 @@ export function DecisionCard({
         max="5.0"
         step="0.5"
         value={rating}
-        className="h-4 w-full"
+        className="rating-slider h-4 w-full"
+        style={{ '--slider-fill': `${ratingFillPct}%` } as CSSProperties}
         aria-label="Rating from 0.5 to 5.0 in steps of 0.5"
         aria-describedby="rating-value queue-effect"
         onChange={(event) => onUpdateRating(event.target.value)}
@@ -177,12 +178,12 @@ export function DecisionCard({
           {rateIsPending ? 'Saving…' : isLastIssue ? 'Mark read & complete' : 'Mark read & save'}
         </button>
 
-        <div className="flex flex-wrap gap-2" data-testid="rating-secondary-actions">
+        <div className="flex gap-2" data-testid="rating-secondary-actions">
           <button
             type="button"
             onClick={onSnooze}
             disabled={snoozeIsPending}
-            className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+            className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
           >
             {snoozeIsPending ? 'Snoozing…' : 'Snooze'}
           </button>
@@ -193,7 +194,7 @@ export function DecisionCard({
               disabled={skipIsPending}
               data-testid="skip-roll"
               aria-label="Skip current roll"
-              className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+              className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] py-3 text-xs font-black uppercase tracking-[0.15em] text-stone-300 transition hover:bg-white/10 focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
             >
               {skipIsPending ? 'Skipping…' : 'Skip'}
             </button>
@@ -202,7 +203,7 @@ export function DecisionCard({
             type="button"
             onClick={onCancel}
             disabled={dismissIsPending}
-            className="min-h-11 min-w-[7.5rem] flex-1 rounded-xl border border-[var(--theme-border)] bg-transparent py-3 text-xs font-black uppercase tracking-[0.15em] text-[var(--theme-text-muted)] transition hover:bg-white/10 hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+            className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-transparent py-3 text-xs font-black uppercase tracking-[0.15em] text-[var(--theme-text-muted)] transition hover:bg-white/10 hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
           >
             Cancel roll
           </button>
