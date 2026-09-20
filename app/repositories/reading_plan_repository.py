@@ -234,8 +234,9 @@ async def link_dependency_to_plan(
             ReadingPlanDependency.dependency_id == dependency_id,
         )
     )
-    if existing.scalar_one_or_none() is not None:
-        return existing.scalar_one()
+    existing_link = existing.scalar_one_or_none()
+    if existing_link is not None:
+        return existing_link
 
     link = ReadingPlanDependency(plan_id=plan_id, dependency_id=dependency_id, explanation=explanation)
     db.add(link)
@@ -251,4 +252,5 @@ async def unlink_dependency_from_plan(db: AsyncSession, plan_id: int, dependency
             ReadingPlanDependency.dependency_id == dependency_id,
         )
     )
-    return result.rowcount > 0
+    rowcount = getattr(result, "rowcount", None)
+    return isinstance(rowcount, int) and rowcount > 0
