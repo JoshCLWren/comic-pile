@@ -82,7 +82,7 @@ export function DecisionCard({
             type="button"
             onClick={handleCopyComicReference}
             disabled={!threadTitle}
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2.5 text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-muted)] transition hover:text-[var(--theme-text-primary)] focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-40 shrink-0"
+            className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-black uppercase tracking-wider transition focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-40 shrink-0 ${copyStatus === 'copied' ? 'border-[var(--theme-continuity-accent)]/40 bg-[var(--theme-continuity-accent)]/15 text-[var(--theme-continuity-accent)]' : copyStatus === 'failed' ? 'border-[var(--theme-danger)]/30 bg-[var(--theme-danger)]/10 text-[var(--theme-danger)]' : 'border-[var(--theme-border)] bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)]'}`}
             aria-label={`Copy ${threadTitle} ${issueNumber}`}
             data-testid="copy-title-button"
           >
