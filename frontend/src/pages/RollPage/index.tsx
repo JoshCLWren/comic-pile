@@ -146,7 +146,7 @@ export default function RollPage() {
   })
 
   const ratingIssueId = state.activeRatingThread?.issue_id ?? state.activeRatingThread?.next_issue_id ?? null
-  const { context: readerContext, isLoading: isReaderContextLoading, error: readerContextError } = useReaderContext(
+  const { context: readerContext, isLoading: isReaderContextLoading } = useReaderContext(
     ratingIssueId,
     rating.readingDetailsRequested,
   )
@@ -271,12 +271,7 @@ export default function RollPage() {
   )
   const pool = filteredThreads.slice(0, dieSize)
   const displayDie = isDiceSide(state.currentDie) ? state.currentDie : 6
-  const hasValidRolledResult =
-    Number.isInteger(state.rolledResult)
-    && state.rolledResult !== null
-    && state.rolledResult >= 1
-    && state.rolledResult <= state.currentDie
-
+ 
   if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
     return (
       <div className="text-center py-10 text-stone-500 font-black uppercase tracking-widest text-[10px]">

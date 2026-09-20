@@ -1053,16 +1053,18 @@ describe('RollPage parent handlers', () => {
     vi.useRealTimers()
   })
 
-  it('handles related-thread request failures while fetching reading details', async () => {
-    relatedApi.readingOrders.mockRejectedValueOnce(new Error('orders failed'))
-    relatedApi.connectedThreads.mockRejectedValueOnce(new Error('connected failed'))
+  it('keeps rating view usable without reading context controls (#2711)', async () => {
     const user = userEvent.setup()
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
-    await user.click(screen.getByTestId('reading-context-button'))
-    await waitFor(() => expect(screen.getByText(/Failed to load reading orders: orders failed/)).toBeInTheDocument())
+    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
+    expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
+    // Rating workflow remains usable even though reading context requests are not made
+    expect(relatedApi.readingOrders).not.toHaveBeenCalled()
+    expect(relatedApi.connectedThreads).not.toHaveBeenCalled()
   })
 
   it('retries a non-401 bootstrap error and reopens the roll view', async () => {
