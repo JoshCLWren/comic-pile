@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import Modal from '../../components/Modal'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
 import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
@@ -33,6 +34,16 @@ export default function QueuePage() {
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
   const isSearching = searchQuery.trim() !== ''
+  
+  // State for first-time roll nudge
+  const [showRollNudge, setShowRollNudge] = useState(false)
+  const [hasDismissedRollNudge, setHasDismissedRollNudge] = useState(false)
+  
+  // Check if user has dismissed the nudge before (persists across sessions)
+  useEffect(() => {
+    const dismissed = localStorage.getItem('comic-pile-roll-nudge-dismissed')
+    setHasDismissedRollNudge(dismissed === 'true')
+  }, [])
 
   const {
     data: threads,
@@ -93,9 +104,16 @@ export default function QueuePage() {
     [reactivateMutation],
   )
 
+  const onCreated = useCallback(async () => {
+    // Only show nudge if this is the first thread creation and user hasn't dismissed it
+    if (!hasDismissedRollNudge) {
+      setShowRollNudge(true)
+    }
+  }, [hasDismissedRollNudge])
+
   const modals = useQueueModalsHook({
     threads,
-    onCreated: async () => {},
+    onCreated,
     onUpdated: async () => {},
     onReactivated: async () => {},
     refetchSession: async () => {
@@ -317,6 +335,49 @@ export default function QueuePage() {
           onConfirm={() => void actions.confirmDelete()}
           onCancel={actions.cancelDelete}
         />
+
+        {/* Ready to roll? modal - shown after first series creation */}
+        <Modal
+          isOpen={showRollNudge}
+          title="Ready to roll?"
+          onClose={() => {
+            setShowRollNudge(false)
+            setHasDismissedRollNudge(true)
+            localStorage.setItem('comic-pile-roll-nudge-dismissed', 'true')
+          }}
+          data-testid="roll-nudge-modal"
+        >
+          <div className="space-y-4">
+            <p className="text-stone-200">
+              You've created your first series! Ready to start reading?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  navigate('/')
+                  setShowRollNudge(false)
+                  setHasDismissedRollNudge(true)
+                  localStorage.setItem('comic-pile-roll-nudge-dismissed', 'true')
+                }}
+                className="flex-1 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] text-stone-950 font-semibold py-3 px-4 rounded-lg transition-colors"
+              >
+                Let's Roll!
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRollNudge(false)
+                  setHasDismissedRollNudge(true)
+                  localStorage.setItem('comic-pile-roll-nudge-dismissed', 'true')
+                }}
+                className="flex-1 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-stone-200 font-semibold py-3 px-4 rounded-lg transition-colors hover:bg-[var(--theme-bg-hover)]"
+              >
+                Maybe Later
+              </button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </PositionMenuProvider>
   )
