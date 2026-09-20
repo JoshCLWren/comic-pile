@@ -349,6 +349,10 @@ async def test_step23b_apply_creates_plan_keeps_standalone_and_preserves_roll(
     appear, source and temporary authority are removed, equivalent standalone
     ``item_read`` edges survive un-owned, temporary rules disappear, and the
     protected reader facts and affected Roll-eligible set stay byte-for-byte same.
+    The retired cbl-order source edge is inert under Dependency-only blocking,
+    so the target thread starts unblocked and the compiled plan re-blocks it:
+    thread identity and progress fields must be unchanged while only the
+    derived ``is_blocked`` flag converges.
     """
     spec, issues, threads, legacy, standalone, temp_dep, temp_rule = (
         await _step23b_fixture(async_db)
@@ -410,11 +414,31 @@ async def test_step23b_apply_creates_plan_keeps_standalone_and_preserves_roll(
 
     for key in (
         "issue_state_hash",
-        "thread_state_hash",
         "event_state_hash",
         "identity_state_hash",
     ):
         assert receipt[key] == snapshot["factual"][key]
+
+    # Dependency-only cutover: the retired cbl-order source edge is inert, so
+    # the plan target starts unblocked and the compiled plan re-blocks it.
+    # Thread identity and progress fields must be unchanged; only the derived
+    # is_blocked flag may converge.
+    before_threads = {row["id"]: row for row in snapshot["factual"]["threads"]}
+    assert before_threads[threads[3].id]["is_blocked"] is False
+    live_threads = (
+        await async_db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
+    ).scalars().all()
+    assert len(live_threads) == len(before_threads)
+    for live in live_threads:
+        before = before_threads[live.id]
+        assert live.title == before["title"]
+        assert live.status == before["status"]
+        assert live.queue_position == before["queue_position"]
+        assert live.next_unread_issue_id == before["next_unread_issue_id"]
+        assert live.issues_remaining == before["issues_remaining"]
+        assert live.reading_progress == before["reading_progress"]
+    live_by_id = {live.id: live for live in live_threads}
+    assert live_by_id[threads[3].id].is_blocked is True
 
     assert await _eligible_of(spec.user_id, async_db, thread_ids) == preflight_eligible
 

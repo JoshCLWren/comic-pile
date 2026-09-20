@@ -239,6 +239,29 @@ def _planned_rules(
 
 
 
+def _thread_rows_without_blocked(
+    threads: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Return thread factual rows with the derived blocked flag removed.
+
+    Args:
+        threads: Thread factual rows from :func:`_factual_snapshot`.
+
+    Returns:
+        Thread rows without the ``is_blocked`` key.
+
+    The Dependency-only cutover retired raw ``cbl-order:%`` Dependency rows as
+    Roll authority; persisted ``is_blocked`` is recomputed from canonical
+    Dependency rows plus compiled ContinuityRule rows. It is derived state,
+    not a protected reader fact (the legacy reading-order migration already
+    excludes ``is_blocked`` from factual thread rows for the same reason), so
+    the cutover guard compares thread identity and progress fields while
+    allowing the flag to converge onto plan-derived blocking. Roll
+    eligibility itself stays guarded by the affected-eligible comparison.
+    """
+    return [{key: value for key, value in row.items() if key != "is_blocked"} for row in threads]
+
+
 async def _factual_snapshot(
     db: AsyncSession,
     *,
@@ -1063,11 +1086,26 @@ async def apply_ultimate_universe_migration(
 
     factual = await _factual_snapshot(db, spec=spec, ordered_issue_ids=issue_ids)
     before_factual = snapshot["factual"]
-    for key in ("issue_state_hash", "thread_state_hash", "event_state_hash", "identity_state_hash"):
+    for key in ("issue_state_hash", "event_state_hash", "identity_state_hash"):
         if factual[key] != before_factual[key]:
             raise MigrationInvariantError(
                 f"cutover changed protected factual state: {key}"
             )
+    # `is_blocked` is derived from the retired cbl-order authority plus the
+    # newly compiled plan rules (see `_thread_rows_without_blocked`); compare
+    # thread facts without it so the intended unblocked-to-blocked convergence
+    # for re-blocked plan threads does not read as factual corruption.
+    # Eligibility parity below still guards the Roll-eligible set exactly.
+    before_threads = _thread_rows_without_blocked(
+        cast(list[dict[str, object]], before_factual["threads"])
+    )
+    after_threads = _thread_rows_without_blocked(
+        cast(list[dict[str, object]], factual["threads"])
+    )
+    if _stable_hash(after_threads) != _stable_hash(before_threads):
+        raise MigrationInvariantError(
+            "cutover changed protected factual state: thread_state_hash"
+        )
 
     affected_thread_ids = {
         coerce_int(thread_id)
