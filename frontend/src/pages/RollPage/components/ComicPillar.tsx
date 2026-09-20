@@ -279,7 +279,7 @@ export function ComicPillar({
 
   const issueId = activeRatingThread?.issue_id ?? activeRatingThread?.next_issue_id
 
-  const { metadata, isLoading, refetch } = useComicVineIssueIntelligence(issueId)
+  const { metadata, isLoading } = useComicVineIssueIntelligence(issueId)
 
   useEffect(() => {
     setCoverRatio(null)
@@ -310,9 +310,8 @@ export function ComicPillar({
       await invalidateComicVineIssueIntelligence(queryClient, issueId)
     }
     await fetchIdentity()
-    await refetch()
     onRefreshThread()
-  }, [fetchIdentity, onRefreshThread, issueId, refetch])
+  }, [fetchIdentity, onRefreshThread, issueId])
 
   const handleFixIssueNumber = () => {
     setIsCorrectionDialogOpen(true)
