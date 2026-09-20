@@ -164,9 +164,10 @@ class AppSettings(BaseSettings):
         default=False,
         description=(
             "Retired cutover switch. The raw Dependency Roll compatibility path "
-            "was removed; Roll blocking uses compiled ContinuityRule rows only. "
-            "Retained (default off) so existing environments referencing the "
-            "switch keep parsing instead of failing."
+            "was removed; Roll blocking uses canonical Dependency rows plus "
+            "compiled ContinuityRule rows, with historical cbl-order materialization "
+            "inert. Retained (default off) so existing environments referencing "
+            "the switch keep parsing instead of failing."
         ),
         json_schema_extra={"env": "LEGACY_DEPENDENCY_BLOCKING_ENABLED"},
     )

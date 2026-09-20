@@ -15,7 +15,7 @@ from datetime import datetime
 import json
 from typing import Any, Protocol, cast
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cbl_reference import CBLSourceList
@@ -55,6 +55,7 @@ from app.services.migration_shared import (
     rules_fingerprint as _rules_fingerprint,
     stable_hash as _stable_hash,
 )
+from comic_pile.dependencies import _get_blocked_thread_ids_uncached
 from comic_pile.queue import get_roll_pool
 
 TEMPORARY_REPAIR_NOTE = "Temporary authoritative Ultimate Universe CBL order incident repair"
@@ -71,9 +72,9 @@ def _legacy_blocked_baseline(
     against this baseline rather than the post-cutover Runtime canonical
     evaluator, so re-affirming reader order over formerly ``cbl-order:%``
     materialization is not mistaken for an accidental eligibility change. The
-    baseline mirrors the retired legacy evaluator: any unread-source Dependency
-    row (excluding historical ``cbl-order:%`` materialization) or ContinuityRule
-    blocker counts.
+    baseline mirrors the retired legacy evaluator the cutover preserves: any
+    unread-source Dependency row (including historical ``cbl-order:%``
+    materialization) or ContinuityRule blocker counts.
     """
     blocked: set[int] = set()
     for thread in affected_threads:
@@ -83,12 +84,92 @@ def _legacy_blocked_baseline(
         raw_blocked = any(
             (source := snapshot.issues.get(dep.source_issue_id)) is not None
             and source.status != "read"
-            and (dep.note is None or not dep.note.startswith("cbl-order:"))
             for dep in raw_by_target.get(next_issue_id, [])
         )
         if raw_blocked or issue_readiness(next_issue_id, snapshot):
             blocked.add(thread.id)
     return blocked
+
+
+async def _legacy_window_blocked_thread_ids(
+    user_id: int,
+    db: AsyncSession,
+) -> set[int]:
+    """Compute blocked thread IDs under the migration-protective legacy window.
+
+    The Dependency-only cutover runtime treats historical ``cbl-order:%``
+    Dependency rows as inert unless promoted to canonical authority. During
+    rollback those same rows are re-inserted to restore the exact reviewed
+    snapshot, so eligibility parity must be re-evaluated against the retired
+    legacy evaluator: any unread-source Dependency row, including historical
+    ``cbl-order:%`` materialization, blocks its target thread again.
+    """
+    source_issue = Issue.__table__.alias("source_issue")
+    next_unread_issue = Issue.__table__.alias("next_unread_issue")
+    target_thread = Thread.__table__.alias("target_thread")
+    source_thread = Thread.__table__.alias("source_thread")
+    result = await db.execute(
+        select(target_thread.c.id)
+        .join(
+            next_unread_issue,
+            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
+        )
+        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
+        .where(target_thread.c.user_id == user_id)
+        .where(source_thread.c.user_id == user_id)
+        .where(source_issue.c.status != "read")
+        .where(target_thread.c.next_unread_issue_id.isnot(None))
+        .distinct()
+    )
+    restored_authority_blocked = {row[0] for row in result.all()}
+    return restored_authority_blocked | await _get_blocked_thread_ids_uncached(user_id, db)
+
+
+async def _refresh_blocked_status_legacy_window(
+    user_id: int,
+    db: AsyncSession,
+) -> None:
+    """Refresh persisted blocked flags under the migration-protective lens.
+
+    Unlike the cutover runtime refresh (historical ``cbl-order:%`` authority is
+    inert), rollback restores that exact authority, so affected Roll eligibility
+    is re-derived exactly as the retired legacy evaluator computed it.
+    """
+    blocked_ids = await _legacy_window_blocked_thread_ids(user_id, db)
+    candidate = (
+        or_(Thread.is_blocked.is_(True), Thread.id.in_(blocked_ids))
+        if blocked_ids
+        else Thread.is_blocked.is_(True)
+    )
+    result = await db.execute(
+        select(Thread.id, Thread.is_blocked)
+        .where(Thread.user_id == user_id)
+        .where(candidate)
+    )
+    changes = {
+        thread_id: old_value
+        for thread_id, old_value in result.all()
+        if old_value != (thread_id in blocked_ids)
+    }
+    to_unblock = [thread_id for thread_id in changes if thread_id not in blocked_ids]
+    if to_unblock:
+        await db.execute(
+            update(Thread)
+            .where(Thread.user_id == user_id)
+            .where(Thread.id.in_(to_unblock))
+            .values(is_blocked=False)
+        )
+    to_block = [thread_id for thread_id in changes if thread_id in blocked_ids]
+    if to_block:
+        await db.execute(
+            update(Thread)
+            .where(Thread.user_id == user_id)
+            .where(Thread.id.in_(to_block))
+            .values(is_blocked=True)
+        )
+    await db.flush()
 
 
 # Re-export shared helpers for backward compatibility
@@ -535,7 +616,6 @@ async def build_ultimate_universe_dry_run(
             f"source-scoped legacy dependencies escape the reconciled issue set: {bad_legacy_edges}"
         )
     source_dependency_ids = {dep.id for dep in source_dependencies}
-    source_dependency_source_issue_ids = {dep.source_issue_id for dep in source_dependencies}
     linked_source_rules = (
         list(
             (
@@ -702,8 +782,7 @@ async def build_ultimate_universe_dry_run(
         if next_issue_id is None:
             continue
         if any(
-            source_id not in source_dependency_source_issue_ids
-            and graph.issues.get(source_id) is not None
+            graph.issues.get(source_id) is not None
             and graph.issues[source_id].status != "read"
             for source_id in planned_sources_by_target.get(
                 int(next_issue_id), []
@@ -727,7 +806,6 @@ async def build_ultimate_universe_dry_run(
             if dep.id in source_dependency_ids
             and graph.issues.get(dep.source_issue_id) is not None
             and graph.issues[dep.source_issue_id].status != "read"
-            and (dep.note is None or not dep.note.startswith("cbl-order:"))
         ]
         other_raw_blockers = [
             dep.id
@@ -745,8 +823,7 @@ async def build_ultimate_universe_dry_run(
         planned_blockers = [
             source_id
             for source_id in planned_sources_by_target.get(next_issue_id, [])
-            if source_id not in source_dependency_source_issue_ids
-            and graph.issues.get(source_id) is not None
+            if graph.issues.get(source_id) is not None
             and graph.issues[source_id].status != "read"
         ]
         if source_raw_blockers:
@@ -1478,7 +1555,7 @@ async def rollback_ultimate_universe_migration(
                 f"attached to restored source dependencies: {remaining_source_linked_ids}"
             )
 
-    await _refresh_blocked_status(spec.user_id, db)
+    await _refresh_blocked_status_legacy_window(spec.user_id, db)
     await db.flush()
 
     restored_dependency_ids = set(
