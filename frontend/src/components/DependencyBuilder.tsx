@@ -16,6 +16,7 @@ import {
 } from '../hooks'
 import { dependenciesApi, threadsApi } from '../services/api'
 import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse } from '../types'
+import { buildFlowchartGraph } from '../utils/dependencyFlowchartAdapter'
 import { getApiErrorDetail } from '../utils/apiError'
 import { useToast } from '../contexts/useToast'
 
@@ -144,80 +145,17 @@ export default function DependencyBuilder({
     try {
       const depsData = await dependenciesApi.listThreadDependencies(threadId)
 
-      const relatedIds = new Set([threadId])
       const allDeps = [...depsData.blocking, ...depsData.blocked_by]
-
-      const threadDeps: FlowchartDependency[] = allDeps.flatMap((dep) =>
-        dep.source_thread_id != null && dep.target_thread_id != null && !dep.is_issue_level
-          ? [{
-              id: String(dep.id),
-              source_id: dep.source_thread_id,
-              target_id: dep.target_thread_id,
-              created_at: dep.created_at,
-            }]
-          : [],
-      )
-
-      for (const dep of threadDeps) {
-        relatedIds.add(dep.source_id)
-        relatedIds.add(dep.target_id)
-      }
-
-      const issueOnlyDeps = allDeps.filter(
-        (dep) => dep.source_issue_id != null && dep.target_issue_id != null
-      )
-      const issueNodeMap = new Map<number, FlowchartNode>()
-      const issueEdges: FlowchartDependency[] = []
-
-      for (const d of issueOnlyDeps) {
-        if (!d.source_issue_thread_id || !d.target_issue_thread_id) continue
-
-        const srcNodeId = -d.source_issue_id!
-        if (!issueNodeMap.has(srcNodeId)) {
-          issueNodeMap.set(srcNodeId, {
-            id: srcNodeId,
-            title: d.source_label ?? `Issue #${d.source_issue_id}`,
-            x: 0, y: 0,
-            isBlocked: false,
-            isIssueNode: true,
-            parentThreadId: d.source_issue_thread_id,
-          })
-        }
-
-        const tgtNodeId = -d.target_issue_id!
-        if (!issueNodeMap.has(tgtNodeId)) {
-          issueNodeMap.set(tgtNodeId, {
-            id: tgtNodeId,
-            title: d.target_label ?? `Issue #${d.target_issue_id}`,
-            x: 0, y: 0,
-            isBlocked: false,
-            isIssueNode: true,
-            parentThreadId: d.target_issue_thread_id,
-          })
-        }
-
-        issueEdges.push({
-          id: d.id,
-          source_id: srcNodeId,
-          target_id: tgtNodeId,
-          is_issue_level: true,
-          source_parent_thread_id: d.source_issue_thread_id,
-          target_parent_thread_id: d.target_issue_thread_id,
-          created_at: d.created_at,
-        })
-
-        relatedIds.add(d.source_issue_thread_id)
-        relatedIds.add(d.target_issue_thread_id)
-      }
-
-      const allEdges = [...threadDeps, ...issueEdges]
+      const graph = buildFlowchartGraph(allDeps, threadId)
+      const relatedIds = graph.relatedThreadIds
+      const allEdges = graph.edges
 
       const allThreads = await threadsApi.list()
       const relatedThreads = allThreads.threads.filter((t) => relatedIds.has(t.id))
 
       setFlowchartThreads(relatedThreads)
       setFlowchartDependencies(allEdges)
-      setFlowchartIssueNodes(Array.from(issueNodeMap.values()))
+      setFlowchartIssueNodes(graph.issueNodes)
     } catch (err) {
       console.error('[loadFlowchartData] Error:', err)
       setFlowchartThreads([])
