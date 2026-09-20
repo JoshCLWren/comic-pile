@@ -22,8 +22,6 @@ from app.models.reading_plan import (
 
 if TYPE_CHECKING:
     from app.models.continuity_plan import ContinuityPlan
-    from app.models.dependency import Dependency
-    from app.models.issue import Issue
 
 
 async def get_plan_with_relations(

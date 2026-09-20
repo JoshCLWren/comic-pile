@@ -18,6 +18,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.cbl_reference import CBLSourceList
+    from app.models.continuity_plan import ContinuityPlan
     from app.models.custom_cbl import CustomCBLList
     from app.models.dependency import Dependency
     from app.models.issue import Issue
@@ -41,10 +42,10 @@ class ReadingPlanLane(Base):
         Index("ix_reading_plan_lanes_plan_id", "plan_id"),
     )
 
-    plan: Mapped["ContinuityPlan"] = relationship(
+    plan: Mapped[ContinuityPlan] = relationship(
         "ContinuityPlan", back_populates="lanes", lazy="raise"
     )
-    issues: Mapped[list["ReadingPlanIssue"]] = relationship(
+    issues: Mapped[list[ReadingPlanIssue]] = relationship(
         "ReadingPlanIssue", back_populates="lane", cascade="all, delete-orphan", lazy="raise"
     )
 
@@ -80,10 +81,10 @@ class ReadingPlanIssue(Base):
         Index("ix_reading_plan_issues_plan_issue", "plan_id", "issue_id"),
     )
 
-    plan: Mapped["ContinuityPlan"] = relationship("ContinuityPlan", back_populates="issues", lazy="raise")
+    plan: Mapped[ContinuityPlan] = relationship("ContinuityPlan", back_populates="issues", lazy="raise")
     lane: Mapped[ReadingPlanLane] = relationship("ReadingPlanLane", back_populates="issues", lazy="raise")
     issue: Mapped[Issue] = relationship("Issue", lazy="raise")
-    source_placements: Mapped[list["ReadingPlanSourcePlacement"]] = relationship(
+    source_placements: Mapped[list[ReadingPlanSourcePlacement]] = relationship(
         "ReadingPlanSourcePlacement", back_populates="occurrence", cascade="all, delete-orphan", lazy="raise"
     )
 
@@ -106,7 +107,7 @@ class ReadingPlanDependency(Base):
         Index("ix_reading_plan_dependencies_dependency_id", "dependency_id"),
     )
 
-    plan: Mapped["ContinuityPlan"] = relationship("ContinuityPlan", back_populates="dependencies", lazy="raise")
+    plan: Mapped[ContinuityPlan] = relationship("ContinuityPlan", back_populates="dependencies", lazy="raise")
     dependency: Mapped[Dependency] = relationship("Dependency", lazy="raise")
 
 
@@ -152,10 +153,10 @@ class ReadingPlanSource(Base):
         Index("ix_reading_plan_sources_custom_list", "custom_cbl_list_id"),
     )
 
-    plan: Mapped["ContinuityPlan"] = relationship("ContinuityPlan", back_populates="sources", lazy="raise")
+    plan: Mapped[ContinuityPlan] = relationship("ContinuityPlan", back_populates="sources", lazy="raise")
     cbl_source_list: Mapped[CBLSourceList | None] = relationship("CBLSourceList", lazy="raise")
     custom_cbl_list: Mapped[CustomCBLList | None] = relationship("CustomCBLList", lazy="raise")
-    placements: Mapped[list["ReadingPlanSourcePlacement"]] = relationship(
+    placements: Mapped[list[ReadingPlanSourcePlacement]] = relationship(
         "ReadingPlanSourcePlacement", back_populates="source", cascade="all, delete-orphan", lazy="raise"
     )
 

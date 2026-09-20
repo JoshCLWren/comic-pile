@@ -193,8 +193,6 @@ class ReadingPlanWrite(BaseModel):
         known_lanes = set(lane_ids)
         if any(issue.lane_id not in known_lanes for issue in self.issues):
             raise ValueError("every issue must reference an existing lane")
-        known_occurrence_ids = set(occurrence_ids)
-        issues_by_occurrence = {issue.occurrence_id: issue for issue in self.issues}
         positions_by_lane: dict[str, list[int]] = {}
         for issue in self.issues:
             positions_by_lane.setdefault(issue.lane_id, []).append(issue.display_position)
@@ -217,8 +215,6 @@ class ReadingPlanWrite(BaseModel):
                         f"checkpoint on occurrence '{issue.occurrence_id}' must have a next issue in the same lane"
                     )
         # Validate source placements reference valid occurrences and sources
-        source_ids = {s.id for s in self.sources} if hasattr(self, 'sources') else set()
-        # Note: source IDs are assigned on creation, so we validate in service layer
         return self
 
 
