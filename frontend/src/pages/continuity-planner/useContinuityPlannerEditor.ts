@@ -252,18 +252,19 @@ export function useContinuityPlannerEditor({
   }
 
   const toggleConvergenceGate = (nodeId: string, targetNodeId: string) => {
-    setNodes((current) =>
-      current.map((node) => {
+    setNodes((current) => {
+      const targetNode = current.find((n) => n.id === targetNodeId)
+      if (!targetNode) return current
+      return current.map((node) => {
         if (node.id !== nodeId) return node
         const gate = node.convergence_gate ?? []
         const exists = gate.some((target) => target.node_id === targetNodeId)
-        const targetNode = current.find((n) => n.id === targetNodeId)!
         const updated = exists
           ? gate.filter((target) => target.node_id !== targetNodeId)
           : [...gate, { node_type: targetNode.node_type, node_id: targetNodeId }]
         return { ...node, convergence_gate: updated }
-      }),
-    )
+      })
+    })
   }
 
   const addLane = () => {

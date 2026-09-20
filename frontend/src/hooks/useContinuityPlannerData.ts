@@ -47,7 +47,10 @@ export function useAllDependencyGroups() {
 export function useContinuityPlan(planId: number | null) {
   return useQuery({
     queryKey: planId ? queryKeys.readingPlans.detail(planId) : [],
-    queryFn: () => continuityPlansApi.get(planId!),
+    queryFn: async () => {
+      if (planId === null) return null as unknown as ReturnType<typeof continuityPlansApi.get>
+      return continuityPlansApi.get(planId)
+    },
     enabled: planId != null,
   })
 }
@@ -63,6 +66,7 @@ export function useThreadIssues(selectedThreadId: number | null) {
         ? queryKeys.thread.issuePage(selectedThreadId, { pageSize: 100, status: undefined })
         : [],
     queryFn: async (): Promise<Issue[]> => {
+      if (selectedThreadId === null) return []
       const result: Issue[] = []
       const seen = new Set<string>()
       let token: string | null = null
@@ -71,7 +75,7 @@ export function useThreadIssues(selectedThreadId: number | null) {
         if (token) {
           params.page_token = token
         }
-        const page = await issuesApi.list(selectedThreadId!, params)
+        const page = await issuesApi.list(selectedThreadId, params)
         result.push(...page.issues)
         token = page.next_page_token
         if (token && seen.has(token)) break
