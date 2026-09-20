@@ -260,16 +260,45 @@ describe('RatingView action panel (issue #1406)', () => {
     expect(screen.getByText('4.5')).toBeInTheDocument()
   })
 
-  it('high rating uses amber color', () => {
+  it('high rating uses personal accent color', () => {
     render(ratingView({ rating: 4.0 }))
     const value = screen.getByText('4.0')
-    expect(value.className).toContain('text-amber-500')
+    expect(value.className).toContain('text-[var(--theme-personal-accent)]')
   })
 
-  it('low rating uses red color', () => {
+  it('low rating uses danger color', () => {
     render(ratingView({ rating: 2.0 }))
     const value = screen.getByText('2.0')
-    expect(value.className).toContain('text-red-600')
+    expect(value.className).toContain('text-[var(--theme-danger)]')
+  })
+
+  it('rating value is the dominant text size', () => {
+    render(ratingView({ rating: 4.5 }))
+    const value = screen.getByText('4.5')
+    expect(value.className).toContain('text-5xl')
+  })
+
+  it('slider has rating-slider class for custom styling', () => {
+    render(ratingView())
+    const slider = screen.getByRole('slider')
+    expect(slider.className).toContain('rating-slider')
+  })
+
+  it('secondary actions use flex without flex-wrap for balanced row', () => {
+    render(ratingView())
+    const secondary = screen.getByTestId('rating-secondary-actions')
+    expect(secondary.className).toContain('flex')
+    expect(secondary.className).not.toContain('flex-wrap')
+  })
+
+  it('secondary action buttons have equal flex weight', () => {
+    render(ratingView())
+    const snooze = screen.getByRole('button', { name: /snooze/i })
+    const cancel = screen.getByRole('button', { name: /cancel roll/i })
+    expect(snooze.className).toContain('flex-1')
+    expect(cancel.className).toContain('flex-1')
+    expect(snooze.className).not.toContain('min-w-\\[7.5rem\\]')
+    expect(cancel.className).not.toContain('min-w-\\[7.5rem\\]')
   })
 })
 
