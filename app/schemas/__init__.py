@@ -32,6 +32,21 @@ from app.schemas.performance_metric import (
 )
 from app.schemas.preferences import ThemeId, UserPreferencesPatchRequest, UserPreferencesResponse
 from app.schemas.rate import RateRequest
+from app.schemas.reading_plan import (
+    ReadingPlanDependency,
+    ReadingPlanDependencyWrite,
+    ReadingPlanIssue,
+    ReadingPlanIssueWrite,
+    ReadingPlanLane,
+    ReadingPlanLaneWrite,
+    ReadingPlanListItem,
+    ReadingPlanResponse,
+    ReadingPlanSource,
+    ReadingPlanSourcePlacement,
+    ReadingPlanSourcePlacementWrite,
+    ReadingPlanSourceWrite,
+    ReadingPlanWrite,
+)
 from app.schemas.recommendation_explanation import (
     ExplainableFactorResponse,
     RecommendationExplanationResponse,
@@ -123,6 +138,20 @@ __all__ = [
     "ThemeId",
     "UserPreferencesResponse",
     "UserPreferencesPatchRequest",
+    # Reading Plan (normalized)
+    "ReadingPlanWrite",
+    "ReadingPlanResponse",
+    "ReadingPlanListItem",
+    "ReadingPlanLane",
+    "ReadingPlanLaneWrite",
+    "ReadingPlanIssue",
+    "ReadingPlanIssueWrite",
+    "ReadingPlanDependency",
+    "ReadingPlanDependencyWrite",
+    "ReadingPlanSource",
+    "ReadingPlanSourceWrite",
+    "ReadingPlanSourcePlacement",
+    "ReadingPlanSourcePlacementWrite",
     # Roll
     "RollRequest",
     "RollResponse",
