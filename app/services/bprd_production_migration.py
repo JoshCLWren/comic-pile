@@ -37,9 +37,6 @@ from app.services.migration_shared import (
     require_snapshot_token as _require_snapshot,
     stable_hash as _stable_hash,
 )
-from comic_pile.dependencies import _refresh_blocked_status as _legacy_refresh
-
-
 
 
 @dataclass(frozen=True)

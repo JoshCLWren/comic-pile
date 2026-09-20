@@ -43,7 +43,6 @@ from app.services.continuity_plan_writer import (
 from app.services.migration_shared import (
     MigrationInvariantError,
     coerce_int,
-    dep_snapshot as _dep,
     json_value as _json_value,
     legacy_prefix as _legacy_prefix,
     plan_fingerprint as _plan_fingerprint,
@@ -814,8 +813,10 @@ async def build_ultimate_universe_dry_run(
     }
 
 
-
-
+def _parse_datetime(value: object) -> datetime:
+    if not isinstance(value, str):
+        raise MigrationInvariantError(f"expected ISO timestamp, got {value!r}")
+    return datetime.fromisoformat(value)
 
 
 def _achieve_node_issue_ids(snapshot: dict[str, Any]) -> list[int]:
