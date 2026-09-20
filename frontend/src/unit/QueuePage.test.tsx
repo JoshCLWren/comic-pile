@@ -824,7 +824,7 @@ describe('Roll nudge after first thread creation', () => {
     // Fill and submit form
     await user.type(screen.getByLabelText('Title'), 'New Series')
     await user.type(screen.getByLabelText('Format'), 'Comic')
-    await user.type(screen.getByLabelText('Issues remaining'), '5')
+    await user.type(screen.getByLabelText('Issues'), '5')
     await user.click(screen.getByRole('button', { name: /create series/i }))
 
     // Wait for creation to complete
@@ -857,7 +857,7 @@ describe('Roll nudge after first thread creation', () => {
     // Fill and submit form
     await user.type(screen.getByLabelText('Title'), 'New Series')
     await user.type(screen.getByLabelText('Format'), 'Comic')
-    await user.type(screen.getByLabelText('Issues remaining'), '5')
+    await user.type(screen.getByLabelText('Issues'), '5')
     await user.click(screen.getByRole('button', { name: /create series/i }))
 
     // Wait for creation to complete
@@ -890,7 +890,7 @@ describe('Roll nudge after first thread creation', () => {
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'New Series')
     await user.type(screen.getByLabelText('Format'), 'Comic')
-    await user.type(screen.getByLabelText('Issues remaining'), '5')
+    await user.type(screen.getByLabelText('Issues'), '5')
     await user.click(screen.getByRole('button', { name: /create series/i }))
 
     // Wait for modal to appear
@@ -920,7 +920,7 @@ describe('Roll nudge after first thread creation', () => {
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'New Series')
     await user.type(screen.getByLabelText('Format'), 'Comic')
-    await user.type(screen.getByLabelText('Issues remaining'), '5')
+    await user.type(screen.getByLabelText('Issues'), '5')
     await user.click(screen.getByRole('button', { name: /create series/i }))
 
     // Wait for modal to appear

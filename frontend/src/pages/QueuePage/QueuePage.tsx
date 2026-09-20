@@ -2,7 +2,6 @@ import { useCallback, useState, useEffect } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import Modal from '../../components/Modal'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
 import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
@@ -34,16 +33,6 @@ export default function QueuePage() {
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
   const isSearching = searchQuery.trim() !== ''
-  
-  // State for first-time roll nudge
-  const [showRollNudge, setShowRollNudge] = useState(false)
-  const [hasDismissedRollNudge, setHasDismissedRollNudge] = useState(false)
-  
-  // Check if user has dismissed the nudge before (persists across sessions)
-  useEffect(() => {
-    const dismissed = localStorage.getItem('comic-pile-roll-nudge-dismissed')
-    setHasDismissedRollNudge(dismissed === 'true')
-  }, [])
 
   const {
     data: threads,
@@ -64,9 +53,6 @@ export default function QueuePage() {
     threads,
     sortBy,
   )
-  // Authoritative whole-queue total from the backend, never a count of the
-  // loaded page (issue #2568). `activeThreads.length` is only a fallback for
-  // responses that predate the field.
   const authoritativeActiveCount = activeCount ?? activeThreads.length
   const blockingByThreadId = useQueueBlockingInfo(
     activeThreads.map((thread) => thread.id),
@@ -87,7 +73,6 @@ export default function QueuePage() {
   })
 
   const submitCreate = useCallback(
-    // SAFETY: the create mutation's async mutationFn resolves to the created thread record before mutate() widens it to void.
     (input: { title: string; format: string; issues_remaining: number; notes: string | null }) =>
       createMutation.mutate(input) as Promise<{ id?: number }>,
     [createMutation],
@@ -104,12 +89,32 @@ export default function QueuePage() {
     [reactivateMutation],
   )
 
+  const [hasDismissedRollNudge, setHasDismissedRollNudge] = useState(false)
+  const [showRollNudge, setShowRollNudge] = useState(false)
+
+  useEffect(() => {
+    const dismissed = localStorage.getItem('comic-pile-roll-nudge-dismissed')
+    setHasDismissedRollNudge(dismissed === 'true')
+  }, [])
+
   const onCreated = useCallback(async () => {
-    // Only show nudge if this is the first thread creation and user hasn't dismissed it
     if (!hasDismissedRollNudge) {
       setShowRollNudge(true)
     }
   }, [hasDismissedRollNudge])
+
+  const onDismissRollNudge = useCallback(() => {
+    setShowRollNudge(false)
+    setHasDismissedRollNudge(true)
+    localStorage.setItem('comic-pile-roll-nudge-dismissed', 'true')
+  }, [])
+
+  const onRollNudgeNavigate = useCallback(() => {
+    setShowRollNudge(false)
+    setHasDismissedRollNudge(true)
+    localStorage.setItem('comic-pile-roll-nudge-dismissed', 'true')
+    navigate('/')
+  }, [navigate])
 
   const modals = useQueueModalsHook({
     threads,
@@ -124,6 +129,9 @@ export default function QueuePage() {
     submitReactivate,
     isPendingCreate: createMutation.isPending,
     isPendingEdit: updateMutation.isPending,
+    showRollNudge,
+    onDismissRollNudge,
+    onRollNudgeNavigate,
   })
 
   const handleIssueChanged = useCallback(() => {
@@ -212,12 +220,8 @@ export default function QueuePage() {
   })
 
   const mobileAddEnabled = !modals.isAnyModalOpen
-  // Shuffle operates on the whole queue, so enablement must use the
-  // authoritative queue size rather than the loaded page slice (issue #2568).
   const shuffleDisabled = authoritativeActiveCount < 2
 
-  // Keep already-rendered rows visible while an additional page loads, but
-  // preserve the full-screen initial loading state before Queue has any data.
   if (isPending && !threads?.length) {
     return <LoadingSpinner fullScreen />
   }
@@ -335,53 +339,9 @@ export default function QueuePage() {
           onConfirm={() => void actions.confirmDelete()}
           onCancel={actions.cancelDelete}
         />
-
-        {/* Ready to roll? modal - shown after first series creation */}
-        <Modal
-          isOpen={showRollNudge}
-          title="Ready to roll?"
-          onClose={() => {
-            setShowRollNudge(false)
-            setHasDismissedRollNudge(true)
-            localStorage.setItem('comic-pile-roll-nudge-dismissed', 'true')
-          }}
-          data-testid="roll-nudge-modal"
-        >
-          <div className="space-y-4">
-            <p className="text-stone-200">
-              You've created your first series! Ready to start reading?
-            </p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  navigate('/')
-                  setShowRollNudge(false)
-                  setHasDismissedRollNudge(true)
-                  localStorage.setItem('comic-pile-roll-nudge-dismissed', 'true')
-                }}
-                className="flex-1 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] text-stone-950 font-semibold py-3 px-4 rounded-lg transition-colors"
-              >
-                Let's Roll!
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowRollNudge(false)
-                  setHasDismissedRollNudge(true)
-                  localStorage.setItem('comic-pile-roll-nudge-dismissed', 'true')
-                }}
-                className="flex-1 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-stone-200 font-semibold py-3 px-4 rounded-lg transition-colors hover:bg-[var(--theme-bg-hover)]"
-              >
-                Maybe Later
-              </button>
-            </div>
-          </div>
-        </Modal>
       </div>
     </PositionMenuProvider>
   )
 }
 
-// Re-export the type for unit tests that previously imported it from QueuePage.
 export type { QueueSortBy }
