@@ -48,6 +48,25 @@ def compute_backoff_sessions(snooze_count: int) -> int:
     return fibonacci(pair + 1)
 
 
+def is_eligible(snooze_count: int, later_session_count: int) -> bool:
+    """Whether a thread is eligible given its snooze streak and later sessions.
+
+    A thread with no snooze streak is always eligible. Otherwise it becomes
+    eligible only once the number of later user sessions (sessions that started
+    after the latest snooze event) reaches the required backoff.
+
+    Args:
+        snooze_count: Number of snooze events for the thread after the reset
+            boundary (0 when there is no active streak).
+        later_session_count: Number of that user's sessions that started after
+            the latest snooze event.
+
+    Returns:
+        True when the thread may be re-rolled, False while it must stay out.
+    """
+    return snooze_count <= 0 or later_session_count >= compute_backoff_sessions(snooze_count)
+
+
 def generate_sequence(limit: int) -> list[int]:
     """Generate the backoff sequence up to the given index.
 
