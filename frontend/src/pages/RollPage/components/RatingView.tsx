@@ -1,8 +1,7 @@
-import type { RatingThread } from '../types'
-import { ComicPillar } from './ComicPillar'
-import { YourContextPillar } from './YourContextPillar'
-import { RatingActionPanel } from './RatingActionPanel'
 import type { RatingViewData } from '../useRatingView'
+import { ComicPillar } from './ComicPillar'
+import { DecisionCard } from './DecisionCard'
+import { ContextDisclosure } from './ContextDisclosure'
 
 interface RatingViewProps {
   data: RatingViewData
@@ -12,6 +11,7 @@ export function RatingView({ data }: RatingViewProps) {
   const {
     activeRatingThread,
     currentDie,
+    rolledResult,
     rating,
     predictedDie,
     errorMessage,
@@ -28,7 +28,6 @@ export function RatingView({ data }: RatingViewProps) {
     readerContext,
     isReaderContextLoading,
     ratingViewTopRef,
-    issuesRemaining,
   } = data
 
   return (
@@ -41,33 +40,28 @@ export function RatingView({ data }: RatingViewProps) {
           <ComicPillar activeRatingThread={activeRatingThread} onRefreshThread={onRefreshThread} />
         </div>
 
-        <div className="min-w-0 space-y-4" data-testid="rating-region-your-context">
-          <YourContextPillar
+        <div className="min-w-0 space-y-4" data-testid="rating-region-decision">
+          <DecisionCard
             activeRatingThread={activeRatingThread}
             currentDie={currentDie}
             rating={rating}
             predictedDie={predictedDie}
+            errorMessage={errorMessage}
+            rateIsPending={rateIsPending}
+            snoozeIsPending={snoozeIsPending}
+            dismissIsPending={dismissIsPending}
+            skipIsPending={skipIsPending}
             onUpdateRating={onUpdateRating}
+            onSubmitRating={onSubmitRating}
+            onSnooze={onSnooze}
+            onSkip={onSkip}
+            onCancel={onCancel}
+          />
+
+          <ContextDisclosure
             readerContext={readerContext}
             isLoading={isReaderContextLoading}
           />
-
-          <div className="min-w-0" data-testid="rating-actions-grid-cell">
-            <RatingActionPanel
-              errorMessage={errorMessage}
-              rateIsPending={rateIsPending}
-              snoozeIsPending={snoozeIsPending}
-              dismissIsPending={dismissIsPending}
-              skipIsPending={skipIsPending}
-              issuesRemaining={issuesRemaining}
-              onSubmitRating={onSubmitRating}
-              onSnooze={onSnooze}
-              onSkip={onSkip}
-              onCancel={onCancel}
-              threadTitle={activeRatingThread?.title ?? null}
-              issueNumber={activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null}
-            />
-          </div>
         </div>
       </div>
     </div>

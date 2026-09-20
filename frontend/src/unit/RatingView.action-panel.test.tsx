@@ -273,7 +273,7 @@ describe('RatingView desktop layout contract (#2711 revises #1943)', () => {
     const { container } = render(ratingView())
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     expect(grid!.className).toContain('items-start')
-    for (const testId of ['rating-region-comic', 'rating-region-your-context']) {
+    for (const testId of ['rating-region-comic', 'rating-region-decision']) {
       expect(container.querySelector(`[data-testid="${testId}"]`)!.className).toContain('min-w-0')
     }
   })
@@ -290,14 +290,17 @@ describe('RatingView desktop layout contract (#2711 revises #1943)', () => {
     }
   })
 
-  it('stacks the action panel with Your Context instead of spanning the full grid width', () => {
-    const { container } = render(ratingView())
-    const yourContext = container.querySelector<HTMLElement>('[data-testid="rating-region-your-context"]')
-    const actions = container.querySelector<HTMLElement>('[data-testid="rating-actions-grid-cell"]')
-    expect(yourContext).not.toBeNull()
-    expect(actions).not.toBeNull()
-    expect(yourContext!.contains(actions)).toBe(true)
-    expect(actions!.className).not.toContain('xl:col-span-full')
+  it('stacks the decision card and context disclosure in the decision region', () => {
+    const { container } = render(ratingView({ readerContext: populatedReaderContext }))
+    const decisionRegion = container.querySelector<HTMLElement>('[data-testid="rating-region-decision"]')
+    const decisionCard = container.querySelector<HTMLElement>('[data-testid="decision-card"]')
+    const contextDisclosure = container.querySelector<HTMLElement>('[data-testid="context-disclosure"]')
+    expect(decisionRegion).not.toBeNull()
+    expect(decisionCard).not.toBeNull()
+    expect(contextDisclosure).not.toBeNull()
+    expect(decisionRegion!.contains(decisionCard)).toBe(true)
+    expect(decisionRegion!.contains(contextDisclosure)).toBe(true)
+    expect(decisionCard!.className).not.toContain('xl:col-span-full')
   })
 
   it('does not render Reading Context pillar when empty - rating form follows The Comic directly without removed surfaces', () => {
