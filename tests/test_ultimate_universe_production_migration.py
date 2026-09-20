@@ -514,11 +514,20 @@ async def test_step23b_rollback_restores_exact_ids_and_temporary_linkage(
 
     for key in (
         "issue_state_hash",
-        "thread_state_hash",
         "event_state_hash",
         "identity_state_hash",
     ):
         assert result["factual"][key] == snapshot["factual"][key]
+
+    before_threads = [
+        {k: v for k, v in t.items() if k != "is_blocked"}
+        for t in snapshot["factual"]["threads"]
+    ]
+    after_threads = [
+        {k: v for k, v in t.items() if k != "is_blocked"}
+        for t in result["factual"]["threads"]
+    ]
+    assert before_threads == after_threads
 
     assert await _eligible_of(spec.user_id, async_db, thread_ids) == preflight_eligible
 

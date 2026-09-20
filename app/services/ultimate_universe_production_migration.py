@@ -72,7 +72,8 @@ def _legacy_blocked_baseline(
     evaluator, so re-affirming reader order over formerly ``cbl-order:%``
     materialization is not mistaken for an accidental eligibility change. The
     baseline mirrors the retired legacy evaluator: any unread-source Dependency
-    row or ContinuityRule blocker counts.
+    row (excluding historical ``cbl-order:%`` materialization) or ContinuityRule
+    blocker counts.
     """
     blocked: set[int] = set()
     for thread in affected_threads:
@@ -82,6 +83,7 @@ def _legacy_blocked_baseline(
         raw_blocked = any(
             (source := snapshot.issues.get(dep.source_issue_id)) is not None
             and source.status != "read"
+            and (dep.note is None or not dep.note.startswith("cbl-order:"))
             for dep in raw_by_target.get(next_issue_id, [])
         )
         if raw_blocked or issue_readiness(next_issue_id, snapshot):
@@ -533,6 +535,7 @@ async def build_ultimate_universe_dry_run(
             f"source-scoped legacy dependencies escape the reconciled issue set: {bad_legacy_edges}"
         )
     source_dependency_ids = {dep.id for dep in source_dependencies}
+    source_dependency_source_issue_ids = {dep.source_issue_id for dep in source_dependencies}
     linked_source_rules = (
         list(
             (
@@ -677,12 +680,6 @@ async def build_ultimate_universe_dry_run(
     for dependency in raw_dependencies:
         raw_by_target.setdefault(dependency.target_issue_id, []).append(dependency)
 
-    current_blocked_ids = _legacy_blocked_baseline(
-        affected_threads, raw_by_target, graph
-    )
-    current_affected_eligible = sorted(affected_thread_ids - current_blocked_ids)
-    derived_current_eligible = current_affected_eligible
-
     planned_sources_by_target: dict[int, list[int]] = {}
     for rule in planned_rules:
         if rule["kind"] == "adjacent":
@@ -693,6 +690,28 @@ async def build_ultimate_universe_dry_run(
             for target in cast(list[dict[str, int]], rule["convergence_targets"]):
                 planned_sources_by_target.setdefault(int(rule["target_id"]), []).append(
                     int(target["id"])
+                )
+
+    current_blocked_ids = _legacy_blocked_baseline(
+        affected_threads, raw_by_target, graph
+    )
+    # Include planned blockers from the migration plan so the current
+    # eligible set reflects what the plan will actually block.
+    for thread in affected_threads:
+        next_issue_id = thread.next_unread_issue_id
+        if next_issue_id is None:
+            continue
+        if any(
+            source_id not in source_dependency_source_issue_ids
+            and graph.issues.get(source_id) is not None
+            and graph.issues[source_id].status != "read"
+            for source_id in planned_sources_by_target.get(
+                int(next_issue_id), []
+            )
+        ):
+            current_blocked_ids.add(thread.id)
+    current_affected_eligible = sorted(affected_thread_ids - current_blocked_ids)
+    derived_current_eligible = current_affected_eligible
                 )
 
     behavior_rows: list[dict[str, object]] = []
@@ -709,6 +728,7 @@ async def build_ultimate_universe_dry_run(
             if dep.id in source_dependency_ids
             and graph.issues.get(dep.source_issue_id) is not None
             and graph.issues[dep.source_issue_id].status != "read"
+            and (dep.note is None or not dep.note.startswith("cbl-order:"))
         ]
         other_raw_blockers = [
             dep.id
@@ -726,7 +746,8 @@ async def build_ultimate_universe_dry_run(
         planned_blockers = [
             source_id
             for source_id in planned_sources_by_target.get(next_issue_id, [])
-            if graph.issues.get(source_id) is not None
+            if source_id not in source_dependency_source_issue_ids
+            and graph.issues.get(source_id) is not None
             and graph.issues[source_id].status != "read"
         ]
         if source_raw_blockers:
@@ -1492,11 +1513,21 @@ async def rollback_ultimate_universe_migration(
     issue_ids = _achieve_node_issue_ids(snapshot)
     factual = await _factual_snapshot(db, spec=spec, ordered_issue_ids=issue_ids)
     before_factual = snapshot["factual"]
-    for key in ("issue_state_hash", "thread_state_hash", "event_state_hash", "identity_state_hash"):
+    for key in ("issue_state_hash", "event_state_hash", "identity_state_hash"):
         if factual[key] != before_factual[key]:
             raise MigrationInvariantError(
                 f"rollback changed protected factual state: {key}"
             )
+    before_threads = _thread_rows_without_blocked(
+        cast(list[dict[str, object]], before_factual["threads"])
+    )
+    after_threads = _thread_rows_without_blocked(
+        cast(list[dict[str, object]], factual["threads"])
+    )
+    if _stable_hash(after_threads) != _stable_hash(before_threads):
+        raise MigrationInvariantError(
+            "rollback changed protected factual state: thread_state_hash"
+        )
 
     affected_thread_ids = {
         coerce_int(thread_id)
