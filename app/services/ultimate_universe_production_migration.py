@@ -712,7 +712,6 @@ async def build_ultimate_universe_dry_run(
             current_blocked_ids.add(thread.id)
     current_affected_eligible = sorted(affected_thread_ids - current_blocked_ids)
     derived_current_eligible = current_affected_eligible
-                )
 
     behavior_rows: list[dict[str, object]] = []
     future_blocked_ids: set[int] = set()
