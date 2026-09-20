@@ -5,6 +5,7 @@
   },
   "include": [
     "src/unit",
+    "src/pages",
     "src/test",
     "src/test/**/*.ts",
     "src/test/**/*.tsx"

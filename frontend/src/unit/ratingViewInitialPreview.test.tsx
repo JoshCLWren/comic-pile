@@ -5,6 +5,7 @@ import { ToastProvider } from '../contexts/ToastProvider'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import { computePredictedDie } from '../pages/RollPage/utils'
 import { cast } from '../utils/cast'
+import type { RatingViewData } from '../pages/RollPage/useRatingView'
 
 // Mock heavy components
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -23,8 +24,8 @@ function renderRatingView({ currentDie, rating, predictedDie }: { currentDie: nu
   return render(
     <MemoryRouter>
       <ToastProvider>
-        <RatingView
-          activeRatingThread={{
+        <RatingView data={{
+          activeRatingThread: {
             id: 1,
             title: 'Test',
             format: 'Comic',
@@ -36,17 +37,28 @@ function renderRatingView({ currentDie, rating, predictedDie }: { currentDie: nu
             next_issue_id: null,
             next_issue_number: null,
             last_rolled_result: null,
-          } as any}
-          currentDie={currentDie}
-          rolledResult={null}
-          rating={rating}
-          predictedDie={predictedDie}
-          errorMessage=""
-          rateIsPending={false}
-          snoozeIsPending={false}
-          dismissIsPending={false}
-          {...callbacks}
-        />
+            queue_position: 0,
+          },
+          currentDie,
+          rolledResult: null,
+          rating,
+          predictedDie,
+          errorMessage: '',
+          rateIsPending: false,
+          snoozeIsPending: false,
+          dismissIsPending: false,
+          skipIsPending: false,
+          onUpdateRating: callbacks.onUpdateRating,
+          onSubmitRating: callbacks.onSubmitRating,
+          onSnooze: callbacks.onSnooze,
+          onCancel: callbacks.onCancel,
+          onRefreshThread: callbacks.onRefreshThread,
+          readerContext: null,
+          isReaderContextLoading: false,
+          readerContextError: null,
+          ratingViewTopRef: null,
+          issuesRemaining: 3,
+        }} />
       </ToastProvider>
     </MemoryRouter>
   )

@@ -107,13 +107,23 @@ vi.mock('../components/MigrationDialog', () => ({ default: ({ onComplete, onSkip
 vi.mock('../components/SimpleMigrationDialog', () => ({ default: ({ onComplete, onClose }: { onComplete: (issue: string) => void; onClose: () => void }) => <div><button onClick={() => onComplete('1')}>complete simple</button><button onClick={onClose}>close simple</button></div> }))
 type MockProps = Record<string, string | (() => void) | ((thread: unknown) => void) | Record<string, string>>
 vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: MockProps) => <div><button onClick={() => (props.onThreadClick as (thread: unknown) => void)({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle as () => void}>shuffle pool</button><button onClick={props.onReadStale as () => void}>read stale</button><button onClick={props.onUnsnooze as () => void}>unsnooze</button><button onClick={props.onToggleSnoozed as () => void}>toggle snoozed</button><button onClick={props.onToggleBlocked as () => void}>toggle blocked</button><span>{JSON.stringify(props.blockingDependencyMap)}</span></div> }))
-vi.mock('../pages/RollPage/components/RatingView', () => ({ RatingView: (props: MockProps) => {
-  const thread = props.activeRatingThread as { title?: string; issue_number?: string | null } | null
-  // SAFETY: RatingView mock casts Record<string, unknown> callbacks to the exact handler signatures RollPage passes, so firing them here triggers the real handlers with their declared argument shapes.
+interface RatingViewMockData {
+  activeRatingThread: { title?: string; issue_number?: string | null } | null
+  errorMessage: string
+  onUpdateRating: (value: string) => void
+  onSubmitRating: (finishSession: boolean) => void
+  onSnooze: () => void
+  onCancel: () => void
+  onRefreshThread: () => void
+}
+vi.mock('../pages/RollPage/components/RatingView', () => ({ RatingView: (props: { data?: RatingViewMockData }) => {
+  const data = props.data
+  const thread = data?.activeRatingThread ?? null
+  // SAFETY: RatingView now receives one colocated data object (see useRatingView); the mock reads thread metadata and handler callbacks from data so firing them here triggers the real RollPage handlers with their declared argument shapes.
   return <div>
     <span data-testid="rating-thread-metadata">{thread?.title ?? 'missing'}:{thread?.issue_number ?? 'none'}</span>
-    {props.errorMessage ? <span>{String(props.errorMessage)}</span> : null}
-    <button onClick={() => (props.onUpdateRating as (value: string) => void)('5')}>update rating</button><button onClick={() => (props.onUpdateRating as (value: string) => void)('4')}>threshold rating</button><button onClick={() => (props.onUpdateRating as (value: string) => void)('1')}>update low rating</button><button onClick={() => (props.onSubmitRating as (finish?: boolean) => void)(false)}>save rating</button><button onClick={() => (props.onSubmitRating as (finish?: boolean) => void)(true)}>finish rating</button><button onClick={props.onSnooze as () => void}>snooze rating</button><button onClick={props.onCancel as () => void}>cancel rating</button><button onClick={props.onRefreshThread as () => void}>refresh rating</button>
+    {data?.errorMessage ? <span>{data.errorMessage}</span> : null}
+    <button onClick={() => { data?.onUpdateRating('5') }}>update rating</button><button onClick={() => { data?.onUpdateRating('4') }}>threshold rating</button><button onClick={() => { data?.onUpdateRating('1') }}>update low rating</button><button onClick={() => { data?.onSubmitRating(false) }}>save rating</button><button onClick={() => { data?.onSubmitRating(true) }}>finish rating</button><button onClick={() => { data?.onSnooze() }}>snooze rating</button><button onClick={() => { data?.onCancel() }}>cancel rating</button><button onClick={() => { data?.onRefreshThread() }}>refresh rating</button>
   </div>
 } }))
 
