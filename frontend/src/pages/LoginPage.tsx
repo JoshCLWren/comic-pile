@@ -5,9 +5,11 @@ import { useNavigate, Link } from 'react-router-dom'
 import api from '../services/api'
 import type { AuthTokens } from '../types'
 import { useAuth } from '../App'
+import { isReturningVisitor, markReturningVisitor } from '../utils/returningVisitor'
 
 export default function LoginPage() {
   const { login } = useAuth()
+  const [isReturning] = useState<boolean>(() => isReturningVisitor())
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -50,6 +52,7 @@ export default function LoginPage() {
         password,
       })
       await login(response.access_token)
+      markReturningVisitor()
       navigate('/')
     } catch (err: unknown) {
       if (axios.isAxiosError<{ detail?: string }>(err) && err.response?.data?.detail) {
@@ -69,8 +72,12 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[var(--theme-primary-action)]">Comic Pile · Roll to read. Rotate your stack.</p>
-          <h1 className="text-4xl font-black tracking-tighter text-glow uppercase">Welcome Back</h1>
-          <p className="text-sm text-[var(--theme-text-muted)]">An open-source, dice-driven comic reading tracker. Sign in to continue your journey.</p>
+          <h1 className="text-4xl font-black tracking-tighter text-glow uppercase">{isReturning ? 'Welcome Back' : 'Welcome to Comic Pile'}</h1>
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            {isReturning
+              ? 'An open-source, dice-driven comic reading tracker. Sign in to continue your journey.'
+              : 'An open-source, dice-driven comic reading tracker. Sign in or create an account to start your journey.'}
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-6">
@@ -128,9 +135,9 @@ export default function LoginPage() {
 
         <div className="text-center space-y-3">
           <p className="text-sm text-[var(--theme-text-muted)]">
-            Don't have an account?{' '}
+            New to Comic Pile?{' '}
             <Link to="/register" className="text-[var(--theme-primary-action)] hover:opacity-80 font-bold transition-opacity">
-              Sign up
+              Create an account
             </Link>
           </p>
           <p className="text-xs text-[var(--theme-text-muted)]">

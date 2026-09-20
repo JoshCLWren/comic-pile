@@ -13,9 +13,10 @@ describe("Comic Pile - smoke", () => {
       url: "https://comic-pile.vercel.app/login",
     });
 
-    // The production login screen should render with its form.
+    // The production login screen should render with its form. A fresh browser
+    // has no returning signal, so first-visit copy applies (issue #2754).
     const loginVisible = await testdriver.assert(
-      "the Comic Pile login page is shown with a 'Welcome Back' heading, Username and Password fields, and a 'Sign In' button",
+      "the Comic Pile login page is shown with a 'Welcome to Comic Pile' heading, Username and Password fields, and a 'Sign In' button",
     );
     expect(loginVisible).toBeTruthy();
   });

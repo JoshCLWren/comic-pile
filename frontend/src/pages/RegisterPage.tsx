@@ -5,6 +5,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import api from '../services/api'
 import type { AuthTokens } from '../types'
 import { useAuth } from '../App'
+import { markReturningVisitor } from '../utils/returningVisitor'
 
 export default function RegisterPage() {
   const { login } = useAuth()
@@ -68,6 +69,7 @@ export default function RegisterPage() {
         { username: username.trim(), email: email.trim(), password },
       )
       await login(response.access_token)
+      markReturningVisitor()
       navigate('/')
     } catch (err: unknown) {
       if (axios.isAxiosError<{ detail?: string }>(err) && err.response?.data?.detail) {
@@ -87,7 +89,7 @@ export default function RegisterPage() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-black tracking-tighter text-glow uppercase">Create Account</h1>
-          <p className="text-sm text-[var(--theme-text-muted)]">Start your dice rolling journey</p>
+          <p className="text-sm text-[var(--theme-text-muted)]">Welcome to Comic Pile. Start your dice-rolling journey.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-6">
