@@ -3,7 +3,6 @@ import { computePredictedDie } from './utils'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread } from './types'
 import type { ReaderContextResponse } from '../../types'
-import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 
 interface UseRatingViewParams {
   state: RollPageState & RollPageStateSetters
