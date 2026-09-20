@@ -505,13 +505,20 @@ describe('Keyboard Accessibility', () => {
   await user.click(screen.getByRole('button', { name: /add to queue/i }))
 })
 
-  it('renders loading and empty queue states', () => {
+  it('renders loading and empty queue states', async () => {
+  const user = userEvent.setup()
   mockedUseQueueThreads.mockReturnValue({ data: undefined, isPending: true, refetch: vi.fn() })
   const { rerender } = render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   expect(screen.getByRole('status')).toBeInTheDocument()
   mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   rerender(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  expect(screen.getByText('No active series in queue')).toBeInTheDocument()
+  expect(screen.getByTestId('queue-empty')).toBeInTheDocument()
+  expect(screen.getByText('Nothing to roll yet')).toBeInTheDocument()
+  expect(
+    screen.getByText('Your reading queue is empty — add some comic series to get started.'),
+  ).toBeInTheDocument()
+  await user.click(screen.getByTestId('queue-empty-add-series'))
+  expect(screen.getByRole('heading', { name: /add series/i })).toBeInTheDocument()
 })
 
   it('prevents reading blocked threads and reports delete failures', async () => {
