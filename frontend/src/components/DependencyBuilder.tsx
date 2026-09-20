@@ -6,70 +6,22 @@ import ReadingOrderTimeline from './ReadingOrderTimeline'
 import DependencyCrossoverControls from './DependencyCrossoverControls'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
-import type { IssueListParams } from '../services/api-issues'
-import type { Dependency, FlowchartDependency, FlowchartNode, Issue, IssueListResponse, Thread, ThreadDependenciesResponse, ThreadListResponse } from '../types'
+import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse } from '../types'
+import { fetchAllUnreadIssues } from '../hooks/useDependencyBuilderData'
+import type {
+  DependencyBuilderDependenciesApi,
+  DependencyBuilderIssuesApi,
+  DependencyBuilderThreadsApi,
+} from '../hooks/useDependencyBuilderData'
+import { buildFlowchartGraph } from '../utils/dependencyFlowchartAdapter'
 import { getApiErrorDetail } from '../utils/apiError'
 import { useToast } from '../contexts/useToast'
 
-export interface DependencyBuilderDependenciesApi {
-  listThreadDependencies: (threadId: number) => Promise<ThreadDependenciesResponse>
-  listBlockedThreadIds: () => Promise<number[]>
-  createDependency: (payload: {
-    sourceType?: 'thread' | 'issue'
-    sourceId: number
-    targetType?: 'thread' | 'issue'
-    targetId: number
-  }) => Promise<Dependency>
-  deleteDependency: (dependencyId: number) => Promise<void>
-  updateDependency: (dependencyId: number, note: string | null) => Promise<Dependency>
-}
-
-export interface DependencyBuilderThreadsApi {
-  list: (
-    params?: { search?: string },
-    pageToken?: string | null,
-  ) => Promise<ThreadListResponse>
-}
-
-export interface DependencyBuilderIssuesApi {
-  list: (
-    threadId: number,
-    params?: IssueListParams,
-  ) => Promise<IssueListResponse>
-  migrateThread: (
-    threadId: number,
-    lastIssueRead: number,
-    totalIssues: number,
-  ) => Promise<Thread>
-}
-
-async function fetchAllUnreadIssues(
-  issuesService: DependencyBuilderIssuesApi,
-  threadId: number,
-): Promise<Issue[]> {
-  const allIssues: Issue[] = []
-  const seenPageTokens = new Set<string>()
-  let nextPageToken: string | null = null
-
-  while (true) {
-    const params: IssueListParams = {
-      status: 'unread',
-      page_size: 100,
-    }
-    if (nextPageToken) {
-      params.page_token = nextPageToken
-    }
-    const data = await issuesService.list(threadId, params)
-    allIssues.push(...data.issues)
-
-    if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
-      return allIssues
-    }
-
-    seenPageTokens.add(data.next_page_token)
-    nextPageToken = data.next_page_token
-  }
-}
+export type {
+  DependencyBuilderDependenciesApi,
+  DependencyBuilderIssuesApi,
+  DependencyBuilderThreadsApi,
+} from '../hooks/useDependencyBuilderData'
 
 function groupByThread(deps: Dependency[], labelKey: 'source_label' | 'target_label'): Map<string, Dependency[]> {
   const groups = new Map<string, Dependency[]>()
@@ -176,84 +128,10 @@ const [isSavingNote, setIsSavingNote] = useState(false)
         dependenciesService.listBlockedThreadIds(),
       ])
 
-      const relatedIds = new Set([currentThreadId!])
       const allDeps = [...depsData.blocking, ...depsData.blocked_by]
-
-      
-
-      // Thread-level deps map directly to FlowchartDependency
-      const threadDeps: FlowchartDependency[] = allDeps.flatMap((dep) =>
-        dep.source_thread_id != null && dep.target_thread_id != null && !dep.is_issue_level
-          ? [{
-              id: String(dep.id),
-              source_id: dep.source_thread_id,
-              target_id: dep.target_thread_id,
-              created_at: dep.created_at,
-            }]
-          : [],
-      )
-
-      // Collect related thread IDs from thread-level deps
-      for (const dep of threadDeps) {
-        relatedIds.add(dep.source_id)
-        relatedIds.add(dep.target_id)
-      }
-
-      // Issue-level deps → issue nodes + direct edges between them
-      const issueOnlyDeps = allDeps.filter(
-        (dep) => dep.source_issue_id != null && dep.target_issue_id != null
-      )
-      const issueNodeMap = new Map<number, FlowchartNode>()
-      const issueEdges: FlowchartDependency[] = []
-
-      
-
-      for (const d of issueOnlyDeps) {
-        if (!d.source_issue_thread_id || !d.target_issue_thread_id) continue
-
-        // Use negative issue ID to avoid thread ID collisions
-        const srcNodeId = -d.source_issue_id!
-        if (!issueNodeMap.has(srcNodeId)) {
-          issueNodeMap.set(srcNodeId, {
-            id: srcNodeId,
-            title: d.source_label ?? `Issue #${d.source_issue_id}`,
-            x: 0, y: 0,
-            isBlocked: false,
-            isIssueNode: true,
-            parentThreadId: d.source_issue_thread_id,
-          })
-        }
-
-        const tgtNodeId = -d.target_issue_id!
-        if (!issueNodeMap.has(tgtNodeId)) {
-          issueNodeMap.set(tgtNodeId, {
-            id: tgtNodeId,
-            title: d.target_label ?? `Issue #${d.target_issue_id}`,
-            x: 0, y: 0,
-            isBlocked: false,
-            isIssueNode: true,
-            parentThreadId: d.target_issue_thread_id,
-          })
-        }
-
- issueEdges.push({
- id: d.id,
- source_id: srcNodeId,
-          target_id: tgtNodeId,
-          is_issue_level: true,
-          source_parent_thread_id: d.source_issue_thread_id,
-          target_parent_thread_id: d.target_issue_thread_id,
-          created_at: d.created_at,
-        })
-
-        // Ensure parent threads are loaded for context
-        relatedIds.add(d.source_issue_thread_id)
-        relatedIds.add(d.target_issue_thread_id)
-      }
-
-      
-
-      const allEdges = [...threadDeps, ...issueEdges]
+      const graph = buildFlowchartGraph(allDeps, currentThreadId!)
+      const relatedIds = graph.relatedThreadIds
+      const allEdges = graph.edges
 
     const allThreads = await threadsService.list()
     const relatedThreads = allThreads.threads.filter((t) => relatedIds.has(t.id))
@@ -262,7 +140,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
       setFlowchartThreads(relatedThreads)
       setFlowchartDependencies(allEdges)
-      setFlowchartIssueNodes(Array.from(issueNodeMap.values()))
+      setFlowchartIssueNodes(graph.issueNodes)
       setBlockedIds(new Set(allBlockedIds))
     } catch (err) {
       console.error('[loadFlowchartData] Error:', err)

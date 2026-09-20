@@ -1,157 +1,105 @@
-import type { Dependency, FlowchartDependency, FlowchartNode, Thread } from '../types'
+import type { Dependency, FlowchartDependency, FlowchartNode } from '../types'
 
-export interface FlowchartData {
-  threads: Thread[]
-  dependencies: FlowchartDependency[]
+/**
+ * Pure flowchart graph derived from thread dependencies.
+ */
+export interface FlowchartGraph {
+  /** Thread-level edges followed by issue-level edges, in render order. */
+  edges: FlowchartDependency[]
+  /** Virtual nodes for issues referenced by issue-level dependencies. */
   issueNodes: FlowchartNode[]
-  blockedIds: Set<number>
+  /** Thread IDs that should be loaded to give the graph context. */
+  relatedThreadIds: Set<number>
 }
 
-export interface ThreadDependenciesData {
-  blocking: Dependency[]
-  blocked_by: Dependency[]
-}
-
-    isBlocked: false,
-    isIssueNode: true,
-    parentThreadId: threadId,
-  }
-}
-
-export function buildFlowchartEdgesFromDependencies(
-  dependencies: Dependency[],
-): FlowchartDependency[] {
-  return dependencies
-    .filter((dep) => 
-      dep.source_thread_id != null && 
-      dep.target_thread_id != null && 
-      !dep.is_issue_level
-    )
-    .map((dep) => ({
-      id: String(dep.id),
-      source_id: dep.source_thread_id,
-      target_id: dep.target_thread_id,
-      created_at: dep.created_at,
-    }))
-}
-
-export function buildFlowchartEdgesFromIssueDependencies(
-  dependencies: Dependency[],
-): FlowchartDependency[] {
-  return dependencies
-    .filter((dep) => 
-      dep.source_issue_id != null && 
-      dep.target_issue_id != null
-    )
-    .map((dep) => ({
-      id: dep.id,
-      source_id: -dep.source_issue_id!,
-      target_id: -dep.target_issue_id!,
-      is_issue_level: true,
-      source_parent_thread_id: dep.source_issue_thread_id,
-      target_parent_thread_id: dep.target_issue_thread_id,
-      created_at: dep.created_at,
-    }))
-}
-
-export function buildIssueNodesFromDependencies(
-  dependencies: Dependency[],
-): Map<number, FlowchartNode> {
-  const nodeMap = new Map<number, FlowchartNode>()
-  
-  for (const dep of dependencies) {
-    if (dep.source_issue_id != null && dep.source_issue_thread_id != null) {
-      const nodeId = -dep.source_issue_id
-      if (!nodeMap.has(nodeId)) {
-        nodeMap.set(nodeId, {
-          id: nodeId,
-          title: dep.source_label ?? `Issue #${dep.source_issue_id}`,
-          x: 0,
-          y: 0,
-          isBlocked: false,
-          isIssueNode: true,
-          parentThreadId: dep.source_issue_thread_id,
-        })
-      }
-    }
-    
-    if (dep.target_issue_id != null && dep.target_issue_thread_id != null) {
-      const nodeId = -dep.target_issue_id
-      if (!nodeMap.has(nodeId)) {
-        nodeMap.set(nodeId, {
-          id: nodeId,
-          title: dep.target_label ?? `Issue #${dep.target_issue_id}`,
-          x: 0,
-          y: 0,
-          isBlocked: false,
-          isIssueNode: true,
-          parentThreadId: dep.target_issue_thread_id,
-        })
-      }
-    }
-  }
-  
-  return nodeMap
-}
-
-export function extractRelatedThreadIds(
-  threadDeps: FlowchartDependency[],
-  issueEdges: FlowchartDependency[],
+/**
+ * Build the full graph of threads and dependencies for the flowchart.
+ *
+ * Synthesizes virtual thread-level edges from issue-level deps so they
+ * show as dashed connections in the flowchart. Extracted verbatim from
+ * DependencyBuilder so public behavior is unchanged.
+ *
+ * @param allDeps - Combined blocking and blocked-by dependencies.
+ * @param currentThreadId - Thread the builder was opened for.
+ * @returns Edges, virtual issue nodes, and related thread IDs.
+ */
+export function buildFlowchartGraph(
+  allDeps: Dependency[],
   currentThreadId: number,
-): Set<number> {
-  const relatedIds = new Set<number>([currentThreadId])
-  
+): FlowchartGraph {
+  const relatedThreadIds = new Set([currentThreadId])
+
+  // Thread-level deps map directly to FlowchartDependency
+  const threadDeps: FlowchartDependency[] = allDeps.flatMap((dep) =>
+    dep.source_thread_id != null && dep.target_thread_id != null && !dep.is_issue_level
+      ? [{
+          id: String(dep.id),
+          source_id: dep.source_thread_id,
+          target_id: dep.target_thread_id,
+          created_at: dep.created_at,
+        }]
+      : [],
+  )
+
+  // Collect related thread IDs from thread-level deps
   for (const dep of threadDeps) {
-    relatedIds.add(dep.source_id)
-    relatedIds.add(dep.target_id)
+    relatedThreadIds.add(dep.source_id)
+    relatedThreadIds.add(dep.target_id)
   }
-  
-  for (const edge of issueEdges) {
-    if (edge.source_parent_thread_id != null) {
-      relatedIds.add(edge.source_parent_thread_id)
-    }
-    if (edge.target_parent_thread_id != null) {
-      relatedIds.add(edge.target_parent_thread_id)
-    }
-  }
-  
-  return relatedIds
-}
 
-export function adaptThreadForFlowchart(
-  thread: Thread,
-): Thread {
+  // Issue-level deps → issue nodes + direct edges between them
+  const issueOnlyDeps = allDeps.filter(
+    (dep) => dep.source_issue_id != null && dep.target_issue_id != null,
+  )
+  const issueNodeMap = new Map<number, FlowchartNode>()
+  const issueEdges: FlowchartDependency[] = []
+
+  for (const d of issueOnlyDeps) {
+    if (!d.source_issue_thread_id || !d.target_issue_thread_id) continue
+
+    // Use negative issue ID to avoid thread ID collisions
+    const srcNodeId = -d.source_issue_id!
+    if (!issueNodeMap.has(srcNodeId)) {
+      issueNodeMap.set(srcNodeId, {
+        id: srcNodeId,
+        title: d.source_label ?? `Issue #${d.source_issue_id}`,
+        x: 0, y: 0,
+        isBlocked: false,
+        isIssueNode: true,
+        parentThreadId: d.source_issue_thread_id,
+      })
+    }
+
+    const tgtNodeId = -d.target_issue_id!
+    if (!issueNodeMap.has(tgtNodeId)) {
+      issueNodeMap.set(tgtNodeId, {
+        id: tgtNodeId,
+        title: d.target_label ?? `Issue #${d.target_issue_id}`,
+        x: 0, y: 0,
+        isBlocked: false,
+        isIssueNode: true,
+        parentThreadId: d.target_issue_thread_id,
+      })
+    }
+
+    issueEdges.push({
+      id: d.id,
+      source_id: srcNodeId,
+      target_id: tgtNodeId,
+      is_issue_level: true,
+      source_parent_thread_id: d.source_issue_thread_id,
+      target_parent_thread_id: d.target_issue_thread_id,
+      created_at: d.created_at,
+    })
+
+    // Ensure parent threads are loaded for context
+    relatedThreadIds.add(d.source_issue_thread_id)
+    relatedThreadIds.add(d.target_issue_thread_id)
+  }
+
   return {
-    ...thread,
-    total_issues: thread.total_issues ?? 0,
+    edges: [...threadDeps, ...issueEdges],
+    issueNodes: Array.from(issueNodeMap.values()),
+    relatedThreadIds,
   }
-}
-
-export function mapThreadIdsToNodes(
-  threads: Thread[],
-  blockedIds: Set<number>,
-): Map<number, Thread> {
-  return new Map(threads.map((t) => [t.id, t]))
-}
-
-export function filterThreadsByIds(
-  threads: Thread[],
-  ids: Set<number>,
-): Thread[] {
-  return threads.filter((t) => ids.has(t.id))
-}
-
-export function adaptThreadDependenciesForFlowchart(
-  depsData: ThreadDependenciesData,
-  blockedIds: number[],
-): {
-  threadDeps: FlowchartDependency[]
-  issueEdges: FlowchartDependency[]
-  allBlockedIds: Set<number>
-} {
-  const allBlockedIds = new Set(blockedIds)
-  const threadDeps = buildFlowchartEdgesFromDependencies([...depsData.blocking, ...depsData.blocked_by])
-  const issueEdges = buildFlowchartEdgesFromIssueDependencies([...depsData.blocking, ...depsData.blocked_by])
-  
-  return { threadDeps, issueEdges, allBlockedIds }
 }
