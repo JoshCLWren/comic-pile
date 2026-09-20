@@ -178,6 +178,16 @@ describe('QueueControls', () => {
     expect(active.className).toContain('amber')
   })
 
+  it('centers the desktop Add Series label horizontally and vertically', () => {
+    render(<QueueControls {...baseProps} />)
+
+    const desktopAdd = screen.getByTestId('queue-add-thread-desktop')
+    expect(desktopAdd).toHaveTextContent('Add Series')
+    for (const utility of ['flex', 'items-center', 'justify-center']) {
+      expect(desktopAdd.className).toContain(utility)
+    }
+  })
+
   it('invokes shuffle, create, and sort callbacks', async () => {
     const user = userEvent.setup()
     render(<QueueControls {...baseProps} />)
