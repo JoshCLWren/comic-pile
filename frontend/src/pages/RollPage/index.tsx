@@ -14,6 +14,8 @@ import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { useSkip, useUnskip } from '../../hooks/useSkip'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../../hooks/useQueue'
 import { useTasteDiscoveries } from '../../hooks/useTasteDiscoveries'
+import { useAnalytics } from '../../hooks/useAnalytics'
+import { selectCorrectionExamples } from '../../utils/correctionExamples'
 import { useRate } from '../../hooks'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
@@ -134,6 +136,30 @@ export default function RollPage() {
   })
 
   const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
+
+  /**
+   * Personalized correction-sheet examples, derived from already-loaded data:
+   * the Roll bootstrap pool (the user's own queue history) plus the single
+   * bounded analytics overview response (the user's own rating signal, shared
+   * cache key with the Analytics page). No per-option requests. When the
+   * analytics response is unavailable the selector input is empty and the
+   * sheet degrades to descriptive copy.
+   */
+  const analytics = useAnalytics()
+  const correctionExamples = useMemo(
+    () =>
+      selectCorrectionExamples({
+        rated: (analytics.data?.top_rated_threads ?? []).map((thread) => ({
+          title: thread.title,
+          rating: thread.rating,
+          format: thread.format,
+        })),
+        history: rollPool.map((thread) => ({ title: thread.title, format: thread.format })),
+        activeTitle: bootstrap?.active_thread?.title ?? null,
+        activeFormat: bootstrap?.active_thread?.format ?? null,
+      }),
+    [analytics.data, rollPool, bootstrap],
+  )
 
   useRollPendingSession({ state, bootstrap, rollPool })
 
@@ -509,6 +535,7 @@ export default function RollPage() {
           onSubmit={handleCorrectionSubmit}
           onOpenQuiz={handleOpenQuiz}
           quizEnabled={FEATURES.readingModeQuiz}
+          examples={correctionExamples}
         />
       </div>
     </div>

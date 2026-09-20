@@ -9,6 +9,9 @@ export type CorrectionChoiceId =
   | 'something_different'
   | 'pure_random'
 
+/** Example display title per choice. Absent key = descriptive copy only. */
+export type CorrectionExamples = Partial<Record<CorrectionChoiceId, string>>
+
 interface CorrectionSheetProps {
   isOpen: boolean
   onClose: () => void
@@ -17,20 +20,61 @@ interface CorrectionSheetProps {
   onOpenQuiz?: () => void
   /** Whether the reading-mode quiz is surfaced in this build (issue #1945 gate). */
   quizEnabled?: boolean
+  /**
+   * Personalized example titles drawn from the signed-in user's own
+   * rated/read history. Explanatory only: selection still uses the canonical
+   * patch below. Missing keys render descriptive copy with no invented
+   * example. A `pure_random` entry is ignored because that choice explicitly
+   * ignores steering preferences.
+   */
+  examples?: CorrectionExamples
 }
 
 interface CorrectionChoice {
   id: CorrectionChoiceId
   label: string
+  description: string
+  /** `{example}` slot filled from `examples`; null renders no example line. */
+  exampleTemplate: string | null
   patch: SessionModeUpdateRequest
 }
 
 const CHOICES: CorrectionChoice[] = [
-  { id: 'even_easier', label: 'Even easier', patch: { bandwidth: 'light' } },
-  { id: 'keep_level_different', label: 'Keep this level, different comic', patch: { intent: 'balanced' } },
-  { id: 'something_familiar', label: 'Something familiar', patch: { intent: 'familiar' } },
-  { id: 'something_different', label: 'Something different', patch: { intent: 'explore' } },
-  { id: 'pure_random', label: 'Pure random', patch: { intent: 'random' } },
+  {
+    id: 'even_easier',
+    label: 'Give me something lighter',
+    description: 'Favor a lower-commitment, easier read for the next roll.',
+    exampleTemplate: 'Think more like {example}, a lighter read.',
+    patch: { bandwidth: 'light' },
+  },
+  {
+    id: 'keep_level_different',
+    label: 'Keep about the same effort',
+    description: 'Keep the same reading commitment, but pick a different comic.',
+    exampleTemplate: 'Think another read at the same commitment, like {example}.',
+    patch: { intent: 'balanced' },
+  },
+  {
+    id: 'something_familiar',
+    label: 'Stay close to what I’ve liked',
+    description: 'Favor something similar to comics you’ve rated well.',
+    exampleTemplate: 'Based on your ratings, think more {example} territory.',
+    patch: { intent: 'familiar' },
+  },
+  {
+    id: 'something_different',
+    label: 'Give me a change of pace',
+    description: 'Favor something meaningfully different from your recent favorites.',
+    exampleTemplate: 'Think less familiar territory, more like {example}.',
+    patch: { intent: 'explore' },
+  },
+  {
+    id: 'pure_random',
+    label: 'Surprise me',
+    description: 'Don’t steer by your past ratings or reading effort for this reroll.',
+    exampleTemplate: null,
+    patch: { intent: 'random' },
+  },
 ]
 
 /**
@@ -40,6 +84,12 @@ const CHOICES: CorrectionChoice[] = [
  * contradictory snoozes). Each choice maps to a predictable bandwidth/intent
  * patch submitted through the canonical session-mode API. Dismissing the sheet
  * leaves the current backend mode intact — no API call fires on dismiss.
+ *
+ * Copy answers one user question ("What should change about the next roll?")
+ * in plain language with no recommendation-model vocabulary. Optional
+ * per-choice examples come from the caller's already-loaded rated/read
+ * history via the `examples` prop; the sheet itself issues no network
+ * requests, so there is no per-option request pattern.
  *
  * Because this surface only appears when a one-tap correction may be
  * insufficient, it also offers the two-question quiz as a non-forced
@@ -52,6 +102,7 @@ export default function CorrectionSheet({
   onSubmit,
   onOpenQuiz,
   quizEnabled = false,
+  examples,
 }: CorrectionSheetProps) {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -81,7 +132,10 @@ export default function CorrectionSheet({
   if (!isOpen) return null
 
   return (
-    <Modal isOpen title="Not the vibe?" onClose={onClose} data-testid="correction-sheet">
+    <Modal isOpen title="Not feeling it?" onClose={onClose} data-testid="correction-sheet">
+      <p className="mb-3 text-sm text-[var(--theme-text-muted)]">
+        What should change about the next roll?
+      </p>
       {submitError && (
         <p role="alert" className="text-sm text-[var(--theme-danger)]" data-testid="correction-sheet-error">
           {submitError}
@@ -89,19 +143,34 @@ export default function CorrectionSheet({
       )}
 
       <fieldset className="space-y-3">
-        <legend className="sr-only">Pick a reading-mode correction</legend>
-        {CHOICES.map((choice) => (
-          <button
-            key={choice.id}
-            type="button"
-            data-testid={`correction-choice-${choice.id}`}
-            disabled={submitting}
-            onClick={() => handleChoice(choice)}
-            className="w-full text-left rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 py-3 text-[var(--theme-text-primary)] text-sm transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
-          >
-            {choice.label}
-          </button>
-        ))}
+        <legend className="sr-only">Pick what should change about the next roll</legend>
+        {CHOICES.map((choice) => {
+          // Surprise-me never shows an example: it explicitly ignores
+          // steering preferences, so any example would imply a false signal.
+          const example =
+            choice.id === 'pure_random' ? undefined : examples?.[choice.id]?.trim() || undefined
+          return (
+            <button
+              key={choice.id}
+              type="button"
+              data-testid={`correction-choice-${choice.id}`}
+              disabled={submitting}
+              onClick={() => handleChoice(choice)}
+              className="w-full text-left rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 py-3 text-[var(--theme-text-primary)] text-sm transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
+            >
+              <span className="font-black">{choice.label}</span>
+              <span className="block mt-0.5 font-normal">{choice.description}</span>
+              {choice.exampleTemplate && example && (
+                <span
+                  className="block mt-0.5 text-xs font-normal text-[var(--theme-text-muted)]"
+                  data-testid={`correction-example-${choice.id}`}
+                >
+                  {choice.exampleTemplate.replace('{example}', example)}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </fieldset>
 
       <div className="mt-4 pt-3 border-t border-[var(--theme-border)]">
