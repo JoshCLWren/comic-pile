@@ -271,6 +271,7 @@ export default function RollPage() {
   )
   const pool = filteredThreads.slice(0, dieSize)
   const displayDie = isDiceSide(state.currentDie) ? state.currentDie : 6
+  const hasRollableContent = pool.length > 0 || blockedThreads.length > 0 || snoozedThreads.length > 0
  
   if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
     return (
@@ -334,7 +335,7 @@ export default function RollPage() {
         <div className="flex-1 flex flex-col relative md:glass-card md:rounded-xl">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 md:w-80 md:h-80 bg-amber-900/15 rounded-full blur-[100px] md:blur-[120px] pointer-events-none"></div>
           <div className="flex-1 flex flex-col">
-            {!state.isRatingView ? (
+            {!state.isRatingView && hasRollableContent ? (
               <>
                 <div
                   id="main-die-3d"
@@ -365,6 +366,8 @@ export default function RollPage() {
                   onRoll={actions.handleRoll}
                 />
               </>
+            ) : !state.isRatingView ? (
+              <div aria-hidden="true" className="h-[200px] w-[200px] mx-auto mt-4 md:mt-8" />
             ) : (
               <RatingView
                 activeRatingThread={state.activeRatingThread}
