@@ -1,7 +1,7 @@
 import { useReaderContext } from '../../hooks/useReaderContext'
 import { computePredictedDie } from './utils'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
-import type { RatingThread } from './types'
+import type { RatingThread, ThreadMetadata } from './types'
 import type { ReaderContextResponse } from '../../types'
 
 interface UseRatingViewParams {
@@ -12,7 +12,7 @@ interface UseRatingViewParams {
     handleSubmitRating: (finishSession: boolean) => Promise<void>
     handleCancelRating: () => Promise<void>
     handleRefreshThread: () => Promise<void>
-    enterRatingView: (threadId: number | null, result?: number | null, threadMetadata?: any) => Promise<void>
+    enterRatingView: (threadId: number | null, result?: number | null, threadMetadata?: ThreadMetadata | null) => Promise<void>
   }
   snooze: { handleSnooze: () => Promise<void> }
   onSkip: () => Promise<void>

@@ -1,4 +1,3 @@
-import { type Ref } from 'react'
 import type { RatingThread } from '../types'
 import { ComicPillar } from './ComicPillar'
 import { YourContextPillar } from './YourContextPillar'

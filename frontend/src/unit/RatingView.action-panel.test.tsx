@@ -45,7 +45,7 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     issue_number: '3',
     next_issue_number: '4',
     reading_progress: 'in_progress',
-        queue_position: 0,
+    queue_position: 0,
     issue_id: 100,
     next_issue_id: 101,
   }
