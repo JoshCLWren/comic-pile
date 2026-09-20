@@ -9,6 +9,7 @@ from comic_pile.snooze_backoff import (
     compute_backoff_sessions,
     fibonacci,
     generate_sequence,
+    is_eligible,
 )
 
 EXPECTED_SEQUENCE = [1, 1, 2, 2, 3, 3, 5, 5, 8, 8, 13, 13]
@@ -68,3 +69,36 @@ def test_generate_sequence_is_deterministic() -> None:
 def test_generate_sequence_empty_limit() -> None:
     """A zero limit yields an empty sequence."""
     assert generate_sequence(0) == []
+
+
+def test_is_eligible_boundary_equals_required_backoff() -> None:
+    """A thread becomes eligible exactly when later sessions reach backoff."""
+    assert is_eligible(0, 0) is True
+    assert is_eligible(1, 0) is False
+    assert is_eligible(1, 1) is True
+    assert is_eligible(2, 0) is False
+    assert is_eligible(2, 1) is True
+    assert is_eligible(3, 1) is False
+    assert is_eligible(3, 2) is True
+    assert is_eligible(10, 8) is False
+    assert is_eligible(10, 13) is True
+    assert is_eligible(12, 12) is False
+    assert is_eligible(12, 13) is True
+
+
+def test_is_eligible_matches_issue_session_examples() -> None:
+    """Issue calibration examples map to the eligibility boundaries."""
+    # Each entry is (snooze_count, later_sessions, expected_eligibility).
+    cases = [
+        (1, 0, False),
+        (1, 1, True),
+        (2, 1, True),
+        (3, 1, False),
+        (3, 2, True),
+        (7, 4, False),
+        (7, 5, True),
+        (11, 12, False),
+        (11, 13, True),
+    ]
+    for snooze_count, later_sessions, expected in cases:
+        assert is_eligible(snooze_count, later_sessions) is expected

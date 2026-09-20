@@ -43,6 +43,29 @@ from comic_pile.snooze_backoff import is_eligible
 logger = logging.getLogger(__name__)
 
 
+def _after_reset(
+    last_activity_at: datetime | None,
+    event_type: str | None,
+    event_timestamp: datetime | None,
+) -> bool:
+    """Return whether an event counts toward the current snooze streak.
+
+    Args:
+        last_activity_at: The thread's read/reset boundary, or ``None`` when
+            the thread was never successfully read.
+        event_type: The event's type.
+        event_timestamp: The event's timestamp.
+
+    Returns:
+        True when the event occurred after the reset boundary.
+    """
+    return (
+        event_type is not None
+        and event_timestamp is not None
+        and (last_activity_at is None or event_timestamp > last_activity_at)
+    )
+
+
 async def derive_cross_session_excluded_thread_ids(
     db: AsyncSession, user_id: int
 ) -> set[int]:
@@ -85,17 +108,11 @@ async def derive_cross_session_excluded_thread_ids(
     for thread_id, thread_rows in grouped.items():
         last_activity_at = thread_rows[0][0]
 
-        def after_reset(event_type: str | None, event_timestamp: datetime | None) -> bool:
-            return (
-                event_type is not None
-                and event_timestamp is not None
-                and (last_activity_at is None or event_timestamp > last_activity_at)
-            )
-
         snoozes = [
             event_timestamp
             for _activity, event_type, event_timestamp, _event_id in thread_rows
-            if event_type == "snooze" and after_reset(event_type, event_timestamp)
+            if event_type == "snooze"
+            and _after_reset(last_activity_at, event_type, event_timestamp)
         ]
         if not snoozes:
             continue
@@ -103,7 +120,8 @@ async def derive_cross_session_excluded_thread_ids(
         unsnoozes = [
             event_timestamp
             for _activity, event_type, event_timestamp, _event_id in thread_rows
-            if event_type == "unsnooze" and after_reset(event_type, event_timestamp)
+            if event_type == "unsnooze"
+            and _after_reset(last_activity_at, event_type, event_timestamp)
         ]
 
         latest_snooze = max(snoozes)
