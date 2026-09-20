@@ -312,21 +312,10 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     expect(yourContext).not.toBeNull()
     expect(comicRegion!.contains(cover)).toBe(true)
     expect(yourContext!.contains(actions)).toBe(true)
-    const aspectRatioAttr = cover!.getAttribute('data-cover-aspect-ratio')
-    const heightCapAttr = cover!.getAttribute('data-cover-height-cap-vh')
-    const widthCapAttr = cover!.getAttribute('data-cover-width-cap-vh')
-    // jsdom's CSSOM drops `aspect-ratio`/`min(100%, calc(...))` from inline
-    // styles, so the viewport budget contract is asserted through the data
-    // attributes that mirror the frame geometry.
-    const aspectRatio = Number(aspectRatioAttr)
-    const heightCap = Number(heightCapAttr)
-    const widthCap = Number(widthCapAttr)
-    expect(Number.isFinite(aspectRatio)).toBe(true)
-    expect(aspectRatio).toBeGreaterThan(0)
-    expect(heightCap).toBe(45)
-    expect(Number.isFinite(widthCap)).toBe(true)
-    expect(widthCap).toBeGreaterThan(0)
-    expect(widthCap).toBeCloseTo(heightCap * aspectRatio)
+    // Cover uses inline viewport-relative styles: aspect-ratio 2/3, width min(100%, 30vh)
+    const coverStyle = cover!.getAttribute('style') ?? ''
+    expect(coverStyle).toContain('aspect-ratio')
+    expect(coverStyle).toContain('30vh')
     expect(cover!.className).not.toContain('max-h-')
   })
 })

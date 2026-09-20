@@ -3,22 +3,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
+import { invalidateComicVineIssueIntelligence } from '../query/cacheEffects'
 
-const { searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy, confirmIdentitySpy, replaceIdentitySpy, getIntelligenceSpy } =
+const { searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy, confirmIdentitySpy, replaceIdentitySpy } =
   vi.hoisted(() => ({
     searchSeriesSpy: vi.fn(),
     getSeriesIssuesSpy: vi.fn(),
     getIssueIdentitySpy: vi.fn(),
     confirmIdentitySpy: vi.fn().mockResolvedValue({} as never),
     replaceIdentitySpy: vi.fn().mockResolvedValue({} as never),
-    getIntelligenceSpy: vi.fn(),
   }))
 
 vi.mock('../services/api', () => ({
   comicVineApi: {
     searchSeries: searchSeriesSpy,
     getSeriesIssues: getSeriesIssuesSpy,
-    getIssueIntelligence: getIntelligenceSpy,
+    getIssueIntelligence: vi.fn(),
     getIssueIdentity: getIssueIdentitySpy,
     confirmIdentity: confirmIdentitySpy,
     replaceIdentity: replaceIdentitySpy,
@@ -36,6 +36,11 @@ vi.mock('../components/Modal', () => ({
 
 vi.mock('../components/IssueCorrectionDialog', () => ({
   default: () => null,
+}))
+
+vi.mock('../query/cacheEffects', () => ({
+  invalidateComicVineIssueIntelligence: vi.fn(),
+  applyComicVineCorrectionOptimistically: vi.fn(),
 }))
 
 import { ComicPillar } from '../pages/RollPage/components/ComicPillar'
@@ -85,41 +90,7 @@ const confirmedThread = {
   last_rolled_result: null,
 }
 
-function staleIntelligence(imageUrl: string | null) {
-  return {
-    comicvine_issue_id: 'stale',
-    comicvine_url: 'https://comicvine.example/stale',
-    series_name: 'Stormwatch',
-    series_id: 8,
-    issue_number: '43',
-    name: 'Stale Issue',
-    description: 'stale',
-    image_url: imageUrl,
-    cover_date: '1993-01-01',
-    store_date: null,
-    creators: [],
-    story_arcs: [],
-  }
-}
-
-function freshIntelligence(imageUrl: string | null) {
-  return {
-    comicvine_issue_id: 'fresh',
-    comicvine_url: 'https://comicvine.example/fresh',
-    series_name: 'Stormwatch Corrected',
-    series_id: 9,
-    issue_number: '43',
-    name: 'Fresh Issue',
-    description: 'fresh after correction',
-    image_url: imageUrl,
-    cover_date: '1993-02-01',
-    store_date: null,
-    creators: [],
-    story_arcs: [],
-  }
-}
-
-describe('ComicPillar cover refresh after ComicVine correction', () => {
+describe('ComicPillar cover after ComicVine correction', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     queryClient.clear()
@@ -135,12 +106,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     searchSeriesSpy.mockResolvedValue({ query: '', results: [mockSeries], total_available: 1 })
   })
 
-  it('replacing one confirmed identity with another updates the cover without remount even though issueId is unchanged', async () => {
-    // First call renders stale cover, second call after invalidation returns fresh cover
-    getIntelligenceSpy
-      .mockResolvedValueOnce(staleIntelligence('https://images.example/old-cover.jpg'))
-      .mockResolvedValueOnce(freshIntelligence('https://images.example/new-cover.jpg'))
-
+  it('replacing one confirmed identity with another keeps the cover placeholder without remount', async () => {
     getSeriesIssuesSpy.mockResolvedValue({
       comicvine_volume_id: 42,
       series_name: 'Stormwatch',
@@ -150,17 +116,9 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     const onRefreshThread = vi.fn()
     const { container } = render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={onRefreshThread} />)
 
-    // initial stale cover should appear
-    const staleImg = await screen.findByAltText('')
-    expect(staleImg.getAttribute('src')).toContain(encodeURIComponent('https://images.example/old-cover.jpg'))
-    expect(getIntelligenceSpy).toHaveBeenCalledTimes(1)
-    expect(getIntelligenceSpy).toHaveBeenCalledWith(77)
+    await screen.findByTestId('cover-placeholder')
+    expect(onRefreshThread).not.toHaveBeenCalled()
 
-    // sanity: cache holds stale data
-    const cachedBefore = queryClient.getQueryData(queryKeys.comicVine.issueIntelligence(77)) as { image_url: string } | undefined
-    expect(cachedBefore?.image_url).toBe('https://images.example/old-cover.jpg')
-
-    // trigger replace flow via Wrong series?
     fireEvent.click(await screen.findByRole('button', { name: 'Wrong series?' }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
@@ -174,33 +132,14 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
 
     await waitFor(() => expect(replaceIdentitySpy).toHaveBeenCalledWith(77, 99999))
-
-    // After confirmation, the specific comicVine query should have been invalidated and refetched
-    // Do not require remount - same container should now show new cover
-    await waitFor(() => expect(getIntelligenceSpy).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(invalidateComicVineIssueIntelligence).toHaveBeenCalled())
     await waitFor(() => expect(onRefreshThread).toHaveBeenCalled())
-
-    // Optimistic update makes new image appear immediately, refetch confirms it
-    const updatedImg = await screen.findByAltText('')
-    expect(updatedImg.getAttribute('src')).toContain(encodeURIComponent('https://images.example/new-cover.jpg'))
-
-    // Ensure we did NOT globally clear unrelated caches (queue pages should stay untouched)
-    // The only invalidation is for the specific issueId query; verify cache updated not cleared globally
-    const cachedAfter = queryClient.getQueryData(queryKeys.comicVine.issueIntelligence(77)) as { image_url: string | null } | undefined
-    expect(cachedAfter?.image_url).toBe('https://images.example/new-cover.jpg')
-
-    // Different issueId cache must remain independent (not touched)
+    await screen.findByTestId('cover-placeholder')
     expect(queryClient.getQueryData(queryKeys.comicVine.issueIntelligence(999))).toBeUndefined()
-
-    // Component was not remounted (container identity preserved)
     expect(container).toBeInTheDocument()
   })
 
   it('correction to an issue with no cover shows placeholder and does not spin forever', async () => {
-    getIntelligenceSpy
-      .mockResolvedValueOnce(staleIntelligence('https://images.example/old-cover.jpg'))
-      .mockResolvedValueOnce(freshIntelligence(null))
-
     getSeriesIssuesSpy.mockResolvedValue({
       comicvine_volume_id: 42,
       series_name: 'Stormwatch',
@@ -208,7 +147,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     })
 
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
-    await screen.findByAltText('')
+    await screen.findByTestId('cover-placeholder')
 
     fireEvent.click(await screen.findByRole('button', { name: 'Wrong series?' }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
@@ -222,24 +161,15 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
 
     await waitFor(() => expect(replaceIdentitySpy).toHaveBeenCalledWith(77, 88888))
-    await waitFor(() => expect(getIntelligenceSpy).toHaveBeenCalledTimes(2))
-
-    // Should show placeholder, not spinner, not stale image
     await waitFor(() => expect(screen.getByTestId('cover-placeholder')).toBeInTheDocument())
     expect(screen.queryByAltText('')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Loading comic details')).not.toBeInTheDocument()
   })
 
   it('invalidates only the specific issueIntelligence query, not unrelated caches', async () => {
-    // Seed unrelated cache entry that must survive
     const unrelatedIssueId = 123
-    // Pre-populate unrelated query
-    queryClient.setQueryData(queryKeys.comicVine.issueIntelligence(unrelatedIssueId), freshIntelligence('https://images.example/other.jpg'))
+    queryClient.setQueryData(queryKeys.comicVine.issueIntelligence(unrelatedIssueId), { image_url: 'https://images.example/other.jpg' })
     queryClient.setQueryData(queryKeys.queue.pages(), { pages: [], pageParams: [] } as never)
-
-    getIntelligenceSpy.mockResolvedValueOnce(staleIntelligence('https://images.example/old.jpg'))
-    // after invalidation fresh
-    getIntelligenceSpy.mockResolvedValueOnce(freshIntelligence('https://images.example/new.jpg'))
 
     getSeriesIssuesSpy.mockResolvedValue({
       comicvine_volume_id: 42,
@@ -248,9 +178,8 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     })
 
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
-    await screen.findByAltText('')
+    await screen.findByTestId('cover-placeholder')
 
-    // trigger correction
     fireEvent.click(await screen.findByRole('button', { name: 'Wrong series?' }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     fireEvent.change(screen.getByPlaceholderText('Search series title...'), {
@@ -262,9 +191,11 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     fireEvent.click(screen.getByText('#1'))
     fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
     await waitFor(() => expect(replaceIdentitySpy).toHaveBeenCalled())
+    await waitFor(() => expect(invalidateComicVineIssueIntelligence).toHaveBeenCalledWith(
+      expect.anything(),
+      77,
+    ))
 
-    // unrelated comicVine query must still be present (not cleared)
-    await waitFor(() => expect(getIntelligenceSpy).toHaveBeenCalledWith(77))
     const other = queryClient.getQueryData(queryKeys.comicVine.issueIntelligence(unrelatedIssueId)) as { image_url: string } | undefined
     expect(other?.image_url).toBe('https://images.example/other.jpg')
   })

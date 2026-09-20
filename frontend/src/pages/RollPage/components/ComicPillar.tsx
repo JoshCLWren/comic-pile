@@ -13,7 +13,6 @@ import {
 interface ConsolidatedComicCardProps {
   activeRatingThread: RatingThread | null
   identityState: IssueIdentityResponse | null
-  onRefreshThread: () => void
   onFixIssueNumber: () => void
   onWrongSeries: () => void
   onFindComicVineMatch: () => void
@@ -22,12 +21,10 @@ interface ConsolidatedComicCardProps {
 function ConsolidatedComicCard({
   activeRatingThread,
   identityState,
-  onRefreshThread,
   onFixIssueNumber,
   onWrongSeries,
   onFindComicVineMatch,
 }: ConsolidatedComicCardProps) {
-  const threadTitle = activeRatingThread?.title ?? 'Loading…'
   const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
   const totalIssues = activeRatingThread?.total_issues ?? null
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
@@ -60,8 +57,7 @@ function ConsolidatedComicCard({
               border: '1px solid var(--theme-border)'
             }}
           >
-            {/* Placeholder for cover image - will be replaced with actual image */}
-            <div className="w-full h-full flex items-center justify-center text-stone-600" aria-hidden="true">
+            <div data-testid="cover-placeholder" className="w-full h-full flex items-center justify-center text-stone-600" aria-hidden="true">
               <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 002 2v12z" />
               </svg>
@@ -70,14 +66,31 @@ function ConsolidatedComicCard({
 
           {/* Comic identity and progress */}
           <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-comic-accent)' }}>
-                {threadTitle}{issueNumber != null ? ` #${issueNumber}` : ''}
-              </p>
-              {activeRatingThread?.title && (
-                <h2 id="comic-identity-heading" className="text-xl font-bold text-stone-100 leading-tight">
-                  {activeRatingThread.title}
+            <div className="flex flex-wrap items-start justify-between gap-3" data-testid="comic-header-row">
+              <div className="min-w-[12rem] flex-1 basis-48 break-words" data-testid="comic-header-title">
+                <h2 id="comic-identity-heading" className="mt-1 text-xl font-black leading-tight text-stone-100 break-words">
+                  {activeRatingThread?.title}
+                  {issueNumber != null && (
+                    <span style={{ color: 'var(--theme-comic-accent)' }}> #{issueNumber}</span>
+                  )}
                 </h2>
+              </div>
+              {issueNumber != null && (
+                <div className="flex shrink-0 flex-wrap gap-1.5" data-testid="comic-header-controls">
+                  <button
+                    type="button"
+                    onClick={onFixIssueNumber}
+                    disabled={!activeRatingThread?.id}
+                    className="min-h-11 rounded-xl px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
+                    style={{
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      backgroundColor: 'rgba(255,255,255,0.05)',
+                    }}
+                    aria-label="Fix issue number"
+                  >
+                    Fix issue #
+                  </button>
+                </div>
               )}
             </div>
 
@@ -97,24 +110,13 @@ function ConsolidatedComicCard({
             </div>
           </div>
 
+          {/* ComicVine linked status */}
+          {identityState?.has_confirmed_identity && (
+            <p className="text-[10px] text-stone-500 font-bold">ComicVine linked</p>
+          )}
+
           {/* Correction controls in subordinate location */}
           <div className="flex flex-wrap gap-2 pt-2 border-t border-white/10">
-            {issueNumber != null && (
-              <button
-                type="button"
-                onClick={onFixIssueNumber}
-                disabled={!activeRatingThread?.id}
-                className="min-h-9 rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
-                style={{
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  backgroundColor: 'rgba(255,255,255,0.05)',
-                }}
-                aria-label="Fix issue number"
-              >
-                Fix issue #
-              </button>
-            )}
-            
             {identityState?.has_confirmed_identity && (
               <button
                 type="button"
@@ -229,7 +231,6 @@ export function ComicPillar({
       <ConsolidatedComicCard
         activeRatingThread={activeRatingThread}
         identityState={identityState}
-        onRefreshThread={onRefreshThread}
         onFixIssueNumber={handleFixIssueNumber}
         onWrongSeries={handleWrongSeries}
         onFindComicVineMatch={handleFindComicVineMatch}
