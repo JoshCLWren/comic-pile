@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -68,8 +68,9 @@ class ReadingPlanIssue(Base):
     source_metadata_json: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (
-        ForeignKey(
-            "reading_plan_lanes.plan_id, reading_plan_lanes.lane_id",
+        ForeignKeyConstraint(
+            ["plan_id", "lane_id"],
+            ["reading_plan_lanes.plan_id", "reading_plan_lanes.lane_id"],
             name="fk_reading_plan_issue_lane",
             ondelete="CASCADE",
         ),
@@ -175,13 +176,15 @@ class ReadingPlanSourcePlacement(Base):
     source_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
-        ForeignKey(
-            "reading_plan_issues.plan_id, reading_plan_issues.occurrence_id",
+        ForeignKeyConstraint(
+            ["plan_id", "occurrence_id"],
+            ["reading_plan_issues.plan_id", "reading_plan_issues.occurrence_id"],
             name="fk_reading_plan_source_placement_occurrence",
             ondelete="CASCADE",
         ),
-        ForeignKey(
-            "reading_plan_sources.plan_id, reading_plan_sources.id",
+        ForeignKeyConstraint(
+            ["source_id"],
+            ["reading_plan_sources.id"],
             name="fk_reading_plan_source_placement_source",
             ondelete="CASCADE",
         ),
