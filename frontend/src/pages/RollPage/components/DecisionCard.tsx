@@ -105,6 +105,12 @@ export function DecisionCard({
         )}
       </div>
 
+      {copyStatus === 'failed' ? (
+        <p role="status" className="text-[10px] font-bold text-rose-400">
+          Copy failed. Use Retry to try again.
+        </p>
+      ) : null}
+
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0 flex-1">
           <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the series to the front of the queue and step the die down. Lower ratings move it past the next roll range and step the die up.`}>

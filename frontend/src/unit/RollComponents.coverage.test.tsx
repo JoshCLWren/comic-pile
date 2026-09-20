@@ -265,6 +265,6 @@ describe('RatingView', () => {
     // Middle column removed: grid is now 2 columns without reading-optional region
     expect(screen.getByTestId('rating-pillars-grid').className).not.toContain('xl:grid-cols-[repeat(auto-fit')
     expect(screen.getByTestId('rating-region-comic')).toBeInTheDocument()
-    expect(screen.getByTestId('rating-region-your-context')).toBeInTheDocument()
+    expect(screen.getByTestId('rating-region-decision')).toBeInTheDocument()
   })
 })

@@ -49,8 +49,6 @@ export function RatingView({
   isReaderContextLoading = false,
   ratingViewTopRef = null,
 }: RatingViewProps) {
-  const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
-
   return (
     <div ref={ratingViewTopRef} data-testid="rating-view-top" className="relative z-10 space-y-4 p-3 md:p-4">
       <div

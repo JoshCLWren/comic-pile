@@ -57,6 +57,24 @@ interface RatingViewOverride {
   // SAFETY: legacy stray override key only read by tests; the component reads issues_remaining from activeRatingThread.
   issues_remaining?: number
 }
+
+const populatedReaderContext: ReaderContextResponse = {
+  issue_id: 100,
+  series: {
+    identity_source: 'comicvine',
+    canonical_series_id: 's1',
+    series_name: 'Saga',
+    average_rating: 4,
+    ratings_count: 1,
+    previous_issue: null,
+    recent_ratings: [],
+    highest_rating: 5,
+    lowest_rating: 1,
+  },
+  crossovers: [],
+  local_chain: { issues: [], edges: [] },
+}
+
 function ratingView(overrides: RatingViewOverride = {}) {
   const defaults = {
     activeRatingThread: {
@@ -299,7 +317,7 @@ describe('RatingView desktop layout contract (#2711 revises #1943)', () => {
   })
 
   it('stacks the decision card and context disclosure in the decision region', () => {
-    const { container } = render(ratingView())
+    const { container } = render(ratingView({ readerContext: populatedReaderContext }))
     const decisionRegion = container.querySelector<HTMLElement>('[data-testid="rating-region-decision"]')
     const decisionCard = container.querySelector<HTMLElement>('[data-testid="decision-card"]')
     const contextDisclosure = container.querySelector<HTMLElement>('[data-testid="context-disclosure"]')
