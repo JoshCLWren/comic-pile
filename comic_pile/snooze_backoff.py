@@ -10,8 +10,6 @@ This module is deliberately free of FastAPI, SQLAlchemy, or database
 dependencies so it can be unit-tested in isolation.
 """
 
-import math
-
 
 def fibonacci(n: int) -> int:
     """Return the nth Fibonacci number (1-indexed, F1=1, F2=1).
@@ -44,7 +42,9 @@ def compute_backoff_sessions(snooze_count: int) -> int:
     Returns:
         The required number of later user sessions before the thread becomes eligible.
     """
-    pair = math.ceil(snooze_count / 2)
+    if snooze_count <= 0:
+        return 0
+    pair = (snooze_count + 1) // 2
     return fibonacci(pair + 1)
 
 
