@@ -71,6 +71,11 @@ def _patch_bootstrap(monkeypatch, current_session):
         "get_current_die_for_session",
         AsyncMock(return_value=6),
     )
+    monkeypatch.setattr(
+        roll_api,
+        "derive_cross_session_excluded_thread_ids",
+        AsyncMock(return_value=set()),
+    )
 
     db = AsyncMock()
     db.execute.side_effect = [

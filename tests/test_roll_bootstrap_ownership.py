@@ -114,6 +114,11 @@ async def test_bootstrap_scopes_snoozed_threads_and_returns_format(monkeypatch):
         "get_current_die_for_session",
         AsyncMock(return_value=4),
     )
+    monkeypatch.setattr(
+        roll_api,
+        "derive_cross_session_excluded_thread_ids",
+        AsyncMock(return_value=set()),
+    )
 
     db = AsyncMock()
     db.execute.side_effect = [
@@ -183,6 +188,11 @@ async def test_bootstrap_roll_pool_is_never_paginated_below_current_die(monkeypa
         roll_api,
         "get_current_die_for_session",
         AsyncMock(return_value=100),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "derive_cross_session_excluded_thread_ids",
+        AsyncMock(return_value=set()),
     )
 
     db = AsyncMock()
@@ -484,6 +494,11 @@ async def test_bootstrap_session_mode_defaults_when_no_fields_set(monkeypatch):
         "get_current_die_for_session",
         AsyncMock(return_value=4),
     )
+    monkeypatch.setattr(
+        roll_api,
+        "derive_cross_session_excluded_thread_ids",
+        AsyncMock(return_value=set()),
+    )
 
     db = AsyncMock()
     db.execute.side_effect = [
@@ -546,6 +561,11 @@ async def test_bootstrap_session_mode_reflects_stored_fields(monkeypatch):
         roll_api,
         "get_current_die_for_session",
         AsyncMock(return_value=4),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "derive_cross_session_excluded_thread_ids",
+        AsyncMock(return_value=set()),
     )
 
     db = AsyncMock()
@@ -611,6 +631,11 @@ async def test_bootstrap_session_mode_includes_guidance(monkeypatch):
         roll_api,
         "get_current_die_for_session",
         AsyncMock(return_value=4),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "derive_cross_session_excluded_thread_ids",
+        AsyncMock(return_value=set()),
     )
 
     db = AsyncMock()
@@ -694,6 +719,11 @@ async def test_bootstrap_stale_randomization_uses_random_choice(monkeypatch):
         roll_api,
         "get_current_die_for_session",
         AsyncMock(return_value=4),
+    )
+    monkeypatch.setattr(
+        roll_api,
+        "derive_cross_session_excluded_thread_ids",
+        AsyncMock(return_value=set()),
     )
 
     stale_ids_captured: list[int] = []

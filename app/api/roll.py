@@ -37,6 +37,7 @@ from app.services.session_response import (
     build_session_response,
     get_session_with_thread_safe,
 )
+from app.services.snooze_service import derive_cross_session_excluded_thread_ids
 from app.schemas import (
     ExplainableFactorResponse,
     OverrideRequest,
@@ -317,6 +318,8 @@ async def roll_dice(
     snoozed_ids = current_session.snoozed_thread_ids or []
     skipped_ids = current_session.skipped_thread_ids or []
 
+    derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
+
     selection_bandwidth = (
         roll_request.bandwidth
         if roll_request.bandwidth is not None
@@ -333,7 +336,7 @@ async def roll_dice(
         user_id=user_id,
         current_session=current_session,
         current_die=current_die,
-        excluded_ids=[*snoozed_ids, *skipped_ids],
+        excluded_ids=[*snoozed_ids, *skipped_ids, *derived_snoozed_ids],
         selection_bandwidth=selection_bandwidth,
         selection_intent=selection_intent,
         selection_method_override=None,
@@ -433,12 +436,14 @@ async def skip_roll(
     snoozed_ids = current_session.snoozed_thread_ids or []
     existing_skipped_ids = list(current_session.skipped_thread_ids or [])
 
+    derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
+
     artifacts = await _select_pending_thread(
         db=db,
         user_id=user_id,
         current_session=current_session,
         current_die=current_die,
-        excluded_ids=[*snoozed_ids, *existing_skipped_ids, skipped_thread_id],
+        excluded_ids=[*snoozed_ids, *existing_skipped_ids, skipped_thread_id, *derived_snoozed_ids],
         selection_bandwidth=current_session.active_bandwidth or DEFAULT_BANDWIDTH,
         selection_intent=current_session.active_intent or DEFAULT_INTENT,
         selection_method_override="skip",
@@ -716,6 +721,16 @@ async def override_roll(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Thread {override_thread_id} is snoozed. Please unsnooze it first before overriding.",
+        )
+
+    derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, current_user.id)
+    if override_thread_id in derived_snoozed_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Thread {override_thread_id} is on session-based snooze backoff and "
+                "cannot be overridden yet."
+            ),
         )
 
     # Decision-time context is purely observational: it records the estimate
@@ -1132,8 +1147,10 @@ async def roll_bootstrap(
 
     snoozed_ids = list(current_session.snoozed_thread_ids or [])
     skipped_ids = list(current_session.skipped_thread_ids or [])
-    if snoozed_ids:
-        pool_query = pool_query.where(Thread.id.not_in(snoozed_ids))
+    derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
+    effective_snoozed_ids = sorted(set(snoozed_ids) | set(derived_snoozed_ids))
+    if effective_snoozed_ids:
+        pool_query = pool_query.where(Thread.id.not_in(effective_snoozed_ids))
     if skipped_ids:
         pool_query = pool_query.where(Thread.id.not_in(skipped_ids))
 
@@ -1218,8 +1235,8 @@ async def roll_bootstrap(
         .where(Thread.is_blocked.is_(False))
         .where(effective_activity < stale_cutoff)
     )
-    if snoozed_ids:
-        stale_base = stale_base.where(Thread.id.not_in(snoozed_ids))
+    if effective_snoozed_ids:
+        stale_base = stale_base.where(Thread.id.not_in(effective_snoozed_ids))
     stale_count_result = await db.execute(stale_base)
     stale_thread_count = stale_count_result.scalar() or 0
 
@@ -1232,8 +1249,8 @@ async def roll_bootstrap(
             .where(Thread.is_blocked.is_(False))
             .where(effective_activity < stale_cutoff)
         )
-        if snoozed_ids:
-            stale_ids_query = stale_ids_query.where(Thread.id.not_in(snoozed_ids))
+        if effective_snoozed_ids:
+            stale_ids_query = stale_ids_query.where(Thread.id.not_in(effective_snoozed_ids))
         stale_ids_result = await db.execute(stale_ids_query)
         stale_ids = [row[0] for row in stale_ids_result.all()]
         if stale_ids:

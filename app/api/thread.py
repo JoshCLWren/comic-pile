@@ -39,6 +39,7 @@ from app.services.errors import (
     NotFoundError,
     ServiceError,
 )
+from app.services.snooze_service import derive_cross_session_excluded_thread_ids
 
 router = APIRouter(tags=["threads"])
 
@@ -78,6 +79,11 @@ async def list_stale_threads(
         session = await fetch_active_session(db, current_user.id)
         snoozed = session.snoozed_thread_ids if session else None
         snoozed_ids = list(snoozed) if snoozed else None
+        derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(
+            db, current_user.id
+        )
+        if derived_snoozed_ids:
+            snoozed_ids = sorted(set(snoozed_ids or []) | derived_snoozed_ids)
         return await thread_service.list_stale_thread_responses(
             db, current_user.id, days, snoozed_ids=snoozed_ids
         )

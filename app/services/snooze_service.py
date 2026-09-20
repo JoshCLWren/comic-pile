@@ -6,6 +6,8 @@ and cache invalidation. Query construction lives in
 """
 
 import logging
+from bisect import bisect_right
+from datetime import datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +22,10 @@ from app.repositories.session_repository import (
     recent_session_events,
     recent_snooze_events,
 )
+from app.repositories.snooze_repository import (
+    fetch_snooze_backoff_rows,
+    fetch_user_session_started_ats,
+)
 from app.repositories.thread_repository import threads_by_ids
 from app.schemas import ActiveThreadInfo, SessionResponse
 from app.schemas.session import SnoozeCorrectionInfo, SnoozedThreadInfo
@@ -32,8 +38,103 @@ from comic_pile.bandwidth_correction import (
     compute_snooze_correction,
 )
 from comic_pile.dice_ladder import step_up
+from comic_pile.snooze_backoff import is_eligible
 
 logger = logging.getLogger(__name__)
+
+
+def _after_reset(
+    last_activity_at: datetime | None,
+    event_type: str | None,
+    event_timestamp: datetime | None,
+) -> bool:
+    """Return whether an event counts toward the current snooze streak.
+
+    Args:
+        last_activity_at: The thread's read/reset boundary, or ``None`` when
+            the thread was never successfully read.
+        event_type: The event's type.
+        event_timestamp: The event's timestamp.
+
+    Returns:
+        True when the event occurred after the reset boundary.
+    """
+    return (
+        event_type is not None
+        and event_timestamp is not None
+        and (last_activity_at is None or event_timestamp > last_activity_at)
+    )
+
+
+async def derive_cross_session_excluded_thread_ids(
+    db: AsyncSession, user_id: int
+) -> set[int]:
+    """Derive threads excluded by durable cross-session snooze backoff.
+
+    ``Session.snoozed_thread_ids`` only covers the current session. Beyond it,
+    a thread stays out of the roll pool and stale list until enough later
+    reading sessions have started (issue #2740). The streak is derived from
+    stored ``snooze``/``unsnooze`` events and the user's session history in
+    two batched queries, never one historical query per candidate thread.
+
+    The reset boundary is ``Thread.last_activity_at``: snooze events on or
+    before a successful read do not count toward the streak (or all snoozes
+    count when the thread was never read). A manual ``unsnooze`` newer than
+    the latest snooze makes the thread immediately eligible without resetting
+    the streak.
+
+    Args:
+        db: Database session.
+        user_id: Owner of the threads.
+
+    Returns:
+        Set of thread IDs that must stay excluded until their backoff elapses.
+    """
+    rows = await fetch_snooze_backoff_rows(db, user_id)
+    excluded: set[int] = set()
+    if not rows:
+        return excluded
+
+    session_starts = await fetch_user_session_started_ats(db, user_id)
+    if not session_starts:
+        return excluded
+
+    grouped: dict[int, list[tuple[datetime | None, str | None, datetime | None, int]]] = {}
+    for thread_id, last_activity_at, event_type, event_timestamp, event_id in rows:
+        grouped.setdefault(thread_id, []).append(
+            (last_activity_at, event_type, event_timestamp, event_id)
+        )
+
+    for thread_id, thread_rows in grouped.items():
+        last_activity_at = thread_rows[0][0]
+
+        snoozes = [
+            event_timestamp
+            for _activity, event_type, event_timestamp, _event_id in thread_rows
+            if event_type == "snooze"
+            and _after_reset(last_activity_at, event_type, event_timestamp)
+        ]
+        if not snoozes:
+            continue
+
+        unsnoozes = [
+            event_timestamp
+            for _activity, event_type, event_timestamp, _event_id in thread_rows
+            if event_type == "unsnooze"
+            and _after_reset(last_activity_at, event_type, event_timestamp)
+        ]
+
+        latest_snooze = max(snoozes)
+        if unsnoozes and max(unsnoozes) > latest_snooze:
+            continue
+
+        later_session_count = len(session_starts) - bisect_right(
+            session_starts, latest_snooze
+        )
+        if not is_eligible(len(snoozes), later_session_count):
+            excluded.add(thread_id)
+
+    return excluded
 
 
 async def _snoozed_thread_info(db: AsyncSession, thread_ids: list[int]) -> list[SnoozedThreadInfo]:
