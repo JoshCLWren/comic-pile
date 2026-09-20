@@ -47,10 +47,7 @@ export function useAllDependencyGroups() {
 export function useContinuityPlan(planId: number | null) {
   return useQuery({
     queryKey: planId ? queryKeys.readingPlans.detail(planId) : [],
-    queryFn: async () => {
-      if (planId === null) return null as unknown as ReturnType<typeof continuityPlansApi.get>
-      return continuityPlansApi.get(planId)
-    },
+    queryFn: () => continuityPlansApi.get(planId!),
     enabled: planId != null,
   })
 }
