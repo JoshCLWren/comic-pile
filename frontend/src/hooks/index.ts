@@ -22,6 +22,16 @@ export {
   useRemoveCrossoverMember,
 } from './useCrossovers'
 export { useDependencyGroups } from './useDependencyGroups'
+export {
+  useThreadDependencies,
+  useBlockedThreadIds,
+  useSearchThreads,
+  useThreadIssuesForDependency,
+  useCreateDependency,
+  useDeleteDependency,
+  useUpdateDependency,
+  useMigrateThread,
+} from './useDependencies'
 export { useReaderContext, useReadingOrdersForThread, useConnectedThreads } from './useReaderContext'
 export { useTasteDiscoveries } from './useTasteDiscoveries'
 export { useRollBootstrap, resolveBrowserTimezone } from './useRollBootstrap'

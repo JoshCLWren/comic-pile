@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query'
 import type { InfiniteData } from '@tanstack/react-query'
-import type { Issue, IssueListResponse, Thread, ThreadListResponse } from '../types'
+import type { Thread, ThreadListResponse, Issue } from '../types'
+import type { IssueListResponse } from '../services/api-issues'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
 import type { CustomCBL, CustomCBLListItem } from '../services/api-custom-cbl'
 import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
@@ -310,12 +311,26 @@ export function applyEditedThreadToQueuePages(
 }
 
 /**
+ * Boolean guard for the paged (infinite) issue cache shape. The
+ * `queryKeys.thread.issuePages` prefix also hosts the flattened all-issues
+ * array (`queryKeys.thread.issuePagesAll`), so shape-matching updaters must
+ * skip array-valued queries instead of treating them as `{ pages }` data.
+ */
+function isIssuePagesInfiniteData(data: unknown): data is InfiniteData<IssueListResponse> {
+  return (
+    isObject(data)
+    && Array.isArray(data.pages)
+    && data.pages.every((page) => isObject(page) && Array.isArray(page.issues))
+  )
+}
+
+/**
  * Apply an authoritative issue read-status result to the cache so the thread
  * detail view reflects a toggle without refetching every loaded issue page.
  *
  * The snapshot carries the reconciled visible issues plus the server-refreshed
- * thread; the issues are patched in-place across every loaded page (keyed via
- * `queryKeys.thread.issuePages`) and the thread is pushed through
+ * thread; the issues are patched in-place across every loaded infinite page
+ * (keyed via `queryKeys.thread.issuePages`) and the thread is pushed through
  * `applyEditedThreadToQueuePages` (detail, summary, and queue rows).
  */
 export function applyIssueReadSnapshotToCache(
@@ -326,7 +341,10 @@ export function applyIssueReadSnapshotToCache(
   const issuesById = new Map(snapshotIssues.map((issue) => [issue.id, issue]))
 
   client.setQueriesData<InfiniteData<IssueListResponse>>(
-    { queryKey: queryKeys.thread.issuePages(updatedThread.id) },
+    {
+      queryKey: queryKeys.thread.issuePages(updatedThread.id),
+      predicate: (query) => isIssuePagesInfiniteData(query.state.data),
+    },
     (old) => {
       if (!old) return old
       return {
@@ -424,6 +442,94 @@ export async function invalidateIdentityInbox(
   await client.invalidateQueries({ queryKey: queryKeys.identityInbox.all })
 }
 
+export type IssueCacheRollback = () => void
+
+/**
+ * Optimistically update an issue's status in the cache.
+ * Used by useToggleIssueStatus mutation.
+ */
+export function optimisticallyUpdateIssueStatus(
+  client: QueryClient,
+  threadId: number,
+  issue: Issue,
+  nextStatus: 'read' | 'unread',
+): IssueCacheRollback {
+  const allIssuesKey = queryKeys.thread.issuePagesAll(threadId)
+  const previousIssues = client.getQueryData<Issue[]>(allIssuesKey)
+
+  if (previousIssues) {
+    const updatedIssue: Issue = {
+      ...issue,
+      status: nextStatus,
+      read_at: nextStatus === 'read' ? new Date().toISOString() : null,
+    }
+    client.setQueryData<Issue[]>(
+      allIssuesKey,
+      previousIssues.map((i) => (i.id === issue.id ? updatedIssue : i)),
+    )
+  }
+
+  return () => {
+    if (previousIssues) {
+      client.setQueryData(allIssuesKey, previousIssues)
+    }
+  }
+}
+
+/**
+ * Optimistically delete an issue from the cache.
+ * Used by useDeleteIssue mutation.
+ */
+export function optimisticallyDeleteIssue(
+  client: QueryClient,
+  threadId: number,
+  issueId: number,
+): IssueCacheRollback {
+  const allIssuesKey = queryKeys.thread.issuePagesAll(threadId)
+  const previousIssues = client.getQueryData<Issue[]>(allIssuesKey)
+
+  if (previousIssues) {
+    client.setQueryData<Issue[]>(
+      allIssuesKey,
+      previousIssues.filter((i) => i.id !== issueId),
+    )
+  }
+
+  return () => {
+    if (previousIssues) {
+      client.setQueryData(allIssuesKey, previousIssues)
+    }
+  }
+}
+
+/**
+ * Optimistically reorder issues in the cache.
+ * Used by useReorderIssues mutation.
+ */
+export function optimisticallyReorderIssues(
+  client: QueryClient,
+  threadId: number,
+  issueIds: number[],
+): IssueCacheRollback {
+  const allIssuesKey = queryKeys.thread.issuePagesAll(threadId)
+  const previousIssues = client.getQueryData<Issue[]>(allIssuesKey)
+
+  if (previousIssues) {
+    const issueMap = new Map(previousIssues.map((i) => [i.id, i]))
+    const reordered = issueIds.flatMap((id) => {
+      const issue = issueMap.get(id)
+      return issue ? [issue] : []
+    })
+    client.setQueryData<Issue[]>(allIssuesKey, reordered)
+  }
+
+  return () => {
+    if (previousIssues) {
+      client.setQueryData(allIssuesKey, previousIssues)
+    }
+  }
+}
+
 /**
  * Invalidate crossover group caches after a mutation that changes group
  * membership or metadata (create, rename, delete, addMember, addIssueRange,
@@ -434,4 +540,17 @@ export async function invalidateAfterCrossoverMutation(
   client: QueryClient,
 ): Promise<void> {
   await client.invalidateQueries({ queryKey: queryKeys.crossover.all })
+}
+
+/**
+ * Apply a migrated thread to the cache and invalidate thread list.
+ * Used after a thread is migrated to issue tracking.
+ */
+export async function applyMigratedThreadCache(
+  client: QueryClient,
+  thread: Thread,
+): Promise<void> {
+  client.setQueryData(queryKeys.thread.detail(thread.id), thread)
+  client.setQueryData(queryKeys.thread.summary(thread.id), thread)
+  await client.invalidateQueries({ queryKey: queryKeys.thread.list() })
 }

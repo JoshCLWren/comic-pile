@@ -12,9 +12,9 @@ const THIS_FILE = import.meta.filename
  * menus/popovers use `OverlayPortal` with `layer="menu"` (or a thin shared
  * Menu primitive built on it). Ad-hoc `role="dialog"` / `aria-modal` /
  * full-viewport `fixed inset-0` overlays outside the approved components are
- * forbidden. The files below are known debt allowlisted until the follow-up
- * migration ticket lands; each allowlist entry must still match its markers
- * so a completed migration fails loudly and the entry gets removed.
+ * forbidden. `KNOWN_DEBT` is the shrink-on-migrate allowlist: a completed
+ * migration must drop its entry, and new ad-hoc overlays outside
+ * `APPROVED_FILES` fail the scan.
  */
 
 const APPROVED_FILES = new Set([
@@ -30,34 +30,12 @@ const DIALOG_PATTERNS = [
   { label: 'migration-dialog__overlay class', regex: /migration-dialog__overlay/ },
 ] as const
 
-const MORE_MENU_PATTERN = {
-  label: 'ad-hoc fixed z-50 menu',
-  regex: /fixed[^\n]*z-50/,
-} as const
-
 type DebtEntry = {
   file: string
   markers: readonly { label: string; regex: RegExp }[]
 }
 
-const KNOWN_DEBT: DebtEntry[] = [
-  {
-    file: 'components/MigrationDialog.tsx',
-    markers: [DIALOG_PATTERNS[0], DIALOG_PATTERNS[1], DIALOG_PATTERNS[3]],
-  },
-  {
-    file: 'components/SimpleMigrationDialog.tsx',
-    markers: [DIALOG_PATTERNS[0], DIALOG_PATTERNS[1], DIALOG_PATTERNS[3]],
-  },
-  {
-    file: 'pages/ContinuityPlansIndexPage.tsx',
-    markers: [DIALOG_PATTERNS[0], DIALOG_PATTERNS[1], DIALOG_PATTERNS[2]],
-  },
-  {
-    file: 'components/Navigation.tsx',
-    markers: [MORE_MENU_PATTERN],
-  },
-]
+const KNOWN_DEBT: DebtEntry[] = []
 
 const KNOWN_DEBT_FILES = new Set(KNOWN_DEBT.map((entry) => entry.file))
 

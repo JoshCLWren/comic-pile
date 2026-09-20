@@ -8,7 +8,7 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.test_helpers import (
+from app.services.test_helpers import (
     create_test_issue_identity,
     create_test_reading_order,
     expire_current_session,
@@ -37,7 +37,7 @@ async def test_expire_current_session_ends_active_session() -> None:
     db = AsyncMock(spec=AsyncSession)
     db.execute.return_value = result
 
-    response = await expire_current_session(SimpleNamespace(id=1), db)
+    response = await expire_current_session(db, user_id=1)
 
     assert response == {"status": "success", "message": "Session expired"}
     assert session.ended_at is not None
@@ -53,9 +53,9 @@ async def test_create_test_reading_order_builds_order_and_items() -> None:
     db.add.side_effect = lambda obj: setattr(obj, "id", 7)
 
     response = await create_test_reading_order(
-        {"name": "Beta", "items": [{"thread_id": 1, "position": 2}]},
-        SimpleNamespace(id=1),
         db,
+        user_id=1,
+        payload={"name": "Beta", "items": [{"thread_id": 1, "position": 2}]},
     )
 
     assert response == {"id": 7, "name": "Beta"}
@@ -80,9 +80,9 @@ async def test_create_test_issue_identity_confirms_identity_for_owned_issue() ->
     db.commit.return_value = None
 
     response = await create_test_issue_identity(
-        {"issue_id": 12, "series_name": "Fixtureverse", "series_id": 612001},
-        SimpleNamespace(id=99),
         db,
+        user_id=99,
+        payload={"issue_id": 12, "series_name": "Fixtureverse", "series_id": 612001},
     )
 
     assert response == {
@@ -127,9 +127,9 @@ async def test_create_test_issue_identity_seeds_every_thread_issue() -> None:
     db.commit.return_value = None
 
     response = await create_test_issue_identity(
-        {"thread_id": 5, "series_name": "Crossed Paths"},
-        SimpleNamespace(id=7),
         db,
+        user_id=7,
+        payload={"thread_id": 5, "series_name": "Crossed Paths"},
     )
     assert response["issue_ids"] == [20, 21]
 
@@ -161,9 +161,9 @@ async def test_create_test_issue_identity_rejects_unowned_issue() -> None:
 
     with pytest.raises(HTTPException) as exc_info:
         await create_test_issue_identity(
-            {"issue_id": 30},
-            SimpleNamespace(id=99),
             db,
+            user_id=99,
+            payload={"issue_id": 30},
         )
     assert exc_info.value.status_code == 404
     db.commit.assert_not_awaited()
@@ -174,6 +174,48 @@ async def test_create_test_issue_identity_requires_scope_target() -> None:
     """Missing both issue_id and thread_id must fail fast."""
     db = AsyncMock(spec=AsyncSession)
     with pytest.raises(HTTPException) as exc_info:
-        await create_test_issue_identity({}, SimpleNamespace(id=1), db)
+        await create_test_issue_identity(db, user_id=1, payload={})
     assert exc_info.value.status_code == 400
     db.execute.assert_not_awaited()
+
+
+def test_test_helper_routes_are_mounted_only_in_test_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The application factory exposes fixture routes only in test environments."""
+    from app.main import create_app
+
+    monkeypatch.delenv("TEST_ENVIRONMENT", raising=False)
+    production_app = create_app(serve_frontend=False)
+    production_paths: set[str] = set()
+    for route in production_app.routes:
+        route_path = getattr(route, "path", None)
+        if isinstance(route_path, str):
+            production_paths.add(route_path)
+    assert not any(path.startswith("/api/test/") for path in production_paths)
+    assert not {
+        "/api/test/reading-orders",
+        "/api/test/issue-identity",
+        "/api/test/cbl-source",
+        "/api/test/sessions/expire",
+    } & set(production_app.openapi()["paths"])
+
+    monkeypatch.setenv("TEST_ENVIRONMENT", "true")
+    test_app = create_app(serve_frontend=False)
+    test_paths: set[str] = set()
+    for route in test_app.routes:
+        route_path = getattr(route, "path", None)
+        if isinstance(route_path, str):
+            test_paths.add(route_path)
+    assert {
+        "/api/test/reading-orders",
+        "/api/test/issue-identity",
+        "/api/test/cbl-source",
+        "/api/test/sessions/expire",
+    } <= test_paths
+    assert {
+        "/api/test/reading-orders",
+        "/api/test/issue-identity",
+        "/api/test/cbl-source",
+        "/api/test/sessions/expire",
+    } <= set(test_app.openapi()["paths"])

@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
@@ -50,7 +49,6 @@ const callbacks = {
 
 function renderRatingView(
   activeRatingThread: Parameters<typeof RatingView>[0]['activeRatingThread'],
-  overrides: Partial<Parameters<typeof RatingView>[0]> = {},
 ) {
   return render(
     <MemoryRouter>
@@ -64,16 +62,14 @@ function renderRatingView(
         rateIsPending={false}
         snoozeIsPending={false}
         dismissIsPending={false}
-        readingOrders={overrides.readingOrders ?? []}
-        connectedThreads={overrides.connectedThreads ?? []}
         {...callbacks}
       />
     </MemoryRouter>,
   )
 }
 
-describe('RatingView crossovers', () => {
-  it('shows crossover names owned by the active rating thread', async () => {
+describe('RatingView crossovers retired from rating screen (#2711)', () => {
+  it('does not show Reading Context button even when active thread would have owned crossovers', () => {
     renderRatingView(
       {
         id: 42,
@@ -84,23 +80,12 @@ describe('RatingView crossovers', () => {
         issue_number: '3',
         next_issue_number: '4',
       } as never,
-      {
-        readingOrders: [
-          {
-            id: 1,
-            name: 'Main route',
-            description: null,
-            total_items: 2,
-            completed_items: 1,
-            items: [],
-          },
-        ],
-      },
     )
 
-    await userEvent.setup().click(screen.getByTestId('reading-context-button'))
-    expect(screen.getByRole('heading', { name: 'Crossovers' })).toBeInTheDocument()
-    expect(screen.getByText('Cosmic bridge')).toBeInTheDocument()
+    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Crossovers' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Cosmic bridge')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
   })
 
   it('does not show crossover chrome without an active thread', () => {

@@ -1,9 +1,7 @@
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
-import type { ConnectedThreadInfo } from '../types'
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -57,13 +55,6 @@ const callbacks = {
   onRefreshThread: vi.fn(),
 }
 
-const connectedThread: ConnectedThreadInfo = {
-  thread_id: 99,
-  title: 'Ultimate Wolverine',
-  connection_type: 'blocks & blocked_by',
-  dependency_id: 12,
-}
-
 function renderRatingView(overrides: Partial<React.ComponentProps<typeof RatingView>> = {}) {
   render(
     <MemoryRouter>
@@ -85,11 +76,8 @@ function renderRatingView(overrides: Partial<React.ComponentProps<typeof RatingV
         rateIsPending={false}
         snoozeIsPending={false}
         dismissIsPending={false}
-        readingOrders={[]}
-        connectedThreads={[connectedThread]}
         readerContext={null}
         isReaderContextLoading={false}
-        readerContextError={null}
         {...callbacks}
         {...overrides}
       />
@@ -101,64 +89,17 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('RatingView continuity correction', () => {
-  it('renders the Correct continuity button when connected threads exist after expanding reading context', async () => {
-    const user = userEvent.setup()
+describe('RatingView continuity correction retired (#2711)', () => {
+  it('renders no Reading Context lazy control and no Correct continuity button', () => {
     renderRatingView()
-    await user.click(screen.getByTestId('reading-context-button'))
-    expect(
-      screen.getByRole('button', { name: /correct continuity/i }),
-    ).toBeInTheDocument()
+    expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /correct continuity/i })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
   })
 
-  it('does not render the Correct continuity button without connected threads even after expansion', async () => {
-    const user = userEvent.setup()
-    renderRatingView({ connectedThreads: [] })
-    await user.click(screen.getByTestId('reading-context-button'))
-    expect(
-      screen.queryByRole('button', { name: /correct continuity/i }),
-    ).not.toBeInTheDocument()
-  })
-
-  it('opens the continuity correction dialog when the button is clicked', async () => {
-    const user = userEvent.setup()
-    renderRatingView()
-    await user.click(screen.getByTestId('reading-context-button'))
-    expect(screen.queryByTestId('continuity-correction-dialog')).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: /correct continuity/i }))
-
-    expect(await screen.findByTestId('continuity-correction-dialog')).toBeInTheDocument()
-  })
-
-  it('closes the continuity correction dialog via the close callback', async () => {
-    const user = userEvent.setup()
-    renderRatingView()
-    await user.click(screen.getByTestId('reading-context-button'))
-    await user.click(screen.getByRole('button', { name: /correct continuity/i }))
-
-    await user.click(screen.getByRole('button', { name: 'Close continuity' }))
-
-    expect(screen.queryByTestId('continuity-correction-dialog')).not.toBeInTheDocument()
-  })
-
-  it('refreshes the thread and closes the dialog when the save callback fires', async () => {
-    const user = userEvent.setup()
-    renderRatingView()
-    await user.click(screen.getByTestId('reading-context-button'))
-    await user.click(screen.getByRole('button', { name: /correct continuity/i }))
-
-    await user.click(screen.getByRole('button', { name: 'Save continuity' }))
-
-    expect(callbacks.onRefreshThread).toHaveBeenCalledTimes(1)
-    expect(screen.queryByTestId('continuity-correction-dialog')).not.toBeInTheDocument()
-  })
-
-  it('does not render the Correct continuity button when no active thread exists', () => {
+  it('does not render the Correct continuity button without an active thread', () => {
     renderRatingView({ activeRatingThread: null })
-    expect(
-      screen.queryByRole('button', { name: /correct continuity/i }),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /correct continuity/i })).not.toBeInTheDocument()
     expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
   })
 })

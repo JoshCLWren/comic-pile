@@ -17,8 +17,11 @@ permissions:
   issues: write
   pull-requests: write
 
+# Capacity refill directly calls the canonical assignment controller. Keep it
+# in the same serialization domain as the dispatcher and completion drain so a
+# worker cannot be leased by two writers from the same stale idle snapshot.
 concurrency:
-  group: fixed-model-capacity-refill-${{ github.event.workflow_run.id || github.run_id }}
+  group: fixed-model-factory-dispatch
   cancel-in-progress: false
 
 jobs:
@@ -27,7 +30,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout trusted main
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: main
 

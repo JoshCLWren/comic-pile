@@ -127,6 +127,15 @@ export const queryKeys = {
     details: () => ['thread', 'detail'] as const,
     detail: (threadId: number) => ['thread', 'detail', threadId] as const,
     issuePages: (threadId: number) => ['thread', threadId, 'issues'] as const,
+    /**
+     * Canonical prefix for status-filtered paged issue reads. The filter is
+     * appended as `{ status }` so each filter owns a distinct page cursor.
+     */
+    issuePagesPaged: (threadId: number) =>
+      ['thread', threadId, 'issues', 'paged'] as const,
+    /** Canonical key for the all-pages-drained issue array (IssueToggleList). */
+    issuePagesAll: (threadId: number) =>
+      ['thread', threadId, 'issues', 'all'] as const,
     issuePage: (
       threadId: number,
       { pageToken, pageSize, status }: ThreadIssuePageKeyOptions,
@@ -150,6 +159,8 @@ export const queryKeys = {
     blockingBatch: (threadIds: number[]) =>
       ['dependencies', 'blocking-batch', [...threadIds].sort((a, b) => a - b)] as const,
     connected: (threadId: number) => ['dependencies', 'connected', threadId] as const,
+    search: (query: string) => ['dependencies', 'search', normalizedSearch(query)] as const,
+    issues: (threadId: number) => ['dependencies', 'issues', threadId] as const,
   },
   readingOrders: {
     all: ['readingOrders'] as const,

@@ -3,8 +3,14 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual'
 import {
+  getAppScrollElement,
+  measureAppScrollMargin,
+  observeAppScrollOffset,
+  readAppScrollOffset,
+  scrollAppToOffset,
+} from '../../scroll/appScrollElement'
+import {
   EDGE_SCROLL_ZONE,
-  ROW_GAP,
   ROW_HEIGHT_WITH_GAP,
   OVERSCAN_PX,
 } from './VirtualizedThreadList.helpers'
@@ -56,12 +62,14 @@ interface VirtualizedThreadListProps<T> {
  * from the first page through the final page. This mirrors the
  * non-virtualized list introduced by #2088/#2099.
  *
- * Uses `@tanstack/react-virtual` with `useWindowVirtualizer` for efficient DOM
- * virtualization. The window scroll surface owns Queue before and after the
- * virtualization threshold is crossed, preventing nested scroll containers.
+ * Uses `@tanstack/react-virtual` with `useWindowVirtualizer` for viewport
+ * sizing. The page scroller is still `#root` (`html`/`body` overflow hidden),
+ * so offset observation and drag-edge `scrollTo` target that element rather
+ * than `window.scrollY` (issue #2725). Queue itself never introduces a nested
+ * list scroller.
  *
  * Scroll ownership (#2582): this component owns measurement/rendering only.
- * It never repositions the window for navigation or resume — route
+ * It never repositions the page for navigation or resume — route
  * restoration belongs exclusively to the route restoration layer. The single
  * `scrollToIndex` call below serves an explicit user drag gesture (edge
  * auto-scroll while reordering) and is not a restore path.
@@ -82,20 +90,18 @@ export default function VirtualizedThreadList<T>({
 
   // Read the initial wrapper offset synchronously to avoid a 0 → measured
   // layout jump. Production stays single-column regardless of wrapper width.
-  // @tanstack/react-virtual's window virtualizer reads the raw window.scrollY
-  // as its scroll offset and lays virtual items out starting at scrollMargin,
-  // so scrollMargin must be the distance from the start of the window scroll
-  // content (the document top) to the wrapper top — a stable document-space
-  // offset. `rect.top` is viewport-relative, so the current scroll is added
-  // back: `rect.top + window.scrollY`. Because virtual item `start` values
+  // The window virtualizer lays items out starting at scrollMargin, so the
+  // margin must be the stable content-space distance from the start of the
+  // *page scroller* (`#root`) to the wrapper top. `window.scrollY` stays 0
+  // while `#root` scrolls, so `rect.top + window.scrollY` is viewport-relative
+  // and collapses after the user scrolls. Because virtual item `start` values
   // already include scrollMargin, items must be rendered at
   // `start - scrollMargin` (see the render below); a bare `start` shifts every
   // virtual row down by the page-chrome offset above the list and blanks the
   // viewport once the queue crosses the virtualization threshold.
   useLayoutEffect(() => {
     if (wrapperRef.current) {
-      const rect = wrapperRef.current.getBoundingClientRect()
-      setScrollMargin(rect.top + window.scrollY)
+      setScrollMargin(measureAppScrollMargin(wrapperRef.current))
     }
   }, [])
 
@@ -113,13 +119,16 @@ export default function VirtualizedThreadList<T>({
       rafId = requestAnimationFrame(() => {
         rafId = null
         if (wrapperRef.current) {
-          const rect = wrapperRef.current.getBoundingClientRect()
-          setScrollMargin(rect.top + window.scrollY)
+          setScrollMargin(measureAppScrollMargin(wrapperRef.current))
         }
       })
     })
 
     observer.observe(document.body)
+    const root = getAppScrollElement()
+    if (root) {
+      observer.observe(root)
+    }
     return () => {
       observer.disconnect()
       if (rafId !== null) {
@@ -138,6 +147,12 @@ export default function VirtualizedThreadList<T>({
       estimateSize: () => ROW_HEIGHT_WITH_GAP,
       overscan: Math.ceil(OVERSCAN_PX / ROW_HEIGHT_WITH_GAP),
       scrollMargin,
+      initialOffset: readAppScrollOffset,
+      // The viewport size still comes from the window, but the user scrolls
+      // `#root`. Default window offset observation would freeze the visible
+      // range at items 0..N and leave a giant empty spacer (issue #2725).
+      observeElementOffset: observeAppScrollOffset,
+      scrollToFn: scrollAppToOffset,
     }),
     [rowCount, scrollMargin],
   )

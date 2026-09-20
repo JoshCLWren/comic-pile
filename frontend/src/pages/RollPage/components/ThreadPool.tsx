@@ -73,9 +73,11 @@ export function ThreadPool({
   }, [isRatingView])
 
   return (
-    <div className={`px-3 md:px-4 pb-20 md:pb-28 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-white/5 pt-4 md:pt-8'}`}>
+    <div
+      className={`px-3 md:px-4 pb-20 md:pb-28 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-[var(--theme-border)] pt-4 md:pt-8'}`}
+    >
       {!isRatingView && <div className="flex items-center gap-2 shrink-0 mb-4">
-        <div className="w-2 h-2 rounded-full bg-amber-600 shadow-[0_0_15px_var(--accent-red)]"></div>
+        <div className="w-2 h-2 rounded-full bg-[var(--theme-comic-accent)] shadow-[0_0_15px_var(--accent-red)]"></div>
         <div className="flex-1">
           <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">{pool.length} ready to read</p>
           {dieSize && pool.length > 0 && pool.length < dieSize && (
@@ -89,7 +91,7 @@ export function ThreadPool({
           onClick={onShuffle}
           disabled={shuffleIsPending || pool.length < 2}
           aria-describedby="shuffle-queue-description"
-          className="h-8 px-3 rounded-lg border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-50"
+          className="h-8 px-3 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-50"
         >
           Shuffle queue
         </button>
@@ -106,11 +108,11 @@ export function ThreadPool({
             </div>
             <button
               onClick={() => navigate('/queue', { state: { openCreate: true } })}
-              className="w-full h-11 min-h-[44px] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-xs font-black uppercase tracking-widest text-amber-500 transition-colors"
+              className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors"
             >
               + Add a Series
             </button>
-            <div className="text-left bg-white/5 rounded-xl p-4 mt-4">
+            <div className="text-left bg-[var(--theme-bg-panel)] rounded-xl p-4 mt-4">
               <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mb-2">How it works:</p>
               <ul className="text-xs text-stone-500 space-y-1">
                 <li>• Add the series you&apos;re reading</li>
@@ -128,7 +130,7 @@ export function ThreadPool({
             </div>
             <button
               onClick={() => navigate('/queue')}
-              className="w-full h-11 min-h-[44px] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-xs font-black uppercase tracking-widest text-amber-500 transition-colors"
+              className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors"
             >
               Go to Queue
             </button>
@@ -149,7 +151,7 @@ export function ThreadPool({
                 role="button"
                 tabIndex={0}
                 aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${thread.route_labels?.length ? `, connected to ${thread.route_labels.join(', ')}` : ''}. Open series actions.`}
-                className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' : ''
+                className={`flex items-center gap-3 px-4 py-3 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-[var(--theme-comic-accent)]/30' : ''
                   }`}
               >
                 <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
@@ -194,7 +196,7 @@ export function ThreadPool({
               {blockedThreads.map((thread) => (
                 <div
                   key={thread.id}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+                  className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
                 >
                   <span className="text-sm">🔒</span>
                   <div className="flex-1 min-w-0">
@@ -223,7 +225,7 @@ export function ThreadPool({
       {staleThread && !isRatingView && (
         <div
           onClick={onReadStale}
-          className="mt-4 md:mt-8 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-amber-500/5 transition-colors rounded-xl"
+          className="mt-4 md:mt-8 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-[var(--theme-comic-accent)]/5 transition-colors rounded-xl"
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
@@ -233,16 +235,16 @@ export function ThreadPool({
             }
           }}
         >
-          <div className="px-4 py-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center gap-3">
-            <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center shrink-0">
+          <div className="px-4 py-3 bg-[var(--theme-comic-accent)]/5 border border-[var(--theme-comic-accent)]/10 rounded-xl flex items-center gap-3">
+            <div className="w-8 h-8 bg-[var(--theme-comic-accent)]/10 rounded-lg flex items-center justify-center shrink-0">
               <span className="text-sm">⏳</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold text-amber-200/70 uppercase tracking-wider leading-relaxed">
-                {staleThreadCount} series you haven&apos;t opened recently: <span className="text-amber-400 font-black">{staleThread.title}</span> · last opened{' '}
-                <span className="text-amber-400 font-black">{staleThread.days}</span> days ago
+              <p className="text-[10px] font-bold text-[var(--theme-comic-accent)]/70 uppercase tracking-wider leading-relaxed">
+                {staleThreadCount} series you haven&apos;t opened recently: <span className="text-[var(--theme-comic-accent)] font-black">{staleThread.title}</span> · last opened{' '}
+                <span className="text-[var(--theme-comic-accent)] font-black">{staleThread.days}</span> days ago
               </p>
-              <p className="text-[9px] text-amber-300/70 text-center mt-1">
+              <p className="text-[9px] text-[var(--theme-comic-accent)]/70 text-center mt-1">
                 Tap to read now
               </p>
             </div>
@@ -271,7 +273,7 @@ export function ThreadPool({
               {snoozedThreads.map((thread) => (
                 <div
                   key={thread.id}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+                  className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
                 >
                   <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
                   <button
@@ -312,7 +314,7 @@ export function ThreadPool({
               {skippedThreads.map((thread) => (
                 <div
                   key={thread.id}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+                  className="flex items-center gap-2 px-4 py-2 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-lg"
                 >
                   <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
                   <button
