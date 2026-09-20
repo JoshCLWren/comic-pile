@@ -14,7 +14,6 @@ production URL.
 from __future__ import annotations
 
 from datetime import datetime
-from hashlib import sha256
 import importlib.util
 import json
 from pathlib import Path
@@ -35,7 +34,16 @@ from app.services.continuity_plan_writer import (
     replace_compiled_rules,
     validate_node_ownership,
 )
-from comic_pile.dependencies import refresh_user_blocked_status
+from app.services.migration_shared import (
+    MigrationInvariantError as _SharedMigrationError,
+    json_value as _json_value,
+    plan_fingerprint_with_id as _plan_fingerprint,
+    refresh_blocked_status,
+    stable_hash as _stable_hash,
+)
+
+# Alias shared error for this module's public API
+MigrationInvariantError = _SharedMigrationError
 
 ROOT = Path(__file__).resolve().parents[2]
 STEP23A_SCRIPT = ROOT / "scripts" / "audit_step23a_legacy_reading_order_preflight.py"
@@ -48,10 +56,6 @@ STALE_SNAPSHOT_MESSAGE = (
     "The reviewed Step 23A snapshot is stale and a new preflight/review is "
     "required. Apply refuses to accept a drifted or regenerated token."
 )
-
-
-class MigrationInvariantError(RuntimeError):
-    """Raised when live state no longer matches the reviewed Step 23B contract."""
 
 
 _STEP23A_MODULE: ModuleType | None = None
@@ -74,22 +78,6 @@ def _load_step23a_module() -> ModuleType:
     return module
 
 
-def _json_value(value: object) -> object:
-    """Convert datetime values to ISO-8601 JSON values."""
-    if isinstance(value, datetime):
-        return value.isoformat()
-    return value
-
-
-def _stable_hash(value: object) -> str:
-    """Fingerprint one JSON-serializable mutation-relevant payload."""
-    payload = json.dumps(
-        value,
-        sort_keys=True,
-        separators=(",", ":"),
-        default=_json_value,
-    )
-    return sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _as_dict(value: object, *, label: str) -> dict[str, object]:
@@ -178,17 +166,6 @@ def reviewed_rule_by_dependency(evidence: dict[str, object]) -> dict[int, dict[s
     return mapping
 
 
-def _plan_fingerprint(plan: ContinuityPlan) -> str:
-    """Fingerprint one persisted Reading Plan's migration-owned structure."""
-    return _stable_hash(
-        {
-            "id": plan.id,
-            "name": plan.name,
-            "ordering_mode": plan.ordering_mode,
-            "nodes": plan.nodes_json,
-            "lanes": plan.lanes_json,
-        }
-    )
 
 
 def _stale_snapshot_error(live_token: str, accepted_token: str) -> MigrationInvariantError:
@@ -819,7 +796,7 @@ async def apply_legacy_reading_order_migration(
             f"standalone prerequisites changed during apply: {sorted(surviving_standalone)}"
         )
 
-    await refresh_user_blocked_status(user_id, db)
+    await refresh_blocked_status(user_id, db)
     await db.flush()
 
     after_report = await run_step23a_preflight(db)
@@ -1186,7 +1163,7 @@ async def rollback_legacy_reading_order_migration(
         ],
         dependency_ids=retired_ids,
     )
-    await refresh_user_blocked_status(user_id, db)
+    await refresh_blocked_status(user_id, db)
     await db.flush()
 
     restored_ids = set(

@@ -4,24 +4,21 @@ import Modal from './Modal'
 import DependencyFlowchart from './DependencyFlowchart'
 import ReadingOrderTimeline from './ReadingOrderTimeline'
 import DependencyCrossoverControls from './DependencyCrossoverControls'
+import {
+  useThreadDependencies,
+  useBlockedThreadIds,
+  useSearchThreads,
+  useThreadIssuesForDependency,
+  useCreateDependency,
+  useDeleteDependency,
+  useUpdateDependency,
+  useMigrateThread,
+} from '../hooks'
 import { dependenciesApi, threadsApi } from '../services/api'
-import { issuesApi } from '../services/api-issues'
 import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse } from '../types'
-import { fetchAllUnreadIssues } from '../hooks/useDependencyBuilderData'
-import type {
-  DependencyBuilderDependenciesApi,
-  DependencyBuilderIssuesApi,
-  DependencyBuilderThreadsApi,
-} from '../hooks/useDependencyBuilderData'
 import { buildFlowchartGraph } from '../utils/dependencyFlowchartAdapter'
 import { getApiErrorDetail } from '../utils/apiError'
 import { useToast } from '../contexts/useToast'
-
-export type {
-  DependencyBuilderDependenciesApi,
-  DependencyBuilderIssuesApi,
-  DependencyBuilderThreadsApi,
-} from '../hooks/useDependencyBuilderData'
 
 function groupByThread(deps: Dependency[], labelKey: 'source_label' | 'target_label'): Map<string, Dependency[]> {
   const groups = new Map<string, Dependency[]>()
@@ -40,12 +37,6 @@ interface DependencyBuilderProps {
   isOpen: boolean
   onClose: () => void
   onChanged?: () => void
-  /** Injectable dependencies API; defaults to the production {@link dependenciesApi}. */
-  dependenciesApi?: DependencyBuilderDependenciesApi
-  /** Injectable threads API; defaults to the production {@link threadsApi}. */
-  threadsApi?: DependencyBuilderThreadsApi
-  /** Injectable issues API; defaults to the production {@link issuesApi}. */
-  issuesApi?: DependencyBuilderIssuesApi
 }
 
 export default function DependencyBuilder({
@@ -53,121 +44,137 @@ export default function DependencyBuilder({
   isOpen,
   onClose,
   onChanged,
-  dependenciesApi: dependenciesService = dependenciesApi,
-  threadsApi: threadsService = threadsApi,
-  issuesApi: issuesService = issuesApi,
 }: DependencyBuilderProps) {
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<Thread[]>([])
   const [selectedThreadId, setSelectedThreadId] = useState<number | null>(null)
-  const [isSearching, setIsSearching] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [dependencies, setDependencies] = useState<ThreadDependenciesResponse>({ blocking: [], blocked_by: [] })
-  const [isLoadingDeps, setIsLoadingDeps] = useState(false)
   const [showReadingOrder, setShowReadingOrder] = useState(false)
   const [readingView, setReadingView] = useState<'timeline' | 'graph'>('timeline')
-  const [isGraphLoading, setIsGraphLoading] = useState(false)
-  const [flowchartThreads, setFlowchartThreads] = useState<Thread[]>([])
-  const [flowchartDependencies, setFlowchartDependencies] = useState<FlowchartDependency[]>([])
-  const [flowchartIssueNodes, setFlowchartIssueNodes] = useState<FlowchartNode[]>([])
-  const [blockedIds, setBlockedIds] = useState<Set<number>>(new Set())
   const [sourceIssueId, setSourceIssueId] = useState<number | null>(null)
   const [targetIssueId, setTargetIssueId] = useState<number | null>(null)
-  const [sourceIssues, setSourceIssues] = useState<Issue[]>([])
-  const [targetIssues, setTargetIssues] = useState<Issue[]>([])
-  const [isLoadingSourceIssues, setIsLoadingSourceIssues] = useState(false)
-  const [isLoadingTargetIssues, setIsLoadingTargetIssues] = useState(false)
-  // Inline migration state (item 7)
+  // Inline migration state
   const [showInlineMigration, setShowInlineMigration] = useState(false)
   const [migrationLastRead, setMigrationLastRead] = useState('')
   const [migrationTotal, setMigrationTotal] = useState('')
-  const [isMigrating, setIsMigrating] = useState(false)
-// Undo state for dependency deletion
-const [pendingDeletion, setPendingDeletion] = useState<{
-  dependencyId: number
-  dependencyData: Dependency
-  timeoutId: ReturnType<typeof setTimeout>
-  toastId: string
-} | null>(null)
-const toast = useToast()
-// Note editing state
-const [editingNoteId, setEditingNoteId] = useState<number | null>(null)
-const [noteText, setNoteText] = useState('')
-const [isSavingNote, setIsSavingNote] = useState(false)
+  // Undo state for dependency deletion
+  const [pendingDeletion, setPendingDeletion] = useState<{
+    dependencyId: number
+    dependencyData: Dependency
+    timeoutId: ReturnType<typeof setTimeout>
+    toastId: string
+  } | null>(null)
+  const toast = useToast()
+  // Note editing state
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null)
+  const [noteText, setNoteText] = useState('')
+  const [error, setError] = useState('')
+
+  const threadId = thread?.id ?? undefined
+
+  const {
+    data: dependenciesData,
+    isPending: isLoadingDeps,
+    error: depsError,
+    refetch: refetchDependencies,
+  } = useThreadDependencies(threadId, isOpen)
+
+  const { data: blockedIdsData } = useBlockedThreadIds(isOpen && showReadingOrder)
+
+  const {
+    data: searchResultsData,
+    isPending: isSearching,
+    error: searchError,
+  } = useSearchThreads(searchQuery, isOpen)
+
+  const searchResults = useMemo(
+    () => (searchResultsData?.threads ?? []).filter((candidate) => candidate.id !== threadId),
+    [searchResultsData, threadId]
+  )
 
   const selectedThread = useMemo(
     () => searchResults.find((candidate) => candidate.id === selectedThreadId) || null,
     [searchResults, selectedThreadId]
   )
 
-  const loadDependencies = useCallback(async () => {
-    const currentThreadId = thread?.id
-    setIsLoadingDeps(true)
-    setError('')
-    try {
-      const data = await dependenciesService.listThreadDependencies(currentThreadId!)
-      setDependencies(data)
-    } catch (loadError: unknown) {
-      setError(getApiErrorDetail(loadError))
-    } finally {
-      setIsLoadingDeps(false)
-    }
-  }, [thread?.id, dependenciesService])
+  const selectedThreadNeedsMigration = useMemo(() => {
+    if (!selectedThread) return false
+    return selectedThread.total_issues === null || selectedThread.total_issues === undefined
+  }, [selectedThread])
 
-  /**
-   * Build the full graph of threads and dependencies for the flowchart.
-   * Synthesizes virtual thread-level edges from issue-level deps so they
-   * show as dashed connections in the flowchart.
-   */
+  const issuesEnabled = isOpen && selectedThreadId != null && !selectedThreadNeedsMigration
+
+  const {
+    data: sourceIssues,
+    isPending: isLoadingSourceIssues,
+    error: sourceIssuesError,
+  } = useThreadIssuesForDependency(selectedThreadId, issuesEnabled)
+
+  const {
+    data: targetIssues,
+    isPending: isLoadingTargetIssues,
+    error: targetIssuesError,
+  } = useThreadIssuesForDependency(threadId, issuesEnabled)
+
+  const createDependencyMutation = useCreateDependency(threadId)
+  const deleteDependencyMutation = useDeleteDependency(threadId)
+  const updateDependencyMutation = useUpdateDependency(threadId)
+  const migrateThreadMutation = useMigrateThread()
+
+  const dependencies = useMemo(
+    () => dependenciesData ?? { blocking: [], blocked_by: [] },
+    [dependenciesData]
+  )
+
+  const blockedIds = useMemo(
+    () => new Set(blockedIdsData ?? []),
+    [blockedIdsData]
+  )
+
+  const isSaving = createDependencyMutation.isPending
+  const isMigrating = migrateThreadMutation.isPending
+  const isSavingNote = updateDependencyMutation.isPending
+
+  // Flowchart state
+  const [isGraphLoading, setIsGraphLoading] = useState(false)
+  const [flowchartThreads, setFlowchartThreads] = useState<Thread[]>([])
+  const [flowchartDependencies, setFlowchartDependencies] = useState<FlowchartDependency[]>([])
+  const [flowchartIssueNodes, setFlowchartIssueNodes] = useState<FlowchartNode[]>([])
+
   const loadFlowchartData = useCallback(async () => {
-    const currentThreadId = thread?.id
+    if (!threadId) return
+    setIsGraphLoading(true)
     try {
-      const [depsData, allBlockedIds] = await Promise.all([
-        dependenciesService.listThreadDependencies(currentThreadId!),
-        dependenciesService.listBlockedThreadIds(),
-      ])
+      const depsData = await dependenciesApi.listThreadDependencies(threadId)
 
       const allDeps = [...depsData.blocking, ...depsData.blocked_by]
-      const graph = buildFlowchartGraph(allDeps, currentThreadId!)
+      const graph = buildFlowchartGraph(allDeps, threadId)
       const relatedIds = graph.relatedThreadIds
       const allEdges = graph.edges
 
-    const allThreads = await threadsService.list()
-    const relatedThreads = allThreads.threads.filter((t) => relatedIds.has(t.id))
-
-      
+      const allThreads = await threadsApi.list()
+      const relatedThreads = allThreads.threads.filter((t) => relatedIds.has(t.id))
 
       setFlowchartThreads(relatedThreads)
       setFlowchartDependencies(allEdges)
       setFlowchartIssueNodes(graph.issueNodes)
-      setBlockedIds(new Set(allBlockedIds))
     } catch (err) {
       console.error('[loadFlowchartData] Error:', err)
       setFlowchartThreads([])
       setFlowchartDependencies([])
       setFlowchartIssueNodes([])
+    } finally {
+      setIsGraphLoading(false)
     }
-  }, [thread?.id, dependenciesService, threadsService])
+  }, [threadId])
 
   useEffect(() => {
-    // Clean up any pending deletion when modal closes
     if (pendingDeletion) {
       clearTimeout(pendingDeletion.timeoutId)
-      // Fire DELETE immediately (commit the deletion)
-      dependenciesService.deleteDependency(pendingDeletion.dependencyId)
+      dependenciesApi.deleteDependency(pendingDeletion.dependencyId)
         .then(() => {
-          // Deletion succeeded, reload dependencies
           onChanged?.()
         })
         .catch((deleteError: unknown) => {
-          // If deletion fails, restore the dependency
           setError(getApiErrorDetail(deleteError))
-          // Restore the dependency
-          setDependencies((prev) => ({
-            blocking: [...prev.blocking, pendingDeletion.dependencyData],
-            blocked_by: [...prev.blocked_by, pendingDeletion.dependencyData],
-          }))
         })
         .finally(() => {
           toast.removeToast(pendingDeletion.toastId)
@@ -175,176 +182,98 @@ const [isSavingNote, setIsSavingNote] = useState(false)
         })
     }
 
-    if (!isOpen || !thread?.id) return
+    if (!isOpen || !threadId) return
     setSearchQuery('')
-    setSearchResults([])
     setSelectedThreadId(null)
     setError('')
     setShowReadingOrder(false)
     setReadingView('timeline')
     setSourceIssueId(null)
     setTargetIssueId(null)
-    setSourceIssues([])
-    setTargetIssues([])
     setShowInlineMigration(false)
-    
-    loadDependencies()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, thread?.id, loadDependencies])
+
+    refetchDependencies()
+  }, [isOpen, threadId, refetchDependencies, onChanged, pendingDeletion, toast])
 
   useEffect(() => {
-    if (!isOpen) return
-    const query = searchQuery.trim()
-    if (query.length < 2) {
-      setSearchResults([])
-      return
+    if (sourceIssuesError) {
+      setError(getApiErrorDetail(sourceIssuesError))
     }
-
-    let isCurrent = true
-    const timeout = setTimeout(async () => {
-      if (!isCurrent) return
-      setIsSearching(true)
-      setError('')
-      try {
-    const candidates = await threadsService.list({ search: query })
-    if (!isCurrent) return
-    const currentThreadId = thread?.id
-    const filtered =  currentThreadId == null
-      ? candidates.threads
-      : candidates.threads.filter((candidate) => candidate.id !== currentThreadId)
-        setSearchResults(filtered)
-      } catch (searchError: unknown) {
-        if (!isCurrent) return
-        setError(getApiErrorDetail(searchError))
-        setSearchResults([])
-      } finally {
-        if (isCurrent) {
-          setIsSearching(false)
-        }
-      }
-    }, 300)
-
-    return () => {
-      isCurrent = false
-      clearTimeout(timeout)
+    if (targetIssuesError) {
+      setError(getApiErrorDetail(targetIssuesError))
     }
-  }, [searchQuery, isOpen, thread?.id, threadsService])
+    if (depsError) {
+      setError(getApiErrorDetail(depsError))
+    }
+    if (searchError) {
+      setError(getApiErrorDetail(searchError))
+    }
+  }, [sourceIssuesError, targetIssuesError, depsError, searchError])
 
-  // Check if selected thread needs migration when in issue mode
-  const selectedThreadNeedsMigration = useMemo(() => {
-    if (!selectedThread) return false
-    return selectedThread.total_issues === null || selectedThread.total_issues === undefined
-  }, [selectedThread])
-
+  // Preserve the legacy default of selecting the first loaded prerequisite and
+  // target issue once issue-level tracking is available, without clobbering an
+  // explicit user selection when the loaded issue lists change.
   useEffect(() => {
-    if (!isOpen || !selectedThreadId || !thread?.id) {
-      setSourceIssues([])
-      setTargetIssues([])
-      setSourceIssueId(null)
-      setTargetIssueId(null)
+    if (!isOpen || !selectedThread || selectedThreadNeedsMigration) return
+    const selectFirst = (current: number | null, issues: Issue[] | undefined): number | null => {
+      if (current != null && issues?.some((issue) => issue.id === current)) return current
+      return issues?.[0]?.id ?? null
+    }
+    setSourceIssueId((current) => selectFirst(current, sourceIssues))
+    setTargetIssueId((current) => selectFirst(current, targetIssues))
+  }, [isOpen, selectedThread, selectedThreadNeedsMigration, sourceIssues, targetIssues])
+
+  function isDuplicateDependency(): boolean {
+    if (!threadId || !selectedThreadId) return false
+    if (!sourceIssueId || !targetIssueId) return false
+    return (
+      dependencies.blocking.some(
+        (dep) => dep.source_issue_id === sourceIssueId && dep.target_issue_id === targetIssueId
+      ) ||
+      dependencies.blocked_by.some(
+        (dep) => dep.source_issue_id === sourceIssueId && dep.target_issue_id === targetIssueId
+      )
+    )
+  }
+
+  async function handleInlineMigration(e: FormEvent) {
+    e.preventDefault()
+    if (!migrationLastRead.trim() || !migrationTotal.trim()) {
+      setError('Both fields are required for migration.')
+      return
+    }
+    const lastRead = Number(migrationLastRead)
+    const total = Number(migrationTotal)
+    if (
+      Number.isNaN(lastRead) ||
+      Number.isNaN(total) ||
+      !Number.isInteger(lastRead) ||
+      !Number.isInteger(total) ||
+      total < 1 ||
+      lastRead < 0 ||
+      lastRead > total
+    ) {
+      setError('Invalid migration values. Both must be whole numbers and last read must be 0-total.')
       return
     }
 
-    // Don't fetch issues if the source thread needs migration
-    if (selectedThreadNeedsMigration) {
-      setSourceIssues([])
-      setTargetIssues([])
-      setSourceIssueId(null)
-      setTargetIssueId(null)
-      return
+    setError('')
+    try {
+      await migrateThreadMutation.mutateAsync({
+        threadId: selectedThreadId!,
+        lastIssueRead: lastRead,
+        totalIssues: total,
+      })
+      setShowInlineMigration(false)
+      setMigrationLastRead('')
+      setMigrationTotal('')
+    } catch (migrationError: unknown) {
+      setError(getApiErrorDetail(migrationError))
     }
-
-    let isCurrent = true
-    const fetchIssues = async () => {
-      setIsLoadingSourceIssues(true)
-      setIsLoadingTargetIssues(true)
-      setError('')
-      try {
-        const [sourceIssuesList, targetIssuesList] = await Promise.all([
-          fetchAllUnreadIssues(issuesService, selectedThreadId),
-          fetchAllUnreadIssues(issuesService, thread.id),
-        ])
-        if (!isCurrent) return
-        setSourceIssues(sourceIssuesList)
-        setTargetIssues(targetIssuesList)
-        setSourceIssueId(sourceIssuesList[0]?.id || null)
-        setTargetIssueId(targetIssuesList[0]?.id || null)
-      } catch (issuesError: unknown) {
-        if (!isCurrent) return
-        setError(getApiErrorDetail(issuesError))
-        setSourceIssues([])
-        setTargetIssues([])
-        setSourceIssueId(null)
-        setTargetIssueId(null)
-      } finally {
-        if (isCurrent) {
-          setIsLoadingSourceIssues(false)
-          setIsLoadingTargetIssues(false)
-        }
-      }
-    }
-
-    fetchIssues()
-
-    return () => {
-      isCurrent = false
-    }
-  }, [selectedThreadId, isOpen, thread?.id, selectedThreadNeedsMigration, issuesService])
-
-   function isDuplicateDependency(): boolean {
-     if (!thread?.id || !selectedThreadId) return false
-     if (!sourceIssueId || !targetIssueId) return false
-     return (
-       dependencies.blocking.some(
-         (dep) => dep.source_issue_id === sourceIssueId && dep.target_issue_id === targetIssueId
-       ) ||
-       dependencies.blocked_by.some(
-         (dep) => dep.source_issue_id === sourceIssueId && dep.target_issue_id === targetIssueId
-       )
-     )
-   }
-
-    async function handleInlineMigration(e: FormEvent) {
-      e.preventDefault()
-      if (!migrationLastRead.trim() || !migrationTotal.trim()) {
-        setError('Both fields are required for migration.')
-        return
-      }
-      const lastRead = Number(migrationLastRead)
-      const total = Number(migrationTotal)
-      if (
-        Number.isNaN(lastRead) ||
-        Number.isNaN(total) ||
-        !Number.isInteger(lastRead) ||
-        !Number.isInteger(total) ||
-        total < 1 ||
-        lastRead < 0 ||
-        lastRead > total
-      ) {
-        setError('Invalid migration values. Both must be whole numbers and last read must be 0-total.')
-        return
-      }
-
-      setIsMigrating(true)
-      setError('')
-      try {
-        const updatedThread = await issuesService.migrateThread(selectedThreadId!, lastRead, total)
-        // Refresh search results with updated thread data
-        setSearchResults((prev) =>
-          prev.map((t) => (t.id === selectedThreadId ? updatedThread : t))
-        )
-        setShowInlineMigration(false)
-        setMigrationLastRead('')
-        setMigrationTotal('')
-      } catch (migrationError: unknown) {
-        setError(getApiErrorDetail(migrationError))
-      } finally {
-        setIsMigrating(false)
-      }
-    }
+  }
 
   async function handleCreateDependency() {
-    if (!thread?.id || !selectedThreadId) return
+    if (!threadId || !selectedThreadId || !thread) return
 
     const targetHasIssueTracking = thread.total_issues !== null && thread.total_issues !== undefined
     if (!targetHasIssueTracking) {
@@ -357,10 +286,9 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       return
     }
 
-    setIsSaving(true)
     setError('')
     try {
-      const result = await dependenciesService.createDependency({
+      const result = await createDependencyMutation.mutateAsync({
         sourceType: 'issue',
         sourceId: sourceIssueId,
         targetType: 'issue',
@@ -370,58 +298,42 @@ const [isSavingNote, setIsSavingNote] = useState(false)
         toast.showToast(result.warning, 'warning')
       }
       setSearchQuery('')
-      setSearchResults([])
       setSelectedThreadId(null)
       setSourceIssueId(null)
       setTargetIssueId(null)
-      setSourceIssues([])
-      setTargetIssues([])
-      await loadDependencies()
-      await refreshGraphIfVisible()
+      // Refresh is covered by useCreateDependency's
+      // invalidateAfterDependencyChange; no manual refetch loop.
       onChanged?.()
     } catch (saveError: unknown) {
       setError(getApiErrorDetail(saveError))
-    } finally {
-      setIsSaving(false)
     }
   }
 
   async function handleDeleteDependency(dependencyId: number) {
     setError('')
     try {
-      // Find the dependency to delete
       const dependencyToDelete = [...dependencies.blocking, ...dependencies.blocked_by].find(
         (dep) => dep.id === dependencyId
       )
 
       if (!dependencyToDelete) return
 
-      // Optimistic UI: remove immediately
-      setDependencies((prev) => ({
-        blocking: prev.blocking.filter((dep) => dep.id !== dependencyId),
-        blocked_by: prev.blocked_by.filter((dep) => dep.id !== dependencyId),
-      }))
-
-      // Show undo toast with action button
       const message = dependencyToDelete.source_label && dependencyToDelete.target_label
         ? `${dependencyToDelete.source_label} → ${dependencyToDelete.target_label}`
         : `Dependency #${dependencyId}`
 
       const timeoutId = setTimeout(async () => {
         try {
-          await dependenciesService.deleteDependency(dependencyId)
+          await deleteDependencyMutation.mutateAsync(dependencyId)
           setPendingDeletion(null)
-          await loadDependencies()
-          await refreshGraphIfVisible()
+          // Refresh is covered by useDeleteDependency's
+          // invalidateAfterDependencyChange; no manual refetch loop.
           onChanged?.()
         } catch (deleteError: unknown) {
           setError(getApiErrorDetail(deleteError))
-          // Restore the dependency
-          await loadDependencies()
         }
       }, 5000)
 
-      // Show toast and capture its ID
       const toastId = toast.showToast(
         `${message} removed.`,
         'info',
@@ -430,19 +342,11 @@ const [isSavingNote, setIsSavingNote] = useState(false)
           onClick: () => {
             clearTimeout(timeoutId)
             setPendingDeletion(null)
-
-            // Restore the dependency
-            setDependencies((prev) => ({
-              blocking: [...prev.blocking, dependencyToDelete],
-              blocked_by: [...prev.blocked_by, dependencyToDelete],
-            }))
-
             toast.removeToast(toastId)
           }
         }
       )
 
-      // Store pending deletion for undo
       setPendingDeletion({
         dependencyId,
         dependencyData: dependencyToDelete,
@@ -454,24 +358,19 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     }
   }
 
-    async function handleSaveNote(dependencyId: number) {
-      setIsSavingNote(true)
-      setError('')
-      try {
-        const updated = await dependenciesService.updateDependency(dependencyId, noteText.trim() || null)
-        setDependencies((prev) => ({
-          ...prev,
-          blocking: prev.blocking.map((d) => (d.id === dependencyId ? updated : d)),
-          blocked_by: prev.blocked_by.map((d) => (d.id === dependencyId ? updated : d)),
-        }))
-        setEditingNoteId(null)
-        setNoteText('')
-      } catch (saveError: unknown) {
-        setError(getApiErrorDetail(saveError))
-      } finally {
-        setIsSavingNote(false)
-      }
+  async function handleSaveNote(dependencyId: number) {
+    setError('')
+    try {
+      await updateDependencyMutation.mutateAsync({
+        dependencyId,
+        note: noteText.trim() || null,
+      })
+      setEditingNoteId(null)
+      setNoteText('')
+    } catch (saveError: unknown) {
+      setError(getApiErrorDetail(saveError))
     }
+  }
 
   function handleStartEditNote(dep: Dependency) {
     setEditingNoteId(dep.id)
@@ -484,12 +383,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
   }
 
   const refreshGraphData = useCallback(async () => {
-    setIsGraphLoading(true)
-    try {
-      await loadFlowchartData()
-    } finally {
-      setIsGraphLoading(false)
-    }
+    await loadFlowchartData()
   }, [loadFlowchartData])
 
   async function handleToggleReadingOrder() {
@@ -504,12 +398,6 @@ const [isSavingNote, setIsSavingNote] = useState(false)
   async function handleSelectReadingView(view: 'timeline' | 'graph') {
     setReadingView(view)
     if (view === 'graph') {
-      await refreshGraphData()
-    }
-  }
-
-  async function refreshGraphIfVisible() {
-    if (showReadingOrder && readingView === 'graph') {
       await refreshGraphData()
     }
   }
@@ -536,9 +424,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                   role="tablist"
                   aria-label="Reading order view"
                   onKeyDown={(e) => {
-                    // SAFETY: all elements with role="tab" inside the tablist are rendered buttons.
                     const tabs = Array.from(e.currentTarget.querySelectorAll('[role="tab"]')) as HTMLElement[];
-                    // SAFETY: tab navigation only runs when the active element is one of the rendered tab buttons.
                     const currentIndex = tabs.indexOf(document.activeElement as HTMLElement);
                     if (currentIndex === -1) return;
                     let newIndex = currentIndex;
@@ -664,9 +550,9 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                 </button>
               ))}
             </div>
-           )}
+          )}
 
-           {/* Inline migration prompt (item 7) */}
+          {/* Inline migration prompt */}
            {selectedThread && selectedThreadNeedsMigration && (
              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 space-y-2">
                <p className="text-xs text-amber-300 font-bold">
@@ -680,9 +566,9 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                  >
                    Migrate Now
                  </button>
-               ) : (
+                ) : (
                   <form onSubmit={handleInlineMigration} className="space-y-2">
-                     <div className="flex flex-col md:flex-row gap-2">
+                    <div className="flex flex-col md:flex-row gap-2">
                       <div className="flex-1">
                         <label htmlFor="migration-last-read" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Last issue read</label>
                         <input
@@ -708,21 +594,21 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                         />
                       </div>
                     </div>
-                   <button
-                     type="submit"
-                     disabled={isMigrating}
-                     className="w-full py-1.5 bg-amber-500/20 border border-amber-500/30 rounded-lg text-xs font-black uppercase tracking-widest text-amber-200 disabled:opacity-50"
-                   >
-                     {isMigrating ? 'Migrating…' : 'Migrate'}
-                   </button>
-                 </form>
+                    <button
+                      type="submit"
+                      disabled={isMigrating}
+                      className="w-full py-1.5 bg-amber-500/20 border border-amber-500/30 rounded-lg text-xs font-black uppercase tracking-widest text-amber-200 disabled:opacity-50"
+                    >
+                      {isMigrating ? 'Migrating…' : 'Migrate'}
+                    </button>
+                  </form>
                )}
              </div>
            )}
 
            {selectedThread && !selectedThreadNeedsMigration && (
              <div className="space-y-2">
-               {isLoadingSourceIssues || isLoadingTargetIssues ? (
+               {(isLoadingSourceIssues || isLoadingTargetIssues) ? (
                  <p className="text-xs text-stone-500">Loading issues…</p>
                ) : (
                  <div className="flex flex-col md:flex-row gap-2 min-w-0">
@@ -732,50 +618,50 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                      </label>
                      <select
                        id="source-issue"
-                       value={sourceIssueId || ''}
-                       onChange={(event) => setSourceIssueId(event.target.value ? Number(event.target.value) : null)}
-                       className="w-full rounded-xl px-3 py-2 text-sm form-control"
-                       disabled={sourceIssues.length === 0}
-                     >
-                       {sourceIssues.length === 0 ? (
-                         <option value="">No unread issues available</option>
-                       ) : (
-                         <>
-                           <option value="">Select an issue</option>
-                           {sourceIssues.map((issue) => (
-                             <option key={issue.id} value={issue.id}>
-                               #{issue.issue_number}
-                             </option>
-                           ))}
-                         </>
-                       )}
-                     </select>
-                   </div>
-                   <div className="min-w-0 w-full">
-                     <label htmlFor="target-issue" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-                       Target issue
-                     </label>
-                     <select
-                       id="target-issue"
-                       value={targetIssueId || ''}
-                       onChange={(event) => setTargetIssueId(event.target.value ? Number(event.target.value) : null)}
-                       className="w-full rounded-xl px-3 py-2 text-sm form-control"
-                       disabled={targetIssues.length === 0}
-                     >
-                       {targetIssues.length === 0 ? (
-                         <option value="">No unread issues available</option>
-                       ) : (
-                         <>
-                           <option value="">Select an issue</option>
-                           {targetIssues.map((issue) => (
-                             <option key={issue.id} value={issue.id}>
-                               #{issue.issue_number}
-                             </option>
-                           ))}
-                         </>
-                       )}
-                     </select>
-                   </div>
+                        value={sourceIssueId || ''}
+                        onChange={(event) => setSourceIssueId(event.target.value ? Number(event.target.value) : null)}
+                        className="w-full rounded-xl px-3 py-2 text-sm form-control"
+                        disabled={(sourceIssues?.length ?? 0) === 0}
+                      >
+                        {(sourceIssues?.length ?? 0) === 0 ? (
+                          <option value="">No unread issues available</option>
+                        ) : (
+                          <>
+                            <option value="">Select an issue</option>
+                            {sourceIssues!.map((issue) => (
+                              <option key={issue.id} value={issue.id}>
+                                #{issue.issue_number}
+                              </option>
+                            ))}
+                          </>
+                        )}
+                      </select>
+                    </div>
+                    <div className="min-w-0 w-full">
+                      <label htmlFor="target-issue" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                        Target issue
+                      </label>
+                      <select
+                        id="target-issue"
+                        value={targetIssueId || ''}
+                        onChange={(event) => setTargetIssueId(event.target.value ? Number(event.target.value) : null)}
+                        className="w-full rounded-xl px-3 py-2 text-sm form-control"
+                        disabled={(targetIssues?.length ?? 0) === 0}
+                      >
+                        {(targetIssues?.length ?? 0) === 0 ? (
+                          <option value="">No unread issues available</option>
+                        ) : (
+                          <>
+                            <option value="">Select an issue</option>
+                            {targetIssues!.map((issue) => (
+                              <option key={issue.id} value={issue.id}>
+                                #{issue.issue_number}
+                              </option>
+                            ))}
+                          </>
+                        )}
+                      </select>
+                    </div>
                  </div>
                )}
              </div>
@@ -788,7 +674,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                disabled={isLoadingSourceIssues || isLoadingTargetIssues}
                onMembershipChanged={onChanged}
              />
-           )}
+            )}
 
             <button
               type="button"
@@ -798,94 +684,94 @@ const [isSavingNote, setIsSavingNote] = useState(false)
               }
               className="w-full py-2 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 whitespace-normal break-words text-left"
             >
-               {isSaving
-                 ? 'Adding dependency…'
-                 : isDuplicateDependency()
-                 ? 'Already added'
-                 : selectedThread
-                 ? `Block issue #${targetIssues.find((i) => i.id === targetIssueId)?.issue_number || '?'} with: ${selectedThread.title} #${sourceIssues.find((i) => i.id === sourceIssueId)?.issue_number || '?'}`
-                 : 'Select a prerequisite'}
+              {isSaving
+                ? 'Adding dependency…'
+                : isDuplicateDependency()
+                ? 'Already added'
+                : selectedThread
+                ? `Block issue #${targetIssues?.find((i) => i.id === targetIssueId)?.issue_number || '?'} with: ${selectedThread.title} #${sourceIssues?.find((i) => i.id === sourceIssueId)?.issue_number || '?'}`
+                : 'Select a prerequisite'}
             </button>
          </div>
 
-        <div className="space-y-2">
-          <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This series is blocked by</h3>
-          {isLoadingDeps ? (
-            <p className="text-xs text-stone-500">Loading dependencies…</p>
-          ) : dependencies.blocked_by.length === 0 ? (
-            <p className="text-xs text-stone-500">No prerequisites yet.</p>
-          ) : (
-            Array.from(groupByThread(dependencies.blocked_by, 'source_label')).map(([threadName, deps]) => (
-              <div key={threadName} className="space-y-1">
-                <p className="text-xs font-bold text-stone-400 break-words min-w-0">{threadName}</p>
-              {deps.map((dep) => {
-                const title = dep.is_issue_level && dep.source_label && dep.target_label
-                  ? `${dep.source_label} → ${dep.target_label}`
-                  : dep.source_label ?? (dep.source_issue_id ? `Issue #${dep.source_issue_id}` : `Series #${dep.source_thread_id}`)
-                return (
-                  <DependencyRow
-                    key={dep.id}
-                    dependency={dep}
-                    title={title}
-                    subtitle={dep.source_issue_id ? 'Issue-level block' : 'Series-level block'}
-                    onDelete={handleDeleteDependency}
-                    onEditNote={handleStartEditNote}
-                    editingNoteId={editingNoteId}
-                    noteText={noteText}
-                    onNoteChange={setNoteText}
-                    onSaveNote={handleSaveNote}
-                    onCancelNote={handleCancelEditNote}
-                    isSavingNote={isSavingNote}
-                  />
-                )
-              })}
-              </div>
-            ))
-          )}
-        </div>
+         <div className="space-y-2">
+           <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This series is blocked by</h3>
+           {isLoadingDeps ? (
+             <p className="text-xs text-stone-500">Loading dependencies…</p>
+           ) : dependencies.blocked_by.length === 0 ? (
+             <p className="text-xs text-stone-500">No prerequisites yet.</p>
+           ) : (
+             Array.from(groupByThread(dependencies.blocked_by, 'source_label')).map(([threadName, deps]) => (
+               <div key={threadName} className="space-y-1">
+                 <p className="text-xs font-bold text-stone-400 break-words min-w-0">{threadName}</p>
+               {deps.map((dep) => {
+                 const title = dep.is_issue_level && dep.source_label && dep.target_label
+                   ? `${dep.source_label} → ${dep.target_label}`
+                   : dep.source_label ?? (dep.source_issue_id ? `Issue #${dep.source_issue_id}` : `Series #${dep.source_thread_id}`)
+                 return (
+                   <DependencyRow
+                     key={dep.id}
+                     dependency={dep}
+                     title={title}
+                     subtitle={dep.source_issue_id ? 'Issue-level block' : 'Series-level block'}
+                     onDelete={handleDeleteDependency}
+                     onEditNote={handleStartEditNote}
+                     editingNoteId={editingNoteId}
+                     noteText={noteText}
+                     onNoteChange={setNoteText}
+                     onSaveNote={handleSaveNote}
+                     onCancelNote={handleCancelEditNote}
+                     isSavingNote={isSavingNote}
+                   />
+                 )
+               })}
+               </div>
+             ))
+           )}
+         </div>
 
-        <div className="space-y-2">
-          <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This series blocks</h3>
-          {isLoadingDeps ? (
-            <p className="text-xs text-stone-500">Loading dependencies…</p>
-          ) : dependencies.blocking.length === 0 ? (
-            <p className="text-xs text-stone-500">No dependent series yet.</p>
-          ) : (
-            Array.from(groupByThread(dependencies.blocking, 'target_label')).map(([threadName, deps]) => (
-              <div key={threadName} className="space-y-1">
-                <p className="text-xs font-bold text-stone-400 break-words min-w-0">{threadName}</p>
-              {deps.map((dep) => {
-                const title = dep.is_issue_level && dep.source_label && dep.target_label
-                  ? `${dep.source_label} → ${dep.target_label}`
-                  : dep.target_label ?? (dep.target_issue_id ? `Issue #${dep.target_issue_id}` : `Series #${dep.target_thread_id}`)
-                return (
-                  <DependencyRow
-                    key={dep.id}
-                    dependency={dep}
-                    title={title}
-                    subtitle={dep.target_issue_id ? 'Issue-level block' : 'Series-level block'}
-                    onDelete={handleDeleteDependency}
-                    onEditNote={handleStartEditNote}
-                    editingNoteId={editingNoteId}
-                    noteText={noteText}
-                    onNoteChange={setNoteText}
-                    onSaveNote={handleSaveNote}
-                    onCancelNote={handleCancelEditNote}
-                    isSavingNote={isSavingNote}
-                  />
-                )
-              })}
-              </div>
-            ))
-          )}
-        </div>
+         <div className="space-y-2">
+           <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This series blocks</h3>
+           {isLoadingDeps ? (
+             <p className="text-xs text-stone-500">Loading dependencies…</p>
+           ) : dependencies.blocking.length === 0 ? (
+             <p className="text-xs text-stone-500">No dependent series yet.</p>
+           ) : (
+             Array.from(groupByThread(dependencies.blocking, 'target_label')).map(([threadName, deps]) => (
+               <div key={threadName} className="space-y-1">
+                 <p className="text-xs font-bold text-stone-400 break-words min-w-0">{threadName}</p>
+               {deps.map((dep) => {
+                 const title = dep.is_issue_level && dep.source_label && dep.target_label
+                   ? `${dep.source_label} → ${dep.target_label}`
+                   : dep.target_label ?? (dep.target_issue_id ? `Issue #${dep.target_issue_id}` : `Series #${dep.target_thread_id}`)
+                 return (
+                   <DependencyRow
+                     key={dep.id}
+                     dependency={dep}
+                     title={title}
+                     subtitle={dep.target_issue_id ? 'Issue-level block' : 'Series-level block'}
+                     onDelete={handleDeleteDependency}
+                     onEditNote={handleStartEditNote}
+                     editingNoteId={editingNoteId}
+                     noteText={noteText}
+                     onNoteChange={setNoteText}
+                     onSaveNote={handleSaveNote}
+                     onCancelNote={handleCancelEditNote}
+                     isSavingNote={isSavingNote}
+                   />
+                 )
+               })}
+               </div>
+             ))
+           )}
+         </div>
 
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-3 py-2 rounded-xl text-xs">
-            {error}
-          </div>
-        )}
-      </div>
+         {error && (
+           <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-3 py-2 rounded-xl text-xs">
+             {error}
+           </div>
+         )}
+       </div>
     </Modal>
   )
 }

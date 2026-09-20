@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-KNOWN_GOOD_SETUP_UV_REF = "08807647e7069bb48b6ef5acd8ec9567f424441b"
+KNOWN_GOOD_SETUP_UV_REF = "37802adc94f370d6bfd71619e3f0bf239e1f3b78"
 
 
 def test_vercel_git_deployments_are_disabled() -> None:

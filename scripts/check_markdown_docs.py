@@ -13,6 +13,7 @@ SHORTCUT_REFERENCE_RE = re.compile(r"(?<!!)\[([^\]\n]+)\](?![\[(])")
 REFERENCE_DEFINITION_RE = re.compile(r"^\s*\[([^\]]+)\]:\s*(\S+)", re.MULTILINE)
 ALLOWED_ROOT_MARKDOWN = {
     "AGENTS.md",
+    "CODE_OF_CONDUCT.md",
     "CONTRIBUTING.md",
     "LOCAL_TESTING.md",
     "README.md",
