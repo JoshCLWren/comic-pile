@@ -2,8 +2,8 @@ import { type Ref } from 'react'
 import type { ReaderContextResponse } from '../../../types'
 import type { RatingThread } from '../types'
 import { ComicPillar } from './ComicPillar'
-import { YourContextPillar } from './YourContextPillar'
-import { RatingActionPanel } from './RatingActionPanel'
+import { DecisionCard } from './DecisionCard'
+import { ContextDisclosure } from './ContextDisclosure'
 
 interface RatingViewProps {
   activeRatingThread: RatingThread | null
@@ -49,8 +49,6 @@ export function RatingView({
   isReaderContextLoading = false,
   ratingViewTopRef = null,
 }: RatingViewProps) {
-  const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
-
   return (
     <div ref={ratingViewTopRef} data-testid="rating-view-top" className="relative z-10 space-y-4 p-3 md:p-4">
       <div
@@ -61,33 +59,28 @@ export function RatingView({
           <ComicPillar activeRatingThread={activeRatingThread} onRefreshThread={onRefreshThread} />
         </div>
 
-        <div className="min-w-0 space-y-4" data-testid="rating-region-your-context">
-          <YourContextPillar
+        <div className="min-w-0 space-y-4" data-testid="rating-region-decision">
+          <DecisionCard
             activeRatingThread={activeRatingThread}
             currentDie={currentDie}
             rating={rating}
             predictedDie={predictedDie}
+            errorMessage={errorMessage}
+            rateIsPending={rateIsPending}
+            snoozeIsPending={snoozeIsPending}
+            dismissIsPending={dismissIsPending}
+            skipIsPending={skipIsPending}
             onUpdateRating={onUpdateRating}
+            onSubmitRating={onSubmitRating}
+            onSnooze={onSnooze}
+            onSkip={onSkip}
+            onCancel={onCancel}
+          />
+
+          <ContextDisclosure
             readerContext={readerContext}
             isLoading={isReaderContextLoading}
           />
-
-          <div className="min-w-0" data-testid="rating-actions-grid-cell">
-            <RatingActionPanel
-              errorMessage={errorMessage}
-              rateIsPending={rateIsPending}
-              snoozeIsPending={snoozeIsPending}
-              dismissIsPending={dismissIsPending}
-              skipIsPending={skipIsPending}
-              issuesRemaining={issuesRemaining}
-              onSubmitRating={onSubmitRating}
-              onSnooze={onSnooze}
-              onSkip={onSkip}
-              onCancel={onCancel}
-              threadTitle={activeRatingThread?.title ?? null}
-              issueNumber={activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null}
-            />
-          </div>
         </div>
       </div>
     </div>
