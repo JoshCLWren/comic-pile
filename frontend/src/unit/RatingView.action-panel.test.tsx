@@ -4,8 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import { RATING_THRESHOLD } from '../pages/RollPage/utils'
-import type { RatingThread } from '../pages/RollPage/types'
-import type { ReaderContextResponse } from '../types'
+import type { RatingViewData } from '../pages/RollPage/useRatingView'
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -36,42 +35,22 @@ vi.mock('../hooks/useReaderContext', async (importOriginal) => {
   }
 })
 
-interface RatingViewOverride {
-  activeRatingThread?: Partial<RatingThread> | null
-  currentDie?: number
-  rolledResult?: number | null
-  rating?: number
-  predictedDie?: number
-  errorMessage?: string
-  rateIsPending?: boolean
-  snoozeIsPending?: boolean
-  dismissIsPending?: boolean
-  onUpdateRating?: (value: string) => void
-  onSubmitRating?: (finishSession: boolean) => void
-  onSnooze?: () => void
-  onCancel?: () => void
-  onRefreshThread?: () => void
-  readerContext?: ReaderContextResponse | null
-  isReaderContextLoading?: boolean
-  readerContextError?: string | null
-  // SAFETY: legacy stray override key only read by tests; the component reads issues_remaining from activeRatingThread.
-  issues_remaining?: number
-}
-function ratingView(overrides: RatingViewOverride = {}) {
-  const defaults = {
-    activeRatingThread: {
-      id: 1,
-      title: 'Saga',
-      format: 'Comic',
-      issues_remaining: 5,
-      total_issues: 10,
-      issue_number: '3',
-      next_issue_number: '4',
-      reading_progress: 'in_progress',
-      queue_position: 0,
-      issue_id: 100,
-      next_issue_id: 101,
-    },
+function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingViewData {
+  const thread = overrides.activeRatingThread ?? {
+    id: 1,
+    title: 'Saga',
+    format: 'Comic',
+    issues_remaining: 5,
+    total_issues: 10,
+    issue_number: '3',
+    next_issue_number: '4',
+    reading_progress: 'in_progress',
+        queue_position: 0,
+    issue_id: 100,
+    next_issue_id: 101,
+  }
+  return {
+    activeRatingThread: thread,
     currentDie: 6,
     rolledResult: 3,
     rating: 3.0,
@@ -80,17 +59,28 @@ function ratingView(overrides: RatingViewOverride = {}) {
     rateIsPending: false,
     snoozeIsPending: false,
     dismissIsPending: false,
+    skipIsPending: false,
     onUpdateRating: vi.fn(),
     onSubmitRating: vi.fn(),
     onSnooze: vi.fn(),
+    onSkip: undefined,
     onCancel: vi.fn(),
     onRefreshThread: vi.fn(),
     readerContext: null,
     isReaderContextLoading: false,
     readerContextError: null,
+    ratingViewTopRef: null,
+    issuesRemaining: thread.issues_remaining,
     ...overrides,
   }
-  return <MemoryRouter><RatingView {...defaults} activeRatingThread={defaults.activeRatingThread as RatingThread | null} /></MemoryRouter>
+}
+
+function ratingView(overrides: Partial<RatingViewData> = {}) {
+  return (
+    <MemoryRouter>
+      <RatingView data={makeRatingViewData(overrides)} />
+    </MemoryRouter>
+  )
 }
 
 describe('RatingView action panel (issue #1406)', () => {
@@ -159,7 +149,7 @@ describe('RatingView action panel (issue #1406)', () => {
   })
 
   it('primary action shows Mark read & save for multi-issue thread', () => {
-    render(ratingView({ issues_remaining: 5 }))
+    render(ratingView({ issuesRemaining: 5 }))
     expect(screen.getByRole('button', { name: /mark read & save/i })).toBeInTheDocument()
   })
 
@@ -168,6 +158,7 @@ describe('RatingView action panel (issue #1406)', () => {
       activeRatingThread: {
         id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10,
         issue_number: '10', next_issue_number: null, reading_progress: 'in_progress',
+        queue_position: 0,
         issue_id: 100, next_issue_id: null,
       },
     }))
@@ -179,6 +170,7 @@ describe('RatingView action panel (issue #1406)', () => {
       activeRatingThread: {
         id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10,
         issue_number: '10', next_issue_number: null, reading_progress: 'in_progress',
+        queue_position: 0,
         issue_id: 100, next_issue_id: null,
       },
     }))
@@ -325,7 +317,7 @@ describe('RatingView desktop layout contract (#2711 revises #1943)', () => {
   })
 
   it('contains no Why this?, Reading Context or Reading Boundaries affordance even with populated props', () => {
-    const { container } = render(ratingView({ readerContext: { issue_id: 100, series: { identity_source: 'comicvine', canonical_series_id: 's1', series_name: 'Saga', average_rating: 4, ratings_count: 1, previous_issue: null, recent_ratings: [], highest_rating: 5, lowest_rating: 1 }, crossovers: [], local_chain: { issues: [], edges: [] } } as ReaderContextResponse }))
+    const { container } = render(ratingView({ readerContext: { issue_id: 100, series: { identity_source: 'comicvine', canonical_series_id: 's1', series_name: 'Saga', average_rating: 4, ratings_count: 1, previous_issue: null, recent_ratings: [], highest_rating: 5, lowest_rating: 1 }, crossovers: [], local_chain: { issues: [], edges: [] } } as any }))
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
     expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
     expect(screen.queryByText('Reading Boundaries')).not.toBeInTheDocument()

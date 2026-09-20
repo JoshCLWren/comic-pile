@@ -20,18 +20,17 @@ import { isDiceSide } from '../../components/diceTypes'
 import { threadsApi, sessionApi } from '../../services/api'
 import type { ReadingModeState, SessionModeUpdateRequest, SnoozeCorrectionInfo } from '../../types'
 import { FEATURES } from '../../config/features'
-import { useReaderContext } from '../../hooks/useReaderContext'
 import type { ThreadMetadata } from './types'
 import { useRollPageState } from './useRollPageState'
 import { useRollBootstrapSync } from './useRollBootstrapSync'
 import { useRollPendingSession } from './useRollPendingSession'
 import { useRollRating } from './useRollRating'
-import { computePredictedDie } from './utils'
 import { useRollSnooze } from './useRollSnooze'
 import { useRollDependencies } from './useRollDependencies'
 import { useRollActions } from './useRollActions'
 import { useRollModals } from './useRollModals'
 import { useRollViewport } from './useRollViewport'
+import { useRatingView } from './useRatingView'
 import { RatingView } from './components/RatingView'
 import { PostRateCopyPrompt } from './components/PostRateCopyPrompt'
 import { ThreadPool } from './components/ThreadPool'
@@ -145,12 +144,6 @@ export default function RollPage() {
     refetchBootstrap,
   })
 
-  const ratingIssueId = state.activeRatingThread?.issue_id ?? state.activeRatingThread?.next_issue_id ?? null
-  const { context: readerContext, isLoading: isReaderContextLoading } = useReaderContext(
-    ratingIssueId,
-    rating.readingDetailsRequested,
-  )
-
   const { mainDieRef, ratingViewTopRef } = useRollViewport({
     isRatingView: state.isRatingView,
   })
@@ -261,6 +254,19 @@ export default function RollPage() {
     }
   }, [skipMutation, refetchBootstrap, rating, state])
 
+  const ratingViewData = useRatingView({
+    state,
+    readingDetailsRequested: rating.readingDetailsRequested,
+    rating,
+    snooze,
+    onSkip: handleSkip,
+    rateMutation,
+    snoozeMutation,
+    dismissPendingMutation,
+    skipMutation,
+    ratingViewTopRef,
+  })
+
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
   const skippedThreads = bootstrap?.skipped_threads ?? []
   const blockedThreads = bootstrap?.blocked_threads ?? []
@@ -366,27 +372,7 @@ export default function RollPage() {
                 />
               </>
             ) : (
-              <RatingView
-                activeRatingThread={state.activeRatingThread}
-                ratingViewTopRef={ratingViewTopRef}
-                currentDie={state.currentDie}
-                rolledResult={state.rolledResult}
-                rating={state.rating}
-                predictedDie={computePredictedDie(state.currentDie, state.rating)}
-                errorMessage={state.errorMessage}
-                rateIsPending={rateMutation.isPending}
-                snoozeIsPending={snoozeMutation.isPending}
-                dismissIsPending={dismissPendingMutation.isPending}
-                skipIsPending={skipMutation.isPending}
-                onUpdateRating={rating.updateRatingUI}
-                onSubmitRating={rating.handleSubmitRating}
-                onSnooze={snooze.handleSnooze}
-                onSkip={handleSkip}
-                onCancel={rating.handleCancelRating}
-                onRefreshThread={rating.handleRefreshThread}
-                readerContext={readerContext}
-                isReaderContextLoading={isReaderContextLoading}
-              />
+              <RatingView data={ratingViewData} />
             )}
 
             {!state.isRatingView && (

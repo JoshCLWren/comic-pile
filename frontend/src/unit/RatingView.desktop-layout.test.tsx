@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
+import type { RatingViewData } from '../pages/RollPage/useRatingView'
 import type { RatingThread } from '../pages/RollPage/types'
 import type { ReaderContextResponse } from '../types'
 
@@ -22,13 +23,7 @@ vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
   ReadingRouteExplanation: () => null,
 }))
 
-interface HoistedComicVineModule {
-  comicvineState: {
-    metadata: unknown
-  }
-}
-
-const { comicvineState } = vi.hoisted((): HoistedComicVineModule => ({
+const { comicvineState } = vi.hoisted((): { comicvineState: { metadata: unknown } } => ({
   comicvineState: { metadata: null },
 }))
 vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
@@ -38,6 +33,53 @@ vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
     refetch: vi.fn(),
   }),
 }))
+
+function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingViewData {
+  return {
+    activeRatingThread: {
+      id: 1,
+      title: 'Saga',
+      format: 'Comic',
+      issues_remaining: 5,
+      total_issues: 10,
+      issue_number: '3',
+      next_issue_number: '4',
+      reading_progress: 'in_progress',
+      queue_position: 0,
+      issue_id: 100,
+      next_issue_id: 101,
+    },
+    currentDie: 6,
+    rolledResult: 3,
+    rating: 3.0,
+    predictedDie: 8,
+    errorMessage: '',
+    rateIsPending: false,
+    snoozeIsPending: false,
+    dismissIsPending: false,
+    skipIsPending: false,
+    onUpdateRating: vi.fn(),
+    onSubmitRating: vi.fn(),
+    onSnooze: vi.fn(),
+    onSkip: undefined,
+    onCancel: vi.fn(),
+    onRefreshThread: vi.fn(),
+    readerContext: null,
+    isReaderContextLoading: false,
+    readerContextError: null,
+    ratingViewTopRef: null,
+    issuesRemaining: 5,
+    ...overrides,
+  }
+}
+
+function ratingView(overrides: Partial<RatingViewData> = {}) {
+  return (
+    <MemoryRouter>
+      <RatingView data={makeRatingViewData(overrides)} />
+    </MemoryRouter>
+  )
+}
 
 function richReaderContext(): ReaderContextResponse {
   return {
@@ -89,61 +131,6 @@ function richReaderContext(): ReaderContextResponse {
       ],
     },
   }
-}
-
-interface RatingViewOverride {
-  activeRatingThread?: Partial<RatingThread> | null
-  currentDie?: number
-  rolledResult?: number | null
-  rating?: number
-  predictedDie?: number
-  errorMessage?: string
-  rateIsPending?: boolean
-  snoozeIsPending?: boolean
-  dismissIsPending?: boolean
-  onUpdateRating?: (value: string) => void
-  onSubmitRating?: (finishSession: boolean) => void
-  onSnooze?: () => void
-  onCancel?: () => void
-  onRefreshThread?: () => void
-  readerContext?: ReaderContextResponse | null
-  isReaderContextLoading?: boolean
-  readerContextError?: string | null
-}
-function ratingView(overrides: RatingViewOverride = {}) {
-  const defaults = {
-    activeRatingThread: {
-      id: 1,
-      title: 'Saga',
-      format: 'Comic',
-      issues_remaining: 5,
-      total_issues: 10,
-      issue_number: '3',
-      next_issue_number: '4',
-      reading_progress: 'in_progress',
-      queue_position: 0,
-      issue_id: 100,
-      next_issue_id: 101,
-    },
-    currentDie: 6,
-    rolledResult: 3,
-    rating: 3.0,
-    predictedDie: 8,
-    errorMessage: '',
-    rateIsPending: false,
-    snoozeIsPending: false,
-    dismissIsPending: false,
-    onUpdateRating: vi.fn(),
-    onSubmitRating: vi.fn(),
-    onSnooze: vi.fn(),
-    onCancel: vi.fn(),
-    onRefreshThread: vi.fn(),
-    readerContext: null,
-    isReaderContextLoading: false,
-    readerContextError: null,
-    ...overrides,
-  }
-  return <MemoryRouter><RatingView {...defaults} activeRatingThread={defaults.activeRatingThread as RatingThread | null} /></MemoryRouter>
 }
 
 function gridChildren(container: HTMLElement) {

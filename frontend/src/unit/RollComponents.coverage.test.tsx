@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { cast } from '../utils/cast'
+import type { RatingViewData } from '../pages/RollPage/useRatingView'
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
 import { RatingView } from '../pages/RollPage/components/RatingView'
@@ -63,7 +64,7 @@ describe('ThreadPool', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: /go to queue/i }))
     expect(actions.onToggleBlocked).not.toHaveBeenCalled()
 
-    // SAFETY: Same synthetic staleThread widening for the second stale branch coverage.
+    // SAFETY: Same synthetic staleThread widening for the second stale branch.
     rerender(<MemoryRouter><ThreadPool pool={[thread]} blockedThreads={[]} blockingDependencyMap={{}} isRatingView={false} selectedThreadId={1} staleThread={cast<Parameters<typeof ThreadPool>[0]['staleThread']>({ ...thread, days: 2 })} staleThreadCount={1} snoozedThreads={[{ id: 3, title: 'Snoozed', format: 'Comic' }]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} blockedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
     await userEvent.setup().click(screen.getByRole('button', { name: /snoozed/i }))
     await userEvent.setup().click(screen.getAllByText('Saga')[0]!)
@@ -151,11 +152,17 @@ describe('ThreadPool', () => {
 })
 
 describe('RatingView', () => {
+  function makeData(overrides: Partial<RatingViewData> = {}): RatingViewData {
+    return {
+      activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5, total_issues: 10, issue_number: '3', next_issue_number: '4', reading_progress: 'in_progress', queue_position: 0, issue_id: 100, next_issue_id: 101 },
+      currentDie: 6, rolledResult: 3, rating: 3.0, predictedDie: 8, errorMessage: '', rateIsPending: false, snoozeIsPending: false, dismissIsPending: false, skipIsPending: false, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn(), readerContext: null, isReaderContextLoading: false, readerContextError: null, ratingViewTopRef: null, issuesRemaining: 5, ...overrides,
+    }
+  }
+
   it('renders rating states and invokes controls', async () => {
     const onUpdateRating = vi.fn(); const onSubmitRating = vi.fn(); const onSnooze = vi.fn(); const onCancel = vi.fn(); const onRefreshThread = vi.fn()
     const user = userEvent.setup()
-    // SAFETY: ActiveRatingThread stub uses only the fields RatingView reads (title/issues/progress); cast widens Thread to the rating thread shape.
-    render(<MemoryRouter><RatingView activeRatingThread={cast<Parameters<typeof RatingView>[0]['activeRatingThread']>({ ...thread, id: 1, issue_number: '2', next_issue_number: '3', reading_progress: 'in_progress' })} currentDie={20} rolledResult={19} rating={5} predictedDie={6} errorMessage="Problem" rateIsPending={false} snoozeIsPending={false} dismissIsPending={false} onUpdateRating={onUpdateRating} onSubmitRating={onSubmitRating} onSnooze={onSnooze} onCancel={onCancel} onRefreshThread={onRefreshThread} readerContext={null} isReaderContextLoading={false} /></MemoryRouter>)
+    render(<MemoryRouter><RatingView data={makeData({ onUpdateRating, onSubmitRating, onSnooze, onCancel, onRefreshThread })} /></MemoryRouter>)
     expect(screen.getAllByText(/Saga/).length).toBeGreaterThan(0)
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
     expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
@@ -174,8 +181,7 @@ describe('RatingView', () => {
 
   it('renders empty, low-rating, progress, reading-order, and correction states', async () => {
     const callbacks = { onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() }
-    // SAFETY: RatingView test stubs use minimal ActiveRatingThread/reading-order shapes; the cast widens to the component's expected types.
-    render(<MemoryRouter><RatingView activeRatingThread={cast<Parameters<typeof RatingView>[0]['activeRatingThread']>({ ...thread, issue_number: '2', next_issue_number: null, reading_progress: 'completed', issues_remaining: 1 })} currentDie={4} rolledResult={null} rating={1} predictedDie={6} errorMessage="Oops" rateIsPending snoozeIsPending dismissIsPending {...callbacks} /></MemoryRouter>)
+    render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10, issue_number: '2', next_issue_number: null, reading_progress: 'completed', queue_position: 0, issue_id: 100, next_issue_id: null }, onUpdateRating: callbacks.onUpdateRating, onSubmitRating: callbacks.onSubmitRating, onSnooze: callbacks.onSnooze, onCancel: callbacks.onCancel, onRefreshThread: callbacks.onRefreshThread })} /></MemoryRouter>)
     expect(screen.getByText(/This is the last issue/)).toBeInTheDocument()
     expect(screen.getByText('Oops')).toBeInTheDocument()
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
@@ -190,23 +196,7 @@ describe('RatingView', () => {
   })
 
   it('renders safe fallbacks for missing thread metadata', async () => {
-    // SAFETY: Test exercises fallback branches with synthetic die shapes; casts narrow to the RatingView prop union.
-    render(<MemoryRouter><RatingView
-      activeRatingThread={cast<Parameters<typeof RatingView>[0]['activeRatingThread']>({ ...thread, issue_number: '2', issues_remaining: 1 })}
-      currentDie={cast<Parameters<typeof RatingView>[0]['currentDie']>(7)}
-      rolledResult={7}
-      rating={3}
-      predictedDie={cast<Parameters<typeof RatingView>[0]['predictedDie']>(7)}
-      errorMessage=""
-      rateIsPending={false}
-      snoozeIsPending={false}
-      dismissIsPending={false}
-      onUpdateRating={vi.fn()}
-      onSubmitRating={vi.fn()}
-      onSnooze={vi.fn()}
-      onCancel={vi.fn()}
-      onRefreshThread={vi.fn()}
-    /></MemoryRouter>)
+    render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10, issue_number: '2', next_issue_number: null, reading_progress: null, queue_position: 0, issue_id: 100, next_issue_id: null }, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() })} /></MemoryRouter>)
     expect(screen.getByText('Saga')).toBeInTheDocument()
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
     expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
@@ -216,19 +206,7 @@ describe('RatingView', () => {
 
   it('renders alternate rating, progress, and order boundaries', async () => {
     const callbacks = { onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() }
-    // SAFETY: Minimal activeRatingThread stubs cover boundary branches; cast widens to the expected prop types.
-    render(<MemoryRouter><RatingView
-      activeRatingThread={cast<Parameters<typeof RatingView>[0]['activeRatingThread']>({ ...thread, issue_number: null, next_issue_number: null, total_issues: 0, issues_remaining: 2, reading_progress: null })}
-      currentDie={6}
-      rolledResult={2}
-      rating={5}
-      predictedDie={6}
-      errorMessage=""
-      rateIsPending={false}
-      snoozeIsPending={false}
-      dismissIsPending={false}
-      {...callbacks}
-    /></MemoryRouter>)
+    render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, total_issues: 0, issue_number: null, next_issue_number: null, reading_progress: null, queue_position: 0, issue_id: 100, next_issue_id: null }, onUpdateRating: callbacks.onUpdateRating, onSubmitRating: callbacks.onSubmitRating, onSnooze: callbacks.onSnooze, onCancel: callbacks.onCancel, onRefreshThread: callbacks.onRefreshThread })} /></MemoryRouter>)
     expect(screen.getByText('Saga')).toBeInTheDocument()
     expect(screen.getByText('Die stays the same')).toBeInTheDocument()
     expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
@@ -238,22 +216,7 @@ describe('RatingView', () => {
   })
 
   it('asserts removed Why this, Reading Context and Reading Boundaries affordances are absent', async () => {
-    render(<MemoryRouter><RatingView
-      activeRatingThread={cast<Parameters<typeof RatingView>[0]['activeRatingThread']>({ ...thread, issue_number: '2', issues_remaining: 1 })}
-      currentDie={6}
-      rolledResult={3}
-      rating={3}
-      predictedDie={6}
-      errorMessage=""
-      rateIsPending={false}
-      snoozeIsPending={false}
-      dismissIsPending={false}
-      onUpdateRating={vi.fn()}
-      onSubmitRating={vi.fn()}
-      onSnooze={vi.fn()}
-      onCancel={vi.fn()}
-      onRefreshThread={vi.fn()}
-    /></MemoryRouter>)
+    render(<MemoryRouter><RatingView data={makeData({ activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 1, total_issues: 10, issue_number: '2', next_issue_number: null, reading_progress: null, queue_position: 0, issue_id: 100, next_issue_id: null }, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() })} /></MemoryRouter>)
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
     expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()
     expect(screen.queryByText('Reading Boundaries')).not.toBeInTheDocument()
@@ -262,7 +225,6 @@ describe('RatingView', () => {
     expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-context')).not.toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-boundaries')).not.toBeInTheDocument()
-    // Middle column removed: grid is now 2 columns without reading-optional region
     expect(screen.getByTestId('rating-pillars-grid').className).not.toContain('xl:grid-cols-[repeat(auto-fit')
     expect(screen.getByTestId('rating-region-comic')).toBeInTheDocument()
     expect(screen.getByTestId('rating-region-your-context')).toBeInTheDocument()

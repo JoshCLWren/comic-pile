@@ -2,8 +2,8 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
+import type { RatingViewData } from '../pages/RollPage/useRatingView'
 import type { ReaderContextResponse } from '../types'
-import type { RatingThread } from '../pages/RollPage/types'
 
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -15,12 +15,56 @@ vi.mock('../components/ContinuityCorrectionDialog', () => ({ default: () => null
 vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
   ReadingOrderGroups: () => null,
 }))
-vi.mock('../pages/RollPage/components/ComicVineIssueCard', () => ({
-  ComicVineIssueCard: () => null,
-}))
 vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
   ReadingRouteExplanation: () => null,
 }))
+
+function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingViewData {
+  return {
+    activeRatingThread: {
+      id: 1,
+      title: 'Saga',
+      format: 'Comic',
+      issues_remaining: 5,
+      total_issues: 10,
+      issue_number: '3',
+      next_issue_number: '4',
+      reading_progress: 'in_progress',
+      queue_position: 0,
+      issue_id: 100,
+      next_issue_id: 101,
+    },
+    currentDie: 6,
+    rolledResult: 3,
+    rating: 3.0,
+    predictedDie: 8,
+    errorMessage: '',
+    rateIsPending: false,
+    snoozeIsPending: false,
+    dismissIsPending: false,
+    skipIsPending: false,
+    onUpdateRating: vi.fn(),
+    onSubmitRating: vi.fn(),
+    onSnooze: vi.fn(),
+    onSkip: undefined,
+    onCancel: vi.fn(),
+    onRefreshThread: vi.fn(),
+    readerContext: null,
+    isReaderContextLoading: false,
+    readerContextError: null,
+    ratingViewTopRef: null,
+    issuesRemaining: 5,
+    ...overrides,
+  }
+}
+
+function ratingView(overrides: Partial<RatingViewData> = {}) {
+  return (
+    <MemoryRouter>
+      <RatingView data={makeRatingViewData(overrides)} />
+    </MemoryRouter>
+  )
+}
 
 function makeContext(edges: ReaderContextResponse['local_chain']['edges'], seriesName: string | null = null): ReaderContextResponse {
   return {
@@ -44,50 +88,6 @@ function makeContext(edges: ReaderContextResponse['local_chain']['edges'], serie
       edges,
     },
   }
-}
-
-interface RatingViewOverride {
-  activeRatingThread?: Partial<RatingThread> | null
-  rolledResult?: number | null
-  errorMessage?: string
-  readerContext?: ReaderContextResponse | null
-  isReaderContextLoading?: boolean
-  readerContextError?: string | null
-}
-function ratingView(overrides: RatingViewOverride = {}) {
-  const defaults = {
-    activeRatingThread: {
-      id: 1,
-      title: 'Saga',
-      format: 'Comic',
-      issues_remaining: 5,
-      total_issues: 10,
-      issue_number: '3',
-      next_issue_number: '4',
-      reading_progress: 'in_progress',
-      queue_position: 0,
-      issue_id: 100,
-      next_issue_id: 101,
-    },
-    currentDie: 6,
-    rolledResult: 3,
-    rating: 3.0,
-    predictedDie: 8,
-    errorMessage: '',
-    rateIsPending: false,
-    snoozeIsPending: false,
-    dismissIsPending: false,
-    onUpdateRating: vi.fn(),
-    onSubmitRating: vi.fn(),
-    onSnooze: vi.fn(),
-    onCancel: vi.fn(),
-    onRefreshThread: vi.fn(),
-    readerContext: null,
-    isReaderContextLoading: false,
-    readerContextError: null,
-    ...overrides,
-  }
-  return <MemoryRouter><RatingView {...defaults} activeRatingThread={defaults.activeRatingThread as RatingThread | null} /></MemoryRouter>
 }
 
 describe('RatingView Reading Boundaries retired control (#2711 supersedes #2519)', () => {

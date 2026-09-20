@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
+import type { RatingViewData } from '../pages/RollPage/useRatingView'
 import { ReadingContextStatusCard } from '../pages/RollPage/components/ReadingContextStatusCard'
 import {
   hasReadingContextContent,
@@ -24,35 +25,21 @@ vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
   ReadingRouteExplanation: () => null,
 }))
 
-const callbacks = {
-  onUpdateRating: vi.fn(),
-  onSubmitRating: vi.fn(),
-  onSnooze: vi.fn(),
-  onCancel: vi.fn(),
-  onRefreshThread: vi.fn(),
-}
+vi.mock('../hooks/useReaderContext', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks/useReaderContext')>()
+  return {
+    ...actual,
+    useReaderContext: () => ({
+      context: null,
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    }),
+  }
+})
 
-interface RatingViewOverride {
-  activeRatingThread?: Partial<RatingThread> | null
-  currentDie?: number
-  rolledResult?: number | null
-  rating?: number
-  predictedDie?: number
-  errorMessage?: string
-  rateIsPending?: boolean
-  snoozeIsPending?: boolean
-  dismissIsPending?: boolean
-  onUpdateRating?: (value: string) => void
-  onSubmitRating?: (finishSession: boolean) => void
-  onSnooze?: () => void
-  onCancel?: () => void
-  onRefreshThread?: () => void
-  readerContext?: ReaderContextResponse | null
-  isReaderContextLoading?: boolean
-  readerContextError?: string | null
-}
-function renderRatingView(overrides: RatingViewOverride = {}) {
-  const defaults = {
+function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingViewData {
+  return {
     activeRatingThread: {
       id: 1,
       title: 'Ultimate X-Men',
@@ -74,13 +61,28 @@ function renderRatingView(overrides: RatingViewOverride = {}) {
     rateIsPending: false,
     snoozeIsPending: false,
     dismissIsPending: false,
+    skipIsPending: false,
+    onUpdateRating: vi.fn(),
+    onSubmitRating: vi.fn(),
+    onSnooze: vi.fn(),
+    onSkip: undefined,
+    onCancel: vi.fn(),
+    onRefreshThread: vi.fn(),
     readerContext: null,
     isReaderContextLoading: false,
     readerContextError: null,
-    ...callbacks,
+    ratingViewTopRef: null,
+    issuesRemaining: 4,
     ...overrides,
   }
-  return render(<MemoryRouter><RatingView {...defaults} activeRatingThread={defaults.activeRatingThread as RatingThread | null} /></MemoryRouter>)
+}
+
+function renderRatingView(overrides: Partial<RatingViewData> = {}) {
+  return render(
+    <MemoryRouter>
+      <RatingView data={makeRatingViewData(overrides)} />
+    </MemoryRouter>
+  )
 }
 
 const populatedContext: ReaderContextResponse = {

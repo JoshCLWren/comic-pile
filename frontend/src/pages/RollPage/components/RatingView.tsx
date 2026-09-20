@@ -1,55 +1,36 @@
 import { type Ref } from 'react'
-import type { ReaderContextResponse } from '../../../types'
 import type { RatingThread } from '../types'
 import { ComicPillar } from './ComicPillar'
 import { YourContextPillar } from './YourContextPillar'
 import { RatingActionPanel } from './RatingActionPanel'
+import type { RatingViewData } from '../useRatingView'
 
 interface RatingViewProps {
-  activeRatingThread: RatingThread | null
-  currentDie: number
-  rolledResult: number | null
-  rating: number
-  predictedDie: number
-  errorMessage: string
-  rateIsPending: boolean
-  snoozeIsPending: boolean
-  dismissIsPending: boolean
-  skipIsPending?: boolean
-  onUpdateRating: (value: string) => void
-  onSubmitRating: (finishSession: boolean) => void
-  onSnooze: () => void
-  onSkip?: () => void
-  onCancel: () => void
-  onRefreshThread: () => void
-  readerContext?: ReaderContextResponse | null
-  isReaderContextLoading?: boolean
-  readerContextError?: string | null
-  ratingViewTopRef?: Ref<HTMLDivElement> | null
+  data: RatingViewData
 }
 
-export function RatingView({
-  activeRatingThread,
-  currentDie,
-  rolledResult: _rolledResult,
-  rating,
-  predictedDie,
-  errorMessage,
-  rateIsPending,
-  snoozeIsPending,
-  dismissIsPending,
-  skipIsPending = false,
-  onUpdateRating,
-  onSubmitRating,
-  onSnooze,
-  onSkip,
-  onCancel,
-  onRefreshThread,
-  readerContext = null,
-  isReaderContextLoading = false,
-  ratingViewTopRef = null,
-}: RatingViewProps) {
-  const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
+export function RatingView({ data }: RatingViewProps) {
+  const {
+    activeRatingThread,
+    currentDie,
+    rating,
+    predictedDie,
+    errorMessage,
+    rateIsPending,
+    snoozeIsPending,
+    dismissIsPending,
+    skipIsPending,
+    onUpdateRating,
+    onSubmitRating,
+    onSnooze,
+    onSkip,
+    onCancel,
+    onRefreshThread,
+    readerContext,
+    isReaderContextLoading,
+    ratingViewTopRef,
+    issuesRemaining,
+  } = data
 
   return (
     <div ref={ratingViewTopRef} data-testid="rating-view-top" className="relative z-10 space-y-4 p-3 md:p-4">

@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import { cast } from '../utils/cast'
+import type { RatingViewData } from '../pages/RollPage/useRatingView'
 vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
@@ -36,32 +37,45 @@ const callbacks = {
   onRefreshThread: vi.fn(),
 }
 
+function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingViewData {
+  return {
+    activeRatingThread: cast<RatingViewData['activeRatingThread']>({
+      id: 1,
+      title: 'Ultimate X-Men',
+      format: 'Comic',
+      issues_remaining: 4,
+      total_issues: 12,
+      issue_number: '11',
+      next_issue_number: '12',
+    }),
+    currentDie: 6,
+    rolledResult: 2,
+    rating: 4,
+    predictedDie: 4,
+    errorMessage: '',
+    rateIsPending: false,
+    snoozeIsPending: false,
+    dismissIsPending: false,
+    skipIsPending: false,
+    onUpdateRating: callbacks.onUpdateRating,
+    onSubmitRating: callbacks.onSubmitRating,
+    onSnooze: callbacks.onSnooze,
+    onSkip: undefined,
+    onCancel: callbacks.onCancel,
+    onRefreshThread: callbacks.onRefreshThread,
+    readerContext: null,
+    isReaderContextLoading: false,
+    readerContextError: null,
+    ratingViewTopRef: null,
+    issuesRemaining: 4,
+    ...overrides,
+  }
+}
+
 function renderRatingView() {
   render(
     <MemoryRouter>
-      <RatingView
-        // SAFETY: Test supplies a minimal ActiveRatingThread shape with only the fields RatingView reads; cast is safe because the component only accesses title/format and issue numbers.
-        activeRatingThread={cast<Parameters<typeof RatingView>[0]['activeRatingThread']>({
-          id: 1,
-          title: 'Ultimate X-Men',
-          format: 'Comic',
-          issues_remaining: 4,
-          total_issues: 12,
-          issue_number: '11',
-          next_issue_number: '12',
-        })}
-        currentDie={6}
-        rolledResult={2}
-        rating={4}
-        predictedDie={4}
-        errorMessage=""
-        rateIsPending={false}
-        snoozeIsPending={false}
-        dismissIsPending={false}
-        readerContext={null}
-        isReaderContextLoading={false}
-        {...callbacks}
-      />
+      <RatingView data={makeRatingViewData()} />
     </MemoryRouter>,
   )
 }

@@ -67,6 +67,7 @@ function renderRatingView(overrides: Partial<React.ComponentProps<typeof RatingV
           total_issues: 12,
           issue_number: '11',
           next_issue_number: '12',
+        queue_position: 0,
         } as never}
         currentDie={6}
         rolledResult={2}
