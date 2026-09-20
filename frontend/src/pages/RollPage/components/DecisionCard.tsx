@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import Modal from '../../../components/Modal'
 import Tooltip from '../../../components/Tooltip'
 import GlossaryLink from '../../../components/GlossaryLink'
@@ -43,6 +43,10 @@ export function DecisionCard({
   const threadTitle = activeRatingThread?.title ?? null
   const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
   const dieDirection = getDieDirection(currentDie, predictedDie)
+  const ratingFillPct = Math.min(
+    100,
+    Math.max(0, ((rating - 0.5) / (5.0 - 0.5)) * 100),
+  )
 
   const [isSkipConfirmOpen, setIsSkipConfirmOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
@@ -134,6 +138,7 @@ export function DecisionCard({
         step="0.5"
         value={rating}
         className="rating-slider h-4 w-full"
+        style={{ '--slider-fill': `${ratingFillPct}%` } as CSSProperties}
         aria-label="Rating from 0.5 to 5.0 in steps of 0.5"
         aria-describedby="rating-value queue-effect"
         onChange={(event) => onUpdateRating(event.target.value)}

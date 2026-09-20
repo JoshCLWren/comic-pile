@@ -284,6 +284,18 @@ describe('RatingView action panel (issue #1406)', () => {
     expect(slider.className).toContain('rating-slider')
   })
 
+  it('slider fill reflects the current rating value', () => {
+    const { rerender } = render(ratingView({ rating: 0.5 }))
+    const slider = screen.getByRole('slider')
+    expect(slider.style.getPropertyValue('--slider-fill')).toBe('0%')
+
+    rerender(ratingView({ rating: 5.0 }))
+    expect(screen.getByRole('slider').style.getPropertyValue('--slider-fill')).toBe('100%')
+
+    rerender(ratingView({ rating: 2.75 }))
+    expect(screen.getByRole('slider').style.getPropertyValue('--slider-fill')).toBe('50%')
+  })
+
   it('secondary actions use flex without flex-wrap for balanced row', () => {
     render(ratingView())
     const secondary = screen.getByTestId('rating-secondary-actions')
