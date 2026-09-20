@@ -62,3 +62,4 @@ async def fetch_user_session_started_ats(db: AsyncSession, user_id: int) -> list
         .order_by(SessionModel.started_at)
     )
     return list(result.scalars().all())
+

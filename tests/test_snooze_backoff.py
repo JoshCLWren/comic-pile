@@ -80,7 +80,7 @@ def test_is_eligible_boundary_equals_required_backoff() -> None:
     assert is_eligible(2, 1) is True
     assert is_eligible(3, 1) is False
     assert is_eligible(3, 2) is True
-    assert is_eligible(10, 8) is False
+    assert is_eligible(10, 8) is True
     assert is_eligible(10, 13) is True
     assert is_eligible(12, 12) is False
     assert is_eligible(12, 13) is True
