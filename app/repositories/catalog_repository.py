@@ -266,27 +266,27 @@ async def get_issue_by_id(
     user_id: int,
 ) -> dict[str, object] | None:
     """Get issue information by ID with thread context.
-    
+
     Args:
         db: Database session.
         issue_id: ComicPile issue ID.
         user_id: User ID for authorization.
-        
+
     Returns:
         Issue information dict or None if not found.
     """
     from app.models.issue import Issue
     from app.models.thread import Thread
     from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
-    
+
     issue_result = await db.execute(
         select(Issue, Thread, ExternalIdentity, IssueExternalIdentityMapping)
         .join(Thread, Thread.id == Issue.thread_id)
-        .join(
+        .outerjoin(
             IssueExternalIdentityMapping,
             IssueExternalIdentityMapping.issue_id == Issue.id,
         )
-        .join(
+        .outerjoin(
             ExternalIdentity,
             ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
         )
@@ -295,21 +295,21 @@ async def get_issue_by_id(
             Thread.user_id == user_id,
         )
     )
-    
+
     issue_row = issue_result.first()
     if not issue_row:
         return None
-        
+
     issue, thread, identity, mapping = issue_row
-    
+
     return {
         "issue_id": issue.id,
         "issue_number": issue.issue_number,
-        "title": issue.title,
+        "title": getattr(issue, "title", None),
         "thread_id": thread.id,
         "thread_title": thread.title,
-        "current_mapping_status": mapping.status,
-        "provider": identity.provider,
-        "external_id": identity.external_id,
-        "confidence": mapping.confidence,
+        "current_mapping_status": mapping.status if mapping is not None else None,
+        "provider": identity.provider if identity is not None else None,
+        "external_id": identity.external_id if identity is not None else None,
+        "confidence": mapping.confidence if mapping is not None else None,
     }

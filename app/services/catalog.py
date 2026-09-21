@@ -1,14 +1,19 @@
 """Catalog service layer for shared comic series and issue identities."""
 
+import hashlib
+import hmac
+import json
 import os
 import re
 import time
 from pathlib import Path
+
+from fastapi import HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from comic_pile.comicvine_provider import ComicVineClient
+from comic_pile.comicvine_provider import ComicVineClient, ComicVineError
 
 from app.external_identities import (
     link_issue_external_identity,
@@ -487,71 +492,67 @@ async def preview_series_mapping(
         db, provider=provider, series_external_id=provider_series_external_id, user_id=user_id
     )
     
-    # If not found locally, try ComicVine API
+    # If not found locally, try ComicVine API (local-first)
     client = None
     if series_info is None:
+        client = _get_comicvine_client()
+        if client is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="provider_unavailable",
+            )
         try:
-            client = _get_comicvine_client()
-            if client is not None:
-                # Fetch volume information from ComicVine
-                volume_response = await client.fetch_volume(int(provider_series_external_id))
-                volume_data = volume_response.payload.get("results")
-                if isinstance(volume_data, dict):
-                    series_info = {
-                        "id": str(volume_data.get("id")),
-                        "name": volume_data.get("name"),
-                        "publisher": volume_data.get("publisher", {}).get("name") if volume_data.get("publisher") else None,
-                        "start_year": volume_data.get("start_year"),
-                        "count_of_issues": volume_data.get("count_of_issues"),
-                        "site_detail_url": volume_data.get("site_detail_url"),
-                        "image": volume_data.get("image"),
-                    }
-                    
-                    # Fetch issues from ComicVine
-                    issues_rows = await client.fetch_volume_issues(int(provider_series_external_id))
-                    issues_with_mappings = []
-                    
-                    for row in issues_rows:
-                        if isinstance(row, dict):
-                            issue_number = row.get("issue_number")
-                            if issue_number is None:
-                                continue
-                                
-                            issue_info = {
-                                "issue_id": None,  # Not in ComicVine data, would need to match locally
-                                "issue_number": str(issue_number),
-                                "title": row.get("name"),
-                                "thread_id": None,
-                                "thread_title": None,
-                                "current_mapping_status": "unresolved",
-                                "classification": "unresolved",
-                            }
-                            issues_with_mappings.append(issue_info)
-                            
-        except Exception:
-            # Provider failure - return unavailable scope
-            return {
-                "preview_token": None,
-                "scope": {
-                    "status": "unavailable",
-                    "scope_key": None,
-                    "origin_issue_id": origin_issue_id,
-                    "series_label": None,
-                    "basis": "provider_failure",
-                },
-                "provider_series": None,
-                "counts": {
-                    "already_confirmed": 0,
-                    "safe_exact_match": 0,
-                    "needs_review_ambiguous": 0,
-                    "needs_review_conflict": 0,
-                    "unresolved": 0,
-                    "excluded_special": 0,
-                },
-                "rows": [],
-                "issued_at": time.time(),
-                "expires_at": None,
-            }
+            volume_response = await client.fetch_volume(int(provider_series_external_id))
+            volume_data = volume_response.payload.get("results")
+            if isinstance(volume_data, dict):
+                series_info = {
+                    "id": str(volume_data.get("id")),
+                    "name": volume_data.get("name"),
+                    "publisher": volume_data.get("publisher", {}).get("name") if volume_data.get("publisher") else None,
+                    "start_year": volume_data.get("start_year"),
+                    "count_of_issues": volume_data.get("count_of_issues"),
+                    "site_detail_url": volume_data.get("site_detail_url"),
+                    "image": volume_data.get("image"),
+                }
+
+                # Fetch issues from ComicVine
+                issues_rows = await client.fetch_volume_issues(int(provider_series_external_id))
+                issues_with_mappings = []
+
+                for row in issues_rows:
+                    if isinstance(row, dict):
+                        issue_number = row.get("issue_number")
+                        if issue_number is None:
+                            continue
+
+                        provider_issue_id = row.get("id")
+                        try:
+                            pid = int(provider_issue_id) if provider_issue_id is not None else 0
+                        except (TypeError, ValueError):
+                            pid = 0
+                        issue_info = {
+                            "issue_id": pid if pid != 0 else 0,
+                            "issue_number": str(issue_number),
+                            "title": row.get("name"),
+                            "thread_id": None,
+                            "thread_title": None,
+                            "current_mapping_status": "unresolved",
+                            "classification": "unresolved",
+                        }
+                        issues_with_mappings.append(issue_info)
+
+        except HTTPException:
+            raise
+        except (ComicVineError, ValueError, TypeError, OSError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="provider_unavailable",
+            ) from exc
+        except Exception as exc:  # pragma: no cover - safety net
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="provider_unavailable",
+            ) from exc
     
     # If we still don't have series info, return unavailable scope
     if series_info is None:
@@ -590,21 +591,27 @@ async def preview_series_mapping(
     
     classified_rows = []
     scope_key = None
-    
-    # For now, let's implement a basic classification logic
-    # This would need to be expanded based on the specific business rules
+
+    origin_number_raw = origin_issue.get("issue_number")
+    origin_number = str(origin_number_raw) if isinstance(origin_number_raw, str) else ""
+
+    # Pre-compute normalized counts for duplicate detection (unique exact requirement)
+    normalized_counts: dict[str, int] = {}
+    for info in issues_with_mappings:
+        num = info.get("issue_number", "")
+        if isinstance(num, str) and not _is_special_issue(num) and not _is_ambiguous(num):
+            norm = _normalize_issue_number(num)
+            if norm:
+                normalized_counts[norm] = normalized_counts.get(norm, 0) + 1
+
     for issue_info in issues_with_mappings:
-        issue_number = issue_info.get("issue_number", "")
-        
+        raw_number = issue_info.get("issue_number", "")
+        issue_number = str(raw_number) if isinstance(raw_number, str) else ""
+
         # Check if it's a special issue (annual, special, etc.)
         if _is_special_issue(issue_number):
             classification = "excluded_special"
             counts["excluded_special"] += 1
-        elif _is_exact_match(issue_number, origin_issue.get("issue_number")):
-            classification = "safe_exact_match"
-            counts["safe_exact_match"] += 1
-            if scope_key is None:
-                scope_key = f"exact:{origin_issue_id}:{issue_number}"
         elif _is_conflicting_mapping(issue_info, provider, provider_series_external_id):
             classification = "needs_review_conflict"
             counts["needs_review_conflict"] += 1
@@ -614,53 +621,85 @@ async def preview_series_mapping(
         elif issue_info.get("current_mapping_status") == "confirmed":
             classification = "already_confirmed"
             counts["already_confirmed"] += 1
+        elif _is_exact_match(issue_number, origin_number):
+            norm = _normalize_issue_number(issue_number)
+            if norm and normalized_counts.get(norm, 0) == 1:
+                classification = "safe_exact_match"
+                counts["safe_exact_match"] += 1
+                if scope_key is None:
+                    scope_key = f"exact:{origin_issue_id}:{issue_number}"
+            else:
+                classification = "needs_review_ambiguous"
+                counts["needs_review_ambiguous"] += 1
         else:
             classification = "unresolved"
             counts["unresolved"] += 1
-        
+
         issue_info["classification"] = classification
         issue_info["proposed_mapping"] = classification in ["safe_exact_match", "already_confirmed"]
         issue_info["default_selected"] = classification == "safe_exact_match"
-        
+
         classified_rows.append(issue_info)
     
     # Determine if scope is available
     scope_status = "available" if scope_key is not None else "unavailable"
     scope_basis = "insufficient_non_thread_evidence" if scope_key is None else "exact_match_found"
-    
+
+    # Spec: unavailable scope due to insufficient evidence returns zero counts and empty rows
+    if scope_status == "unavailable":
+        counts = {
+            "already_confirmed": 0,
+            "safe_exact_match": 0,
+            "needs_review_ambiguous": 0,
+            "needs_review_conflict": 0,
+            "unresolved": 0,
+            "excluded_special": 0,
+        }
+        classified_rows = []
+
     # Generate preview token if scope is available
     preview_token = None
+    issued_at = time.time()
+    expires_at = issued_at + 600 if scope_status == "available" else None
     if scope_status == "available":
-        issue_numbers = [row.get("issue_number", "") for row in classified_rows if row.get("issue_number")]
+        issue_numbers = [str(row.get("issue_number", "")) for row in classified_rows if row.get("issue_number")]
         classification_digest = "|".join(
-            f"{cls}:{counts[cls]}" for cls in ["already_confirmed", "safe_exact_match", "needs_review_ambiguous", "needs_review_conflict", "unresolved", "excluded_special"]
+            f"{cls}:{counts[cls]}"
+            for cls in [
+                "already_confirmed",
+                "safe_exact_match",
+                "needs_review_ambiguous",
+                "needs_review_conflict",
+                "unresolved",
+                "excluded_special",
+            ]
         )
         preview_token = _generate_preview_token(
             user_id=user_id,
             provider=provider,
             provider_series_external_id=provider_series_external_id,
             origin_issue_id=origin_issue_id,
-            scope_key=scope_key,
-            issued_at=time.time(),
-            expires_at=time.time() + 600,  # 10 minutes
+            scope_key=scope_key or "",
+            issued_at=issued_at,
+            expires_at=expires_at or issued_at,
             issue_numbers=issue_numbers,
             classification_digest=classification_digest,
         )
-    
+
     return {
         "preview_token": preview_token,
         "scope": {
             "status": scope_status,
             "scope_key": scope_key,
             "origin_issue_id": origin_issue_id,
-            "series_label": series_info.get("name"),
+            "series_label": series_info.get("name") if isinstance(series_info.get("name"), str) else None,  # type: ignore[union-attr]
             "basis": scope_basis,
         },
         "provider_series": series_info,
         "counts": counts,
         "rows": classified_rows,
-        "issued_at": time.time(),
-        "expires_at": time.time() + 600 if scope_status == "available" else None,
+        "issued_at": issued_at,
+        "expires_at": expires_at,
     }
 
 
@@ -674,19 +713,25 @@ def _get_comicvine_client():
     return ComicVineClient(api_key=api_key, cache_dir=cache_dir)
 
 
+def _normalize_issue_number(value: str) -> str:
+    """Normalize an issue number for exact comparison."""
+    normalized = re.sub(r"[^0-9.]", "", value.lower().strip())
+    normalized = normalized.strip(".")
+    return normalized
+
+
 def _is_special_issue(issue_number: str) -> bool:
     """Check if issue number indicates a special/annual issue."""
-    # Patterns for special issues: annual, special, hc (hardcover), etc.
-    special_patterns = [
-        r'\b(annual|special|hc|tpb|gn|omnibus|deluxe|absolute|hardcover|trade paperback|graphic novel)\b',
-        r'^[^0-9]*$',  # Non-numeric prefixes
-        r'\.[^0-9]+$',  # Non-numeric suffixes
-    ]
-    
-    issue_number_lower = issue_number.lower()
-    for pattern in special_patterns:
-        if re.search(pattern, issue_number_lower):
-            return True
+    stripped = issue_number.strip().lower()
+    if not stripped:
+        return True
+    # Purely non-numeric or annual/special keywords
+    if re.search(r"\b(annual|special|hc|tpb|gn|omnibus|deluxe|absolute|hardcover|trade paperback|graphic novel)\b", stripped):
+        return True
+    if re.fullmatch(r"[^0-9]*", stripped):
+        return True
+    if re.search(r"\.[^0-9]+$", stripped):
+        return True
     return False
 
 
@@ -694,16 +739,7 @@ def _is_exact_match(issue_number: str, origin_issue_number: str) -> bool:
     """Check if issue number exactly matches the origin issue number."""
     if not issue_number or not origin_issue_number:
         return False
-    
-    # Normalize both numbers (remove common prefixes/suffixes, normalize case)
-    def normalize_number(num: str) -> str:
-        # Remove non-numeric characters except decimal points
-        normalized = re.sub(r'[^0-9.]', '', num.lower().strip())
-        # Remove leading/trailing decimal points
-        normalized = normalized.strip('.')
-        return normalized
-    
-    return normalize_number(issue_number) == normalize_number(origin_issue_number)
+    return _normalize_issue_number(issue_number) == _normalize_issue_number(origin_issue_number)
 
 
 def _is_conflicting_mapping(issue_info: dict, provider: str, series_external_id: str) -> bool:
@@ -750,14 +786,14 @@ def _generate_preview_token(
     classification_digest: str | None = None,
 ) -> str:
     """Generate an HMAC-signed preview token."""
-    import hmac
-    import hashlib
-    import json
-
-    # Get secret key from environment
-    secret_key = os.environ.get("PREVIEW_TOKEN_SECRET_KEY", "")
+    # Use the application secret key; fall back to env for test isolation
+    secret_key = os.environ.get("PREVIEW_TOKEN_SECRET_KEY", "").strip()
     if not secret_key:
-        raise ValueError("PREVIEW_TOKEN_SECRET_KEY environment variable is required")
+        from app.config import get_auth_settings
+
+        secret_key = get_auth_settings().secret_key
+    if not secret_key:
+        raise ValueError("Preview token secret is not configured")
 
     # Create token payload
     payload = {
@@ -775,9 +811,9 @@ def _generate_preview_token(
     # Generate signature
     payload_json = json.dumps(payload, sort_keys=True)
     signature = hmac.new(
-        secret_key.encode('utf-8'),
-        payload_json.encode('utf-8'),
-        hashlib.sha256
+        secret_key.encode("utf-8"),
+        payload_json.encode("utf-8"),
+        hashlib.sha256,
     ).hexdigest()
 
     # Combine payload and signature

@@ -25,9 +25,9 @@ class TestSeriesMappingPreview:
             external_url="https://comicvine.gamespot.com/issue/4000-12345/",
             metadata_json={"name": "Amazing Spider-Man #1", "issue_number": "1"},
         )
-        await async_db.add(external_identity)
+        async_db.add(external_identity)
         await async_db.flush()
-        
+
         # Create a confirmed mapping
         mapping = IssueExternalIdentityMapping(
             issue_id=issue.id,
@@ -36,7 +36,7 @@ class TestSeriesMappingPreview:
             evidence_source="test",
             confidence=1.0,
         )
-        await async_db.add(mapping)
+        async_db.add(mapping)
         await async_db.commit()
         
         # Mock the ComicVine client to return series data
@@ -198,29 +198,24 @@ class TestSeriesMappingPreview:
     async def test_preview_series_mapping_provider_failure(self, auth_client: AsyncClient, sample_data):
         """Test preview with provider failure (ComicVine unavailable)."""
         issue = sample_data["issue"]
-        
+
         # Mock ComicVine client failure
-        with patch('app.services.catalog._get_comicvine_client') as mock_get_client:
+        with patch("app.services.catalog._get_comicvine_client") as mock_get_client:
             mock_get_client.return_value = None
-            
+
             # Make the request
             response = await auth_client.post(
                 "/api/v1/catalog/series-mappings/preview",
                 json={
                     "origin_issue_id": issue.id,
                     "provider": "comicvine",
-                    "provider_series_external_id": "20764"
-                }
+                    "provider_series_external_id": "20764",
+                },
             )
-            
-            assert response.status_code == 200
+
+            assert response.status_code == 503
             data = response.json()
-            
-            # Verify scope is unavailable due to provider failure
-            assert data["scope"]["status"] == "unavailable"
-            assert data["scope"]["basis"] == "provider_failure"
-            assert data["preview_token"] is None
-            assert data["expires_at"] is None
+            assert data["detail"] == "provider_unavailable"
 
     @pytest.mark.asyncio
     async def test_preview_series_mapping_special_issues(self, auth_client: AsyncClient, sample_data):
@@ -313,9 +308,9 @@ class TestSeriesMappingPreview:
             external_url="https://comicvine.gamespot.com/issue/4000-99999/",
             metadata_json={"name": "Different Issue", "issue_number": "999"},
         )
-        await async_db.add(conflicting_identity)
+        async_db.add(conflicting_identity)
         await async_db.flush()
-        
+
         # Create a conflicting mapping
         conflicting_mapping = IssueExternalIdentityMapping(
             issue_id=issue.id,
@@ -324,7 +319,7 @@ class TestSeriesMappingPreview:
             evidence_source="test",
             confidence=0.8,
         )
-        await async_db.add(conflicting_mapping)
+        async_db.add(conflicting_mapping)
         await async_db.commit()
         
         # Mock the ComicVine client
