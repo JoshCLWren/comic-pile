@@ -207,7 +207,7 @@ export default function CustomCBLBuilder({
   const error = exportError ?? createMutation.error ?? saveMutation.error ?? deleteMutation.error ?? applyMutation.error ?? detailQuery.error ?? listsQuery.error
 
   return (
-    <section className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-card)] p-3" aria-labelledby="custom-cbl-heading">
+    <section className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3" aria-labelledby="custom-cbl-heading">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 id="custom-cbl-heading" className="text-sm font-black text-[var(--theme-text-primary)]">Custom CBLs</h3>
