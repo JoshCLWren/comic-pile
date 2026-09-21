@@ -226,7 +226,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     const applied = selectTheme(themeId)
     if (applied === null) return
     setActiveTheme(applied)
-    updatePreferences({ theme: applied })
+    updatePreferences.mutate({ theme: applied })
   }
 
   const handleLogout = useCallback(async () => {

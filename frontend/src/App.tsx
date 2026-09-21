@@ -16,13 +16,6 @@ import api, {
   refreshSession,
   setAccessToken,
 } from './services/api'
-import {
-  applyTheme,
-  ensureThemeApplied,
-  getThemeSelectionToken,
-  isSupportedTheme,
-  readStoredThemePreference,
-} from './services/theme'
 import { isDefinitiveAuthenticationFailure } from './services/authFailure'
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
