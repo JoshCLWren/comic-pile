@@ -7,6 +7,7 @@ import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { cast } from '../utils/cast'
+import * as api from '../services/api'
 
 vi.mock('../contexts/useToast', () => ({
   useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
@@ -29,8 +30,13 @@ vi.mock('../services/api', () => {
     getAccessToken: () => mockGetAccessToken(),
     refreshSession: vi.fn(),
     isSessionRefreshRejected: () => false,
+    identityInboxApi: {
+      list: vi.fn().mockResolvedValue({ items: [], total: 0, offset: 0, limit: 1 }),
+    },
   }
 })
+
+const mockIdentityInboxList = vi.mocked(api.identityInboxApi.list)
 
 beforeEach(() => {
   const width = 390
@@ -52,6 +58,8 @@ beforeEach(() => {
   mockApiPost.mockReset()
   mockSetAccessToken.mockReset()
   mockClearAccessToken.mockReset()
+  mockIdentityInboxList.mockReset()
+  mockIdentityInboxList.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 1 })
 })
 
 const renderWithAuth = (initialEntry = '/') => {
@@ -255,4 +263,64 @@ test('renders all secondary nav links inline on a desktop viewport', async () =>
   expect(within(desktopNav).getByRole('link', { name: /what's new page/i })).toBeInTheDocument()
   expect(within(desktopNav).getByRole('link', { name: /glossary page/i })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /more pages/i })).not.toBeInTheDocument()
+})
+
+test('shows Identity Inbox in desktop navigation when total is greater than 0', async () => {
+  mockIdentityInboxList.mockResolvedValueOnce({ items: [{ mapping_id: 1 }], total: 1, offset: 0, limit: 1 })
+  renderWithAuth()
+
+  await waitFor(() => {
+    const desktopNav = screen.getByRole('navigation', { name: /desktop navigation/i })
+    expect(within(desktopNav).getByRole('link', { name: /identity inbox page/i })).toBeInTheDocument()
+  })
+})
+
+test('hides Identity Inbox from desktop navigation when total is 0', async () => {
+  mockIdentityInboxList.mockResolvedValueOnce({ items: [], total: 0, offset: 0, limit: 1 })
+  renderWithAuth()
+
+  await waitFor(() => {
+    const desktopNav = screen.getByRole('navigation', { name: /desktop navigation/i })
+    expect(within(desktopNav).queryByRole('link', { name: /identity inbox page/i })).not.toBeInTheDocument()
+  })
+})
+
+test('shows Identity Inbox in mobile More menu when total is greater than 0', async () => {
+  mockIdentityInboxList.mockResolvedValueOnce({ items: [{ mapping_id: 1 }], total: 1, offset: 0, limit: 1 })
+  renderWithAuth()
+
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: /more pages/i })).toBeInTheDocument()
+  })
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: /more pages/i }))
+
+  await waitFor(() => {
+    expect(screen.getByRole('link', { name: /identity inbox page/i })).toBeInTheDocument()
+  })
+})
+
+test('hides Identity Inbox from mobile More menu when total is 0', async () => {
+  mockIdentityInboxList.mockResolvedValueOnce({ items: [], total: 0, offset: 0, limit: 1 })
+  renderWithAuth()
+
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: /more pages/i })).toBeInTheDocument()
+  })
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: /more pages/i }))
+
+  await waitFor(() => {
+    expect(screen.queryByRole('link', { name: /identity inbox page/i })).not.toBeInTheDocument()
+  })
+})
+
+test('keeps Identity Inbox visible on status query error', async () => {
+  mockIdentityInboxList.mockRejectedValueOnce(new Error('network error'))
+  renderWithAuth()
+
+  await waitFor(() => {
+    const desktopNav = screen.getByRole('navigation', { name: /desktop navigation/i })
+    expect(within(desktopNav).getByRole('link', { name: /identity inbox page/i })).toBeInTheDocument()
+  })
 })
