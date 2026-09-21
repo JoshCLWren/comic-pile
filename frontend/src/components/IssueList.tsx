@@ -288,7 +288,7 @@ export function IssueList({
           return (
             <div
               key={issue.id}
-              className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors hover:[var(--theme-bg-panel)] ${
+              className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors hover:bg-[var(--theme-bg-panel)] ${
                 issue.id === nextUnreadId 
                   ? 'bg-[color-mix(in_srgb,var(--theme-comic-accent)_15%,transparent)] border border-[var(--theme-comic-accent)]' 
                   : ''

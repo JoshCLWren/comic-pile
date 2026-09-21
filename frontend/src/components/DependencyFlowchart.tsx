@@ -297,7 +297,7 @@ export default function DependencyFlowchart({
 
   return (
     <div 
-      className="relative w-full border border-[var(--theme-border)] rounded-lg overflow-hidden [var(--theme-bg-panel)]" 
+      className="relative w-full border border-[var(--theme-border)] rounded-lg overflow-hidden bg-[var(--theme-bg-panel)]" 
       ref={containerRef} 
       data-testid="flowchart-container"
     >
@@ -308,7 +308,7 @@ export default function DependencyFlowchart({
         }
         @media (prefers-reduced-motion: reduce) {
           .flowchart-edge-blocking {
-            animation: none;
+            animation: none !important;
             stroke-opacity: 0.7;
           }
         }
@@ -345,7 +345,7 @@ export default function DependencyFlowchart({
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="[color-mix(in_srgb,var(--theme-text-muted)_60%,transparent)]" />
+            <polygon points="0 0, 10 3.5, 0 7" style={{ fill: 'color-mix(in srgb, var(--theme-text-muted) 60%, transparent)' }} />
           </marker>
           <marker
             id="arrowhead-blocking"
@@ -355,7 +355,7 @@ export default function DependencyFlowchart({
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="[var(--theme-danger)]" />
+            <polygon points="0 0, 10 3.5, 0 7" style={{ fill: 'var(--theme-danger)' }} />
           </marker>
         </defs>
 
@@ -372,6 +372,7 @@ export default function DependencyFlowchart({
                 d={edge.path}
                 stroke="none"
                 fill="none"
+                className={edge.isBlocking ? 'flowchart-edge-blocking' : undefined}
                 style={edge.isIssueLevel ? { 
                   stroke: 'var(--theme-continuity-accent)', 
                   strokeWidth: 2, 
@@ -407,7 +408,7 @@ export default function DependencyFlowchart({
               <g
                 key={node.id}
                 transform={`translate(${node.x}, ${node.y})`}
-                className={`cursor-grab active:cursor-grabbing ${node.isBlocked ? '' : ''} ${node.isIssueNode ? '' : ''}`}
+                className={`cursor-grab active:cursor-grabbing`}
                 onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
                 onMouseEnter={(e) => handleNodeMouseEnter(e, node)}
                 onMouseLeave={handleNodeMouseLeave}
@@ -471,7 +472,7 @@ export default function DependencyFlowchart({
           type="button" 
           onClick={handleZoomIn} 
           aria-label="Zoom in"
-          className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--theme-bg-page)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] text-sm font-bold cursor-pointer transition-all duration-150 hover:[var(--theme-bg-panel)] hover:border-[color-mix(in_srgb,white_25%,transparent)]"
+          className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--theme-bg-page)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] text-sm font-bold cursor-pointer transition-all duration-150 hover:bg-[var(--theme-bg-panel)] hover:border-[color-mix(in_srgb,white_25%,transparent)]"
         >
           +
         </button>
@@ -479,7 +480,7 @@ export default function DependencyFlowchart({
           type="button" 
           onClick={handleZoomOut} 
           aria-label="Zoom out"
-          className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--theme-bg-page)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] text-sm font-bold cursor-pointer transition-all duration-150 hover:[var(--theme-bg-panel)] hover:border-[color-mix(in_srgb,white_25%,transparent)]"
+          className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--theme-bg-page)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] text-sm font-bold cursor-pointer transition-all duration-150 hover:bg-[var(--theme-bg-panel)] hover:border-[color-mix(in_srgb,white_25%,transparent)]"
         >
           −
         </button>
@@ -487,7 +488,7 @@ export default function DependencyFlowchart({
           type="button" 
           onClick={handleReset} 
           aria-label="Reset view"
-          className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--theme-bg-page)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] text-sm font-bold cursor-pointer transition-all duration-150 hover:[var(--theme-bg-panel)] hover:border-[color-mix(in_srgb,white_25%,transparent)]"
+          className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--theme-bg-page)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] text-sm font-bold cursor-pointer transition-all duration-150 hover:bg-[var(--theme-bg-panel)] hover:border-[color-mix(in_srgb,white_25%,transparent)]"
         >
           ⟳
         </button>
