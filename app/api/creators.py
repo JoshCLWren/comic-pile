@@ -1,17 +1,19 @@
-"""Bounded personal creator summary API (issue #2028).
+"""Bounded personal creator summary and discovery APIs (issues #2028, #2775).
 
 Endpoints:
 
+- ``GET /api/v1/creators`` — bounded discovery list of canonical creators with
+  at least one rated issue for the authenticated user (issue #2775).
 - ``GET /api/v1/creators/summaries`` — bounded batch summary of the
   authenticated user's library statistics per canonical creator key.
 
-This router validates requests and delegates aggregation to the creator summary
-service. It performs no query construction and no direct persistence.
+This router validates requests and delegates aggregation to the creator services.
+It performs no query construction and no direct persistence.
 """
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,8 +22,10 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.creator_detail import CreatorDetailResponse
+from app.schemas.creator_list import CreatorListResponse
 from app.schemas.creator_summary import CreatorSummariesResponse
 from app.services.creator_detail import get_creator_detail
+from app.services.creator_list import get_creator_list
 from app.services.creator_summary import get_creator_summaries
 
 router = APIRouter(prefix="/api/v1/creators", tags=["creators"])
@@ -94,6 +98,68 @@ def _validate_creator_keys(raw: str | None) -> list[str]:
             )
 
     return keys
+
+
+@router.get("", response_model=CreatorListResponse, include_in_schema=True)
+@router.get("/", response_model=CreatorListResponse, include_in_schema=False)
+async def list_creators_endpoint(
+    current_user: Annotated[User, Depends(get_current_user)],
+    search: str | None = Query(
+        default=None,
+        description="Bounded case-insensitive name substring",
+        max_length=100,
+    ),
+    sort: Literal["name", "ratings_count", "average_rating"] = Query(
+        default="name",
+        description="Browse ordering: name (alphabetical), ratings_count (most-rated), "
+        "average_rating (personal average desc, nulls last)",
+    ),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=50,
+        description="Page size (bounded, max 50)",
+    ),
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="Page offset",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> CreatorListResponse:
+    """Return bounded personal creator discovery list for the authenticated user.
+
+    The default collection is creators with at least one rated issue for the
+    current user (headline-eligible rating). Rows include canonical key, display
+    name, personal ratings count, personal average rating, and compact normalized
+    roles. Ordering is deterministic with a stable canonical-key tie-breaker so
+    pagination is correct across pages. Name search is bounded and user-scoped.
+    ``average_rating`` sorting handles ``null`` explicitly (nulls last) so the
+    contract remains deterministic if filtering expands to include unrated
+    creators later.
+
+    Args:
+        current_user: Authenticated user whose library is aggregated.
+        search: Optional bounded case-insensitive name substring.
+        sort: Deterministic browse ordering.
+        limit: Bounded page size.
+        offset: Page offset.
+        db: Async database session.
+
+    Returns:
+        Bounded creator list with deterministic ordering and coverage state.
+    """
+    bounded_search = search.strip() if search and search.strip() else None
+    if bounded_search and len(bounded_search) > 100:
+        bounded_search = bounded_search[:100]
+    return await get_creator_list(
+        db,
+        current_user.id,
+        search=bounded_search,
+        sort=sort,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/summaries", response_model=CreatorSummariesResponse)
