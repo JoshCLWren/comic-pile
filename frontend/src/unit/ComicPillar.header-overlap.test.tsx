@@ -84,16 +84,13 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     const titleRegion = screen.getByTestId('comic-header-title')
     const controlsRegion = screen.getByTestId('comic-header-controls')
 
-    // Structural assertions: header must be wrap-based, not single-row desktop-only
-    expect(headerRow.className).toContain('flex-wrap')
-    expect(titleRegion.className).toContain('flex-1')
-    expect(titleRegion.className).toContain('basis-48')
-    expect(titleRegion.className).toContain('min-w-[12rem]')
+    // Structural assertions: header uses vertical stack (space-y-3) with title and controls in separate rows
+    expect(headerRow.className).toContain('flex-1')
+    expect(headerRow.className).toContain('space-y-3')
+    expect(titleRegion.className).toContain('text-xl')
+    expect(titleRegion.className).toContain('font-black')
     expect(titleRegion.className).toContain('break-words')
     expect(controlsRegion.className).toContain('flex-wrap')
-
-    // Title must not be reduced to a sliver: basis-48 guarantees >= 12rem before wrap
-    expect(titleRegion.className).toMatch(/basis-48/)
 
     // Simulate rendered geometry at 320px tablet-portrait pillar width.
     // With flex-wrap, the title occupies the first row full-width and controls wrap to second row.
@@ -133,15 +130,15 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     // Long title region must remain readable width (>= 10rem) not a sliver
     expect(t.width).toBeGreaterThanOrEqual(160)
 
-    // Controls must remain usable by touch (min-h-11) and keyboard
+    // Controls must remain usable by touch (min-h-9) and keyboard
     // After #2288 Copy title lives beside rating controls, not in the Comic pillar
     expect(screen.queryByRole('button', { name: /Copy Absolute Batman/i })).not.toBeInTheDocument()
     expect(screen.queryByText('Copy title')).not.toBeInTheDocument()
     const fixButton = screen.getByRole('button', { name: 'Fix issue number' })
     expect(fixButton).toBeInTheDocument()
     expect(fixButton.getAttribute('aria-label')).toBeTruthy()
-    // Touch target via class min-h-11
-    expect(fixButton.className).toContain('min-h-11')
+    // Touch target via class min-h-9
+    expect(fixButton.className).toContain('min-h-9')
 
     unmount()
     narrowContainer.remove()
@@ -161,31 +158,33 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     const titleRegion = screen.getByTestId('comic-header-title')
     const controlsRegion = screen.getByTestId('comic-header-controls')
 
-    expect(headerRow.className).toContain('flex-wrap')
-    expect(titleRegion.className).toContain('flex-1')
+    expect(headerRow.className).toContain('flex-1')
+    expect(headerRow.className).toContain('space-y-3')
+    expect(titleRegion.className).toContain('text-xl')
+    expect(titleRegion.className).toContain('font-black')
     expect(controlsRegion.className).toContain('flex-wrap')
 
-    // At wide width both regions can sit on one row — geometric check: same top, no vertical stack required but still no overlap
+    // In the new vertical stack layout, title and controls are in separate rows — no overlap possible
     const titleRect = {
       left: 0,
-      right: 600,
+      right: 900,
       top: 0,
       bottom: 40,
-      width: 600,
+      width: 900,
       height: 40,
       x: 0,
       y: 0,
       toJSON() {},
     } as DOMRect
     const controlsRect = {
-      left: 612,
-      right: 822,
-      top: 0,
-      bottom: 36,
+      left: 0,
+      right: 210,
+      top: 50,
+      bottom: 86,
       width: 210,
       height: 36,
-      x: 612,
-      y: 0,
+      x: 0,
+      y: 50,
       toJSON() {},
     } as DOMRect
 
@@ -195,8 +194,8 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     const t = titleRegion.getBoundingClientRect()
     const c = controlsRegion.getBoundingClientRect()
     expect(rectsIntersect(t, c)).toBe(false)
-    // Horizontal gap exists
-    expect(c.left).toBeGreaterThan(t.right)
+    // Vertical separation exists
+    expect(c.top).toBeGreaterThan(t.bottom)
 
     unmount()
     wideContainer.remove()
@@ -214,14 +213,16 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     )
 
     const headerRow = await screen.findByTestId('comic-header-row')
-    expect(headerRow.className).toContain('flex-wrap')
+    expect(headerRow.className).toContain('flex-1')
+    expect(headerRow.className).toContain('space-y-3')
 
     // Verify old Copy title placement is removed and single control still reflows safely
     expect(screen.queryByRole('button', { name: /Copy/i })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Fix issue number' })).toBeInTheDocument()
     const titleRegion = screen.getByTestId('comic-header-title')
     const controlsRegion = screen.getByTestId('comic-header-controls')
-    expect(titleRegion.className).toContain('flex-1')
+    expect(titleRegion.className).toContain('text-xl')
+    expect(titleRegion.className).toContain('font-black')
     expect(controlsRegion.className).toContain('flex-wrap')
 
     unmount()

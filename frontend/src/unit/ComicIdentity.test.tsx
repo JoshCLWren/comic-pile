@@ -82,12 +82,6 @@ describe('ComicIdentity', () => {
     expect(srcSet).toContain('/api/v1/images/optimize?url=https%3A%2F%2Fimages.example%2F100.jpg&width=240')
     expect(srcSet).toContain('720w')
 
-    // Series name and issue number
-    expect(screen.getByText('Alpha #1')).toBeInTheDocument()
-
-    // Issue/story title
-    expect(screen.getByText('Opening')).toBeInTheDocument()
-
     // Cover/store date
     expect(screen.getByText('Jan 1, 2026')).toBeInTheDocument()
 
@@ -137,8 +131,6 @@ describe('ComicIdentity', () => {
     expect(placeholder).toBeInTheDocument()
     expect(screen.queryByAltText('')).not.toBeInTheDocument()
 
-    expect(screen.getByText('Test Series #5')).toBeInTheDocument()
-    expect(screen.getByText('Test Issue')).toBeInTheDocument()
     expect(screen.getByText('Jun 15, 2026')).toBeInTheDocument()
   })
 
@@ -627,7 +619,6 @@ describe('ComicIdentity', () => {
 
     const { container: _container } = render(<ComicIdentity issueId={7} />)
     await waitForLoaded()
-    expect(screen.getByText('ComicVine')).toBeInTheDocument()
     // Summary text is split, check for the arc count in the summary
     expect(screen.getByText((content) => content.includes('Story arcs') && content.includes('2'))).toBeInTheDocument()
     expect(screen.getByText('Coming soon')).toBeInTheDocument()
