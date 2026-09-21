@@ -541,6 +541,70 @@ describe('ComicVineSearchDialog direct URL resolution (#2803)', () => {
     expect(screen.getByPlaceholderText('Search series title or paste a ComicVine URL')).toBeInTheDocument()
     expect(confirmIdentitySpy).not.toHaveBeenCalled()
   })
+
+  it('handles volume resolution with empty issues array', async () => {
+    resolveIdentitySpy.mockResolvedValue({
+      input: 'https://comicvine.gamespot.com/superman/4050-148476/',
+      kind: 'volume',
+      validation_error: null,
+      issue: null,
+      volume: mockVolume,
+      issues: [],
+    })
+
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: '34' })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'https://comicvine.gamespot.com/superman/4050-148476/' } })
+
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    expect(screen.getByTestId('rematch-issue-context')).toHaveTextContent('#34')
+    expect(screen.queryByRole('button', { name: 'Confirm Identity' })).not.toBeInTheDocument()
+  })
+
+  it('handles volume resolution with null issue data', async () => {
+    resolveIdentitySpy.mockResolvedValue({
+      input: 'https://comicvine.gamespot.com/superman-34-i-superman/4000-1154070/',
+      kind: 'issue',
+      validation_error: null,
+      issue: null,
+      volume: null,
+      issues: [],
+    })
+
+    render(<ComicVineSearchDialog {...defaultProps()} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'https://comicvine.gamespot.com/superman-34-i-superman/4000-1154070/' } })
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Failed to search ComicVine. Please try again.'),
+    )
+    expect(screen.getByPlaceholderText('Search series title or paste a ComicVine URL')).toBeInTheDocument()
+    expect(confirmIdentitySpy).not.toHaveBeenCalled()
+  })
+
+  it('handles search kind resolution (plain text)', async () => {
+    resolveIdentitySpy.mockResolvedValue({
+      input: 'Just some plain text',
+      kind: 'search',
+      validation_error: null,
+      issue: null,
+      volume: null,
+      issues: [],
+    })
+
+    render(<ComicVineSearchDialog {...defaultProps()} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Just some plain text' } })
+
+    await waitFor(() => {
+      expect(searchSeriesSpy).toHaveBeenCalledWith('Just some plain text', 10, 0)
+    })
+    expect(screen.getByPlaceholderText('Search series title or paste a ComicVine URL')).toBeInTheDocument()
+    expect(confirmIdentitySpy).not.toHaveBeenCalled()
+  })
 })
 
 describe('ComicVineSearchDialog paginated series search (#2803)', () => {
@@ -640,5 +704,45 @@ describe('ComicVineSearchDialog paginated series search (#2803)', () => {
     await waitFor(() =>
       expect(searchSeriesSpy).toHaveBeenCalledTimes(2),
     )
+  })
+
+  it('does not show Load more when has_more is false', async () => {
+    searchSeriesSpy.mockResolvedValue({
+      query: 'Super',
+      results: [{ ...mockSeries, comicvine_volume_id: 1, name: 'Super Series' }],
+      total_available: 1,
+      offset: 0,
+      limit: 10,
+      has_more: false,
+      next_offset: null,
+    })
+
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: '' })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Super' } })
+
+    await waitFor(() => expect(screen.getByText('Super Series')).toBeInTheDocument())
+    expect(screen.queryByTestId('comicvine-load-more')).not.toBeInTheDocument()
+  })
+
+  it('does not show Load more when nextOffset is null', async () => {
+    searchSeriesSpy.mockResolvedValue({
+      query: 'Super',
+      results: [{ ...mockSeries, comicvine_volume_id: 1, name: 'Super Series' }],
+      total_available: 2,
+      offset: 0,
+      limit: 10,
+      has_more: true,
+      next_offset: null,
+    })
+
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: '' })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Super' } })
+
+    await waitFor(() => expect(screen.getByText('Super Series')).toBeInTheDocument())
+    expect(screen.queryByTestId('comicvine-load-more')).not.toBeInTheDocument()
   })
 })
