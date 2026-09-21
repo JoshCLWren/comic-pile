@@ -8,7 +8,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { layoutGraph, NODE_WIDTH, NODE_HEIGHT, ISSUE_NODE_WIDTH, ISSUE_NODE_HEIGHT } from '../utils/graphLayout'
 import type { Thread, FlowchartDependency, FlowchartNode } from '../types'
-import './DependencyFlowchart.css'
 
 const PAGE_SIZE = 50
 const LARGE_GRAPH_THRESHOLD = 100
@@ -287,7 +286,7 @@ export default function DependencyFlowchart({
 
   if (adjustedNodes.length === 0) {
     return (
-      <div className="flowchart-empty" data-testid="flowchart-empty">
+      <div className="p-8 text-center text-[var(--theme-text-muted)] text-sm font-semibold uppercase tracking-wide" data-testid="flowchart-empty">
         No dependency relationships to visualize
       </div>
     )
@@ -297,13 +296,29 @@ export default function DependencyFlowchart({
   const svgHeight = Math.max(layout.height, 200)
 
   return (
-    <div className="flowchart-container" ref={containerRef} data-testid="flowchart-container">
+    <div 
+      className="relative w-full border border-[var(--theme-border)] rounded-lg overflow-hidden bg-[var(--theme-bg-panel)]" 
+      ref={containerRef} 
+      data-testid="flowchart-container"
+    >
+      <style>{`
+        @keyframes pulse-edge {
+          0%, 100% { stroke-opacity: 0.7; }
+          50% { stroke-opacity: 0.3; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .flowchart-edge-blocking {
+            animation: none !important;
+            stroke-opacity: 0.7;
+          }
+        }
+      `}</style>
+      
       {isLargeGraph && (
-        <div className="flowchart-warning" data-testid="flowchart-warning">
-          <h3>⚠️ Large Dependency Graph</h3>
-          <p>
-            This view has {threads.length} related threads. Showing {PAGE_SIZE} threads per page for
-            performance.
+        <div className="p-4 border border-[color-mix(in_srgb,var(--theme-warning)_30%,transparent)] rounded-lg bg-[color-mix(in_srgb,var(--theme-warning)_8%,transparent)] text-center" data-testid="flowchart-warning">
+          <h3 className="m-0 mb-2 text-[var(--theme-warning)] text-sm font-extrabold uppercase tracking-wide">⚠️ Large Dependency Graph</h3>
+          <p className="m-0 text-[var(--theme-text-muted)] text-xs">
+            This view has {threads.length} related threads. Showing {PAGE_SIZE} threads per page for performance.
           </p>
         </div>
       )}
@@ -311,7 +326,7 @@ export default function DependencyFlowchart({
       <div className="relative w-full h-full">
         <svg
           ref={svgRef}
-          className="dependency-flowchart"
+          className="dependency-flowchart w-full cursor-grab active:cursor-grabbing touch-none"
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
           style={{ height: Math.min(svgHeight + 40, 500) }}
           onWheel={handleWheel}
@@ -330,7 +345,7 @@ export default function DependencyFlowchart({
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" className="flowchart-arrowhead" />
+            <polygon points="0 0, 10 3.5, 0 7" style={{ fill: 'color-mix(in srgb, var(--theme-text-muted) 60%, transparent)' }} />
           </marker>
           <marker
             id="arrowhead-blocking"
@@ -340,26 +355,37 @@ export default function DependencyFlowchart({
             refY="3.5"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" className="flowchart-arrowhead-blocking" />
+            <polygon points="0 0, 10 3.5, 0 7" style={{ fill: 'var(--theme-danger)' }} />
           </marker>
         </defs>
 
         <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.scale})`}>
           {/* Render edges */}
           {adjustedEdges.map((edge) => {
-            const edgeClass = edge.isIssueLevel
-              ? 'flowchart-edge edge--issue-level'
-              : edge.isBlocking
-                ? 'flowchart-edge-blocking'
-                : 'flowchart-edge'
             const marker = edge.isBlocking && !edge.isIssueLevel
               ? 'url(#arrowhead-blocking)'
               : 'url(#arrowhead)'
+            
             return (
               <path
                 key={edge.id}
                 d={edge.path}
-                className={edgeClass}
+                stroke="none"
+                fill="none"
+                className={edge.isBlocking ? 'flowchart-edge-blocking' : undefined}
+                style={edge.isIssueLevel ? { 
+                  stroke: 'var(--theme-continuity-accent)', 
+                  strokeWidth: 2, 
+                  strokeDasharray: '6 4', 
+                  strokeOpacity: 0.6 
+                } : edge.isBlocking ? { 
+                  stroke: 'var(--theme-danger)', 
+                  strokeWidth: 2.5,
+                  animation: 'pulse-edge 2s ease-in-out infinite'
+                } : { 
+                  stroke: 'color-mix(in srgb, var(--theme-text-muted) 40%, transparent)', 
+                  strokeWidth: 2 
+                }}
                 markerEnd={marker}
                 data-testid={`flowchart-edge-${edge.sourceId}-${edge.targetId}`}
               />
@@ -372,11 +398,17 @@ export default function DependencyFlowchart({
             const nodeH = node.isIssueNode ? ISSUE_NODE_HEIGHT : NODE_HEIGHT
             const maxChars = node.isIssueNode ? 14 : 18
             
+            const rectStyle = node.isBlocked 
+              ? { fill: 'color-mix(in srgb, var(--theme-danger) 30%, transparent)', stroke: 'var(--theme-danger)' }
+              : node.isIssueNode 
+                ? { fill: 'color-mix(in srgb, var(--theme-continuity-accent) 15%, transparent)', stroke: 'var(--theme-continuity-accent)' }
+                : { fill: 'var(--theme-bg-page)', stroke: 'var(--theme-text-dim)' }
+            
             return (
               <g
                 key={node.id}
                 transform={`translate(${node.x}, ${node.y})`}
-                className={`flowchart-node ${node.isBlocked ? 'flowchart-node-blocked' : ''} ${node.isIssueNode ? 'flowchart-node--issue' : ''}`}
+                className={`cursor-grab active:cursor-grabbing`}
                 onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
                 onMouseEnter={(e) => handleNodeMouseEnter(e, node)}
                 onMouseLeave={handleNodeMouseLeave}
@@ -385,13 +417,19 @@ export default function DependencyFlowchart({
                 <rect
                   width={nodeW}
                   height={nodeH}
-                  className="flowchart-node-rect"
                   rx={node.isIssueNode ? 12 : 0}
+                  strokeWidth="1.5"
+                  style={rectStyle}
+                  className="transition-all duration-150"
                 />
                 <text
                   x={nodeW / 2}
                   y={nodeH / 2 + (node.isIssueNode ? 3 : 4)}
-                  className="flowchart-node-title"
+                  textAnchor="middle"
+                  fill="var(--theme-text-primary)"
+                  fontSize={node.isIssueNode ? 11 : 12}
+                  fontWeight="700"
+                  pointerEvents="none"
                 >
                   {truncateTitle(node.title, maxChars)}
                 </text>
@@ -400,7 +438,9 @@ export default function DependencyFlowchart({
                   <text
                     x={nodeW - 8}
                     y={16}
-                    className="flowchart-node-blocked-icon"
+                    textAnchor="end"
+                    fontSize="14px"
+                    pointerEvents="none"
                   >
                     🔒
                   </text>
@@ -414,7 +454,7 @@ export default function DependencyFlowchart({
       {/* Tooltip */}
       {tooltip && containerRef.current && (
         <div
-          className="flowchart-tooltip"
+          className="absolute z-60 px-3 py-2 rounded-lg bg-[var(--theme-bg-page)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] text-xs font-semibold pointer-events-none whitespace-nowrap max-w-[250px] overflow-hidden text-ellipsis"
           style={{
             left: tooltip.clientX - containerRef.current.getBoundingClientRect().left + 12,
             top: tooltip.clientY - containerRef.current.getBoundingClientRect().top - 30,
@@ -427,14 +467,29 @@ export default function DependencyFlowchart({
       )}
 
       {/* Zoom controls */}
-      <div className="flowchart-controls" data-testid="flowchart-controls">
-        <button type="button" onClick={handleZoomIn} aria-label="Zoom in">
+      <div className="absolute bottom-3 right-3 flex gap-1" data-testid="flowchart-controls">
+        <button 
+          type="button" 
+          onClick={handleZoomIn} 
+          aria-label="Zoom in"
+          className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--theme-bg-page)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] text-sm font-bold cursor-pointer transition-all duration-150 hover:bg-[var(--theme-bg-panel)] hover:border-[color-mix(in_srgb,white_25%,transparent)]"
+        >
           +
         </button>
-        <button type="button" onClick={handleZoomOut} aria-label="Zoom out">
+        <button 
+          type="button" 
+          onClick={handleZoomOut} 
+          aria-label="Zoom out"
+          className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--theme-bg-page)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] text-sm font-bold cursor-pointer transition-all duration-150 hover:bg-[var(--theme-bg-panel)] hover:border-[color-mix(in_srgb,white_25%,transparent)]"
+        >
           −
         </button>
-        <button type="button" onClick={handleReset} aria-label="Reset view">
+        <button 
+          type="button" 
+          onClick={handleReset} 
+          aria-label="Reset view"
+          className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--theme-bg-page)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] text-sm font-bold cursor-pointer transition-all duration-150 hover:bg-[var(--theme-bg-panel)] hover:border-[color-mix(in_srgb,white_25%,transparent)]"
+        >
           ⟳
         </button>
       </div>
@@ -442,33 +497,19 @@ export default function DependencyFlowchart({
       {/* Pagination */}
       {totalPages > 1 && (
         <div
-          style={{
-            position: 'absolute',
-            bottom: '0.75rem',
-            left: '0.75rem',
-            display: 'flex',
-            gap: '0.25rem',
-            alignItems: 'center',
-          }}
+          className="absolute bottom-3 left-3 flex items-center gap-1"
         >
           <button
             type="button"
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
-            className="flowchart-control-button"
-            style={{
-              opacity: page === 0 ? 0.4 : 1,
-            }}
+            className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--theme-bg-page)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] text-sm font-bold cursor-pointer transition-all duration-150 disabled:opacity-40"
             aria-label="Previous page"
           >
             ←
           </button>
           <span
-            style={{
-              color: 'rgba(203, 213, 225, 0.7)',
-              fontSize: '0.625rem',
-              fontWeight: 700,
-            }}
+            className="text-[rgba(203,213,225,0.7)] text-xs font-bold"
           >
             {page + 1}/{totalPages}
           </span>
@@ -476,10 +517,7 @@ export default function DependencyFlowchart({
             type="button"
             onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
             disabled={page === totalPages - 1}
-            className="flowchart-control-button"
-            style={{
-              opacity: page === totalPages - 1 ? 0.4 : 1,
-            }}
+            className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--theme-bg-page)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] text-sm font-bold cursor-pointer transition-all duration-150 disabled:opacity-40"
             aria-label="Next page"
           >
             →

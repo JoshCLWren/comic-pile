@@ -173,7 +173,7 @@ describe('useQueueThreadActions', () => {
     )
 
     await result.current.handleThreadRead(makeThread({ id: 7, is_blocked: true }))
-    expect(toastSpy).not.toHaveBeenCalled()
+    expect(window.alert).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
 
     await result.current.handleThreadRead(makeThread({ id: 8 }))
@@ -234,9 +234,8 @@ describe('useQueueThreadActions', () => {
     await result.current.handleThreadRead(makeThread({ id: 8 }))
 
     expect(navigate).not.toHaveBeenCalled()
-    expect(toastSpy).toHaveBeenCalledWith(
+    expect(window.alert).toHaveBeenCalledWith(
       expect.stringContaining('Thread 8 has no issues remaining'),
-      'error',
     )
   })
 
@@ -264,7 +263,7 @@ describe('useQueueThreadActions', () => {
     expect(unsnooze.mutate).toHaveBeenCalledWith(4)
   })
 
-  it('reports shuffle failure as a toast', async () => {
+  it('reports shuffle failure as an alert', async () => {
     const { result } = renderHook(
       () =>
         useQueueThreadActions(
@@ -280,7 +279,7 @@ describe('useQueueThreadActions', () => {
     )
 
     await result.current.handleShuffle()
-    expect(toastSpy).toHaveBeenCalledWith(expect.stringContaining('shuffle'), 'error')
+    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('shuffle'))
   })
 
   it('validates reposition bounds before calling the mutation', async () => {
@@ -300,7 +299,7 @@ describe('useQueueThreadActions', () => {
     await result.current.handleReposition(1, 0, 2)
     await result.current.handleReposition(1, 3, 2)
     expect(movePosition.mutate).not.toHaveBeenCalled()
-    expect(toastSpy).toHaveBeenCalled()
+    expect(window.alert).toHaveBeenCalled()
   })
 
   it('opens and cancels the delete confirmation without mutating', async () => {

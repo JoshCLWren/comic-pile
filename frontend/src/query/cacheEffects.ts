@@ -564,3 +564,23 @@ export function applyUpdatedPreferencesCache(
 ): void {
   client.setQueryData(queryKeys.preferences.detail(), preferences)
 }
+
+/**
+ * Invalidate the roll bootstrap and current session after a session-mode
+ * update. Replaces the imperative `sessionApi.updateMode` + `refetchBootstrap()`
+ * pattern in RollPage (#2649).
+ */
+export async function invalidateAfterSessionModeUpdate(
+  client: QueryClient,
+): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    }),
+  ])
+}

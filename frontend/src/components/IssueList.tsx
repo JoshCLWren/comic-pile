@@ -5,7 +5,6 @@ import type { ThreadIssueDependenciesResponse } from '../services/api-dependenci
 import type { Issue, IssueDependenciesResponse, IssueListResponse, Thread } from '../types'
 import Tooltip from './Tooltip'
 import { getDependencyTooltip } from '../utils/dependencyHelpers'
-import './IssueList.css'
 
 /** The issue-API surface IssueList consumes, injectable for tests. */
 export interface IssueListApi {
@@ -246,11 +245,19 @@ export function IssueList({
   }
 
   if (isLoading) {
-    return <div className="issue-list loading">Loading issues...</div>
+    return (
+      <div className="border border-[var(--theme-border)] rounded-lg p-8 text-center text-[var(--theme-text-muted)]">
+        Loading issues...
+      </div>
+    )
   }
 
   if (issues.length === 0) {
-    return <div className="issue-list empty">No issues found</div>
+    return (
+      <div className="border border-[var(--theme-border)] rounded-lg p-8 text-center text-[var(--theme-text-muted)]">
+        No issues found
+      </div>
+    )
   }
 
   const nextUnreadId = thread.next_unread_issue_id
@@ -258,13 +265,14 @@ export function IssueList({
   const progressPercent = totalCount > 0 ? Math.round((readCount / totalCount) * 100) : 0
 
   return (
-    <div className="issue-list">
-      <div className="issue-list-header">
-        <h3>Issues</h3>
+    <div className="border border-[var(--theme-border)] rounded-lg p-4">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="m-0 text-lg">Issues</h3>
         <select
           value={filter}
           // SAFETY: the select options are exactly the FilterType union values, so the event value is one of them.
           onChange={(event) => handleFilterChange(event.target.value as 'all' | 'unread' | 'read')}
+          className="px-2 py-1 border border-[var(--theme-border)] rounded-md"
         >
           <option value="all">All</option>
           <option value="unread">Unread</option>
@@ -272,7 +280,7 @@ export function IssueList({
         </select>
       </div>
 
-      <div className="issues">
+      <div className="flex flex-col gap-2">
         {issues.map((issue) => {
           const hasDependencies = dependencies[issue.id] !== undefined
           const tooltipContent = getDependencyTooltip(dependencies[issue.id])
@@ -280,15 +288,19 @@ export function IssueList({
           return (
             <div
               key={issue.id}
-              className={`issue-item ${issue.status} ${issue.id === nextUnreadId ? 'next-unread' : ''}`}
+              className={`issue-item ${issue.status} ${issue.id === nextUnreadId ? 'next-unread' : ''} flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors hover:bg-[var(--theme-bg-panel)] ${
+                issue.id === nextUnreadId
+                  ? 'bg-[color-mix(in_srgb,var(--theme-comic-accent)_15%,transparent)] border border-[var(--theme-comic-accent)]'
+                  : ''
+              }`}
               onClick={() => toggleIssueStatus(issue)}
             >
-              <span className="issue-icon">{getStatusIcon(issue)}</span>
-              <span className="issue-number">#{issue.issue_number}</span>
+              <span className="text-lg">{getStatusIcon(issue)}</span>
+              <span className="font-medium">#{issue.issue_number}</span>
               {hasDependencies && tooltipContent && (
                 <Tooltip content={tooltipContent}>
                   <span
-                    className="dependency-indicator"
+                    className="text-sm cursor-help ml-1 opacity-70 transition-opacity hover:opacity-100"
                     onClick={(event) => event.stopPropagation()}
                     title="Has dependencies"
                   >
@@ -296,9 +308,15 @@ export function IssueList({
                   </span>
                 </Tooltip>
               )}
-              {issue.id === nextUnreadId && <span className="next-badge">Next</span>}
+              {issue.id === nextUnreadId && (
+                <span className="ml-auto bg-[var(--theme-comic-accent)] text-white px-2 py-1 rounded-full text-xs font-medium">
+                  Next
+                </span>
+              )}
               {issue.status === 'read' && issue.read_at && (
-                <span className="read-date">{new Date(issue.read_at).toLocaleDateString()}</span>
+                <span className="ml-auto text-sm text-[var(--theme-text-muted)]">
+                  {new Date(issue.read_at).toLocaleDateString()}
+                </span>
               )}
             </div>
           )
@@ -306,23 +324,26 @@ export function IssueList({
       </div>
 
       {nextPageToken && (
-        <div className="issue-list-load-more">
+        <div className="mb-4">
           <button
             type="button"
             onClick={() => loadIssues(true, nextPageToken)}
             disabled={isLoadingMore}
-            className="load-more-button"
+            className="w-full px-4 py-2 border border-[var(--theme-border)] rounded-md hover:bg-[var(--theme-bg-panel)] transition-colors disabled:opacity-50"
           >
             {isLoadingMore ? 'Loading...' : `Load more (${issues.length} of ${totalCount})`}
           </button>
         </div>
       )}
 
-      <div className="issue-list-footer">
-        <div className="progress-bar">
-          <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
+      <div className="mt-4">
+        <div className="h-2 bg-[var(--theme-border)] rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-[var(--theme-comic-accent)] transition-all duration-300"
+            style={{ width: `${progressPercent}%` }}
+          />
         </div>
-        <div className="progress-text">
+        <div className="mt-1 text-sm text-[var(--theme-text-muted)] text-center">
           Read {readCount} of {totalCount} ({progressPercent}%)
         </div>
       </div>

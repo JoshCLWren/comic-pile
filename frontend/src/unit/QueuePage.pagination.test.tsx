@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
-import { ToastProvider } from '../contexts/ToastProvider'
 import QueuePage from '../pages/QueuePage'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../hooks/useThread'
 import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
@@ -99,9 +98,7 @@ const thread = {
 function renderQueue() {
   return render(
     <BrowserRouter>
-      <ToastProvider>
-        <QueuePage />
-      </ToastProvider>
+      <QueuePage />
     </BrowserRouter>,
   )
 }

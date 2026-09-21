@@ -26,6 +26,11 @@ export interface RollBootstrapApi {
 export interface CacheEffectsApi {
   applyRatedThreadCache: (client: import('@tanstack/react-query').QueryClient, thread: Thread) => Promise<void>
   invalidateCurrentSessionAfterSnooze: (client: import('@tanstack/react-query').QueryClient) => Promise<void>
+  invalidateAfterSessionModeUpdate: (client: import('@tanstack/react-query').QueryClient) => Promise<void>
+}
+
+export interface SessionModeApi {
+  updateMode: (data: import('../types').SessionModeUpdateRequest) => Promise<import('../types').SessionModeResponse>
 }
 
 export interface SkipApi {
@@ -50,4 +55,11 @@ export interface RollMutationDeps {
 /** The subset of `dependenciesApi` used by the Roll page's batch blocker load. */
 export interface RollDependenciesApi {
   getBatchBlockingInfo: (threadIds: number[]) => Promise<import('../types').BatchBlockingInfoResponse>
+}
+
+/** Injectable dependencies for the session mode mutation hook. */
+export interface SessionModeMutationDeps {
+  sessionApi?: SessionModeApi
+  cacheEffects?: CacheEffectsApi
+  queryClientInstance?: import('@tanstack/react-query').QueryClient
 }

@@ -1,0 +1,255 @@
+/* Migration Dialog Overlay */
+.migration-dialog__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: color-mix(in srgb, var(--theme-bg-page) 80%, transparent);
+}
+
+/* Migration Dialog Container */
+.migration-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 32rem;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
+/* Dialog Header */
+.migration-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.migration-dialog__title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  text-transform: uppercase;
+  color: var(--theme-text-primary);
+  line-height: 1.4;
+}
+
+.migration-dialog__close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  font-size: 1.5rem;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--theme-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.migration-dialog__close-btn:hover {
+  color: var(--theme-text-primary);
+  background: color-mix(in srgb, white 10%, transparent);
+}
+
+.migration-dialog__close-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Dialog Form */
+.migration-dialog__form {
+  padding: 1.5rem;
+}
+
+/* Form Field */
+.migration-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-bottom: 1.25rem;
+}
+
+.migration-dialog__label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--theme-text-primary);
+}
+
+.migration-dialog__required {
+  color: var(--theme-error);
+}
+
+/* Text Input */
+.migration-dialog__input {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: var(--theme-text-primary);
+  background: color-mix(in srgb, var(--theme-bg-page) 50%, transparent);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.5rem;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.migration-dialog__input::placeholder {
+  color: var(--theme-text-muted);
+}
+
+.migration-dialog__input:hover {
+  border-color: color-mix(in srgb, white 20%, transparent);
+}
+
+.migration-dialog__input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-focus-ring) 30%, transparent);
+}
+
+.migration-dialog__input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Hint Text */
+.migration-dialog__hint {
+  font-size: 0.75rem;
+  color: var(--theme-text-muted);
+}
+
+/* Preview Section */
+.migration-preview {
+  padding: 0.875rem 1rem;
+  margin-bottom: 1rem;
+  background: color-mix(in srgb, var(--theme-comic-accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--theme-comic-accent) 20%, transparent);
+  border-radius: 0.5rem;
+}
+
+.migration-preview__content {
+  font-size: 0.8125rem;
+  color: var(--theme-comic-accent);
+  line-height: 1.5;
+}
+
+/* Warning Message */
+.migration-warning {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.8125rem;
+  color: var(--theme-warning);
+  background: color-mix(in srgb, var(--theme-warning) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--theme-warning) 20%, transparent);
+  border-radius: 0.5rem;
+  line-height: 1.5;
+}
+
+/* Error Message */
+.migration-dialog__error {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--theme-error);
+  background: color-mix(in srgb, var(--theme-error) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--theme-error) 30%, transparent);
+  border-radius: 0.5rem;
+}
+
+/* Dialog Actions */
+.migration-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+/* Buttons */
+.migration-dialog__btn {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.migration-dialog__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.migration-dialog__btn--secondary {
+  color: var(--theme-text-primary);
+  background: var(--glass-bg);
+}
+
+.migration-dialog__btn--secondary:hover:not(:disabled) {
+  background: color-mix(in srgb, white 20%, transparent);
+}
+
+.migration-dialog__btn--primary {
+  color: white;
+  background: var(--accent-primary);
+}
+
+.migration-dialog__btn--primary:hover:not(:disabled) {
+  background: var(--theme-primary-action-hover);
+}
+
+/* Confirm Overlay */
+.migration-dialog__confirm-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--theme-bg-page) 90%, transparent);
+  border-radius: 0.75rem;
+}
+
+/* Confirm Dialog */
+.migration-dialog__confirm-dialog {
+  width: 100%;
+  max-width: 24rem;
+  padding: 1.5rem;
+  background: var(--theme-bg-page);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+.migration-dialog__confirm-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--theme-text-primary);
+}
+
+.migration-dialog__confirm-message {
+  margin: 0 0 1.25rem 0;
+  font-size: 0.875rem;
+  color: var(--theme-text-primary);
+  line-height: 1.5;
+}
+
+.migration-dialog__confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}

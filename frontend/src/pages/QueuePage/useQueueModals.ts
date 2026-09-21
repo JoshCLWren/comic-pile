@@ -4,7 +4,6 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import type { Thread } from '../../types'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
-import { useToast } from '../../contexts/useToast'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
 
@@ -101,7 +100,6 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const navigate = useNavigate()
   const location = useLocation()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
-  const { showToast } = useToast()
 
   const [openModal, setOpenModal] = useState<ModalKey | null>(null)
   const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
@@ -312,9 +310,8 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
             }
           } catch (issueError: unknown) {
             console.error('Thread created but failed to create issues:', issueError)
-            showToast(
+            window.alert(
               `Thread created successfully, but failed to create individual issues: ${getApiErrorDetail(issueError)}`,
-              'error',
             )
           }
         }
@@ -324,10 +321,10 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         await onCreated()
       } catch (error: unknown) {
         console.error('Failed to create thread:', error)
-        showToast(`Failed to create series: ${getApiErrorDetail(error)}`, 'error')
+        window.alert(`Failed to create series: ${getApiErrorDetail(error)}`)
       }
     },
-    [createForm, closeCreateModal, onCreated, submitCreate, showToast],
+    [createForm, closeCreateModal, onCreated, submitCreate],
   )
 
   const handleEditSubmit = useCallback(
@@ -380,13 +377,13 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         await refetchSession()
       } catch (error) {
         console.error('Failed to refresh data after migration:', error)
-        showToast('Failed to refresh data. Please refresh the page.', 'error')
+        window.alert('Failed to refresh data. Please refresh the page.')
       }
       setShowMigrationDialog(false)
       setThreadToMigrate(null)
       setEditingThread(migratedThread)
     },
-    [onUpdated, refetchSession, showToast],
+    [onUpdated, refetchSession],
   )
 
   const handleMigrationSkip = useCallback(() => {

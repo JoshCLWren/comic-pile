@@ -54,9 +54,8 @@ vi.mock('../services/api-issues', () => ({
   },
 }))
 
-const showToast = vi.fn()
 vi.mock('../contexts/useToast', () => ({
-  useToast: vi.fn(() => ({ showToast, removeToast: vi.fn(), toasts: [] })),
+  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
 }))
 
 // SAFETY: vi.mocked returns mocked type; cast to any for flexible test stubs
@@ -140,7 +139,7 @@ it('does not refresh session or threads when snooze fails', async () => {
   await user.click(screen.getByRole('menuitem', { name: /^snooze$/i }))
 
   await waitFor(() => {
-    expect(showToast).toHaveBeenCalledWith('Failed to snooze thread: Snooze unavailable', 'error')
+    expect(alert).toHaveBeenCalledWith('Failed to snooze thread: Snooze unavailable')
   })
   expect(snooze).toHaveBeenCalledOnce()
   expect(refetchSession).not.toHaveBeenCalled()
@@ -181,7 +180,7 @@ it('does not refresh session or threads when unsnooze fails', async () => {
   await user.click(screen.getByRole('menuitem', { name: /^unsnooze$/i }))
 
   await waitFor(() => {
-    expect(showToast).toHaveBeenCalledWith('Failed to unsnooze thread: Unsnooze unavailable', 'error')
+    expect(alert).toHaveBeenCalledWith('Failed to unsnooze thread: Unsnooze unavailable')
   })
   expect(unsnooze).toHaveBeenCalledWith(1)
   expect(refetchSession).not.toHaveBeenCalled()
@@ -224,5 +223,5 @@ it('keeps snooze disabled before session data has loaded', async () => {
   expect(refetchSession).not.toHaveBeenCalled()
   expect(snooze).not.toHaveBeenCalled()
   expect(refetchThreads).not.toHaveBeenCalled()
-  expect(showToast).not.toHaveBeenCalled()
+  expect(alert).not.toHaveBeenCalled()
 })
