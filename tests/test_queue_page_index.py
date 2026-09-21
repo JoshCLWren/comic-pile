@@ -197,9 +197,12 @@ async def test_completed_page_uses_user_scoped_index(async_db_committed: AsyncSe
     plan_nodes = plan_data[0]["Plan"]
     used_indexes = collect_index_names(plan_nodes)
 
-    # Should use a user-scoped index, not a global one
-    assert "ix_thread_user_status_position" in used_indexes or "ix_thread_user_active_queue_position" in used_indexes, (
-        f"Plan did not reference a user-scoped index. Used indexes: {used_indexes}"
+    # Should use the partial completed index for created_at DESC, not a global index
+    assert "ix_thread_user_completed_created_id" in used_indexes, (
+        f"Plan did not reference ix_thread_user_completed_created_id. Used indexes: {used_indexes}"
+    )
+    assert "ix_thread_position" not in used_indexes, (
+        f"Plan incorrectly used global ix_thread_position. Used indexes: {used_indexes}"
     )
 
 

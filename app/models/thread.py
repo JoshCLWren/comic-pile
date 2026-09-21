@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     func,
     select,
+    text,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -93,6 +94,28 @@ class Thread(Base):
             "status",
             "is_blocked",
             "queue_position",
+        ),
+        Index(
+            "ix_thread_user_active_queue_position",
+            "user_id",
+            "is_blocked",
+            "queue_position",
+            "id",
+            postgresql_where=text("status = 'active'"),
+        ),
+        Index(
+            "ix_thread_user_completed_created_id",
+            "user_id",
+            "created_at",
+            "id",
+            postgresql_where=text("status = 'completed'"),
+        ),
+        Index(
+            "ix_thread_user_completed_title_id",
+            "user_id",
+            "title",
+            "id",
+            postgresql_where=text("status = 'completed'"),
         ),
     )
 
