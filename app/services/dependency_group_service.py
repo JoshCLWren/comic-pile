@@ -612,3 +612,47 @@ class DependencyGroupService:
         await self._db.delete(member)
         await self._db.commit()
         await self._refresh_crossover_blocked_state(user_id)
+
+    async def list_thread_groups_batch(
+        self,
+        user_id: int,
+        thread_ids: list[int],
+    ) -> dict[int, list[DependencyGroupSummary]]:
+        """List crossover groups for multiple owned threads in one request.
+
+        Args:
+            user_id: The authenticated owner of the requested threads and groups.
+            thread_ids: The bounded thread identifiers to resolve.
+
+        Returns:
+            A mapping from thread ID to zero or more crossover summaries.
+
+        Raises:
+            NotFoundError: If any requested thread is not owned by the current user.
+        """
+        thread_ids = list(dict.fromkeys(thread_ids))
+        
+        # Verify all threads are owned
+        owned_result = await groups_repo.get_owned_threads_batch(self._db, thread_ids, user_id)
+        owned_ids = set(owned_result.scalars())
+        missing_ids = [thread_id for thread_id in thread_ids if thread_id not in owned_ids]
+        if missing_ids:
+            raise NotFoundError(f"Thread {missing_ids[0]} not found")
+
+        # Get all group memberships for the requested threads
+        result = await groups_repo.thread_group_summaries_batch(self._db, thread_ids, user_id)
+
+        groups_by_thread: dict[int, list[DependencyGroupSummary]] = {
+            thread_id: [] for thread_id in thread_ids
+        }
+        seen: dict[int, set[int]] = {thread_id: set() for thread_id in thread_ids}
+        
+        for group_id, group_name, thread_id in result:
+            if thread_id in seen and group_id in seen[thread_id]:
+                continue
+            seen[thread_id].add(group_id)
+            groups_by_thread[thread_id].append(
+                DependencyGroupSummary(id=group_id, name=group_name)
+            )
+
+        return groups_by_thread
