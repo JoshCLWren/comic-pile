@@ -72,7 +72,7 @@ export function ComicPillar({
         </div>
 
         {/* Issue identity and details */}
-        <div className="flex-1 space-y-3">
+        <div className="flex-1 space-y-3" data-testid="comic-header-row">
           {/* Provider eyebrow and title block */}
           <div className="space-y-2">
             {identityState?.has_confirmed_identity && (
@@ -81,7 +81,7 @@ export function ComicPillar({
               </div>
             )}
             <div className="flex flex-col gap-1">
-              <h2 className="text-xl font-black text-stone-100 leading-tight break-words">
+              <h2 data-testid="comic-header-title" className="text-xl font-black text-stone-100 leading-tight break-words">
                 {threadTitle}
                 {issueNumber != null ? <span style={{ color: 'var(--theme-comic-accent)' }}> #{issueNumber}</span> : null}
               </h2>
@@ -99,7 +99,7 @@ export function ComicPillar({
 
           {/* Compact identity/correction controls */}
           {issueNumber != null && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2" data-testid="comic-header-controls">
               <button
                 type="button"
                 onClick={() => setIsCorrectionDialogOpen(true)}

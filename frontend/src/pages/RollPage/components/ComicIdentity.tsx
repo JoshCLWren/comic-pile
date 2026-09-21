@@ -144,8 +144,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   return (
     <>
     <section
-      aria-labelledby={metadata.name ? 'comic-identity-heading' : undefined}
-      aria-label={metadata.name ? undefined : 'Comic details'}
+      aria-label={metadata.name || 'Comic details'}
       className="w-full space-y-4"
     >
       <div
