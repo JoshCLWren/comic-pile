@@ -95,7 +95,6 @@ export function buildNumberNormals(
 }
 
 export type FaceRotation = { x: number; y: number; z: number }
-export type ResolvedDiceConfig = import('./diceTypes').DiceRenderGlobalConfig
 
 // Geometry builders extracted from Dice3D.tsx
 export function createD4Geometry(atlasInfo: import('./diceAtlas').DiceTextureAtlas): THREE.BufferGeometry {
