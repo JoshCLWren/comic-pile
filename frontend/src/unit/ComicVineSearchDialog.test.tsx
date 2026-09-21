@@ -414,6 +414,11 @@ describe('ComicVineSearchDialog direct URL resolution (#2803)', () => {
 
     render(<ComicVineSearchDialog {...defaultProps({ issueNumber: '34' })} />)
 
+    // The dialog auto-searches the pre-filled threadTitle on open; isolate the
+    // URL-paste behavior so the assertion below only covers post-paste calls.
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalled())
+    searchSeriesSpy.mockClear()
+
     const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
     fireEvent.change(input, { target: { value: ISSUE_URL } })
 
