@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { buildD10Faces } from './d10Geometry'
 import type { DiceTextureAtlas, TextureTileUv } from './diceAtlas'
 import { getUVForNumber } from './diceAtlas'
 

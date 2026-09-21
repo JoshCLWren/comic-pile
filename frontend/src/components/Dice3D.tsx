@@ -1,11 +1,10 @@
 import { useRef, useEffect, useLayoutEffect } from 'react'
 import * as THREE from 'three'
-import { buildD10Faces } from './d10Geometry'
 import { getDiceRenderConfigForSides } from './diceRenderConfig'
 import type { Dice3DProps, DiceRenderGlobalConfig, DiceSide } from './diceTypes'
 import { isDiceSide } from './diceTypes'
 import { createTextureAtlas, getUVForNumber, type DiceTextureAtlas, type TextureTileUv } from './diceAtlas'
-import { normalize, addTriangle, getNumberFromUv, buildNumberNormals, getFaceRotation, type Vector3Tuple, type Vector2Tuple, type QuadFace, type FaceProjection, type FaceBasis, type UVBounds, type NormalizedUvPoint, type ProjectedOffset, type FaceRotation, type NumberNormals, buildGeometry, createD4Geometry, createD6Geometry, createD8Geometry, createD10Geometry, createD12Geometry, createD20Geometry, createD30Geometry, createD50Geometry, createD100Geometry } from './diceGeometryUtils'
+import { buildNumberNormals, getFaceRotation, buildGeometry, type FaceRotation, type NumberNormals, type ProjectedOffset } from './diceGeometryUtils'
 
 function lerp(start: number, end: number, alpha: number): number {
   return start + (end - start) * alpha;
