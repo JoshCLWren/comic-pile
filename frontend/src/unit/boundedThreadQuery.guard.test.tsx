@@ -7,7 +7,7 @@ import * as useThreadModule from '../hooks/useThread'
 import { threadsApi } from '../services/api-threads'
 import type { Thread } from '../types'
 
-vi.mock('../services/api', () => ({
+vi.mock('../services/api-threads', () => ({
   threadsApi: {
     list: vi.fn(),
   },

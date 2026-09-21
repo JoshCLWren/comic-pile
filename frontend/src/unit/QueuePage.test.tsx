@@ -55,10 +55,13 @@ vi.mock('../hooks/useQueueBlockingInfo', () => ({
   useQueueBlockingInfo: vi.fn(() => ({})),
 }))
 
-vi.mock('../services/api', () => ({
+vi.mock('../services/api-threads', () => ({
   threadsApi: {
     setPending: vi.fn(),
   },
+}))
+
+vi.mock('../services/api', () => ({
   dependenciesApi: {
     listBlockedThreadIds: vi.fn().mockResolvedValue([]),
     getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),

@@ -55,10 +55,12 @@ vi.mock('../hooks', async (importOriginal) => {
 vi.mock('../services/api-reading-orders', () => ({
   readingOrdersApi: { getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }) },
 }))
-vi.mock('../services/api-threads', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../services/api-threads')>()
-  return { ...actual }
-})
+vi.mock('../services/api-threads', () => ({
+  threadsApi: {
+    list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }),
+    setPending: vi.fn(),
+  },
+}))
 vi.mock('../services/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api')>()
   return {

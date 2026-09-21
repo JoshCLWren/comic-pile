@@ -15,7 +15,7 @@ vi.mock('../services/api-issues', () => ({
   },
 }))
 
-vi.mock('../services/api', () => ({
+vi.mock('../services/api-threads', () => ({
   threadsApi: {
     get: vi.fn(),
   },

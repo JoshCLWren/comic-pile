@@ -367,6 +367,8 @@ rawApi.interceptors.response.use(
 
 export default api
 
+// Temporary reading-runtime re-exports keep this slice independently shippable.
+// TODO(#2785): remove these re-exports once every call site imports the focused domain clients.
 export { threadsApi } from './api-threads'
 export { rollApi } from './api-roll'
 export { rateApi } from './api-rate'
@@ -642,6 +644,8 @@ export const creatorsApi = {
   },
 }
 
+// Temporary reading-runtime re-exports keep this slice independently shippable.
+// TODO(#2785): remove these re-exports once every call site imports the focused domain clients.
 export { snoozeApi } from './api-snooze'
 export { skipApi } from './api-skip'
 

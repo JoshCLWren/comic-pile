@@ -24,14 +24,7 @@ vi.mock('../services/api-dependency-groups', () => ({
   },
 }))
 
-vi.mock('../services/api', () => ({
-  default: {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-  },
+vi.mock('../services/api-threads', () => ({
   threadsApi: {
     list: vi.fn(),
     get: vi.fn(),
@@ -44,8 +37,21 @@ vi.mock('../services/api', () => ({
     setCurrentIssue: vi.fn(),
     listCompleted: vi.fn(),
   },
+}))
+
+vi.mock('../services/api-issues', () => ({
   issuesApi: {
     list: vi.fn(),
+  },
+}))
+
+vi.mock('../services/api', () => ({
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
   },
 }))
 

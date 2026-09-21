@@ -14,7 +14,7 @@ const api = vi.hoisted(() => ({
 }))
 const bootstrapApi = vi.hoisted(() => ({ rollBootstrapApi: { get: vi.fn() } }))
 const toast = vi.hoisted(() => ({ showToast: vi.fn() }))
-vi.mock('../services/api', () => api)
+vi.mock('../services/api-sessions', () => api)
 vi.mock('../services/rollBootstrapApi', () => bootstrapApi)
 vi.mock('../contexts/useToast', () => ({ useToast: () => toast }))
 
