@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from 'react'
+
+import { useCrossoverDetail } from '../hooks/useCrossoverDetail'
 import { useParams, Link } from 'react-router-dom'
-import { dependencyGroupsApi, type DependencyGroup, type DependencyGroupMember, type DependencyGroupSummary } from '../services/api-dependency-groups'
-import { getApiErrorDetail } from '../utils/apiError'
+import { type DependencyGroupMember } from '../services/api-dependency-groups'
+
 import type { Thread, Issue } from '../types'
 
 interface CrossoverMember {
@@ -16,42 +17,7 @@ export default function CrossoverDetailPage() {
   const { group } = useParams<{ group: string }>()
   const groupId = parseInt(group ?? '', 10)
 
-  const [crossover, setCrossover] = useState<DependencyGroup | null>(null)
-  const [members, setMembers] = useState<CrossoverMember[]>([])
-  const [linkedPlans, setLinkedPlans] = useState<DependencyGroupSummary[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const loadCrossover = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const detail = await dependencyGroupsApi.getDetail(groupId)
-      setCrossover({
-        id: detail.id,
-        name: detail.name,
-        created_at: detail.created_at,
-        memberships: detail.memberships.map((m) => m.membership),
-      })
-      setMembers(
-        detail.memberships.map((m) => ({
-          membership: m.membership,
-          thread: m.thread,
-          issue: m.issue,
-          other_crossovers: m.other_crossovers,
-        })),
-      )
-      setLinkedPlans(detail.linked_plans ?? [])
-    } catch (err) {
-      setError(getApiErrorDetail(err))
-    } finally {
-      setIsLoading(false)
-    }
-  }, [groupId])
-
-  useEffect(() => {
-    loadCrossover()
-  }, [loadCrossover])
+  const { crossover, members, linkedPlans, isLoading, error } = useCrossoverDetail(groupId)
 
   if (isLoading) {
     return (
@@ -83,12 +49,7 @@ export default function CrossoverDetailPage() {
         <div className="text-center text-[var(--theme-danger)] mt-8">
           <p className="text-lg font-medium">Error loading crossover</p>
           <p className="mt-1 text-sm">{error}</p>
-          <button
-            onClick={loadCrossover}
-            className="mt-4 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 font-bold text-[var(--theme-text-primary)]"
-          >
-            Try again
-          </button>
+
         </div>
       </div>
     )
