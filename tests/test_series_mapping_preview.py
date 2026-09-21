@@ -291,21 +291,26 @@ class TestSeriesMappingPreview:
             special_rows = [row for row in data["rows"] if row["classification"] == "excluded_special"]
             assert len(special_rows) > 0
             
+            # Verify "Annual" is specifically classified as excluded_special
+            annual_rows = [row for row in data["rows"] if row["issue_number"] == "Annual"]
+            assert len(annual_rows) == 1
+            assert annual_rows[0]["classification"] == "excluded_special"
+            
             # Verify non-special issues are not excluded
             normal_rows = [row for row in data["rows"] if row["classification"] != "excluded_special"]
             assert len(normal_rows) > 0
 
     @pytest.mark.asyncio
     async def test_preview_series_mapping_conflict_detection(self, auth_client: AsyncClient, async_db: AsyncSession, sample_data):
-        """Test preview with conflict detection."""
+        """Test preview with cross-provider conflict detection."""
         issue = sample_data["issue"]
         
-        # Create conflicting external identity
+        # Create conflicting external identity with a DIFFERENT provider
         conflicting_identity = ExternalIdentity(
-            provider="comicvine",
+            provider="cbl",  # Different provider = cross-provider conflict
             entity_type="issue",
-            external_id="99999",  # Different from origin issue
-            external_url="https://comicvine.gamespot.com/issue/4000-99999/",
+            external_id="99999",
+            external_url="https://comicbookdb.com/issue/99999",
             metadata_json={"name": "Different Issue", "issue_number": "999"},
         )
         async_db.add(conflicting_identity)
@@ -367,7 +372,7 @@ class TestSeriesMappingPreview:
             assert response.status_code == 200
             data = response.json()
             
-            # Verify conflict detection
+            # Verify cross-provider conflict detection
             conflict_rows = [row for row in data["rows"] if row["classification"] == "needs_review_conflict"]
             assert len(conflict_rows) > 0
 
@@ -444,6 +449,20 @@ class TestSeriesMappingPreview:
             # Verify ambiguous issues are classified correctly
             ambiguous_rows = [row for row in data["rows"] if row["classification"] == "needs_review_ambiguous"]
             assert len(ambiguous_rows) > 0
+            
+            # Verify Roman numerals are classified as ambiguous, not special
+            roman_rows = [row for row in data["rows"] if row["issue_number"] == "II"]
+            assert len(roman_rows) == 1
+            assert roman_rows[0]["classification"] == "needs_review_ambiguous"
+            
+            # Verify fractional numbers are classified as ambiguous
+            fractional_rows = [row for row in data["rows"] if row["issue_number"] == "1.5"]
+            assert len(fractional_rows) == 1
+            assert fractional_rows[0]["classification"] == "needs_review_ambiguous"
+            
+            # Verify special issues are still excluded
+            special_rows = [row for row in data["rows"] if row["classification"] == "excluded_special"]
+            assert len(special_rows) == 0  # No special issues in this test
 
     @pytest.mark.asyncio
     async def test_preview_series_mapping_invalid_request(self, auth_client: AsyncClient):

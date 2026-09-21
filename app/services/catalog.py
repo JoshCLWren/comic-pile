@@ -754,6 +754,9 @@ def _is_special_issue(issue_number: str) -> bool:
     stripped = issue_number.strip().lower()
     if not stripped:
         return True
+    # Roman numerals are not special issues - they are ambiguous numbering
+    if re.fullmatch(r"[ivx]+", stripped):
+        return False
     # Purely non-numeric or annual/special keywords
     if re.search(r"\b(annual|special|hc|tpb|gn|omnibus|deluxe|absolute|hardcover|trade paperback|graphic novel)\b", stripped):
         return True
@@ -776,12 +779,11 @@ def _is_conflicting_mapping(issue_info: dict, provider: str, series_external_id:
     if issue_info.get("current_mapping_status") != "confirmed":
         return False
     issue_provider = issue_info.get("provider")
-    issue_external_id = issue_info.get("external_id")
-    # If provider matches but external id differs, or provider differs, it's a conflict
+    # If provider differs, it's a conflict (cross-provider mapping conflict)
     if issue_provider != provider:
         return True
-    if issue_external_id is not None and str(issue_external_id) != str(series_external_id):
-        return True
+    # Same provider: we cannot reliably determine series-level conflict without
+    # additional data (issue's volume/series not stored locally). Defer to review.
     return False
 
 
