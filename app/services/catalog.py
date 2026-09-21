@@ -559,17 +559,12 @@ async def preview_series_mapping(
     origin_mapping_provider = origin_issue.get("provider")
     origin_mapping_external_id = origin_issue.get("external_id")
     origin_mapping_status = origin_issue.get("current_mapping_status")
-    print(f"DEBUG: origin_issue = {origin_issue}")
-    print(f"DEBUG: origin_mapping_provider = {origin_mapping_provider}")
-    print(f"DEBUG: origin_mapping_external_id = {origin_mapping_external_id}")
-    print(f"DEBUG: origin_mapping_status = {origin_mapping_status}")
     if (origin_mapping_provider and origin_mapping_external_id and origin_mapping_status == "confirmed"):
-        # Check if origin issue is already in the list
+        # Check if origin issue is already in the list (by issue_id)
         origin_in_list = any(
             info.get("issue_id") == origin_issue.get("issue_id")
             for info in issues_with_mappings
         )
-        print(f"DEBUG: origin_in_list = {origin_in_list}")
         if not origin_in_list:
             issues_with_mappings.append({
                 "issue_id": origin_issue.get("issue_id"),
@@ -582,9 +577,8 @@ async def preview_series_mapping(
                 "external_id": origin_mapping_external_id,
                 "confidence": origin_issue.get("confidence"),
                 "classification": "unresolved",
+                "_is_origin": True,
             })
-            print(f"DEBUG: Added origin issue to mappings")
-    print(f"DEBUG: issues_with_mappings after origin add = {issues_with_mappings}")
     
     # If we still don't have series info, return unavailable scope
     if series_info is None:
@@ -628,8 +622,11 @@ async def preview_series_mapping(
     origin_number = str(origin_number_raw) if isinstance(origin_number_raw, str) else ""
 
     # Pre-compute normalized counts for duplicate detection (unique exact requirement)
+    # Exclude the origin issue (_is_origin flag) since it's the anchor, not part of the series issues
     normalized_counts: dict[str, int] = {}
     for info in issues_with_mappings:
+        if info.get("_is_origin"):
+            continue
         num = info.get("issue_number", "")
         if isinstance(num, str) and not _is_special_issue(num) and not _is_ambiguous(num):
             norm = _normalize_issue_number(num)
@@ -639,7 +636,6 @@ async def preview_series_mapping(
     for issue_info in issues_with_mappings:
         raw_number = issue_info.get("issue_number", "")
         issue_number = str(raw_number) if isinstance(raw_number, str) else ""
-        print(f"DEBUG classify: issue_info = {issue_info}")
 
         # Check if it's a special issue (annual, special, etc.)
         if _is_special_issue(issue_number):
@@ -776,23 +772,13 @@ def _is_exact_match(issue_number: str, origin_issue_number: str) -> bool:
 
 
 def _is_conflicting_mapping(issue_info: dict, provider: str, series_external_id: str) -> bool:
-    """Check if issue has a confirmed mapping that conflicts with the selected series."""
-    print(f"DEBUG _is_conflicting_mapping: issue_info = {issue_info}")
-    print(f"DEBUG _is_conflicting_mapping: provider = {provider}, series_external_id = {series_external_id}")
-    if issue_info.get("current_mapping_status") != "confirmed":
-        print("DEBUG: not confirmed")
-        return False
-    issue_provider = issue_info.get("provider", "")
-    issue_external_id = issue_info.get("external_id", "")
-    if not issue_provider or not issue_external_id:
-        print("DEBUG: missing provider or external_id")
-        return False
-    if issue_provider != provider:
-        print(f"DEBUG: provider mismatch: {issue_provider} != {provider}")
-        return True
-    if issue_external_id != series_external_id:
-        print(f"DEBUG: external_id mismatch: {issue_external_id} != {series_external_id}")
-        return True
+    """Check if issue has a confirmed mapping that conflicts with the selected series.
+    
+    Note: Proper conflict detection requires checking if the issue's thread has a confirmed
+    series mapping to a different series. This information is not available in the current
+    issue_info structure, so conflict detection is disabled.
+    """
+    # Conflict detection not implemented - would require thread series mapping info
     return False
 
 
