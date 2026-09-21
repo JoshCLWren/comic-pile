@@ -18,9 +18,7 @@ from app.repositories.password_reset_token_repository import (
     get_token_by_digest,
     mark_used,
 )
-from app.repositories.session_repository import find_owned
-from app.repositories.revoked_token_repository import add_revoked_token
-from app.repositories.user_repository import get_user_by_username, get_user_by_email
+from app.repositories.user_repository import get_user_by_email
 
 TOKEN_EXPIRY_MINUTES = 30
 
@@ -87,7 +85,6 @@ async def complete_reset(
     # Pre-load needed values before any commit
     user_id = token_obj.user_id
     token_id = token_obj.id
-    user_email = token_obj.user.email if token_obj.user else None
     now = datetime.now(UTC)
     if token_obj.used_at is not None:
         raise HTTPException(

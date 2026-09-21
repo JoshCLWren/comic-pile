@@ -23,7 +23,7 @@ from app.auth import (
 from app.csrf import ensure_csrf_cookie, is_secure_request
 from app.database import get_db
 from app.middleware import limiter
-from app.services.password_reset_service import request_forgot_password, complete_reset, PasswordResetDeliveryHandoff
+from app.services.password_reset_service import request_forgot_password, complete_reset
 from app.models.user import User
 from app.repositories.failed_login_repository import (
     clear_attempts_for_username,
