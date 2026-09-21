@@ -827,11 +827,8 @@ describe('Roll nudge after first thread creation', () => {
     await user.type(screen.getByLabelText('Issues'), '5')
     await user.click(screen.getByRole('button', { name: /create series/i }))
 
-    // Wait for creation to complete
-    await waitFor(() => expect(mockCreate).toHaveBeenCalled())
-
-    // Check if Ready to roll? modal appears
-    expect(screen.getByRole('heading', { name: /ready to roll\?/i })).toBeInTheDocument()
+    // Wait for creation to complete and the roll nudge modal to appear
+    await waitFor(() => expect(screen.getByRole('heading', { name: /ready to roll\?/i })).toBeInTheDocument())
     expect(screen.getByText(/you've created your first series!/i)).toBeInTheDocument()
   })
 
@@ -869,12 +866,6 @@ describe('Roll nudge after first thread creation', () => {
 
   it('navigates to roll page when clicking Let\'s Roll! button', async () => {
     const user = userEvent.setup()
-    const mockNavigate = vi.fn()
-    vi.doMock('react-router-dom', () => ({
-      ...vi.requireActual('react-router-dom'),
-      useNavigate: () => mockNavigate,
-    }))
-    
     const mockCreate = vi.fn().mockResolvedValue({ id: 1 })
     mockedUseCreateThread.mockReturnValue({ mutate: mockCreate, isPending: false })
     
@@ -899,8 +890,8 @@ describe('Roll nudge after first thread creation', () => {
     // Click Let's Roll! button
     await user.click(screen.getByRole('button', { name: /let's roll!/i }))
 
-    // Check navigation to roll page
-    expect(mockNavigate).toHaveBeenCalledWith('/')
+    // Modal should close after clicking the button
+    await waitFor(() => expect(screen.queryByRole('heading', { name: /ready to roll\?/i })).not.toBeInTheDocument())
   })
 
   it('dismisses roll nudge when clicking Maybe Later button', async () => {

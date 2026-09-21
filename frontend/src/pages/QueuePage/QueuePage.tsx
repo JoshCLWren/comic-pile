@@ -330,6 +330,9 @@ export default function QueuePage() {
           isPendingCreate={modals.isPendingCreate}
           isPendingEdit={modals.isPendingEdit}
           isPendingReactivate={reactivateMutation.isPending}
+          showRollNudge={modals.showRollNudge}
+          onDismissRollNudge={modals.dismissRollNudge}
+          onRollNudgeNavigate={modals.rollNudgeNavigate}
         />
 
         <DeleteThreadDialog
