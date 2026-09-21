@@ -33,6 +33,7 @@ from app.schemas.continuity_plan import (
 )
 from app.schemas.continuity_rule import ContinuityNodeType
 from app.repositories.continuity_repository import plans_for_user
+from app.services.reading_plan_normalization import rebuild_plan_membership
 
 
 PLAN_RULE_MARKER_PREFIX = "continuity-plan"
@@ -217,6 +218,12 @@ async def replace_compiled_rules(
     Returns:
         True when all rules compiled without cycle conflicts.
     """
+    # Normalized membership/provenance always reflects the latest nodes in the
+    # same transaction: informational plans with no compiled edges still own
+    # relational membership, and a later rule-compilation failure rolls the
+    # membership rebuild back with the rest of the write.
+    await rebuild_plan_membership(db, plan_id=plan.id, nodes=nodes)
+
     marker = plan_rule_marker(plan.id)
     await db.execute(
         delete(ContinuityRule).where(

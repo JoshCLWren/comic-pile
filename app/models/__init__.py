@@ -19,6 +19,12 @@ from app.models.issue import Issue
 from app.models.metadata_correction import IssueMetadataCorrection
 from app.models.performance_metric import PerformanceMetric
 from app.models.reading_order import ReadingOrder, ReadingOrderItem
+from app.models.reading_plan_membership import (
+    ReadingPlanDependency,
+    ReadingPlanIssue,
+    ReadingPlanSource,
+    ReadingPlanSourcePlacement,
+)
 from app.models.release import Release
 from app.models.revoked_token import RevokedToken
 from app.models.session import Session
@@ -53,6 +59,10 @@ __all__ = [
     "PerformanceMetric",
     "ReadingOrder",
     "ReadingOrderItem",
+    "ReadingPlanDependency",
+    "ReadingPlanIssue",
+    "ReadingPlanSource",
+    "ReadingPlanSourcePlacement",
     "Release",
     "RevokedToken",
     "Session",

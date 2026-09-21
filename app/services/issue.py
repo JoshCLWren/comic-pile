@@ -347,6 +347,8 @@ async def delete_issue(
     # Prune continuity plans
     from app.models.continuity_plan import ContinuityPlan
     from app.models.continuity_rule import ContinuityRule
+    from app.schemas.continuity_plan import ContinuityPlanNode
+    from app.services.reading_plan_normalization import rebuild_plan_membership
 
     plans_result = await db.execute(
         select(ContinuityPlan).where(ContinuityPlan.user_id == current_user_id)
@@ -369,6 +371,11 @@ async def delete_issue(
                     n["position"] = idx
                     normalized.append(n)
             plan.nodes_json = normalized
+            await rebuild_plan_membership(
+                db,
+                plan_id=plan.id,
+                nodes=[ContinuityPlanNode.model_validate(n) for n in normalized],
+            )
 
             marker = f"continuity-plan:{plan.id}"
             await db.execute(
