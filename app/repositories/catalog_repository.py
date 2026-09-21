@@ -166,3 +166,144 @@ async def list_issue_mappings(
     
     result = await db.execute(query)
     return list(result.scalars().all())
+
+
+async def get_series_with_issues(
+    db: AsyncSession,
+    *,
+    provider: str,
+    series_external_id: str,
+    user_id: int,
+) -> tuple[dict[str, object] | None, list[dict[str, object]]]:
+    """Get series information and related issues for preview mapping.
+    
+    Args:
+        db: Database session.
+        provider: Provider name (e.g., "comicvine").
+        series_external_id: Provider-specific series identifier.
+        user_id: User ID for authorization.
+        
+    Returns:
+        Tuple of (series_info, issues_with_mappings) where series_info is None
+        if not found, and issues_with_mappings contains issue data with mapping status.
+    """
+    from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+    from app.models.issue import Issue
+    from app.models.thread import Thread
+    
+    # First try to find the series in the local catalog
+    series_result = await db.execute(
+        select(ExternalIdentity).where(
+            ExternalIdentity.entity_type == "series",
+            ExternalIdentity.provider == provider.strip().lower(),
+            ExternalIdentity.external_id == series_external_id,
+        )
+    )
+    series_identity = series_result.scalar_one_or_none()
+    
+    if series_identity is None:
+        return None, []
+    
+    # Get issues that belong to this series from the catalog
+    issues_result = await db.execute(
+        select(ExternalIdentity, IssueExternalIdentityMapping)
+        .join(
+            IssueExternalIdentityMapping,
+            IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
+        )
+        .join(
+            Issue,
+            Issue.id == IssueExternalIdentityMapping.issue_id,
+        )
+        .join(
+            Thread,
+            Thread.id == Issue.thread_id,
+        )
+        .where(
+            ExternalIdentity.entity_type == "issue",
+            ExternalIdentity.provider == provider.strip().lower(),
+            # This assumes issues have some relationship to the series - may need adjustment
+            # based on how series-issue relationships are stored
+            Thread.user_id == user_id,
+        )
+    )
+    
+    issues_with_mappings = []
+    for issue_identity, issue_mapping in issues_result:
+        issue_info = {
+            "issue_id": issue_mapping.issue_id,
+            "issue_number": issue_identity.external_id,
+            "title": issue_identity.metadata_json.get("name") if issue_identity.metadata_json else None,
+            "thread_id": issue_mapping.issue_id,  # This may need adjustment
+            "thread_title": None,  # Would need to fetch thread info
+            "current_mapping_status": issue_mapping.status,
+            "classification": "unresolved",  # Default, will be refined
+        }
+        issues_with_mappings.append(issue_info)
+    
+    series_info = {
+        "id": series_identity.external_id,
+        "name": series_identity.metadata_json.get("name") if series_identity.metadata_json else None,
+        "publisher": series_identity.metadata_json.get("publisher") if series_identity.metadata_json else None,
+        "start_year": series_identity.metadata_json.get("start_year"),
+        "count_of_issues": series_identity.metadata_json.get("count_of_issues"),
+        "site_detail_url": series_identity.external_url,
+        "image": series_identity.metadata_json.get("image") if series_identity.metadata_json else None,
+    }
+    
+    return series_info, issues_with_mappings
+
+
+async def get_issue_by_id(
+    db: AsyncSession,
+    issue_id: int,
+    user_id: int,
+) -> dict[str, object] | None:
+    """Get issue information by ID with thread context.
+    
+    Args:
+        db: Database session.
+        issue_id: ComicPile issue ID.
+        user_id: User ID for authorization.
+        
+    Returns:
+        Issue information dict or None if not found.
+    """
+    from app.models.issue import Issue
+    from app.models.thread import Thread
+    from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+    
+    issue_result = await db.execute(
+        select(Issue, Thread, ExternalIdentity, IssueExternalIdentityMapping)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .join(
+            IssueExternalIdentityMapping,
+            IssueExternalIdentityMapping.issue_id == Issue.id,
+        )
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .where(
+            Issue.id == issue_id,
+            Thread.user_id == user_id,
+        )
+    )
+    
+    issue_row = issue_result.first()
+    if not issue_row:
+        return None
+        
+    issue, thread, identity, mapping = issue_row
+    
+    return {
+        "issue_id": issue.id,
+        "issue_number": issue.issue_number,
+        "title": issue.title,
+        "thread_id": thread.id,
+        "thread_title": thread.title,
+        "current_mapping_status": mapping.status,
+        "provider": identity.provider,
+        "external_id": identity.external_id,
+        "confidence": mapping.confidence,
+    }
