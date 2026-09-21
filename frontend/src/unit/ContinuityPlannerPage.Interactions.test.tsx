@@ -500,7 +500,7 @@ describe('ContinuityPlannerPage', () => {
     
     // Scroll down
     await user.click(screen.getByRole('button', { name: 'Statistics' }))
-    await user.scroll(screen.getByText(/Plan Statistics/), { behavior: 'smooth' })
+    await window.scrollTo(0, 500)
     
     // Switch to another view
     await user.click(screen.getByRole('button', { name: 'Overview' }))

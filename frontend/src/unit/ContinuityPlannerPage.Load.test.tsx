@@ -1,5 +1,5 @@
 import { type ComponentProps, type PropsWithChildren } from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -90,16 +90,6 @@ const issue = {
   thread_id: 4,
   issue_number: 'Annual 1',
   position: 1,
-  status: 'unread',
-  read_at: null,
-  created_at: '2026-08-12T00:00:00Z',
-}
-
-const secondIssue = {
-  id: 41,
-  thread_id: 5,
-  issue_number: '7',
-  position: 7,
   status: 'unread',
   read_at: null,
   created_at: '2026-08-12T00:00:00Z',

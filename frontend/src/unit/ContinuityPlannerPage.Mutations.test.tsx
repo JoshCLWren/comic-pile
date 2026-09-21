@@ -95,16 +95,6 @@ const issue = {
   created_at: '2026-08-12T00:00:00Z',
 }
 
-const secondIssue = {
-  id: 41,
-  thread_id: 5,
-  issue_number: '7',
-  position: 7,
-  status: 'unread',
-  read_at: null,
-  created_at: '2026-08-12T00:00:00Z',
-}
-
 const plan = {
   id: 12,
   user_id: 1,
