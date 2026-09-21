@@ -772,13 +772,16 @@ def _is_exact_match(issue_number: str, origin_issue_number: str) -> bool:
 
 
 def _is_conflicting_mapping(issue_info: dict, provider: str, series_external_id: str) -> bool:
-    """Check if issue has a confirmed mapping that conflicts with the selected series.
-    
-    Note: Proper conflict detection requires checking if the issue's thread has a confirmed
-    series mapping to a different series. This information is not available in the current
-    issue_info structure, so conflict detection is disabled.
-    """
-    # Conflict detection not implemented - would require thread series mapping info
+    """Check if issue has a confirmed mapping that conflicts with the selected series."""
+    if issue_info.get("current_mapping_status") != "confirmed":
+        return False
+    issue_provider = issue_info.get("provider")
+    issue_external_id = issue_info.get("external_id")
+    # If provider matches but external id differs, or provider differs, it's a conflict
+    if issue_provider != provider:
+        return True
+    if issue_external_id is not None and str(issue_external_id) != str(series_external_id):
+        return True
     return False
 
 
