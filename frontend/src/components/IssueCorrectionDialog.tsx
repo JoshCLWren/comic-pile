@@ -92,8 +92,7 @@ export default function IssueCorrectionDialog({
         setSelectedIssueNumber(firstUnreadIssue?.issue_number ?? loadedIssues[0]?.issue_number ?? '')
       }
       setHasLoadedOnce(true)
-    } catch (err) {
-      console.error('Failed to load issues:', err)
+    } catch (_err) {
       if (retryAttempt < 2) {
         await fetchIssues(retryAttempt + 1)
       } else {
@@ -160,8 +159,7 @@ export default function IssueCorrectionDialog({
 
       onSuccess()
       onClose()
-    } catch (err) {
-      console.error('Failed to update issue:', err)
+    } catch (_err) {
       setError('Failed to update issue. Please try again.')
     } finally {
       setIsLoading(false)
