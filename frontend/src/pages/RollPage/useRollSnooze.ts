@@ -48,7 +48,8 @@ export function useRollSnooze({
 
   async function handleSnooze() {
     try {
-      const response = await snoozeMutation.mutate()
+      const expectedId = state.activeRatingThread?.id
+      const response = await snoozeMutation.mutate(expectedId)
       await refetchBootstrap()
       setIsRolling(false)
       setIsRatingView(false)
@@ -60,7 +61,18 @@ export function useRollSnooze({
         onClarificationSuggested?.(correction)
       }
     } catch (error: unknown) {
-      setErrorMessage(getApiErrorDetail(error))
+      const errorDetail = getApiErrorDetail(error)
+      if (errorDetail.includes('No pending thread to snooze')) {
+        // Bounded reconciliation: if backend says no pending thread,
+        // the current rating view is stale. Clear it.
+        setIsRolling(false)
+        setIsRatingView(false)
+        setRolledResult(null)
+        setSelectedThreadId(null)
+        setActiveRatingThread(null)
+      } else {
+        setErrorMessage(errorDetail)
+      }
     }
   }
 

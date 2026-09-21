@@ -87,6 +87,13 @@ export function useSnooze(deps: RollMutationDeps = {}) {
         await refreshAuthoritativeState()
         return result
       } catch (error: unknown) {
+        const errorDetail = getApiErrorDetail(error)
+        if (errorDetail.includes('No pending thread to snooze')) {
+          await refreshAuthoritativeState()
+          setIsError(true)
+          throw error
+        }
+
         if (
           expectedPendingThreadId !== undefined
           && isAuthenticationMutationFailure(error)
