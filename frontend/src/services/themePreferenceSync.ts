@@ -132,6 +132,10 @@ export function reconcileStoredThemeWithServer(theme: ThemeId): void {
   persistThemePreference(theme)
 }
 
+export function getThemePreferenceRetryDelays(): readonly number[] {
+  return retryDelaysMs
+}
+
 /** Replace the retry backoff schedule (test hook). */
 export function setThemePreferenceRetryDelaysForTests(
   delaysMs: readonly number[],

@@ -818,7 +818,8 @@ export interface UserPreferencesPatchRequest {
 }
 
 export const preferencesApi = {
-  get: () => api.get<UserPreferencesResponse>('/v1/users/me/preferences'),
+  get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
+    api.get<UserPreferencesResponse>('/v1/users/me/preferences', options),
   patch: (data: UserPreferencesPatchRequest) =>
     api.patch<UserPreferencesResponse, UserPreferencesPatchRequest>('/v1/users/me/preferences', data),
 }

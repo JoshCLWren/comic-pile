@@ -24,12 +24,11 @@ import {
   readStoredThemePreference,
 } from './services/theme'
 import { isDefinitiveAuthenticationFailure } from './services/authFailure'
-import { reconcileStoredThemeWithServer } from './services/themePreferenceSync'
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import { usePingHeartbeat } from './hooks/usePingHeartbeat'
 import { useScrollRestoration } from './hooks/useScrollRestoration'
-import { usePreferences } from './hooks/usePreferences'
+import { PreferencesSync } from './hooks/usePreferences'
 import type { DiagnosticData } from './hooks/useDiagnostics'
 import { ToastProvider } from './contexts/ToastProvider'
 import { BugReportRestoreProvider } from './contexts/BugReportRestoreContext'
@@ -42,39 +41,8 @@ declare global {
   }
 }
 
-function PreferencesSync({ isAuthenticated }: { isAuthenticated: boolean }) {
-  const { data, isError } = usePreferences(isAuthenticated)
-  const selectionTokenAtStart = getThemeSelectionToken()
-
-  // Only run reconciliation when we have data and the selection token hasn't changed
-  if (data && getThemeSelectionToken() === selectionTokenAtStart) {
-    const theme = data.theme
-    if (isSupportedTheme(theme)) {
-      const storedTheme = readStoredThemePreference()
-      if (storedTheme === null || theme === storedTheme) {
-        applyTheme(theme)
-      } else {
-        // The locally stored choice is newer than the server value (a prior
-        // persistence attempt likely failed during an outage, issue #1872).
-        // Keep it rendered and quietly converge the server to it.
-        ensureThemeApplied()
-        reconcileStoredThemeWithServer(storedTheme)
-      }
-    } else {
-      // Unknown/stale ids must not strand the tokens; keep any rendered theme
-      // and only seed a default when nothing has been resolved yet.
-      ensureThemeApplied()
-    }
-  } else if (isError) {
-    // A transient preferences outage (for example 503 during a database
-    // blip, issue #1611) must never reset the rendered theme to classic.
-    // Keep whatever is applied; seed the stored choice/default only when the
-    // document has no valid theme yet.
-    ensureThemeApplied()
-  }
-
-  return null
-}
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 15000
+const AUTH_BOOTSTRAP_RETRY_DELAY_MS = 1000
 
 type BugReportSubmit = (
   reportType: ReportType,
@@ -82,9 +50,6 @@ type BugReportSubmit = (
   description: string,
   diagnosticData: DiagnosticData | null,
 ) => Promise<void>
-
-const AUTH_BOOTSTRAP_TIMEOUT_MS = 15000
-const AUTH_BOOTSTRAP_RETRY_DELAY_MS = 1000
 
 const RollPage = lazyRoute('roll')
 const QueuePage = lazyRoute('queue')

@@ -23,6 +23,7 @@ import {
   resetThemePreferenceSyncForTests,
   setThemePreferenceRetryDelaysForTests,
 } from '../services/themePreferenceSync'
+import { PreferencesSync } from '../hooks/usePreferences'
 import { queryClient } from '../query/queryClient'
 import { RollPage } from '../routes/routeModules'
 const mocks = vi.hoisted(() => ({
@@ -58,6 +59,11 @@ function ThemeConsumer() {
   return null
 }
 
+function PreferencesSyncConsumer() {
+  const { isAuthenticated } = useAuth()
+  return <PreferencesSync isAuthenticated={isAuthenticated} />
+}
+
 const AUTH_ME_CONFIG = { timeout: 15000, skipAuthRedirect: true }
 const PREFERENCES_CONFIG = { timeout: 15000, skipAuthRedirect: true }
 
@@ -77,6 +83,7 @@ function renderProvider() {
             <ToastProvider>
               <NavCollapseProvider>
                 <ThemeConsumer />
+                <PreferencesSyncConsumer />
               </NavCollapseProvider>
             </ToastProvider>
           </BugReportRestoreProvider>
@@ -95,6 +102,7 @@ function renderNavigation() {
             <ToastProvider>
               <NavCollapseProvider>
                 <Navigation onBugReportSubmit={vi.fn()} />
+                <PreferencesSyncConsumer />
               </NavCollapseProvider>
             </ToastProvider>
           </BugReportRestoreProvider>
@@ -267,7 +275,7 @@ describe('semantic theme runtime bootstrap', () => {
     })
 
     await waitFor(() => expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold'))
-    expect(mocks.get).toHaveBeenNthCalledWith(3, '/v1/users/me/preferences', { skipAuthRedirect: true })
+    expect(mocks.get).toHaveBeenNthCalledWith(3, '/v1/users/me/preferences', PREFERENCES_CONFIG)
   })
 })
 

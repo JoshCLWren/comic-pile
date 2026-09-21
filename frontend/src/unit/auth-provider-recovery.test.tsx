@@ -24,6 +24,7 @@ vi.mock('../services/api', () => ({
   isSessionRefreshRejected: mocks.isSessionRefreshRejected,
 }))
 
+import { PreferencesSync } from '../hooks/usePreferences'
 import { AuthProvider, useAuth } from '../App'
 
 let auth: AuthContextValue | null = null
@@ -33,10 +34,16 @@ function Consumer() {
   return null
 }
 
+function PreferencesSyncConsumer() {
+  const { isAuthenticated } = useAuth()
+  return <PreferencesSync isAuthenticated={isAuthenticated} />
+}
+
 function renderProvider() {
   return render(
     <AuthProvider>
       <Consumer />
+      <PreferencesSyncConsumer />
     </AuthProvider>,
   )
 }
