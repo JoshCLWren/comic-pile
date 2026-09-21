@@ -1,6 +1,7 @@
 """Thread-related Pydantic schemas for request/response validation."""
 
 from datetime import datetime
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -54,6 +55,39 @@ class ThreadDetail(ThreadResponse):
     """Schema for thread detail view (single thread with full detail fields)."""
 
 
+class ComicVineMappingStatus(StrEnum):
+    """ComicVine mapping health status for a thread.
+
+    - ``not_applicable``: Thread does not use issue tracking (legacy counter-based).
+    - ``fully_mapped``: All in-scope issues have confirmed ComicVine mappings.
+    - ``partial``: Some issues confirmed, some unresolved/unmapped.
+    - ``unresolved``: Issues exist but none have confirmed mappings.
+    - ``needs_review``: Conflicting/ambiguous mappings requiring human review.
+    """
+
+    not_applicable = "not_applicable"
+    fully_mapped = "fully_mapped"
+    partial = "partial"
+    unresolved = "unresolved"
+    needs_review = "needs_review"
+
+
+class ComicVineMappingHealth(BaseModel):
+    """Compact ComicVine mapping health projection for a queue thread.
+
+    Derived from stored canonical issue mappings only. No live provider calls.
+    Counts are scoped to the issues represented by the Queue thread.
+    """
+
+    status: ComicVineMappingStatus
+    tracked_issue_count: int = Field(..., ge=0, description="Total issues in this thread's scope")
+    confirmed_issue_count: int = Field(..., ge=0, description="Issues with confirmed ComicVine mappings")
+    needs_mapping_count: int = Field(..., ge=0, description="Issues with no confirmed mapping (unresolved/candidate)")
+    needs_review_count: int = Field(..., ge=0, description="Issues with conflicting/ambiguous mappings")
+
+    model_config = ConfigDict(frozen=True)
+
+
 class QueueThreadListItem(BaseModel):
     """Schema for a single thread in the list/queue view.
 
@@ -75,6 +109,7 @@ class QueueThreadListItem(BaseModel):
     next_unread_issue_number: str | None = None
     notes: str | None = None
     created_at: datetime
+    comicvine_mapping: ComicVineMappingHealth | None = None
 
 
 class ReactivateRequest(BaseModel):
