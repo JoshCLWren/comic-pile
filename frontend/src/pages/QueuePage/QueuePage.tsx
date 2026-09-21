@@ -139,7 +139,7 @@ export default function QueuePage() {
         showToast('Failed to reposition thread. Please try again.', 'error')
       }
     },
-    [modals, moveToPositionMutation, authoritativeActiveCount],
+    [modals, moveToPositionMutation, authoritativeActiveCount, showToast],
   )
 
   const renderThreadCard = useCallback(
