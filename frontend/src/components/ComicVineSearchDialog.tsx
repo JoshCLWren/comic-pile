@@ -143,6 +143,32 @@ export default function ComicVineSearchDialog({
 
   const hasAutoSearchedRef = useRef(false)
 
+  const handlePlainSearch = useCallback(
+    async (searchQuery: string, offset = 0, append = false) => {
+      const requestId = ++asyncRef.current
+      searchingRef.current = true
+      setIsSearching(true)
+      try {
+        const response = await comicVineApi.searchSeries(searchQuery, SEARCH_PAGE_SIZE, offset)
+        if (requestId !== asyncRef.current) return
+        setSeriesResults((previous) =>
+          append ? mergeSeriesResults(previous, response.results) : response.results,
+        )
+        setPagination(paginationFromResponse(response))
+      } catch {
+        if (requestId !== asyncRef.current) return
+        setError('Failed to search ComicVine. Please try again.')
+        setSeriesResults((previous) => (append ? previous : []))
+      } finally {
+        if (requestId === asyncRef.current) {
+          setIsSearching(false)
+          searchingRef.current = false
+        }
+      }
+    },
+    [],
+  )
+
   const handleDirectResolution = useCallback(
     (resolved: ComicVineResolveResponse) => {
       if (resolved.validation_error) {
@@ -185,32 +211,6 @@ export default function ComicVineSearchDialog({
       }
     },
     [handlePlainSearch, issueNumber],
-  )
-
-  const handlePlainSearch = useCallback(
-    async (searchQuery: string, offset = 0, append = false) => {
-      const requestId = ++asyncRef.current
-      searchingRef.current = true
-      setIsSearching(true)
-      try {
-        const response = await comicVineApi.searchSeries(searchQuery, SEARCH_PAGE_SIZE, offset)
-        if (requestId !== asyncRef.current) return
-        setSeriesResults((previous) =>
-          append ? mergeSeriesResults(previous, response.results) : response.results,
-        )
-        setPagination(paginationFromResponse(response))
-      } catch {
-        if (requestId !== asyncRef.current) return
-        setError('Failed to search ComicVine. Please try again.')
-        setSeriesResults((previous) => (append ? previous : []))
-      } finally {
-        if (requestId === asyncRef.current) {
-          setIsSearching(false)
-          searchingRef.current = false
-        }
-      }
-    },
-    [],
   )
 
   const handleSearch = useCallback(
