@@ -1,10 +1,11 @@
 """Tests for move_to_safe_position queue function."""
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Thread
-from comic_pile.queue import get_roll_pool, move_to_safe_position
-from comic_pile.queue import get_roll_pool, move_to_safe_position
+from app.models import Dependency, Issue, Thread
+from comic_pile.dependencies import refresh_user_blocked_status
+from comic_pile.queue import get_bounded_roll_pool_rows, get_roll_pool, move_to_safe_position
 
 
 @pytest.mark.asyncio
@@ -390,7 +391,7 @@ async def test_move_to_safe_position_excludes_skipped_threads_issue_2802(
     skipped_thread_ids = {thread_a.id}
     
     # First, test that move_to_safe_position correctly excludes skipped threads
-    # When thread B is rated 3.0 on d6, it should move to position 9 (d6 + 1 + 2 skipped)
+    # When thread B is rated on d6, it should move to position 8 (d6 + 1 + 1 skipped)
     await move_to_safe_position(
         thread_b.id,
         user.id,
@@ -409,8 +410,6 @@ async def test_move_to_safe_position_excludes_skipped_threads_issue_2802(
     )
     
     # Now verify that thread B is NOT in the bounded roll pool
-    from comic_pile.queue import get_bounded_roll_pool_rows
-    
     # Get the bounded roll pool (simulating what happens during the next roll)
     bounded_rows = await get_bounded_roll_pool_rows(
         user.id, 
@@ -443,10 +442,10 @@ async def test_move_to_safe_position_excludes_skipped_threads_issue_2802(
     await async_db.refresh(thread_b)
     
     # With die=8, 11 total threads, 1 skipped:
-    # Target should be at position 9 (8 + 1 + 1 skipped, but max is 11)
+    # Target should be at position 10 (8 + 1 + 1 skipped, but max is 11)
     # This ensures thread B is outside the d8 roll pool
-    assert thread_b.queue_position == 9, (
-        f"Thread B should be at position 9 (die=8 + 1 + 1 skipped), "
+    assert thread_b.queue_position == 10, (
+        f"Thread B should be at position 10 (die=8 + 1 + 1 skipped), "
         f"but is at position {thread_b.queue_position}"
     )
     
