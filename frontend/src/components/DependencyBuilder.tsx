@@ -157,10 +157,7 @@ export default function DependencyBuilder({
       setFlowchartDependencies(allEdges)
       setFlowchartIssueNodes(graph.issueNodes)
     } catch (err) {
-      console.error('[loadFlowchartData] Error:', err)
-      setFlowchartThreads([])
-      setFlowchartDependencies([])
-      setFlowchartIssueNodes([])
+      setError(getApiErrorDetail(err))
     } finally {
       setIsGraphLoading(false)
     }

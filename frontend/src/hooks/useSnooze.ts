@@ -4,7 +4,6 @@ import type { CacheEffectsApi, ProtectedRollMutationApi, RollBootstrapApi, RollM
 import { invalidateCurrentSessionAfterSnooze } from '../query/cacheEffects'
 import { snoozeApi } from '../services/api'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
-import { getApiErrorDetail } from '../utils/apiError'
 import {
   fetchAndPublishRollBootstrap,
   isAmbiguousNetworkFailure,
@@ -41,10 +40,6 @@ export function useSnooze(deps: RollMutationDeps = {}) {
         } catch (error: unknown) {
           if (attempt === SNOOZE_REFRESH_ATTEMPTS) {
             setRefreshError(error)
-            console.error(
-              'Snooze saved but authoritative Roll state failed to refresh:',
-              getApiErrorDetail(error),
-            )
             return false
           }
         }
@@ -87,13 +82,6 @@ export function useSnooze(deps: RollMutationDeps = {}) {
         await refreshAuthoritativeState()
         return result
       } catch (error: unknown) {
-        const errorDetail = getApiErrorDetail(error)
-        if (errorDetail.includes('No pending thread to snooze')) {
-          await refreshAuthoritativeState()
-          setIsError(true)
-          throw error
-        }
-
         if (
           expectedPendingThreadId !== undefined
           && isAuthenticationMutationFailure(error)
@@ -110,11 +98,8 @@ export function useSnooze(deps: RollMutationDeps = {}) {
               await refreshAuthoritativeState()
               return recovery.value
             }
-          } catch (recoveryError: unknown) {
-            console.error(
-              'Failed to recover snooze after authentication expiry:',
-              getApiErrorDetail(recoveryError),
-            )
+          } catch (_recoveryError: unknown) {
+            // Recovery failure is exposed via isError / refreshError; no console fallback.
           }
         }
 
@@ -125,16 +110,12 @@ export function useSnooze(deps: RollMutationDeps = {}) {
               rollBootstrap,
             )
             if (committed) return undefined
-          } catch (reconciliationError: unknown) {
-            console.error(
-              'Failed to reconcile ambiguous snooze result:',
-              getApiErrorDetail(reconciliationError),
-            )
+          } catch (_reconciliationError: unknown) {
+            // Reconciliation failure is exposed via isError / refreshError.
           }
         }
 
         setIsError(true)
-        console.error('Failed to snooze thread:', getApiErrorDetail(error))
         throw error
       }
     })()

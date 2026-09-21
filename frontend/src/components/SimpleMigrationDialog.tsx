@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import Modal from './Modal'
-import './MigrationDialog.css'
 
 interface SimpleMigrationDialogProps {
   threadTitle: string
@@ -38,42 +37,47 @@ export default function SimpleMigrationDialog({
   }
 
   return (
-    <Modal isOpen title={`Track Issues for "${threadTitle}"`} onClose={onClose} data-testid="simple-migration-dialog">
+    <Modal
+      isOpen
+      title={`Track Issues for "${threadTitle}"`}
+      onClose={onClose}
+      data-testid="simple-migration-dialog"
+      autoFocus={true}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-1.5">
+          <label htmlFor="issue-number" className="block text-sm font-semibold text-[var(--theme-text-primary)]">
+            What issue number did you just read? <span className="text-[var(--theme-error)]" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="issue-number"
+            type="text"
+            value={issueNumber}
+            onChange={(e) => setIssueNumber(e.target.value)}
+            placeholder="e.g., 42"
+            className="form-control w-full"
+            autoFocus
+          />
+          <span className="text-xs text-[var(--theme-text-muted)]">
+            We'll infer total issues from your remaining count
+          </span>
+        </div>
 
-        <form onSubmit={handleSubmit} className="migration-dialog__form">
-          <div className="migration-dialog__field">
-            <label htmlFor="issue-number" className="migration-dialog__label">
-              What issue number did you just read? <span className="migration-dialog__required">*</span>
-            </label>
-            <input
-              id="issue-number"
-              type="text"
-              value={issueNumber}
-              onChange={(e) => setIssueNumber(e.target.value)}
-              placeholder="e.g., 42"
-              className="migration-dialog__input"
-              autoFocus
-            />
-            <span className="migration-dialog__hint">
-              We'll infer total issues from your remaining count
-            </span>
+        {error && (
+          <div className="rounded-lg border border-[color-mix(in_srgb,_var(--theme-error)_30%,_transparent)] bg-[color-mix(in_srgb,_var(--theme-error)_20%,_transparent)] p-3" role="alert">
+            <p className="text-sm text-[var(--theme-error)]">{error}</p>
           </div>
+        )}
 
-          {error && (
-            <div className="migration-dialog__error" role="alert">
-              {error}
-            </div>
-          )}
-
-          <div className="migration-dialog__actions">
-            <button
-              type="submit"
-              className="migration-dialog__btn migration-dialog__btn--primary"
-            >
-              Start Tracking
-            </button>
-          </div>
-        </form>
+        <div className="flex justify-end pt-2">
+          <button
+            type="submit"
+            className="px-5 py-2.5 text-sm font-semibold rounded-lg transition-colors text-white bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)]"
+          >
+            Start Tracking
+          </button>
+        </div>
+      </form>
     </Modal>
   )
 }

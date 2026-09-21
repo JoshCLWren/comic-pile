@@ -1,5 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import WhatsNewPage, {
   groupReleasesByDay,
@@ -19,6 +21,16 @@ vi.mock('../services/api-releases', () => ({
 }))
 
 const api = vi.mocked(releasesApi)
+
+function renderPage() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  const Wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  )
+  return render(<WhatsNewPage />, { wrapper: Wrapper })
+}
 
 function release(overrides: Partial<Release> = {}): Release {
   return {
@@ -173,7 +185,7 @@ describe('release time-of-day formatting', () => {
         offset: 0,
       })
 
-      render(<WhatsNewPage />)
+      renderPage()
 
       expect(await screen.findByText('Timed release note')).toBeInTheDocument()
       expect(screen.getByText(/Published at \d{1,2}:\d{2}/)).toBeInTheDocument()
@@ -185,7 +197,7 @@ describe('WhatsNewPage', () => {
       let resolveList: ((value: { releases: Release[]; total: number; limit: number; offset: number }) => void) | undefined
       api.list.mockImplementation(() => new Promise(resolve => { resolveList = resolve }))
 
-      render(<WhatsNewPage />)
+      renderPage()
       expect(screen.getByRole('status')).toHaveTextContent('Loading release notes')
 
       resolveList?.({ releases: [], total: 0, limit: RELEASE_PAGE_SIZE, offset: 0 })
@@ -200,7 +212,7 @@ describe('WhatsNewPage', () => {
         offset: 0,
       })
 
-      render(<WhatsNewPage />)
+      renderPage()
 
       expect(await screen.findByText('Queue cards open details')).toBeInTheDocument()
       expect(screen.getByText('Queue')).toBeInTheDocument()
@@ -222,7 +234,7 @@ describe('WhatsNewPage', () => {
         offset: 0,
       })
 
-      render(<WhatsNewPage />)
+      renderPage()
 
       expect(await screen.findByText('First same-day update')).toBeInTheDocument()
       expect(screen.getByText('2 updates published this day.')).toBeInTheDocument()
@@ -243,7 +255,7 @@ describe('WhatsNewPage', () => {
           offset: 1,
         })
 
-      render(<WhatsNewPage />)
+      renderPage()
       await screen.findByText('Newest release')
 
       fireEvent.click(screen.getByRole('button', { name: 'Load older updates' }))
@@ -265,7 +277,7 @@ describe('WhatsNewPage', () => {
         })
         .mockImplementationOnce(() => new Promise(resolve => { resolveOlder = resolve }))
 
-      render(<WhatsNewPage />)
+      renderPage()
       await screen.findByText('Newest release')
 
       fireEvent.click(screen.getByRole('button', { name: 'Load older updates' }))
@@ -296,7 +308,7 @@ describe('WhatsNewPage', () => {
           offset: 1,
         })
 
-      render(<WhatsNewPage />)
+      renderPage()
       await screen.findByText('Newest release')
       fireEvent.click(screen.getByRole('button', { name: 'Load older updates' }))
       expect(await screen.findByRole('alert')).toHaveTextContent('older page unavailable')
@@ -313,7 +325,7 @@ describe('WhatsNewPage', () => {
         .mockRejectedValueOnce(new Error('release API unavailable'))
         .mockResolvedValueOnce({ releases: [], total: 0, limit: RELEASE_PAGE_SIZE, offset: 0 })
 
-      render(<WhatsNewPage />)
+      renderPage()
 
       expect(await screen.findByRole('alert')).toHaveTextContent('release API unavailable')
       fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
@@ -325,7 +337,7 @@ describe('WhatsNewPage', () => {
 
     it('uses a safe fallback for non-Error API failures', async () => {
       api.list.mockRejectedValue('offline')
-      render(<WhatsNewPage />)
+      renderPage()
       expect(await screen.findByRole('alert')).toHaveTextContent('Release notes could not be loaded.')
     })
 
@@ -340,7 +352,7 @@ describe('WhatsNewPage', () => {
         offset: 0,
       })
 
-      render(<WhatsNewPage />)
+      renderPage()
 
       expect(await screen.findByText('Real release note')).toBeInTheDocument()
       expect(screen.queryByText('T')).not.toBeInTheDocument()
@@ -372,7 +384,7 @@ describe('WhatsNewPage', () => {
         offset: 0,
       })
 
-      render(<WhatsNewPage />)
+      renderPage()
 
       expect(await screen.findByText('Real reader update')).toBeInTheDocument()
       expect(screen.queryByText(/incomplete/i)).not.toBeInTheDocument()
@@ -397,7 +409,7 @@ describe('WhatsNewPage', () => {
         offset: 0,
       })
 
-      render(<WhatsNewPage />)
+      renderPage()
 
       expect(
         await screen.findByText('Roll recovery resumes interrupted sessions'),
@@ -419,7 +431,7 @@ describe('WhatsNewPage', () => {
         offset: 0,
       })
 
-      render(<WhatsNewPage />)
+      renderPage()
 
       expect(await screen.findByText('Fix roll bug')).toBeInTheDocument()
       expect(screen.getByText('See for details.')).toBeInTheDocument()

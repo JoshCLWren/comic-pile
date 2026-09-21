@@ -142,6 +142,33 @@ async def get_owned_thread(
     return thread
 
 
+async def get_owned_thread_ids(
+    db: AsyncSession,
+    thread_ids: list[int],
+    user_id: int,
+) -> set[int]:
+    """Return the identifiers of requested threads owned by a user.
+
+    Args:
+        db: The asynchronous database session.
+        thread_ids: Thread identifiers to check for ownership.
+        user_id: The authenticated thread owner.
+
+    Returns:
+        The subset of ``thread_ids`` that belong to the user, resolved in a
+        single query rather than one lookup per thread.
+    """
+    if not thread_ids:
+        return set()
+    result = await db.execute(
+        select(Thread.id).where(
+            Thread.id.in_(thread_ids),
+            Thread.user_id == user_id,
+        )
+    )
+    return set(result.scalars().all())
+
+
 async def get_owned_issue(
     db: AsyncSession,
     issue_id: int,
@@ -482,6 +509,59 @@ async def other_crossover_group_names_by_thread(
             if name not in other_crossovers[thread_id]:
                 other_crossovers[thread_id].append(name)
     return other_crossovers
+
+
+async def thread_group_summaries_batch(
+    db: AsyncSession,
+    thread_ids: list[int],
+    user_id: int,
+) -> list[tuple[int, str, int]]:
+    """List group summaries for multiple threads in one query.
+
+    Each row is ``(group_id, group_name, thread_id)`` where ``thread_id``
+    is the thread that the group relationship references (either directly or
+    through an issue).
+
+    Args:
+        db: The asynchronous database session.
+        thread_ids: The bounded thread identifiers to resolve.
+        user_id: The authenticated group owner.
+
+    Returns:
+        Distinct ``(group id, group name, thread id)`` rows ordered by
+        group name then identifier.
+    """
+    if not thread_ids:
+        return []
+
+    thread_membership = (
+        select(
+            DependencyGroupMembership.group_id,
+            DependencyGroupMembership.thread_id.label("thread_id"),
+        )
+        .where(DependencyGroupMembership.thread_id.in_(thread_ids))
+    )
+    issue_membership = (
+        select(
+            DependencyGroupMembership.group_id,
+            Issue.thread_id.label("thread_id"),
+        )
+        .join(Issue, Issue.id == DependencyGroupMembership.issue_id)
+        .where(Issue.thread_id.in_(thread_ids))
+    )
+    combined = union_all(thread_membership, issue_membership).subquery()
+    result = await db.execute(
+        select(
+            DependencyGroup.id,
+            DependencyGroup.name,
+            combined.c.thread_id,
+        )
+        .join(DependencyGroup, DependencyGroup.id == combined.c.group_id)
+        .where(DependencyGroup.user_id == user_id)
+        .distinct()
+        .order_by(DependencyGroup.name, DependencyGroup.id)
+    )
+    return [(row.id, row.name, row.thread_id) for row in result]
 
 
 async def linked_plan_summaries(

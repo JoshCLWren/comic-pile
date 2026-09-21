@@ -5,7 +5,7 @@ return ORM models or plain values; callers (services) own transactions.
 """
 
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Issue, Thread
@@ -183,6 +183,33 @@ async def delete_dependency(db: AsyncSession, dependency_id: int) -> None:
         dependency_id: Dependency ID to delete.
     """
     await db.execute(delete(Dependency).where(Dependency.id == dependency_id))
+
+
+async def get_issue_dependencies_batch(
+    db: AsyncSession, issue_ids: list[int]
+) -> list[Dependency]:
+    """Get all dependencies involving any of the given issues.
+
+    Args:
+        db: Database session.
+        issue_ids: Issue identifiers to search for.
+
+    Returns:
+        Every dependency where source or target is in ``issue_ids``.
+    """
+    if not issue_ids:
+        return []
+    result = await db.execute(
+        select(Dependency)
+        .where(
+            or_(
+                Dependency.source_issue_id.in_(issue_ids),
+                Dependency.target_issue_id.in_(issue_ids),
+            )
+        )
+        .order_by(Dependency.id)
+    )
+    return list(result.scalars())
 
 
 async def is_dependency_owned_by_user(

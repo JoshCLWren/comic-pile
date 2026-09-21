@@ -6,6 +6,7 @@ import { useAuth } from '../App'
 import { useNavCollapse } from '../contexts/NavCollapseContext'
 import api from '../services/api'
 import { useToast } from '../contexts/useToast'
+import { useIdentityInboxStatus } from '../hooks/useIdentityInbox'
 import { DEFAULT_THEME, getAppliedTheme, isSupportedTheme, readStoredThemePreference, selectTheme } from '../services/theme'
 import type { ThemeId } from '../services/theme'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
@@ -169,6 +170,11 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const [activeTheme, setActiveTheme] = useState<ThemeId>(
     () => getAppliedTheme() ?? readStoredThemePreference() ?? DEFAULT_THEME,
   )
+  const { data: inboxTotal, isError: inboxStatusError } = useIdentityInboxStatus()
+  const showIdentityInbox = inboxTotal === undefined || inboxStatusError || inboxTotal > 0
+  const visibleSecondaryNavItems = showIdentityInbox
+    ? SECONDARY_NAV_ITEMS
+    : SECONDARY_NAV_ITEMS.filter((item) => item.path !== '/identity-inbox')
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const moreMenuRef = useRef<HTMLElement>(null)
 
@@ -210,7 +216,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   }, [isMoreOpen])
 
   const isActive = (path: string) => location.pathname === path
-  const isMoreRoute = SECONDARY_NAV_ITEMS.some((item) =>
+  const isMoreRoute = visibleSecondaryNavItems.some((item) =>
     location.pathname === item.path || location.pathname.startsWith(`${item.path}/`),
   )
 
@@ -321,7 +327,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           </div>
           {MAIN_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path), true))}
           <div className="my-2 border-t border-[var(--glass-border)]" aria-hidden="true" />
-          {SECONDARY_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path), true))}
+          {visibleSecondaryNavItems.map((item) => renderNavItem(item, isActive(item.path), true))}
         </div>
         <div className={`border-t border-[var(--glass-border)] ${collapsed ? 'px-2 py-3' : 'px-3 py-3'}`}>
           {collapsed ? (
@@ -424,7 +430,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
       <nav className="fixed bottom-0 left-0 right-0 nav-container z-40 md:hidden" role="navigation" aria-label="Mobile navigation">
         <div className="flex h-14 items-center justify-around px-1 md:h-20 md:px-2 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto">
           {MAIN_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path)))}
-          {!isMobile && SECONDARY_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path)))}
+          {!isMobile && visibleSecondaryNavItems.map((item) => renderNavItem(item, isActive(item.path)))}
           {isMobile && (
             <button
               ref={moreButtonRef}
@@ -450,7 +456,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
             aria-label="More pages"
             className="fixed bottom-16 right-3 w-56 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-2 shadow-2xl md:bottom-24 md:right-6"
           >
-          {SECONDARY_NAV_ITEMS.map((item) => (
+          {visibleSecondaryNavItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}

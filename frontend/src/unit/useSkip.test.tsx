@@ -323,36 +323,26 @@ describe('skip hooks', () => {
     expect(invalidateCurrentSessionAfterSnooze).not.toHaveBeenCalled()
   })
 
-  it('logs authentication recovery failure without marking stale skip as error', async () => {
+  it('handles authentication recovery failure without marking stale skip as error', async () => {
     const authError = Object.assign(new Error('Not authenticated'), {
       response: { status: 403, data: { detail: 'Not authenticated' } },
     })
     const recoveryError = new Error('bootstrap down')
     protectedRollMutationApi.skip.mockRejectedValueOnce(authError)
     protectedRollMutationApi.bootstrap.mockRejectedValueOnce(recoveryError)
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const skip = renderSkip()
     await act(async () => await expect(skip.result.current.mutate(7)).rejects.toThrow('Not authenticated'))
-    expect(errorSpy).toHaveBeenCalledWith(
-      'Failed to recover skip after authentication expiry:',
-      expect.any(String),
-    )
-    errorSpy.mockRestore()
+    expect(skip.result.current.isError).toBe(true)
   })
 
-  it('logs ambiguous reconciliation failure and rethrows original network error', async () => {
+  it('handles ambiguous reconciliation failure and rethrows original network error', async () => {
     const timeoutError = Object.assign(new Error('timeout'), { code: 'ECONNABORTED' })
     const reconcileError = new Error('reconcile down')
     protectedRollMutationApi.skip.mockRejectedValueOnce(timeoutError)
     rollBootstrapApi.get.mockRejectedValueOnce(reconcileError)
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const skip = renderSkip()
     await act(async () => await expect(skip.result.current.mutate(7)).rejects.toThrow('timeout'))
-    expect(errorSpy).toHaveBeenCalledWith(
-      'Failed to reconcile ambiguous skip result:',
-      expect.any(String),
-    )
-    errorSpy.mockRestore()
+    expect(skip.result.current.isError).toBe(true)
   })
 
   it('shares one in-flight authoritative refresh across concurrent retryRefresh calls', async () => {

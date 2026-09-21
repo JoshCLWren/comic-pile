@@ -3,7 +3,6 @@ import type { Thread } from '../types'
 import axios from 'axios'
 import { migrationApi } from '../services/api'
 import Modal from './Modal'
-import './MigrationDialog.css'
 
 interface MigrationDialogProps {
   thread: Pick<Thread, 'id' | 'title'>
@@ -140,115 +139,120 @@ export default function MigrationDialog({ thread, onComplete, onSkip, onClose }:
   }
 
   return (
-    <Modal isOpen title={`Track Issues for "${thread.title}"`} onClose={handleModalClose} data-testid="migration-dialog">
+    <Modal
+      isOpen
+      title={`Track Issues for "${thread.title}"`}
+      onClose={handleModalClose}
+      data-testid="migration-dialog"
+      autoFocus={true}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
+        <div className="space-y-1.5">
+          <label htmlFor="last-issue-read" className="block text-sm font-semibold text-[var(--theme-text-primary)]">
+            Last Issue Read <span className="text-[var(--theme-error)]" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="last-issue-read"
+            type="number"
+            min="0"
+            value={lastIssueRead}
+            onChange={(e) => setLastIssueRead(e.target.value)}
+            placeholder="0"
+            className="form-control w-full"
+            autoFocus
+            disabled={isSubmitting}
+          />
+          <span className="text-xs text-[var(--theme-text-muted)]">
+            The highest issue number you've finished reading (0 if starting fresh)
+          </span>
+        </div>
 
-        <form onSubmit={handleSubmit} className="migration-dialog__form">
-          <div className="migration-dialog__field">
-            <label htmlFor="last-issue-read" className="migration-dialog__label">
-              Last Issue Read <span className="migration-dialog__required">*</span>
-            </label>
-            <input
-              id="last-issue-read"
-              type="number"
-              min="0"
-              value={lastIssueRead}
-              onChange={(e) => setLastIssueRead(e.target.value)}
-              placeholder="0"
-              className="migration-dialog__input"
-              autoFocus
-              disabled={isSubmitting}
-            />
-            <span className="migration-dialog__hint">
-              The highest issue number you've finished reading (0 if starting fresh)
-            </span>
-          </div>
+        <div className="space-y-1.5">
+          <label htmlFor="total-issues" className="block text-sm font-semibold text-[var(--theme-text-primary)]">
+            Total Issues <span className="text-[var(--theme-error)]" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="total-issues"
+            type="number"
+            min="1"
+            value={totalIssues}
+            onChange={(e) => setTotalIssues(e.target.value)}
+            placeholder="e.g., 50"
+            className="form-control w-full"
+            disabled={isSubmitting}
+          />
+          <span className="text-xs text-[var(--theme-text-muted)]">
+            The total number of issues in this series
+          </span>
+        </div>
 
-          <div className="migration-dialog__field">
-            <label htmlFor="total-issues" className="migration-dialog__label">
-              Total Issues <span className="migration-dialog__required">*</span>
-            </label>
-            <input
-              id="total-issues"
-              type="number"
-              min="1"
-              value={totalIssues}
-              onChange={(e) => setTotalIssues(e.target.value)}
-              placeholder="e.g., 50"
-              className="migration-dialog__input"
-              disabled={isSubmitting}
-            />
-            <span className="migration-dialog__hint">
-              The total number of issues in this series
-            </span>
-          </div>
-
-          {previewText && (
-            <div className="migration-preview">
-              <div className="migration-preview__content">
-                {previewText}
-              </div>
-            </div>
-          )}
-
-          {warning && (
-            <div className="migration-warning" role="status">
-              {warning}
-            </div>
-          )}
-
-          {error && (
-            <div className="migration-dialog__error" role="alert">
-              {error}
-            </div>
-          )}
-
-          <div className="migration-dialog__actions">
-            <button
-              type="button"
-              onClick={handleSkipClick}
-              className="migration-dialog__btn migration-dialog__btn--secondary"
-              disabled={isSubmitting}
-            >
-              Skip
-            </button>
-            <button
-              type="submit"
-              className="migration-dialog__btn migration-dialog__btn--primary"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Migrating...' : 'Start Tracking'}
-            </button>
-          </div>
-        </form>
-
-        {showSkipConfirm && (
-          <div className="migration-dialog__confirm-overlay">
-            <div className="migration-dialog__confirm-dialog">
-              <p className="migration-dialog__confirm-title">Skip migration?</p>
-              <p className="migration-dialog__confirm-message">
-                You can migrate this thread later from the queue page.
-              </p>
-              <div className="migration-dialog__confirm-actions">
-                <button
-                  type="button"
-                  onClick={() => setShowSkipConfirm(false)}
-                  className="migration-dialog__btn migration-dialog__btn--secondary"
-                  disabled={isSubmitting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSkipConfirm}
-                  className="migration-dialog__btn migration-dialog__btn--primary"
-                  disabled={isSubmitting}
-                >
-                  Yes, Skip
-                </button>
-              </div>
-            </div>
+        {previewText && (
+          <div className="rounded-lg border border-[color-mix(in_srgb,_var(--theme-comic-accent)_20%,_transparent)] bg-[color-mix(in_srgb,_var(--theme-comic-accent)_10%,_transparent)] p-3.5">
+            <p className="text-sm leading-relaxed text-[var(--theme-comic-accent)]">{previewText}</p>
           </div>
         )}
+
+        {warning && (
+          <div className="rounded-lg border border-[color-mix(in_srgb,_var(--theme-warning)_30%,_transparent)] bg-[color-mix(in_srgb,_var(--theme-warning)_10%,_transparent)] p-3" role="status">
+            <p className="text-sm leading-relaxed text-[var(--theme-warning)]">{warning}</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-lg border border-[color-mix(in_srgb,_var(--theme-error)_30%,_transparent)] bg-[color-mix(in_srgb,_var(--theme-error)_20%,_transparent)] p-3" role="alert">
+            <p className="text-sm text-[var(--theme-error)]">{error}</p>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={handleSkipClick}
+            className="px-5 py-2.5 text-sm font-semibold rounded-lg transition-colors text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] hover:bg-[color-mix(in_srgb,_white_20%,_transparent)] disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isSubmitting}
+          >
+            Skip
+          </button>
+          <button
+            type="submit"
+            className="px-5 py-2.5 text-sm font-semibold rounded-lg transition-colors text-white bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Migrating...' : 'Start Tracking'}
+          </button>
+        </div>
+      </form>
+
+      {showSkipConfirm && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center p-4 bg-[color-mix(in_srgb,_var(--theme-bg-page)_90%,_transparent)] rounded-lg">
+          <div className="w-full max-w-xs rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-6 shadow-[0_20px_25px_-5px_rgba(0,0,0,0.3)]">
+            <h3 className="mb-2 text-base font-bold text-[var(--theme-text-primary)]">
+              Skip migration?
+            </h3>
+            <p className="mb-5 text-sm leading-relaxed text-[var(--theme-text-primary)]">
+              You can migrate this thread later from the queue page.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowSkipConfirm(false)}
+                className="px-5 py-2.5 text-sm font-semibold rounded-lg transition-colors text-[var(--theme-text-primary)] bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] hover:bg-[color-mix(in_srgb,_white_20%,_transparent)] disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSkipConfirm}
+                className="px-5 py-2.5 text-sm font-semibold rounded-lg transition-colors text-white bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isSubmitting}
+              >
+                Yes, Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Modal>
   )
 }

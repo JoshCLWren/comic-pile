@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import select
 
 from app.models import Event, Thread
+from comic_pile.queue import get_bounded_roll_pool_rows
 from httpx import AsyncClient
 from app.models import Session as SessionModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -157,6 +158,83 @@ async def test_low_rating_moves_thread_beyond_expanded_roll_pool(
     rate_event = result.scalar_one()
     assert rate_event.die == 6
     assert rate_event.die_after == 8
+
+
+@pytest.mark.asyncio
+async def test_low_rating_safe_position_accounts_for_skipped_threads_issue_2802(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A low rating must place the thread outside the next roll's bounded pool.
+
+    Regression test for issue #2802: the below-threshold rating path must use
+    the same exclusion set (snoozed + skipped) as the roll path. Thread A is
+    skipped, thread B is rated 3.0 (d6 -> d8); B must land beyond the d8 pool
+    built with A skipped. Without the fix B lands at position 9, which is
+    inside that pool.
+    """
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    threads = [
+        Thread(
+            title=f"Thread {position}",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=position,
+            status="active",
+            user_id=user.id,
+        )
+        for position in range(1, 13)
+    ]
+    async_db.add_all(threads)
+    await async_db.flush()
+
+    target = threads[0]
+    skipped = threads[1]
+    session = SessionModel(
+        start_die=6,
+        user_id=user.id,
+        skipped_thread_ids=[skipped.id],
+    )
+    async_db.add(session)
+    await async_db.flush()
+
+    session.pending_thread_id = target.id
+    async_db.add(
+        Event(
+            type="roll",
+            die=6,
+            result=1,
+            selected_thread_id=target.id,
+            selection_method="random",
+            session_id=session.id,
+            thread_id=target.id,
+        )
+    )
+    await async_db.commit()
+
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 3.0, "issues_read": 1})
+    assert response.status_code == 200
+
+    await async_db.refresh(target)
+    assert target.queue_position == 10
+
+    result = await async_db.execute(
+        select(Event).where(Event.session_id == session.id).where(Event.type == "rate")
+    )
+    rate_event = result.scalar_one()
+    assert rate_event.die == 6
+    assert rate_event.die_after == 8
+
+    bounded_rows = await get_bounded_roll_pool_rows(
+        user.id,
+        async_db,
+        8,
+        snoozed_ids=[],
+        skipped_ids=[skipped.id],
+    )
+    assert target.id not in {row[0].id for row in bounded_rows}
 
 
 @pytest.mark.asyncio

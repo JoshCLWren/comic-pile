@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { releasesApi, type Release } from '../services/api-releases'
+import { useMemo } from 'react'
+import type { Release } from '../services/api-releases'
+import { RELEASES_PAGE_SIZE, useReleases } from '../hooks/useReleases'
 
-export const RELEASE_PAGE_SIZE = 20
+export const RELEASE_PAGE_SIZE = RELEASES_PAGE_SIZE
 
 const TICKET_REFERENCE_PATTERN = /(?<![\w&])#\d{1,7}\b/g
 const SCHEMA_IDENTIFIER_PATTERN = /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g
@@ -17,11 +18,6 @@ type ReleaseDay = {
   key: string
   label: string
   releases: Release[]
-}
-
-type ReleaseRequest = {
-  offset: number
-  replace: boolean
 }
 
 function releasedAtTimestamp(release: Release) {
@@ -154,44 +150,18 @@ function ReleaseCard({ release }: { release: Release }) {
 }
 
 export default function WhatsNewPage() {
-  const [releases, setReleases] = useState<Release[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [failedRequest, setFailedRequest] = useState<ReleaseRequest>({ offset: 0, replace: true })
+  const {
+    releases,
+    isPending: loading,
+    isFetchingMore: loadingMore,
+    isError,
+    error: queryError,
+    hasMore,
+    loadMore,
+    retry,
+  } = useReleases()
   const days = useMemo(() => groupReleasesByDay(releases), [releases])
-  const hasMore = releases.length < total
-
-  const load = useCallback(async (offset: number, replace: boolean) => {
-    if (replace) setLoading(true)
-    else setLoadingMore(true)
-    setError(null)
-
-    try {
-      const response = await releasesApi.list(RELEASE_PAGE_SIZE, offset)
-      setReleases(current => replace ? response.releases : [...current, ...response.releases])
-      setTotal(response.total)
-    } catch (loadError) {
-      setFailedRequest({ offset, replace })
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : 'Release notes could not be loaded.',
-      )
-    } finally {
-      if (replace) setLoading(false)
-      else setLoadingMore(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void load(0, true)
-  }, [load])
-
-  const retry = () => {
-    void load(failedRequest.offset, failedRequest.replace)
-  }
+  const error = isError ? (queryError?.message ?? 'Release notes could not be loaded.') : null
 
   return (
     <section aria-labelledby="whats-new-title" className="mx-auto max-w-3xl pb-8">
@@ -225,7 +195,7 @@ export default function WhatsNewPage() {
           <p className="mt-2 text-sm text-red-100/80">{error}</p>
           <button
             type="button"
-            onClick={retry}
+            onClick={() => void retry()}
             className="mt-4 min-h-11 rounded-lg bg-amber-400 px-4 py-2 font-bold text-stone-950"
           >
             Try again
@@ -266,7 +236,7 @@ export default function WhatsNewPage() {
               <button
                 type="button"
                 disabled={loadingMore}
-                onClick={() => void load(releases.length, false)}
+                onClick={() => void loadMore()}
                 className="min-h-11 rounded-lg border border-amber-500/40 bg-stone-950 px-5 py-2 font-bold text-amber-300 disabled:cursor-wait disabled:opacity-60"
               >
                 {loadingMore ? 'Loading older updates…' : 'Load older updates'}

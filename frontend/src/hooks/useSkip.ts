@@ -4,7 +4,6 @@ import type { RollMutationDeps } from '../services/apiTypes'
 import { invalidateCurrentSessionAfterSnooze } from '../query/cacheEffects'
 import { skipApi } from '../services/api'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
-import { getApiErrorDetail } from '../utils/apiError'
 import {
   fetchAndPublishRollBootstrap,
   isAmbiguousNetworkFailure,
@@ -43,10 +42,6 @@ export function useSkip(deps: RollMutationDeps = {}) {
         } catch (error: unknown) {
           if (attempt === SKIP_REFRESH_ATTEMPTS) {
             setRefreshError(error)
-            console.error(
-              'Skip saved but authoritative Roll state failed to refresh:',
-              getApiErrorDetail(error),
-            )
             result = false
           }
         }
@@ -105,11 +100,8 @@ export function useSkip(deps: RollMutationDeps = {}) {
               await refreshAuthoritativeState()
               return recovery.value
             }
-          } catch (recoveryError: unknown) {
-            console.error(
-              'Failed to recover skip after authentication expiry:',
-              getApiErrorDetail(recoveryError),
-            )
+          } catch (_recoveryError: unknown) {
+            // Recovery failure exposed via isError / refreshError.
           }
         }
 
@@ -120,16 +112,12 @@ export function useSkip(deps: RollMutationDeps = {}) {
               rollBootstrap,
             )
             if (committed) return undefined
-          } catch (reconciliationError: unknown) {
-            console.error(
-              'Failed to reconcile ambiguous skip result:',
-              getApiErrorDetail(reconciliationError),
-            )
+          } catch (_reconciliationError: unknown) {
+            // Reconciliation failure exposed via isError / refreshError.
           }
         }
 
         setIsError(true)
-        console.error('Failed to skip thread:', getApiErrorDetail(error))
         throw error
       }
     })()
