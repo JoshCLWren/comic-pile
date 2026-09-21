@@ -179,6 +179,8 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/auth/me",
             "/api/auth/refresh",
             "/api/auth/register",
+            "/api/auth/forgot-password",
+            "/api/auth/reset-password",
             "/api/bug-reports/",
             "/api/health",
             "/api/health/cache-quota",

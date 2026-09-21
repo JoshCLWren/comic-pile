@@ -1,6 +1,6 @@
 """Auth schemas for request/response validation."""
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserRegisterRequest(BaseModel):
@@ -39,3 +39,22 @@ class RefreshTokenRequest(BaseModel):
     """Request schema for token refresh."""
 
     refresh_token: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Enumeration-safe forgot-password request using recovery email."""
+
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request schema for password reset completion."""
+
+    token: str
+    new_password: str = Field(..., min_length=1)
+
+
+class PasswordResetResponse(BaseModel):
+    """Safe acknowledgement regardless of account existence."""
+
+    message: str

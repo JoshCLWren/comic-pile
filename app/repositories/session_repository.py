@@ -7,7 +7,7 @@ own transaction boundaries.
 
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Session as SessionModel, Snapshot, Thread
@@ -25,6 +25,16 @@ async def get_session(db: AsyncSession, session_id: int) -> SessionModel | None:
         The session, or None when it does not exist.
     """
     return await db.get(SessionModel, session_id)
+
+
+async def delete_all_sessions_for_user(db: AsyncSession, user_id: int) -> None:
+    """Delete all sessions for a user.
+
+    Args:
+        db: Database session.
+        user_id: Owner whose sessions should be removed.
+    """
+    await db.execute(delete(SessionModel).where(SessionModel.user_id == user_id))
 
 
 async def find_owned(
