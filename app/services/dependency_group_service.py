@@ -632,11 +632,11 @@ class DependencyGroupService:
         """
         thread_ids = list(dict.fromkeys(thread_ids))
 
-        # Verify all threads are owned
-        for thread_id in thread_ids:
-            owned = await groups_repo.get_owned_thread(self._db, thread_id, user_id)
-            if owned is None:
-                raise NotFoundError(f"Thread {thread_id} not found")
+        # Verify all threads are owned in a single query (not one lookup per thread)
+        owned_ids = await groups_repo.get_owned_thread_ids(self._db, thread_ids, user_id)
+        missing_ids = [thread_id for thread_id in thread_ids if thread_id not in owned_ids]
+        if missing_ids:
+            raise NotFoundError(f"Thread {missing_ids[0]} not found")
 
         # Get all group memberships for the requested threads
         result = await groups_repo.thread_group_summaries_batch(self._db, thread_ids, user_id)

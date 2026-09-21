@@ -142,6 +142,33 @@ async def get_owned_thread(
     return thread
 
 
+async def get_owned_thread_ids(
+    db: AsyncSession,
+    thread_ids: list[int],
+    user_id: int,
+) -> set[int]:
+    """Return the identifiers of requested threads owned by a user.
+
+    Args:
+        db: The asynchronous database session.
+        thread_ids: Thread identifiers to check for ownership.
+        user_id: The authenticated thread owner.
+
+    Returns:
+        The subset of ``thread_ids`` that belong to the user, resolved in a
+        single query rather than one lookup per thread.
+    """
+    if not thread_ids:
+        return set()
+    result = await db.execute(
+        select(Thread.id).where(
+            Thread.id.in_(thread_ids),
+            Thread.user_id == user_id,
+        )
+    )
+    return set(result.scalars().all())
+
+
 async def get_owned_issue(
     db: AsyncSession,
     issue_id: int,
