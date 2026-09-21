@@ -288,9 +288,9 @@ export function IssueList({
           return (
             <div
               key={issue.id}
-              className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors hover:bg-[var(--theme-bg-panel)] ${
-                issue.id === nextUnreadId 
-                  ? 'bg-[color-mix(in_srgb,var(--theme-comic-accent)_15%,transparent)] border border-[var(--theme-comic-accent)]' 
+              className={`issue-item ${issue.status} ${issue.id === nextUnreadId ? 'next-unread' : ''} flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors hover:bg-[var(--theme-bg-panel)] ${
+                issue.id === nextUnreadId
+                  ? 'bg-[color-mix(in_srgb,var(--theme-comic-accent)_15%,transparent)] border border-[var(--theme-comic-accent)]'
                   : ''
               }`}
               onClick={() => toggleIssueStatus(issue)}
@@ -329,7 +329,7 @@ export function IssueList({
             type="button"
             onClick={() => loadIssues(true, nextPageToken)}
             disabled={isLoadingMore}
-            className="w-full px-4 py-2 border border-[var(--theme-border)] rounded-md hover:[var(--theme-bg-panel)] transition-colors disabled:opacity-50"
+            className="w-full px-4 py-2 border border-[var(--theme-border)] rounded-md hover:bg-[var(--theme-bg-panel)] transition-colors disabled:opacity-50"
           >
             {isLoadingMore ? 'Loading...' : `Load more (${issues.length} of ${totalCount})`}
           </button>
