@@ -1,7 +1,4 @@
 import api from './api'
-
-export type SessionListParams = Record<string, string | number | boolean | null>
-
 import type {
   SessionCurrent,
   SessionDetails,
@@ -11,6 +8,8 @@ import type {
   SessionSnapshotsResponse,
   SessionSummary,
 } from '../types'
+
+export type SessionListParams = Record<string, string | number | boolean | null>
 
 export const sessionApi = {
   list: async (params?: SessionListParams, pageToken?: string | null): Promise<SessionListResponse> => {
