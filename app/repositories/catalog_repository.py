@@ -205,8 +205,9 @@ async def get_series_with_issues(
         return None, []
     
     # Get issues that belong to this series from the catalog
+    # Use ThreadExternalSeriesMapping to find threads confirmed for this series
     issues_result = await db.execute(
-        select(ExternalIdentity, IssueExternalIdentityMapping)
+        select(ExternalIdentity, IssueExternalIdentityMapping, Thread)
         .join(
             IssueExternalIdentityMapping,
             IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
@@ -219,25 +220,30 @@ async def get_series_with_issues(
             Thread,
             Thread.id == Issue.thread_id,
         )
+        .outerjoin(
+            ThreadExternalSeriesMapping,
+            ThreadExternalSeriesMapping.thread_id == Thread.id,
+        )
         .where(
             ExternalIdentity.entity_type == "issue",
             ExternalIdentity.provider == provider.strip().lower(),
-            # This assumes issues have some relationship to the series - may need adjustment
-            # based on how series-issue relationships are stored
             Thread.user_id == user_id,
         )
     )
     
     issues_with_mappings = []
-    for issue_identity, issue_mapping in issues_result:
+    for issue_identity, issue_mapping, thread in issues_result:
         issue_info = {
             "issue_id": issue_mapping.issue_id,
             "issue_number": issue_identity.external_id,
             "title": issue_identity.metadata_json.get("name") if issue_identity.metadata_json else None,
-            "thread_id": issue_mapping.issue_id,  # This may need adjustment
-            "thread_title": None,  # Would need to fetch thread info
+            "thread_id": thread.id,
+            "thread_title": thread.title,
             "current_mapping_status": issue_mapping.status,
-            "classification": "unresolved",  # Default, will be refined
+            "provider": issue_identity.provider,
+            "external_id": issue_identity.external_id,
+            "confidence": issue_mapping.confidence,
+            "classification": "unresolved",
         }
         issues_with_mappings.append(issue_info)
     

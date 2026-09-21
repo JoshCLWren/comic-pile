@@ -14,8 +14,6 @@ class TestSeriesMappingPreview:
     async def test_preview_series_mapping_available_scope(self, auth_client: AsyncClient, sample_data):
         """Test preview with available scope (exact match found)."""
         # Create test data
-        user = sample_data["user"]
-        thread = sample_data["thread"]
         issue = sample_data["issue"]
         
         # Create a confirmed external identity for the origin issue
@@ -133,8 +131,6 @@ class TestSeriesMappingPreview:
     @pytest.mark.asyncio
     async def test_preview_series_mapping_unavailable_scope(self, auth_client: AsyncClient, sample_data):
         """Test preview with unavailable scope (no exact match)."""
-        user = sample_data["user"]
-        thread = sample_data["thread"]
         issue = sample_data["issue"]
         
         # Mock the ComicVine client to return series data
@@ -200,8 +196,6 @@ class TestSeriesMappingPreview:
     @pytest.mark.asyncio
     async def test_preview_series_mapping_provider_failure(self, auth_client: AsyncClient, sample_data):
         """Test preview with provider failure (ComicVine unavailable)."""
-        user = sample_data["user"]
-        thread = sample_data["thread"]
         issue = sample_data["issue"]
         
         # Mock ComicVine client failure
@@ -230,8 +224,6 @@ class TestSeriesMappingPreview:
     @pytest.mark.asyncio
     async def test_preview_series_mapping_special_issues(self, auth_client: AsyncClient, sample_data):
         """Test preview with special/annual issues correctly excluded."""
-        user = sample_data["user"]
-        thread = sample_data["thread"]
         issue = sample_data["issue"]
         
         # Mock the ComicVine client to return series with special issues
@@ -310,8 +302,6 @@ class TestSeriesMappingPreview:
     @pytest.mark.asyncio
     async def test_preview_series_mapping_conflict_detection(self, auth_client: AsyncClient, sample_data):
         """Test preview with conflict detection."""
-        user = sample_data["user"]
-        thread = sample_data["thread"]
         issue = sample_data["issue"]
         
         # Create conflicting external identity
@@ -388,8 +378,6 @@ class TestSeriesMappingPreview:
     @pytest.mark.asyncio
     async def test_preview_series_mapping_ambiguous_numbers(self, auth_client: AsyncClient, sample_data):
         """Test preview with ambiguous issue numbers."""
-        user = sample_data["user"]
-        thread = sample_data["thread"]
         issue = sample_data["issue"]
         
         # Mock the ComicVine client to return series with ambiguous issues
@@ -512,4 +500,4 @@ class TestSeriesMappingPreview:
         assert response.status_code == 200  # Should return unavailable scope
         data = response.json()
         assert data["scope"]["status"] == "unavailable"
-        assert data["scope"]["basis"] == "series_not_found"
+        assert data["scope"]["basis"] == "origin_issue_not_found"

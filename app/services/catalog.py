@@ -1,9 +1,14 @@
 """Catalog service layer for shared comic series and issue identities."""
 
 import os
+import re
+import time
+from pathlib import Path
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+from comic_pile.comicvine_provider import ComicVineClient
 
 from app.external_identities import (
     link_issue_external_identity,
@@ -450,12 +455,32 @@ async def preview_series_mapping(
         Preview response with scope information, counts, and classified rows.
     """
     from app.repositories.catalog_repository import get_series_with_issues, get_issue_by_id
-    import time
-    
+
     # Get the origin issue to establish context
     origin_issue = await get_issue_by_id(db, origin_issue_id, user_id)
     if origin_issue is None:
-        raise ValueError(f"Origin issue {origin_issue_id} not found")
+        return {
+            "preview_token": None,
+            "scope": {
+                "status": "unavailable",
+                "scope_key": None,
+                "origin_issue_id": origin_issue_id,
+                "series_label": None,
+                "basis": "origin_issue_not_found",
+            },
+            "provider_series": None,
+            "counts": {
+                "already_confirmed": 0,
+                "safe_exact_match": 0,
+                "needs_review_ambiguous": 0,
+                "needs_review_conflict": 0,
+                "unresolved": 0,
+                "excluded_special": 0,
+            },
+            "rows": [],
+            "issued_at": time.time(),
+            "expires_at": None,
+        }
     
     # Try local catalog first
     series_info, issues_with_mappings = await get_series_with_issues(
@@ -580,7 +605,7 @@ async def preview_series_mapping(
             counts["safe_exact_match"] += 1
             if scope_key is None:
                 scope_key = f"exact:{origin_issue_id}:{issue_number}"
-        elif _is_conflicting_mapping(issue_info):
+        elif _is_conflicting_mapping(issue_info, provider, provider_series_external_id):
             classification = "needs_review_conflict"
             counts["needs_review_conflict"] += 1
         elif _is_ambiguous(issue_number):
@@ -606,6 +631,10 @@ async def preview_series_mapping(
     # Generate preview token if scope is available
     preview_token = None
     if scope_status == "available":
+        issue_numbers = [row.get("issue_number", "") for row in classified_rows if row.get("issue_number")]
+        classification_digest = "|".join(
+            f"{cls}:{counts[cls]}" for cls in ["already_confirmed", "safe_exact_match", "needs_review_ambiguous", "needs_review_conflict", "unresolved", "excluded_special"]
+        )
         preview_token = _generate_preview_token(
             user_id=user_id,
             provider=provider,
@@ -614,6 +643,8 @@ async def preview_series_mapping(
             scope_key=scope_key,
             issued_at=time.time(),
             expires_at=time.time() + 600,  # 10 minutes
+            issue_numbers=issue_numbers,
+            classification_digest=classification_digest,
         )
     
     return {
@@ -635,21 +666,16 @@ async def preview_series_mapping(
 
 def _get_comicvine_client():
     """Build a ComicVine client from environment settings."""
-    import os
-    from pathlib import Path
-    
     api_key = os.environ.get("COMICVINE_API_KEY", "").strip()
     if not api_key:
         return None
-    
+
     cache_dir = Path(os.environ.get("COMICVINE_CACHE_DIR", "/tmp/comicvine-cache"))
     return ComicVineClient(api_key=api_key, cache_dir=cache_dir)
 
 
 def _is_special_issue(issue_number: str) -> bool:
     """Check if issue number indicates a special/annual issue."""
-    import re
-    
     # Patterns for special issues: annual, special, hc (hardcover), etc.
     special_patterns = [
         r'\b(annual|special|hc|tpb|gn|omnibus|deluxe|absolute|hardcover|trade paperback|graphic novel)\b',
@@ -671,7 +697,6 @@ def _is_exact_match(issue_number: str, origin_issue_number: str) -> bool:
     
     # Normalize both numbers (remove common prefixes/suffixes, normalize case)
     def normalize_number(num: str) -> str:
-        import re
         # Remove non-numeric characters except decimal points
         normalized = re.sub(r'[^0-9.]', '', num.lower().strip())
         # Remove leading/trailing decimal points
@@ -681,17 +706,23 @@ def _is_exact_match(issue_number: str, origin_issue_number: str) -> bool:
     return normalize_number(issue_number) == normalize_number(origin_issue_number)
 
 
-def _is_conflicting_mapping(issue_info: dict) -> bool:
-    """Check if issue has conflicting mappings."""
-    # This would need to be implemented based on specific business rules
-    # For now, return False
+def _is_conflicting_mapping(issue_info: dict, provider: str, series_external_id: str) -> bool:
+    """Check if issue has a confirmed mapping that conflicts with the selected series."""
+    if issue_info.get("current_mapping_status") != "confirmed":
+        return False
+    issue_provider = issue_info.get("provider", "")
+    issue_external_id = issue_info.get("external_id", "")
+    if not issue_provider or not issue_external_id:
+        return False
+    if issue_provider != provider:
+        return True
+    if issue_external_id != series_external_id:
+        return True
     return False
 
 
 def _is_ambiguous(issue_number: str) -> bool:
     """Check if issue number is ambiguous."""
-    import re
-    
     # Patterns that indicate ambiguity
     ambiguous_patterns = [
         r'\d+\.\d+',  # Fractional numbers (e.g., "1.5")
@@ -715,17 +746,19 @@ def _generate_preview_token(
     scope_key: str,
     issued_at: float,
     expires_at: float,
+    issue_numbers: list[str] | None = None,
+    classification_digest: str | None = None,
 ) -> str:
     """Generate an HMAC-signed preview token."""
     import hmac
     import hashlib
     import json
-    
+
     # Get secret key from environment
     secret_key = os.environ.get("PREVIEW_TOKEN_SECRET_KEY", "")
     if not secret_key:
         raise ValueError("PREVIEW_TOKEN_SECRET_KEY environment variable is required")
-    
+
     # Create token payload
     payload = {
         "user_id": user_id,
@@ -733,10 +766,12 @@ def _generate_preview_token(
         "provider_series_external_id": provider_series_external_id,
         "origin_issue_id": origin_issue_id,
         "scope_key": scope_key,
+        "issue_numbers": issue_numbers or [],
+        "classification_digest": classification_digest or "",
         "issued_at": issued_at,
         "expires_at": expires_at,
     }
-    
+
     # Generate signature
     payload_json = json.dumps(payload, sort_keys=True)
     signature = hmac.new(
@@ -744,11 +779,11 @@ def _generate_preview_token(
         payload_json.encode('utf-8'),
         hashlib.sha256
     ).hexdigest()
-    
+
     # Combine payload and signature
     token_data = {
         "payload": payload,
         "signature": signature,
     }
-    
+
     return json.dumps(token_data)
