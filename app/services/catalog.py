@@ -554,6 +554,38 @@ async def preview_series_mapping(
                 detail="provider_unavailable",
             ) from exc
     
+    # Ensure origin issue is included in the mapping check for conflict detection
+    # even if it's mapped to a different series
+    origin_mapping_provider = origin_issue.get("provider")
+    origin_mapping_external_id = origin_issue.get("external_id")
+    origin_mapping_status = origin_issue.get("current_mapping_status")
+    print(f"DEBUG: origin_issue = {origin_issue}")
+    print(f"DEBUG: origin_mapping_provider = {origin_mapping_provider}")
+    print(f"DEBUG: origin_mapping_external_id = {origin_mapping_external_id}")
+    print(f"DEBUG: origin_mapping_status = {origin_mapping_status}")
+    if (origin_mapping_provider and origin_mapping_external_id and origin_mapping_status == "confirmed"):
+        # Check if origin issue is already in the list
+        origin_in_list = any(
+            info.get("issue_id") == origin_issue.get("issue_id")
+            for info in issues_with_mappings
+        )
+        print(f"DEBUG: origin_in_list = {origin_in_list}")
+        if not origin_in_list:
+            issues_with_mappings.append({
+                "issue_id": origin_issue.get("issue_id"),
+                "issue_number": origin_issue.get("issue_number"),
+                "title": origin_issue.get("title"),
+                "thread_id": origin_issue.get("thread_id"),
+                "thread_title": origin_issue.get("thread_title"),
+                "current_mapping_status": origin_mapping_status,
+                "provider": origin_mapping_provider,
+                "external_id": origin_mapping_external_id,
+                "confidence": origin_issue.get("confidence"),
+                "classification": "unresolved",
+            })
+            print(f"DEBUG: Added origin issue to mappings")
+    print(f"DEBUG: issues_with_mappings after origin add = {issues_with_mappings}")
+    
     # If we still don't have series info, return unavailable scope
     if series_info is None:
         return {
@@ -607,6 +639,7 @@ async def preview_series_mapping(
     for issue_info in issues_with_mappings:
         raw_number = issue_info.get("issue_number", "")
         issue_number = str(raw_number) if isinstance(raw_number, str) else ""
+        print(f"DEBUG classify: issue_info = {issue_info}")
 
         # Check if it's a special issue (annual, special, etc.)
         if _is_special_issue(issue_number):
@@ -744,15 +777,21 @@ def _is_exact_match(issue_number: str, origin_issue_number: str) -> bool:
 
 def _is_conflicting_mapping(issue_info: dict, provider: str, series_external_id: str) -> bool:
     """Check if issue has a confirmed mapping that conflicts with the selected series."""
+    print(f"DEBUG _is_conflicting_mapping: issue_info = {issue_info}")
+    print(f"DEBUG _is_conflicting_mapping: provider = {provider}, series_external_id = {series_external_id}")
     if issue_info.get("current_mapping_status") != "confirmed":
+        print("DEBUG: not confirmed")
         return False
     issue_provider = issue_info.get("provider", "")
     issue_external_id = issue_info.get("external_id", "")
     if not issue_provider or not issue_external_id:
+        print("DEBUG: missing provider or external_id")
         return False
     if issue_provider != provider:
+        print(f"DEBUG: provider mismatch: {issue_provider} != {provider}")
         return True
     if issue_external_id != series_external_id:
+        print(f"DEBUG: external_id mismatch: {issue_external_id} != {series_external_id}")
         return True
     return False
 
