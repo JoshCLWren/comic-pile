@@ -3,7 +3,20 @@ import type { DiceRenderGlobalConfig } from './diceTypes'
 
 export type TextureTileUv = { u0: number; v0: number; u1: number; v1: number }
 
-export type DiceTextureAtlas = ReturnType<typeof createTextureAtlas>
+export type DiceTextureAtlas = {
+  texture: THREE.CanvasTexture;
+  cols: number;
+  rows: number;
+  uvInset: number;
+  triangleUvRadius: number;
+  d12UvRadius: number;
+  d10UvPadding: number;
+  d10AutoCenter: boolean;
+  d10TopOffsetX: number;
+  d10TopOffsetY: number;
+  d10BottomOffsetX: number;
+  d10BottomOffsetY: number;
+}
 
 export function createTextureAtlas(maxNumber: number, renderConfig: DiceRenderGlobalConfig): DiceTextureAtlas {
   const {
