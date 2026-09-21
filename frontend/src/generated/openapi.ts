@@ -6898,6 +6898,8 @@ export interface components {
         IssueIdentityResponse: {
             /** Candidate Mappings */
             candidate_mappings: components["schemas"]["IssueIdentityMapping"][];
+            /** Comicvine Issue Id */
+            comicvine_issue_id: string | null;
             /** Confirmed Mappings */
             confirmed_mappings: components["schemas"]["IssueIdentityMapping"][];
             /** Has Confirmed Identity */

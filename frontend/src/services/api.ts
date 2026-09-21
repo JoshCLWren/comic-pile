@@ -602,6 +602,7 @@ export interface IssueIdentityResponse {
   thread_id: number
   thread_title: string
   has_confirmed_identity: boolean
+  comicvine_issue_id: string | null
   confirmed_mappings: IssueIdentityMapping[]
   candidate_mappings: IssueIdentityMapping[]
   has_unresolved: boolean

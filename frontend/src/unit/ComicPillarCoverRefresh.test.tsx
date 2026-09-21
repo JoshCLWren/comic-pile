@@ -125,6 +125,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     queryClient.clear()
     getIssueIdentitySpy.mockResolvedValue({
       has_confirmed_identity: true,
+      comicvine_issue_id: null,
       confirmed_mappings: [{ comicvine_id: 111 }],
       candidate_mappings: [],
       has_unresolved: false,

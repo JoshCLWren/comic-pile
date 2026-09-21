@@ -65,6 +65,7 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     vi.clearAllMocks()
     getIssueIdentitySpy.mockResolvedValue({
       has_confirmed_identity: false,
+      comicvine_issue_id: null,
       confirmed_mappings: [],
     })
   })
