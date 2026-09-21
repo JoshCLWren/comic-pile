@@ -124,7 +124,10 @@ describe('AuthProvider transient recovery', () => {
       timeout: 15000,
       skipAuthRedirect: true,
     })
-    await waitForPreferencesFetch()
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(mocks.get).toHaveBeenNthCalledWith(3, '/v1/users/me/preferences', PREFERENCES_CONFIG)
   })
 
   it('logs out when explicit recovery proves the persistent session is invalid', async () => {

@@ -136,6 +136,21 @@ export function getThemePreferenceRetryDelays(): readonly number[] {
   return retryDelaysMs
 }
 
+/** Whether a persistent theme save failure was already reported this episode. */
+export function hasNotifiedThemeFailureThisEpisode(): boolean {
+  return notifiedThisEpisode
+}
+
+/** Record that a persistent theme save failure was reported this episode. */
+export function markThemeFailureNotifiedThisEpisode(): void {
+  notifiedThisEpisode = true
+}
+
+/** End the failure-notification episode (for example after a successful save). */
+export function clearThemeFailureNotifiedThisEpisode(): void {
+  notifiedThisEpisode = false
+}
+
 /** Replace the retry backoff schedule (test hook). */
 export function setThemePreferenceRetryDelaysForTests(
   delaysMs: readonly number[],
