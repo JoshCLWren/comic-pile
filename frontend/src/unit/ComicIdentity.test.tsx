@@ -29,6 +29,16 @@ function waitForLoaded() {
   return waitFor(() => expect(screen.queryByLabelText('Loading comic details')).not.toBeInTheDocument())
 }
 
+function formatExpectedDate(value: string): string {
+  const [year, month, day] = value.split('-').map(Number)
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, day)))
+}
+
 describe('ComicIdentity', () => {
   beforeEach(() => {
     getIntelligence.mockReset()
@@ -89,7 +99,7 @@ describe('ComicIdentity', () => {
     expect(screen.getByText('Opening')).toBeInTheDocument()
 
     // Cover/store date
-    expect(screen.getByText('Jan 1, 2026')).toBeInTheDocument()
+    expect(screen.getByText(formatExpectedDate('2026-01-01'))).toBeInTheDocument()
 
     // Creators with roles
     expect(screen.getByText('Writer One')).toBeInTheDocument()
@@ -139,7 +149,7 @@ describe('ComicIdentity', () => {
 
     expect(screen.getByText('Test Series #5')).toBeInTheDocument()
     expect(screen.getByText('Test Issue')).toBeInTheDocument()
-    expect(screen.getByText('Jun 15, 2026')).toBeInTheDocument()
+    expect(screen.getByText(formatExpectedDate('2026-06-15'))).toBeInTheDocument()
   })
 
   it('handles cover image load failure gracefully', async () => {

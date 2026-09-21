@@ -28,7 +28,7 @@ function collectSourceFiles(dir: string): string[] {
 }
 
 function relativeToSource(file: string): string {
-  return file.slice(SOURCE_ROOT.length + 1)
+  return file.slice(SOURCE_ROOT.length + 1).replaceAll('\\', '/')
 }
 
 it('application source never reads window.innerWidth for responsive behavior', () => {

@@ -25,7 +25,7 @@ function collectProductionSources(dir: string): string[] {
 }
 
 function relative(path: string): string {
-  return path.slice(srcDir.length + 1)
+  return path.slice(srcDir.length + 1).replaceAll('\\', '/')
 }
 
 const sources = collectProductionSources(srcDir)
