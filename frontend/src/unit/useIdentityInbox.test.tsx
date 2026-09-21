@@ -173,7 +173,7 @@ describe('useIdentityInboxStatus', () => {
   })
 
   it('returns a positive total when items exist', async () => {
-    const fullResponse = { items: [{ mapping_id: 1 } as unknown as IdentityInboxItem], total: 5, offset: 0, limit: 1 }
+    const fullResponse = { items: [{ ...inboxResponse.items[0], mapping_id: 1 }], total: 5, offset: 0, limit: 1 }
     mockedInboxApi.list.mockResolvedValue(fullResponse as never)
     const wrapper = createWrapper()
     const { result } = renderHook(() => useIdentityInboxStatus(), { wrapper })
