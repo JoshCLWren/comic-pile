@@ -6,7 +6,7 @@ import { ToastProvider } from '../contexts/ToastProvider'
 import { queryKeys } from '../query/queryKeys'
 import { queryClient } from '../query/queryClient'
 import { useUpdateThread } from '../hooks/useThread'
-import { threadsApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
 import { issuesApi } from '../services/api-issues'
 import type { IssueListResponse, Thread } from '../types'
 

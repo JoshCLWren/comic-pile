@@ -15,7 +15,7 @@ import {
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
-import { threadsApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
 import { cast } from '../utils/cast'
 
 const navigateSpy = vi.fn()
@@ -55,6 +55,10 @@ vi.mock('../hooks', async (importOriginal) => {
 vi.mock('../services/api-reading-orders', () => ({
   readingOrdersApi: { getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }) },
 }))
+vi.mock('../services/api-threads', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api-threads')>()
+  return { ...actual }
+})
 vi.mock('../services/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api')>()
   return {

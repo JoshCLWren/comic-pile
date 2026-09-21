@@ -19,7 +19,8 @@ vi.mock('axios', () => ({
   },
 }))
 
-import { rateApi, rollApi } from '../services/api'
+import { rateApi } from '../services/api-rate'
+import { rollApi } from '../services/api-roll'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 

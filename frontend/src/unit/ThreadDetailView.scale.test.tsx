@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useUpdateThread } from '../hooks/useThread'
-import { threadsApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
 import { issuesApi } from '../services/api-issues'
 
 vi.mock('react-router-dom', async () => {

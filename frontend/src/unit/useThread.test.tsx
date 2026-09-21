@@ -12,9 +12,9 @@ import {
   useThread,
   useUpdateThread,
 } from '../hooks/useThread'
-import { threadsApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
 
-vi.mock('../services/api', () => ({
+vi.mock('../services/api-threads', () => ({
   threadsApi: {
     list: vi.fn(),
     get: vi.fn(),

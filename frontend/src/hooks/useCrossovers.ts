@@ -3,7 +3,7 @@ import {
   dependencyGroupsApi,
   type DependencyGroupMemberTarget,
 } from '../services/api-dependency-groups'
-import { threadsApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
 import { issuesApi, type IssueListParams } from '../services/api-issues'
 import type { Issue, Thread, ThreadListResponse } from '../types'
 import { queryKeys } from '../query/queryKeys'

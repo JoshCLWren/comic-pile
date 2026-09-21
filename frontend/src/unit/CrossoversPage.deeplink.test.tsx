@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
-import { threadsApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
 
 vi.mock('../services/api-dependency-groups', () => ({
   dependencyGroupsApi: {

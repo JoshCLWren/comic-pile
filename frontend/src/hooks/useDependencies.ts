@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { dependenciesApi, threadsApi, migrationApi } from '../services/api';
+import { threadsApi } from '../services/api-threads';
+import { dependenciesApi, migrationApi } from '../services/api';
 import { issuesApi, type IssueListParams } from '../services/api-issues';
 import type { Dependency, Issue, Thread, ThreadDependenciesResponse, ThreadListResponse } from '../types';
 import { queryClient } from '../query/queryClient';

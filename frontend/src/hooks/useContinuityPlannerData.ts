@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { threadsApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { continuityPlansApi } from '../services/api-continuity-plans'
 import { issuesApi, type IssueListParams } from '../services/api-issues'

@@ -10,7 +10,7 @@ import {
   useRoll,
   useSetDie,
 } from '../hooks/useRoll'
-import { rollApi } from '../services/api'
+import { rollApi } from '../services/api-roll'
 import type { OverrideRollPayload } from '../types'
 import { cast } from '../utils/cast'
 
@@ -19,7 +19,7 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>
 }
 
-vi.mock('../services/api', () => ({
+vi.mock('../services/api-roll', () => ({
   rollApi: {
     roll: vi.fn(),
     override: vi.fn(),

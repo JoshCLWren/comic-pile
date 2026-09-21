@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery, useInfiniteQuery, useMutation } from "@tanstack/react-query";
-import { sessionApi } from "../services/api";
+import { sessionApi } from "../services/api-sessions";
 import type {
   SessionCurrent,
   SessionDetails,

@@ -7,7 +7,8 @@ import { useCreateThread, useUpdateThread, useDeleteThread, useReactivateThread 
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
-import { threadsApi, dependenciesApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
+import { dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 
 vi.mock('../hooks/useThread', () => ({ useCreateThread: vi.fn(), useUpdateThread: vi.fn(), useDeleteThread: vi.fn(), useReactivateThread: vi.fn() }))

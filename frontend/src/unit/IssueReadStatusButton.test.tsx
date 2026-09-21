@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IssueReadStatusButton } from '../pages/thread-detail/IssueReadStatusButton'
 import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
-import { threadsApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
 import { issuesApi } from '../services/api-issues'
 import type { Issue, Thread } from '../types'
 

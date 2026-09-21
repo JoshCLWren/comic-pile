@@ -7,7 +7,8 @@ import { ToastProvider } from '../contexts/ToastProvider'
 import { queryKeys } from '../query/queryKeys'
 import { queryClient } from '../query/queryClient'
 import { useUpdateThread } from '../hooks/useThread'
-import { dependenciesApi, threadsApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
+import { dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 
 const navigateSpy = vi.fn()

@@ -8,7 +8,7 @@ import {
   type DependencyGroupDetailMember,
   type DependencyGroupSummary,
 } from '../services/api-dependency-groups'
-import { threadsApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
 import { issuesApi } from '../services/api-issues'
 import type { Issue, Thread } from '../types'
 
@@ -21,6 +21,7 @@ vi.mock('../services/api-dependency-groups', () => ({
   },
 }))
 
+vi.mock('../services/api-threads', () => ({ threadsApi: { get: vi.fn() } }))
 vi.mock('../services/api', () => ({
   threadsApi: { get: vi.fn() },
 }))

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { threadsApi } from '../../services/api'
+import { threadsApi } from '../../services/api-threads'
 import { issuesApi } from '../../services/api-issues'
 import type { Issue } from '../../types'
 import {

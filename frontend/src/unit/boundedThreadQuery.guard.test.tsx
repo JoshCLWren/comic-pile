@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useQueueThreads } from '../hooks/useQueue'
 import * as useThreadModule from '../hooks/useThread'
-import { threadsApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
 import type { Thread } from '../types'
 
 vi.mock('../services/api', () => ({
