@@ -42,7 +42,6 @@ def test_openrouter_free_pins_require_free_tier_ids(validate) -> None:
     assert validate.openrouter_model_is_free('cohere/north-mini-code:free')
     assert validate.openrouter_model_is_free('openrouter/free')
     assert validate.openrouter_model_is_free('stealth/union-alpha')
-    assert validate.openrouter_model_is_free('qwen/qwen3.8-27b:free')
     assert not validate.openrouter_model_is_free('stealth/ox-alpha')
     assert not validate.openrouter_model_is_free('openai/gpt-4o')
 

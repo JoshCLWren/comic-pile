@@ -7,6 +7,7 @@ import {
   type SelectedIssueRange,
 } from '../components/continuity'
 import { type DependencyGroup, type DependencyGroupMember } from '../services/api-dependency-groups'
+import type { Issue } from '../types'
 import GlossaryLink from '../components/GlossaryLink'
 import type { Thread } from '../types'
 import { isString } from '../utils/runtimeChecks'
@@ -21,6 +22,8 @@ import {
   useAddCrossoverIssueRange,
   useRemoveCrossoverMember,
 } from '../hooks/useCrossovers'
+
+type PositionedIssue = Issue & { position: number }
 
 function errorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
@@ -220,8 +223,10 @@ export default function CrossoversPage() {
       setMutationError('Choose a series and an inclusive first and last issue.')
       return
     }
-    const startPosition = rangeSelection.startIssue.position
-    const endPosition = rangeSelection.endIssue.position
+    // SAFETY: the range selector only offers position-ordered issues, so each selected issue carries a numeric position.
+    const startPosition = (rangeSelection.startIssue as PositionedIssue).position
+    // SAFETY: the end issue is subject to the same position-ordered invariant as the start issue.
+    const endPosition = (rangeSelection.endIssue as PositionedIssue).position
     if (!Number.isInteger(startPosition) || !Number.isInteger(endPosition) || startPosition < 1 || endPosition < startPosition) {
       setMutationError('Choose a valid issue range in reading order.')
       return

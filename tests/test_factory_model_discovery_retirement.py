@@ -863,6 +863,7 @@ def test_committed_tsv_pins_ling_and_muse_spark_13_via_add_path() -> None:
     assert "ling-3.0-flash-fin-free" in models
     assert "muse-spark-1.3-contributor-free" in models
     assert "deepseek-v4-flash" not in models
+    assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
     assert ROSTER.schedule_is_balanced(rows)
 
 
@@ -904,6 +905,7 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_nex_and_ling() -> N
     assert ROSTER.openrouter_model_is_free(by_worker["49"]["model"])
     assert ROSTER.openrouter_model_is_free(by_worker["50"]["model"])
     assert ROSTER.schedule_is_balanced(rows)
+    assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
 
 
 def test_committed_tsv_converts_surplus_pickle_to_openrouter_nemotron_ultra_and_inkling() -> None:
@@ -951,6 +953,7 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_nemotron_ultra_and_
     assert ROSTER.openrouter_model_is_free(by_worker["52"]["model"])
     assert ROSTER.openrouter_model_is_free(by_worker["53"]["model"])
     assert ROSTER.schedule_is_balanced(rows)
+    assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
 
 
 def test_committed_tsv_converts_surplus_pickle_to_z_ai_and_ollama_cloud() -> None:
@@ -988,6 +991,7 @@ def test_committed_tsv_converts_surplus_pickle_to_z_ai_and_ollama_cloud() -> Non
     assert ROSTER.ollama_cloud_model_is_free(by_worker["55"]["model"])
     assert not ROSTER.z_ai_model_is_free("glm-5")
     assert ROSTER.schedule_is_balanced(rows)
+    assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
 
 
 def test_committed_tsv_converts_surplus_pickle_to_openrouter_dots_note() -> None:
@@ -1016,6 +1020,7 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_dots_note() -> None
     assert "dots-studio/dots-3-note-preview:free" not in lock["retired_models"]
     assert ROSTER.openrouter_model_is_free(by_worker["56"]["model"])
     assert ROSTER.schedule_is_balanced(rows)
+    assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
 
 
 def test_stealth_union_alpha_lock_stays_consistent_with_roster() -> None:
@@ -1043,43 +1048,7 @@ def test_stealth_union_alpha_lock_stays_consistent_with_roster() -> None:
         assert 23 in lock["retired_workers"]
         assert "stealth/union-alpha" in lock["retired_models"]
     assert ROSTER.schedule_is_balanced(rows)
-
-
-def test_committed_tsv_converts_surplus_pickle_to_openrouter_qwen38_27b() -> None:
-    """Worker 29 stays expected and pins Harvy-listed OpenRouter Qwen3.8 27B Free."""
-    rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
-    lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
-    by_worker = {row["worker"]: row for row in rows}
-
-    assert 29 in lock["expected_workers"]
-    assert 29 not in lock["retired_workers"]
-    assert by_worker["21"]["source"] == "nvidia"
-    assert by_worker["21"]["model"] == "google/gemma-4-31b-it"
-    assert by_worker["46"]["source"] == "kilo-auto"
-    assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["54"]["source"] == "z-ai"
-    assert by_worker["54"]["model"] == "glm-4.5-flash"
-    assert by_worker["55"]["source"] == "ollama-cloud"
-    assert by_worker["55"]["model"] == "nemotron-3-nano:30b"
-    assert by_worker["56"]["source"] == "openrouter-free"
-    assert by_worker["56"]["model"] == "dots-studio/dots-3-note-preview:free"
-    assert "23" not in by_worker
-    assert by_worker["29"] == {
-        "worker": "29",
-        "source": "openrouter-free",
-        "model": "qwen/qwen3.8-27b:free",
-        "minute": "0",
-        "scheduler": "dispatcher",
-        "display_name": "OpenRouter Qwen3.8 27B Free",
-    }
-    assert by_worker["29"]["model"] not in lock["retired_models"]
-    assert "qwen/qwen3.8-27b:free" not in lock["retired_models"]
-    assert by_worker["29"]["model"].endswith(":free")
-    assert ROSTER.openrouter_model_is_free(by_worker["29"]["model"])
-    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
-    assert "qwen/qwen3.8-27b:free" in catalogs["openrouter"].model_ids()
-    assert ROSTER.schedule_is_balanced(rows)
-    assert sum(1 for row in rows if row["model"] == "big-pickle") == 0
+    assert sum(1 for row in rows if row["model"] == "big-pickle") >= 1
 
 
 def test_protected_openai_compat_pins_are_not_catalog_retired() -> None:

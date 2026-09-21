@@ -58,7 +58,6 @@ function issueResult(threadId: number): IssueListResponse {
       id: threadId,
       thread_id: threadId,
       issue_number: threadId === 1 ? 'Saga 1' : 'Monstress 1',
-      position: 1,
       status: 'unread',
       read_at: null,
       created_at: 'now',

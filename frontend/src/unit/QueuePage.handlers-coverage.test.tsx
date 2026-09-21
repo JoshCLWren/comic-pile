@@ -18,8 +18,7 @@ vi.mock('../services/api', () => ({ threadsApi: { setPending: vi.fn() }, depende
 vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 vi.mock('../services/api-issues', () => ({ issuesApi: { create: vi.fn(), markRead: vi.fn(), bulkMarkRead: vi.fn(), bulkMarkUnread: vi.fn(), migrateThread: vi.fn() } }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: () => ({ setRestoreAction: vi.fn(), clearRestoreAction: vi.fn() }) }))
-const showToast = vi.fn()
-vi.mock('../contexts/useToast', () => ({ useToast: vi.fn(() => ({ showToast, removeToast: vi.fn(), toasts: [] })) }))
+vi.mock('../contexts/useToast', () => ({ useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }) }))
 type CardProps = Record<string, string | (() => void) | ((event: unknown) => void)>
 // SAFETY: mock component receives the exact QueueThreadCard prop callbacks; non-sugar casts expose the minimal callable contract exercised by the tests.
 vi.mock('../pages/QueuePage/QueueThreadCard', () => ({ default: (props: CardProps) => <article><button onClick={props.onCardClick as () => void}>card callback</button><button onClick={() => (props.onDragStart as (event: unknown) => void)({ dataTransfer: { effectAllowed: '', setData: vi.fn() } })}>drag start</button><button onClick={() => (props.onDragOver as (event: unknown) => void)({ preventDefault: vi.fn() })}>drag over</button><button onClick={() => (props.onDrop as (event: unknown) => void)({ preventDefault: vi.fn() })}>drop</button><button onClick={props.onDragEnd as () => void}>drag end</button><button onClick={props.onRead as () => void}>read callback</button><button onClick={props.onEdit as () => void}>edit callback</button><button onClick={props.onSnooze as () => void}>snooze callback</button><button onClick={props.onDelete as () => void}>delete callback</button><button onClick={props.onMoveToFront as () => void}>front callback</button><button onClick={props.onMoveToBack as () => void}>back callback</button><button onClick={props.onReposition as () => void}>reposition callback</button><button onClick={props.onEdit as () => void}>edit modal callback</button><button onClick={props.onDependencies as () => void}>dependencies callback</button></article> }))
@@ -126,7 +125,7 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getByText('front callback'))
     await user.click(screen.getByText('reposition callback'))
     await user.click(screen.getByText('invalid position'))
-    await waitFor(() => expect(showToast).toHaveBeenCalled())
+    await waitFor(() => expect(alert).toHaveBeenCalled())
     await user.click(screen.getByText('confirm position'))
     await user.click(screen.getByText('reposition callback'))
     await user.click(screen.getByText('cancel position'))
@@ -163,10 +162,10 @@ describe('QueuePage callback coverage', () => {
     await user.type(screen.getByLabelText('Title'), 'Complex')
     await user.type(screen.getByLabelText('Issues'), 'Annual 1, 3-4')
     await user.click(screen.getByRole('button', { name: /create series/i }))
-    await waitFor(() => expect(showToast).toHaveBeenCalledWith(expect.stringContaining('issue create failed'), 'error'))
+    await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('issue create failed')))
     mocks.mutate.mockRejectedValue(new Error('mutation failed'))
     await user.click(screen.getByText('snooze callback'))
-    await waitFor(() => expect(showToast).toHaveBeenCalled())
+    await waitFor(() => expect(alert).toHaveBeenCalled())
     await user.click(screen.getByText('delete callback'))
     expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /delete series/i }))
@@ -207,7 +206,7 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getByRole('button', { name: /migrate to issue tracking/i }))
     mocks.refetchSession.mockRejectedValueOnce(new Error('refresh failed'))
     await user.click(screen.getByText('complete migration'))
-    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Failed to refresh data. Please refresh the page.', 'error'))
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Failed to refresh data. Please refresh the page.'))
 
     await user.click(screen.getByRole('button', { name: /close modal/i }))
     await user.click(screen.getByText('edit modal callback'))
@@ -259,7 +258,7 @@ describe('QueuePage callback coverage', () => {
     await user.type(screen.getByLabelText('Issues'), '8-2')
     await user.click(screen.getByRole('button', { name: /create series/i }))
     await waitFor(() =>
-      expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Failed to create series'), 'error'),
+      expect(alert).toHaveBeenCalledWith(expect.stringContaining('Failed to create series')),
     )
     expect(mocks.mutate).not.toHaveBeenCalled()
   })
@@ -389,7 +388,7 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getByText('back callback'))
     await user.click(screen.getByRole('button', { name: 'Shuffle' }))
     await user.click(screen.getByText('drop'))
-    await waitFor(() => expect(showToast).toHaveBeenCalled())
+    await waitFor(() => expect(alert).toHaveBeenCalled())
   })
 
   it('uses snoozed and blocked card branches and reports blocked reads', async () => {
@@ -403,7 +402,7 @@ describe('QueuePage callback coverage', () => {
     vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValue({ blocking_reasons: [] })
     renderPage()
     await user.click(screen.getByText('read callback'))
-    expect(showToast).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'), 'error')
+    expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
     await user.click(screen.getByText('snooze callback'))
     expect(mocks.mutate).toHaveBeenCalled()
   })

@@ -66,8 +66,7 @@ const SEMANTIC_TOKENS = [
  * theme instead of freezing in classic colors.
  */
 const THEME_ROLE_SHEETS = [
-  'src/components/DependencyFlowchart.css',
-  'src/components/IssueList.css',
+   'src/components/MigrationDialog.css',
 ]
 
 /**

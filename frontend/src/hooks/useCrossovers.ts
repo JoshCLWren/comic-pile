@@ -9,8 +9,10 @@ import type { Issue, Thread, ThreadListResponse } from '../types'
 import { queryKeys } from '../query/queryKeys'
 import { invalidateAfterCrossoverMutation } from '../query/cacheEffects'
 
-async function fetchAllIssues(threadId: number): Promise<Issue[]> {
-  const issues: Issue[] = []
+type PositionedIssue = Issue & { position: number }
+
+async function fetchAllIssues(threadId: number): Promise<PositionedIssue[]> {
+  const issues: PositionedIssue[] = []
   const seenPageTokens = new Set<string>()
   let nextPageToken: string | null = null
 
@@ -20,7 +22,8 @@ async function fetchAllIssues(threadId: number): Promise<Issue[]> {
       params.page_token = nextPageToken
     }
     const data = await issuesApi.list(threadId, params)
-    const pageIssues = data.issues
+    // SAFETY: the issues endpoint returns position-ordered issues; the integer-position check below enforces the contract.
+    const pageIssues = data.issues as PositionedIssue[]
     if (pageIssues.some((issue) => !Number.isInteger(issue.position) || issue.position < 1)) {
       throw new Error('Comic issue order is unavailable for this series.')
     }

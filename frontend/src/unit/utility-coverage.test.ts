@@ -15,7 +15,7 @@ afterEach(() => vi.useRealTimers())
 import type { Dependency, Issue, Thread, FlowchartDependency } from '../types'
 
 const issue = (id: number, status: 'read' | 'unread' = 'unread'): Issue => ({
-  id, thread_id: 1, issue_number: String(id), position: id, status, read_at: status === 'read' ? '2024-01-01' : null, created_at: '2024-01-01',
+  id, thread_id: 1, issue_number: String(id), status, read_at: status === 'read' ? '2024-01-01' : null, created_at: '2024-01-01',
 })
 
 const thread = (id: number): Thread => ({

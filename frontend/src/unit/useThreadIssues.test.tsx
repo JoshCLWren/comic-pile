@@ -46,7 +46,6 @@ const mockedDepsApi = vi.mocked(issueDependenciesApi)
 function makeIssue(overrides: Partial<Issue> & { id: number; issue_number: string }): Issue {
   return {
     thread_id: 1,
-    position: 1,
     status: 'unread',
     read_at: null,
     created_at: new Date().toISOString(),

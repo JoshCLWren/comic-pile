@@ -21,7 +21,6 @@ import DeleteThreadDialog from './DeleteThreadDialog'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
-import { useToast } from '../../contexts/useToast'
 
 /**
  * Route entry for the Queue page. The component composes the focused
@@ -47,7 +46,6 @@ export default function QueuePage() {
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
-  const { showToast } = useToast()
   const reactivateMutation = useReactivateThread()
   const moveToPositionMutation = useMoveToPosition()
   const shuffleQueueMutation = useShuffleQueue()
@@ -125,7 +123,7 @@ export default function QueuePage() {
         targetPosition < 1 ||
         targetPosition > authoritativeActiveCount
       ) {
-        showToast('Invalid position specified. Please choose a valid position.', 'error')
+        window.alert('Invalid position specified. Please choose a valid position.')
         return
       }
       try {
@@ -136,10 +134,10 @@ export default function QueuePage() {
         modals.closeRepositionModal()
       } catch {
         modals.closeRepositionModal()
-        showToast('Failed to reposition thread. Please try again.', 'error')
+        window.alert('Failed to reposition thread. Please try again.')
       }
     },
-    [modals, moveToPositionMutation, authoritativeActiveCount, showToast],
+    [modals, moveToPositionMutation, authoritativeActiveCount],
   )
 
   const renderThreadCard = useCallback(

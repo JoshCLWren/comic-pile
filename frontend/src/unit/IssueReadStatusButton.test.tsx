@@ -68,7 +68,6 @@ const issue: Issue = {
   id: 11,
   thread_id: 7,
   issue_number: '2',
-  position: 2,
   status: 'unread',
   read_at: null,
   created_at: '2026-07-02T00:00:00Z',

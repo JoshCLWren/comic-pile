@@ -42,12 +42,8 @@ export function IssueReadStatusButton({
         issuesApi.get(issue.id),
         threadsApi.get(issue.thread_id),
       ])
-      const updatedStatus = updatedIssue.status
-      if (updatedStatus !== 'read' && updatedStatus !== 'unread') {
-        throw new Error(`Unexpected issue status from API: ${updatedStatus}`)
-      }
       const result: IssueReadStatusResult = {
-        status: updatedStatus,
+        status: updatedIssue.status,
         read_at: updatedIssue.read_at,
         issues_remaining: updatedThread.issues_remaining,
         next_unread_issue_id: updatedThread.next_unread_issue_id ?? null,
