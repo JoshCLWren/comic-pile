@@ -52,7 +52,7 @@ function seriesMetaText(series: ComicVineSeriesResult): string {
 
 function seriesAccessibleName(series: ComicVineSeriesResult): string {
   const parts = seriesMetaParts(series)
-  return parts.length > 0 ? `${series.name} — ${parts.join(', ')}` : series.name
+  return parts.length > 0 ? `${series.name} - ${parts.join(', ')}` : series.name
 }
 
 function isComicVineUrlLike(value: string): boolean {
