@@ -8,3 +8,5 @@ export function isDefinitiveAuthenticationFailure(error: unknown): boolean {
 
   return error.response?.status === 401
 }
+
+export { isDefinitiveAuthenticationFailure } from './authState'
