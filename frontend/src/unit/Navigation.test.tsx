@@ -8,6 +8,7 @@ import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { cast } from '../utils/cast'
 import * as api from '../services/api'
+import type { IdentityInboxItem } from '../services/api'
 
 vi.mock('../contexts/useToast', () => ({
   useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
@@ -266,7 +267,7 @@ test('renders all secondary nav links inline on a desktop viewport', async () =>
 })
 
 test('shows Identity Inbox in desktop navigation when total is greater than 0', async () => {
-  mockIdentityInboxList.mockResolvedValueOnce({ items: [{ mapping_id: 1 }], total: 1, offset: 0, limit: 1 })
+  mockIdentityInboxList.mockResolvedValueOnce({ items: [{ mapping_id: 1 } as unknown as IdentityInboxItem], total: 1, offset: 0, limit: 1 })
   renderWithAuth()
 
   await waitFor(() => {
@@ -286,7 +287,7 @@ test('hides Identity Inbox from desktop navigation when total is 0', async () =>
 })
 
 test('shows Identity Inbox in mobile More menu when total is greater than 0', async () => {
-  mockIdentityInboxList.mockResolvedValueOnce({ items: [{ mapping_id: 1 }], total: 1, offset: 0, limit: 1 })
+  mockIdentityInboxList.mockResolvedValueOnce({ items: [{ mapping_id: 1 } as unknown as IdentityInboxItem], total: 1, offset: 0, limit: 1 })
   renderWithAuth()
 
   await waitFor(() => {
