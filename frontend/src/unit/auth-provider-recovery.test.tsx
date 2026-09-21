@@ -5,9 +5,11 @@ import type { AuthContextValue } from '../App'
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
+  patch: vi.fn(),
   clearAccessToken: vi.fn(),
   setAccessToken: vi.fn(),
   getAccessToken: vi.fn<() => string | null>(),
+  readStoredAccessToken: vi.fn<() => string | null>(),
   refreshSession: vi.fn(),
   isSessionRefreshRejected: vi.fn(() => false),
 }))
@@ -16,6 +18,7 @@ vi.mock('../services/api', () => {
   const apiMock = {
     get: mocks.get,
     post: mocks.post,
+    patch: mocks.patch,
   }
   return {
     default: apiMock,
@@ -29,6 +32,7 @@ vi.mock('../services/api', () => {
     clearAccessToken: mocks.clearAccessToken,
     setAccessToken: mocks.setAccessToken,
     getAccessToken: mocks.getAccessToken,
+    readStoredAccessToken: mocks.readStoredAccessToken,
     refreshSession: mocks.refreshSession,
     isSessionRefreshRejected: mocks.isSessionRefreshRejected,
   }
@@ -76,9 +80,11 @@ describe('AuthProvider transient recovery', () => {
     auth = null
     mocks.get.mockReset()
     mocks.post.mockReset()
+    mocks.patch.mockReset()
     mocks.clearAccessToken.mockReset()
     mocks.setAccessToken.mockReset()
     mocks.getAccessToken.mockReset()
+    mocks.readStoredAccessToken.mockReset()
     mocks.refreshSession.mockReset()
     mocks.isSessionRefreshRejected.mockReset()
     mocks.getAccessToken.mockReturnValue('test-token')
