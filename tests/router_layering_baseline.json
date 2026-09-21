@@ -1,8 +1,6 @@
 {
   "dependency": ["execute-call", "query-import"],
   "dependency_group": ["execute-call", "query-import"],
-  "dependency_group_batch": ["execute-call", "query-import"],
-  "issue_dependency_batch": ["execute-call", "query-import"],
   "roll": ["execute-call", "query-import"],
   "session": ["execute-call", "query-import"],
   "undo": ["execute-call", "query-import"]
