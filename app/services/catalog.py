@@ -787,14 +787,17 @@ def _is_conflicting_mapping(issue_info: dict, provider: str, series_external_id:
 
 def _is_ambiguous(issue_number: str) -> bool:
     """Check if issue number is ambiguous."""
-    # Patterns that indicate ambiguity
+    # Fractional, roman, suffixed, or named numbering is never bulk-safe.
     ambiguous_patterns = [
-        r'\d+\.\d+',  # Fractional numbers (e.g., "1.5")
-        r'^[ivx]+$',  # Roman numerals
-        r'^[a-z]+$',  # Letters only
-        r'\.\d+$',   # Decimal suffixes
+        r"\d+\.\d+",  # Fractional numbers (e.g., "1.5", "0.5")
+        r"^[ivx]+$",  # Roman numerals
+        r"^[a-z]+$",  # Letters only
+        r"\.\d+$",  # Decimal suffixes
+        r"\d+[a-zA-Z]",  # Named variants like "1A", "2B"
+        r"\d+\s*-\s*\d+",  # Ranges like "1-2"
+        r"#",  # Hash-prefixed like "#1"
     ]
-    
+
     issue_number_lower = issue_number.lower()
     for pattern in ambiguous_patterns:
         if re.search(pattern, issue_number_lower):
