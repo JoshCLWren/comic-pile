@@ -17,7 +17,11 @@ function makeSessionApi() {
 
 const sessionApi = makeSessionApi()
 const invalidateAfterSessionModeUpdate = vi.fn()
-const cacheEffects = { invalidateAfterSessionModeUpdate }
+const cacheEffects = {
+  applyRatedThreadCache: vi.fn(),
+  invalidateCurrentSessionAfterSnooze: vi.fn(),
+  invalidateAfterSessionModeUpdate,
+}
 const deps = { sessionApi, cacheEffects }
 
 const modeResponse: SessionModeResponse = {
@@ -35,8 +39,8 @@ const modeResponse: SessionModeResponse = {
 }
 
 const modePatch: SessionModeUpdateRequest = {
-  bandwidth: 'comic',
-  intent: 'browsing',
+  bandwidth: 'balanced',
+  intent: 'explore',
 }
 
 function renderSessionMode() {
