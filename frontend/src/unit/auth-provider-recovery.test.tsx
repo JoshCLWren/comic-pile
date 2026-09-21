@@ -12,17 +12,27 @@ const mocks = vi.hoisted(() => ({
   isSessionRefreshRejected: vi.fn(() => false),
 }))
 
-vi.mock('../services/api', () => ({
-  default: {
+vi.mock('../services/api', () => {
+  const apiMock = {
     get: mocks.get,
     post: mocks.post,
-  },
-  clearAccessToken: mocks.clearAccessToken,
-  setAccessToken: mocks.setAccessToken,
-  getAccessToken: mocks.getAccessToken,
-  refreshSession: mocks.refreshSession,
-  isSessionRefreshRejected: mocks.isSessionRefreshRejected,
-}))
+  }
+  return {
+    default: apiMock,
+    api: apiMock,
+    preferencesApi: {
+      get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
+        apiMock.get('/v1/users/me/preferences', options),
+      patch: (data: { theme?: string | null }) =>
+        apiMock.patch('/v1/users/me/preferences', data),
+    },
+    clearAccessToken: mocks.clearAccessToken,
+    setAccessToken: mocks.setAccessToken,
+    getAccessToken: mocks.getAccessToken,
+    refreshSession: mocks.refreshSession,
+    isSessionRefreshRejected: mocks.isSessionRefreshRejected,
+  }
+})
 
 import { PreferencesSync } from '../hooks/usePreferences'
 import { AuthProvider, useAuth } from '../App'
@@ -55,6 +65,12 @@ function axiosError(status: number): Error & { isAxiosError: true; response: { s
   })
 }
 
+const PREFERENCES_CONFIG = { timeout: 15000, skipAuthRedirect: true }
+
+async function waitForPreferencesFetch() {
+  await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/v1/users/me/preferences', PREFERENCES_CONFIG))
+}
+
 describe('AuthProvider transient recovery', () => {
   beforeEach(() => {
     auth = null
@@ -79,6 +95,7 @@ describe('AuthProvider transient recovery', () => {
     mocks.get
       .mockRejectedValueOnce(new Error('network timeout'))
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
 
     renderProvider()
     await act(async () => {
@@ -101,16 +118,16 @@ describe('AuthProvider transient recovery', () => {
       timeout: 15000,
       skipAuthRedirect: true,
     })
-    expect(mocks.get).toHaveBeenNthCalledWith(3, '/v1/users/me/preferences', {
-      timeout: 15000,
-      skipAuthRedirect: true,
-    })
+    await waitForPreferencesFetch()
   })
 
   it('logs out when explicit recovery proves the persistent session is invalid', async () => {
-    mocks.get.mockResolvedValue({ username: 'reader', email: 'reader@example.com' })
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     renderProvider()
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitForPreferencesFetch()
 
     mocks.refreshSession.mockRejectedValueOnce(axiosError(401))
     await act(async () => {
@@ -122,9 +139,12 @@ describe('AuthProvider transient recovery', () => {
   })
 
   it('preserves authenticated state when explicit recovery hits a transient server failure', async () => {
-    mocks.get.mockResolvedValue({ username: 'reader', email: 'reader@example.com' })
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     renderProvider()
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitForPreferencesFetch()
 
     mocks.refreshSession.mockRejectedValueOnce(axiosError(503))
     await act(async () => {
@@ -140,10 +160,12 @@ describe('AuthProvider transient recovery', () => {
     mocks.get
       .mockRejectedValueOnce(axiosError(401))
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     mocks.refreshSession.mockResolvedValueOnce('new-token')
 
     renderProvider()
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitForPreferencesFetch()
 
     expect(auth?.isLoading).toBe(false)
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
@@ -175,13 +197,18 @@ describe('AuthProvider transient recovery', () => {
   })
 
   it('revalidates silently before logging the user out on resume', async () => {
-    mocks.get.mockResolvedValue({ username: 'reader', email: 'reader@example.com' })
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     renderProvider()
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitForPreferencesFetch()
 
     mocks.get.mockRejectedValueOnce(axiosError(401))
     mocks.refreshSession.mockResolvedValueOnce('new-token')
-    mocks.get.mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+    mocks.get
+      .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
+      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
 
     await act(async () => {
       await auth!.revalidateSession(15000)

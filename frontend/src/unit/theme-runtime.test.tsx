@@ -37,19 +37,29 @@ const mocks = vi.hoisted(() => ({
   isSessionRefreshRejected: vi.fn(() => false),
 }))
 
-vi.mock('../services/api', () => ({
-  default: {
+vi.mock('../services/api', () => {
+  const apiMock = {
     get: mocks.get,
     post: mocks.post,
     patch: mocks.patch,
-  },
-  clearAccessToken: mocks.clearAccessToken,
-  setAccessToken: mocks.setAccessToken,
-  getAccessToken: mocks.getAccessToken,
-  readStoredAccessToken: mocks.readStoredAccessToken,
-  refreshSession: mocks.refreshSession,
-  isSessionRefreshRejected: mocks.isSessionRefreshRejected,
-}))
+  }
+  return {
+    default: apiMock,
+    api: apiMock,
+    preferencesApi: {
+      get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
+        apiMock.get('/v1/users/me/preferences', options),
+      patch: (data: { theme?: string | null }) =>
+        apiMock.patch('/v1/users/me/preferences', data),
+    },
+    clearAccessToken: mocks.clearAccessToken,
+    setAccessToken: mocks.setAccessToken,
+    getAccessToken: mocks.getAccessToken,
+    readStoredAccessToken: mocks.readStoredAccessToken,
+    refreshSession: mocks.refreshSession,
+    isSessionRefreshRejected: mocks.isSessionRefreshRejected,
+  }
+})
 
 let auth: AuthContextValue | null = null
 
@@ -131,6 +141,11 @@ function resetApiMocks() {
   mocks.isSessionRefreshRejected.mockReturnValue(false)
 }
 
+async function waitForPreferencesApplied() {
+  await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/v1/users/me/preferences', PREFERENCES_CONFIG))
+  await waitFor(() => expect(queryClient.getQueryState(['preferences', 'detail'])?.status).toBe('success'))
+}
+
 describe('semantic theme runtime bootstrap', () => {
   beforeEach(() => {
     auth = null
@@ -148,6 +163,7 @@ describe('semantic theme runtime bootstrap', () => {
     renderProvider()
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitForPreferencesApplied()
     expect(document.documentElement).toHaveAttribute('data-theme', 'classic')
   })
 
@@ -156,6 +172,7 @@ describe('semantic theme runtime bootstrap', () => {
     renderProvider()
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitForPreferencesApplied()
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
   })
 
@@ -164,6 +181,7 @@ describe('semantic theme runtime bootstrap', () => {
     renderProvider()
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitForPreferencesApplied()
     expect(document.documentElement).toHaveAttribute('data-theme', 'classic')
   })
 
@@ -174,8 +192,8 @@ describe('semantic theme runtime bootstrap', () => {
     renderProvider()
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/v1/users/me/preferences', PREFERENCES_CONFIG))
     expect(document.documentElement).toHaveAttribute('data-theme', 'classic')
-    expect(mocks.get).toHaveBeenNthCalledWith(2, '/v1/users/me/preferences', PREFERENCES_CONFIG)
   })
 
   it('keeps the locally stored theme when the preference fetch fails with a 503-style outage', async () => {
@@ -186,6 +204,7 @@ describe('semantic theme runtime bootstrap', () => {
     renderProvider()
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/v1/users/me/preferences', PREFERENCES_CONFIG))
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
   })
 
@@ -197,6 +216,7 @@ describe('semantic theme runtime bootstrap', () => {
     renderProvider()
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitForPreferencesApplied()
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
   })
 
@@ -208,6 +228,7 @@ describe('semantic theme runtime bootstrap', () => {
     renderProvider()
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/v1/users/me/preferences', PREFERENCES_CONFIG))
     expect(document.documentElement).toHaveAttribute('data-theme', 'command-center')
   })
 
@@ -232,6 +253,7 @@ describe('semantic theme runtime bootstrap', () => {
     await act(async () => {
       resolvePreferences?.({ theme: 'classic', user_id: 1 })
     })
+    await waitForPreferencesApplied()
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
   })
 
@@ -240,6 +262,7 @@ describe('semantic theme runtime bootstrap', () => {
     renderProvider()
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitForPreferencesApplied()
     expect(mocks.get).toHaveBeenNthCalledWith(1, '/v1/auth/me', AUTH_ME_CONFIG)
     expect(mocks.get).toHaveBeenNthCalledWith(2, '/v1/users/me/preferences', PREFERENCES_CONFIG)
     expect(document.documentElement).toHaveAttribute('data-theme', 'command-center')
@@ -254,7 +277,8 @@ describe('semantic theme runtime bootstrap', () => {
     renderProvider()
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
-    await waitFor(() => expect(document.documentElement).toHaveAttribute('data-theme', 'command-center'))
+    await waitForPreferencesApplied()
+    expect(document.documentElement).toHaveAttribute('data-theme', 'command-center')
     expect(mocks.get).toHaveBeenNthCalledWith(3, '/v1/users/me/preferences', PREFERENCES_CONFIG)
   })
 
@@ -273,7 +297,8 @@ describe('semantic theme runtime bootstrap', () => {
       await auth!.login('fresh-token')
     })
 
-    await waitFor(() => expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold'))
+    await waitForPreferencesApplied()
+    expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
     expect(mocks.get).toHaveBeenNthCalledWith(3, '/v1/users/me/preferences', PREFERENCES_CONFIG)
   })
 })
@@ -306,6 +331,7 @@ describe('Appearance picker in the More tray', () => {
     renderNavigation()
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: /more pages/i }))
+    await waitForPreferencesApplied()
     return user
   }
 
@@ -401,6 +427,7 @@ describe('Appearance picker in the More tray', () => {
     renderProvider()
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/v1/users/me/preferences', PREFERENCES_CONFIG))
     expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold')
   })
 

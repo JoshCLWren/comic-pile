@@ -1,8 +1,9 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
-import { AuthProvider } from '../App'
+import { AuthProvider, useAuth } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
@@ -13,6 +14,8 @@ import {
   resetThemePreferenceSyncForTests,
   setThemePreferenceRetryDelaysForTests,
 } from '../services/themePreferenceSync'
+import { PreferencesSync } from '../hooks/usePreferences'
+import { queryClient } from '../query/queryClient'
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -24,19 +27,29 @@ const mocks = vi.hoisted(() => ({
   readStoredAccessToken: vi.fn<() => string | null>(),
 }))
 
-vi.mock('../services/api', () => ({
-  default: {
+vi.mock('../services/api', () => {
+  const apiMock = {
     get: mocks.get,
     post: mocks.post,
     patch: mocks.patch,
-  },
-  clearAccessToken: mocks.clearAccessToken,
-  setAccessToken: mocks.setAccessToken,
-  getAccessToken: mocks.getAccessToken,
-  readStoredAccessToken: mocks.readStoredAccessToken,
-  refreshSession: vi.fn(),
-  isSessionRefreshRejected: () => false,
-}))
+  }
+  return {
+    default: apiMock,
+    api: apiMock,
+    preferencesApi: {
+      get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
+        apiMock.get('/v1/users/me/preferences', options),
+      patch: (data: { theme?: string | null }) =>
+        apiMock.patch('/v1/users/me/preferences', data),
+    },
+    clearAccessToken: mocks.clearAccessToken,
+    setAccessToken: mocks.setAccessToken,
+    getAccessToken: mocks.getAccessToken,
+    readStoredAccessToken: mocks.readStoredAccessToken,
+    refreshSession: vi.fn(),
+    isSessionRefreshRejected: () => false,
+  }
+})
 
 function axiosError(status: number): Error & { isAxiosError: true; response: { status: number } } {
   return Object.assign(new Error(`HTTP ${status}`), {
@@ -59,20 +72,35 @@ function setViewport(width: number) {
   window.dispatchEvent(new Event('resize'))
 }
 
+const PREFERENCES_CONFIG = { timeout: 15000, skipAuthRedirect: true }
+
+async function waitForPreferencesApplied() {
+  await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/v1/users/me/preferences', PREFERENCES_CONFIG))
+  await waitFor(() => expect(queryClient.getQueryState(['preferences', 'detail'])?.status).toBe('success'))
+}
+
 function renderNavigation() {
   return render(
-    <MemoryRouter initialEntries={['/']}>
-      <AuthProvider>
-        <BugReportRestoreProvider>
-          <ToastProvider>
-            <NavCollapseProvider>
-              <Navigation onBugReportSubmit={vi.fn()} />
-            </NavCollapseProvider>
-          </ToastProvider>
-        </BugReportRestoreProvider>
-      </AuthProvider>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/']}>
+        <AuthProvider>
+          <BugReportRestoreProvider>
+            <ToastProvider>
+              <NavCollapseProvider>
+                <Navigation onBugReportSubmit={vi.fn()} />
+                <PreferencesSyncConsumer />
+              </NavCollapseProvider>
+            </ToastProvider>
+          </BugReportRestoreProvider>
+        </AuthProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
+}
+
+function PreferencesSyncConsumer() {
+  const { isAuthenticated } = useAuth()
+  return <PreferencesSync isAuthenticated={isAuthenticated} />
 }
 
 describe('desktop appearance picker (issue #1792)', () => {
@@ -125,6 +153,7 @@ describe('desktop appearance picker (issue #1792)', () => {
   it('switches themes immediately and persists through the preferences contract', async () => {
     const user = userEvent.setup()
     renderNavigation()
+    await waitForPreferencesApplied()
 
     await user.click(await screen.findByRole('button', { name: 'Ink Gold theme' }))
 
@@ -141,6 +170,7 @@ describe('desktop appearance picker (issue #1792)', () => {
     mocks.patch.mockRejectedValueOnce(axiosError(503))
     const user = userEvent.setup()
     renderNavigation()
+    await waitForPreferencesApplied()
 
     await user.click(await screen.findByRole('button', { name: 'Command Center theme' }))
 
@@ -155,6 +185,7 @@ describe('desktop appearance picker (issue #1792)', () => {
     mocks.patch.mockRejectedValue(axiosError(503))
     const user = userEvent.setup()
     renderNavigation()
+    await waitForPreferencesApplied()
 
     await user.click(await screen.findByRole('button', { name: 'Command Center theme' }))
     await waitFor(() => expect(mocks.patch).toHaveBeenCalledTimes(3))
@@ -163,7 +194,6 @@ describe('desktop appearance picker (issue #1792)', () => {
     await waitFor(() => expect(mocks.patch.mock.calls.length).toBeGreaterThanOrEqual(4))
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
 
-    // Let any further retries from the second selection exhaust as well.
     await waitFor(() => expect(mocks.patch.mock.calls.length).toBeGreaterThanOrEqual(6))
     expect(screen.getAllByRole('alert')).toHaveLength(1)
     expect(screen.getByRole('alert')).toHaveTextContent(/saving your preference failed/i)
@@ -177,6 +207,7 @@ describe('desktop appearance picker (issue #1792)', () => {
       .mockResolvedValueOnce({ theme: 'ink-gold', user_id: 1 })
 
     renderNavigation()
+    await waitForPreferencesApplied()
 
     await waitFor(() =>
       expect(document.documentElement).toHaveAttribute('data-theme', 'ink-gold'),
@@ -206,6 +237,7 @@ describe('mobile More tray keeps the theme selector (issue #1792)', () => {
   it('offers every theme inside the More tray on mobile', async () => {
     const user = userEvent.setup()
     renderNavigation()
+    await waitForPreferencesApplied()
 
     await user.click(await screen.findByRole('button', { name: /more pages/i }))
 
