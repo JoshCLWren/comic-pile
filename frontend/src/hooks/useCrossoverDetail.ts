@@ -5,7 +5,7 @@ import {
   type DependencyGroupSummary,
   type DependencyGroupMember,
 } from '../services/api-dependency-groups'
-import { Thread, Issue } from '../types'
+import type { Thread, Issue } from '../types'
 import { queryKeys } from '../query/queryKeys'
 import { getApiErrorDetail } from '../utils/apiError'
 
@@ -42,7 +42,7 @@ export function useCrossoverDetail(
     enabled: !!validId,
     retry: false,
   })
-  const error = err ? getApiErrorDetail(err as Error) : null
+  const error = err ? getApiErrorDetail(err) : null
   const crossover = data
     ? {
         id: data.id,
