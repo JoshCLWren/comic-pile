@@ -238,6 +238,7 @@ export default function QueuePage() {
           isSearching={isSearching}
           sentinelRef={sentinelRef}
           hasNextPage={!!nextPageToken}
+          onAddSeries={modals.showCreateModal}
         />
 
         <CompletedThreadsSection
