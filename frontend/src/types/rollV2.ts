@@ -80,6 +80,15 @@ export interface RollV2LastRead {
   read_at?: string | null
 }
 
+/** Session bandwidth state carried by bootstrap responses. */
+export interface RollV2BandwidthState {
+  predicted_bandwidth: string | null
+  active_bandwidth: string | null
+  confidence: number | null
+  source: string | null
+  mode_version: string | null
+}
+
 /**
  * V2 bootstrap superset. Every v1 session/recovery/partition field keeps its
  * semantics; `roll_pool` is replaced by `rollable` and `last_read` is added.
@@ -94,6 +103,7 @@ export interface RollV2BootstrapResponse {
   session_mode: SessionMode
   active_thread: SessionThread | null
   roll_recovery?: RollRecoveryInfo | null
+  bandwidth: RollV2BandwidthState
   rollable: RollV2Item[]
   last_read: RollV2LastRead | null
   snoozed_threads: RollV2Thread[]
