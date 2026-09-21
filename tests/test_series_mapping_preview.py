@@ -3,6 +3,7 @@
 import pytest
 from httpx import AsyncClient
 from unittest.mock import patch, AsyncMock
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 
@@ -11,7 +12,7 @@ class TestSeriesMappingPreview:
     """Test cases for the series mapping preview endpoint."""
 
     @pytest.mark.asyncio
-    async def test_preview_series_mapping_available_scope(self, auth_client: AsyncClient, sample_data):
+    async def test_preview_series_mapping_available_scope(self, auth_client: AsyncClient, async_db: AsyncSession, sample_data):
         """Test preview with available scope (exact match found)."""
         # Create test data
         issue = sample_data["issue"]
@@ -24,8 +25,8 @@ class TestSeriesMappingPreview:
             external_url="https://comicvine.gamespot.com/issue/4000-12345/",
             metadata_json={"name": "Amazing Spider-Man #1", "issue_number": "1"},
         )
-        await auth_client.db.add(external_identity)
-        await auth_client.db.flush()
+        await async_db.add(external_identity)
+        await async_db.flush()
         
         # Create a confirmed mapping
         mapping = IssueExternalIdentityMapping(
@@ -35,8 +36,8 @@ class TestSeriesMappingPreview:
             evidence_source="test",
             confidence=1.0,
         )
-        await auth_client.db.add(mapping)
-        await auth_client.db.commit()
+        await async_db.add(mapping)
+        await async_db.commit()
         
         # Mock the ComicVine client to return series data
         with patch('app.services.catalog._get_comicvine_client') as mock_get_client:
@@ -300,7 +301,7 @@ class TestSeriesMappingPreview:
             assert len(normal_rows) > 0
 
     @pytest.mark.asyncio
-    async def test_preview_series_mapping_conflict_detection(self, auth_client: AsyncClient, sample_data):
+    async def test_preview_series_mapping_conflict_detection(self, auth_client: AsyncClient, async_db: AsyncSession, sample_data):
         """Test preview with conflict detection."""
         issue = sample_data["issue"]
         
@@ -312,8 +313,8 @@ class TestSeriesMappingPreview:
             external_url="https://comicvine.gamespot.com/issue/4000-99999/",
             metadata_json={"name": "Different Issue", "issue_number": "999"},
         )
-        await auth_client.db.add(conflicting_identity)
-        await auth_client.db.flush()
+        await async_db.add(conflicting_identity)
+        await async_db.flush()
         
         # Create a conflicting mapping
         conflicting_mapping = IssueExternalIdentityMapping(
@@ -323,8 +324,8 @@ class TestSeriesMappingPreview:
             evidence_source="test",
             confidence=0.8,
         )
-        await auth_client.db.add(conflicting_mapping)
-        await auth_client.db.commit()
+        await async_db.add(conflicting_mapping)
+        await async_db.commit()
         
         # Mock the ComicVine client
         with patch('app.services.catalog._get_comicvine_client') as mock_get_client:
