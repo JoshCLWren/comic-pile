@@ -139,3 +139,73 @@ async def test_search_series_tolerates_non_numeric_metadata() -> None:
     result = response.results[0]
     assert result.start_year is None
     assert result.issue_count is None
+
+
+@pytest.mark.asyncio
+async def test_search_series_passes_offset_and_reports_paging_metadata() -> None:
+    """Search uses ComicVine offset semantics and exposes a next page."""
+    client = FakeSearchClient(
+        payload={
+            "results": [
+                {"id": 100 + n, "name": f"Series {n}"} for n in range(10)
+            ],
+            "number_of_total_results": 27,
+        }
+    )
+
+    response = await search_comicvine_series(client, "Superman", limit=10, offset=10)
+
+    assert client.requests[0]["offset"] == 10
+    assert client.requests[0]["limit"] == 10
+    assert response.offset == 10
+    assert response.limit == 10
+    assert response.total_available == 27
+    assert response.has_more is True
+    assert response.next_offset == 20
+
+
+@pytest.mark.asyncio
+async def test_search_series_final_page_has_no_next_offset() -> None:
+    """When everything is loaded has_more is False and next_offset is None."""
+    client = FakeSearchClient(
+        payload={
+            "results": [{"id": 200 + n, "name": f"Series {n}"} for n in range(3)],
+            "number_of_total_results": 13,
+        }
+    )
+
+    response = await search_comicvine_series(client, "X-Men", limit=10, offset=10)
+
+    assert response.offset == 10
+    assert len(response.results) == 3
+    assert response.next_offset is None
+    assert response.has_more is False
+
+
+@pytest.mark.asyncio
+async def test_search_series_clamps_negative_offset_and_limit() -> None:
+    """Offsets and limits are clamped to the provider contract."""
+    client = FakeSearchClient(payload={"results": [], "number_of_total_results": 0})
+
+    response = await search_comicvine_series(client, "Spider-Man", limit=-5, offset=-3)
+
+    assert client.requests[0]["offset"] == 0
+    assert client.requests[0]["limit"] == 1
+    assert response.offset == 0
+    assert response.limit == 1
+
+
+@pytest.mark.asyncio
+async def test_search_series_without_metadata_does_not_claim_more_pages() -> None:
+    """Without a total count the provider cannot promise additional pages."""
+    client = FakeSearchClient(
+        payload={
+            "results": [{"id": 300 + n, "name": f"Series {n}"} for n in range(10)],
+        }
+    )
+
+    response = await search_comicvine_series(client, "Series", limit=10, offset=0)
+
+    assert response.total_available == 10
+    assert response.has_more is False
+    assert response.next_offset is None

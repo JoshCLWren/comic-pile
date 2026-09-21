@@ -4,6 +4,8 @@ import {
   comicVineApi,
   type ComicVineSeriesResult,
   type ComicVineIssueCandidate,
+  type ComicVineResolveResponse,
+  type ComicVineResolvedIssue,
 } from '../services/api'
 import ImageWithLoading from './ImageWithLoading'
 import { optimizedImageSrcSet, optimizedImageUrl } from '../services/imageDelivery'
@@ -20,6 +22,22 @@ interface ComicVineSearchDialogProps {
 
 type DialogStep = 'search' | 'select-issue' | 'confirm'
 
+interface SeriesPagination {
+  offset: number
+  limit: number
+  hasMore: boolean
+  nextOffset: number | null
+}
+
+const SEARCH_PAGE_SIZE = 10
+
+const EMPTY_PAGINATION: SeriesPagination = {
+  offset: 0,
+  limit: SEARCH_PAGE_SIZE,
+  hasMore: false,
+  nextOffset: null,
+}
+
 function seriesMetaParts(series: ComicVineSeriesResult): string[] {
   return [
     series.publisher,
@@ -34,7 +52,41 @@ function seriesMetaText(series: ComicVineSeriesResult): string {
 
 function seriesAccessibleName(series: ComicVineSeriesResult): string {
   const parts = seriesMetaParts(series)
-  return parts.length > 0 ? `${series.name} — ${parts.join(', ')}` : series.name
+  return parts.length > 0 ? `${series.name} - ${parts.join(', ')}` : series.name
+}
+
+function isComicVineUrlLike(value: string): boolean {
+  const trimmed = value.trim()
+  return /^https?:\/\//i.test(trimmed) || trimmed.includes('://')
+}
+
+function mergeSeriesResults(
+  previous: ComicVineSeriesResult[],
+  incoming: ComicVineSeriesResult[],
+): ComicVineSeriesResult[] {
+  const seen = new Set(previous.map((series) => series.comicvine_volume_id))
+  const merged = previous.slice()
+  for (const series of incoming) {
+    if (!seen.has(series.comicvine_volume_id)) {
+      seen.add(series.comicvine_volume_id)
+      merged.push(series)
+    }
+  }
+  return merged
+}
+
+function paginationFromResponse(response: {
+  offset: number
+  limit: number
+  has_more: boolean
+  next_offset: number | null
+}): SeriesPagination {
+  return {
+    offset: response.offset,
+    limit: response.limit,
+    hasMore: response.has_more,
+    nextOffset: response.next_offset,
+  }
 }
 
 export default function ComicVineSearchDialog({
@@ -52,12 +104,16 @@ export default function ComicVineSearchDialog({
   const [selectedSeries, setSelectedSeries] = useState<ComicVineSeriesResult | null>(null)
   const [issueCandidates, setIssueCandidates] = useState<ComicVineIssueCandidate[]>([])
   const [selectedIssue, setSelectedIssue] = useState<ComicVineIssueCandidate | null>(null)
+  const [directIssue, setDirectIssue] = useState<ComicVineResolvedIssue | null>(null)
+  const [pagination, setPagination] = useState<SeriesPagination>(EMPTY_PAGINATION)
   const [isSearching, setIsSearching] = useState(false)
   const [isConfirming, setIsConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const asyncRef = useRef(0)
+  const searchingRef = useRef(false)
 
   useEffect(() => {
     return () => {
@@ -78,6 +134,8 @@ export default function ComicVineSearchDialog({
       setSelectedSeries(null)
       setIssueCandidates([])
       setSelectedIssue(null)
+      setDirectIssue(null)
+      setPagination(EMPTY_PAGINATION)
       setError(null)
       setHasSearched(false)
     }
@@ -85,25 +143,126 @@ export default function ComicVineSearchDialog({
 
   const hasAutoSearchedRef = useRef(false)
 
-  const handleSearch = useCallback(async (searchQuery: string) => {
-    if (!searchQuery.trim()) {
-      setSeriesResults([])
-      setHasSearched(false)
-      return
-    }
-    setIsSearching(true)
-    setError(null)
-    setHasSearched(true)
-    try {
-      const response = await comicVineApi.searchSeries(searchQuery.trim(), 10)
-      setSeriesResults(response.results)
-    } catch {
-      setError('Failed to search ComicVine. Please try again.')
-      setSeriesResults([])
-    } finally {
-      setIsSearching(false)
-    }
-  }, [])
+  const handlePlainSearch = useCallback(
+    async (searchQuery: string, offset = 0, append = false) => {
+      const requestId = ++asyncRef.current
+      searchingRef.current = true
+      setIsSearching(true)
+      try {
+        const response = await comicVineApi.searchSeries(searchQuery, SEARCH_PAGE_SIZE, offset)
+        if (requestId !== asyncRef.current) return
+        setSeriesResults((previous) =>
+          append ? mergeSeriesResults(previous, response.results) : response.results,
+        )
+        setPagination(paginationFromResponse(response))
+      } catch {
+        if (requestId !== asyncRef.current) return
+        setError('Failed to search ComicVine. Please try again.')
+        setSeriesResults((previous) => (append ? previous : []))
+      } finally {
+        if (requestId === asyncRef.current) {
+          setIsSearching(false)
+          searchingRef.current = false
+        }
+      }
+    },
+    [],
+  )
+
+  const handleDirectResolution = useCallback(
+    (resolved: ComicVineResolveResponse) => {
+      if (resolved.validation_error) {
+        setSeriesResults([])
+        setPagination(EMPTY_PAGINATION)
+        setError(resolved.validation_error)
+        return
+      }
+      if (resolved.kind === 'issue') {
+        if (resolved.issue) {
+          setDirectIssue(resolved.issue)
+          setSelectedIssue(null)
+          setSelectedSeries(null)
+          setIssueCandidates([])
+          setStep('confirm')
+          return
+        } else {
+          setError('Failed to resolve ComicVine issue. Please try again.')
+          return
+        }
+      }
+      if (resolved.kind === 'volume') {
+        if (resolved.volume) {
+          setDirectIssue(null)
+          setSelectedIssue(null)
+          setSelectedSeries(resolved.volume)
+          setIssueCandidates(resolved.issues)
+          setStep('select-issue')
+          if (issueNumber) {
+            const normalizedIssueNumber = issueNumber.trim()
+            const match = resolved.issues.find(
+              (issue) => issue.issue_number?.trim() === normalizedIssueNumber,
+            )
+            if (match) {
+              setSelectedIssue(match)
+              setStep('confirm')
+            }
+          }
+          return
+        } else {
+          setError('Failed to resolve ComicVine volume. Please try again.')
+          return
+        }
+      }
+      if (resolved.kind === 'search') {
+        const remainingQuery = resolved.input.trim()
+        if (remainingQuery) {
+          handlePlainSearch(remainingQuery)
+        }
+      }
+    },
+    [handlePlainSearch, issueNumber],
+  )
+
+  const handleSearch = useCallback(
+    async (searchQuery: string, offset = 0, append = false) => {
+      if (!searchQuery.trim()) {
+        setSeriesResults([])
+        setHasSearched(false)
+        setPagination(EMPTY_PAGINATION)
+        return
+      }
+      const requestId = ++asyncRef.current
+      searchingRef.current = true
+      setIsSearching(true)
+      setError(null)
+      setHasSearched(true)
+      try {
+        const trimmed = searchQuery.trim()
+        if (isComicVineUrlLike(trimmed)) {
+          const resolved = await comicVineApi.resolveIdentity(trimmed)
+          if (requestId !== asyncRef.current) return
+          handleDirectResolution(resolved)
+          return
+        }
+        const response = await comicVineApi.searchSeries(trimmed, SEARCH_PAGE_SIZE, offset)
+        if (requestId !== asyncRef.current) return
+        setSeriesResults((previous) =>
+          append ? mergeSeriesResults(previous, response.results) : response.results
+        )
+        setPagination(paginationFromResponse(response))
+      } catch {
+        if (requestId !== asyncRef.current) return
+        setError('Failed to search ComicVine. Please try again.')
+        setSeriesResults((previous) => (append ? previous : []))
+      } finally {
+        if (requestId === asyncRef.current) {
+          setIsSearching(false)
+          searchingRef.current = false
+        }
+      }
+    },
+    [handleDirectResolution],
+  )
 
   useEffect(() => {
     if (isOpen && threadTitle.trim() && !hasAutoSearchedRef.current) {
@@ -115,73 +274,101 @@ export default function ComicVineSearchDialog({
     }
   }, [isOpen, threadTitle, handleSearch])
 
-  const handleQueryChange = useCallback((value: string) => {
-    setQuery(value)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (!value.trim()) {
-      setHasSearched(false)
-      setSeriesResults([])
-      return
-    }
-    debounceRef.current = setTimeout(() => handleSearch(value), 350)
-  }, [handleSearch])
+  const handleQueryChange = useCallback(
+    (value: string) => {
+      setQuery(value)
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      if (!value.trim()) {
+        setHasSearched(false)
+        setSeriesResults([])
+        setPagination(EMPTY_PAGINATION)
+        return
+      }
+      debounceRef.current = setTimeout(() => {
+        asyncRef.current += 1
+        handleSearch(value)
+      }, 350)
+    },
+    [handleSearch],
+  )
 
-  const handleSelectSeries = useCallback(async (series: ComicVineSeriesResult) => {
-    setSelectedSeries(series)
-    setStep('select-issue')
-    setIsSearching(true)
-    setError(null)
-    try {
-      const response = await comicVineApi.getSeriesIssues(series.comicvine_volume_id, series.name)
-      setIssueCandidates(response.issues)
-      if (issueNumber) {
-        const normalizedIssueNumber = issueNumber.trim()
-        const match = response.issues.find(
-          (issue) => issue.issue_number?.trim() === normalizedIssueNumber,
-        )
-        if (match) {
-          setSelectedIssue(match)
-          setStep('confirm')
+  const handleLoadMore = useCallback(() => {
+    if (!pagination.hasMore || pagination.nextOffset == null || searchingRef.current) return
+    handleSearch(query, pagination.nextOffset, true)
+  }, [pagination, query, handleSearch])
+
+  const handleSelectSeries = useCallback(
+    async (series: ComicVineSeriesResult) => {
+      setSelectedSeries(series)
+      setStep('select-issue')
+      setIsSearching(true)
+      setError(null)
+      const requestId = ++asyncRef.current
+      try {
+        const response = await comicVineApi.getSeriesIssues(series.comicvine_volume_id, series.name)
+        if (requestId !== asyncRef.current) return
+        setIssueCandidates(response.issues)
+        if (issueNumber) {
+          const normalizedIssueNumber = issueNumber.trim()
+          const match = response.issues.find(
+            (issue) => issue.issue_number?.trim() === normalizedIssueNumber,
+          )
+          if (match) {
+            setSelectedIssue(match)
+            setStep('confirm')
+          }
+        }
+      } catch {
+        if (requestId !== asyncRef.current) return
+        setError('Failed to load issues. Please try again.')
+        setIssueCandidates([])
+      } finally {
+        if (requestId === asyncRef.current) {
+          setIsSearching(false)
         }
       }
-    } catch {
-      setError('Failed to load issues. Please try again.')
-      setIssueCandidates([])
-    } finally {
-      setIsSearching(false)
-    }
-  }, [issueNumber])
+    },
+    [issueNumber],
+  )
 
   const handleSelectIssue = useCallback((issue: ComicVineIssueCandidate) => {
+    setDirectIssue(null)
     setSelectedIssue(issue)
     setStep('confirm')
   }, [])
 
   const handleConfirm = useCallback(async () => {
-    if (!issueId || !selectedIssue) return
+    const targetIssue = directIssue ?? selectedIssue
+    if (!issueId || !targetIssue) return
     setIsConfirming(true)
     setError(null)
     try {
       if (mode === 'replace') {
-        await comicVineApi.replaceIdentity(issueId, selectedIssue.comicvine_issue_id)
+        await comicVineApi.replaceIdentity(issueId, targetIssue.comicvine_issue_id)
       } else {
-        await comicVineApi.confirmIdentity(issueId, selectedIssue.comicvine_issue_id)
+        await comicVineApi.confirmIdentity(issueId, targetIssue.comicvine_issue_id)
       }
-      onConfirmed(selectedIssue)
+      onConfirmed(targetIssue)
       onClose()
     } catch {
       setError('Failed to confirm identity. Please try again.')
     } finally {
       setIsConfirming(false)
     }
-  }, [issueId, selectedIssue, mode, onConfirmed, onClose])
+  }, [issueId, directIssue, selectedIssue, mode, onConfirmed, onClose])
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && step === 'search' && query.trim()) {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      handleSearch(query)
-    }
-  }, [step, query, handleSearch])
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && step === 'search' && query.trim()) {
+        if (debounceRef.current) clearTimeout(debounceRef.current)
+        handleSearch(query)
+      }
+    },
+    [step, query, handleSearch],
+  )
+
+  const confirmSeriesName = directIssue?.series_name ?? selectedSeries?.name ?? threadTitle
+  const confirmIssue = directIssue ?? selectedIssue
 
   return (
     <Modal
@@ -213,7 +400,7 @@ export default function ComicVineSearchDialog({
                 value={query}
                 onChange={(e) => handleQueryChange(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Search series title..."
+                placeholder="Search series title or paste a ComicVine URL"
                 className="w-full min-h-11 rounded-xl px-4 pr-10 text-sm text-stone-100 bg-stone-800 border border-stone-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition"
               />
               {isSearching && (
@@ -222,6 +409,9 @@ export default function ComicVineSearchDialog({
                 </div>
               )}
             </div>
+            <p className="text-xs text-stone-500" data-testid="comicvine-resolve-hint">
+              You can also paste a ComicVine issue or volume URL (comicvine.gamespot.com) to skip searching.
+            </p>
             {seriesResults.length > 0 && (
               <div className="space-y-2 max-h-96 overflow-y-auto overscroll-contain">
                 {seriesResults.map((series) => (
@@ -253,6 +443,17 @@ export default function ComicVineSearchDialog({
                     </div>
                   </button>
                 ))}
+{pagination.hasMore && pagination.nextOffset !== null && (
+                   <button
+                     type="button"
+                     onClick={handleLoadMore}
+                     disabled={isSearching}
+                     data-testid="comicvine-load-more"
+                     className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/50 border border-stone-700/50 hover:border-amber-500/50 hover:bg-stone-800 transition disabled:opacity-50"
+                   >
+                     {isSearching ? 'Loading...' : 'Load more'}
+                   </button>
+                 )}
               </div>
             )}
             {!isSearching && !query.trim() && (
@@ -348,43 +549,50 @@ export default function ComicVineSearchDialog({
           </>
         )}
 
-        {step === 'confirm' && selectedIssue && selectedSeries && (
+        {step === 'confirm' && confirmIssue && (
           <>
             <button
               type="button"
               onClick={() => {
-                setStep('select-issue')
-                setSelectedIssue(null)
+                if (directIssue) {
+                  setDirectIssue(null)
+                  setStep('search')
+                } else {
+                  setStep('select-issue')
+                  setSelectedIssue(null)
+                }
               }}
               className="text-sm text-amber-500 hover:text-amber-400 font-bold"
             >
-              ← Back to issues
+              {directIssue ? '← Back to search' : '← Back to issues'}
             </button>
-            <div className="p-4 rounded-xl bg-stone-800/50 border border-stone-700/50 space-y-3">
+            <div className="p-4 rounded-xl bg-stone-800/50 border border-stone-700/50 space-y-3" data-testid="comicvine-confirm-card">
               <p className="text-xs font-black uppercase tracking-wider text-stone-400">Selected match</p>
               <div className="flex items-start gap-3">
-                {selectedIssue.image_url && (
+                {confirmIssue.image_url && (
                   <ImageWithLoading
-                    src={optimizedImageUrl(selectedIssue.image_url, 240) ?? selectedIssue.image_url}
-                    srcSet={optimizedImageSrcSet(selectedIssue.image_url, [96, 240]) ?? undefined}
+                    src={optimizedImageUrl(confirmIssue.image_url, 240) ?? confirmIssue.image_url}
+                    srcSet={optimizedImageSrcSet(confirmIssue.image_url, [96, 240]) ?? undefined}
                     sizes="64px"
                     alt=""
                     className="w-16 h-22 object-cover rounded-lg shrink-0"
                   />
                 )}
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-stone-100">{selectedSeries.name}</p>
+                  <p className="text-sm font-bold text-stone-100">{confirmSeriesName}</p>
                   <p className="text-sm text-stone-300">
-                    {selectedIssue.issue_number ? `#${selectedIssue.issue_number}` : ''}
-                    {selectedIssue.name && ` — ${selectedIssue.name}`}
+                    {confirmIssue.issue_number ? `#${confirmIssue.issue_number}` : ''}
+                    {confirmIssue.name && ` — ${confirmIssue.name}`}
                   </p>
-                  {selectedIssue.cover_date && (
-                    <p className="text-xs text-stone-400 mt-1">{selectedIssue.cover_date}</p>
+                  {confirmIssue.cover_date && (
+                    <p className="text-xs text-stone-400 mt-1">{confirmIssue.cover_date}</p>
                   )}
                 </div>
               </div>
               <p className="text-xs text-stone-400">
-                This will confirm <span className="text-stone-300">{threadTitle} #{issueNumber}</span> maps to this ComicVine issue.
+                {directIssue
+                  ? `You pasted the ComicVine URL for this issue. Confirming will map ${threadTitle} ${issueNumber ? `#${issueNumber}` : ''} to it.`
+                  : `This will confirm ${threadTitle} ${issueNumber ? `#${issueNumber}` : ''} maps to this ComicVine issue.`}
               </p>
             </div>
             <button
