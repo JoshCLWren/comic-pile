@@ -159,7 +159,7 @@ describe('ComicPillar confirmed mapping display', () => {
   it('never renders the raw ComicVine mapping ID as visible text', async () => {
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
 
-    expect(await screen.findByText('ComicVine linked')).toBeInTheDocument()
+    expect(await screen.findByText('Linked')).toBeInTheDocument()
     expect(screen.queryByText(/ComicVine #\d+/)).not.toBeInTheDocument()
     expect(screen.queryByText(/36956/)).not.toBeInTheDocument()
   })

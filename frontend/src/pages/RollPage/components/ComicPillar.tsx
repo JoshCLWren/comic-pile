@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import ComicVineSearchDialog from '../../../components/ComicVineSearchDialog'
 import { comicVineApi, type ComicVineIssueCandidate, type IssueIdentityResponse } from '../../../services/api'
@@ -10,6 +10,7 @@ import {
   applyComicVineCorrectionOptimistically,
   invalidateComicVineIssueIntelligence,
 } from '../../../query/cacheEffects'
+import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 
 interface ComicPillarProps {
   activeRatingThread: RatingThread | null
@@ -31,6 +32,19 @@ export function ComicPillar({
   const totalIssues = activeRatingThread?.total_issues ?? null
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const progress = getProgressPercentage(activeRatingThread)
+  const { metadata } = useComicVineIssueIntelligence(issueId)
+  const displayDate = useMemo(() => {
+    const raw = metadata?.store_date ?? metadata?.cover_date ?? null
+    if (!raw) return null
+    const [y, m, d] = raw.split('-').map(Number)
+    if (!y || !m || !d) return raw
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(Date.UTC(y, m - 1, d)))
+  }, [metadata?.store_date, metadata?.cover_date])
 
   const fetchIdentity = useCallback(async () => {
     if (!issueId) {
@@ -64,28 +78,58 @@ export function ComicPillar({
 
   return (
     <div className="w-full space-y-4">
-      <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: 'var(--theme-comic-accent)' }}>
-        <span className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-comic-accent)' }}>The Comic</span>
-      </div>
-      <section id="thread-info" aria-labelledby="selected-issue-heading" className="space-y-3">
-        <div className="rounded-2xl p-3 md:p-4" style={{ border: '1px solid rgba(212,137,14,0.2)', backgroundColor: 'var(--theme-bg-panel)' }}>
-          <div className="flex flex-wrap items-start justify-between gap-3" data-testid="comic-header-row">
-            <div className="min-w-[12rem] flex-1 basis-48 break-words" data-testid="comic-header-title">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
-                Selected issue
-              </p>
-              <h2 id="selected-issue-heading" className="mt-1 text-xl font-black leading-tight text-stone-100 break-words">
+      {/* Cover rail beside issue identity/details composition */}
+      <div className="flex flex-col lg:flex-row gap-4">
+        {/* Cover rail */}
+        <div className="flex-shrink-0 w-full lg:w-auto">
+          <ComicIdentity issueId={issueId} />
+        </div>
+
+        {/* Issue identity and details */}
+        <div className="flex-1 space-y-3" data-testid="comic-header-row">
+          {/* Provider eyebrow and title block */}
+          <div className="space-y-2">
+            {identityState?.has_confirmed_identity && identityState.comicvine_issue_id && (
+              <div className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-comic-accent)' }}>
+                COMICVINE #{identityState.comicvine_issue_id}
+              </div>
+            )}
+            <div className="flex flex-col gap-1">
+              <h2 data-testid="comic-header-title" className="text-xl font-black text-stone-100 leading-tight break-words">
                 {threadTitle}
                 {issueNumber != null ? <span style={{ color: 'var(--theme-comic-accent)' }}> #{issueNumber}</span> : null}
               </h2>
+              {(issueNumber != null || displayDate) && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-stone-500">
+                  {issueNumber != null && totalIssues != null && (
+                    <>
+                      <span>Issue {issueNumber} of {totalIssues}</span>
+                      <span aria-hidden="true">·</span>
+                    </>
+                  )}
+                  <span>{progress}% complete</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{issuesRemaining} left</span>
+                  {displayDate && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>{displayDate}</span>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
-            {issueNumber != null ? (
-              <div className="flex shrink-0 flex-wrap gap-1.5" data-testid="comic-header-controls">
+          </div>
+
+          {/* Compact identity/correction controls */}
+          {(issueNumber != null || (needsIdentity && issueId) || (identityState?.has_confirmed_identity && issueId)) && (
+            <div className="flex flex-wrap items-center gap-2" data-testid="comic-header-controls">
+              {issueNumber != null && (
                 <button
                   type="button"
                   onClick={() => setIsCorrectionDialogOpen(true)}
                   disabled={!activeRatingThread?.id}
-                  className="min-h-11 rounded-xl px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
+                  className="min-h-9 rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
                   style={{
                     border: '1px solid rgba(255,255,255,0.1)',
                     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -94,67 +138,43 @@ export function ComicPillar({
                 >
                   Fix issue #
                 </button>
-              </div>
-            ) : null}
-          </div>
+              )}
 
-          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-stone-500">
-            {totalIssues && issueNumber != null ? (
-              <span>Issue {issueNumber} of {totalIssues}</span>
-            ) : null}
-            {totalIssues && issueNumber != null ? <span aria-hidden="true">·</span> : null}
-            <span>{progress}% complete</span>
-            <span aria-hidden="true">·</span>
-            <span>{issuesRemaining} left</span>
-          </div>
+              {needsIdentity && issueId && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchMode('confirm'); setIsSearchDialogOpen(true) }}
+                  className="min-h-9 rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-900 bg-amber-500 hover:bg-amber-400 transition shrink-0"
+                >
+                  Find ComicVine match
+                </button>
+              )}
+
+              {identityState?.has_confirmed_identity && issueId && (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 rounded-full px-2 py-1 bg-green-500/10 border border-green-500/30">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                    <span className="text-[9px] font-bold text-green-400">Linked</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setSearchMode('replace'); setIsSearchDialogOpen(true) }}
+                    className="min-h-9 rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-400 hover:text-amber-400 transition shrink-0"
+                    style={{
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      backgroundColor: 'rgba(255,255,255,0.05)',
+                    }}
+                  >
+                    Wrong series?
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      </section>
+      </div>
 
-      {needsIdentity && issueId && (
-        <div
-          className="rounded-xl p-3 flex items-center justify-between gap-3"
-          style={{
-            border: '1px solid rgba(234,179,8,0.25)',
-            backgroundColor: 'rgba(234,179,8,0.06)',
-          }}
-        >
-          <p className="text-xs text-amber-300/90 font-bold">
-            No ComicVine identity linked
-          </p>
-          <button
-            type="button"
-            onClick={() => { setSearchMode('confirm'); setIsSearchDialogOpen(true) }}
-            className="min-h-9 rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-900 bg-amber-500 hover:bg-amber-400 transition shrink-0"
-          >
-            Find ComicVine match
-          </button>
-        </div>
-      )}
-
-      {identityState?.has_confirmed_identity && issueId && (
-        <div
-          className="rounded-xl p-3 flex items-center justify-between gap-3"
-          style={{
-            border: '1px solid rgba(255,255,255,0.08)',
-            backgroundColor: 'rgba(255,255,255,0.03)',
-          }}
-        >
-          <p className="text-[10px] text-stone-500 font-bold">ComicVine linked</p>
-          <button
-            type="button"
-            onClick={() => { setSearchMode('replace'); setIsSearchDialogOpen(true) }}
-            className="min-h-9 rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-400 hover:text-amber-400 transition shrink-0"
-            style={{
-              border: '1px solid rgba(255,255,255,0.1)',
-              backgroundColor: 'rgba(255,255,255,0.05)',
-            }}
-          >
-            Wrong series?
-          </button>
-        </div>
-      )}
-
-      <ComicIdentity issueId={issueId} />
+      {/* Rich content continues in ComicIdentity component */}
 
       {activeRatingThread ? (
         <IssueCorrectionDialog

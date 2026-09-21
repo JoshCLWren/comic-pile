@@ -144,8 +144,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   return (
     <>
     <section
-      aria-labelledby={metadata.name ? 'comic-identity-heading' : undefined}
-      aria-label={metadata.name ? undefined : 'Comic details'}
+      aria-label={metadata.name || 'Comic details'}
       className="w-full space-y-4"
     >
       <div
@@ -174,28 +173,19 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
             onError={() => setFailedImageUrl(metadata.image_url)}
           />
         ) : (
-          <div data-testid="cover-placeholder" className="w-full h-full flex items-center justify-center text-stone-600" aria-hidden="true">
+          <div data-testid="cover-placeholder" className="w-full h-full flex items-center justify-center text-stone-600 flex-col gap-2" aria-hidden="true">
             <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 002 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
             </svg>
+            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">COMIC COVER</span>
           </div>
         )}
       </div>
 
       <div className="space-y-3">
-        <div className="flex flex-col gap-1">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-comic-accent)' }}>
-            {metadata.series_name ?? 'ComicVine'}{metadata.issue_number ? ` #${metadata.issue_number}` : ''}
-          </p>
-          {metadata.name && (
-            <h2 id="comic-identity-heading" className="text-lg font-bold text-stone-100 leading-tight">
-              {metadata.name}
-            </h2>
-          )}
-          {date && (
-            <p className="text-[11px] text-stone-500">{date}</p>
-          )}
-        </div>
+        {date && (
+          <p className="text-[11px] text-stone-500">{date}</p>
+        )}
 
         {metadata.description && (
           <details className="group space-y-2">

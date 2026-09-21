@@ -47,7 +47,7 @@ test.describe('Issue #2153: Queue Read Now handoff', () => {
     // The handoff must land on Roll in rating view for the chosen thread.
     await expect(page).toHaveURL(/\/$/)
     await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 15000 })
-    const heading = page.locator('#selected-issue-heading')
+    const heading = page.locator('[data-testid="comic-header-title"]')
     await expect(heading).toContainText(title)
     await expect(heading).toContainText('#1')
     await expect(page.locator(SELECTORS.roll.mainDie)).toHaveCount(0)

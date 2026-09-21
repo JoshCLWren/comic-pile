@@ -275,11 +275,13 @@ async def get_issue_identity_state(
         elif mapping.status == "unresolved":
             has_unresolved = True
 
+    comicvine_issue_id: str | None = confirmed[0].comicvine_id if confirmed else None
     return IssueIdentityResponse(
         issue_id=issue_id,
         thread_id=issue.thread_id,
         thread_title=thread.title if thread else "",
         has_confirmed_identity=len(confirmed) > 0,
+        comicvine_issue_id=comicvine_issue_id,
         confirmed_mappings=confirmed,
         candidate_mappings=candidates,
         has_unresolved=has_unresolved,

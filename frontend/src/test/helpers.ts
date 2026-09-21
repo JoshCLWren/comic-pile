@@ -499,7 +499,7 @@ export const SELECTORS = {
 		snoozeButton: 'button:has-text("Snooze")',
 	},
 	thread: {
-		title: '#thread-info h2',
+		title: '[data-testid="comic-header-title"]',
 	},
 	navigation: {
 		homeLink: 'a[href="/"]',

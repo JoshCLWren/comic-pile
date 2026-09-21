@@ -362,16 +362,17 @@ describe('RatingView desktop layout contract (#2711 revises #1943)', () => {
     expect(decisionCard!.className).not.toContain('xl:col-span-full')
   })
 
-  it('does not render Reading Context pillar when empty - rating form follows The Comic directly without removed surfaces', () => {
+  it('does not render Reading Context pillar when empty - rating form follows comic region directly without removed surfaces', () => {
     const { container } = render(ratingView())
     expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-context')).not.toBeInTheDocument()
     expect(screen.queryByText('Your Context')).not.toBeInTheDocument()
     const grid = container.querySelector('[data-testid="rating-pillars-grid"]')
     const text = grid!.textContent ?? ''
-    expect(text.indexOf('The Comic')).toBeGreaterThan(-1)
+    // Comic region (first column) contains the thread title "Saga"
+    expect(text.indexOf('Saga')).toBeGreaterThan(-1)
     expect(text.indexOf('Your rating')).toBeGreaterThan(-1)
-    expect(text.indexOf('The Comic')).toBeLessThan(text.indexOf('Your rating'))
+    expect(text.indexOf('Saga')).toBeLessThan(text.indexOf('Your rating'))
     expect(text).not.toMatch(/\b0[123]\b/)
     expect(text).not.toContain('Reading Context')
     expect(text).not.toContain('Reading Boundaries')

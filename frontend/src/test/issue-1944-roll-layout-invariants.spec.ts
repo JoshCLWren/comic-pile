@@ -256,7 +256,7 @@ async function readGeometry(page: Page): Promise<LayoutGeometry> {
         children.push({
           index,
           rect,
-          isComic: child.querySelector('[data-testid="comic-cover"], [data-testid="cover-placeholder"], #thread-info') !== null,
+          isComic: child.querySelector('[data-testid="comic-cover"], [data-testid="cover-placeholder"], [data-testid="comic-header-row"]') !== null,
           isReadingContext: text.includes('Reading Context'),
           isYourContext: text.includes('Your Context'),
           isActions: child.getAttribute('data-testid') === 'rating-actions-grid-cell',
