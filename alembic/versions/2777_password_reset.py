@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "2777_password_reset"
-down_revision: str | Sequence[str] | None = "g9h0i1j2k3l4"
+down_revision: str | Sequence[str] | None = "b1c2d3e4f5a6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
