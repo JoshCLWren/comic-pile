@@ -327,7 +327,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         showToast(`Failed to create series: ${getApiErrorDetail(error)}`, 'error')
       }
     },
-    [createForm, closeCreateModal, onCreated, submitCreate],
+    [createForm, closeCreateModal, onCreated, submitCreate, showToast],
   )
 
   const handleEditSubmit = useCallback(
@@ -380,13 +380,13 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         await refetchSession()
       } catch (error) {
         console.error('Failed to refresh data after migration:', error)
-        window.alert('Failed to refresh data. Please refresh the page.')
+        showToast('Failed to refresh data. Please refresh the page.', 'error')
       }
       setShowMigrationDialog(false)
       setThreadToMigrate(null)
       setEditingThread(migratedThread)
     },
-    [onUpdated, refetchSession],
+    [onUpdated, refetchSession, showToast],
   )
 
   const handleMigrationSkip = useCallback(() => {

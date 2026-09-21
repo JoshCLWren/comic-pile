@@ -54,8 +54,9 @@ vi.mock('../services/api-issues', () => ({
   },
 }))
 
+const showToast = vi.fn()
 vi.mock('../contexts/useToast', () => ({
-  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
+  useToast: vi.fn(() => ({ showToast, removeToast: vi.fn(), toasts: [] })),
 }))
 
 // SAFETY: vi.mocked returns mocked type; cast to any for flexible test stubs

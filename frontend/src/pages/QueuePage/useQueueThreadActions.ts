@@ -185,7 +185,7 @@ export function useQueueThreadActions(
           showToast('Failed to move series to front. Please try again.', 'error')
         })
     },
-    [moveToFrontMutation],
+    [moveToFrontMutation, showToast],
   )
 
   const handleMoveToBack = useCallback(
@@ -195,7 +195,7 @@ export function useQueueThreadActions(
           showToast('Failed to move series to back. Please try again.', 'error')
         })
     },
-    [moveToBackMutation],
+    [moveToBackMutation, showToast],
   )
 
   const handleReposition = useCallback(
@@ -210,7 +210,7 @@ export function useQueueThreadActions(
           showToast('Failed to reposition thread. Please try again.', 'error')
         })
     },
-    [moveToPositionMutation],
+    [moveToPositionMutation, showToast],
   )
 
   const handleShuffle = useCallback(async () => {
@@ -219,7 +219,7 @@ export function useQueueThreadActions(
     } catch {
       showToast('Failed to shuffle queue. Please try again.', 'error')
     }
-  }, [shuffleQueueMutation])
+  }, [shuffleQueueMutation, showToast])
 
   const handleThreadRead = useCallback(
     async (thread: Thread) => {
@@ -237,7 +237,7 @@ export function useQueueThreadActions(
         showToast(`Action failed: ${getApiErrorDetail(error)}`, 'error')
       }
     },
-    [navigateToRoll, setPending],
+    [navigateToRoll, setPending, showToast],
   )
 
   const handleSnoozeToggle = useCallback(
@@ -258,7 +258,7 @@ export function useQueueThreadActions(
         )
       }
     },
-    [snoozeMutation, unsnoozeMutation, refetchSession],
+    [snoozeMutation, unsnoozeMutation, refetchSession, showToast],
   )
 
   return {
