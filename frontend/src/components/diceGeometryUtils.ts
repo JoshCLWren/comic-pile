@@ -693,4 +693,3 @@ export function buildGeometry(sides: number, atlasInfo: DiceTextureAtlas): THREE
   }
 }
 
-
