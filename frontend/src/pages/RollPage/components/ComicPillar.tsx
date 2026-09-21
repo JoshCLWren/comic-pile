@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import ComicVineSearchDialog from '../../../components/ComicVineSearchDialog'
 import { comicVineApi, type ComicVineIssueCandidate, type IssueIdentityResponse } from '../../../services/api'
@@ -10,6 +10,7 @@ import {
   applyComicVineCorrectionOptimistically,
   invalidateComicVineIssueIntelligence,
 } from '../../../query/cacheEffects'
+import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 
 interface ComicPillarProps {
   activeRatingThread: RatingThread | null
@@ -31,6 +32,19 @@ export function ComicPillar({
   const totalIssues = activeRatingThread?.total_issues ?? null
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const progress = getProgressPercentage(activeRatingThread)
+  const { metadata } = useComicVineIssueIntelligence(issueId)
+  const displayDate = useMemo(() => {
+    const raw = metadata?.store_date ?? metadata?.cover_date ?? null
+    if (!raw) return null
+    const [y, m, d] = raw.split('-').map(Number)
+    if (!y || !m || !d) return raw
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(Date.UTC(y, m - 1, d)))
+  }, [metadata?.store_date, metadata?.cover_date])
 
   const fetchIdentity = useCallback(async () => {
     if (!issueId) {
@@ -85,35 +99,47 @@ export function ComicPillar({
                 {threadTitle}
                 {issueNumber != null ? <span style={{ color: 'var(--theme-comic-accent)' }}> #{issueNumber}</span> : null}
               </h2>
-              {issueNumber != null && totalIssues != null && (
+              {(issueNumber != null || displayDate) && (
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-stone-500">
-                  <span>Issue {issueNumber} of {totalIssues}</span>
-                  <span aria-hidden="true">·</span>
+                  {issueNumber != null && totalIssues != null && (
+                    <>
+                      <span>Issue {issueNumber} of {totalIssues}</span>
+                      <span aria-hidden="true">·</span>
+                    </>
+                  )}
                   <span>{progress}% complete</span>
                   <span aria-hidden="true">·</span>
                   <span>{issuesRemaining} left</span>
+                  {displayDate && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>{displayDate}</span>
+                    </>
+                  )}
                 </div>
               )}
             </div>
           </div>
 
           {/* Compact identity/correction controls */}
-          {issueNumber != null && (
+          {(issueNumber != null || (needsIdentity && issueId) || (identityState?.has_confirmed_identity && issueId)) && (
             <div className="flex flex-wrap items-center gap-2" data-testid="comic-header-controls">
-              <button
-                type="button"
-                onClick={() => setIsCorrectionDialogOpen(true)}
-                disabled={!activeRatingThread?.id}
-                className="min-h-9 rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
-                style={{
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  backgroundColor: 'rgba(255,255,255,0.05)',
-                }}
-                aria-label="Fix issue number"
-              >
-                Fix issue #
-              </button>
-              
+              {issueNumber != null && (
+                <button
+                  type="button"
+                  onClick={() => setIsCorrectionDialogOpen(true)}
+                  disabled={!activeRatingThread?.id}
+                  className="min-h-9 rounded-lg px-3 text-[10px] font-black uppercase tracking-wider text-stone-300 transition disabled:opacity-30"
+                  style={{
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    backgroundColor: 'rgba(255,255,255,0.05)',
+                  }}
+                  aria-label="Fix issue number"
+                >
+                  Fix issue #
+                </button>
+              )}
+
               {needsIdentity && issueId && (
                 <button
                   type="button"

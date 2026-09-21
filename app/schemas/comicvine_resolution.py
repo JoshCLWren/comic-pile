@@ -64,6 +64,7 @@ class IssueIdentityResponse(BaseModel):
     thread_id: int
     thread_title: str
     has_confirmed_identity: bool
+    comicvine_issue_id: str | None = None
     confirmed_mappings: list[IssueIdentityMapping]
     candidate_mappings: list[IssueIdentityMapping]
     has_unresolved: bool
