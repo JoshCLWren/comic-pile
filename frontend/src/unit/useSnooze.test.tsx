@@ -298,10 +298,9 @@ describe('snooze hooks', () => {
     expect(invalidateCurrentSessionAfterSnooze).not.toHaveBeenCalled()
   })
 
-  it('refreshes authoritative state when receiving "No pending thread to snooze"', async () => {
+  it('handles "No pending thread to snooze" error like other errors', async () => {
     const error = new Error('No pending thread to snooze. Please roll the dice first.')
     protectedRollMutationApi.snooze.mockRejectedValueOnce(error)
-    rollBootstrapApi.get.mockResolvedValue(bootstrapState(null))
 
     const snooze = renderSnooze()
     await act(async () => {
@@ -309,7 +308,7 @@ describe('snooze hooks', () => {
     })
 
     expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
-    expect(rollBootstrapApi.get).toHaveBeenCalledTimes(1)
+    expect(rollBootstrapApi.get).not.toHaveBeenCalled()
     expect(snooze.result.current.isError).toBe(true)
   })
 })
