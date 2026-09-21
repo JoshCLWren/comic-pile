@@ -9,7 +9,6 @@ from datetime import UTC, datetime, timedelta
 from fastapi import HTTPException, status
 
 from app.auth import hash_password
-from app.models.user import User
 from app.repositories.password_reset_token_repository import (
     create_token,
     delete_all_for_user,
@@ -18,6 +17,7 @@ from app.repositories.password_reset_token_repository import (
 )
 from app.repositories.session_repository import delete_all_sessions_for_user
 from app.repositories.user_repository import get_user_by_email, get_user_by_id
+from sqlalchemy.ext.asyncio import AsyncSession
 
 TOKEN_EXPIRY_MINUTES = 30
 
@@ -51,6 +51,9 @@ async def request_forgot_password(
     user = await get_user_by_email(db, email)
     if user is None or not user.email:
         return None
+    # Extract attributes before commit to avoid session expiration
+    recipient_email = user.email
+    user_username = user.username
     # Supersede older tokens for this user
     await delete_all_for_user(db, user.id)
     raw_token = secrets.token_urlsafe(32)
@@ -59,8 +62,8 @@ async def request_forgot_password(
     await create_token(db, user_id=user.id, token_digest=digest, expires_at=expires_at)
     await db.commit()
     return PasswordResetDeliveryHandoff(
-        recipient_email=user.email,
-        user_username=user.username,
+        recipient_email=recipient_email,
+        user_username=user_username,
         reset_token=raw_token,
         expires_at=expires_at,
     )
