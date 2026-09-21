@@ -21,13 +21,14 @@ async def test_queue_query_count_is_constant_for_page_size(
     async_db: AsyncSession,
     db_engine: AsyncEngine,
 ) -> None:
-    """Queue construction hydrates every row with four PostgreSQL reads.
+    """Queue construction hydrates every row with five PostgreSQL reads.
 
-    The four reads are: (1) the pages' thread rows, (2) batched unread counts,
-    (3) batched next-issue numbers, and (4) the authoritative whole-queue
-    ``active_count`` behind issue #2568. The count predicates match the active-
-    queue membership contract, so the payout stays constant per page regardless
-    of the search filter, sort, or loaded page size.
+    The five reads are: (1) the pages' thread rows, (2) batched unread counts,
+    (3) batched next-issue numbers, (4) the authoritative whole-queue
+    ``active_count`` behind issue #2568, and (5) the bounded ComicVine
+    mapping-health query added by issue #2776. The count predicates match the
+    active-queue membership contract, so the payout stays constant per page
+    regardless of the search filter, sort, or loaded page size.
     """
     user = await get_or_create_user_async(async_db)
     expected: dict[int, tuple[str, int]] = {}
@@ -106,7 +107,7 @@ async def test_queue_query_count_is_constant_for_page_size(
         event.remove(db_engine.sync_engine, "before_cursor_execute", _capture_statement)
 
     assert len(response.threads) == thread_count
-    assert len(select_statements) == 4, select_statements
+    assert len(select_statements) == 5, select_statements
     assert response.active_count == thread_count
 
     for queue_thread in response.threads:
