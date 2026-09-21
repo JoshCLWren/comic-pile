@@ -627,7 +627,11 @@ async def get_thread_issue_dependencies_batch(
         ):
             source_issue = issue_map.get(source_issue_id)
             source_thread = thread_map.get(source_issue.thread_id) if source_issue else None
-            if source_issue is not None and source_thread is not None:
+            if (
+                source_issue is not None
+                and source_thread is not None
+                and source_thread.user_id == user_id
+            ):
                 incoming_by_issue[target_issue_id].append(
                     IssueDependencyEdge(
                         dependency_id=dep.id,
@@ -646,7 +650,11 @@ async def get_thread_issue_dependencies_batch(
         ):
             target_issue = issue_map.get(target_issue_id)
             target_thread = thread_map.get(target_issue.thread_id) if target_issue else None
-            if target_issue is not None and target_thread is not None:
+            if (
+                target_issue is not None
+                and target_thread is not None
+                and target_thread.user_id == user_id
+            ):
                 outgoing_by_issue[source_issue_id].append(
                     IssueDependencyEdge(
                         dependency_id=dep.id,
