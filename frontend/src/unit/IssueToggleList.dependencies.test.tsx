@@ -39,6 +39,7 @@ function buildIssues(count: number, threadId = 99, idOffset = 0): Issue[] {
     id: idOffset + index + 1,
     thread_id: threadId,
     issue_number: String(index + 1),
+    position: index + 1,
     status: 'unread' as const,
     read_at: null,
     created_at: '2026-07-31T00:00:00Z',

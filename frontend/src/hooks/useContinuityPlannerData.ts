@@ -74,7 +74,7 @@ export function useThreadIssues(selectedThreadId: number | null) {
         }
         const page = await issuesApi.list(selectedThreadId, params)
         result.push(...page.issues)
-        token = page.next_page_token
+        token = page.next_page_token ?? null
         if (token && seen.has(token)) break
         if (token) seen.add(token)
       } while (token)

@@ -93,7 +93,7 @@ export function IssueList({
 
       setIssues((previous) => append ? [...previous, ...response.issues] : response.issues)
       setTotalCount(response.total_count)
-      setNextPageToken(response.next_page_token)
+      setNextPageToken(response.next_page_token ?? null)
     } catch (error) {
       if (
         mountedRef.current

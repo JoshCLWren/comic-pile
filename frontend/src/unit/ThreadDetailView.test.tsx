@@ -108,7 +108,7 @@ it('fetches one bounded page when the Issues section expands', async () => {
     status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
   } as never)
   mockedIssuesApiList.mockResolvedValueOnce({
-    issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }],
+    issues: [{ id: 1, thread_id: 1, issue_number: '1', position: 1, status: 'read', read_at: 'now', created_at: 'now' }],
     next_page_token: 'next', total_count: 2, page_size: 100,
   })
   renderPage()
@@ -127,7 +127,7 @@ it('caches loaded issues under the canonical issue-pages query key', async () =>
     status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
   } as never)
   mockedIssuesApiList.mockResolvedValueOnce({
-    issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }],
+    issues: [{ id: 1, thread_id: 1, issue_number: '1', position: 1, status: 'read', read_at: 'now', created_at: 'now' }],
     next_page_token: null, total_count: 1, page_size: 100,
   })
   renderPage()
@@ -150,11 +150,11 @@ it('loads the next page without duplicates or gaps', async () => {
   } as never)
   mockedIssuesApiList
     .mockResolvedValueOnce({
-      issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }],
+      issues: [{ id: 1, thread_id: 1, issue_number: '1', position: 1, status: 'read', read_at: 'now', created_at: 'now' }],
       next_page_token: 'next', total_count: 2, page_size: 100,
     })
     .mockResolvedValueOnce({
-      issues: [{ id: 2, thread_id: 1, issue_number: '2', status: 'unread', read_at: null, created_at: 'now' }],
+      issues: [{ id: 2, thread_id: 1, issue_number: '2', position: 2, status: 'unread', read_at: null, created_at: 'now' }],
       next_page_token: null, total_count: 2, page_size: 100,
     })
   renderPage()
@@ -191,7 +191,7 @@ it('shows a retry action when loading issues fails', async () => {
   mockedIssuesApiList
     .mockRejectedValueOnce(new Error('issues unavailable'))
     .mockResolvedValueOnce({
-      issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }],
+      issues: [{ id: 1, thread_id: 1, issue_number: '1', position: 1, status: 'read', read_at: 'now', created_at: 'now' }],
       next_page_token: null, total_count: 1, page_size: 100,
     })
   renderPage()
@@ -210,8 +210,8 @@ it('renders migrated progress, paginated issues, and saves edits', async () => {
   } as never)
   mockedIssuesApiList.mockResolvedValue({
     issues: [
-      { id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' },
-      { id: 2, thread_id: 1, issue_number: '2', status: 'unread', read_at: null, created_at: 'now' },
+      { id: 1, thread_id: 1, issue_number: '1', position: 1, status: 'read', read_at: 'now', created_at: 'now' },
+      { id: 2, thread_id: 1, issue_number: '2', position: 2, status: 'unread', read_at: null, created_at: 'now' },
     ],
     next_page_token: null, total_count: 2, page_size: 100,
   })
@@ -280,7 +280,7 @@ it('edits migrated threads and displays the all-read boundary', async () => {
     notes: '',
   } as never)
   mockedIssuesApiList.mockResolvedValue({
-    issues: [{ id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' }],
+    issues: [{ id: 1, thread_id: 1, issue_number: '1', position: 1, status: 'read', read_at: 'now', created_at: 'now' }],
     next_page_token: null, total_count: 1, page_size: 100,
   })
   const updatedThread = {

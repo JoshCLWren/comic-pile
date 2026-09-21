@@ -1,3 +1,5 @@
+import type { components } from '../generated/openapi'
+
 /**
  * Represents a thread in list view (QueuePage).
  *
@@ -345,38 +347,20 @@ export interface DependencyCreatePayload {
 }
 
 /**
- * Represents a single issue within a thread
+ * A single issue within a thread.
+ *
+ * Alias of the generated OpenAPI `IssueResponse` schema, which is the source
+ * of truth for response field nullability/optionality (issue #2780).
  */
-export interface Issue {
-  /** Unique identifier for the issue */
-  id: number;
-  /** ID of the thread this issue belongs to */
-  thread_id: number;
-  /** Issue number (e.g., '1', '2', 'Annual 1') */
-  issue_number: string;
-  /** Canonical one-based reading-order position when supplied by the API */
-  position?: number;
-  /** Current reading status */
-  status: 'unread' | 'read';
-  /** ISO 8601 timestamp when the issue was marked as read (null if unread) */
-  read_at: string | null;
-  /** ISO 8601 timestamp when the issue was created */
-  created_at: string;
-}
+export type Issue = components['schemas']['IssueResponse']
 
 /**
- * Response from issue list endpoint with pagination
+ * Response from issue list endpoint with pagination.
+ *
+ * Alias of the generated OpenAPI `IssueListResponse` schema (issue #2780).
+ * `api-issues.ts` re-exports this canonical type; do not define a second copy.
  */
-export interface IssueListResponse {
-  /** Array of issues for the current page */
-  issues: Issue[];
-  /** Total number of issues for the thread */
-  total_count: number;
-  /** Number of issues per page */
-  page_size: number;
-  /** Token for fetching next page (null if no more pages) */
-  next_page_token: string | null;
-}
+export type IssueListResponse = components['schemas']['IssueListResponse']
 
 /**
  * Represents a dependency between threads or issues.
