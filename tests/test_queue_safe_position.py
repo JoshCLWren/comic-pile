@@ -1,10 +1,9 @@
 """Tests for move_to_safe_position queue function."""
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Dependency, Issue, Thread
-from comic_pile.dependencies import refresh_user_blocked_status
+from app.models import Thread
+from comic_pile.queue import get_roll_pool, move_to_safe_position
 from comic_pile.queue import get_roll_pool, move_to_safe_position
 
 
