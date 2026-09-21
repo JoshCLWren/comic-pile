@@ -26,8 +26,13 @@ export type CrossoverMember = {
 
 export function useCrossoverDetail(
   groupId: number | null | undefined,
-): CrossoverDetailState {
-  const { data, isPending, error: err } = useQuery({
+): CrossoverDetailState & { refetch: () => Promise<void> } {
+  const {
+    data,
+    isPending,
+    error: err,
+    refetch: queryRefetch,
+  } = useQuery({
     queryKey: groupId != null ? queryKeys.crossover.detail(groupId) : [],
     queryFn: async () => {
       if (groupId == null) throw new Error('No group ID')
@@ -54,5 +59,8 @@ export function useCrossoverDetail(
       }))
     : []
   const linkedPlans = data?.linked_plans ?? []
-  return { crossover, members, linkedPlans, isLoading: isPending, error }
+  const refetch = async (): Promise<void> => {
+    await queryRefetch()
+  }
+  return { crossover, members, linkedPlans, isLoading: isPending, error, refetch }
 }

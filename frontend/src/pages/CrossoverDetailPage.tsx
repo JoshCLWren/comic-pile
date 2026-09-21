@@ -17,7 +17,7 @@ export default function CrossoverDetailPage() {
   const { group } = useParams<{ group: string }>()
   const groupId = parseInt(group ?? '', 10)
 
-  const { crossover, members, linkedPlans, isLoading, error } = useCrossoverDetail(groupId)
+  const { crossover, members, linkedPlans, isLoading, error, refetch } = useCrossoverDetail(groupId)
 
   if (isLoading) {
     return (
@@ -49,7 +49,12 @@ export default function CrossoverDetailPage() {
         <div className="text-center text-[var(--theme-danger)] mt-8">
           <p className="text-lg font-medium">Error loading crossover</p>
           <p className="mt-1 text-sm">{error}</p>
-
+          <button
+            onClick={() => void refetch()}
+            className="mt-4 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 font-bold text-[var(--theme-text-primary)]"
+          >
+            Try again
+          </button>
         </div>
       </div>
     )
