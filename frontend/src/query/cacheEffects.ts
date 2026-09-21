@@ -554,3 +554,13 @@ export async function applyMigratedThreadCache(
   client.setQueryData(queryKeys.thread.summary(thread.id), thread)
   await client.invalidateQueries({ queryKey: queryKeys.thread.list() })
 }
+
+/**
+ * Apply updated preferences to the cache after a successful mutation.
+ */
+export function applyUpdatedPreferencesCache(
+  client: QueryClient,
+  preferences: { theme: 'classic' | 'ink-gold' | 'command-center'; user_id: number },
+): void {
+  client.setQueryData(queryKeys.preferences.detail(), preferences)
+}

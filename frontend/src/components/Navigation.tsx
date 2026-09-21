@@ -7,10 +7,10 @@ import { useNavCollapse } from '../contexts/NavCollapseContext'
 import api from '../services/api'
 import { useToast } from '../contexts/useToast'
 import { DEFAULT_THEME, getAppliedTheme, isSupportedTheme, readStoredThemePreference, selectTheme } from '../services/theme'
-import { persistThemePreference } from '../services/themePreferenceSync'
 import type { ThemeId } from '../services/theme'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
 import { useResponsive } from '../utils/responsive'
+import { useUpdatePreferences } from '../hooks/usePreferences'
 import OverlayPortal from './OverlayPortal'
 
 type BugReportSubmit = (
@@ -161,13 +161,16 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const { collapsed, toggleCollapsed } = useNavCollapse()
   const navigate = useNavigate()
   const { isMobile } = useResponsive()
+  const { showToast } = useToast()
+  const updatePreferences = useUpdatePreferences(() => {
+    showToast('Theme applied for this session, but saving your preference failed.', 'error')
+  })
   const [isMoreOpen, setIsMoreOpen] = useState(false)
   const [activeTheme, setActiveTheme] = useState<ThemeId>(
     () => getAppliedTheme() ?? readStoredThemePreference() ?? DEFAULT_THEME,
   )
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const moreMenuRef = useRef<HTMLElement>(null)
-  const { showToast } = useToast()
 
   useEffect(() => {
     const root = document.documentElement
@@ -223,12 +226,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     const applied = selectTheme(themeId)
     if (applied === null) return
     setActiveTheme(applied)
-    // The choice is already applied and mirrored locally; server persistence
-    // retries in the background and reports sustained failure once per
-    // outage episode instead of once per click (issue #1872).
-    persistThemePreference(applied, () => {
-      showToast('Theme applied for this session, but saving your preference failed.', 'error')
-    })
+    updatePreferences.mutate({ theme: applied })
   }
 
   const handleLogout = useCallback(async () => {

@@ -16,19 +16,12 @@ import api, {
   refreshSession,
   setAccessToken,
 } from './services/api'
-import {
-  applyTheme,
-  ensureThemeApplied,
-  getThemeSelectionToken,
-  isSupportedTheme,
-  readStoredThemePreference,
-} from './services/theme'
 import { isDefinitiveAuthenticationFailure } from './services/authFailure'
-import { reconcileStoredThemeWithServer } from './services/themePreferenceSync'
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import { usePingHeartbeat } from './hooks/usePingHeartbeat'
 import { useScrollRestoration } from './hooks/useScrollRestoration'
+import { PreferencesSync } from './hooks/usePreferences'
 import type { DiagnosticData } from './hooks/useDiagnostics'
 import { ToastProvider } from './contexts/ToastProvider'
 import { BugReportRestoreProvider } from './contexts/BugReportRestoreContext'
@@ -41,53 +34,15 @@ declare global {
   }
 }
 
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 15000
+const AUTH_BOOTSTRAP_RETRY_DELAY_MS = 1000
+
 type BugReportSubmit = (
   reportType: ReportType,
   title: string,
   description: string,
   diagnosticData: DiagnosticData | null,
 ) => Promise<void>
-
-const AUTH_BOOTSTRAP_TIMEOUT_MS = 15000
-const AUTH_BOOTSTRAP_RETRY_DELAY_MS = 1000
-
-async function fetchAndApplyPersistedTheme(timeout?: number): Promise<void> {
-  // Capture the local-selection generation before awaiting so a theme picked
-  // while this request is in flight always wins over the older server value.
-  const selectionTokenAtStart = getThemeSelectionToken()
-  try {
-    const prefResponse = await api.get<{ theme?: string }>('/v1/users/me/preferences', {
-      timeout,
-      skipAuthRedirect: true,
-    })
-    if (getThemeSelectionToken() !== selectionTokenAtStart) {
-      return
-    }
-    const theme = prefResponse?.theme
-    if (isSupportedTheme(theme)) {
-      const storedTheme = readStoredThemePreference()
-      if (storedTheme === null || theme === storedTheme) {
-        applyTheme(theme)
-      } else {
-        // The locally stored choice is newer than the server value (a prior
-        // persistence attempt likely failed during an outage, issue #1872).
-        // Keep it rendered and quietly converge the server to it.
-        ensureThemeApplied()
-        reconcileStoredThemeWithServer(storedTheme)
-      }
-    } else {
-      // Unknown/stale ids must not strand the tokens; keep any rendered theme
-      // and only seed a default when nothing has been resolved yet.
-      ensureThemeApplied()
-    }
-  } catch {
-    // A transient preferences outage (for example 503 during a database
-    // blip, issue #1611) must never reset the rendered theme to classic.
-    // Keep whatever is applied; seed the stored choice/default only when the
-    // document has no valid theme yet.
-    ensureThemeApplied()
-  }
-}
 
 const RollPage = lazyRoute('roll')
 const QueuePage = lazyRoute('queue')
@@ -160,7 +115,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           throw error
         }
-        await fetchAndApplyPersistedTheme(timeout)
       })().finally(() => {
         recoveryPromise.current = null
       })
@@ -222,8 +176,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(response)
           setIsAuthenticated(true)
         }
-        // Resolve the persisted theme after the user is loaded
-        await fetchAndApplyPersistedTheme(AUTH_BOOTSTRAP_TIMEOUT_MS)
         if (isMounted) {
           setIsLoading(false)
         }
@@ -282,7 +234,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await api.get<AuthUser>('/v1/auth/me', { skipAuthRedirect: true })
       setUser(response)
       setIsAuthenticated(true)
-      void fetchAndApplyPersistedTheme()
     } catch (error) {
       clearAccessToken()
       setIsAuthenticated(false)
@@ -329,6 +280,7 @@ function AuthenticatedLayout({ children, onBugReportSubmit, wide = false }: { ch
     >
       <Navigation onBugReportSubmit={onBugReportSubmit} />
       <main className={`container mx-auto min-w-0 px-3 md:px-4 py-4 md:py-6 ${maxWidthClass} pb-28 md:pb-6`}>
+        <PreferencesSync isAuthenticated={true} />
         {children}
       </main>
     </div>
