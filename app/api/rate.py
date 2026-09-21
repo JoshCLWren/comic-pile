@@ -10,8 +10,8 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
 from app.models.user import User
-from app.schemas import RateRequest, ThreadResponse
-from app.schemas.roll_v2 import RateResponse, RollReconciliation, RollLastRead
+from app.schemas import RateRequest
+from app.schemas.roll_v2 import RateResponse
 from app.services.rate_service import rate_thread
 
 router = APIRouter()

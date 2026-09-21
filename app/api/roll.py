@@ -1408,17 +1408,18 @@ async def roll_v2_bootstrap(
         .cast(ARRAY(Text))
     )
 
+    # Contract-only v2 projection over stored data. The Issue model carries
+    # no canonical-series columns, so canonical identity stays unavailable
+    # (null id/stats per #1401) until the heavy projection lands. No
+    # synchronous provider call is made here.
     pool_query = (
         select(
             Thread.id,
             Thread.title,
             Thread.format,
+            Thread.last_activity_at,
             Thread.next_unread_issue_id.label("issue_id"),
-            Issue.id.label("issue_detail_id"),
             Issue.issue_number,
-            Issue.canonical_series_id,
-            Issue.canonical_series_title,
-            Issue.cover_url,
             route_labels_subq.label("route_labels"),
         )
         .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
@@ -1448,7 +1449,7 @@ async def roll_v2_bootstrap(
         if row.issue_id is None:
             # Skip threads with no next unread issue (v2 never returns issue: null)
             continue
-            
+
         # Create rollable thread
         rollable_thread = RollableThread(
             id=row.id,
@@ -1456,49 +1457,56 @@ async def roll_v2_bootstrap(
             format=normalize_format_value(row.format),
             last_activity_at=row.last_activity_at.isoformat() if row.last_activity_at else None,
         )
-        
-        # Create rollable issue (required/non-null)
+
+        # Create rollable issue (required/non-null). Covers stay null until
+        # the projection can supply same-origin optimized URLs; raw provider
+        # URLs are never exposed as the Roll contract.
         rollable_issue = RollableIssue(
             id=row.issue_id,
             number=row.issue_number,
-            canonical_series_title=row.canonical_series_title,
-            cover_url=row.cover_url,
+            canonical_series_title=None,
+            cover_url=None,
         )
-        
-        # Create rollable identity
+
+        # Contract slice: canonical identity is unavailable, so the id and
+        # canonical-series stats stay null per #1401 and progress falls back
+        # to the thread scope with a nullable run length.
         rollable_identity = RollableIdentity(
-            source="comicvine" if row.canonical_series_id else "unknown",
-            canonical_series_id=row.canonical_series_id,
-            state=IdentityState.CONFIRMED if row.canonical_series_id else IdentityState.UNRESOLVED,
-            series_mapping_state="confirmed" if row.canonical_series_id else "unavailable",
+            source="unavailable",
+            canonical_series_id=None,
+            state=IdentityState.UNRESOLVED,
+            series_mapping_state=IdentityState.UNRESOLVED,
         )
-        
+
         # Create rollable reader
         rollable_reader = RollableReader(
-            latest_rating=None,  # Would need to fetch from thread
-            average_rating=None,  # Would need to compute from series
-            rating_count=None,  # Would need to compute from series
-            read_count=None,  # Would need to compute from user's read issues
-            issue_count=None,  # Would need to get from provider/catalog
-            progress_scope=ProgressScope.CANONICAL_SERIES_RUN if row.canonical_series_id else ProgressScope.THREAD,
+            latest_rating=None,
+            average_rating=None,
+            rating_count=None,
+            read_count=None,
+            issue_count=None,
+            progress_scope=ProgressScope.THREAD,
         )
-        
-        # Create rollable routes
+
+        # Max 3 routes plus an overflow count; the frozen v2 kind is "group"
+        # with no subtype guessing from the group name.
+        all_route_names = list(row.route_labels or [])
+        visible_route_names = all_route_names[:3]
         rollable_routes = [
             RollableRoute(
                 kind=RouteKind.GROUP,
                 name=route_name,
             )
-            for route_name in (row.route_labels or [])
+            for route_name in visible_route_names
         ]
-        
+
         rollable_item = RollableItem(
             thread=rollable_thread,
             issue=rollable_issue,
             identity=rollable_identity,
             reader=rollable_reader,
             routes=rollable_routes,
-            overflow_routes_count=0,  # Would need to compute if routes > 3
+            overflow_routes_count=max(0, len(all_route_names) - len(visible_route_names)),
         )
         rollable.append(rollable_item)
 

@@ -29,8 +29,8 @@ from app.repositories.session_repository import (
     latest_action_event,
 )
 from app.repositories.thread_repository import find_owned, threads_for_user
-from app.schemas import RateRequest, ThreadResponse
-from app.schemas.roll_v2 import RateResponse, RollReconciliation, RollLastRead
+from app.schemas import RateRequest
+from app.schemas.roll_v2 import RateResponse, RollLastRead, RollReconciliation
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
     QUEUE_CHANGES_KEY,
