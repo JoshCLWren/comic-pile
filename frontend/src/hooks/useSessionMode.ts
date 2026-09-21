@@ -1,15 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { QueryClient } from '@tanstack/react-query'
-import type { CacheEffectsApi, SessionModeApi } from '../services/apiTypes'
+import type { CacheEffectsApi, SessionModeApi, SessionModeMutationDeps } from '../services/apiTypes'
 import { invalidateAfterSessionModeUpdate } from '../query/cacheEffects'
 import { queryClient as fallbackQueryClient } from '../query/queryClient'
 import type { SessionModeUpdateRequest, SessionModeResponse } from '../types'
-
-export interface SessionModeMutationDeps {
-  sessionApi?: SessionModeApi
-  cacheEffects?: CacheEffectsApi
-  queryClientInstance?: QueryClient
-}
 
 export function useSessionMode(deps: SessionModeMutationDeps = {}) {
   const sessionInstance = deps.sessionApi
