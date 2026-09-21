@@ -224,9 +224,9 @@ export default function MigrationDialog({ thread, onComplete, onSkip, onClose }:
       </form>
 
       {showSkipConfirm && (
-        <div className="fixed inset-0 z-10 flex items-center justify-center p-4 bg-[color-mix(in_srgb,_var(--theme-bg-page)_90%,_transparent)] rounded-lg" role="dialog" aria-modal="true" aria-labelledby="skip-confirm-title">
+        <div className="absolute inset-0 z-10 flex items-center justify-center p-4 bg-[color-mix(in_srgb,_var(--theme-bg-page)_90%,_transparent)] rounded-lg">
           <div className="w-full max-w-xs rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-6 shadow-[0_20px_25px_-5px_rgba(0,0,0,0.3)]">
-            <h3 id="skip-confirm-title" className="mb-2 text-base font-bold text-[var(--theme-text-primary)]">
+            <h3 className="mb-2 text-base font-bold text-[var(--theme-text-primary)]">
               Skip migration?
             </h3>
             <p className="mb-5 text-sm leading-relaxed text-[var(--theme-text-primary)]">
