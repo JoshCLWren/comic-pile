@@ -743,11 +743,13 @@ async def test_bulk_issues_remaining_no_n_plus_one(
     assert len(per_thread_counts) == 0, (
         f"Found {len(per_thread_counts)} per-thread COUNT queries: {per_thread_counts}"
     )
-
     bulk_counts = [
         s
         for s in captured
-        if "group by" in s.lower() and "issues" in s.lower()
+        if "group by" in s.lower()
+        and "issues" in s.lower()
+        and "issue_external_identity_mappings" not in s.lower()
+        and "external_identities" not in s.lower()
     ]
     assert len(bulk_counts) == 1, (
         f"Expected 1 bulk COUNT query, found {len(bulk_counts)}: {bulk_counts}"

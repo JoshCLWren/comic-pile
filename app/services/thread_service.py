@@ -313,9 +313,11 @@ async def list_queue_threads(
 
     thread_responses = await threads_to_responses(threads_to_return, db)
 
-    # Fetch ComicVine mapping health for the threads on this page (batched, no N+1)
-    thread_ids = {tr.id for tr in thread_responses}
-    mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, thread_ids)
+    # Fetch ComicVine mapping health for issue-tracking threads on this page only
+    # (batched, no N+1). Legacy threads without total_issues skip the query
+    # entirely, preserving the existing 2-SELECT-per-page contract for them.
+    tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
+    mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
 
     queue_items = [
         to_queue_list_item(tr, mapping_health_map.get(tr.id))
@@ -399,9 +401,11 @@ async def list_completed_threads(
 
     thread_responses = await threads_to_responses(threads_to_return, db)
 
-    # Fetch ComicVine mapping health for the threads on this page (batched, no N+1)
-    thread_ids = {tr.id for tr in thread_responses}
-    mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, thread_ids)
+    # Fetch ComicVine mapping health for issue-tracking threads on this page only
+    # (batched, no N+1). Legacy threads without total_issues skip the query
+    # entirely, preserving the existing 2-SELECT-per-page contract for them.
+    tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
+    mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
 
     queue_items = [
         to_queue_list_item(tr, mapping_health_map.get(tr.id))
