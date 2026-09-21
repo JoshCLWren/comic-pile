@@ -1,16 +1,6 @@
 
 import { useCrossoverDetail } from '../hooks/useCrossoverDetail'
 import { useParams, Link } from 'react-router-dom'
-import { type DependencyGroupMember } from '../services/api-dependency-groups'
-
-import type { Thread, Issue } from '../types'
-
-interface CrossoverMember {
-  membership: DependencyGroupMember
-  thread: Thread | null
-  issue: Issue | null
-  other_crossovers: string[]
-}
 
 
 export default function CrossoverDetailPage() {
