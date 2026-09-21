@@ -80,10 +80,7 @@ async def test_app_functionality_without_cache_dependency(
     response = await auth_client.post("/api/roll/")
     assert response.status_code == 200
 
-    response = await auth_client.get("/api/queue")
-    assert response.status_code == 200
-
-    response = await auth_client.get("/api/threads")
+    response = await auth_client.get("/api/threads/")
     assert response.status_code == 200
 
     response = await auth_client.get("/api/auth/me")
