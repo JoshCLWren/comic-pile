@@ -45,7 +45,7 @@ class User(Base):
     revoked_tokens: Mapped[list[RevokedToken]] = relationship(
         "RevokedToken", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
-    password_reset_tokens: Mapped[list["PasswordResetToken"]] = relationship(
+    password_reset_tokens: Mapped[list[PasswordResetToken]] = relationship(
         "PasswordResetToken", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
     preferences: Mapped[UserPreferences | None] = relationship(

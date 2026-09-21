@@ -15,6 +15,7 @@ async def create_token(
     token_digest: str,
     expires_at: datetime,
 ) -> PasswordResetToken:
+    """Create a password reset token for a user."""
     token = PasswordResetToken(
         user_id=user_id,
         token_digest=token_digest,
@@ -25,6 +26,7 @@ async def create_token(
 
 
 async def get_token_by_digest(db: AsyncSession, digest: str) -> PasswordResetToken | None:
+    """Look up a password reset token by its digest."""
     result = await db.execute(
         select(PasswordResetToken).where(PasswordResetToken.token_digest == digest).limit(1)
     )
@@ -32,10 +34,12 @@ async def get_token_by_digest(db: AsyncSession, digest: str) -> PasswordResetTok
 
 
 async def delete_all_for_user(db: AsyncSession, user_id: int) -> None:
+    """Delete all password reset tokens for a user."""
     await db.execute(delete(PasswordResetToken).where(PasswordResetToken.user_id == user_id))
 
 
 async def mark_used(db: AsyncSession, token_id: int) -> None:
+    """Mark a reset token as used by setting its used_at timestamp."""
     result = await db.execute(
         select(PasswordResetToken).where(PasswordResetToken.id == token_id).limit(1)
     )

@@ -11,7 +11,22 @@ from app.models.user import User
 
 
 async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
+    """Find a user by email address."""
     result = await db.execute(select(User).where(User.email == email).limit(1))
+    return result.scalar_one_or_none()
+
+
+async def get_user_by_id(db: AsyncSession, user_id: int) -> User | None:
+    """Find a user by ID.
+
+    Args:
+        db: Database session.
+        user_id: Primary key of the user.
+
+    Returns:
+        The user, or ``None`` when absent.
+    """
+    result = await db.execute(select(User).where(User.id == user_id).limit(1))
     return result.scalar_one_or_none()
 
 

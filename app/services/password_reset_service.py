@@ -7,8 +7,6 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, status
-from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import hash_password
 from app.models.user import User
@@ -18,7 +16,8 @@ from app.repositories.password_reset_token_repository import (
     get_token_by_digest,
     mark_used,
 )
-from app.repositories.user_repository import get_user_by_email
+from app.repositories.session_repository import delete_all_sessions_for_user
+from app.repositories.user_repository import get_user_by_email, get_user_by_id
 
 TOKEN_EXPIRY_MINUTES = 30
 
@@ -33,6 +32,7 @@ class PasswordResetDeliveryHandoff:
         reset_token: str,
         expires_at: datetime,
     ) -> None:
+        """Initialize the handoff with delivery metadata."""
         self.recipient_email = recipient_email
         self.user_username = user_username
         self.reset_token = reset_token
@@ -97,8 +97,7 @@ async def complete_reset(
             detail="Invalid or expired reset request.",
         )
     # Load user to extract before commit
-    result = await db.execute(select(User).where(User.id == user_id).limit(1))
-    user = result.scalar_one_or_none()
+    user = await get_user_by_id(db, user_id)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -109,9 +108,8 @@ async def complete_reset(
     user.password_changed_at = now
     # Consume token
     await mark_used(db, token_id)
-    # Revoke all server-side sessions for user (delete all session records)
-    from app.models.session import Session
-    await db.execute(delete(Session).where(Session.user_id == user_id))
+    # Revoke all server-side sessions for user
+    await delete_all_sessions_for_user(db, user_id)
     # Refresh-token revocation: for any existing revoked_token JTIs the user has,
     # they remain revoked; new JWTs will include password_changed_at which is now current.
     await db.commit()
