@@ -173,7 +173,7 @@ describe('useQueueThreadActions', () => {
     )
 
     await result.current.handleThreadRead(makeThread({ id: 7, is_blocked: true }))
-    expect(window.alert).not.toHaveBeenCalled()
+    expect(toastSpy).not.toHaveBeenCalled()
     expect(navigate).not.toHaveBeenCalled()
 
     await result.current.handleThreadRead(makeThread({ id: 8 }))
