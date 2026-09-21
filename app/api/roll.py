@@ -1593,10 +1593,10 @@ async def roll_v2_bootstrap(
 
     # Create last_read (nullable session-scoped)
     last_read = None
-    if active_thread and active_thread.next_unread_issue_id:
+    if active_thread and active_thread.next_issue_id:
         last_read = RollLastRead(
-            issue_id=active_thread.next_unread_issue_id,
-            issue_number=active_thread.next_unread_issue_number,
+            issue_id=active_thread.next_issue_id,
+            issue_number=active_thread.next_issue_number,
             thread_id=active_thread.id,
             thread_title=active_thread.title,
             read_at=None,  # Would need to be set when user actually reads

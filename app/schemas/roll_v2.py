@@ -7,7 +7,7 @@ null canonical-series stats per #1401, never a thread-title substitution).
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -17,7 +17,7 @@ from app.schemas.session import ActiveThreadInfo, SessionBandwidthState, Session
 from app.schemas.thread import ThreadResponse
 
 
-class IdentityState(str, Enum):
+class IdentityState(StrEnum):
     """Derived identity states for rollable items."""
 
     CONFIRMED = "confirmed"
@@ -27,13 +27,13 @@ class IdentityState(str, Enum):
     CONFLICTING = "conflicting"
 
 
-class RouteKind(str, Enum):
+class RouteKind(StrEnum):
     """Route kind for rollable items."""
 
     GROUP = "group"
 
 
-class ProgressScope(str, Enum):
+class ProgressScope(StrEnum):
     """Progress scope for reader context."""
 
     CANONICAL_SERIES_RUN = "canonical_series_run"

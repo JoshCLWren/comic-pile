@@ -40,25 +40,26 @@ class TestRollV2BootstrapResponse:
         v2_additional_fields = {'rollable', 'last_read'}
 
         # All v1 fields should be in v2
+        model_fields = RollV2BootstrapResponse.model_fields
         for field in v1_fields:
-            assert hasattr(RollV2BootstrapResponse, field), f"v1 field {field} missing from v2"
+            assert field in model_fields, f"v1 field {field} missing from v2"
 
         # v2 should have the additional fields
         for field in v2_additional_fields:
-            assert hasattr(RollV2BootstrapResponse, field), f"v2 field {field} missing"
+            assert field in model_fields, f"v2 field {field} missing"
 
     def test_rollable_replaces_roll_pool(self):
         """Test that rollable replaces roll_pool and has correct structure."""
         # roll_pool should not exist in v2
-        assert not hasattr(RollV2BootstrapResponse, 'roll_pool')
+        assert 'roll_pool' not in RollV2BootstrapResponse.model_fields
 
         # rollable should exist and be a list of RollableItem
-        assert hasattr(RollV2BootstrapResponse, 'rollable')
+        assert 'rollable' in RollV2BootstrapResponse.model_fields
         assert RollV2BootstrapResponse.model_fields['rollable'].annotation == list[RollableItem]
 
     def test_last_read_is_nullable_session_scoped(self):
         """Test that last_read is nullable and session-scoped."""
-        assert hasattr(RollV2BootstrapResponse, 'last_read')
+        assert 'last_read' in RollV2BootstrapResponse.model_fields
         assert RollV2BootstrapResponse.model_fields['last_read'].annotation == RollLastRead | None
 
     def test_rollable_item_structure(self):
@@ -145,8 +146,9 @@ class TestRateResponse:
             'reading_progress', 'next_unread_issue_id', 'next_unread_issue_number'
         }
 
+        rate_fields = RateResponse.model_fields
         for field in thread_response_fields:
-            assert hasattr(RateResponse, field), f"ThreadResponse field {field} missing from RateResponse"
+            assert field in rate_fields, f"ThreadResponse field {field} missing from RateResponse"
 
     def test_rate_response_subclasses_thread_response(self):
         """RateResponse must subclass ThreadResponse so fields cannot drift."""
@@ -154,7 +156,7 @@ class TestRateResponse:
 
     def test_rate_response_adds_roll_reconciliation(self):
         """Test that RateResponse adds roll_reconciliation field."""
-        assert hasattr(RateResponse, 'roll_reconciliation')
+        assert 'roll_reconciliation' in RateResponse.model_fields
         assert RateResponse.model_fields['roll_reconciliation'].annotation == RollReconciliation | None
 
     def test_roll_reconciliation_structure(self):
