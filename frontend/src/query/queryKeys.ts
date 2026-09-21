@@ -251,4 +251,18 @@ export const queryKeys = {
     all: ['preferences'] as const,
     detail: () => ['preferences', 'detail'] as const,
   },
+  releases: {
+    all: ['releases'] as const,
+    pages: () => ['releases', 'pages'] as const,
+    /**
+     * Canonical infinite Releases list key. `offset` is intentionally
+     * excluded so the key stays stable across offset pages; the offset lives
+     * in `pageParam`, not the key. Changing `pageSize` becomes a distinct
+     * query that resets to the first compatible page.
+     */
+    list: ({ pageSize }: { pageSize: number }) =>
+      ['releases', 'pages', { pageSize }] as const,
+    page: ({ offset, limit }: { offset: number; limit: number }) =>
+      ['releases', 'pages', { offset, limit }] as const,
+  },
 } as const

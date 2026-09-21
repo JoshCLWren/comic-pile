@@ -14,13 +14,21 @@ describe('What’s new wiring', () => {
 
     expect(appSource).toContain('path="/whats-new"')
     expect(appSource).toContain('<WhatsNewPage />')
-    expect(navigationSource).toContain('to="/whats-new"')
+    expect(navigationSource).toContain("path: '/whats-new'")
     expect(navigationSource).toContain('What\'s new')
   })
 
-  it('reads the database-backed release API without a static changelog build dependency', () => {
+  it('reads the database-backed release API through the canonical releases query', () => {
     const pageSource = readFileSync(
       path.join(frontendRoot, 'src/pages/WhatsNewPage.tsx'),
+      'utf-8',
+    )
+    const hookSource = readFileSync(
+      path.join(frontendRoot, 'src/hooks/useReleases.ts'),
+      'utf-8',
+    )
+    const queryKeysSource = readFileSync(
+      path.join(frontendRoot, 'src/query/queryKeys.ts'),
       'utf-8',
     )
     const releaseApiSource = readFileSync(
@@ -29,7 +37,11 @@ describe('What’s new wiring', () => {
     )
     const viteConfigSource = readFileSync(path.join(frontendRoot, 'vite.config.ts'), 'utf-8')
 
-    expect(pageSource).toContain('releasesApi.list')
+    expect(pageSource).toContain('useReleases')
+    expect(pageSource).not.toContain('releasesApi.list')
+    expect(hookSource).toContain('../services/api-releases')
+    expect(hookSource).toContain('queryKeys.releases.list')
+    expect(queryKeysSource).toContain('releases:')
     expect(releaseApiSource).toContain("'/v1/releases/'")
     expect(pageSource).not.toContain('/changelog.md')
     expect(viteConfigSource).not.toContain('changelogAsset')
