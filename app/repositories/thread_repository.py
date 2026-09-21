@@ -435,7 +435,7 @@ async def fetch_comicvine_mapping_health(
     # We need to count per thread:
     # - total issues (tracked_issue_count)
     # - issues with at least one confirmed ComicVine mapping (confirmed_issue_count)
-    # - issues with no confirmed mapping but have candidate/unresolved mappings (needs_mapping_count)
+    # - issues with no confirmed mapping (unresolved/candidate or no mapping at all)
     # - issues with multiple confirmed mappings or other conflicts (needs_review_count)
 
     # Subquery: for each issue, determine its mapping state
@@ -459,14 +459,6 @@ async def fetch_comicvine_mapping_health(
                 )
             )
             .label("unconfirmed_count"),
-            func.count()
-            .filter(
-                and_(
-                    IssueExternalIdentityMapping.status == "confirmed",
-                    ExternalIdentity.provider == "comicvine",
-                )
-            )
-            .label("confirmed_total"),
         )
         .select_from(Issue)
         .outerjoin(
@@ -491,12 +483,7 @@ async def fetch_comicvine_mapping_health(
             .filter(issue_mapping_state.c.confirmed_count > 0)
             .label("confirmed_issue_count"),
             func.count()
-            .filter(
-                and_(
-                    issue_mapping_state.c.confirmed_count == 0,
-                    issue_mapping_state.c.unconfirmed_count > 0,
-                )
-            )
+            .filter(issue_mapping_state.c.confirmed_count == 0)
             .label("needs_mapping_count"),
             func.count()
             .filter(issue_mapping_state.c.confirmed_count > 1)

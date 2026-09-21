@@ -5,7 +5,6 @@ no issue tracking, specials/review-needed, multiple threads in one request,
 and user isolation.
 """
 
-from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.repositories import thread_repository
-from app.schemas import ComicVineMappingStatus
 from tests.conftest import get_or_create_user_async
 
 
