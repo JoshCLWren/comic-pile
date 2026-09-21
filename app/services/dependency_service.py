@@ -24,6 +24,7 @@ from app.schemas.dependency import (
     ThreadDependenciesResponse,
     ThreadConnectedResponse,
 )
+from app.schemas.issue_dependency_batch import ThreadIssueDependenciesResponse
 from comic_pile.dependencies import (
     BlockingDependency as InternalBlockingDependency,
     detect_circular_dependency,
@@ -575,8 +576,6 @@ async def get_thread_issue_dependencies_batch(
         Thread issue dependencies response, or None if thread not found.
     """
     from app.repositories import issue_repository, thread_repository
-
-    from app.schemas.issue_dependency_batch import ThreadIssueDependenciesResponse
 
     # Verify thread ownership
     thread = await thread_repository.find_owned(db, user_id, thread_id)
