@@ -631,13 +631,12 @@ class DependencyGroupService:
             NotFoundError: If any requested thread is not owned by the current user.
         """
         thread_ids = list(dict.fromkeys(thread_ids))
-        
+
         # Verify all threads are owned
-        owned_result = await groups_repo.get_owned_threads_batch(self._db, thread_ids, user_id)
-        owned_ids = set(owned_result.scalars())
-        missing_ids = [thread_id for thread_id in thread_ids if thread_id not in owned_ids]
-        if missing_ids:
-            raise NotFoundError(f"Thread {missing_ids[0]} not found")
+        for thread_id in thread_ids:
+            owned = await groups_repo.get_owned_thread(self._db, thread_id, user_id)
+            if owned is None:
+                raise NotFoundError(f"Thread {thread_id} not found")
 
         # Get all group memberships for the requested threads
         result = await groups_repo.thread_group_summaries_batch(self._db, thread_ids, user_id)
@@ -646,7 +645,7 @@ class DependencyGroupService:
             thread_id: [] for thread_id in thread_ids
         }
         seen: dict[int, set[int]] = {thread_id: set() for thread_id in thread_ids}
-        
+
         for group_id, group_name, thread_id in result:
             if thread_id in seen and group_id in seen[thread_id]:
                 continue

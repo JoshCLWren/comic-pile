@@ -563,7 +563,7 @@ async def invalidate_dependency_caches(user_id: int) -> None:
 
 async def get_thread_issue_dependencies_batch(
     thread_id: int, user_id: int, db: AsyncSession
-) -> ThreadDependenciesResponse | None:
+) -> ThreadIssueDependenciesResponse | None:
     """Get all dependencies for issues in one thread using bulk queries.
 
     Args:
@@ -572,10 +572,12 @@ async def get_thread_issue_dependencies_batch(
         db: Database session.
 
     Returns:
-        Thread dependencies response with all issue dependencies, or None if thread not found.
+        Thread issue dependencies response, or None if thread not found.
     """
-    from app.repositories import thread_repository, issue_repository
-    
+    from app.repositories import issue_repository, thread_repository
+
+    from app.schemas.issue_dependency_batch import ThreadIssueDependenciesResponse
+
     # Verify thread ownership
     thread = await thread_repository.find_owned(db, user_id, thread_id)
     if not thread:
@@ -584,19 +586,15 @@ async def get_thread_issue_dependencies_batch(
     # Get all issues in the thread
     thread_issues = await issue_repository.get_issues_by_thread(db, thread_id)
     if not thread_issues:
-        return ThreadDependenciesResponse(
-            thread_id=thread_id,
-            blocking=[],
-            blocked_by=[]
-        )
-    
+        return ThreadIssueDependenciesResponse(thread_id=thread_id, issues=[])
+
     thread_issue_ids = [issue.id for issue in thread_issues]
 
     # Get all dependencies involving these issues
     all_deps = await dependency_repository.get_issue_dependencies_batch(db, thread_issue_ids)
 
     # Build maps for related issues and threads
-    related_issue_ids = set(thread_issue_ids)
+    related_issue_ids: set[int] = set(thread_issue_ids)
     for dep in all_deps:
         if dep.source_issue_id is not None:
             related_issue_ids.add(dep.source_issue_id)
@@ -606,10 +604,9 @@ async def get_thread_issue_dependencies_batch(
     # Get all related issues and their threads
     all_issues = await issue_repository.get_issues_by_ids(db, list(related_issue_ids))
     issue_map = {issue.id: issue for issue in all_issues}
-    
+
     thread_ids = {issue.thread_id for issue in all_issues}
-    all_threads = await thread_repository.get_threads_by_ids(db, list(thread_ids))
-    thread_map = {thread.id: thread for thread in all_threads}
+    thread_map = await thread_repository.threads_by_ids(db, thread_ids)
 
     # Build dependency edges
     incoming_by_issue: dict[int, list[IssueDependencyEdge]] = {
@@ -624,8 +621,11 @@ async def get_thread_issue_dependencies_batch(
         target_issue_id = dep.target_issue_id
 
         # Handle incoming dependencies
-        if (target_issue_id is not None and target_issue_id in incoming_by_issue 
-            and source_issue_id is not None):
+        if (
+            target_issue_id is not None
+            and target_issue_id in incoming_by_issue
+            and source_issue_id is not None
+        ):
             source_issue = issue_map.get(source_issue_id)
             source_thread = thread_map.get(source_issue.thread_id) if source_issue else None
             if source_issue is not None and source_thread is not None:
@@ -640,8 +640,11 @@ async def get_thread_issue_dependencies_batch(
                 )
 
         # Handle outgoing dependencies
-        if (source_issue_id is not None and source_issue_id in outgoing_by_issue 
-            and target_issue_id is not None):
+        if (
+            source_issue_id is not None
+            and source_issue_id in outgoing_by_issue
+            and target_issue_id is not None
+        ):
             target_issue = issue_map.get(target_issue_id)
             target_thread = thread_map.get(target_issue.thread_id) if target_issue else None
             if target_issue is not None and target_thread is not None:
@@ -655,8 +658,14 @@ async def get_thread_issue_dependencies_batch(
                     )
                 )
 
-    return ThreadDependenciesResponse(
+    return ThreadIssueDependenciesResponse(
         thread_id=thread_id,
-        blocking=outgoing_by_issue,
-        blocked_by=incoming_by_issue,
+        issues=[
+            IssueDependenciesResponse(
+                issue_id=issue.id,
+                incoming=incoming_by_issue[issue.id],
+                outgoing=outgoing_by_issue[issue.id],
+            )
+            for issue in thread_issues
+        ],
     )

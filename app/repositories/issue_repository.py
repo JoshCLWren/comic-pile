@@ -323,6 +323,38 @@ async def issue_ids_for_thread(db: AsyncSession, thread_id: int) -> set[int]:
     return set(result.scalars().all())
 
 
+async def get_issues_by_thread(db: AsyncSession, thread_id: int) -> list[Issue]:
+    """List every issue of a thread in canonical position order.
+
+    Args:
+        db: Database session.
+        thread_id: Thread whose issues are listed.
+
+    Returns:
+        Issues ordered by position.
+    """
+    result = await db.execute(
+        select(Issue).where(Issue.thread_id == thread_id).order_by(Issue.position, Issue.id)
+    )
+    return list(result.scalars().all())
+
+
+async def get_issues_by_ids(db: AsyncSession, issue_ids: list[int]) -> list[Issue]:
+    """Load issues by primary key.
+
+    Args:
+        db: Database session.
+        issue_ids: Issue identifiers to load.
+
+    Returns:
+        The issues matching the given identifiers.
+    """
+    if not issue_ids:
+        return []
+    result = await db.execute(select(Issue).where(Issue.id.in_(issue_ids)))
+    return list(result.scalars())
+
+
 def is_thread_number_conflict(exc: IntegrityError) -> bool:
     """Report whether an integrity error came from issue thread/number uniqueness.
 
