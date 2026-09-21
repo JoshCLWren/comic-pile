@@ -505,13 +505,20 @@ describe('Keyboard Accessibility', () => {
   await user.click(screen.getByRole('button', { name: /add to queue/i }))
 })
 
-  it('renders loading and empty queue states', () => {
+  it('renders loading and empty queue states', async () => {
+  const user = userEvent.setup()
   mockedUseQueueThreads.mockReturnValue({ data: undefined, isPending: true, refetch: vi.fn() })
   const { rerender } = render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   expect(screen.getByRole('status')).toBeInTheDocument()
   mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   rerender(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  expect(screen.getByText('No active series in queue')).toBeInTheDocument()
+  expect(screen.getByTestId('queue-empty')).toBeInTheDocument()
+  expect(screen.getByText('Nothing to roll yet')).toBeInTheDocument()
+  expect(
+    screen.getByText('Your reading queue is empty — add some comic series to get started.'),
+  ).toBeInTheDocument()
+  await user.click(screen.getByTestId('queue-empty-add-series'))
+  expect(screen.getByRole('heading', { name: /add series/i })).toBeInTheDocument()
 })
 
   it('prevents reading blocked threads and reports delete failures', async () => {
@@ -794,4 +801,136 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   expect(mockedDependenciesApi.listBlockedThreadIds).not.toHaveBeenCalled()
   expect(mockedDependenciesApi.getBlockingInfo).not.toHaveBeenCalled()
   vi.unstubAllGlobals()
+})
+
+describe('Roll nudge after first thread creation', () => {
+  beforeEach(() => {
+    // Clear localStorage before each test
+    vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(null)
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {})
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {})
+  })
+
+  it('shows Ready to roll? modal after first thread creation', async () => {
+    const user = userEvent.setup()
+    const mockCreate = vi.fn().mockResolvedValue({ id: 1 })
+    mockedUseCreateThread.mockReturnValue({ mutate: mockCreate, isPending: false })
+    
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>
+    )
+
+    // Open create modal
+    await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
+    expect(screen.getByRole('heading', { name: /add series/i })).toBeInTheDocument()
+
+    // Fill and submit form
+    await user.type(screen.getByLabelText('Title'), 'New Series')
+    await user.type(screen.getByLabelText('Format'), 'Comic')
+    await user.type(screen.getByLabelText('Issues'), '5')
+    await user.click(screen.getByRole('button', { name: /create series/i }))
+
+    // Wait for creation to complete and the roll nudge modal to appear
+    await waitFor(() => expect(screen.getByRole('heading', { name: /ready to roll\?/i })).toBeInTheDocument())
+    expect(screen.getByText(/you've created your first series!/i)).toBeInTheDocument()
+  })
+
+  it('does not show roll nudge if user has dismissed it before', async () => {
+    // Mock dismissed state in localStorage
+    vi.spyOn(Storage.prototype, 'getItem').mockReturnValue('true')
+    
+    const user = userEvent.setup()
+    const mockCreate = vi.fn().mockResolvedValue({ id: 1 })
+    mockedUseCreateThread.mockReturnValue({ mutate: mockCreate, isPending: false })
+    
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>
+    )
+
+    // Open create modal
+    await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
+
+    // Fill and submit form
+    await user.type(screen.getByLabelText('Title'), 'New Series')
+    await user.type(screen.getByLabelText('Format'), 'Comic')
+    await user.type(screen.getByLabelText('Issues'), '5')
+    await user.click(screen.getByRole('button', { name: /create series/i }))
+
+    // Wait for creation to complete
+    await waitFor(() => expect(mockCreate).toHaveBeenCalled())
+
+    // Check that Ready to roll? modal does NOT appear
+    expect(screen.queryByRole('heading', { name: /ready to roll\?/i })).not.toBeInTheDocument()
+  })
+
+  it('navigates to roll page when clicking Let\'s Roll! button', async () => {
+    const user = userEvent.setup()
+    const mockCreate = vi.fn().mockResolvedValue({ id: 1 })
+    mockedUseCreateThread.mockReturnValue({ mutate: mockCreate, isPending: false })
+    
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>
+    )
+
+    // Open create modal and submit
+    await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
+    await user.type(screen.getByLabelText('Title'), 'New Series')
+    await user.type(screen.getByLabelText('Format'), 'Comic')
+    await user.type(screen.getByLabelText('Issues'), '5')
+    await user.click(screen.getByRole('button', { name: /create series/i }))
+
+    // Wait for modal to appear
+    await waitFor(() => expect(screen.getByRole('heading', { name: /ready to roll\?/i })).toBeInTheDocument())
+
+    // Click Let's Roll! button
+    await user.click(screen.getByRole('button', { name: /let's roll!/i }))
+
+    // Modal should close after clicking the button
+    await waitFor(() => expect(screen.queryByRole('heading', { name: /ready to roll\?/i })).not.toBeInTheDocument())
+  })
+
+  it('dismisses roll nudge when clicking Maybe Later button', async () => {
+    const user = userEvent.setup()
+    const mockCreate = vi.fn().mockResolvedValue({ id: 1 })
+    mockedUseCreateThread.mockReturnValue({ mutate: mockCreate, isPending: false })
+    
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>
+    )
+
+    // Open create modal and submit
+    await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
+    await user.type(screen.getByLabelText('Title'), 'New Series')
+    await user.type(screen.getByLabelText('Format'), 'Comic')
+    await user.type(screen.getByLabelText('Issues'), '5')
+    await user.click(screen.getByRole('button', { name: /create series/i }))
+
+    // Wait for modal to appear
+    await waitFor(() => expect(screen.getByRole('heading', { name: /ready to roll\?/i })).toBeInTheDocument())
+
+    // Click Maybe Later button
+    await user.click(screen.getByRole('button', { name: /maybe later/i }))
+
+    // Check that modal is closed
+    expect(screen.queryByRole('heading', { name: /ready to roll\?/i })).not.toBeInTheDocument()
+    
+    // Check that dismissed state is saved to localStorage
+    expect(Storage.prototype.setItem).toHaveBeenCalledWith('comic-pile-roll-nudge-dismissed', 'true')
+  })
 })

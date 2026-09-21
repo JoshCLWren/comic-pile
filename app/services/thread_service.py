@@ -26,6 +26,8 @@ from app.repositories import (
     thread_repository,
 )
 from app.schemas import (
+    ComicVineMappingHealth,
+    ComicVineMappingStatus,
     QueueThreadListItem,
     QueueThreadListResponse,
     ReactivateRequest,
@@ -162,7 +164,9 @@ async def threads_to_responses(threads: list[Thread], db: AsyncSession) -> list[
     ]
 
 
-def to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
+def to_queue_list_item(
+    tr: ThreadResponse, mapping_health: dict | None = None
+) -> QueueThreadListItem:
     """Convert a full ThreadResponse to a narrow QueueThreadListItem.
 
     Deliberately drops detail-only fields (last_rating, is_test,
@@ -171,11 +175,45 @@ def to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
 
     Args:
         tr: Full thread response.
+        mapping_health: Optional pre-computed mapping health row from the
+            batched repository query. When provided, used to construct the
+            ComicVineMappingHealth projection.
 
     Returns:
         Narrow list-item projection of the thread response.
     """
     format_value = normalize_format_value(tr.format)
+
+    comicvine_mapping = None
+    if mapping_health is not None:
+        tracked = mapping_health["tracked_issue_count"]
+        confirmed = mapping_health["confirmed_issue_count"]
+        needs_mapping = mapping_health["needs_mapping_count"]
+        needs_review = mapping_health["needs_review_count"]
+        has_issues = mapping_health["has_issues"]
+
+        if not has_issues and tr.total_issues is None:
+            # Legacy thread without issue tracking - mapping not applicable
+            status = ComicVineMappingStatus.not_applicable
+        elif tracked == 0:
+            # Thread uses issue tracking but has no issues yet
+            status = ComicVineMappingStatus.not_applicable
+        elif needs_review > 0:
+            status = ComicVineMappingStatus.needs_review
+        elif confirmed == tracked and tracked > 0:
+            status = ComicVineMappingStatus.fully_mapped
+        elif confirmed > 0:
+            status = ComicVineMappingStatus.partial
+        else:
+            status = ComicVineMappingStatus.unresolved
+
+        comicvine_mapping = ComicVineMappingHealth(
+            status=status,
+            tracked_issue_count=tracked,
+            confirmed_issue_count=confirmed,
+            needs_mapping_count=needs_mapping,
+            needs_review_count=needs_review,
+        )
 
     return QueueThreadListItem(
         id=tr.id,
@@ -191,6 +229,7 @@ def to_queue_list_item(tr: ThreadResponse) -> QueueThreadListItem:
         next_unread_issue_number=tr.next_unread_issue_number,
         notes=tr.notes,
         created_at=tr.created_at,
+        comicvine_mapping=comicvine_mapping,
     )
 
 
@@ -274,7 +313,16 @@ async def list_queue_threads(
 
     thread_responses = await threads_to_responses(threads_to_return, db)
 
-    queue_items = [to_queue_list_item(tr) for tr in thread_responses]
+    # Fetch ComicVine mapping health for issue-tracking threads on this page only
+    # (batched, no N+1). Legacy threads without total_issues skip the query
+    # entirely, preserving the existing 2-SELECT-per-page contract for them.
+    tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
+    mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
+
+    queue_items = [
+        to_queue_list_item(tr, mapping_health_map.get(tr.id))
+        for tr in thread_responses
+    ]
 
     next_token = None
     if has_more and threads_to_return:
@@ -353,7 +401,16 @@ async def list_completed_threads(
 
     thread_responses = await threads_to_responses(threads_to_return, db)
 
-    queue_items = [to_queue_list_item(tr) for tr in thread_responses]
+    # Fetch ComicVine mapping health for issue-tracking threads on this page only
+    # (batched, no N+1). Legacy threads without total_issues skip the query
+    # entirely, preserving the existing 2-SELECT-per-page contract for them.
+    tracked_ids = {tr.id for tr in thread_responses if tr.total_issues is not None}
+    mapping_health_map = await thread_repository.fetch_comicvine_mapping_health(db, tracked_ids)
+
+    queue_items = [
+        to_queue_list_item(tr, mapping_health_map.get(tr.id))
+        for tr in thread_responses
+    ]
 
     next_token = None
     if has_more and threads_to_return:

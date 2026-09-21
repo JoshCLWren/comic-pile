@@ -261,6 +261,29 @@ describe('semantic theme stylesheet contract (#1646)', () => {
     }
   })
 
+  /**
+   * Issue #2634: the legacy root aliases were collapsed into the canonical
+   * `data-theme` token sets in `styles.css`. Nothing in the component tree may
+   * still consume the retired aliases, because that would be a second
+   * design-token source drifting from the canonical theme sets.
+   */
+  it('consumes no retired legacy root aliases anywhere in component sources (#2634)', () => {
+    const retiredAliases = ['--theme-bg-card', '--theme-primary-light', '--theme-bg-dark']
+    const sources = [
+      'src/components/CustomCBLBuilder.tsx',
+      'src/components/ReadingPlanAddMaterialImpl.tsx',
+    ]
+    for (const source of sources) {
+      const text = loadComponentStylesheet(source)
+      for (const alias of retiredAliases) {
+        expect(
+          text,
+          `${source} must not consume retired legacy alias ${alias}`,
+        ).not.toContain(alias)
+      }
+    }
+  })
+
   it('never reuses a danger literal as a primary/focus/comic/personal literal (#2229)', () => {
     const css = loadStylesheet()
     const dangerLiterals = new Set(tokenValuesPerTheme(css, '--theme-danger-hover'))

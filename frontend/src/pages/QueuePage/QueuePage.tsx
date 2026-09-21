@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useRollNudge } from './useRollNudge'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
@@ -53,9 +54,6 @@ export default function QueuePage() {
     threads,
     sortBy,
   )
-  // Authoritative whole-queue total from the backend, never a count of the
-  // loaded page (issue #2568). `activeThreads.length` is only a fallback for
-  // responses that predate the field.
   const authoritativeActiveCount = activeCount ?? activeThreads.length
   const blockingByThreadId = useQueueBlockingInfo(
     activeThreads.map((thread) => thread.id),
@@ -76,7 +74,6 @@ export default function QueuePage() {
   })
 
   const submitCreate = useCallback(
-    // SAFETY: the create mutation's async mutationFn resolves to the created thread record before mutate() widens it to void.
     (input: { title: string; format: string; issues_remaining: number; notes: string | null }) =>
       createMutation.mutate(input) as Promise<{ id?: number }>,
     [createMutation],
@@ -93,9 +90,11 @@ export default function QueuePage() {
     [reactivateMutation],
   )
 
+  const rollNudge = useRollNudge()
+
   const modals = useQueueModalsHook({
     threads,
-    onCreated: async () => {},
+    onCreated: rollNudge.onCreated,
     onUpdated: async () => {},
     onReactivated: async () => {},
     refetchSession: async () => {
@@ -106,6 +105,9 @@ export default function QueuePage() {
     submitReactivate,
     isPendingCreate: createMutation.isPending,
     isPendingEdit: updateMutation.isPending,
+    showRollNudge: rollNudge.showRollNudge,
+    onDismissRollNudge: rollNudge.onDismissRollNudge,
+    onRollNudgeNavigate: rollNudge.onRollNudgeNavigate,
   })
 
   const handleIssueChanged = useCallback(() => {
@@ -194,12 +196,8 @@ export default function QueuePage() {
   })
 
   const mobileAddEnabled = !modals.isAnyModalOpen
-  // Shuffle operates on the whole queue, so enablement must use the
-  // authoritative queue size rather than the loaded page slice (issue #2568).
   const shuffleDisabled = authoritativeActiveCount < 2
 
-  // Keep already-rendered rows visible while an additional page loads, but
-  // preserve the full-screen initial loading state before Queue has any data.
   if (isPending && !threads?.length) {
     return <LoadingSpinner fullScreen />
   }
@@ -238,6 +236,7 @@ export default function QueuePage() {
           isSearching={isSearching}
           sentinelRef={sentinelRef}
           hasNextPage={!!nextPageToken}
+          onAddSeries={modals.showCreateModal}
         />
 
         <CompletedThreadsSection
@@ -308,6 +307,9 @@ export default function QueuePage() {
           isPendingCreate={modals.isPendingCreate}
           isPendingEdit={modals.isPendingEdit}
           isPendingReactivate={reactivateMutation.isPending}
+          showRollNudge={modals.showRollNudge}
+          onDismissRollNudge={modals.dismissRollNudge}
+          onRollNudgeNavigate={modals.rollNudgeNavigate}
         />
 
         <DeleteThreadDialog
@@ -322,5 +324,4 @@ export default function QueuePage() {
   )
 }
 
-// Re-export the type for unit tests that previously imported it from QueuePage.
 export type { QueueSortBy }

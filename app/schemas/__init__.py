@@ -79,6 +79,8 @@ from app.schemas.session import (
 )
 from app.schemas.snapshot import SnapshotResponse, SnapshotsListResponse
 from app.schemas.thread import (
+    ComicVineMappingHealth,
+    ComicVineMappingStatus,
     QueueThreadListItem,
     QueueThreadListResponse,
     ReactivateRequest,
@@ -106,6 +108,8 @@ __all__ = [
     "ThreadResponse",
     "ThreadDetail",
     "ThreadListResponse",
+    "ComicVineMappingHealth",
+    "ComicVineMappingStatus",
     "QueueThreadListItem",
     "QueueThreadListResponse",
     "ReactivateRequest",

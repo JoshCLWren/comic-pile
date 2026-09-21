@@ -247,7 +247,7 @@ export default function ReadingPlanAddMaterial({
               placeholder="Search source lists"
               maxLength={200}
               disabled={isCommitting}
-              className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-card)] px-3 text-[var(--theme-text-primary)] disabled:opacity-50"
+              className="min-h-11 flex-1 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-[var(--theme-text-primary)] disabled:opacity-50"
             />
             <button
               type="submit"
