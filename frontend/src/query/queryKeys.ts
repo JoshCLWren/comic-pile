@@ -247,4 +247,8 @@ export const queryKeys = {
   continuityCorrection: {
     groups: () => ['continuityCorrection', 'groups'] as const,
   },
+  preferences: {
+    all: ['preferences'] as const,
+    detail: () => ['preferences', 'detail'] as const,
+  },
 } as const

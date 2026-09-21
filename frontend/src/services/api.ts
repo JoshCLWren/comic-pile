@@ -807,3 +807,18 @@ export const identityInboxApi = {
   skip: (mappingId: number) =>
     api.post<void>(`/v1/identity-inbox/${mappingId}/skip`),
 }
+
+export interface UserPreferencesResponse {
+  theme: 'classic' | 'ink-gold' | 'command-center'
+  user_id: number
+}
+
+export interface UserPreferencesPatchRequest {
+  theme?: 'classic' | 'ink-gold' | 'command-center' | null
+}
+
+export const preferencesApi = {
+  get: () => api.get<UserPreferencesResponse>('/v1/users/me/preferences'),
+  patch: (data: UserPreferencesPatchRequest) =>
+    api.patch<UserPreferencesResponse, UserPreferencesPatchRequest>('/v1/users/me/preferences', data),
+}
