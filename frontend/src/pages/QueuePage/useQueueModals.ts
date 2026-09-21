@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import type { Thread } from '../../types'
 import { issuesApi } from '../../services/api-issues'
-import { useBugReportRestore } from '../../contexts/useBugReportRestore'
+import { useToast } from '../../contexts/useToast'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
 
@@ -310,8 +310,9 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
             }
           } catch (issueError: unknown) {
             console.error('Thread created but failed to create issues:', issueError)
-            window.alert(
+            showToast(
               `Thread created successfully, but failed to create individual issues: ${getApiErrorDetail(issueError)}`,
+              'error',
             )
           }
         }
