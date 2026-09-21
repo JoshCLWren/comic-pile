@@ -24,6 +24,8 @@ from app.models.thread import Thread
 from app.schemas.comicvine_resolution import (
     CanonicalCorrection,
     ComicVineIssueCandidate,
+    ComicVineResolveResponse,
+    ComicVineResolvedIssue,
     ComicVineSeriesIssuesResponse,
     ComicVineSeriesSearchResponse,
     ComicVineSeriesResult,
@@ -35,8 +37,9 @@ from app.schemas.comicvine_resolution import (
     MetadataCorrectionsResponse,
     MetadataRefreshResponse,
 )
+from app.services.comicvine_url import looks_like_url, parse_comicvine_url
 from app.services.reading_order_placement import apply_insert, resolve_anchored_position
-from comic_pile.comicvine_provider import ComicVineClient
+from comic_pile.comicvine_provider import ComicVineClient, ComicVineError
 
 logger = logging.getLogger(__name__)
 
@@ -69,21 +72,37 @@ async def search_comicvine_series(
     query: str,
     *,
     limit: int = 10,
+    offset: int = 0,
 ) -> ComicVineSeriesSearchResponse:
     """Search ComicVine volumes/series by title.
+
+    Uses ComicVine offset semantics so a caller can page through more than
+    the first page without discarding earlier results. The response exposes
+    ``offset``, ``limit``, ``has_more``, and ``next_offset`` so the client can
+    render a bounded load-more contract instead of dead-ending at page one.
 
     Args:
         client: Optional live ComicVine client. When ``None``, returns empty results.
         query: Search query string.
         limit: Maximum results to return (1-100).
+        offset: Zero-based provider offset for the requested page.
 
     Returns:
-        Series search results with metadata.
+        Series search results with paging metadata.
     """
-    if client is None or not query.strip():
-        return ComicVineSeriesSearchResponse(query=query, results=[], total_available=0)
-
     clamped_limit = max(1, min(limit, 100))
+    clamped_offset = max(0, offset)
+    if client is None or not query.strip():
+        return ComicVineSeriesSearchResponse(
+            query=query,
+            results=[],
+            total_available=0,
+            offset=clamped_offset,
+            limit=clamped_limit,
+            has_more=False,
+            next_offset=None,
+        )
+
     response = await client.request(
         "search",
         "search",
@@ -91,14 +110,17 @@ async def search_comicvine_series(
             "query": query,
             "resources": "volume",
             "limit": clamped_limit,
+            "offset": clamped_offset,
             "field_list": "id,name,publisher,start_year,count_of_issues,site_detail_url,image",
         },
     )
     results = response.payload.get("results")
-    total = response.payload.get("number_of_total_results")
     if not isinstance(results, list):
         return ComicVineSeriesSearchResponse(
-            query=query, results=[], total_available=0
+            query=query,
+            results=[],
+            offset=clamped_offset,
+            limit=clamped_limit,
         )
 
     series_results: list[ComicVineSeriesResult] = []
@@ -133,10 +155,18 @@ async def search_comicvine_series(
             )
         )
 
+    total = _coerce_provider_int(response.payload.get("number_of_total_results"))
+    total_available = total if total is not None else len(series_results)
+    loaded = clamped_offset + len(series_results)
+    has_more = loaded < total_available if total_available is not None else False
     return ComicVineSeriesSearchResponse(
         query=query,
         results=series_results,
-        total_available=total if isinstance(total, int) else len(series_results),
+        total_available=total_available,
+        offset=clamped_offset,
+        limit=clamped_limit,
+        has_more=has_more,
+        next_offset=loaded if has_more else None,
     )
 
 
@@ -214,6 +244,168 @@ async def get_comicvine_series_issues(
         series_name=series_name,
         issues=candidates,
     )
+
+
+def _provider_image_url(image_raw: object) -> str | None:
+    """Extract the best available image URL from a ComicVine image object."""
+    if not isinstance(image_raw, dict):
+        return None
+    for key in ("medium_url", "small_url", "super_url", "thumb_url"):
+        candidate = image_raw.get(key)
+        if isinstance(candidate, str) and candidate:
+            return candidate
+    return None
+
+
+def _provider_string(value: object) -> str | None:
+    """Return a non-empty string value, else None."""
+    return value if isinstance(value, str) and value else None
+
+
+async def _resolve_comicvine_issue(
+    client: ComicVineClient, issue_id: int
+) -> ComicVineResolvedIssue:
+    """Resolve one ComicVine issue from a direct issue URL."""
+    response = await client.fetch_issue(issue_id)
+    result = response.payload.get("results")
+    if not isinstance(result, dict):
+        raise ComicVineError("ComicVine issue response did not contain an object result")
+
+    series_name: str | None = None
+    volume_id: int | None = None
+    volume_raw = result.get("volume")
+    if isinstance(volume_raw, dict):
+        raw_id = volume_raw.get("id")
+        if isinstance(raw_id, int):
+            volume_id = raw_id
+        raw_name = volume_raw.get("name")
+        if isinstance(raw_name, str):
+            series_name = raw_name
+
+    issue_number = result.get("issue_number")
+    return ComicVineResolvedIssue(
+        comicvine_issue_id=issue_id,
+        series_name=series_name,
+        volume_id=volume_id,
+        issue_number=str(issue_number) if issue_number is not None else None,
+        name=_provider_string(result.get("name")),
+        cover_date=_provider_string(result.get("cover_date")),
+        store_date=_provider_string(result.get("store_date")),
+        image_url=_provider_image_url(result.get("image")),
+        site_detail_url=_provider_string(result.get("site_detail_url")),
+    )
+
+
+async def _resolve_comicvine_volume(
+    client: ComicVineClient,
+    volume_id: int,
+) -> tuple[ComicVineSeriesResult, list[ComicVineIssueCandidate]]:
+    """Resolve one ComicVine volume and its issues from a direct volume URL."""
+    response = await client.fetch_volume(volume_id)
+    result = response.payload.get("results")
+    if not isinstance(result, dict):
+        raise ComicVineError("ComicVine volume response did not contain an object result")
+
+    name = result.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise ComicVineError("ComicVine volume response did not contain a name")
+
+    publisher: str | None = None
+    publisher_raw = result.get("publisher")
+    if isinstance(publisher_raw, dict):
+        publisher_name = publisher_raw.get("name")
+        if isinstance(publisher_name, str):
+            publisher = publisher_name
+    elif isinstance(publisher_raw, str):
+        publisher = publisher_raw
+    volume = ComicVineSeriesResult(
+        comicvine_volume_id=volume_id,
+        name=name,
+        publisher=publisher,
+        start_year=_coerce_provider_int(result.get("start_year")),
+        issue_count=_coerce_provider_int(result.get("count_of_issues")),
+        site_detail_url=_provider_string(result.get("site_detail_url")),
+        image_url=_provider_image_url(result.get("image")),
+    )
+
+    issues_response = await get_comicvine_series_issues(
+        client, volume_id, series_name=name
+    )
+    return volume, issues_response.issues
+
+
+async def resolve_comicvine_input(
+    client: ComicVineClient | None,
+    raw: str,
+) -> ComicVineResolveResponse:
+    """Resolve a correction input that may be a pasted ComicVine issue/volume URL.
+
+    A recognized ComicVine issue URL resolves directly to a compact
+    confirmation-card payload so the user does not need to find the volume via
+    title search first. A recognized volume URL resolves to the volume plus its
+    issues. Unsupported/malformed URLs and provider failures return a clear
+    ``validation_error`` while leaving ordinary title search available.
+
+    Args:
+        client: Optional live ComicVine client.
+        raw: The untrusted pasted input or ordinary search text.
+
+    Returns:
+        A discriminated resolve response.
+    """
+    trimmed = raw.strip()
+    if not trimmed:
+        return ComicVineResolveResponse(input=raw, kind="search")
+
+    parsed = parse_comicvine_url(trimmed)
+    if parsed is None:
+        if looks_like_url(trimmed):
+            return ComicVineResolveResponse(
+                input=raw,
+                kind="search",
+                validation_error=(
+                    "That doesn't look like a ComicVine issue or volume URL. Paste a "
+                    "comicvine.gamespot.com link or search by title instead."
+                ),
+            )
+        return ComicVineResolveResponse(input=raw, kind="search")
+
+    if client is None:
+        return ComicVineResolveResponse(
+            input=raw,
+            kind=parsed.kind,
+            validation_error=(
+                "ComicVine is not configured on this server, so pasted links cannot "
+                "be resolved. Search by title instead."
+            ),
+        )
+
+    try:
+        if parsed.kind == "issue":
+            issue = await _resolve_comicvine_issue(client, parsed.resource_id)
+            return ComicVineResolveResponse(input=raw, kind="issue", issue=issue)
+        volume, issues = await _resolve_comicvine_volume(client, parsed.resource_id)
+        return ComicVineResolveResponse(
+            input=raw,
+            kind="volume",
+            volume=volume,
+            issues=issues,
+        )
+    except (ComicVineError, TimeoutError, ValueError):
+        logger.warning(
+            "comicvine_resolve_failed kind=%s id=%s",
+            parsed.kind,
+            parsed.resource_id,
+            exc_info=True,
+        )
+        return ComicVineResolveResponse(
+            input=raw,
+            kind=parsed.kind,
+            validation_error=(
+                "We couldn't resolve that ComicVine link right now. Check the link "
+                "or search by title instead."
+            ),
+        )
 
 
 async def get_issue_identity_state(

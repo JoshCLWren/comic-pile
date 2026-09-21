@@ -1,6 +1,9 @@
 """Schemas for ComicVine identity resolution and metadata correction."""
 
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -18,11 +21,50 @@ class ComicVineSeriesResult(BaseModel):
 
 
 class ComicVineSeriesSearchResponse(BaseModel):
-    """Paginated series search results."""
+    """Paginated series search results using ComicVine offset semantics."""
 
     query: str
     results: list[ComicVineSeriesResult]
     total_available: int | None = None
+    offset: int = 0
+    limit: int = 10
+    has_more: bool = False
+    next_offset: int | None = None
+
+
+class ComicVineResolvedIssue(BaseModel):
+    """A ComicVine issue resolved directly from a pasted URL.
+
+    Carries the owning series/volume metadata so the confirmation card can
+    render without a separate volume search.
+    """
+
+    comicvine_issue_id: int
+    series_name: str | None = None
+    volume_id: int | None = None
+    issue_number: str | None = None
+    name: str | None = None
+    cover_date: str | None = None
+    store_date: str | None = None
+    image_url: str | None = None
+    site_detail_url: str | None = None
+
+
+class ComicVineResolveResponse(BaseModel):
+    """Result of resolving a correction input that may be a pasted URL.
+
+    ``kind`` distinguishes an exact issue resolution, an exact volume
+    resolution, or an ordinary title-search input. ``validation_error`` carries
+    a clear inline message when the input is an unsupported/malformed URL or
+    provider resolution failed, while leaving normal title search available.
+    """
+
+    input: str
+    kind: Literal["issue", "volume", "search"]
+    validation_error: str | None = None
+    issue: ComicVineResolvedIssue | None = None
+    volume: ComicVineSeriesResult | None = None
+    issues: list[ComicVineIssueCandidate] = []
 
 
 class ComicVineIssueCandidate(BaseModel):

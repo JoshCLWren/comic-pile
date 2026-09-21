@@ -415,3 +415,92 @@ async def test_get_series_issues_without_client(
     body = response.json()
     assert body["comicvine_volume_id"] == 12345
     assert body["issues"] == []
+
+
+@pytest.mark.asyncio
+async def test_search_series_exposes_paging_defaults_without_client(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Search reports offset/limit/has_more even with no provider configured."""
+    monkeypatch.delenv("COMICVINE_API_KEY", raising=False)
+    response = await auth_client.get(
+        "/api/v1/comicvine/search/series",
+        params={"q": "Batman", "limit": 20, "offset": 20},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["query"] == "Batman"
+    assert body["results"] == []
+    assert body["offset"] == 20
+    assert body["limit"] == 20
+    assert body["has_more"] is False
+    assert body["next_offset"] is None
+
+
+@pytest.mark.asyncio
+async def test_resolve_plain_text_returns_search_without_client(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Resolve treats ordinary text as a search signal and stays safe."""
+    monkeypatch.delenv("COMICVINE_API_KEY", raising=False)
+    response = await auth_client.get(
+        "/api/v1/comicvine/resolve",
+        params={"input": "Superman"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["kind"] == "search"
+    assert body["validation_error"] is None
+    assert body["issue"] is None
+    assert body["volume"] is None
+
+
+@pytest.mark.asyncio
+async def test_resolve_issue_url_without_client_reports_configuration_error(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pasted issue URL never silently searches when the provider is absent."""
+    monkeypatch.delenv("COMICVINE_API_KEY", raising=False)
+    response = await auth_client.get(
+        "/api/v1/comicvine/resolve",
+        params={"input": "https://comicvine.gamespot.com/superman-34-i-superman/4000-1154070/"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["kind"] == "issue"
+    assert body["validation_error"] is not None
+    assert body["issue"] is None
+
+
+@pytest.mark.asyncio
+async def test_resolve_unsupported_url_reports_validation_without_mutation(
+    auth_client,
+    async_db: AsyncSession,
+    default_user: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unsupported hosts are rejected with a clear message and no identity mutation."""
+    monkeypatch.delenv("COMICVINE_API_KEY", raising=False)
+    response = await auth_client.get(
+        "/api/v1/comicvine/resolve",
+        params={"input": "https://example.com/not-comicvine/4000-1154070/"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["kind"] == "search"
+    assert body["validation_error"] is not None
+    assert body["issue"] is None
+    assert body["volume"] is None

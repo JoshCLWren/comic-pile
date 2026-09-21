@@ -99,10 +99,10 @@ describe('ComicPillar Wrong comic? flow', () => {
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByPlaceholderText('Search series title...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
       target: { value: 'Stormwatch' },
     })
-    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('Stormwatch', 10))
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('Stormwatch', 10, 0))
     fireEvent.click(screen.getByText('Stormwatch'))
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
 
@@ -126,10 +126,10 @@ describe('ComicPillar Wrong comic? flow', () => {
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByPlaceholderText('Search series title...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
       target: { value: 'Stormwatch' },
     })
-    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('Stormwatch', 10))
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('Stormwatch', 10, 0))
     fireEvent.click(screen.getByText('Stormwatch'))
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
 
@@ -172,7 +172,7 @@ describe('ComicPillar confirmed mapping display', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Wrong series?' }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByPlaceholderText('Search series title...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
       target: { value: 'Stormwatch' },
     })
     fireEvent.click(await screen.findByText('Stormwatch'))

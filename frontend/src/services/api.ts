@@ -569,6 +569,33 @@ export interface ComicVineSeriesSearchResponse {
   query: string
   results: ComicVineSeriesResult[]
   total_available: number | null
+  offset: number
+  limit: number
+  has_more: boolean
+  next_offset: number | null
+}
+
+export interface ComicVineResolvedIssue {
+  comicvine_issue_id: number
+  series_name: string | null
+  volume_id: number | null
+  issue_number: string | null
+  name: string | null
+  cover_date: string | null
+  store_date: string | null
+  image_url: string | null
+  site_detail_url: string | null
+}
+
+export type ComicVineResolveKind = 'issue' | 'volume' | 'search'
+
+export interface ComicVineResolveResponse {
+  input: string
+  kind: ComicVineResolveKind
+  validation_error: string | null
+  issue: ComicVineResolvedIssue | null
+  volume: ComicVineSeriesResult | null
+  issues: ComicVineIssueCandidate[]
 }
 
 export interface ComicVineIssueCandidate {
@@ -634,8 +661,10 @@ export const comicVineApi = {
     api.get<ComicVineIssueIntelligence | null>(`/v1/issues/${issueId}/comicvine`),
   importIssue: (payload: ComicVineImportIssuePayload) =>
     api.post<ComicVineImportIssueResult, ComicVineImportIssuePayload>('/v1/comicvine/issues:import', payload),
-  searchSeries: (query: string, limit = 10) =>
-    api.get<ComicVineSeriesSearchResponse>(`/v1/comicvine/search/series`, { params: { q: query, limit } }),
+  searchSeries: (query: string, limit = 10, offset = 0) =>
+    api.get<ComicVineSeriesSearchResponse>(`/v1/comicvine/search/series`, { params: { q: query, limit, offset } }),
+  resolveIdentity: (input: string) =>
+    api.get<ComicVineResolveResponse>(`/v1/comicvine/resolve`, { params: { input } }),
   getSeriesIssues: (volumeId: number, seriesName = '') =>
     api.get<ComicVineSeriesIssuesResponse>(`/v1/comicvine/series/${volumeId}/issues`, { params: { series_name: seriesName } }),
   getIssueIdentity: (issueId: number) =>

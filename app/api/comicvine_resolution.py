@@ -17,6 +17,7 @@ from app.database import get_db
 from app.external_identities import ExternalIdentityMappingError
 from app.models.user import User
 from app.schemas.comicvine_resolution import (
+    ComicVineResolveResponse,
     ComicVineSeriesIssuesResponse,
     ComicVineSeriesSearchResponse,
     ConfirmIdentityRequest,
@@ -37,8 +38,9 @@ from app.services.comicvine_resolution import (
     get_issue_identity_state,
     import_comicvine_issue,
     list_metadata_corrections,
-    request_provider_refresh,
     replace_comicvine_identity,
+    request_provider_refresh,
+    resolve_comicvine_input,
     revert_metadata_correction,
     search_comicvine_series,
 )
@@ -75,16 +77,51 @@ async def api_search_comicvine_series(
     current_user: Annotated[User, Depends(get_current_user)],
     q: str = Query(..., min_length=1, max_length=200, description="Series search query"),
     limit: int = Query(10, ge=1, le=50, description="Maximum results"),
+    offset: int = Query(0, ge=0, description="Zero-based result offset"),
 ) -> ComicVineSeriesSearchResponse:
     """Search ComicVine for series/volumes by title.
+
+    Pagination uses ComicVine offset semantics: the response reports
+    ``offset``, ``limit``, ``has_more``, and ``next_offset`` so a client can
+    load more results without dead-ending at the first page.
 
     Args:
         q: Search query string.
         limit: Maximum results to return.
+        offset: Zero-based result offset for paging.
         current_user: Authenticated user.
     """
     client = _get_comicvine_client()
-    return await search_comicvine_series(client, q, limit=limit)
+    return await search_comicvine_series(client, q, limit=limit, offset=offset)
+
+
+@router.get(
+    "/resolve",
+    response_model=ComicVineResolveResponse,
+)
+async def api_resolve_comicvine_input(
+    current_user: Annotated[User, Depends(get_current_user)],
+    input: str = Query(
+        ...,
+        min_length=1,
+        max_length=1000,
+        description="Search text or a pasted ComicVine issue/volume URL",
+    ),
+) -> ComicVineResolveResponse:
+    """Resolve a correction input that may be a pasted ComicVine URL.
+
+    A recognized ``4000-<id>`` issue URL resolves directly to the exact issue;
+    a recognized ``4050-<id>`` volume URL resolves to the volume and its
+    issues. Unsupported or malformed URLs return a clear validation message
+    without mutating any identity. Ordinary text returns ``kind='search'`` and
+    continues through the normal title-search path.
+
+    Args:
+        input: Search text or pasted ComicVine URL.
+        current_user: Authenticated user.
+    """
+    client = _get_comicvine_client()
+    return await resolve_comicvine_input(client, input)
 
 
 @router.get(

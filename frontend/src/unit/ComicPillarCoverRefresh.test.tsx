@@ -165,10 +165,10 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Wrong series?' }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByPlaceholderText('Search series title...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
       target: { value: 'Stormwatch' },
     })
-    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('Stormwatch', 10))
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('Stormwatch', 10, 0))
     fireEvent.click(screen.getByText('Stormwatch'))
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
     fireEvent.click(screen.getByText('#1'))
@@ -213,10 +213,10 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Wrong series?' }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
-    fireEvent.change(screen.getByPlaceholderText('Search series title...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
       target: { value: 'Stormwatch' },
     })
-    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('Stormwatch', 10))
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('Stormwatch', 10, 0))
     fireEvent.click(screen.getByText('Stormwatch'))
     await waitFor(() => expect(screen.getByText('#2')).toBeInTheDocument())
     fireEvent.click(screen.getByText('#2'))
@@ -254,7 +254,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     // trigger correction
     fireEvent.click(await screen.findByRole('button', { name: 'Wrong series?' }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
-    fireEvent.change(screen.getByPlaceholderText('Search series title...'), {
+    fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
       target: { value: 'Stormwatch' },
     })
     await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalled())
