@@ -193,4 +193,11 @@ describe('QueueControls', () => {
     await user.click(screen.getByRole('button', { name: 'Recently added' }))
     expect(baseProps.onSortChange).toHaveBeenCalledWith('created')
   })
+
+  it('centers Add Series button text vertically with items-center utility', () => {
+    render(<QueueControls {...baseProps} />)
+    
+    const addButton = screen.getByTestId('queue-add-thread-desktop')
+    expect(addButton).toHaveClass('items-center')
+  })
 })
