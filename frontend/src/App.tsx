@@ -1,6 +1,6 @@
 import { Suspense, createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './query/queryClient'
 import { lazyRoute } from './routes/routeModules'
@@ -17,6 +17,7 @@ import api, {
   setAccessToken,
 } from './services/api'
 import { isDefinitiveAuthenticationFailure } from './services/authFailure'
+import { isServiceUnavailableError } from './services/authFailure'
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import { usePingHeartbeat } from './hooks/usePingHeartbeat'
@@ -63,6 +64,7 @@ const IdentityInboxPage = lazyRoute('identityInbox')
 export interface AuthContextValue {
   isAuthenticated: boolean
   isLoading: boolean
+  isServiceUnavailable: boolean
   user: AuthUser | null
   login: (accessToken: string) => Promise<void>
   logout: () => void
@@ -82,6 +84,7 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isServiceUnavailable, setIsServiceUnavailable] = useState(false)
   const [user, setUser] = useState<AuthUser | null>(null)
   const recoveryPromise = useRef<Promise<void> | null>(null)
 
@@ -89,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearAccessToken()
     setIsAuthenticated(false)
     setUser(null)
+    setIsServiceUnavailable(false)
   }, [])
 
   const recoverSession = useCallback((timeout?: number): Promise<void> => {
@@ -112,6 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (error) {
           if (isDefinitiveAuthenticationFailure(error)) {
             markDefinitivelyUnauthenticated()
+          } else if (isServiceUnavailableError(error)) {
+            setIsServiceUnavailable(true)
           }
           throw error
         }
@@ -152,6 +158,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let isMounted = true
     let retryTimer: number | undefined
     const authChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('comic-pile-auth') : null
+    const navigate = useNavigate()
+
+    // Periodic retry loop when service is temporarily unavailable
+    const unavailableInterval = setInterval(async () => {
+      if (!isMounted || !isServiceUnavailable) {
+        clearInterval(unavailableInterval)
+        return
+      }
+      try {
+        await validateSession()
+        if (isMounted && isServiceUnavailable) {
+          setIsServiceUnavailable(false)
+          if (location.state?.from) {
+            navigate(location.state.from.pathname, { replace: true })
+          } else {
+            navigate('/', { replace: true })
+          }
+        }
+      } catch (error) {
+        // Ignore errors during retry, keep polling
+      }
+    }, 5000)
+
     const validateSession = async () => {
       const isPublicAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register'
       if (!getAccessToken() && !window.__COMIC_PILE_ACCESS_TOKEN && isPublicAuthPage) {
@@ -200,6 +229,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               return
             }
           }
+        } else if (isServiceUnavailableError(error)) {
+          // The database backend is temporarily unavailable. Keep the user's
+          // authenticated session visible and show a degraded state rather than
+          // forcing a login loop.
+          setIsServiceUnavailable(true)
+          if (isMounted) {
+            setIsLoading(false)
+          }
+          return
         }
 
         if (!isMounted) {
@@ -210,6 +248,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }, AUTH_BOOTSTRAP_RETRY_DELAY_MS)
       }
     }
+
+    void validateSession()
+
     if (authChannel) {
       authChannel.onmessage = (event: MessageEvent<{ type?: string }>) => {
         if (event.data?.type === 'logout') {
@@ -218,15 +259,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-    void validateSession()
+
     return () => {
       isMounted = false
+      clearInterval(unavailableInterval)
       if (retryTimer !== undefined) {
         window.clearTimeout(retryTimer)
       }
       authChannel?.close()
     }
-  }, [markDefinitivelyUnauthenticated, recoverSession])
+  }, [isServiceUnavailable, location.state?.from, navigate])
 
   const login = async (accessToken: string) => {
     setAccessToken(accessToken)
@@ -251,13 +293,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  return <AuthContext.Provider value={{ isAuthenticated, isLoading, user, login, logout, revalidateSession, recoverSession }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ isAuthenticated, isLoading, isServiceUnavailable, user, login, logout, revalidateSession, recoverSession }}>{children}</AuthContext.Provider>
 }
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, isServiceUnavailable } = useAuth()
   const location = useLocation()
   if (isLoading) return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Checking authentication...</div>
+  if (isServiceUnavailable) return <div className="min-h-screen flex flex-col items-center justify-center text-center text-stone-500">ComicPile is temporarily unavailable. Please try again in a moment.</div>
   if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />
   return children
 }

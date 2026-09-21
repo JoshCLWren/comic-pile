@@ -32,25 +32,45 @@ def register_exception_handlers(app: FastAPI, app_settings: AppSettings) -> None
     async def global_exception_handler(request: Request, exc: Exception):
         """Handle all unhandled exceptions with full stacktrace logging.
 
+        If the exception is database-related, it is classified as a retryable 503
+        rather than a generic 500, so operators can distinguish transient DB
+        unavailability from actual application bugs.
+
         Args:
             request: FastAPI request object.
             exc: Exception that was raised.
 
         Returns:
-            JSON response with 500 status code.
+            JSON response with appropriate status code.
         """
+        # Check if this is a database-related error that should be 503
+        exc_type = type(exc).__name__
+        is_db_error = (
+            "DBAPIError" in exc_type
+            or "TimeoutError" in exc_type
+            or "OperationalError" in exc_type
+            or "InterfaceError" in exc_type
+        )
+
+        if is_db_error:
+            status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+            detail = "Database temporarily unavailable"
+        else:
+            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+            detail = "Internal server error"
+
         error_data = {
             "timestamp": datetime.now(UTC).isoformat(),
             "method": request.method,
             "path": request.url.path,
             "query_params": str(request.url.query) if request.url.query else None,
-            "error_type": type(exc).__name__,
+            "error_type": exc_type,
             "error_message": str(exc),
             "stacktrace": traceback.format_exc(),
             "client_host": request.client.host if request.client else None,
             "user_agent": request.headers.get("user-agent"),
             "headers": redact_headers(dict(request.headers)),
-            "level": "ERROR",
+            "level": "ERROR" if is_db_error else "ERROR",
         }
 
         if environment != "production":
@@ -66,13 +86,13 @@ def register_exception_handlers(app: FastAPI, app_settings: AppSettings) -> None
         error_data = sanitize_for_logging(error_data, environment)
 
         logger.error(
-            f"Unhandled Exception: {type(exc).__name__}",
+            f"Exception: {exc_type}",
             extra=error_data,
             exc_info=True,
         )
         return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "Internal server error"},
+            status_code=status_code,
+            content={"detail": detail},
         )
 
     @app.exception_handler(StarletteHTTPException)

@@ -8,3 +8,12 @@ export function isDefinitiveAuthenticationFailure(error: unknown): boolean {
 
   return error.response?.status === 401
 }
+
+/** Return true when the server reports the service is temporarily unavailable. */
+export function isServiceUnavailableError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) {
+    return false
+  }
+
+  return error.response?.status === 503
+}
