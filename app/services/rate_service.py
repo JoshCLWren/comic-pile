@@ -521,7 +521,7 @@ async def rate_thread(
             user_id,
             new_die,
             db,
-            excluded_thread_ids=current_session.snoozed_thread_ids,
+            excluded_thread_ids=[*(current_session.snoozed_thread_ids or []), *(current_session.skipped_thread_ids or [])],
         )
 
     # Always refresh blocked status after reading.  Advancing next_unread_issue_id
