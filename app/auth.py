@@ -205,4 +205,15 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Password-change revocation: reject tokens issued before last password change
+    payload_pc = payload.get("pc")
+    user_pc = int(user.password_changed_at.timestamp()) if user.password_changed_at else 0
+    token_pc = int(payload_pc) if payload_pc is not None else 0
+    if token_pc < user_pc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Password changed; please sign in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return user

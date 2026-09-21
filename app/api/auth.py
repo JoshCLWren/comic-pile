@@ -23,6 +23,7 @@ from app.auth import (
 from app.csrf import ensure_csrf_cookie, is_secure_request
 from app.database import get_db
 from app.middleware import limiter
+from app.services.password_reset_service import request_forgot_password, complete_reset, PasswordResetDeliveryHandoff
 from app.models.user import User
 from app.repositories.failed_login_repository import (
     clear_attempts_for_username,
@@ -35,7 +36,10 @@ from app.repositories.user_repository import (
     get_user_by_username,
 )
 from app.schemas.auth import (
+    ForgotPasswordRequest,
     RefreshTokenRequest,
+    ResetPasswordRequest,
+    PasswordResetResponse,
     TokenResponse,
     UserLoginRequest,
     UserRegisterRequest,
@@ -150,8 +154,8 @@ async def register_user(
 
     jti = secrets.token_urlsafe(32)
     ensure_csrf_cookie(request, response)
-    access_token = create_access_token(data={"sub": user_data.username, "jti": jti})
-    refresh_token = create_refresh_token(data={"sub": user_data.username, "jti": jti})
+    access_token = create_access_token(data={"sub": user_data.username, "jti": jti, "pc": 0})
+    refresh_token = create_refresh_token(data={"sub": user_data.username, "jti": jti, "pc": 0})
     _set_refresh_cookie(response, request, refresh_token)
 
     return TokenResponse(
@@ -215,9 +219,10 @@ async def login_user(
     await clear_attempts_for_username(db, username=login_data.username)
 
     jti = secrets.token_urlsafe(32)
+    pc = int(user.password_changed_at.timestamp()) if user.password_changed_at else 0
     ensure_csrf_cookie(request, response)
-    access_token = create_access_token(data={"sub": user.username, "jti": jti})
-    refresh_token = create_refresh_token(data={"sub": user.username, "jti": jti})
+    access_token = create_access_token(data={"sub": user.username, "jti": jti, "pc": pc})
+    refresh_token = create_refresh_token(data={"sub": user.username, "jti": jti, "pc": pc})
     _set_refresh_cookie(response, request, refresh_token)
 
     return TokenResponse(
@@ -311,10 +316,21 @@ async def refresh_access_token(
             detail="User not found",
         )
 
+    payload_pc = payload.get("pc")
+    user_pc = int(user.password_changed_at.timestamp()) if user.password_changed_at else 0
+    token_pc = int(payload_pc) if payload_pc is not None else 0
+    if token_pc < user_pc:
+        _log_refresh_outcome(request, outcome="rejected", reason="password_changed")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Password changed; please sign in again.",
+        )
+
     new_jti = secrets.token_urlsafe(32)
+    pc = user_pc
     ensure_csrf_cookie(request, response)
-    access_token = create_access_token(data={"sub": user.username, "jti": new_jti})
-    refresh_token = create_refresh_token(data={"sub": user.username, "jti": new_jti})
+    access_token = create_access_token(data={"sub": user.username, "jti": new_jti, "pc": pc})
+    refresh_token = create_refresh_token(data={"sub": user.username, "jti": new_jti, "pc": pc})
     _set_refresh_cookie(response, request, refresh_token)
     _log_refresh_outcome(request, outcome="success", reason="refreshed")
 
@@ -392,3 +408,41 @@ async def get_current_user_info(
         email=current_user.email,
         is_admin=current_user.is_admin,
     )
+
+
+@router.post("/forgot-password")
+@limiter.limit("3/minute")
+async def forgot_password(
+    request: Request,
+    data: ForgotPasswordRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> PasswordResetResponse:
+    """Enumeration-safe forgot-password request.
+
+    Same acknowledgement whether email exists or not.
+    Rate-limited via existing application limiter.
+    """
+    handoff = await request_forgot_password(db, data.email)
+    if handoff is not None:
+        # Provider-neutral delivery handoff for #2778 — do not embed provider
+        logger.info(
+            "Password reset handoff: user=%s email=%s expires=%s",
+            handoff.user_username,
+            handoff.recipient_email,
+            handoff.expires_at,
+            extra={
+                "event": "password_reset_handoff",
+                "user": handoff.user_username,
+            },
+        )
+    return PasswordResetResponse(message="If an account exists, a reset link has been sent.")
+
+
+@router.post("/reset-password", response_model=PasswordResetResponse)
+async def reset_password(
+    data: ResetPasswordRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> PasswordResetResponse:
+    """Complete password reset with atomic token consumption and session revocation."""
+    await complete_reset(db, data.token, data.new_password)
+    return PasswordResetResponse(message="Password reset successfully.")
