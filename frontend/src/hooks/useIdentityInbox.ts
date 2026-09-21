@@ -17,6 +17,15 @@ export function useIdentityInbox(offset: number) {
   })
 }
 
+export function useIdentityInboxStatus() {
+  return useQuery({
+    queryKey: queryKeys.identityInbox.list({ offset: 0, limit: 1 }),
+    queryFn: () => identityInboxApi.list(0, 1),
+    select: (data) => data.total,
+    staleTime: 10_000,
+  })
+}
+
 export function useConfirmInboxCandidate() {
   return useMutation({
     mutationFn: ({

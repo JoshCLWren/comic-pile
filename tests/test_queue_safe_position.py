@@ -362,8 +362,8 @@ async def test_move_to_safe_position_excludes_skipped_threads_issue_2802(
     async_db: AsyncSession, default_user
 ) -> None:
     """Regression test for issue #2802: skipped threads must be excluded from safe position calculation.
-
-    This reproduces the bug where a below-threshold rating could immediately return
+    
+    This reproduces the bug where a below-threshold rating could immediately return 
     the same thread on the next roll when skipped threads shrink the bounded pool.
     """
     user = default_user
@@ -380,16 +380,16 @@ async def test_move_to_safe_position_excludes_skipped_threads_issue_2802(
         async_db.add(thread)
         threads.append(thread)
     await async_db.flush()
-
+    
     # Simulate the production scenario:
     # - Thread A (at position 1) will be skipped during a session
     # - Thread B (at position 2) will be rated 3.0, causing d6 -> d8
     # - The safe position calculation must account for thread A being skipped
-
+    
     thread_a = threads[0]  # Position 1
     thread_b = threads[1]  # Position 2
     skipped_thread_ids = {thread_a.id}
-
+    
     # First, test that move_to_safe_position correctly excludes skipped threads
     # When thread B is rated on d6, it should move to position 8 (d6 + 1 + 1 skipped)
     await move_to_safe_position(
@@ -400,7 +400,7 @@ async def test_move_to_safe_position_excludes_skipped_threads_issue_2802(
         excluded_thread_ids=skipped_thread_ids,
     )
     await async_db.refresh(thread_b)
-
+    
     # With die=6, 11 total threads, 1 skipped:
     # Target should be at position 8 (6 + 1 + 1 skipped, but max is 11)
     # This ensures thread B is outside the d6 roll pool
@@ -408,28 +408,28 @@ async def test_move_to_safe_position_excludes_skipped_threads_issue_2802(
         f"Thread B should be at position 8 (die=6 + 1 + 1 skipped), "
         f"but is at position {thread_b.queue_position}"
     )
-
+    
     # Now verify that thread B is NOT in the bounded roll pool
     # Get the bounded roll pool (simulating what happens during the next roll)
     bounded_rows = await get_bounded_roll_pool_rows(
-        user.id,
-        async_db,
+        user.id, 
+        async_db, 
         6,  # die size = d6
         snoozed_ids=[],  # No snoozed threads
         skipped_ids=skipped_thread_ids,  # Thread A is skipped
     )
-
+    
     bounded_thread_ids = {row[0].id for row in bounded_rows}
     assert thread_b.id not in bounded_thread_ids, (
         f"Thread B (id={thread_b.id}) should NOT be in the d6 roll pool "
         f"when thread A (id={thread_a.id}) is skipped, but it is present"
     )
-
+    
     # Now test the expanded die case (d6 -> d8 after rating)
     # Move thread B back to position 2 to simulate the rating scenario
     thread_b.queue_position = 2
     await async_db.flush()
-
+    
     # Simulate rating thread B 3.0, causing d6 -> d8
     # The safe position calculation should now account for the skipped thread
     await move_to_safe_position(
@@ -440,7 +440,7 @@ async def test_move_to_safe_position_excludes_skipped_threads_issue_2802(
         excluded_thread_ids=skipped_thread_ids,
     )
     await async_db.refresh(thread_b)
-
+    
     # With die=8, 11 total threads, 1 skipped:
     # Target should be at position 10 (8 + 1 + 1 skipped, but max is 11)
     # This ensures thread B is outside the d8 roll pool
@@ -448,16 +448,16 @@ async def test_move_to_safe_position_excludes_skipped_threads_issue_2802(
         f"Thread B should be at position 10 (die=8 + 1 + 1 skipped), "
         f"but is at position {thread_b.queue_position}"
     )
-
+    
     # Verify thread B is NOT in the expanded d8 roll pool
     bounded_rows_d8 = await get_bounded_roll_pool_rows(
-        user.id,
-        async_db,
+        user.id, 
+        async_db, 
         8,  # die size = d8
         snoozed_ids=[],  # No snoozed threads
         skipped_ids=skipped_thread_ids,  # Thread A is skipped
     )
-
+    
     bounded_thread_ids_d8 = {row[0].id for row in bounded_rows_d8}
     assert thread_b.id not in bounded_thread_ids_d8, (
         f"Thread B (id={thread_b.id}) should NOT be in the d8 roll pool "

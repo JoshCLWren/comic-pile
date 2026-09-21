@@ -4,12 +4,14 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   useIdentityInbox,
+  useIdentityInboxStatus,
   useConfirmInboxCandidate,
   useRejectInboxCandidate,
   useDeferInboxItem,
   useSkipInboxItem,
 } from '../hooks/useIdentityInbox'
 import * as api from '../services/api'
+import type { IdentityInboxItem } from '../services/api'
 import { queryKeys } from '../query/queryKeys'
 
 vi.mock('../services/api', () => ({
@@ -147,6 +149,46 @@ describe('useSkipInboxItem', () => {
     })
 
     expect(mockedInboxApi.skip).toHaveBeenCalledWith(7)
+  })
+})
+
+describe('useIdentityInboxStatus', () => {
+  it('returns total from a limit=1 query', async () => {
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useIdentityInboxStatus(), { wrapper })
+
+    await waitFor(() => expect(result.current.data).toBeDefined())
+    expect(result.current.data).toBe(1)
+    expect(mockedInboxApi.list).toHaveBeenCalledWith(0, 1)
+  })
+
+  it('returns 0 when the inbox is empty', async () => {
+    const emptyResponse = { items: [], total: 0, offset: 0, limit: 1 }
+    mockedInboxApi.list.mockResolvedValue(emptyResponse as never)
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useIdentityInboxStatus(), { wrapper })
+
+    await waitFor(() => expect(result.current.data).toBeDefined())
+    expect(result.current.data).toBe(0)
+  })
+
+  it('returns a positive total when items exist', async () => {
+    const fullResponse = { items: [{ ...inboxResponse.items[0], mapping_id: 1 }], total: 5, offset: 0, limit: 1 }
+    mockedInboxApi.list.mockResolvedValue(fullResponse as never)
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useIdentityInboxStatus(), { wrapper })
+
+    await waitFor(() => expect(result.current.data).toBeDefined())
+    expect(result.current.data).toBe(5)
+  })
+
+  it('uses the identityInbox.list query key with limit=1', async () => {
+    const wrapper = createWrapper()
+    const { result } = renderHook(() => useIdentityInboxStatus(), { wrapper })
+
+    await waitFor(() => expect(result.current.data).toBeDefined())
+    expect(queryKeys.identityInbox.list({ offset: 0, limit: 1 })).toBeDefined()
+    expect(mockedInboxApi.list).toHaveBeenCalledWith(0, 1)
   })
 })
 

@@ -3,8 +3,8 @@
 import pytest
 from sqlalchemy import select
 
-from comic_pile.queue import get_bounded_roll_pool_rows
 from app.models import Event, Thread
+from comic_pile.queue import get_bounded_roll_pool_rows
 from httpx import AsyncClient
 from app.models import Session as SessionModel
 from sqlalchemy.ext.asyncio import AsyncSession
