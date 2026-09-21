@@ -7,13 +7,7 @@ import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
 
-type ModalKey =
-  | 'create'
-  | 'edit'
-  | 'reactivate'
-  | 'dependency'
-  | 'reposition'
-  | 'migration'
+type ModalKey = 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration'
 
 interface QueueModalsParams {
   threads: Thread[] | null | undefined
@@ -30,13 +24,16 @@ interface QueueModalsParams {
   submitEdit: (input: {
     id: number
     data: EditThreadData
-}) => Promise<Thread>
+  }) => Promise<Thread>
   submitReactivate: (input: {
     thread_id: number
     issues_to_add: number
   }) => Promise<Thread>
   isPendingCreate: boolean
   isPendingEdit: boolean
+  showRollNudge: boolean
+  onDismissRollNudge: () => void
+  onRollNudgeNavigate: () => void
 }
 
 interface UseQueueModalsResult {
@@ -76,6 +73,9 @@ interface UseQueueModalsResult {
   handleMigrationSkip: () => void
   isPendingCreate: boolean
   isPendingEdit: boolean
+  showRollNudge: boolean
+  dismissRollNudge: () => void
+  rollNudgeNavigate: () => void
 }
 
 /**
@@ -113,6 +113,8 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
   const [issuePreview, setIssuePreview] = useState<number | null>(null)
   const [issueParseError, setIssueParseError] = useState<string | null>(null)
+
+  const showRollNudge = params.showRollNudge
 
   const clearQueueModalState = useCallback(() => {
     navigate(location.pathname, { replace: true, state: {} })
@@ -207,6 +209,14 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     setShowMigrationDialog(false)
     setThreadToMigrate(null)
   }, [])
+
+  const dismissRollNudge = useCallback(() => {
+    params.onDismissRollNudge()
+  }, [params])
+
+  const rollNudgeNavigate = useCallback(() => {
+    params.onRollNudgeNavigate()
+  }, [params])
 
   useEffect(() => {
     if (location.state?.editThreadId && threads) {
@@ -382,8 +392,8 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   }, [])
 
   const isAnyModalOpen = useMemo(
-    () => openModal !== null || showMigrationDialog,
-    [openModal, showMigrationDialog],
+    () => openModal !== null || showMigrationDialog || showRollNudge,
+    [openModal, showMigrationDialog, showRollNudge],
   )
 
   return {
@@ -423,5 +433,8 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     handleMigrationSkip,
     isPendingCreate,
     isPendingEdit,
+    showRollNudge,
+    dismissRollNudge,
+    rollNudgeNavigate,
   }
 }

@@ -51,6 +51,9 @@ interface QueueModalsProps {
   isPendingCreate: boolean
   isPendingEdit: boolean
   isPendingReactivate: boolean
+  showRollNudge: boolean
+  onDismissRollNudge: () => void
+  onRollNudgeNavigate: () => void
 }
 
 /**
@@ -98,6 +101,9 @@ export function QueueModals({
   isPendingCreate,
   isPendingEdit,
   isPendingReactivate,
+  showRollNudge,
+  onDismissRollNudge,
+  onRollNudgeNavigate,
 }: QueueModalsProps) {
   return (
     <>
@@ -410,6 +416,37 @@ export function QueueModals({
           onSkip={onMigrationSkip}
           onClose={onCloseMigration}
         />
+      )}
+
+      {showRollNudge && (
+        <Modal
+          isOpen={true}
+          title="Ready to roll?"
+          onClose={onDismissRollNudge}
+          data-testid="roll-nudge-modal"
+        >
+          <div className="space-y-4">
+            <p className="text-stone-200">
+              You've created your first series! Ready to start reading?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onRollNudgeNavigate}
+                className="flex-1 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] text-stone-950 font-semibold py-3 px-4 rounded-lg transition-colors"
+              >
+                Let's Roll!
+              </button>
+              <button
+                type="button"
+                onClick={onDismissRollNudge}
+                className="flex-1 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-stone-200 font-semibold py-3 px-4 rounded-lg transition-colors hover:bg-[var(--theme-bg-hover)]"
+              >
+                Maybe Later
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </>
   )
