@@ -9,7 +9,7 @@ import type { Thread } from '../../types'
 import type { QueueFormState } from './types'
 
 interface QueueModalsProps {
-  openModal: 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | 'rollNudge' | null
+  openModal: 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration' | null
   createForm: QueueFormState
   editForm: QueueFormState
   setCreateForm: (next: QueueFormState) => void

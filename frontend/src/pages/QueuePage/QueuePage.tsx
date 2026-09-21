@@ -1,6 +1,7 @@
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useRollNudge } from './useRollNudge'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
@@ -89,36 +90,11 @@ export default function QueuePage() {
     [reactivateMutation],
   )
 
-  const [hasDismissedRollNudge, setHasDismissedRollNudge] = useState(false)
-  const [showRollNudge, setShowRollNudge] = useState(false)
-
-  useEffect(() => {
-    const dismissed = localStorage.getItem('comic-pile-roll-nudge-dismissed')
-    setHasDismissedRollNudge(dismissed === 'true')
-  }, [])
-
-  const onCreated = useCallback(async () => {
-    if (!hasDismissedRollNudge) {
-      setShowRollNudge(true)
-    }
-  }, [hasDismissedRollNudge])
-
-  const onDismissRollNudge = useCallback(() => {
-    setShowRollNudge(false)
-    setHasDismissedRollNudge(true)
-    localStorage.setItem('comic-pile-roll-nudge-dismissed', 'true')
-  }, [])
-
-  const onRollNudgeNavigate = useCallback(() => {
-    setShowRollNudge(false)
-    setHasDismissedRollNudge(true)
-    localStorage.setItem('comic-pile-roll-nudge-dismissed', 'true')
-    navigate('/')
-  }, [navigate])
+  const rollNudge = useRollNudge()
 
   const modals = useQueueModalsHook({
     threads,
-    onCreated,
+    onCreated: rollNudge.onCreated,
     onUpdated: async () => {},
     onReactivated: async () => {},
     refetchSession: async () => {
@@ -129,9 +105,9 @@ export default function QueuePage() {
     submitReactivate,
     isPendingCreate: createMutation.isPending,
     isPendingEdit: updateMutation.isPending,
-    showRollNudge,
-    onDismissRollNudge,
-    onRollNudgeNavigate,
+    showRollNudge: rollNudge.showRollNudge,
+    onDismissRollNudge: rollNudge.onDismissRollNudge,
+    onRollNudgeNavigate: rollNudge.onRollNudgeNavigate,
   })
 
   const handleIssueChanged = useCallback(() => {

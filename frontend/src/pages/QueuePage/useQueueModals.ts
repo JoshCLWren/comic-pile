@@ -7,14 +7,7 @@ import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
 
-type ModalKey =
-  | 'create'
-  | 'edit'
-  | 'reactivate'
-  | 'dependency'
-  | 'reposition'
-  | 'migration'
-  | 'rollNudge'
+type ModalKey = 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration'
 
 interface QueueModalsParams {
   threads: Thread[] | null | undefined
@@ -121,8 +114,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const [issuePreview, setIssuePreview] = useState<number | null>(null)
   const [issueParseError, setIssueParseError] = useState<string | null>(null)
 
-  // Roll nudge state - controlled by parent, but we provide handlers
-  const [showRollNudge, setShowRollNudge] = useState(false)
+  const showRollNudge = params.showRollNudge
 
   const clearQueueModalState = useCallback(() => {
     navigate(location.pathname, { replace: true, state: {} })
@@ -219,18 +211,12 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   }, [])
 
   const dismissRollNudge = useCallback(() => {
-    setShowRollNudge(false)
     params.onDismissRollNudge()
   }, [params])
 
   const rollNudgeNavigate = useCallback(() => {
-    setShowRollNudge(false)
     params.onRollNudgeNavigate()
   }, [params])
-
-  useEffect(() => {
-    setShowRollNudge(params.showRollNudge)
-  }, [params.showRollNudge])
 
   useEffect(() => {
     if (location.state?.editThreadId && threads) {
