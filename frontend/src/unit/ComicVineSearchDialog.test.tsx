@@ -586,7 +586,7 @@ describe('ComicVineSearchDialog direct URL resolution (#2803)', () => {
 
   it('handles search kind resolution (plain text)', async () => {
     resolveIdentitySpy.mockResolvedValue({
-      input: 'Just some plain text',
+      input: 'https://fallback.test/search?q=plain',
       kind: 'search',
       validation_error: null,
       issue: null,
@@ -596,12 +596,40 @@ describe('ComicVineSearchDialog direct URL resolution (#2803)', () => {
 
     render(<ComicVineSearchDialog {...defaultProps()} />)
 
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalled())
+    searchSeriesSpy.mockClear()
+
     const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
-    fireEvent.change(input, { target: { value: 'Just some plain text' } })
+    fireEvent.change(input, { target: { value: 'https://fallback.test/search?q=plain' } })
 
     await waitFor(() => {
-      expect(searchSeriesSpy).toHaveBeenCalledWith('Just some plain text', 10, 0)
+      expect(searchSeriesSpy).toHaveBeenCalledWith('https://fallback.test/search?q=plain', 10, 0)
     })
+    expect(screen.getByPlaceholderText('Search series title or paste a ComicVine URL')).toBeInTheDocument()
+    expect(confirmIdentitySpy).not.toHaveBeenCalled()
+  })
+
+  it('handles volume resolution with null volume data', async () => {
+    resolveIdentitySpy.mockResolvedValue({
+      input: 'https://comicvine.gamespot.com/superman/4050-148476/',
+      kind: 'volume',
+      validation_error: null,
+      issue: null,
+      volume: null,
+      issues: [],
+    })
+
+    render(<ComicVineSearchDialog {...defaultProps()} />)
+
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalled())
+    searchSeriesSpy.mockClear()
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'https://comicvine.gamespot.com/superman/4050-148476/' } })
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Failed to resolve ComicVine volume. Please try again.'),
+    )
     expect(screen.getByPlaceholderText('Search series title or paste a ComicVine URL')).toBeInTheDocument()
     expect(confirmIdentitySpy).not.toHaveBeenCalled()
   })
