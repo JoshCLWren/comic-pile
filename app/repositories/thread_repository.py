@@ -488,7 +488,7 @@ async def fetch_comicvine_mapping_health(
             func.count()
             .filter(issue_mapping_state.c.confirmed_count > 1)
             .label("needs_review_count"),
-            func.count(issue_mapping_state.c.issue_id).label("has_issues"),
+            (func.count(issue_mapping_state.c.issue_id) > 0).label("has_issues"),
         )
         .group_by(issue_mapping_state.c.thread_id)
         .subquery()
