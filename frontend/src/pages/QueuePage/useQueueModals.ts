@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import type { Thread } from '../../types'
 import { issuesApi } from '../../services/api-issues'
+import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { useToast } from '../../contexts/useToast'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from './types'
@@ -100,6 +101,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
   const navigate = useNavigate()
   const location = useLocation()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
+  const { showToast } = useToast()
 
   const [openModal, setOpenModal] = useState<ModalKey | null>(null)
   const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
@@ -322,7 +324,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         await onCreated()
       } catch (error: unknown) {
         console.error('Failed to create thread:', error)
-        window.alert(`Failed to create series: ${getApiErrorDetail(error)}`)
+        showToast(`Failed to create series: ${getApiErrorDetail(error)}`, 'error')
       }
     },
     [createForm, closeCreateModal, onCreated, submitCreate],
