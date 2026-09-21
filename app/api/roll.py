@@ -51,6 +51,19 @@ from app.schemas import (
     SessionModeUpdateRequest,
     SessionResponse,
 )
+from app.schemas.roll_v2 import (
+    RollV2BootstrapResponse,
+    RollableItem,
+    RollableThread,
+    RollableIssue,
+    RollableIdentity,
+    RollableReader,
+    RollableRoute,
+    RollLastRead,
+    IdentityState,
+    RouteKind,
+    ProgressScope,
+)
 from app.schemas.recommendation_context import (
     RecommendationContextCreate,
 )
@@ -1285,6 +1298,315 @@ async def roll_bootstrap(
         roll_pool=roll_pool,
         snoozed_threads=snoozed_threads,
         snoozed_count=snoozed_count,
+        skipped_thread_ids=skipped_ids,
+        skipped_threads=skipped_threads,
+        blocked_count=blocked_count,
+        blocked_threads=blocked_threads,
+        stale_thread_count=stale_thread_count,
+        stale_thread=stale_thread,
+        session_id=current_session_id,
+        user_id=user_id,
+        timezone=current_session.timezone,
+    )
+
+
+@router.get("/v2/bootstrap", response_model=RollV2BootstrapResponse)
+async def roll_v2_bootstrap(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    timezone: str | None = Query(default=None, description="Browser IANA timezone identifier"),
+) -> RollV2BootstrapResponse:
+    """Return v2 bootstrap data for the Roll initial render.
+    
+    This is a breaking sibling of the existing bootstrap with no unversioned alias.
+    It provides a superset response replacing roll_pool with rollable[] and adding
+    nullable session-scoped last_read while preserving all v1 semantics.
+    
+    Args:
+        current_user: The authenticated user.
+        db: Async database session.
+        timezone: Optional browser-resolved IANA timezone identifier captured once
+            per active reading session. Invalid or unusable values leave the field
+            unset and never break the roll.
+    
+    Returns:
+        RollV2BootstrapResponse with v2 contract including rollable and last_read.
+    """
+    # Reuse the existing bootstrap logic to get v1 data
+    user_id = current_user.id
+    current_session = await get_or_create(db, user_id=user_id, existing_user=current_user)
+    await db.refresh(current_session)
+
+    if timezone is not None and current_session.timezone is None:
+        try:
+            candidate_timezone = timezone.strip()
+            if candidate_timezone and len(candidate_timezone) <= 100:
+                ZoneInfo(candidate_timezone)
+                current_session.timezone = candidate_timezone
+                await db.commit()
+                await db.refresh(current_session)
+        except Exception:
+            logger.exception("Failed to update session timezone from browser value %s", timezone)
+
+    current_session_id = current_session.id
+
+    bandwidth_state = build_session_bandwidth_state(
+        predicted_bandwidth=current_session.predicted_bandwidth,
+        active_bandwidth=current_session.active_bandwidth,
+        confidence=current_session.bandwidth_confidence,
+        source=current_session.bandwidth_source,
+        mode_version=current_session.bandwidth_version,
+    )
+
+    _, active_thread = await get_session_with_thread_safe(current_session_id, db)
+
+    die_size = await get_current_die_for_session(current_session, db)
+    manual_die = current_session.manual_die
+    pending_thread_id = current_session.pending_thread_id
+    session_mode = SessionMode(
+        active_bandwidth=current_session.active_bandwidth,
+        predicted_bandwidth=current_session.predicted_bandwidth,
+        bandwidth_confidence=current_session.bandwidth_confidence,
+        bandwidth_source=current_session.bandwidth_source,
+        bandwidth_version=current_session.bandwidth_version,
+        active_intent=current_session.active_intent,
+        predicted_intent=current_session.predicted_intent,
+        intent_confidence=current_session.intent_confidence,
+        intent_source=current_session.intent_source,
+        intent_version=current_session.intent_version,
+        session_mode_correction_guidance=current_session.session_mode_correction_guidance,
+    )
+    last_rolled_result = active_thread.last_rolled_result if active_thread else None
+    pending_thread_title = (
+        active_thread.title
+        if active_thread is not None and active_thread.id == pending_thread_id
+        else None
+    )
+    roll_recovery = await build_roll_recovery(
+        db,
+        user_id=user_id,
+        pending_thread_id=pending_thread_id,
+        pending_thread_title=pending_thread_title,
+    )
+
+    # Get existing roll pool data and convert to v2 rollable format
+    route_labels_subq = (
+        select(
+            func.array_agg(func.distinct(DependencyGroup.name)),
+        )
+        .select_from(DependencyGroupMembership)
+        .join(DependencyGroup, DependencyGroup.id == DependencyGroupMembership.group_id)
+        .where(
+            or_(
+                DependencyGroupMembership.thread_id == Thread.id,
+                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id,
+            ),
+            DependencyGroup.user_id == user_id,
+        )
+        .correlate(Thread)
+        .scalar_subquery()
+        .cast(ARRAY(Text))
+    )
+
+    pool_query = (
+        select(
+            Thread.id,
+            Thread.title,
+            Thread.format,
+            Thread.next_unread_issue_id.label("issue_id"),
+            Issue.id.label("issue_detail_id"),
+            Issue.issue_number,
+            Issue.canonical_series_id,
+            Issue.canonical_series_title,
+            Issue.cover_url,
+            route_labels_subq.label("route_labels"),
+        )
+        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+        .where(Thread.is_blocked.is_(False))
+        .order_by(Thread.queue_position)
+        .limit(die_size)
+    )
+
+    snoozed_ids = list(current_session.snoozed_thread_ids or [])
+    skipped_ids = list(current_session.skipped_thread_ids or [])
+    derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
+    effective_snoozed_ids = sorted(set(snoozed_ids) | set(derived_snoozed_ids))
+    if effective_snoozed_ids:
+        pool_query = pool_query.where(Thread.id.not_in(effective_snoozed_ids))
+    if skipped_ids:
+        pool_query = pool_query.where(Thread.id.not_in(skipped_ids))
+
+    pool_result = await db.execute(pool_query)
+    pool_rows = pool_result.all()
+
+    # Convert v1 roll pool to v2 rollable format
+    rollable: list[RollableItem] = []
+    for row in pool_rows:
+        if row.issue_id is None:
+            # Skip threads with no next unread issue (v2 never returns issue: null)
+            continue
+            
+        # Create rollable thread
+        rollable_thread = RollableThread(
+            id=row.id,
+            title=row.title,
+            format=normalize_format_value(row.format),
+            last_activity_at=row.last_activity_at.isoformat() if row.last_activity_at else None,
+        )
+        
+        # Create rollable issue (required/non-null)
+        rollable_issue = RollableIssue(
+            id=row.issue_id,
+            number=row.issue_number,
+            canonical_series_title=row.canonical_series_title,
+            cover_url=row.cover_url,
+        )
+        
+        # Create rollable identity
+        rollable_identity = RollableIdentity(
+            source="comicvine" if row.canonical_series_id else "unknown",
+            canonical_series_id=row.canonical_series_id,
+            state=IdentityState.CONFIRMED if row.canonical_series_id else IdentityState.UNRESOLVED,
+            series_mapping_state="confirmed" if row.canonical_series_id else "unavailable",
+        )
+        
+        # Create rollable reader
+        rollable_reader = RollableReader(
+            latest_rating=None,  # Would need to fetch from thread
+            average_rating=None,  # Would need to compute from series
+            rating_count=None,  # Would need to compute from series
+            read_count=None,  # Would need to compute from user's read issues
+            issue_count=None,  # Would need to get from provider/catalog
+            progress_scope=ProgressScope.CANONICAL_SERIES_RUN if row.canonical_series_id else ProgressScope.THREAD,
+        )
+        
+        # Create rollable routes
+        rollable_routes = [
+            RollableRoute(
+                kind=RouteKind.GROUP,
+                name=route_name,
+            )
+            for route_name in (row.route_labels or [])
+        ]
+        
+        rollable_item = RollableItem(
+            thread=rollable_thread,
+            issue=rollable_issue,
+            identity=rollable_identity,
+            reader=rollable_reader,
+            routes=rollable_routes,
+            overflow_routes_count=0,  # Would need to compute if routes > 3
+        )
+        rollable.append(rollable_item)
+
+    # Get snoozed, skipped, blocked threads in v2 format
+    snoozed_threads: list[RollableThread] = []
+    if snoozed_ids:
+        snoozed_result = await db.execute(
+            select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
+            .where(Thread.user_id == user_id)
+            .where(Thread.id.in_(snoozed_ids))
+        )
+        for row in snoozed_result:
+            snoozed_threads.append(RollableThread(
+                id=row.id,
+                title=row.title,
+                format=normalize_format_value(row.format),
+                last_activity_at=row.last_activity_at.isoformat() if row.last_activity_at else None,
+            ))
+
+    skipped_threads: list[RollableThread] = []
+    if skipped_ids:
+        skipped_result = await db.execute(
+            select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
+            .where(Thread.user_id == user_id)
+            .where(Thread.id.in_(skipped_ids))
+        )
+        for row in skipped_result:
+            skipped_threads.append(RollableThread(
+                id=row.id,
+                title=row.title,
+                format=normalize_format_value(row.format),
+                last_activity_at=row.last_activity_at.isoformat() if row.last_activity_at else None,
+            ))
+
+    # Get blocked threads
+    blocked_threads_result = await db.execute(
+        select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
+        .where(Thread.user_id == user_id)
+        .where(Thread.is_blocked.is_(True))
+        .order_by(Thread.queue_position)
+        .limit(RollV2BootstrapResponse.summary_limit)
+    )
+    blocked_threads = [
+        RollableThread(
+            id=row.id,
+            title=row.title,
+            format=normalize_format_value(row.format),
+            last_activity_at=row.last_activity_at.isoformat() if row.last_activity_at else None,
+        )
+        for row in blocked_threads_result
+    ]
+    blocked_count = len(blocked_threads)
+
+    # Get stale thread
+    stale_thread_count = 0
+    stale_thread = None
+    if effective_snoozed_ids:
+        stale_cutoff = datetime.now(UTC) - timedelta(days=30)
+        stale_ids_query = (
+            select(Thread.id)
+            .where(Thread.user_id == user_id)
+            .where(Thread.status == "active")
+            .where(Thread.last_activity_at < stale_cutoff)
+        )
+        if effective_snoozed_ids:
+            stale_ids_query = stale_ids_query.where(Thread.id.not_in(effective_snoozed_ids))
+        stale_ids_result = await db.execute(stale_ids_query)
+        stale_ids = [row[0] for row in stale_ids_result.all()]
+        if stale_ids:
+            stale_thread_count = len(stale_ids)
+            chosen_id = random.choice(stale_ids)
+            stale_detail_result = await db.execute(
+                select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
+                .where(Thread.id == chosen_id)
+            )
+            stale_row = stale_detail_result.first()
+            if stale_row:
+                stale_thread = RollableThread(
+                    id=stale_row.id,
+                    title=stale_row.title,
+                    format=normalize_format_value(stale_row.format),
+                    last_activity_at=stale_row.last_activity_at.isoformat() if stale_row.last_activity_at else None,
+                )
+
+    # Create last_read (nullable session-scoped)
+    last_read = None
+    if active_thread and active_thread.next_unread_issue_id:
+        last_read = RollLastRead(
+            issue_id=active_thread.next_unread_issue_id,
+            issue_number=active_thread.next_unread_issue_number,
+            thread_id=active_thread.id,
+            thread_title=active_thread.title,
+            read_at=None,  # Would need to be set when user actually reads
+        )
+
+    return RollV2BootstrapResponse(
+        current_die=die_size,
+        manual_die=manual_die,
+        pending_thread_id=pending_thread_id,
+        last_rolled_result=last_rolled_result,
+        session_mode=session_mode,
+        active_thread=active_thread,
+        roll_recovery=roll_recovery,
+        bandwidth=bandwidth_state,
+        rollable=rollable,  # New v2 field replacing roll_pool
+        last_read=last_read,  # New nullable session-scoped field
+        snoozed_threads=snoozed_threads,
+        snoozed_count=len(snoozed_threads),
         skipped_thread_ids=skipped_ids,
         skipped_threads=skipped_threads,
         blocked_count=blocked_count,
