@@ -69,7 +69,7 @@ describe('DependencyBuilder', () => {
   it('searches, selects, loads issues, creates dependencies, and opens views', async () => {
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [], blocked_by: [] })
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Prerequisite', total_issues: 2 }], next_page_token: null })
-    api.issuesApi.list.mockResolvedValue({ issues: [{ id: 8, thread_id: 2, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: null })
+    api.issuesApi.list.mockResolvedValue({ issues: [{ id: 8, thread_id: 2, issue_number: '1', position: 1, status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: null })
     api.dependenciesApi.createDependency.mockResolvedValue({ ...dependency, warning: 'dependency warning' })
     const user = userEvent.setup(); const changed = vi.fn()
     renderBuilder(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} onChanged={changed} />)
@@ -157,8 +157,8 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [], blocked_by: [] })
     api.threadsApi.list.mockRejectedValueOnce(new Error('search failed'))
     api.issuesApi.list
-      .mockResolvedValueOnce({ issues: [{ id: 8, thread_id: 2, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: 'next' })
-      .mockResolvedValueOnce({ issues: [{ id: 9, thread_id: 2, issue_number: '2', status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: 'next' })
+      .mockResolvedValueOnce({ issues: [{ id: 8, thread_id: 2, issue_number: '1', position: 1, status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: 'next' })
+      .mockResolvedValueOnce({ issues: [{ id: 9, thread_id: 2, issue_number: '2', position: 2, status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: 'next' })
     const user = userEvent.setup()
     renderBuilder(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'x')
@@ -229,8 +229,8 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [issueDependency], blocked_by: [] })
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Source', total_issues: 2 }], next_page_token: null })
     api.issuesApi.list
-      .mockResolvedValueOnce({ issues: [{ id: 8, thread_id: 2, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: null })
-      .mockResolvedValueOnce({ issues: [{ id: 9, thread_id: 1, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: null })
+      .mockResolvedValueOnce({ issues: [{ id: 8, thread_id: 2, issue_number: '1', position: 1, status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: null })
+      .mockResolvedValueOnce({ issues: [{ id: 9, thread_id: 1, issue_number: '1', position: 1, status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: null })
     const user = userEvent.setup()
     renderBuilder(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await user.type(screen.getByLabelText('Search prerequisite series'), 'Source')
@@ -241,8 +241,8 @@ describe('DependencyBuilder', () => {
     cleanup()
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [], blocked_by: [] })
     api.issuesApi.list
-      .mockResolvedValueOnce({ issues: [{ id: 8, thread_id: 2, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: null })
-      .mockResolvedValueOnce({ issues: [{ id: 9, thread_id: 1, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: null })
+      .mockResolvedValueOnce({ issues: [{ id: 8, thread_id: 2, issue_number: '1', position: 1, status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: null })
+      .mockResolvedValueOnce({ issues: [{ id: 9, thread_id: 1, issue_number: '1', position: 1, status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: null })
     renderBuilder(<DependencyBuilder thread={{ ...thread, total_issues: null } as never} isOpen onClose={vi.fn()} />)
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Unmigrated', total_issues: 2 }], next_page_token: null })
     await user.type(screen.getByLabelText('Search prerequisite series'), 'Unm')
@@ -271,8 +271,8 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.listBlockedThreadIds.mockResolvedValue([1, 2])
     api.threadsApi.list.mockResolvedValue({ threads: [thread, { ...thread, id: 2, title: 'Source', total_issues: 4 }], next_page_token: null })
     api.issuesApi.list
-      .mockResolvedValueOnce({ issues: [{ id: 8, thread_id: 2, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: null })
-      .mockResolvedValueOnce({ issues: [{ id: 9, thread_id: 1, issue_number: '2', status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: null })
+      .mockResolvedValueOnce({ issues: [{ id: 8, thread_id: 2, issue_number: '1', position: 1, status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: null })
+      .mockResolvedValueOnce({ issues: [{ id: 9, thread_id: 1, issue_number: '2', position: 2, status: 'unread', read_at: null, created_at: 'now' }], total_count: 1, page_size: 100, next_page_token: null })
     const user = userEvent.setup()
     renderBuilder(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByRole('button', { name: /view reading order/i })).toBeInTheDocument())
@@ -427,7 +427,7 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [], blocked_by: [] })
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Prerequisite' }], next_page_token: null })
     api.issuesApi.list.mockResolvedValue({
-      issues: [{ id: 8, thread_id: 2, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' }],
+      issues: [{ id: 8, thread_id: 2, issue_number: '1', position: 1, status: 'unread', read_at: null, created_at: 'now' }],
       total_count: 1,
       page_size: 100,
       next_page_token: null,
@@ -490,8 +490,8 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [issueDependency], blocked_by: [] })
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Prerequisite', total_issues: 3 }], next_page_token: null })
     api.issuesApi.list.mockResolvedValue({ issues: [
-      { id: 8, thread_id: 2, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' },
-      { id: 9, thread_id: 1, issue_number: '2', status: 'unread', read_at: null, created_at: 'now' },
+      { id: 8, thread_id: 2, issue_number: '1', position: 1, status: 'unread', read_at: null, created_at: 'now' },
+      { id: 9, thread_id: 1, issue_number: '2', position: 2, status: 'unread', read_at: null, created_at: 'now' },
     ], total_count: 2, page_size: 100, next_page_token: null })
     api.dependenciesApi.createDependency.mockResolvedValue({ ...dependency, warning: 'Dependency may create a cycle' })
     const user = userEvent.setup()

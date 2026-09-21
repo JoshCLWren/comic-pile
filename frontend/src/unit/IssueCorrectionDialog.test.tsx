@@ -26,6 +26,7 @@ const issuesApi: IssueCorrectionIssuesApi = {
 
 const issue = (overrides: Partial<Issue> & Pick<Issue, 'id' | 'issue_number'>): Issue => ({
   thread_id: 42,
+  position: 1,
   status: 'unread',
   read_at: null,
   created_at: '2026-04-17T00:00:00Z',

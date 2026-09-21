@@ -37,6 +37,7 @@ const buildIssue = (
   id,
   thread_id: threadId,
   issue_number: issueNumber,
+  position: Number(issueNumber),
   status,
   read_at: status === 'read' ? '2026-03-08T00:00:00Z' : null,
   created_at: '2026-03-08T00:00:00Z',
