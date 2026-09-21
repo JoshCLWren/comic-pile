@@ -256,10 +256,10 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'Broken Range')
     await user.type(screen.getByLabelText('Issues'), '8-2')
-    await user.click(screen.getByRole('button', { name: /create series/i }))
-    await waitFor(() =>
-      expect(alert).toHaveBeenCalledWith(expect.stringContaining('Failed to create series')),
-    )
+await user.click(screen.getByRole('button', { name: /create series/i }))
+  await waitFor(() =>
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Failed to create series'), 'error'),
+  )
     expect(mocks.mutate).not.toHaveBeenCalled()
   })
 
@@ -386,9 +386,9 @@ describe('QueuePage callback coverage', () => {
     await waitFor(() => expect(mocks.mutate).toHaveBeenCalledWith(1))
     await user.click(screen.getByText('front callback'))
     await user.click(screen.getByText('back callback'))
-    await user.click(screen.getByRole('button', { name: 'Shuffle' }))
-    await user.click(screen.getByText('drop'))
-    await waitFor(() => expect(alert).toHaveBeenCalled())
+await user.click(screen.getByRole('button', { name: 'Shuffle' }))
+  await user.click(screen.getByText('drop'))
+  await waitFor(() => expect(showToast).toHaveBeenCalled())
   })
 
   it('uses snoozed and blocked card branches and reports blocked reads', async () => {
@@ -401,8 +401,8 @@ describe('QueuePage callback coverage', () => {
     vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1])
     vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValue({ blocking_reasons: [] })
     renderPage()
-    await user.click(screen.getByText('read callback'))
-    expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
+await user.click(screen.getByText('read callback'))
+  expect(showToast).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'), 'error')
     await user.click(screen.getByText('snooze callback'))
     expect(mocks.mutate).toHaveBeenCalled()
   })

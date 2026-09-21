@@ -139,7 +139,7 @@ it('does not refresh session or threads when snooze fails', async () => {
   await user.click(screen.getByRole('menuitem', { name: /^snooze$/i }))
 
   await waitFor(() => {
-    expect(alert).toHaveBeenCalledWith('Failed to snooze thread: Snooze unavailable')
+    expect(showToast).toHaveBeenCalledWith('Failed to snooze thread: Snooze unavailable', 'error')
   })
   expect(snooze).toHaveBeenCalledOnce()
   expect(refetchSession).not.toHaveBeenCalled()
@@ -180,7 +180,7 @@ it('does not refresh session or threads when unsnooze fails', async () => {
   await user.click(screen.getByRole('menuitem', { name: /^unsnooze$/i }))
 
   await waitFor(() => {
-    expect(alert).toHaveBeenCalledWith('Failed to unsnooze thread: Unsnooze unavailable')
+    expect(showToast).toHaveBeenCalledWith('Failed to unsnooze thread: Unsnooze unavailable', 'error')
   })
   expect(unsnooze).toHaveBeenCalledWith(1)
   expect(refetchSession).not.toHaveBeenCalled()

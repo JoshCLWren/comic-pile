@@ -632,6 +632,8 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
 
   it('reports queue mutation failures and invalid reposition requests', async () => {
   const user = userEvent.setup()
+  const showToast = vi.fn()
+  vi.mocked(useToast).mockReturnValue({ showToast, removeToast: vi.fn(), toasts: [] })
   mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('front failed')), isPending: false })
   mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('shuffle failed')), isPending: false })
   mockedUseQueueThreads.mockReturnValue({ data: [
@@ -640,10 +642,10 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   ], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getByRole('button', { name: /shuffle/i }))
-  await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('shuffle')))
+  await waitFor(() => expect(showToast).toHaveBeenCalledWith(expect.stringContaining('shuffle'), 'error'))
   await user.click(screen.getAllByRole('button', { name: /series actions/i })[0]!)
   await user.click(screen.getByRole('menuitem', { name: /move to front/i }))
-  await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('front')))
+  await waitFor(() => expect(showToast).toHaveBeenCalledWith(expect.stringContaining('front'), 'error'))
   await user.click(screen.getAllByRole('button', { name: /series actions/i })[0]!)
   await user.click(screen.getByRole('menuitem', { name: /reposition/i }))
   const slider = screen.getByRole('slider')
@@ -665,12 +667,14 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   await user.click(screen.getByRole('button', { name: /create series/i }))
   await waitFor(() => expect(create).toHaveBeenCalled())
 
+  const showToast = vi.fn()
+  vi.mocked(useToast).mockReturnValue({ showToast, removeToast: vi.fn(), toasts: [] })
   mockedUseCreateThread.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('create failed')), isPending: false })
   await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Broken')
   await user.type(screen.getByLabelText('Issues'), '1')
   await user.click(screen.getByRole('button', { name: /create series/i }))
-  await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('create failed')))
+  await waitFor(() => expect(showToast).toHaveBeenCalledWith(expect.stringContaining('create failed'), 'error'))
 })
 
   it('uses thread blocked state without loading dependency details, and handles edit failure', async () => {
