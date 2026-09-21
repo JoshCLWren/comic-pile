@@ -746,3 +746,250 @@ describe('ComicVineSearchDialog paginated series search (#2803)', () => {
     expect(screen.queryByTestId('comicvine-load-more')).not.toBeInTheDocument()
   })
 })
+
+describe('ComicVineSearchDialog branch coverage gaps', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    searchSeriesSpy.mockResolvedValue({ query: '', results: [mockSeries], total_available: 1, offset: 0, limit: 10, has_more: false, next_offset: null })
+    getSeriesIssuesSpy.mockResolvedValue({ comicvine_volume_id: 42, series_name: 'Stormwatch', issues: [mockIssue] })
+    resolveIdentitySpy.mockReset()
+  })
+
+  it('navigates back from confirm to select-issue when not a direct issue resolution', async () => {
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: null })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('#1'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: '← Back to issues' }))
+    await waitFor(() => expect(screen.getByText('← Back to search')).toBeInTheDocument())
+  })
+
+  it('navigates back from confirm to search when resolved via direct issue URL', async () => {
+    resolveIdentitySpy.mockResolvedValue({ input: ISSUE_URL, kind: 'issue', validation_error: null, issue: mockResolvedIssue, volume: null, issues: [] })
+
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: '34' })} />)
+
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalled())
+    searchSeriesSpy.mockClear()
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: ISSUE_URL } })
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument(),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '← Back to search' }))
+    expect(screen.getByPlaceholderText('Search series title or paste a ComicVine URL')).toBeInTheDocument()
+  })
+
+  it('skips confirm when issueId is null', async () => {
+    resolveIdentitySpy.mockResolvedValue({ input: ISSUE_URL, kind: 'issue', validation_error: null, issue: mockResolvedIssue, volume: null, issues: [] })
+
+    render(<ComicVineSearchDialog {...defaultProps({ issueId: null, issueNumber: '34' })} />)
+
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalled())
+    searchSeriesSpy.mockClear()
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: ISSUE_URL } })
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument(),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
+    await waitFor(() => {
+      expect(confirmIdentitySpy).not.toHaveBeenCalled()
+      expect(replaceIdentitySpy).not.toHaveBeenCalled()
+    })
+  })
+
+  it('handles Enter key to trigger search', async () => {
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: '' })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'X-Men' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('X-Men', 10, 0))
+  })
+
+  it('renders series results with image_url', async () => {
+    searchSeriesSpy.mockResolvedValue({
+      query: 'Storm',
+      results: [{ ...mockSeries, image_url: 'https://example.com/series.jpg' }],
+      total_available: 1,
+      offset: 0,
+      limit: 10,
+      has_more: false,
+      next_offset: null,
+    })
+
+    const { container } = render(<ComicVineSearchDialog {...defaultProps({ threadTitle: '' })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Storm' } })
+
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    const images = container.querySelectorAll('img')
+    expect(images.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders issue candidates with image_url', async () => {
+    getSeriesIssuesSpy.mockResolvedValue({
+      comicvine_volume_id: 42,
+      series_name: 'Stormwatch',
+      issues: [{ ...mockIssue, image_url: 'https://example.com/issue.jpg' }],
+    })
+
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: null })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    const container = screen.getByRole('dialog')
+    const images = container.querySelectorAll('img')
+    expect(images.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders confirm card with image_url from direct issue', async () => {
+    resolveIdentitySpy.mockResolvedValue({
+      input: ISSUE_URL,
+      kind: 'issue',
+      validation_error: null,
+      issue: { ...mockResolvedIssue, image_url: 'https://example.com/confirm.jpg' },
+      volume: null,
+      issues: [],
+    })
+
+    const { container } = render(<ComicVineSearchDialog {...defaultProps({ issueNumber: '34' })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: ISSUE_URL } })
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument(),
+    )
+    const images = container.querySelectorAll('img')
+    expect(images.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('shows no issues message when issueNumber is null and issue list is empty', async () => {
+    getSeriesIssuesSpy.mockResolvedValue({
+      comicvine_volume_id: 42,
+      series_name: 'Stormwatch',
+      issues: [],
+    })
+
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: null })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+    await waitFor(() => expect(screen.getByText('No issues found in this series.')).toBeInTheDocument())
+  })
+
+  it('shows issue list when issueNumber has no exact match in the series', async () => {
+    getSeriesIssuesSpy.mockResolvedValue({
+      comicvine_volume_id: 42,
+      series_name: 'Stormwatch',
+      issues: [mockIssue],
+    })
+
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: '99' })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    expect(screen.getByTestId('rematch-issue-context')).toHaveTextContent('#99')
+  })
+
+  it('handles getSeriesIssues failure gracefully', async () => {
+    getSeriesIssuesSpy.mockRejectedValue(new Error('Network error'))
+
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: null })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+    await waitFor(() => expect(screen.getByText('Failed to load issues. Please try again.')).toBeInTheDocument())
+  })
+
+  it('handles confirm identity failure gracefully', async () => {
+    confirmIdentitySpy.mockRejectedValue(new Error('Network error'))
+
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: null })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('#1'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
+    await waitFor(() => expect(screen.getByText('Failed to confirm identity. Please try again.')).toBeInTheDocument())
+  })
+
+  it('shows issue list without auto-selecting when volume URL has no issueNumber match', async () => {
+    resolveIdentitySpy.mockResolvedValue({
+      input: 'https://comicvine.gamespot.com/superman/4050-148476/',
+      kind: 'volume',
+      validation_error: null,
+      issue: null,
+      volume: mockVolume,
+      issues: [mockIssue],
+    })
+
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: '34' })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'https://comicvine.gamespot.com/superman/4050-148476/' } })
+
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Confirm Identity' })).not.toBeInTheDocument()
+  })
+
+  it('volume resolution without issueNumber leaves user on select-issue step', async () => {
+    resolveIdentitySpy.mockResolvedValue({
+      input: 'https://comicvine.gamespot.com/superman/4050-148476/',
+      kind: 'volume',
+      validation_error: null,
+      issue: null,
+      volume: mockVolume,
+      issues: [mockIssue],
+    })
+
+    render(<ComicVineSearchDialog {...defaultProps({ issueNumber: null })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'https://comicvine.gamespot.com/superman/4050-148476/' } })
+
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Confirm Identity' })).not.toBeInTheDocument()
+  })
+
+  it('handles clear query to reset pagination and search state', async () => {
+    render(<ComicVineSearchDialog {...defaultProps({ threadTitle: '' })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'X-Men' } })
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalled())
+    fireEvent.change(input, { target: { value: '' } })
+
+    await waitFor(() => expect(screen.queryByText('Stormwatch')).not.toBeInTheDocument())
+  })
+})
