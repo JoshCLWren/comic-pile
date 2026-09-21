@@ -183,19 +183,9 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       </div>
 
       <div className="space-y-3">
-        <div className="flex flex-col gap-1">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-comic-accent)' }}>
-            {metadata.series_name ?? 'ComicVine'}{metadata.issue_number ? ` #${metadata.issue_number}` : ''}
-          </p>
-          {metadata.name && (
-            <h2 id="comic-identity-heading" className="text-lg font-bold text-stone-100 leading-tight">
-              {metadata.name}
-            </h2>
-          )}
-          {date && (
-            <p className="text-[11px] text-stone-500">{date}</p>
-          )}
-        </div>
+        {date && (
+          <p className="text-[11px] text-stone-500">{date}</p>
+        )}
 
         {metadata.description && (
           <details className="group space-y-2">
