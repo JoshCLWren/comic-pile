@@ -1,7 +1,7 @@
 """Add partial indexes for queue pagination to optimize fetch_queue_page and fetch_completed_page.
 
 Revision ID: a1b2c3d4e5f7
-Revises: f1a2b3c4d5e6, 2777_password_reset
+Revises: 2777_password_reset
 Create Date: 2026-09-21 12:00:00.000000
 
 """
@@ -11,7 +11,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a1b2c3d4e5f7"
-down_revision: str | Sequence[str] | None = ("f1a2b3c4d5e6", "2777_password_reset")
+down_revision: str | Sequence[str] | None = ("2777_password_reset",)
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
