@@ -224,5 +224,5 @@ it('keeps snooze disabled before session data has loaded', async () => {
   expect(refetchSession).not.toHaveBeenCalled()
   expect(snooze).not.toHaveBeenCalled()
   expect(refetchThreads).not.toHaveBeenCalled()
-  expect(alert).not.toHaveBeenCalled()
+  expect(showToast).not.toHaveBeenCalled()
 })

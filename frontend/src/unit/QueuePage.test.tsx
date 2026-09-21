@@ -534,7 +534,7 @@ describe('Keyboard Accessibility', () => {
   expect(readButton).toBeDisabled()
   expect(readButton).toHaveAttribute('title', expect.stringContaining('Blocked by: Prequel'))
   expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()
-  expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
+  expect(showToast).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'), 'error')
   await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /delete/i }))
   expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
