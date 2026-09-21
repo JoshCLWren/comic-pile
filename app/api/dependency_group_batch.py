@@ -11,7 +11,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.dependency_group import DependencyGroupSummary
 from app.services import dependency_group_service
-from app.services.errors import ServiceError
+from app.services.errors import NotFoundError, ServiceError
 
 router = APIRouter()
 
@@ -24,16 +24,11 @@ class DependencyGroupThreadBatchRequest(BaseModel):
     thread_ids: list[int] = Field(min_length=1, max_length=MAX_BATCH_THREADS)
 
 
-_ERROR_STATUS: dict[type[ServiceError], int] = {
-    ServiceError: status.HTTP_404_NOT_FOUND,
-}
-
-
 def _map_service_error(exc: ServiceError) -> HTTPException:
     """Translate a domain error into its HTTP equivalent."""
-    return HTTPException(
-        status_code=_ERROR_STATUS[type(exc)], detail=exc.detail
-    )
+    if isinstance(exc, NotFoundError):
+        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.detail)
+    return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.detail)
 
 
 @router.post(
