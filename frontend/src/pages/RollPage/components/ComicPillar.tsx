@@ -75,7 +75,7 @@ export function ComicPillar({
         <div className="flex-1 space-y-3" data-testid="comic-header-row">
           {/* Provider eyebrow and title block */}
           <div className="space-y-2">
-            {identityState?.has_confirmed_identity && (
+            {identityState?.has_confirmed_identity && identityState.comicvine_issue_id && (
               <div className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: 'var(--theme-comic-accent)' }}>
                 COMICVINE #{identityState.comicvine_issue_id}
               </div>
