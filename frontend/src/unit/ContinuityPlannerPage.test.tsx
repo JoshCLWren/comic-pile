@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { continuityPlansApi } from '../services/api-continuity-plans'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { issuesApi } from '../services/api-issues'
-import { threadsApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
 import ContinuityPlannerPageImpl from '../pages/ContinuityPlannerPage'
 
 interface AddMaterialProbeProps {

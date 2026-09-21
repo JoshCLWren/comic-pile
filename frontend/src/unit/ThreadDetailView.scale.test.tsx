@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { useUpdateThread } from '../hooks/useThread'
-import { threadsApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
 import { issuesApi } from '../services/api-issues'
 
 vi.mock('react-router-dom', async () => {
@@ -20,8 +20,10 @@ vi.mock('../hooks/useThread', async () => {
   const actual = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
   return { ...actual, useUpdateThread: vi.fn() }
 })
-vi.mock('../services/api', () => ({
+vi.mock('../services/api-threads', () => ({
   threadsApi: { get: vi.fn() },
+}))
+vi.mock('../services/api', () => ({
   dependenciesApi: {
     getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
     getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),

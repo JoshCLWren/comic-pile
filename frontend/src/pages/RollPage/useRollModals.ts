@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { threadsApi } from '../../services/api'
+import { threadsApi } from '../../services/api-threads'
 import { getApiErrorDetail } from '../../utils/apiError'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 import type { RollResponse, Thread } from '../../types'

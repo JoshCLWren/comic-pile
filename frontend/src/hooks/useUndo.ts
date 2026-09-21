@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { undoApi } from '../services/api'
+import { undoApi } from '../services/api-undo'
 import { getApiErrorDetail } from '../utils/apiError'
 import { queryKeys } from '../query/queryKeys'
 import type { SessionSnapshotsResponse, UndoPayload } from '../types'

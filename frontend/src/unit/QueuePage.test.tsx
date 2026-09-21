@@ -21,7 +21,8 @@ import { useSession } from '../hooks/useSession'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useToast } from '../contexts/useToast'
-import { threadsApi, dependenciesApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
+import { dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { Thread } from '../types'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
@@ -54,10 +55,13 @@ vi.mock('../hooks/useQueueBlockingInfo', () => ({
   useQueueBlockingInfo: vi.fn(() => ({})),
 }))
 
-vi.mock('../services/api', () => ({
+vi.mock('../services/api-threads', () => ({
   threadsApi: {
     setPending: vi.fn(),
   },
+}))
+
+vi.mock('../services/api', () => ({
   dependenciesApi: {
     listBlockedThreadIds: vi.fn().mockResolvedValue([]),
     getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),

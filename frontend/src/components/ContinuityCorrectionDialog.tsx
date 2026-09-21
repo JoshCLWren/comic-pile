@@ -7,7 +7,7 @@ import {
   type DependencyGroupMember,
   type DependencyGroupMemberTarget,
 } from '../services/api-dependency-groups';
-import { threadsApi } from '../services/api';
+import { threadsApi } from '../services/api-threads';
 import { getApiErrorDetail } from '../utils/apiError';
 import type { ConnectedThreadInfo, Thread } from '../types';
 import { queryKeys } from '../query/queryKeys';

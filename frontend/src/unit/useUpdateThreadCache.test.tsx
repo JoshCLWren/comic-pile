@@ -4,7 +4,7 @@ import { type ReactNode } from 'react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useUpdateThread } from '../hooks/useThread'
 import * as cacheEffects from '../query/cacheEffects'
-import { threadsApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
 import type { Thread } from '../types'
 
 function createTestWrapper() {

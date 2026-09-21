@@ -14,22 +14,9 @@ import type {
   Dependency,
   DependencyCreatePayload,
   IssueDependenciesResponse,
-  ReactivateThreadPayload,
   RollResponse,
-  SessionCurrent,
-  SessionModeResponse,
-  SessionModeUpdateRequest,
-  SessionDetails,
-  SessionListResponse,
-  SessionSnapshotsResponse,
-  SessionSummary,
-  SetCurrentIssueResponse,
   Thread,
-  ThreadCreatePayload,
   ThreadDependenciesResponse,
-  ThreadListResponse,
-  ThreadQueryParams,
-  ThreadUpdatePayload,
 } from '../types'
 
 type ApiRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
@@ -380,91 +367,16 @@ rawApi.interceptors.response.use(
 
 export default api
 
-export const threadsApi = {
-  list: async (params?: ThreadQueryParams, pageToken?: string | null): Promise<ThreadListResponse> => {
-    const queryParams = { ...(params ?? {}) } satisfies ThreadQueryParams;
-    if (pageToken) {
-      queryParams.page_token = pageToken;
-    }
-    const response = await api.get<ThreadListResponse>('/v1/threads/', {
-      params: Object.keys(queryParams).length ? queryParams : undefined,
-    })
-    return response
-  },
-  listCompleted: async (search?: string, sort?: string, pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
-    const queryParams: Record<string, string | number> = {};
-    if (search) queryParams.search = search;
-    if (sort) queryParams.sort = sort;
-    if (pageSize) queryParams.page_size = pageSize;
-    if (pageToken) queryParams.page_token = pageToken;
-    
-    const response = await api.get<ThreadListResponse>('/v1/threads/completed/threads', {
-      params: Object.keys(queryParams).length ? queryParams : undefined,
-    })
-    return response
-  },
-  get: (id: number) => api.get<Thread>(`/v1/threads/${id}`),
-  create: (data: ThreadCreatePayload) => api.post<Thread, ThreadCreatePayload>('/v1/threads/', data),
-  update: (id: number, data: ThreadUpdatePayload) =>
-    api.put<Thread, ThreadUpdatePayload>(`/v1/threads/${id}`, data),
-  delete: (id: number) => api.delete<void>(`/v1/threads/${id}`),
-  reactivate: (data: ReactivateThreadPayload) =>
-    api.post<Thread, ReactivateThreadPayload>('/v1/threads/reactivate', data),
-  listStale: (days = 30) => api.get<Thread[]>('/v1/threads/stale', { params: { days } }),
-  setPending: (id: number) => api.post<RollResponse>(`/v1/threads/${id}/set-pending`),
-  setCurrentIssue: (id: number, issueNumber: string) =>
-    api.post<SetCurrentIssueResponse, { issue_number: string }>(`/v1/threads/${id}:setCurrentIssue`, { issue_number: issueNumber }),
-}
+// Temporary reading-runtime re-exports keep this slice independently shippable.
+// TODO(#2785): remove these re-exports once every call site imports the focused domain clients.
+export { threadsApi } from './api-threads'
+export { rollApi } from './api-roll'
+export { rateApi } from './api-rate'
 
-export const rollApi = {
-  roll: () => api.post<RollResponse>('/v1/roll/'),
-  override: (data: { thread_id: number }) => api.post<RollResponse, { thread_id: number }>('/v1/roll/override', data),
-  dismissPending: () => api.post<void>('/v1/roll/dismiss-pending'),
-  skip: () => api.post<RollResponse>('/v1/roll/skip'),
-  reroll: () => api.post<RollResponse>('/v1/roll/'),
-  setDie: (die: number) => api.post<void>('/v1/roll/set-die', null, { params: { die } }),
-  clearManualDie: () => api.post<void>('/v1/roll/clear-manual-die'),
-}
-
-export const rateApi = {
-  rate: (data: { thread_id: number; rating: number; issues_read?: number; finish_session?: boolean; issue_number?: string }) =>
-    api.post<Thread, { thread_id: number; rating: number; issues_read?: number; finish_session?: boolean; issue_number?: string }>('/v1/rate/', data),
-}
-
-export type SessionListParams = Record<string, string | number | boolean | null>
-export const sessionApi = {
-  list: async (params?: SessionListParams, pageToken?: string | null): Promise<SessionListResponse> => {
-    const queryParams = { ...(params ?? {}) } satisfies SessionListParams;
-    if (pageToken) {
-      queryParams.page_token = pageToken;
-    }
-    const response = await api.get<SessionListResponse>('/v1/sessions/', {
-      params: Object.keys(queryParams).length ? queryParams : undefined,
-    })
-    return response
-  },
-  get: (id: number) => api.get<SessionSummary>(`/v1/sessions/${id}`),
-  getCurrent: () => api.get<SessionCurrent>('/v1/sessions/current/'),
-  getDetails: (id: number | string) => api.get<SessionDetails>(`/v1/sessions/${id}/details`),
-  getSnapshots: (id: number | string) => api.get<SessionSnapshotsResponse>(`/v1/sessions/${id}/snapshots`),
-  restoreSessionStart: (id: number | string) => api.post<void>(`/v1/sessions/${id}/restore-session-start`),
-  updateMode: (data: SessionModeUpdateRequest) =>
-    api.patch<SessionModeResponse, SessionModeUpdateRequest>('/v1/roll/session-mode', data),
-}
-
-export const queueApi = {
-  moveToPosition: (id: number, position: number) =>
-    api.put<void, { new_position: number }>(`/v1/queue/threads/${id}/position/`, { new_position: position }),
-  moveToFront: (id: number) => api.put<void>(`/v1/queue/threads/${id}/front/`),
-  moveToBack: (id: number) => api.put<void>(`/v1/queue/threads/${id}/back/`),
-  shuffle: () => api.post<void>('/v1/queue/shuffle/'),
-}
-
-export const undoApi = {
-  undo: (sessionId: number | string, snapshotId: number | string) =>
-    api.post<void>(`/v1/undo/${sessionId}/undo/${snapshotId}`),
-  listSnapshots: (sessionId: number | string) => api.get<SessionSnapshotsResponse>(`/v1/undo/${sessionId}/snapshots`),
-}
+export { sessionApi } from './api-sessions'
+export type { SessionListParams } from './api-sessions'
+export { queueApi } from './api-queue'
+export { undoApi } from './api-undo'
 
 export const dependenciesApi = {
   listBlockedThreadIds: () => api.get<number[]>('/v1/dependencies/blocked'),
@@ -761,15 +673,10 @@ export const creatorsApi = {
   },
 }
 
-export const snoozeApi = {
-  snooze: () => api.post<void>('/v1/snooze/'),
-  unsnooze: (threadId: number) => api.post<void>(`/v1/snooze/${threadId}/unsnooze`),
-}
-
-export const skipApi = {
-  skip: () => api.post<RollResponse>('/v1/roll/skip'),
-  unskip: (threadId: number) => api.post<void>(`/v1/roll/skip/${threadId}/unskip`),
-}
+// Temporary reading-runtime re-exports keep this slice independently shippable.
+// TODO(#2785): remove these re-exports once every call site imports the focused domain clients.
+export { snoozeApi } from './api-snooze'
+export { skipApi } from './api-skip'
 
 export const migrationApi = {
   migrateThread: (threadId: number, data: { last_issue_read: number; total_issues: number }) =>

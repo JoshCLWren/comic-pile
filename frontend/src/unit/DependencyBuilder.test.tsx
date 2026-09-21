@@ -17,6 +17,18 @@ const mocks = vi.hoisted(() => ({
   migrateThread: vi.fn(),
 }))
 
+vi.mock('../services/api-threads', async () => {
+  const actual = await vi.importActual<typeof import('../services/api-threads')>(
+    '../services/api-threads'
+  )
+  return {
+    ...actual,
+    threadsApi: {
+      ...actual.threadsApi,
+      list: mocks.listThreads,
+    },
+  }
+})
 vi.mock('../services/api', async () => {
   const actual = await vi.importActual<typeof import('../services/api')>(
     '../services/api'

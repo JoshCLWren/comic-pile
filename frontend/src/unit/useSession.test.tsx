@@ -9,11 +9,11 @@ import {
   useSessionSnapshots,
   useSessions,
 } from '../hooks/useSession'
-import { sessionApi } from '../services/api'
+import { sessionApi } from '../services/api-sessions'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { queryKeys } from '../query/queryKeys'
 
-vi.mock('../services/api', () => ({
+vi.mock('../services/api-sessions', () => ({
   sessionApi: {
     getCurrent: vi.fn(),
     list: vi.fn(),

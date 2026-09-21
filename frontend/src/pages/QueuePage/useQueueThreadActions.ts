@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { DragEvent } from 'react'
 import type { Thread } from '../../types'
-import { threadsApi } from '../../services/api'
+import { threadsApi } from '../../services/api-threads'
 import {
   useMoveToBack,
   useMoveToFront,

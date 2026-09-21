@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { CacheEffectsApi, ProtectedRollMutationApi, RollBootstrapApi, RollMutationDeps, SnoozeApi } from '../services/apiTypes'
 import { invalidateCurrentSessionAfterSnooze } from '../query/cacheEffects'
-import { snoozeApi } from '../services/api'
+import { snoozeApi } from '../services/api-snooze'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import {
   fetchAndPublishRollBootstrap,

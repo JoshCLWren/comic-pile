@@ -10,7 +10,7 @@ import {
   useShuffleQueue,
 } from '../hooks/useQueue'
 import type { QueueApi, QueueInvalidateFn } from '../hooks/useQueue'
-import { threadsApi as realThreadsApi } from '../services/api'
+import { threadsApi as realThreadsApi } from '../services/api-threads'
 import { queryClient } from '../query/queryClient'
 import type { QueueSortBy } from '../pages/QueuePage/useQueueFilters'
 

@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { threadsApi } from '../services/api';
+import { threadsApi } from '../services/api-threads';
 import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadUpdatePayload } from '../types';
 import { applyEditedThreadToQueuePages, invalidateAfterQueueMutation } from '../query/cacheEffects';
 import { queryClient } from '../query/queryClient';

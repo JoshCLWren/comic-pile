@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { NavigateFunction } from 'react-router-dom'
-import { threadsApi } from '../../services/api'
+import { threadsApi } from '../../services/api-threads'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../../types/rollBootstrap'
 import type { RollResponse, SnoozeSessionResponse } from '../../types'

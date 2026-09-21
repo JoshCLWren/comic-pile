@@ -14,7 +14,8 @@ import {
   useUpdateDependency,
   useMigrateThread,
 } from '../hooks'
-import { dependenciesApi, threadsApi } from '../services/api'
+import { threadsApi } from '../services/api-threads'
+import { dependenciesApi } from '../services/api'
 import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse } from '../types'
 import { buildFlowchartGraph } from '../utils/dependencyFlowchartAdapter'
 import { getApiErrorDetail } from '../utils/apiError'

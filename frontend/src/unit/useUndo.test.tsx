@@ -3,14 +3,14 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useSnapshots, useUndo } from '../hooks/useUndo'
-import { undoApi } from '../services/api'
+import { undoApi } from '../services/api-undo'
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>
 }
 
-vi.mock('../services/api', () => ({
+vi.mock('../services/api-undo', () => ({
   undoApi: {
     listSnapshots: vi.fn(),
     undo: vi.fn(),
