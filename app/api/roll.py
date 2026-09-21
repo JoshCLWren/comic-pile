@@ -80,6 +80,7 @@ from comic_pile.recommendation_version import (
 from comic_pile.session import get_current_die_for_session, get_or_create
 
 router = APIRouter(tags=["roll"])
+v2_router = APIRouter(tags=["roll"])
 logger = logging.getLogger(__name__)
 
 
@@ -1310,7 +1311,7 @@ async def roll_bootstrap(
     )
 
 
-@router.get("/v2/bootstrap", response_model=RollV2BootstrapResponse)
+@v2_router.get("/bootstrap", response_model=RollV2BootstrapResponse)
 async def roll_v2_bootstrap(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
