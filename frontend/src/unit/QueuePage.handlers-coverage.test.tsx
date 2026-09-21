@@ -207,7 +207,7 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getByRole('button', { name: /migrate to issue tracking/i }))
     mocks.refetchSession.mockRejectedValueOnce(new Error('refresh failed'))
     await user.click(screen.getByText('complete migration'))
-    await waitFor(() => expect(alert).toHaveBeenCalledWith('Failed to refresh data. Please refresh the page.'))
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Failed to refresh data. Please refresh the page.', 'error'))
 
     await user.click(screen.getByRole('button', { name: /close modal/i }))
     await user.click(screen.getByText('edit modal callback'))
