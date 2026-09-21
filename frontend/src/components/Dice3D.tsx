@@ -1,16 +1,20 @@
 import { useRef, useEffect, useLayoutEffect } from 'react'
 import * as THREE from 'three'
 import { getDiceRenderConfigForSides } from './diceRenderConfig'
-import type { Dice3DProps, DiceRenderGlobalConfig, DiceSide } from './diceTypes'
+import type { Dice3DProps, DiceSide } from './diceTypes'
 import { isDiceSide } from './diceTypes'
-import { createTextureAtlas, getUVForNumber, type DiceTextureAtlas, type TextureTileUv } from './diceAtlas'
+import { createTextureAtlas } from './diceAtlas'
 import { buildNumberNormals, getFaceRotation, buildGeometry, type FaceRotation, type NumberNormals, type ProjectedOffset } from './diceGeometryUtils'
+
+// Preserve the public helpers historically exported from this module so existing
+// Dice3D unit tests keep passing after the geometry/atlas split.
+export { getFaceRotation };
 
 function lerp(start: number, end: number, alpha: number): number {
   return start + (end - start) * alpha;
 }
 
-function getProjectedCenterOffsetPx(
+export function getProjectedCenterOffsetPx(
   mesh: THREE.Mesh,
   camera: THREE.PerspectiveCamera,
   width: number,

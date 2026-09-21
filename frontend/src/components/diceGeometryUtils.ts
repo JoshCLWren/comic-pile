@@ -213,7 +213,7 @@ export function getFaceRotation(value: number, normalMap: NumberNormals | null):
   return { x: euler.x, y: euler.y, z: euler.z }
 }
 
-function createD8Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
+export function createD8Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   const { cols, rows, uvInset, triangleUvRadius } = atlasInfo;
   const verts: number[] = []
   const uvs: number[] = []
@@ -259,7 +259,7 @@ function createD8Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   return geometry;
 }
 
-function createD10Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
+export function createD10Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   const {
     cols,
     rows,
@@ -442,7 +442,7 @@ function createD10Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   return geometry;
 }
 
-function createD12Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
+export function createD12Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   const { cols, rows, uvInset, d12UvRadius } = atlasInfo;
   const verts: number[] = []
   const uvs: number[] = []
@@ -535,7 +535,7 @@ function createD12Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   return geometry;
 }
 
-function createD20Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
+export function createD20Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   const { cols, rows, uvInset, triangleUvRadius } = atlasInfo;
   const verts: number[] = []
   const uvs: number[] = []
@@ -601,7 +601,7 @@ function createD20Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   return geometry;
 }
 
-function createQuadSphereGeometry(
+export function createQuadSphereGeometry(
   sides: number,
   latBands: number,
   lonSegs: number,
@@ -657,19 +657,19 @@ function createQuadSphereGeometry(
   return geometry;
 }
 
-function createD30Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
+export function createD30Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   return createQuadSphereGeometry(30, 3, 10, atlasInfo)
 }
 
-function createD50Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
+export function createD50Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   return createQuadSphereGeometry(50, 5, 10, atlasInfo)
 }
 
-function createD100Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
+export function createD100Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   return createQuadSphereGeometry(100, 10, 10, atlasInfo)
 }
 
-function buildGeometry(sides: number, atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
+export function buildGeometry(sides: number, atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   switch (sides) {
     case 4:
       return createD4Geometry(atlasInfo);
