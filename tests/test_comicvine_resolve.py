@@ -22,6 +22,7 @@ class FakeResolveClient:
     requests: list[str] = field(default_factory=list)
 
     async def fetch_issue(self, issue_id: int, *, refresh: bool = False) -> ComicVineResponse:
+        """Fetch a single ComicVine issue by ID."""
         self.requests.append(f"issue:{issue_id}")
         if self.issue_error is not None:
             raise self.issue_error
@@ -32,6 +33,7 @@ class FakeResolveClient:
         )
 
     async def fetch_volume(self, volume_id: int, *, refresh: bool = False) -> ComicVineResponse:
+        """Fetch a single ComicVine volume by ID."""
         self.requests.append(f"volume:{volume_id}")
         if self.volume_error is not None:
             raise self.volume_error
@@ -44,6 +46,7 @@ class FakeResolveClient:
     async def fetch_volume_issues(
         self, volume_id: int, *, refresh: bool = False
     ) -> list[dict[str, object]]:
+        """Fetch all issues belonging to a ComicVine volume."""
         self.requests.append(f"issues:{volume_id}")
         return list(self.issue_rows)
 
@@ -73,6 +76,7 @@ def _volume_result() -> dict[str, object]:
 
 @pytest.mark.asyncio
 async def test_resolve_issue_url_returns_exact_issue() -> None:
+    """An issue URL resolves directly to the exact ComicVine issue."""
     client = FakeResolveClient(issue_results=_issue_result())
 
     response = await resolve_comicvine_input(
@@ -94,6 +98,7 @@ async def test_resolve_issue_url_returns_exact_issue() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_volume_url_returns_volume_and_issues() -> None:
+    """A volume URL resolves to the volume and its issue list."""
     client = FakeResolveClient(
         volume_results=_volume_result(),
         issue_rows=[
@@ -119,6 +124,7 @@ async def test_resolve_volume_url_returns_volume_and_issues() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_plain_text_returns_search() -> None:
+    """Plain text without a URL is classified as a search."""
     response = await resolve_comicvine_input(
         FakeResolveClient(), "Ultimate Spider-Man"
     )
@@ -131,6 +137,7 @@ async def test_resolve_plain_text_returns_search() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_unknown_host_returns_validation_error() -> None:
+    """A URL from an unknown host returns a validation error."""
     response = await resolve_comicvine_input(
         FakeResolveClient(), "https://comicvine.example.com/superman/4050-148476/"
     )
@@ -142,6 +149,7 @@ async def test_resolve_unknown_host_returns_validation_error() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_unsupported_resource_returns_validation_error() -> None:
+    """An unsupported resource prefix returns a validation error."""
     response = await resolve_comicvine_input(
         FakeResolveClient(), "https://comicvine.gamespot.com/arc/4045-12345/"
     )
@@ -152,6 +160,7 @@ async def test_resolve_unsupported_resource_returns_validation_error() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_provider_failure_is_safe() -> None:
+    """Provider failure returns a validation error without mutating identity."""
     client = FakeResolveClient(issue_error=ComicVineError("provider down"))
 
     response = await resolve_comicvine_input(
@@ -166,6 +175,7 @@ async def test_resolve_provider_failure_is_safe() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_volume_provider_failure_is_safe() -> None:
+    """Volume provider failure returns a validation error."""
     client = FakeResolveClient(volume_error=ComicVineError("provider down"))
 
     response = await resolve_comicvine_input(
@@ -179,6 +189,7 @@ async def test_resolve_volume_provider_failure_is_safe() -> None:
 
 @pytest.mark.asyncio
 async def test_resolve_without_client_returns_validation_error() -> None:
+    """A pasted issue URL with no configured client returns a validation error."""
     response = await resolve_comicvine_input(
         None, "https://comicvine.gamespot.com/superman/4050-148476/"
     )
