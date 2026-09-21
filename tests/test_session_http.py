@@ -2,14 +2,12 @@
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import create_access_token
-from app.models import Event, Session, Snapshot, Thread, User
+from app.models import Event, Snapshot, Thread, User
 from app.models import Session as SessionModel
-from comic_pile.session import create_session_start_snapshot
 
 async def test_get_current_session_active(
     client: AsyncClient, async_db: AsyncSession, default_user: User

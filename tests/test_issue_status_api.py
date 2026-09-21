@@ -1,6 +1,5 @@
 """Tests for Issue Read/Unread status API."""
 
-import pytest
 from datetime import UTC, datetime
 from httpx import AsyncClient
 from sqlalchemy import select

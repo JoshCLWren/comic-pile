@@ -1,6 +1,5 @@
 """Dependency lifecycle API tests."""
 
-import pytest
 from sqlalchemy import select
 
 from app.models import Dependency, Issue, Thread, User

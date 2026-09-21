@@ -1,6 +1,5 @@
 """Dependency order-check API tests."""
 
-import pytest
 from sqlalchemy import select
 
 from app.models import Dependency, Issue, Thread, User
@@ -84,7 +83,6 @@ async def test_dependency_order_check_with_conflicts(auth_client, async_db, test
     await async_db.refresh(issue_79)
     await async_db.refresh(issue_131)
 
-    from app.models import Dependency
 
     dep = Dependency(
         source_issue_id=issue_131.id,
@@ -182,7 +180,6 @@ async def test_dependency_order_check_cross_thread_dependencies(
     await async_db.refresh(thread1_issue)
     await async_db.refresh(thread2_issue)
 
-    from app.models import Dependency
 
     dep = Dependency(
         source_issue_id=thread1_issue.id,

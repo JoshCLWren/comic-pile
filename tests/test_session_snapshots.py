@@ -2,14 +2,13 @@
 
 from datetime import UTC, datetime
 
-import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Issue, Session, Snapshot, Thread, User
+from app.models import Issue, Snapshot, Thread, User
 from app.models import Session as SessionModel
-from comic_pile.session import create_session_start_snapshot
+from comic_pile.session import create_session_start_snapshot, get_or_create
 
 async def test_session_start_snapshot_created(async_db: AsyncSession, default_user: User) -> None:
     """A snapshot is created when a new session starts."""

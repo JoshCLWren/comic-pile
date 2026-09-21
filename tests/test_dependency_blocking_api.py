@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime
 
-import pytest
 from sqlalchemy import select
 
 from app.models import Issue, Thread, User

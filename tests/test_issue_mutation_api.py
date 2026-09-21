@@ -1,6 +1,5 @@
 """Tests for Issue Move/Reorder/Delete API."""
 
-import pytest
 from datetime import UTC, datetime
 from httpx import AsyncClient
 from sqlalchemy import func, select

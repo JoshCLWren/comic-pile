@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import clear_settings_cache
 from app.models import Event, Session, Snapshot, Thread, User
 from app.models import Session as SessionModel
+from app.services.session_response import get_active_thread
 from comic_pile.session import (
-    create_session_start_snapshot,
     end_session,
     get_current_die,
     get_or_create,
@@ -557,7 +557,6 @@ async def test_get_current_die_returns_manual_die(
 
     This tests line 194 where session.manual_die is returned.
     """
-    from comic_pile.session import get_current_die
     from app.models import Session as SessionModel
 
     session = SessionModel(

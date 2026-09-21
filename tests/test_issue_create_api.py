@@ -1,6 +1,5 @@
 """Tests for Issue Create API endpoints."""
 
-import pytest
 from datetime import UTC, datetime
 from httpx import AsyncClient
 from sqlalchemy import func, select
