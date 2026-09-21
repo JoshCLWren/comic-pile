@@ -177,31 +177,41 @@ export default function ComicVineSearchDialog({
         setError(resolved.validation_error)
         return
       }
-      if (resolved.kind === 'issue' && resolved.issue) {
-        setDirectIssue(resolved.issue)
-        setSelectedIssue(null)
-        setSelectedSeries(null)
-        setIssueCandidates([])
-        setStep('confirm')
-        return
-      }
-      if (resolved.kind === 'volume' && resolved.volume) {
-        setDirectIssue(null)
-        setSelectedIssue(null)
-        setSelectedSeries(resolved.volume)
-        setIssueCandidates(resolved.issues)
-        setStep('select-issue')
-        if (issueNumber) {
-          const normalizedIssueNumber = issueNumber.trim()
-          const match = resolved.issues.find(
-            (issue) => issue.issue_number?.trim() === normalizedIssueNumber,
-          )
-          if (match) {
-            setSelectedIssue(match)
-            setStep('confirm')
-          }
+      if (resolved.kind === 'issue') {
+        if (resolved.issue) {
+          setDirectIssue(resolved.issue)
+          setSelectedIssue(null)
+          setSelectedSeries(null)
+          setIssueCandidates([])
+          setStep('confirm')
+          return
+        } else {
+          setError('Failed to resolve ComicVine issue. Please try again.')
+          return
         }
-        return
+      }
+      if (resolved.kind === 'volume') {
+        if (resolved.volume) {
+          setDirectIssue(null)
+          setSelectedIssue(null)
+          setSelectedSeries(resolved.volume)
+          setIssueCandidates(resolved.issues)
+          setStep('select-issue')
+          if (issueNumber) {
+            const normalizedIssueNumber = issueNumber.trim()
+            const match = resolved.issues.find(
+              (issue) => issue.issue_number?.trim() === normalizedIssueNumber,
+            )
+            if (match) {
+              setSelectedIssue(match)
+              setStep('confirm')
+            }
+          }
+          return
+        } else {
+          setError('Failed to resolve ComicVine volume. Please try again.')
+          return
+        }
       }
       if (resolved.kind === 'search') {
         const remainingQuery = resolved.input.trim()
@@ -433,17 +443,17 @@ export default function ComicVineSearchDialog({
                     </div>
                   </button>
                 ))}
-                {pagination.hasMore && (
-                  <button
-                    type="button"
-                    onClick={handleLoadMore}
-                    disabled={isSearching}
-                    data-testid="comicvine-load-more"
-                    className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/50 border border-stone-700/50 hover:border-amber-500/50 hover:bg-stone-800 transition disabled:opacity-50"
-                  >
-                    {isSearching ? 'Loading...' : 'Load more'}
-                  </button>
-                )}
+{pagination.hasMore && pagination.nextOffset !== null && (
+                   <button
+                     type="button"
+                     onClick={handleLoadMore}
+                     disabled={isSearching}
+                     data-testid="comicvine-load-more"
+                     className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-200 bg-stone-800/50 border border-stone-700/50 hover:border-amber-500/50 hover:bg-stone-800 transition disabled:opacity-50"
+                   >
+                     {isSearching ? 'Loading...' : 'Load more'}
+                   </button>
+                 )}
               </div>
             )}
             {!isSearching && !query.trim() && (

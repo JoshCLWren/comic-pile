@@ -557,7 +557,7 @@ describe('ComicVineSearchDialog direct URL resolution (#2803)', () => {
     const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
     fireEvent.change(input, { target: { value: 'https://comicvine.gamespot.com/superman/4050-148476/' } })
 
-    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('#34')).toBeInTheDocument())
     expect(screen.getByTestId('rematch-issue-context')).toHaveTextContent('#34')
     expect(screen.queryByRole('button', { name: 'Confirm Identity' })).not.toBeInTheDocument()
   })
@@ -578,7 +578,7 @@ describe('ComicVineSearchDialog direct URL resolution (#2803)', () => {
     fireEvent.change(input, { target: { value: 'https://comicvine.gamespot.com/superman-34-i-superman/4000-1154070/' } })
 
     await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent('Failed to search ComicVine. Please try again.'),
+      expect(screen.getByRole('alert')).toHaveTextContent('Failed to resolve ComicVine issue. Please try again.'),
     )
     expect(screen.getByPlaceholderText('Search series title or paste a ComicVine URL')).toBeInTheDocument()
     expect(confirmIdentitySpy).not.toHaveBeenCalled()
