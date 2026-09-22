@@ -1,7 +1,7 @@
 """Normalize Reading Plan persistence around canonical Issues and Dependencies.
 
 Revision ID: c86200000001
-Revises: 2777_password_reset
+Revises: a1b2c3d4e5f7
 
 Creates the relational plan-family tables from
 ``docs/READING_GRAPH_PERSISTENCE_DESIGN.md`` section 2 (Chunk 1 of the
@@ -28,7 +28,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c86200000001"
-down_revision: str | Sequence[str] | None = "2777_password_reset"
+down_revision: str | Sequence[str] | None = "a1b2c3d4e5f7"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

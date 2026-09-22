@@ -269,6 +269,9 @@ async def replace_compiled_rules(
         if node_index is None or node_index >= len(lane_nodes) - 1:
             continue
         next_node = lane_nodes[node_index + 1]
+        # Skip self-referencing checkpoint edges (same issue/type in same lane)
+        if next_node.node_type == node.node_type and next_node.ref_id == node.ref_id:
+            continue
         checkpoint_issue_id = node.ref_id if node.node_type == "issue" else None
         edges_to_add.append((
             node.node_type, node.ref_id,
