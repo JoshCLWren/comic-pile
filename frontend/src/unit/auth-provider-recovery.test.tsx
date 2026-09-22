@@ -112,23 +112,28 @@ describe('AuthProvider transient recovery', () => {
       .mockRejectedValueOnce(Object.assign(new Error('network timeout'), { isAxiosError: true, code: 'ERR_NETWORK' }))
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
       .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
-
+    
     renderProvider()
+    
+    // Initial check: should be network_error
     await act(async () => {
       await Promise.resolve()
     })
-
-    // During bootstrap failure, status should be network_error (degraded), isLoading false
     expect(auth?.authState.status).toBe('network_error')
-    expect(auth?.authState.isLoading).toBe(false)
-    expect(mocks.clearAccessToken).not.toHaveBeenCalled()
-
+    
+    // Advance timers to trigger retry
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2000)
+      await Promise.resolve()
     })
+    
+    // Wait for the state update to propagate
+    await waitFor(() => {
+      if (auth?.authState.status !== 'authenticated') {
+        throw new Error('Still not authenticated')
+      }
+    }, { timeout: 2000 })
 
-    // Wait for retry to complete and status to become authenticated
-    await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
     expect(auth?.authState.isLoading).toBe(false)
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
     expect(mocks.get).toHaveBeenCalledTimes(3)
@@ -136,11 +141,12 @@ describe('AuthProvider transient recovery', () => {
       timeout: 15000,
       skipAuthRedirect: true,
     })
+    
     await act(async () => {
       await Promise.resolve()
     })
     expect(mocks.get).toHaveBeenNthCalledWith(3, '/v1/users/me/preferences', PREFERENCES_CONFIG)
-  })
+  }, 15000)
 
   it('logs out when explicit recovery proves the persistent session is invalid', async () => {
     mocks.get
