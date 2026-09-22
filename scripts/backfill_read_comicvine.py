@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 r"""Local-first ComicVine read backfill operator for identity resolution and creator hydration.
 
 Single documented operator command::
@@ -338,7 +339,7 @@ class ComicVineBackfillOperator:
             )
             .order_by(Thread.queue_position, Issue.position)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def resolve_identity_locally(self, db: AsyncSession, issue: Issue) -> ExternalIdentity | None:
         """Try to resolve ComicVine identity using local evidence only.
