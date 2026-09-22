@@ -80,6 +80,8 @@ def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> N
     intermediate owner states. A post-write claim verification is performed by
     ``assign_candidate``.
     """
+    if os.environ.get('GITHUB_ACTIONS') == 'true' and not dispatcher_identity_verified():
+        raise RuntimeError('dispatcher authorization failed: mutation blocked for non-dispatcher workflow')
     target = target_json(number)
     current = [label['name'] for label in target.get('labels', [])]
     existing_stage = next((label for label in current if label in STAGE_LABELS), None)
@@ -176,6 +178,28 @@ def target_owned_by(number: int, owner: str) -> bool:
     return active_owners == {owner}
 
 
+def dispatcher_identity_verified() -> bool:
+    """Return True only when running inside the canonical dispatcher workflow.
+
+    In GitHub Actions, authorization fails closed unless the current run
+    resolves to the dispatcher file path (not only a display-name match,
+    which can be spoofed). Local/operator/test invocation remains possible.
+    """
+    if os.environ.get('GITHUB_ACTIONS') != 'true':
+        return True
+    run_id = os.environ.get('GITHUB_RUN_ID', '').strip()
+    if not run_id or not run_id.isdigit():
+        return False
+    try:
+        payload = gh_json(['api', f'repos/{REPO}/actions/runs/{run_id}'])
+    except Exception:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    path = payload.get('path')
+    return isinstance(path, str) and path == '.github/workflows/fixed-model-factory-dispatch.yml'
+
+
 def record_controller_lease_activity(number: int, worker: str, kind: str) -> None:
     """Persist a trusted lease timestamp before dispatcher handoff."""
     epoch = int(time.time())
@@ -185,6 +209,8 @@ def record_controller_lease_activity(number: int, worker: str, kind: str) -> Non
 
 def assign_candidate(candidate: Candidate, worker: str) -> bool:
     """Claim a candidate and any linked issue for one fixed-model worker."""
+    if os.environ.get('GITHUB_ACTIONS') == 'true' and not dispatcher_identity_verified():
+        return False
     owner = f'factory:{worker}'
     numbers = [candidate.number]
     if candidate.kind == 'pr' and candidate.linked_issue is not None:
@@ -209,6 +235,11 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
     claimed: list[int] = []
     try:
         for number in numbers:
+            # Revalidate immediately before the first lease mutation so a stale
+            # idle snapshot cannot create a second lease.
+            if not target_still_unowned(number):
+                release_verified_claims(claimed)
+                return False
             if candidate.kind == 'issue':
                 stage = 'factory:building'
                 kind = 'issue'
