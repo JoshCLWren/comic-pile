@@ -858,3 +858,71 @@ def _generate_preview_token(
     }
 
     return json.dumps(token_data)
+
+
+def verify_preview_token(token: str, expected_user_id: int) -> dict[str, object]:
+    """Verify an HMAC-signed preview token and check expiry and ownership.
+
+    Args:
+        token: JSON token string produced by ``_generate_preview_token``.
+        expected_user_id: User id that must match the token payload.
+
+    Returns:
+        The verified payload dict.
+
+    Raises:
+        HTTPException: If the token is malformed, tampered, expired, or not
+            bound to the expected user.
+    """
+    secret_key = os.environ.get("PREVIEW_TOKEN_SECRET_KEY", "").strip()
+    if not secret_key:
+        from app.config import get_auth_settings
+
+        secret_key = get_auth_settings().secret_key
+    if not secret_key:
+        raise ValueError("Preview token secret is not configured")
+
+    try:
+        token_data = json.loads(token)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid_preview_token",
+        ) from exc
+
+    payload = token_data.get("payload") if isinstance(token_data, dict) else None
+    signature = token_data.get("signature") if isinstance(token_data, dict) else None
+    if not isinstance(payload, dict) or not isinstance(signature, str):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid_preview_token",
+        )
+
+    payload_json = json.dumps(payload, sort_keys=True)
+    expected_sig = hmac.new(
+        secret_key.encode("utf-8"),
+        payload_json.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected_sig, signature):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid_preview_token",
+        )
+
+    expires_at = payload.get("expires_at")
+    if not isinstance(expires_at, (int, float)) or float(expires_at) <= time.time():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="preview_token_expired",
+        )
+
+    payload_user = payload.get("user_id")
+    if payload_user != expected_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid_preview_token",
+        )
+
+    return payload

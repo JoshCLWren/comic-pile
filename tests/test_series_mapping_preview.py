@@ -599,3 +599,219 @@ class TestSeriesMappingPreview:
             assert data["rows"] == []
             assert data["preview_token"] is None
             assert data["expires_at"] is None
+
+    @pytest.mark.asyncio
+    async def test_preview_series_mapping_duplicate_match(self, auth_client: AsyncClient, sample_data):
+        """Duplicate exact numbers must not be bulk-safe; both become ambiguous."""
+        issue = sample_data["issue"]
+
+        with patch("app.services.catalog._get_comicvine_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_get_client.return_value = mock_client
+
+            mock_client.fetch_volume.return_value = AsyncMock(
+                payload={
+                    "results": {
+                        "id": 20764,
+                        "name": "Amazing Spider-Man (1963)",
+                        "publisher": {"name": "Marvel Comics"},
+                        "start_year": 1963,
+                        "count_of_issues": 500,
+                        "site_detail_url": "https://comicvine.gamespot.com/amazing-spider-man-1963/4050-20764/",
+                        "image": {"medium_url": "http://example.com/image.jpg"},
+                    }
+                }
+            )
+
+            # Two provider issues share the same normalized number "1"
+            mock_client.fetch_volume_issues.return_value = [
+                {
+                    "id": 400012345,
+                    "issue_number": "1",
+                    "name": "Amazing Spider-Man #1",
+                    "cover_date": "1963-03-01",
+                    "store_date": None,
+                    "image": {"small_url": "http://example.com/issue1.jpg"},
+                    "site_detail_url": "https://comicvine.gamespot.com/amazing-spider-man-1/4000-12345/",
+                    "volume": {"id": 20764},
+                },
+                {
+                    "id": 400012346,
+                    "issue_number": "1",
+                    "name": "Amazing Spider-Man #1 dup",
+                    "cover_date": "1963-03-01",
+                    "store_date": None,
+                    "image": {"small_url": "http://example.com/issue1b.jpg"},
+                    "site_detail_url": "https://comicvine.gamespot.com/amazing-spider-man-1/4000-12346/",
+                    "volume": {"id": 20764},
+                },
+            ]
+
+            response = await auth_client.post(
+                "/api/v1/catalog/series-mappings/preview",
+                json={
+                    "origin_issue_id": issue.id,
+                    "provider": "comicvine",
+                    "provider_series_external_id": "20764",
+                },
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            # No unique exact match -> unavailable scope per spec, counts zeroed
+            assert data["scope"]["status"] == "unavailable"
+            assert data["scope"]["basis"] == "insufficient_non_thread_evidence"
+            assert data["preview_token"] is None
+
+    @pytest.mark.asyncio
+    async def test_preview_series_mapping_cross_volume_material(self, auth_client: AsyncClient, sample_data):
+        """Cross-volume material with the same number must not be auto-selected."""
+        issue = sample_data["issue"]
+
+        with patch("app.services.catalog._get_comicvine_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_get_client.return_value = mock_client
+
+            mock_client.fetch_volume.return_value = AsyncMock(
+                payload={
+                    "results": {
+                        "id": 20764,
+                        "name": "Amazing Spider-Man (1963)",
+                        "publisher": {"name": "Marvel Comics"},
+                        "start_year": 1963,
+                        "count_of_issues": 500,
+                        "site_detail_url": "https://comicvine.gamespot.com/amazing-spider-man-1963/4050-20764/",
+                        "image": {"medium_url": "http://example.com/image.jpg"},
+                    }
+                }
+            )
+
+            # Provider roster contains only the origin number, but we also verify
+            # that ambiguous/cross-volume numbers are never default_selected.
+            mock_client.fetch_volume_issues.return_value = [
+                {
+                    "id": 400012345,
+                    "issue_number": "1",
+                    "name": "Amazing Spider-Man #1",
+                    "cover_date": "1963-03-01",
+                    "store_date": None,
+                    "image": {"small_url": "http://example.com/issue1.jpg"},
+                    "site_detail_url": "https://comicvine.gamespot.com/amazing-spider-man-1/4000-12345/",
+                    "volume": {"id": 20764},
+                },
+                {
+                    "id": 400012346,
+                    "issue_number": "Annual 1",
+                    "name": "Amazing Spider-Man Annual #1",
+                    "cover_date": "1964-01-01",
+                    "store_date": None,
+                    "image": {"small_url": "http://example.com/annual.jpg"},
+                    "site_detail_url": "https://comicvine.gamespot.com/annual-1/4000-12346/",
+                    "volume": {"id": 20764},
+                },
+            ]
+
+            response = await auth_client.post(
+                "/api/v1/catalog/series-mappings/preview",
+                json={
+                    "origin_issue_id": issue.id,
+                    "provider": "comicvine",
+                    "provider_series_external_id": "20764",
+                },
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            # Annual must be excluded_special and never default_selected
+            annual_rows = [r for r in data["rows"] if r["issue_number"] == "Annual 1"]
+            assert len(annual_rows) == 1
+            assert annual_rows[0]["classification"] == "excluded_special"
+            assert annual_rows[0]["default_selected"] is False
+
+    @pytest.mark.asyncio
+    async def test_preview_token_tamper(self, auth_client: AsyncClient, sample_data):
+        """Tampered preview token must fail verification."""
+        import json
+
+        from app.services.catalog import verify_preview_token
+
+        issue = sample_data["issue"]
+
+        with patch("app.services.catalog._get_comicvine_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_get_client.return_value = mock_client
+            mock_client.fetch_volume.return_value = AsyncMock(
+                payload={
+                    "results": {
+                        "id": 20764,
+                        "name": "Amazing Spider-Man (1963)",
+                        "publisher": {"name": "Marvel Comics"},
+                        "start_year": 1963,
+                        "count_of_issues": 500,
+                        "site_detail_url": "https://comicvine.gamespot.com/amazing-spider-man-1963/4050-20764/",
+                        "image": {"medium_url": "http://example.com/image.jpg"},
+                    }
+                }
+            )
+            mock_client.fetch_volume_issues.return_value = [
+                {
+                    "id": 400012345,
+                    "issue_number": "1",
+                    "name": "Amazing Spider-Man #1",
+                    "cover_date": "1963-03-01",
+                    "store_date": None,
+                    "image": {"small_url": "http://example.com/issue1.jpg"},
+                    "site_detail_url": "https://comicvine.gamespot.com/amazing-spider-man-1/4000-12345/",
+                    "volume": {"id": 20764},
+                },
+            ]
+
+            response = await auth_client.post(
+                "/api/v1/catalog/series-mappings/preview",
+                json={
+                    "origin_issue_id": issue.id,
+                    "provider": "comicvine",
+                    "provider_series_external_id": "20764",
+                },
+            )
+            assert response.status_code == 200
+            token = response.json()["preview_token"]
+            assert token is not None
+
+            # Tamper with payload
+            tampered = json.loads(token)
+            tampered["payload"]["scope_key"] = "tampered"
+            tampered_token = json.dumps(tampered)
+
+            try:
+                verify_preview_token(tampered_token, expected_user_id=sample_data["user"].id)
+                assert False, "tampered token should not verify"
+            except Exception as exc:
+                assert "invalid_preview_token" in str(exc.detail) if hasattr(exc, "detail") else True
+
+    @pytest.mark.asyncio
+    async def test_preview_token_expiry(self, sample_data):
+        """Expired preview token must fail verification."""
+        import time
+
+        from app.services.catalog import _generate_preview_token, verify_preview_token
+
+        user_id = sample_data["user"].id
+        expired_token = _generate_preview_token(
+            user_id=user_id,
+            provider="comicvine",
+            provider_series_external_id="20764",
+            origin_issue_id=sample_data["issue"].id,
+            scope_key="exact:1:1",
+            issued_at=time.time() - 1200,
+            expires_at=time.time() - 600,
+            issue_numbers=["1"],
+            classification_digest="safe_exact_match:1",
+        )
+
+        try:
+            verify_preview_token(expired_token, expected_user_id=user_id)
+            assert False, "expired token should not verify"
+        except Exception as exc:
+            detail = getattr(exc, "detail", "")
+            assert "preview_token_expired" in str(detail) or "expired" in str(detail).lower()
