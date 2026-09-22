@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import Depends, status
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import exc as sqlalchemy_exc
+from sqlalchemy import exc as sqlalchemy_exc, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -95,7 +95,7 @@ async def test_insufficient_resources_error_produces_503(
 
     @test_app.get("/test-db-error")
     async def test_db_error(db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
-        await db.execute("SELECT 1")
+        await db.execute(text("SELECT 1"))
         return {"status": "ok"}
 
     # Mock the session factory to return a session that fails on execute
@@ -140,7 +140,7 @@ async def test_programming_error_produces_500_not_503(
 
     @test_app.get("/test-db-error")
     async def test_db_error(db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
-        await db.execute("SELECT 1")
+        await db.execute(text("SELECT 1"))
         return {"status": "ok"}
 
     # Mock the session factory to return a session that fails with programming error
@@ -172,7 +172,7 @@ async def test_integrity_error_produces_500_not_503(
 
     @test_app.get("/test-db-error")
     async def test_db_error(db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
-        await db.execute("SELECT 1")
+        await db.execute(text("SELECT 1"))
         return {"status": "ok"}
 
     error = _make_integrity_error()
@@ -259,7 +259,7 @@ async def test_auth_endpoint_database_unavailability_not_401(
 
     @test_app.get("/test-auth")
     async def test_auth(db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
-        await db.execute("SELECT 1")
+        await db.execute(text("SELECT 1"))
         return {"status": "authenticated"}
 
     error = _make_insufficient_resources_error()
@@ -378,7 +378,7 @@ async def test_database_unavailable_response_structure(
 
     @test_app.get("/test-db-error")
     async def test_db_error(db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
-        await db.execute("SELECT 1")
+        await db.execute(text("SELECT 1"))
         return {"status": "ok"}
 
     error = _make_insufficient_resources_error()

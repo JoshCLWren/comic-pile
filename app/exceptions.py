@@ -25,6 +25,14 @@ class DatabaseUnavailableError(Exception):
         error_class: str | None = None,
         sqlstate: str | None = None,
     ) -> None:
+        """Initialize the database unavailability error.
+
+        Args:
+            message: Human-readable diagnostic message.
+            original_error: The underlying exception that caused this error.
+            error_class: The class name of the original exception for structured logging.
+            sqlstate: The PostgreSQL SQLSTATE code if available.
+        """
         super().__init__(message)
         self.original_error = original_error
         self.error_class = error_class or (type(original_error).__name__ if original_error else None)
