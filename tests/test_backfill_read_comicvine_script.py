@@ -362,3 +362,150 @@ async def test_unmapped_resolution_refuses_ambiguous_duplicate_matches(
 
     assert result is None
     persist.assert_not_awaited()
+
+
+class _NoProviderClient:
+    """Fail loudly if the operator reaches ComicVine on a local-only path."""
+
+    async def fetch_issue(self, provider_id: int, *, refresh: bool = False) -> object:
+        raise AssertionError(f"unexpected provider fetch for issue {provider_id}")
+
+    async def fetch_volume_issues(self, volume_id: int) -> list[dict[str, object]]:
+        raise AssertionError(f"unexpected provider roster fetch for volume {volume_id}")
+
+
+class _NoMutationDb:
+    """Fail loudly if dry-run or already-complete work touches the database."""
+
+    async def execute(self, *args: object, **kwargs: object) -> object:
+        raise AssertionError("unexpected database execute during read-only path")
+
+    async def scalar(self, *args: object, **kwargs: object) -> object:
+        raise AssertionError("unexpected database scalar during read-only path")
+
+    async def commit(self) -> None:
+        raise AssertionError("unexpected database commit during read-only path")
+
+    async def rollback(self) -> None:
+        raise AssertionError("unexpected database rollback during read-only path")
+
+
+@pytest.mark.asyncio
+async def test_completed_work_is_resumable_without_provider_or_mutation() -> None:
+    """Re-running finished creator work neither fetches nor writes."""
+    cli = _module()
+    issue = _issue(
+        cli,
+        identity_id=10,
+        external_id="4005",
+        has_creator_credits=True,
+        has_person_credit_source=True,
+        creator_credit_count=3,
+    )
+
+    result = await cli._process_issue(
+        _NoMutationDb(),
+        _NoProviderClient(),
+        user_id=1,
+        issue=issue,
+        dry_run=False,
+        refresh=False,
+    )
+
+    assert result.status == "complete"
+    assert result.comicvine_issue_id == "4005"
+    assert result.creator_credits == 3
+
+
+@pytest.mark.asyncio
+async def test_dry_run_performs_no_mutation_and_no_provider_request() -> None:
+    """Dry-run only classifies inventory state; it never writes or fetches."""
+    cli = _module()
+    needs_hydration = _issue(
+        cli,
+        identity_id=10,
+        external_id="4005",
+        has_creator_credits=False,
+        has_person_credit_source=False,
+        creator_credit_count=0,
+    )
+    needs_normalization = _issue(
+        cli,
+        identity_id=11,
+        external_id="4006",
+        has_creator_credits=False,
+        has_person_credit_source=True,
+        creator_credit_count=2,
+    )
+    unmapped = _issue(cli)
+
+    hydration = await cli._process_issue(
+        _NoMutationDb(),
+        _NoProviderClient(),
+        user_id=1,
+        issue=needs_hydration,
+        dry_run=True,
+        refresh=False,
+    )
+    normalization = await cli._process_issue(
+        _NoMutationDb(),
+        _NoProviderClient(),
+        user_id=1,
+        issue=needs_normalization,
+        dry_run=True,
+        refresh=False,
+    )
+    unmapped_result = await cli._process_issue(
+        _NoMutationDb(),
+        _NoProviderClient(),
+        user_id=1,
+        issue=unmapped,
+        dry_run=True,
+        refresh=False,
+    )
+
+    assert hydration.status == "needs-hydration"
+    assert normalization.status == "needs-normalization"
+    assert unmapped_result.status == "unmapped"
+
+
+@pytest.mark.asyncio
+async def test_locally_satisfiable_creator_work_makes_no_provider_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Stored person_credits normalize locally without a ComicVine request."""
+    cli = _module()
+    issue = _issue(
+        cli,
+        identity_id=12,
+        external_id="4007",
+        has_creator_credits=False,
+        has_person_credit_source=True,
+        creator_credit_count=2,
+    )
+
+    normalize = AsyncMock(return_value=2)
+    monkeypatch.setattr(cli, "_normalize_existing_creator_credits", normalize)
+
+    class _LocalOnlyDb:
+        """Session stand-in for the local-normalization commit path."""
+
+        async def commit(self) -> None:
+            return None
+
+        async def rollback(self) -> None:
+            raise AssertionError("local normalization should commit, not roll back")
+
+    result = await cli._process_issue(
+        _LocalOnlyDb(),
+        _NoProviderClient(),
+        user_id=1,
+        issue=issue,
+        dry_run=False,
+        refresh=False,
+    )
+
+    assert result.status == "complete"
+    assert result.creator_credits == 2
+    normalize.assert_awaited_once()
+    assert normalize.call_args.kwargs["identity_id"] == 12

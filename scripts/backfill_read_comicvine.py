@@ -34,6 +34,7 @@ import argparse
 import asyncio
 from dataclasses import asdict, dataclass
 from datetime import datetime
+import importlib
 import json
 import os
 from pathlib import Path
@@ -48,11 +49,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from comic_pile.comicvine_provider import (  # noqa: E402
-    ComicVineClient,
-    ComicVineError,
-    ComicVineRateLimitError,
-)
+_comicvine_provider = importlib.import_module("comic_pile.comicvine_provider")
+ComicVineClient = _comicvine_provider.ComicVineClient
+ComicVineError = _comicvine_provider.ComicVineError
+ComicVineRateLimitError = _comicvine_provider.ComicVineRateLimitError
 
 DEFAULT_REPORT = Path("/tmp/comicpile-read-comicvine-backfill.json")
 
