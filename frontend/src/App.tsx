@@ -266,22 +266,25 @@ const clearAuthError = useCallback(() => {
           }
         }
 
-        // Handle service unavailable and network errors with retry logic
+        // Bounded retry: do not schedule beyond max to stop indefinite spinning
+        // Capture the updated retry count synchronously from the state updater
+        // so the effect does not need to depend on authState.retryCount.
+        let nextRetryCount = 0
         if (isMounted) {
-          setAuthState(prev => ({
-            ...prev,
-            status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
-            isLoading: false,
-            error: authError,
-            retryCount: prev.retryCount + 1,
-            lastRetryAt: Date.now(),
-          }))
+          setAuthState(prev => {
+            nextRetryCount = prev.retryCount + 1
+            return {
+              ...prev,
+              status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
+              isLoading: false,
+              error: authError,
+              retryCount: nextRetryCount,
+              lastRetryAt: Date.now(),
+            }
+          })
         }
 
         if (!isMounted) return
-        
-        // Bounded retry: do not schedule beyond max to stop indefinite spinning
-        const nextRetryCount = authState.retryCount + 1
         if (nextRetryCount <= AUTH_BOOTSTRAP_MAX_RETRIES) {
           const retryDelay = calculateRetryDelay(nextRetryCount, AUTH_RETRY_BASE_DELAY_MS)
           retryTimer = window.setTimeout(() => {
@@ -308,7 +311,7 @@ const clearAuthError = useCallback(() => {
       }
       authChannel?.close()
     }
-  }, [markDefinitivelyUnauthenticated, recoverSession, authState.retryCount])
+  }, [markDefinitivelyUnauthenticated, recoverSession])
 
   const login = async (accessToken: string) => {
     setAccessToken(accessToken)
@@ -605,5 +608,6 @@ function App() {
   return <BrowserRouter><QueryClientProvider client={queryClient}><BugReportRestoreProvider><ToastProvider><AuthProvider><NavCollapseProvider><AuthResumeBoundary><AppRoutes /></AuthResumeBoundary></NavCollapseProvider></AuthProvider></ToastProvider></BugReportRestoreProvider></QueryClientProvider></BrowserRouter>
 }
 
-export { AppRoutes, useAuth, AuthContextValue, AuthContextLegacyValue }
+export { AppRoutes, useAuth }
+export type { AuthContextValue, AuthContextLegacyValue }
 export default App
