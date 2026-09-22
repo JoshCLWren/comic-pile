@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ExclamationTriangleIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
+import OverlayPortal from './OverlayPortal'
 
 interface DegradedServiceStateProps {
   type: 'service_unavailable' | 'network_error'
@@ -32,41 +33,43 @@ export function DegradedServiceState({
   const displayMessage = message || defaultMessages[type]
 
   return (
-    <div
-      className={`fixed inset-0 z-[100] flex items-center justify-center bg-[var(--theme-bg-page)]/80 p-4 backdrop-blur-sm transition-opacity duration-300 ${
-        isVisible ? 'opacity-100' : 'opacity-0'
-      } ${className}`}
-      data-testid="degraded-service-state"
-      role="alert"
-      aria-live="assertive"
-    >
-      <div className="w-full max-w-md rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-6 shadow-lg">
-        <div className="flex items-center space-x-3">
-          <ExclamationTriangleIcon className="h-8 w-8 text-[var(--theme-danger)]" />
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-[var(--theme-text-primary)]">
-              {type === 'service_unavailable' ? 'Service Unavailable' : 'Connection Issue'}
-            </h3>
-            <p className="mt-1 text-sm text-[var(--theme-text-muted)]">{displayMessage}</p>
-            <p className="mt-2 text-xs text-[var(--theme-text-dim)]">
-              Your session is still active. You don&apos;t need to login again.
-            </p>
+    <OverlayPortal layer="dialog">
+      <div
+        className={`flex items-center justify-center bg-[var(--theme-bg-page)]/80 p-4 backdrop-blur-sm transition-opacity duration-300 ${
+          isVisible ? 'opacity-100' : 'opacity-0'
+        } ${className}`}
+        data-testid="degraded-service-state"
+        role="alert"
+        aria-live="assertive"
+      >
+        <div className="w-full max-w-md rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-6 shadow-lg">
+          <div className="flex items-center space-x-3">
+            <ExclamationTriangleIcon className="h-8 w-8 text-[var(--theme-danger)]" />
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-[var(--theme-text-primary)]">
+                {type === 'service_unavailable' ? 'Service Unavailable' : 'Connection Issue'}
+              </h3>
+              <p className="mt-1 text-sm text-[var(--theme-text-muted)]">{displayMessage}</p>
+              <p className="mt-2 text-xs text-[var(--theme-text-dim)]">
+                Your session is still active. You don&apos;t need to login again.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <button
+              onClick={onRetry}
+              disabled={isRetrying}
+              className="inline-flex items-center rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--theme-primary-action-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ArrowPathIcon
+                className={`mr-2 h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`}
+              />
+              {isRetrying ? 'Retrying...' : 'Try again'}
+            </button>
           </div>
         </div>
-        <div className="mt-4 flex justify-end">
-          <button
-            onClick={onRetry}
-            disabled={isRetrying}
-            className="inline-flex items-center rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--theme-primary-action-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <ArrowPathIcon
-              className={`mr-2 h-4 w-4 ${isRetrying ? 'animate-spin' : ''}`}
-            />
-            {isRetrying ? 'Retrying...' : 'Try again'}
-          </button>
-        </div>
       </div>
-    </div>
+    </OverlayPortal>
   )
 }
 
