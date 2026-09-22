@@ -18,7 +18,7 @@ from factory_capacity_policy import (
     omniroute_enabled,
     remaining_omniroute_free_entry_slots,
 )
-from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments)
+from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments)
 from stale_pr_decay import StalePRGuard
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
@@ -615,48 +615,6 @@ def record_claim_released(number: int, worker: str, kind: str, reason: str) -> N
     run_gh(['issue', 'comment', str(number), '--repo', REPO, '--body', marker])
 
 
-def issue_explicitly_closed_by_pr(pr: dict[str, Any]) -> int | None:
-    """Return the issue a PR explicitly claims to close, if any.
-
-    Only explicit closing keywords (``Closes #N``, ``Fixes #N``,
-    ``Resolves #N`` and their inflected forms) in the PR body count. Casual
-    ``#N`` mentions used by stacked/child PRs for cross-reference never claim
-    closure, so they must not suppress fresh intake.
-    """
-    from factory_work_policy import CLOSING_ISSUE_RE
-    match = CLOSING_ISSUE_RE.search(str(pr.get('body') or ''))
-    return int(match.group('issue')) if match else None
-
-
-def linked_issue_from_pr(pr: dict[str, Any]) -> int | None:
-    """Resolve the canonical linked issue for factory assignment/suppression.
-
-    Prefers the durable ``factory/<worker>-<issue>-...`` branch shape, then an
-    explicit closing keyword in the body (``Closes #N``/``Fixes #N``/
-    ``Resolves #N``), then a leading ``Fix #N`` reference in the PR title so
-    labeled local Cursor/fix delivery PRs still suppress duplicate issue
-    intake. Closing references are honored regardless of author or branch
-    naming: a manually opened ``local/*`` PR that explicitly owns an issue must
-    suppress fresh factory implementation (#2164).
-    """
-    from factory_work_policy import linked_issue_from_branch, issue_explicitly_closed_by_pr, TITLE_ISSUE_RE
-    
-    # Try branch shape first
-    linked = linked_issue_from_branch(str(pr.get('headRefName') or ''))
-    if linked is not None:
-        return linked
-    
-    # Try explicit closing keyword in body
-    closed = issue_explicitly_closed_by_pr(pr)
-    if closed is not None:
-        return closed
-    
-    # Try leading reference in title
-    title = str(pr.get('title') or '')
-    match = TITLE_ISSUE_RE.search(title)
-    return int(match.group(1)) if match else None
-
-
 def release_worker(worker: str, reason: str = 'controller-release') -> list[int]:
     """Release all targets still owned by one fixed-model worker immediately.
 
@@ -761,7 +719,10 @@ def selectivity_conflict_recovery(worker: str) -> dict[str, Any]:
         for issue in owned_issues:
             issue_number = int(issue['number'])
             # No canonical PR found for this issue, check if it's ambiguous
-            other_worker_prs = [p for p in prs if linked_issue_from_pr(p) == issue_number]
+            other_worker_prs = [
+                p for p in prs
+                if linked_issue_from_pr(p) == issue_number and owner_of(labels_of(p)) != owner
+            ]
             if other_worker_prs:
                 # This might be ambiguous - multiple workers could claim this issue
                 result['ambiguous_cases'].append({
@@ -782,7 +743,6 @@ def selectivity_conflict_recovery(worker: str) -> dict[str, Any]:
     # Case 1: Worker owns canonical PR + unrelated accidental issue lease
     for pr in owned_prs:
         pr_number = int(pr['number'])
-        pr_labels = labels_of(pr)
         
         # Check if this PR is canonical (has linked issue)
         linked_issue = linked_issue_from_pr(pr)
@@ -847,9 +807,12 @@ def selectivity_conflict_recovery(worker: str) -> dict[str, Any]:
                     except Exception as e:
                         result['errors'].append(f'Failed to release orphan issue {issue_number}: {str(e)}')
         
-        if not linked_pr_found and issue_number in [i['number'] for i in owned_issues]:
+        if not linked_pr_found:
             # No canonical PR found for this issue, check if it's ambiguous
-            other_worker_prs = [p for p in prs if linked_issue_from_pr(p) == issue_number]
+            other_worker_prs = [
+                p for p in prs
+                if linked_issue_from_pr(p) == issue_number and owner_of(labels_of(p)) != owner
+            ]
             if other_worker_prs:
                 # This might be ambiguous - multiple workers could claim this issue
                 result['ambiguous_cases'].append({

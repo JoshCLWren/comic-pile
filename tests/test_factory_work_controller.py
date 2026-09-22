@@ -7,6 +7,7 @@ import sys
 import types
 from pathlib import Path
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
@@ -557,12 +558,98 @@ def test_selective_conflict_recovery_ambiguous_cases_fail_closed(
     result = controller.selectivity_conflict_recovery("54")
     
     # Verify that ambiguous cases are detected and not resolved
-    assert len(result["ambiguous_cases"]) > 0
-    assert "multiple PRs with different linked issues" in str(result["ambiguous_cases"])
+    assert len(result["ambiguous_cases"]) == 2
+    assert {case["issue"] for case in result["ambiguous_cases"]} == {1003, 1004}
+    assert all(
+        case["reason"] == "multiple workers could claim this issue"
+        for case in result["ambiguous_cases"]
+    )
     assert len(result["recovered_issues"]) == 0
     assert len(result["recovered_prs"]) == 0
     assert len(result["canonical_prs_preserved"]) == 0
     assert len(result["orphan_issues_released"]) == 0
+
+
+def test_selective_conflict_recovery_canonical_pair_is_not_ambiguous(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test that a worker's own canonical PR never flags its linked issue as ambiguous."""
+    issues = [
+        {
+            "number": 1007,
+            "title": "Canonical issue owned by worker with its PR",
+            "labels": [{"name": "factory:54"}],
+            "state": "open",
+            "createdAt": "2026-09-01T12:00:00Z",
+        },
+        {
+            "number": 1008,
+            "title": "Stray issue owned by worker",
+            "labels": [{"name": "factory:54"}],
+            "state": "open",
+            "createdAt": "2026-09-01T12:00:00Z",
+        }
+    ]
+
+    prs = [
+        {
+            "number": 2007,
+            "title": "Canonical PR for issue 1007",
+            "labels": [{"name": "factory:54"}],
+            "headRefName": "factory/54-1007-fix",
+            "state": "open",
+            "isDraft": False,
+            "createdAt": "2026-09-01T12:00:00Z",
+        }
+    ]
+
+    def mock_target_json(number):
+        if number == 1007:
+            return {
+                "number": 1007,
+                "title": "Canonical issue owned by worker with its PR",
+                "labels": [{"name": "factory:54"}],
+                "state": "open",
+            }
+        elif number == 1008:
+            return {
+                "number": 1008,
+                "title": "Stray issue owned by worker",
+                "labels": [{"name": "factory:54"}],
+                "state": "open",
+            }
+        elif number == 2007:
+            return {
+                "number": 2007,
+                "title": "Canonical PR for issue 1007",
+                "labels": [{"name": "factory:54"}],
+                "state": "open",
+            }
+        return {}
+
+    replaced_labels = []
+    def mock_replace_factory_labels(number, owner, stage=None):
+        replaced_labels.append((number, owner, stage))
+
+    monkeypatch.setattr(controller, "list_issues", lambda: issues)
+    monkeypatch.setattr(controller, "list_prs", lambda: prs)
+    monkeypatch.setattr(controller, "target_json", mock_target_json)
+    monkeypatch.setattr(controller, "replace_factory_labels", mock_replace_factory_labels)
+    monkeypatch.setattr(controller, "record_claim_released", lambda *a, **k: None)
+    monkeypatch.setattr(controller, "target_owned_by", lambda num, owner: True)
+
+    result = controller.selectivity_conflict_recovery("54")
+
+    # The canonical pair is provably owned, so no spurious ambiguity is reported.
+    assert len(result["ambiguous_cases"]) == 0
+
+    # Only the stray issue is released; the canonical issue and PR survive.
+    assert 1008 in result["recovered_issues"]
+    assert 1008 in result["orphan_issues_released"]
+    assert 2007 in result["canonical_prs_preserved"]
+    assert len(result["errors"]) == 0
+    assert (1008, "factory:unowned") == replaced_labels[0][:2]
+    assert len(replaced_labels) == 1
 
 
 def test_selective_conflict_recovery_preserves_label_state_invariants(
@@ -652,31 +739,33 @@ def test_cli_conflict_recovery_command(
 ) -> None:
     """Test that the conflict recovery CLI command works correctly."""
     # Mock the selective_conflict_recovery function
-    def mock_recovery(worker):
-        return {
-            "worker": worker,
-            "recovered_issues": [1001],
-            "canonical_prs_preserved": [2001],
-            "orphan_issues_released": [1001],
-            "errors": []
-        }
-    
+    mock_recovery = Mock(return_value={
+        "worker": "54",
+        "recovered_issues": [1001],
+        "canonical_prs_preserved": [2001],
+        "orphan_issues_released": [1001],
+        "errors": []
+    })
+
     monkeypatch.setattr(controller, "selectivity_conflict_recovery", mock_recovery)
-    
+
     # Simulate CLI command execution
-    import sys
+    original_argv = sys.argv
     sys.argv = ["factory-work-controller.py", "conflict-recovery", "--worker", "54"]
-    
+
     # Capture stdout
-    with capsys.disabled():
-        result = controller.main()
-    
+    try:
+        with capsys.disabled():
+            result = controller.main()
+    finally:
+        sys.argv = original_argv
+
     # Should return 0 for success
     assert result == 0
-    
+
     # The function should have been called with the right worker
-    assert controller.selectivity_conflict_recovery.call_count == 1
-    assert controller.selectivity_conflict_recovery.call_args[0][0] == "54"
+    assert mock_recovery.call_count == 1
+    assert mock_recovery.call_args.args[0] == "54"
 
 
 def test_selective_conflict_recovery_current_owner_verification(
