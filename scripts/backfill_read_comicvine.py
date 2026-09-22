@@ -1,4 +1,4 @@
-"""Local-first ComicVine read backfill operator for identity resolution and creator hydration.
+r"""Local-first ComicVine read backfill operator for identity resolution and creator hydration.
 
 Single documented operator command::
 
@@ -24,7 +24,7 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, TypedDict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -46,6 +46,41 @@ _CREATOR_RESOURCE = "issue"
 
 _THROTTLE_BASE_SECONDS = 60.0
 _THROTTLE_MAX_SECONDS = 3600.0
+
+
+class ThrottleResourceSnapshot(TypedDict):
+    """Snapshot of a single resource's throttle state."""
+
+    cooling: bool
+    cooldown_remaining_seconds: float
+    consecutive_throttles: int
+
+
+class ThrottleSnapshot(TypedDict):
+    """Full throttle snapshot mapping resource names to their state."""
+
+    search: ThrottleResourceSnapshot
+    issue: ThrottleResourceSnapshot
+
+
+class BackfillReport(TypedDict):
+    """Machine-readable backfill report."""
+
+    user_id: int
+    dry_run: bool
+    requests_per_hour: int
+    local_snapshot_available: bool
+    total_issues: int
+    resolved_identities: int
+    resolved_creators: int
+    unresolved_identities: int
+    unresolved_creators: int
+    rate_limited: int
+    errors: int
+    skipped_existing: int
+    completion_rate: float
+    throttles: dict[str, ThrottleResourceSnapshot]
+    completed_at: str
 
 
 @dataclass
@@ -158,7 +193,7 @@ class ResourceThrottleTracker:
         self._consecutive_throttles.pop(resource, None)
         self._cooldown_until.pop(resource, None)
 
-    def snapshot(self) -> dict[str, object]:
+    def snapshot(self) -> dict[str, ThrottleResourceSnapshot]:
         """Return machine-readable per-resource throttle state."""
         resources = sorted(set(self._cooldown_until) | set(self._consecutive_throttles))
         return {
@@ -581,7 +616,7 @@ class ComicVineBackfillOperator:
             creator_status = await self.process_issue_creator(db, issue)
             self.progress.update(issue.id, "creator", creator_status)
 
-    def build_report(self) -> dict[str, object]:
+    def build_report(self) -> BackfillReport:
         """Return a machine-readable summary of the backfill run.
 
         Returns:
