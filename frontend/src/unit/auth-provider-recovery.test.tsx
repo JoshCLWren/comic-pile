@@ -109,7 +109,7 @@ describe('AuthProvider transient recovery', () => {
     vi.useFakeTimers()
     // First call fails with network error, second succeeds
     mocks.get
-      .mockRejectedValueOnce(Object.assign(new Error('network timeout'), { isAxiosError: true }))
+      .mockRejectedValueOnce(Object.assign(new Error('network timeout'), { isAxiosError: true, code: 'ERR_NETWORK' }))
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
       .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
 
@@ -124,11 +124,12 @@ describe('AuthProvider transient recovery', () => {
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(2000)
     })
 
+    // Wait for retry to complete and status to become authenticated
+    await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
     expect(auth?.authState.isLoading).toBe(false)
-    expect(auth?.authState.status).toBe('authenticated')
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
     expect(mocks.get).toHaveBeenCalledTimes(3)
     expect(mocks.get).toHaveBeenNthCalledWith(2, '/v1/auth/me', {
