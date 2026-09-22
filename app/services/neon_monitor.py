@@ -28,8 +28,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import httpx
-from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic import AliasChoices, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -40,19 +40,46 @@ class NeonMonitorSettings(BaseSettings):
     All thresholds and credentials are loaded from environment variables.
     """
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     # Neon API authentication
-    neon_token: str = Field(..., alias="NEON_TOKEN")
-    neon_project_id: str = Field(..., alias="NEON_PROJECT_ID")
+    neon_token: str = Field(
+        ...,
+        validation_alias=AliasChoices("NEON_TOKEN", "neon_token"),
+    )
+    neon_project_id: str = Field(
+        ...,
+        validation_alias=AliasChoices("NEON_PROJECT_ID", "neon_project_id"),
+    )
 
     # Thresholds (in gigabytes)
-    neon_absolute_threshold_gb: float = Field(5.0, alias="NEON_ABSOLUTE_THRESHOLD_GB")
-    neon_anomaly_delta_gb: float = Field(1.0, alias="NEON_ANOMALY_DELTA_GB")
-    neon_anomaly_factor: float = Field(3.0, alias="NEON_ANOMALY_FACTOR")
+    neon_absolute_threshold_gb: float = Field(
+        5.0,
+        validation_alias=AliasChoices(
+            "NEON_ABSOLUTE_THRESHOLD_GB", "neon_absolute_threshold_gb"
+        ),
+    )
+    neon_anomaly_delta_gb: float = Field(
+        1.0,
+        validation_alias=AliasChoices("NEON_ANOMALY_DELTA_GB", "neon_anomaly_delta_gb"),
+    )
+    neon_anomaly_factor: float = Field(
+        3.0,
+        validation_alias=AliasChoices("NEON_ANOMALY_FACTOR", "neon_anomaly_factor"),
+    )
 
     # Polling interval
-    neon_poll_interval_seconds: int = Field(3600, alias="NEON_POLL_INTERVAL_SECONDS")
+    neon_poll_interval_seconds: int = Field(
+        3600,
+        validation_alias=AliasChoices(
+            "NEON_POLL_INTERVAL_SECONDS", "neon_poll_interval_seconds"
+        ),
+    )
 
 
 @dataclass

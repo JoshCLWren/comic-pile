@@ -7,7 +7,6 @@ active warning.  All network access is mocked via httpx transports.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime
 from unittest.mock import patch
 
@@ -82,6 +81,7 @@ class TestNeonMonitorSettings:
     """Configuration validation tests."""
 
     def test_defaults(self) -> None:
+        """Defaults are applied when only required fields are supplied."""
         settings = NeonMonitorSettings(neon_token="tok", neon_project_id="proj")
         assert settings.neon_absolute_threshold_gb == 5.0
         assert settings.neon_anomaly_delta_gb == 1.0
@@ -93,6 +93,7 @@ class TestConsumptionSample:
     """Dataclass tests."""
 
     def test_construction(self) -> None:
+        """ConsumptionSample stores timestamp, bytes, and month."""
         ts = datetime(2026, 9, 22, tzinfo=UTC)
         sample = ConsumptionSample(timestamp=ts, public_bytes=1_000_000, month="2026-09")
         assert sample.public_bytes == 1_000_000
@@ -104,6 +105,7 @@ class TestNeonEgressMonitor:
 
     @pytest.mark.asyncio
     async def test_first_sample_records_first_sample_event(self) -> None:
+        """First evaluation records a first_sample event."""
         monitor = _make_monitor(_consumption_response(500_000_000))
         try:
             sample = await monitor._fetch_monthly_consumption()
@@ -117,6 +119,7 @@ class TestNeonEgressMonitor:
 
     @pytest.mark.asyncio
     async def test_normal_growth_logs_normal(self) -> None:
+        """Small delta below thresholds logs a normal event."""
         monitor = _make_monitor(_consumption_response(100_000_000))
         try:
             # First sample
@@ -310,6 +313,7 @@ class TestCreateNeonMonitor:
     """Factory function tests."""
 
     def test_create_from_env(self) -> None:
+        """Factory reads credentials from environment variables."""
         with patch.dict(
             "os.environ",
             {"NEON_TOKEN": "tok", "NEON_PROJECT_ID": "proj"},
