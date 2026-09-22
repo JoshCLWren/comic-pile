@@ -76,6 +76,7 @@ async def list_stale_threads(
     page_size: int = Query(default=200, ge=1, le=200),
 ) -> list[ThreadResponse]:
     """List the authenticated user's threads not read in ``days`` (default 30).
+
     The result is bounded at the database to ``page_size`` items (default 200, max 200).
     """
     try:
