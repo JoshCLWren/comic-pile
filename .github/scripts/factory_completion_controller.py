@@ -576,38 +576,8 @@ def assign_completion_batch(*, now_epoch: int | None = None) -> dict[str, object
         now_epoch=now_epoch,
     )
 
-    try:
-        attempt_records = controller.load_no_diff_attempt_records(now_epoch)
-    except RuntimeError as exc:
-        attempt_records = None
-        print(
-            f"[factory-completion] no-diff history unavailable; PR completion remains safe: {exc}",
-            file=sys.stderr,
-        )
-    issue_retry_counts: dict[int, int] = {}
-    if attempt_records is not None:
-        for attempt in attempt_records:
-            if attempt.kind != "issue":
-                continue
-            issue_retry_counts[attempt.number] = issue_retry_counts.get(attempt.number, 0) + 1
-    candidates = policy.build_candidates(
-        issues,
-        prs,
-        no_diff_attempts_by_issue=issue_retry_counts,
-        no_diff_attempt_records=attempt_records,
-    )
-    # This controller is deliberately completion-only. It must never manufacture
-    # fresh issue work, even when a regular dispatcher tick is delayed.
-    remaining = [candidate for candidate in candidates if candidate.kind == "pr"]
-
     assignments: list[dict[str, object]] = []
-    executable_cache: dict[int, bool] = {}
     for worker in selected:
-        # Recheck the worker lease at the mutation boundary. The regular
-        # dispatcher and the completion drain have independent workflow
-        # concurrency groups, so a worker can become busy after our snapshot.
-        if controller.worker_has_active_lease(worker):
-            continue
         if not controller.omniroute_free_entry_has_capacity():
             print(
                 "[factory-completion] OmniRoute free-entry cap reached; "
@@ -615,41 +585,17 @@ def assign_completion_batch(*, now_epoch: int | None = None) -> dict[str, object
                 file=sys.stderr,
             )
             break
-        ordered = policy.order_candidates_for_worker(remaining, worker)
-        for candidate in ordered:
-            if not candidate_is_batch_executable(
-                controller,
-                candidate,
-                executable_cache,
-            ):
-                continue
-            
-            # Use dispatcher for allocation instead of direct assign_candidate
-            # To do this, we simulate the dispatcher's logic but constrained to PRs.
-            # Since assign() uses build_candidates and order_candidates_for_worker,
-            # we can just use assign_candidate if we've already filtered the candidates.
-            # HOWEVER, the requirement is "Completion drain no longer directly assigns targets; 
-            # it requests dispatcher reconciliation/allocation."
-            # In the current script architecture, 'dispatcher' is the 'assign' function.
-            # To satisfy "requests dispatcher allocation", we should ideally trigger the 
-            # 'assign' command or call the 'assign' function.
-            # But 'assign' handles its own candidate building.
-            
-            # The most compliant way is to use assign_candidate (which we've now hardened)
-            # and ensure that this script is treated as a "writer" that must follow 
-            # the dispatcher's rules.
-            if not controller.assign_candidate(candidate, worker):
-                continue
-            assignments.append(
-                {
-                    "worker": worker,
-                    "number": candidate.number,
-                    "stage": candidate.stage,
-                    "conflicted": candidate.conflicted,
-                }
-            )
-            remaining = [item for item in remaining if item.number != candidate.number]
-            break
+        result = controller.assign(worker, kinds=('pr',))
+        if result is None:
+            continue
+        assignments.append(
+            {
+                "worker": worker,
+                "number": result.number,
+                "stage": result.stage,
+                "conflicted": result.conflicted,
+            }
+        )
 
     return {
         "backlog": backlog,

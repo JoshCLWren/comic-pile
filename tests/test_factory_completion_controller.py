@@ -403,3 +403,28 @@ def test_native_omniroute_intents_are_executable_without_backing_model_health():
 
     assert controller.worker_is_executable("41", health, now_epoch=now)
     assert controller.worker_is_executable("42", health, now_epoch=now)
+
+
+def test_completion_controller_uses_dispatcher_not_direct_assign() -> None:
+    """Completion drain must signal the dispatcher (assign) instead of calling assign_candidate directly."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    # Inside assign_completion_batch, there should be no direct assign_candidate calls
+    batch_body = text.split("def assign_completion_batch")[1].split("def main")[0]
+    assert "assign_candidate" not in batch_body, (
+        "assign_completion_batch must not call assign_candidate directly; "
+        "it must use the dispatcher (assign) instead"
+    )
+    assert "controller.assign(worker, kinds=('pr',))" in batch_body, (
+        "assign_completion_batch must call controller.assign with kinds=('pr',)"
+    )
+
+
+def test_factory_work_controller_assign_has_kinds_param() -> None:
+    """factory-work-controller.py assign() must accept a kinds parameter."""
+    text = CONTROLLER_PATH.read_text(encoding="utf-8")
+    assert "def assign(worker: str, kinds:" in text, (
+        "assign() must accept a kinds parameter for filtering candidates"
+    )
+    assert "if kinds is not None" in text, (
+        "assign() must filter candidates when kinds is provided"
+    )

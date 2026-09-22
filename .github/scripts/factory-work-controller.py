@@ -204,7 +204,6 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
     for number in numbers:
         if not target_still_unowned(number):
             return False
-    # ... (rest of function remains same)
 
     def release_verified_claims(claimed_numbers: list[int]) -> None:
         """Release only labels this worker can still prove it owns."""
@@ -542,8 +541,13 @@ def omniroute_free_entry_has_capacity() -> bool:
     return omniroute_free_entry_capacity()['remaining'] > 0
 
 
-def assign(worker: str) -> Candidate | None:
-    """Assign the highest-ranked executable work to one fixed-model worker."""
+def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
+    """Assign the highest-ranked executable work to one fixed-model worker.
+
+    When kinds is provided, only candidates whose kind is in the tuple
+    are considered. This allows completion drains to request dispatcher
+    allocation restricted to specific candidate types.
+    """
     if not re.fullmatch('(?:[6-9]|[1-3][0-9]|[4-7][0-9])', worker):
         raise SystemExit(f'unsupported fixed-model worker: {worker}')
     if worker_has_active_lease(worker):
@@ -577,7 +581,9 @@ def assign(worker: str) -> Candidate | None:
         no_diff_attempts_by_issue=issue_retry_counts,
         no_diff_attempt_records=attempt_records,
     )
-    if attempt_records is None:
+    if kinds is not None:
+        candidates = [candidate for candidate in candidates if candidate.kind in kinds]
+    elif attempt_records is None:
         candidates = [candidate for candidate in candidates if candidate.kind == 'pr']
     candidates = order_candidates_for_worker(candidates, worker)
     for candidate in candidates:
@@ -683,6 +689,7 @@ def main() -> int:
     subparsers.add_parser('capacity')
     assign_parser = subparsers.add_parser('assign')
     assign_parser.add_argument('--worker', required=True)
+    assign_parser.add_argument('--kinds', nargs='*', default=None)
     inspect_parser = subparsers.add_parser('inspect')
     inspect_parser.add_argument('--worker', required=True)
     release_parser = subparsers.add_parser('release')
@@ -696,7 +703,7 @@ def main() -> int:
         print(json.dumps(omniroute_free_entry_capacity()))
         return 0
     if args.command == 'assign':
-        candidate = assign(args.worker)
+        candidate = assign(args.worker, kinds=tuple(args.kinds) if args.kinds else None)
         if candidate is None:
             print(json.dumps({'kind': 'none'}))
             return 0
