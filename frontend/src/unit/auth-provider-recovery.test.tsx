@@ -112,28 +112,28 @@ describe('AuthProvider transient recovery', () => {
       .mockRejectedValueOnce(Object.assign(new Error('network timeout'), { isAxiosError: true, code: 'ERR_NETWORK' }))
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
       .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
-    
+
     renderProvider()
-    
-    // Initial check: should be network_error
+
+    // Flush the initial bootstrap attempt: network failure -> degraded state
+    // with a bounded exponential-backoff retry scheduled.
+    // NOTE: waitFor cannot be used with fake timers (its polling timers never
+    // fire), so the retry is driven deterministically with timer advancement.
     await act(async () => {
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
     })
     expect(auth?.authState.status).toBe('network_error')
-    
-    // Advance timers to trigger retry
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2000)
-      await Promise.resolve()
-    })
-    
-    // Wait for the state update to propagate
-    await waitFor(() => {
-      if (auth?.authState.status !== 'authenticated') {
-        throw new Error('Still not authenticated')
-      }
-    }, { timeout: 2000 })
 
+    // Fire the scheduled backoff retry (attempt-1 delay is ~1000-1100ms) and
+    // flush the recovery chain through to the authenticated state.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(auth?.authState.status).toBe('authenticated')
     expect(auth?.authState.isLoading).toBe(false)
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
     expect(mocks.get).toHaveBeenCalledTimes(3)
@@ -143,7 +143,7 @@ describe('AuthProvider transient recovery', () => {
     })
     
     await act(async () => {
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
     })
     expect(mocks.get).toHaveBeenNthCalledWith(3, '/v1/users/me/preferences', PREFERENCES_CONFIG)
   }, 15000)

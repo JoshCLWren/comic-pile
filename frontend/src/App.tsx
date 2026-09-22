@@ -328,7 +328,11 @@ const clearAuthError = useCallback(() => {
       }))
     } catch (error) {
       const authError = createAuthError(error)
-      if (isDefinitiveAuthenticationFailure(error)) {
+      // Preserve the freshly issued session only when the hydration failure is
+      // positively identified as a transient outage (503 / network). A
+      // definitive 401 — or an unclassifiable validation failure — keeps the
+      // legacy invalid-credentials behavior: clear the token and log out.
+      if (isDefinitiveAuthenticationFailure(error) || authError === null) {
         clearAccessToken()
         setAuthState(prev => ({
           ...prev,
