@@ -10,12 +10,14 @@ describe('Auth State Service', () => {
   describe('isDefinitiveAuthenticationFailure', () => {
     it('returns true for 401 errors', () => {
       const error = new Error('Unauthorized') as any
+      error.isAxiosError = true
       error.response = { status: 401 }
       expect(isDefinitiveAuthenticationFailure(error)).toBe(true)
     })
 
     it('returns false for non-401 errors', () => {
       const error = new Error('Service Unavailable') as any
+      error.isAxiosError = true
       error.response = { status: 503 }
       expect(isDefinitiveAuthenticationFailure(error)).toBe(false)
     })
@@ -29,18 +31,21 @@ describe('Auth State Service', () => {
   describe('isServiceUnavailable', () => {
     it('returns true for 503 errors', () => {
       const error = new Error('Service Unavailable') as any
+      error.isAxiosError = true
       error.response = { status: 503 }
       expect(isServiceUnavailable(error)).toBe(true)
     })
 
     it('returns true for timeout errors', () => {
       const error = new Error('Timeout') as any
+      error.isAxiosError = true
       error.code = 'ECONNABORTED'
       expect(isServiceUnavailable(error)).toBe(true)
     })
 
     it('returns false for other errors', () => {
       const error = new Error('Network error') as any
+      error.isAxiosError = true
       error.response = { status: 500 }
       expect(isServiceUnavailable(error)).toBe(false)
     })
@@ -49,17 +54,20 @@ describe('Auth State Service', () => {
   describe('isNetworkError', () => {
     it('returns true for network errors without response', () => {
       const error = new Error('Network error') as any
+      error.isAxiosError = true
       expect(isNetworkError(error)).toBe(true)
     })
 
     it('returns true for ERR_NETWORK errors', () => {
       const error = new Error('Network error') as any
+      error.isAxiosError = true
       error.code = 'ERR_NETWORK'
       expect(isNetworkError(error)).toBe(true)
     })
 
     it('returns false for errors with response', () => {
       const error = new Error('Service error') as any
+      error.isAxiosError = true
       error.response = { status: 500 }
       expect(isNetworkError(error)).toBe(false)
     })
@@ -68,6 +76,7 @@ describe('Auth State Service', () => {
   describe('createAuthError', () => {
     it('creates definitive auth failure error for 401', () => {
       const error = new Error('Unauthorized') as any
+      error.isAxiosError = true
       error.response = { status: 401 }
       
       const authError = createAuthError(error)
@@ -80,6 +89,7 @@ describe('Auth State Service', () => {
 
     it('creates service unavailable error for 503', () => {
       const error = new Error('Service Unavailable') as any
+      error.isAxiosError = true
       error.response = { status: 503 }
       
       const authError = createAuthError(error)
@@ -92,6 +102,7 @@ describe('Auth State Service', () => {
 
     it('creates network error for network failures', () => {
       const error = new Error('Network error') as any
+      error.isAxiosError = true
       
       const authError = createAuthError(error)
       expect(authError).toEqual({
@@ -102,6 +113,7 @@ describe('Auth State Service', () => {
 
     it('returns null for unknown error types', () => {
       const error = new Error('Unknown error') as any
+      error.isAxiosError = true
       error.response = { status: 500 }
       
       const authError = createAuthError(error)

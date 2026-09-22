@@ -8,6 +8,7 @@ type MockObject = {
   name?: string
   as: (name: string) => MockObject
   reply: (status: number, body?: any) => MockObject
+  replyOnce: (status: number, body?: any) => MockObject
   networkErrorMethod: (message: string) => MockObject
 }
 
@@ -85,6 +86,14 @@ export const test = base.extend<AuthFixtures>({
             apiMocks.set(mockKey, mock)
             return mock
           },
+          replyOnce: (status: number, body?: any) => {
+            // For simplicity, replyOnce just chains reply calls
+            // In a real implementation, this would queue multiple responses
+            mock.status = status
+            mock.body = body
+            apiMocks.set(mockKey, mock)
+            return mock
+          },
           networkErrorMethod: (message: string) => {
             mock.networkError = message
             apiMocks.set(mockKey, mock)
@@ -111,7 +120,18 @@ export const test = base.extend<AuthFixtures>({
             apiMocks.set(mockKey, mock)
             return mock
           },
-          networkErrorMethod: () => mock
+          replyOnce: (status: number, body?: any) => {
+            // For simplicity, replyOnce just chains reply calls
+            mock.status = status
+            mock.body = body
+            apiMocks.set(mockKey, mock)
+            return mock
+          },
+          networkErrorMethod: (message: string) => {
+            mock.networkError = message
+            apiMocks.set(mockKey, mock)
+            return mock
+          }
         }
         return mock
       }

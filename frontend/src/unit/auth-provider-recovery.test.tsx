@@ -1,6 +1,7 @@
 import { act, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AuthContextValue } from '../App'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { AuthContextValue } from '../contexts/AuthContext'
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -39,7 +40,7 @@ vi.mock('../services/api', () => {
 })
 
 import { PreferencesSync } from '../hooks/usePreferences'
-import { AuthProvider, useAuth } from '../App'
+import { AuthProvider, useAuth } from '../contexts/AuthContext'
 
 let auth: AuthContextValue | null = null
 
@@ -49,16 +50,24 @@ function Consumer() {
 }
 
 function PreferencesSyncConsumer() {
-  const { isAuthenticated } = useAuth()
-  return <PreferencesSync isAuthenticated={isAuthenticated} />
+  const { authState } = useAuth()
+  return <PreferencesSync isAuthenticated={authState.status === 'authenticated'} />
 }
 
 function renderProvider() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
   return render(
-    <AuthProvider>
-      <Consumer />
-      <PreferencesSyncConsumer />
-    </AuthProvider>,
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <Consumer />
+        <PreferencesSyncConsumer />
+      </AuthProvider>
+    </QueryClientProvider>,
   )
 }
 
@@ -96,10 +105,11 @@ describe('AuthProvider transient recovery', () => {
     vi.useRealTimers()
   })
 
-  it('keeps bootstrap in recovery after a transient failure and authenticates on retry', async () => {
+  it('keeps bootstrap in recovery after a transient network failure and authenticates on retry', async () => {
     vi.useFakeTimers()
+    // First call fails with network error, second succeeds
     mocks.get
-      .mockRejectedValueOnce(new Error('network timeout'))
+      .mockRejectedValueOnce(Object.assign(new Error('network timeout'), { isAxiosError: true }))
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
       .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
 
@@ -108,16 +118,17 @@ describe('AuthProvider transient recovery', () => {
       await Promise.resolve()
     })
 
-    expect(auth?.isLoading).toBe(true)
-    expect(auth?.isAuthenticated).toBe(false)
+    // During bootstrap failure, status should be network_error (degraded), isLoading false
+    expect(auth?.authState.status).toBe('network_error')
+    expect(auth?.authState.isLoading).toBe(false)
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000)
     })
 
-    expect(auth?.isLoading).toBe(false)
-    expect(auth?.isAuthenticated).toBe(true)
+    expect(auth?.authState.isLoading).toBe(false)
+    expect(auth?.authState.status).toBe('authenticated')
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
     expect(mocks.get).toHaveBeenCalledTimes(3)
     expect(mocks.get).toHaveBeenNthCalledWith(2, '/v1/auth/me', {
@@ -135,7 +146,7 @@ describe('AuthProvider transient recovery', () => {
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
       .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     renderProvider()
-    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
     await waitForPreferencesFetch()
 
     mocks.refreshSession.mockRejectedValueOnce(axiosError(401))
@@ -143,16 +154,16 @@ describe('AuthProvider transient recovery', () => {
       await expect(auth!.recoverSession(15000)).rejects.toMatchObject({ response: { status: 401 } })
     })
 
-    expect(auth?.isAuthenticated).toBe(false)
+    expect(auth?.authState.status).toBe('unauthenticated')
     expect(mocks.clearAccessToken).toHaveBeenCalledOnce()
   })
 
-  it('preserves authenticated state when explicit recovery hits a transient server failure', async () => {
+  it('transitions to degraded state when explicit recovery hits a transient server failure', async () => {
     mocks.get
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
       .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     renderProvider()
-    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
     await waitForPreferencesFetch()
 
     mocks.refreshSession.mockRejectedValueOnce(axiosError(503))
@@ -160,8 +171,11 @@ describe('AuthProvider transient recovery', () => {
       await expect(auth!.recoverSession(15000)).rejects.toMatchObject({ response: { status: 503 } })
     })
 
-    expect(auth?.isAuthenticated).toBe(true)
+    // New behavior: transition to service_unavailable degraded state instead of staying authenticated
+    expect(auth?.authState.status).toBe('service_unavailable')
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
+    // User should still have access to content (ProtectedRoute allows degraded states)
+    expect(auth?.authState.user).toEqual({ username: 'reader', email: 'reader@example.com' })
   })
 
   it('silently recovers the bootstrap session when the access token is rejected', async () => {
@@ -173,10 +187,10 @@ describe('AuthProvider transient recovery', () => {
     mocks.refreshSession.mockResolvedValueOnce('new-token')
 
     renderProvider()
-    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
     await waitForPreferencesFetch()
 
-    expect(auth?.isLoading).toBe(false)
+    expect(auth?.authState.isLoading).toBe(false)
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
     expect(mocks.refreshSession).toHaveBeenCalledWith({ skipAuthRedirect: true })
   })
@@ -187,9 +201,9 @@ describe('AuthProvider transient recovery', () => {
     mocks.refreshSession.mockRejectedValueOnce(axiosError(401))
 
     renderProvider()
-    await waitFor(() => expect(auth?.isAuthenticated).toBe(false))
+    await waitFor(() => expect(auth?.authState.status).toBe('unauthenticated'))
 
-    expect(auth?.isLoading).toBe(false)
+    expect(auth?.authState.isLoading).toBe(false)
     expect(mocks.clearAccessToken).toHaveBeenCalled()
   })
 
@@ -199,7 +213,7 @@ describe('AuthProvider transient recovery', () => {
     mocks.get.mockRejectedValueOnce(axiosError(401))
 
     renderProvider()
-    await waitFor(() => expect(auth?.isAuthenticated).toBe(false))
+    await waitFor(() => expect(auth?.authState.status).toBe('unauthenticated'))
 
     expect(mocks.refreshSession).not.toHaveBeenCalled()
     expect(mocks.clearAccessToken).toHaveBeenCalled()
@@ -210,7 +224,7 @@ describe('AuthProvider transient recovery', () => {
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
       .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     renderProvider()
-    await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
+    await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
     await waitForPreferencesFetch()
 
     mocks.get.mockRejectedValueOnce(axiosError(401))
@@ -223,7 +237,7 @@ describe('AuthProvider transient recovery', () => {
       await auth!.revalidateSession(15000)
     })
 
-    expect(auth?.isAuthenticated).toBe(true)
+    expect(auth?.authState.status).toBe('authenticated')
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
   })
 })

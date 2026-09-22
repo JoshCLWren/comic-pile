@@ -74,7 +74,7 @@ test.describe('Auth Outage Recovery', () => {
     
     // Mock network error for /auth/me
     mockApi.get('/v1/auth/me').as('authMe')
-      .networkError('Network Error')
+      .networkErrorMethod('Network Error')
 
     // Navigate to a protected route
     await page.goto('/thread/1')
@@ -124,7 +124,7 @@ test.describe('Auth Outage Recovery', () => {
     await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
     
     // Verify we're not on the login page
-    await expect(page).toHaveURL('/login', { timeout: 1000 }).toBe(false)
+    await expect(page).not.toHaveURL('/login', { timeout: 1000 })
   })
 
   test('transitions to unauthenticated when auth/me returns 401 after retries', async ({
