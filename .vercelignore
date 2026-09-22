@@ -47,13 +47,6 @@ scripts/
 frontend/src/
 frontend/public/
 
-# Coverage / lint / type artifacts
-.coverage
-htmlcov/
-.mypy_cache/
-.ruff_cache/
-.pytest_cache/
-
 # Migration files not needed at serverless request time
 alembic/
 
