@@ -604,7 +604,9 @@ async def preview_series_mapping(
             "issued_at": time.time(),
             "expires_at": None,
         }
-    
+
+    assert series_info is not None
+
     # Classify issues and determine safe scope
     counts = {
         "already_confirmed": 0,
@@ -721,7 +723,7 @@ async def preview_series_mapping(
             "status": scope_status,
             "scope_key": scope_key,
             "origin_issue_id": origin_issue_id,
-            "series_label": series_info.get("name") if isinstance(series_info.get("name"), str) else None,  # type: ignore[union-attr]
+            "series_label": series_info.get("name") if isinstance(series_info.get("name"), str) else None,
             "basis": scope_basis,
         },
         "provider_series": series_info,
