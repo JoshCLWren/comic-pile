@@ -557,6 +557,34 @@ async def test_stale_endpoint_excludes_snoozed_threads(
 
 
 @pytest.mark.asyncio
+async def test_stale_endpoint_bounded_by_page_size(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Stale endpoint respects page_size bound at the database."""
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=60)
+    for i in range(3):
+        async_db.add(
+            Thread(
+                title=f"Stale {i}",
+                format="Comic",
+                issues_remaining=1,
+                queue_position=1,
+                status="active",
+                user_id=user.id,
+                last_activity_at=stale_date,
+                is_blocked=False,
+                created_at=now,
+            )
+        )
+    await async_db.commit()
+    response = await auth_client.get("/api/v1/threads/stale?days=30&page_size=2")
+    assert response.status_code == 200
+    assert len(response.json()) <= 2
+
+
+@pytest.mark.asyncio
 async def test_list_threads_issues_remaining_correct(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:

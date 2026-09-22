@@ -103,6 +103,7 @@ async def fetch_stale_threads(
     user_id: int,
     cutoff_date: datetime,
     snoozed_ids: list[int] | None = None,
+    page_size: int | None = None,
 ) -> list[Thread]:
     """Fetch active, unblocked threads whose last activity predates a cutoff.
 
@@ -112,9 +113,11 @@ async def fetch_stale_threads(
         cutoff_date: Threads last read before this instant are stale.
         snoozed_ids: Thread IDs currently snoozed in the session; these are
             excluded from the stale result.
+        page_size: Optional maximum number of results to return.
 
     Returns:
-        Stale threads ordered oldest activity first (nulls first).
+        Stale threads ordered oldest activity first (nulls first), capped to
+        ``page_size`` when provided.
     """
     query = (
         select(Thread)
@@ -126,6 +129,8 @@ async def fetch_stale_threads(
     )
     if snoozed_ids:
         query = query.where(Thread.id.not_in(snoozed_ids))
+    if page_size is not None:
+        query = query.limit(page_size)
     result = await db.execute(query)
     return list(result.scalars().all())
 
