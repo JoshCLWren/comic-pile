@@ -25,38 +25,34 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, UTC
-from typing import Any
+from datetime import UTC, datetime
 
 import httpx
-from pydantic import BaseModel, Field
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
 
 
-class NeonMonitorSettings(BaseModel):
+class NeonMonitorSettings(BaseSettings):
     """Configuration settings for the Neon egress monitor.
 
     All thresholds and credentials are loaded from environment variables.
     """
 
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
     # Neon API authentication
-    token: str = Field(..., env="NEON_TOKEN")
-    project_id: str = Field(..., env="NEON_PROJECT_ID")
+    neon_token: str = Field(..., alias="NEON_TOKEN")
+    neon_project_id: str = Field(..., alias="NEON_PROJECT_ID")
 
     # Thresholds (in gigabytes)
-    absolute_threshold_gb: float = Field(5.0, env="NEON_ABSOLUTE_THRESHOLD_GB")
-    anomaly_delta_gb: float = Field(1.0, env="NEON_ANOMALY_DELTA_GB")
-    anomaly_factor: float = Field(3.0, env="NEON_ANOMALY_FACTOR")
+    neon_absolute_threshold_gb: float = Field(5.0, alias="NEON_ABSOLUTE_THRESHOLD_GB")
+    neon_anomaly_delta_gb: float = Field(1.0, alias="NEON_ANOMALY_DELTA_GB")
+    neon_anomaly_factor: float = Field(3.0, alias="NEON_ANOMALY_FACTOR")
 
     # Polling interval
-    poll_interval_seconds: int = Field(3600, env="NEON_POLL_INTERVAL_SECONDS")
-
-    class Config:
-        """Pydantic configuration for loading settings from environment variables."""
-
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    neon_poll_interval_seconds: int = Field(3600, alias="NEON_POLL_INTERVAL_SECONDS")
 
 
 @dataclass
@@ -89,10 +85,11 @@ class NeonEgressMonitor:
         """
         self.settings = settings
         self.client = httpx.AsyncClient(
-            base_url="https://api.neon.tech", headers={"Authorization": f"Bearer {settings.token}"}
+            base_url="https://api.neon.tech",
+            headers={"Authorization": f"Bearer {settings.neon_token}"},
         )
         self.last_sample: ConsumptionSample | None = None
-        self.events: list[dict[str, Any]] = []  # for test introspection
+        self.events: list[dict[str, object]] = []
 
     async def _fetch_monthly_consumption(self) -> ConsumptionSample | None:
         """Query Neon for the current month's public data transfer.
@@ -100,7 +97,7 @@ class NeonEgressMonitor:
         Returns ``None`` if the API request fails.
         """
         month = datetime.now(UTC).strftime("%Y-%m")
-        url = f"/v1/projects/{self.settings.project_id}/consumption/periods"
+        url = f"/v1/projects/{self.settings.neon_project_id}/consumption/periods"
         params = {"month": month}
         try:
             resp = await self.client.get(url, params=params, timeout=15.0)
@@ -109,12 +106,17 @@ class NeonEgressMonitor:
             # Expected shape:
             # {"data": {"public_data_transfer_bytes": 123456789}}
             public_bytes = int(data["data"]["public_data_transfer_bytes"])
-            return ConsumptionSample(timestamp=datetime.now(UTC), public_bytes=public_bytes, month=month)
+            return ConsumptionSample(
+                timestamp=datetime.now(UTC),
+                public_bytes=public_bytes,
+                month=month,
+            )
         except Exception as exc:  # pragma: no cover - network failure
             logger.warning("Neon consumption fetch failed: %s", exc, exc_info=True)
             return None
 
     def _serialize_gb(self, bytes_: int) -> float:
+        """Convert bytes to gigabytes."""
         return round(bytes_ / (1024**3), 2)
 
     def _evaluate_warnings(self, sample: ConsumptionSample) -> None:
@@ -124,12 +126,40 @@ class NeonEgressMonitor:
             # First sample, nothing to compare
             self._log_event("first_sample", sample)
             return
+
+        # Period rollover: if the sample is from a different month than the
+        # last sample, the delta is not meaningful.  Record the rollover and
+        # reset the baseline so the new period starts clean.
+        if sample.month != last.month:
+            self._log_event(
+                "period_rollover",
+                {
+                    "previous_month": last.month,
+                    "current_month": sample.month,
+                    "previous_bytes": last.public_bytes,
+                    "current_bytes": sample.public_bytes,
+                },
+            )
+            self.last_sample = sample
+            self._log_event("first_sample", sample)
+            return
+
         delta = sample.public_bytes - last.public_bytes
         delta_gb = self._serialize_gb(delta)
-        abs_warning = sample.public_bytes >= self.settings.absolute_threshold_gb * 1024**3
-        anomaly = delta >= (self.settings.anomaly_delta_gb * 1024**3) and delta_gb >= self.settings.anomaly_factor * self._serialize_gb(last.public_bytes)
+        abs_warning = (
+            sample.public_bytes >= self.settings.neon_absolute_threshold_gb * 1024**3
+        )
+        anomaly_threshold = self.settings.neon_anomaly_delta_gb * 1024**3
+        anomaly_baseline = self.settings.neon_anomaly_factor * self._serialize_gb(
+            last.public_bytes
+        )
+        anomaly = delta >= anomaly_threshold and delta_gb >= anomaly_baseline
+
         if abs_warning or anomaly:
-            detail = {"month": sample.month, "bytes": sample.public_bytes}
+            detail: dict[str, object] = {
+                "month": sample.month,
+                "bytes": sample.public_bytes,
+            }
             if abs_warning:
                 detail["type"] = "absolute"
             if anomaly:
@@ -146,7 +176,11 @@ class NeonEgressMonitor:
             event_type: The category of event (e.g. "warning", "normal").
             data: The payload associated with the event.
         """
-        record = {"type": event_type, "timestamp": datetime.now(UTC).isoformat(), "data": data}
+        record = {
+            "type": event_type,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "data": data,
+        }
         logger.info("NeonMonitor event: %s", record)
         self.events.append(record)
 
@@ -161,7 +195,7 @@ class NeonEgressMonitor:
             if sample:
                 self.last_sample = sample
                 self._evaluate_warnings(sample)
-            await asyncio.sleep(self.settings.poll_interval_seconds)
+            await asyncio.sleep(self.settings.neon_poll_interval_seconds)
 
     async def close(self) -> None:
         """Close the underlying HTTP client."""
@@ -170,12 +204,15 @@ class NeonEgressMonitor:
 
 # Hook into application startup -------------------------------------------------
 
+
 def create_neon_monitor() -> NeonEgressMonitor:
     """Create a NeonEgressMonitor instance from environment settings."""
     return NeonEgressMonitor(NeonMonitorSettings())
 
+
 # The monitor instance can be imported by the app and scheduled.
 _monitored: NeonEgressMonitor | None = None
+
 
 async def startup_event() -> None:
     """Initialize the monitor and schedule periodic sampling."""
@@ -184,6 +221,7 @@ async def startup_event() -> None:
     # schedule the monitor; noop when tests set TEST_ENVIRONMENT
     if not os.getenv("TEST_ENVIRONMENT"):
         asyncio.create_task(_monitored.start())
+
 
 async def shutdown_event() -> None:
     """Gracefully shut down the monitor's HTTP client."""

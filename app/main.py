@@ -638,6 +638,15 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             },
         )
 
+        # Start Neon egress monitor when credentials are configured.
+        if os.getenv("NEON_TOKEN") and os.getenv("NEON_PROJECT_ID"):
+            try:
+                from app.services.neon_monitor import startup_event as neon_startup
+
+                await neon_startup()
+            except Exception:
+                logger.warning("Neon monitor startup skipped", exc_info=True)
+
     @app.middleware("http")
     async def heavy_init_middleware(request: Request, call_next):
         """Ensure heavy dependencies are ready for all routes except the ping probe."""
@@ -667,6 +676,15 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         )
         await cache_accounting.close()
         await cache.close()
+
+        # Shut down Neon egress monitor if it was started.
+        if os.getenv("NEON_TOKEN") and os.getenv("NEON_PROJECT_ID"):
+            try:
+                from app.services.neon_monitor import shutdown_event as neon_shutdown
+
+                await neon_shutdown()
+            except Exception:
+                logger.warning("Neon monitor shutdown skipped", exc_info=True)
 
     return app
 
