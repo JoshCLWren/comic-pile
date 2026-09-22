@@ -607,16 +607,17 @@ async def rate_thread(
         "blocking_reasons": [],
     }
     
-    # Create roll reconciliation with last_read if applicable
+    # Roll reconciliation describes the issue just read (not the next
+    # unread one), so it stays present even when the thread completes.
     roll_reconciliation = None
-    if resp_next_unread_issue_id is not None:
+    if rated_issue_id is not None:
         roll_reconciliation = RollReconciliation(
             last_read=RollLastRead(
-                issue_id=resp_next_unread_issue_id,
-                issue_number=resp_next_unread_issue_number,
+                issue_id=rated_issue_id,
+                issue_number=rated_issue_number,
                 thread_id=resp_id,
                 thread_title=resp_title,
-                read_at=None,  # Would be set when user actually reads
+                read_at=resp_last_activity_at,
             )
         )
     

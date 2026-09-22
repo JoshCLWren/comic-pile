@@ -1542,13 +1542,24 @@ async def roll_v2_bootstrap(
                 last_activity_at=row.last_activity_at.isoformat() if row.last_activity_at else None,
             ))
 
-    # Get blocked threads
+    # Blocked summary keeps v1 semantics: the count covers every active
+    # blocked thread while the detail list stays bounded.
+    blocked_count_result = await db.execute(
+        select(func.count())
+        .select_from(Thread)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.is_blocked.is_(True))
+    )
+    blocked_count = blocked_count_result.scalar() or 0
+
     blocked_threads_result = await db.execute(
         select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
         .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
         .where(Thread.is_blocked.is_(True))
         .order_by(Thread.queue_position)
-        .limit(RollV2BootstrapResponse.summary_limit)
+        .limit(20)
     )
     blocked_threads = [
         RollableThread(
@@ -1559,25 +1570,41 @@ async def roll_v2_bootstrap(
         )
         for row in blocked_threads_result
     ]
-    blocked_count = len(blocked_threads)
+    snoozed_threads = snoozed_threads[:RollV2BootstrapResponse.summary_limit]
+    blocked_threads = blocked_threads[:RollV2BootstrapResponse.summary_limit]
+    skipped_threads = skipped_threads[:RollV2BootstrapResponse.summary_limit]
 
-    # Get stale thread
-    stale_thread_count = 0
-    stale_thread = None
+    # Stale summary keeps v1 semantics: 7-day cutoff over coalesced
+    # activity, excluding blocked and snoozed threads.
+    stale_cutoff = datetime.now(UTC) - timedelta(days=7)
+    effective_activity = func.coalesce(Thread.last_activity_at, Thread.created_at)
+    stale_base = (
+        select(func.count())
+        .select_from(Thread)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.is_blocked.is_(False))
+        .where(effective_activity < stale_cutoff)
+    )
     if effective_snoozed_ids:
-        stale_cutoff = datetime.now(UTC) - timedelta(days=30)
+        stale_base = stale_base.where(Thread.id.not_in(effective_snoozed_ids))
+    stale_count_result = await db.execute(stale_base)
+    stale_thread_count = stale_count_result.scalar() or 0
+
+    stale_thread = None
+    if stale_thread_count > 0:
         stale_ids_query = (
             select(Thread.id)
             .where(Thread.user_id == user_id)
             .where(Thread.status == "active")
-            .where(Thread.last_activity_at < stale_cutoff)
+            .where(Thread.is_blocked.is_(False))
+            .where(effective_activity < stale_cutoff)
         )
         if effective_snoozed_ids:
             stale_ids_query = stale_ids_query.where(Thread.id.not_in(effective_snoozed_ids))
         stale_ids_result = await db.execute(stale_ids_query)
         stale_ids = [row[0] for row in stale_ids_result.all()]
         if stale_ids:
-            stale_thread_count = len(stale_ids)
             chosen_id = random.choice(stale_ids)
             stale_detail_result = await db.execute(
                 select(Thread.id, Thread.title, Thread.format, Thread.last_activity_at)
