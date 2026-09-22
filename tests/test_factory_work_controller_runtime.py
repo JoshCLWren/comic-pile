@@ -143,6 +143,9 @@ def test_assign_candidate_rolls_first_target_back_when_second_write_fails(
     monkeypatch.setattr(controller, "target_still_unowned", lambda number: True)
     monkeypatch.setattr(controller, "target_owned_by", lambda number, owner: True)
     monkeypatch.setattr(controller, "record_controller_lease_activity", lambda *args: None)
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda _worker: False)
+    # Mock dispatcher identity verification for testing
+    monkeypatch.setattr(controller, "dispatcher_identity_verified", lambda: True)
     calls: list[tuple[int, str, str | None]] = []
 
     def replace(number: int, owner: str, stage: str | None = None) -> None:
@@ -166,6 +169,9 @@ def test_pr_assignment_preserves_existing_workflow_stage(
     monkeypatch.setattr(controller, "target_still_unowned", lambda number: True)
     monkeypatch.setattr(controller, "target_owned_by", lambda number, owner: True)
     monkeypatch.setattr(controller, "record_controller_lease_activity", lambda *args: None)
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda _worker: False)
+    # Mock dispatcher identity verification for testing
+    monkeypatch.setattr(controller, "dispatcher_identity_verified", lambda: True)
     calls: list[tuple[int, str, str | None]] = []
     monkeypatch.setattr(
         controller,
@@ -184,6 +190,10 @@ def test_assign_candidate_verifies_post_write_owner(
     candidate = controller.Candidate("issue", 603, 1, 3, "2026-08-16T12:00:00Z")
     monkeypatch.setattr(controller, "target_still_unowned", lambda number: True)
     monkeypatch.setattr(controller, "target_owned_by", lambda number, owner: False)
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda _worker: False)
+    monkeypatch.setattr(controller, "record_controller_lease_activity", lambda *args: None)
+    # Mock dispatcher identity verification for testing
+    monkeypatch.setattr(controller, "dispatcher_identity_verified", lambda: True)
     writes: list[tuple[Any, ...]] = []
     monkeypatch.setattr(
         controller,
@@ -216,6 +226,8 @@ def test_replace_factory_labels_preserves_existing_stage(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Verify replace factory labels preserves existing stage."""
+    # Mock dispatcher identity verification for testing
+    monkeypatch.setattr(controller, "dispatcher_identity_verified", lambda: True)
     monkeypatch.setattr(
         controller,
         "target_json",
