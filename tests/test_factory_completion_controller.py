@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / ".github" / "scripts" / "factory_completion_controller.py"
+CONTROLLER_PATH = Path(__file__).resolve().parents[1] / ".github" / "scripts" / "factory-work-controller.py"
 SPEC = importlib.util.spec_from_file_location("factory_completion_controller", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 controller = importlib.util.module_from_spec(SPEC)
