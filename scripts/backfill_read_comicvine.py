@@ -852,27 +852,27 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--user-id", type=int, required=True, help="Target user ID for backfill")
     parser.add_argument(
-        "--database-url", 
-        type=str, 
+        "--database-url",
+        type=str,
         required=True,
-        help="Database connection URL (explicit, no .env loading)"
+        help="Database connection URL (explicit, no .env loading)",
     )
     parser.add_argument(
-        "--cache-dir", 
-        type=Path, 
+        "--cache-dir",
+        type=Path,
         default=Path("/tmp/comicpile-comicvine"),
-        help="Directory for ComicVine cache persistence"
+        help="Directory for ComicVine cache persistence",
     )
     parser.add_argument(
-        "--dry-run", 
+        "--dry-run",
         action="store_true",
-        help="Report what would be done without making changes"
+        help="Report what would be done without making changes",
     )
     parser.add_argument(
         "--requests-per-hour",
         type=int,
         default=180,
-        help="Rolling request ceiling per endpoint (default: 180)"
+        help="Rolling request ceiling per endpoint (default: 180)",
     )
     parser.add_argument(
         "--comicvine-db",
@@ -913,11 +913,7 @@ def main() -> None:
             min_live_interval_seconds=args.min_live_interval_seconds,
         )
 
-        stats = asyncio.run(operator.run())
-
-        # Rate-limited or partially unresolved runs are resumable, not failures.
-        if stats.errors > 0:
-            sys.exit(1)
+        asyncio.run(operator.run())
             
     except Exception as exc:
         print(f"Backfill failed: {exc}", file=sys.stderr)
