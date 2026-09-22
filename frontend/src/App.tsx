@@ -16,7 +16,7 @@ import api, {
   refreshSession,
   setAccessToken,
 } from './services/api'
-import { isDefinitiveAuthenticationFailure, createAuthError, type AuthState, type AuthStatus, type AuthError, calculateRetryDelay } from './services/authState'
+import { isDefinitiveAuthenticationFailure, createAuthError, type AuthState, calculateRetryDelay } from './services/authState'
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import { usePingHeartbeat } from './hooks/usePingHeartbeat'
@@ -87,14 +87,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
-const clearAuthError = useCallback(() => {
-     setAuthState(prev => ({
-       ...prev,
-       error: null,
-     }))
-   }, [])
+  const clearAuthError = useCallback(() => {
+    setAuthState(prev => ({
+      ...prev,
+      error: null,
+    }))
+  }, [])
 
-   const recoverSession = useCallback((timeout?: number): Promise<void> => {
+  const recoverSession = useCallback(
+    (timeout?: number): Promise<void> => {
      if (!recoveryPromise.current) {
        recoveryPromise.current = (async () => {
          try {

@@ -245,7 +245,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     navigate('/login')
   }, [logout, navigate])
 
-  if (!authState || authState.status !== 'authenticated') return null
+  if (!authState || authState.status === 'unauthenticated') return null
 
   const navItemClass = (active: boolean) =>
     `nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${
