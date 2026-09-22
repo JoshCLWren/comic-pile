@@ -280,10 +280,12 @@ def test_assign_candidate_rechecks_target_before_mutation(
     def target_state(_number: int) -> bool:
         nonlocal calls
         calls += 1
-        return calls <= 2
+        return calls <= 1
 
     monkeypatch.setattr(controller, "target_still_unowned", target_state)
     monkeypatch.setattr(controller, "worker_has_active_lease", lambda _worker: False)
+    monkeypatch.setattr(controller, "target_owned_by", lambda _number, _owner: True)
+    monkeypatch.setattr(controller, "record_controller_lease_activity", lambda *args: None)
     writes: list[tuple[Any, ...]] = []
     monkeypatch.setattr(
         controller,
