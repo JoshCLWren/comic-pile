@@ -539,10 +539,10 @@ async def _create_async_db_override(
 @pytest_asyncio.fixture(scope="function")
 async def sample_data(
     async_db: SQLAlchemyAsyncSession,
-) -> dict[str, Thread | SessionModel | Event | User | list]:
+) -> dict[str, Thread | SessionModel | Event | User | list | object]:
     """Create sample threads, sessions for async testing."""
     from sqlalchemy import delete
-    from app.models import Snapshot, Event, Thread, Session, User
+    from app.models import Issue, Snapshot, Event, Thread, Session, User
 
     batman_issues = []
 
@@ -632,8 +632,6 @@ async def sample_data(
     for thread in threads:
         await async_db.refresh(thread)
 
-    from app.models import Issue
-
     for i in range(1, 11):
         issue = Issue(
             id=i,
@@ -711,7 +709,14 @@ async def sample_data(
     await _sync_id_sequence(async_db, "sessions")
     await _sync_id_sequence(async_db, "events")
 
-    return {"threads": threads, "sessions": sessions, "events": events, "user": user}
+    return {
+        "threads": threads,
+        "sessions": sessions,
+        "events": events,
+        "user": user,
+        "issue": batman_issues[0],
+        "issues": batman_issues,
+    }
 
 
 @pytest_asyncio.fixture(scope="function")
