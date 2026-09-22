@@ -339,7 +339,15 @@ def schedule_counts(rows: Sequence[Mapping[str, str]]) -> Counter[int]:
 
 
 def schedule_is_balanced(rows: Sequence[Mapping[str, str]]) -> bool:
-    """Return whether every schedule minute is used and load differs by at most 1."""
+    """Return whether every row is scheduled and load differs by at most 1.
+
+    Unscheduled rows (empty or invalid ``minute``) make the roster unbalanced
+    even when the remaining scheduled buckets already satisfy ±1. Discovery
+    grow-path adds start with an empty minute; treating those as already
+    balanced left ``validate-free-model-factories.py`` to crash on ``int('')``.
+    """
+    if any(_row_schedule_minute(row) is None for row in rows):
+        return False
     counts = schedule_counts(rows)
     if set(counts) != set(SCHEDULE_MINUTES):
         return False

@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 from types import ModuleType
 
@@ -47,6 +48,24 @@ def _row(
         "scheduler": "dispatcher",
         "display_name": model,
     }
+
+
+def _assert_validator_minutes(rows: list[dict[str, str]]) -> None:
+    """Apply the discovery validator's minute loop that crashed on ``int('')``.
+
+    Mirrors ``validate-free-model-factories.py`` so grow-path apply fixtures
+    prove the PR step would stay green after writing the TSV.
+    """
+    counts: Counter[int] = Counter()
+    for row in rows:
+        minute = int(row["minute"])
+        assert row["scheduler"] == "dispatcher"
+        assert minute in ROSTER.SCHEDULE_MINUTES
+        counts[minute] += 1
+    assert set(counts) == set(ROSTER.SCHEDULE_MINUTES)
+    assert max(counts.values()) - min(counts.values()) <= 1
+    assert sum(counts.values()) == len(rows)
+    assert ROSTER.schedule_is_balanced(rows)
 
 
 def test_committed_lock_matches_live_roster() -> None:
@@ -457,6 +476,28 @@ def test_rebalance_keeps_minutes_when_already_balanced() -> None:
     assert ROSTER.schedule_is_balanced(rebalanced)
 
 
+def test_rebalance_assigns_empty_minutes_on_already_balanced_roster() -> None:
+    """An empty grown minute is assigned even when scheduled rows are ±1.
+
+    Discovery runs #35-#37 appended ``minute=""`` and rebalance early-returned
+    because the remaining scheduled buckets already looked balanced.
+    """
+    rows = [
+        _row(str(index + 1), "nvidia", f"model-{index}", minute=str(minute))
+        for index, minute in enumerate(ROSTER.SCHEDULE_MINUTES)
+    ]
+    rows.append(_row("99", "opencode-free", "ling-3.0-flash-fin-free", minute=""))
+
+    assert not ROSTER.schedule_is_balanced(rows)
+
+    rebalanced = ROSTER.rebalance_schedule_minutes(rows)
+    grown = next(row for row in rebalanced if row["worker"] == "99")
+
+    assert grown["minute"] != ""
+    assert int(grown["minute"]) in ROSTER.SCHEDULE_MINUTES
+    _assert_validator_minutes(rebalanced)
+
+
 def test_rebalance_spreads_clustered_minutes() -> None:
     """Workers stacked on one minute are spread across the dispatcher grid."""
     rows = [
@@ -743,15 +784,19 @@ def test_mixed_retire_and_add_rebalances_in_one_plan() -> None:
         _row("41", "opencode-free", "mimo-v2.6-flash-free", minute="10"),
         _row("59", "opencode-free", "big-pickle", minute="15"),
         _row("80", "opencode-free", "absent-free-model", minute="20"),
+        _row("201", "opencode-free", "muse-spark-1.2-contributor-free", minute="25"),
+        _row("202", "opencode-free", "nemotron-3-ultra-free", minute="30"),
+        _row("203", "opencode-free", "nemotron-3.5-lightning-free", minute="35"),
         *[
             _row(
-                str(201 + index),
+                str(204 + index),
                 "nvidia",
                 "poolside/laguna-xs-2.1",
                 minute=str(minute),
             )
-            for index, minute in enumerate((25, 30, 35, 40, 45, 50, 55))
+            for index, minute in enumerate((40, 45, 50, 55))
         ],
+        _row("208", "nvidia", "poolside/laguna-xs-2.1", minute="0"),
     ]
 
     plan = RETIRE.plan_retirement(rows, catalogs)
@@ -796,6 +841,172 @@ def test_apply_grows_when_no_surplus_big_pickle_remains() -> None:
     assert any(
         row["worker"] == "39" and row["model"] == "big-pickle" for row in remaining
     )
+    for row in remaining:
+        assert int(row["minute"]) in ROSTER.SCHEDULE_MINUTES
+
+
+def _balanced_grow_roster() -> list[dict[str, str]]:
+    """Return a ±1 roster with one big-pickle and one unused-free hole.
+
+    All keep-present free OpenCode models except ``ling-3.0-flash-fin-free``
+    are already pinned, so apply must grow a new worker rather than convert.
+    Twelve slots cover every dispatcher minute so the validator loop applies.
+    """
+    return [
+        _row("39", "opencode-free", "big-pickle", minute="0"),
+        _row("41", "opencode-free", "mimo-v2.6-flash-free", minute="5"),
+        _row("42", "opencode-free", "nemotron-3-ultra-free", minute="10"),
+        _row("45", "opencode-free", "nemotron-3.5-lightning-free", minute="15"),
+        _row("46", "kilo-auto", "kilo-auto/free", minute="20"),
+        _row("47", "opencode-free", "muse-spark-1.2-contributor-free", minute="25"),
+        _row("48", "opencode-free", "muse-spark-1.3-contributor-free", minute="30"),
+        *[
+            _row(
+                str(201 + index),
+                "nvidia",
+                "poolside/laguna-xs-2.1",
+                minute=str(minute),
+            )
+            for index, minute in enumerate((35, 40, 45, 50, 55))
+        ],
+    ]
+
+
+def _balanced_mimo_upgrade_roster() -> list[dict[str, str]]:
+    """Return a ±1 roster whose only catalog change is mimo-v2.5 → v2.6."""
+    return [
+        _row("39", "opencode-free", "big-pickle", minute="0"),
+        _row("41", "opencode-free", "mimo-v2.5-free", minute="15"),
+        _row("42", "opencode-free", "nemotron-3-ultra-free", minute="10"),
+        _row("45", "opencode-free", "nemotron-3.5-lightning-free", minute="20"),
+        _row("46", "kilo-auto", "kilo-auto/free", minute="25"),
+        _row("47", "opencode-free", "muse-spark-1.2-contributor-free", minute="30"),
+        _row("48", "opencode-free", "muse-spark-1.3-contributor-free", minute="35"),
+        _row("49", "opencode-free", "ling-3.0-flash-fin-free", minute="40"),
+        *[
+            _row(
+                str(201 + index),
+                "nvidia",
+                "poolside/laguna-xs-2.1",
+                minute=str(minute),
+            )
+            for index, minute in enumerate((5, 45, 50, 55))
+        ],
+    ]
+
+
+def test_apply_grow_assigns_minutes_on_balanced_roster(tmp_path: Path) -> None:
+    """Grow-path apply writes a valid dispatcher minute the validator accepts.
+
+    Reproduces discovery runs #35-#37: remaining scheduled rows already
+    satisfy ±1, so a grown unused-free pin must not keep ``minute=""``.
+    """
+    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
+    rows = _balanced_grow_roster()
+    assert ROSTER.schedule_is_balanced(rows)
+    lock = ROSTER.RosterLock(
+        schema_version=1,
+        expected_workers=sorted(ROSTER.roster_worker_ids(rows)),
+        retired_workers=[40, 43, 44],
+        retired_models=[],
+    )
+
+    plan = RETIRE.plan_retirement(rows, catalogs, lock=lock)
+    grow = [item for item in plan.additions if item.action == "add"]
+
+    assert plan.retirements == ()
+    assert {item.model for item in grow} == {"ling-3.0-flash-fin-free"}
+    assert all(item.action == "add" for item in plan.additions)
+    assert all(int(item.worker) > 48 for item in grow)
+
+    roster = tmp_path / "free-model-factories.tsv"
+    lock_path = tmp_path / "factory-expected-workers.json"
+    ROSTER.write_roster_rows(roster, rows)
+    ROSTER.write_roster_lock(lock_path, lock)
+
+    status = RETIRE.run(
+        [
+            "apply",
+            "--roster",
+            str(roster),
+            "--lock",
+            str(lock_path),
+            "--catalog-json",
+            str(FIXTURES / "keep-present.json"),
+        ]
+    )
+    remaining = ROSTER.load_roster_rows(roster)
+    written_lock = ROSTER.load_roster_lock(lock_path)
+    grown = [row for row in remaining if row["model"] == "ling-3.0-flash-fin-free"]
+
+    assert status == 0
+    assert grown
+    assert all(row["minute"] != "" for row in grown)
+    _assert_validator_minutes(remaining)
+    assert set(written_lock["expected_workers"]) == ROSTER.roster_worker_ids(remaining)
+    assert {40, 43, 44}.issubset(set(written_lock["retired_workers"]))
+    assert any(row["worker"] == "46" and row["model"] == "kilo-auto/free" for row in remaining)
+
+
+def test_same_plan_retire_and_add_reuses_freed_worker(tmp_path: Path) -> None:
+    """Retire+add in one plan converts the freed slot instead of growing.
+
+    The #37 mimo-v2.5-free → mimo-v2.6-flash-free case must keep worker 41
+    and its minute even when the lock still lists 41 as expected.
+    """
+    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
+    rows = _balanced_mimo_upgrade_roster()
+    assert ROSTER.schedule_is_balanced(rows)
+    lock = ROSTER.RosterLock(
+        schema_version=1,
+        expected_workers=sorted(ROSTER.roster_worker_ids(rows)),
+        retired_workers=[40, 43, 44],
+        retired_models=[],
+    )
+
+    plan = RETIRE.plan_retirement(rows, catalogs, lock=lock)
+    added = {item.model: item for item in plan.additions}
+
+    assert {item.model for item in plan.retirements} == {"mimo-v2.5-free"}
+    assert added["mimo-v2.6-flash-free"].action == "convert"
+    assert added["mimo-v2.6-flash-free"].worker == "41"
+    assert added["mimo-v2.6-flash-free"].previous_model == "mimo-v2.5-free"
+    assert "just-retired" in added["mimo-v2.6-flash-free"].reason
+    assert all(item.action != "add" for item in plan.additions)
+
+    roster = tmp_path / "free-model-factories.tsv"
+    lock_path = tmp_path / "factory-expected-workers.json"
+    ROSTER.write_roster_rows(roster, rows)
+    ROSTER.write_roster_lock(lock_path, lock)
+
+    status = RETIRE.run(
+        [
+            "apply",
+            "--roster",
+            str(roster),
+            "--lock",
+            str(lock_path),
+            "--catalog-json",
+            str(FIXTURES / "keep-present.json"),
+        ]
+    )
+    remaining = ROSTER.load_roster_rows(roster)
+    written_lock = ROSTER.load_roster_lock(lock_path)
+    by_worker = {row["worker"]: row for row in remaining}
+
+    assert status == 0
+    assert "41" in by_worker
+    assert by_worker["41"]["model"] == "mimo-v2.6-flash-free"
+    assert by_worker["41"]["minute"] == "15"
+    assert by_worker["41"]["source"] == "opencode-free"
+    assert by_worker["46"]["model"] == "kilo-auto/free"
+    assert "mimo-v2.5-free" not in {row["model"] for row in remaining}
+    assert "xiaomi/mimo-v2.6-flash" not in {row["model"] for row in remaining}
+    assert 41 in written_lock["expected_workers"]
+    assert 41 not in written_lock["retired_workers"]
+    assert "mimo-v2.5-free" in written_lock["retired_models"]
+    assert {40, 43, 44}.issubset(set(written_lock["retired_workers"]))
+    _assert_validator_minutes(remaining)
 
 
 def test_apply_cli_converts_production_shaped_tsv_via_add_path(tmp_path: Path) -> None:

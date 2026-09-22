@@ -365,22 +365,33 @@ def plan_additions(
     unused: Sequence[UnusedFreeModel],
     *,
     lock: RosterLock | None = None,
+    reusable_slots: Sequence[RosterRow] = (),
 ) -> tuple[PinAddition, ...]:
     """Choose TSV conversions/adds for unused free OpenCode models.
 
     Surplus ``big-pickle`` duplicates convert first (highest worker id).
-    New worker ids are allocated only when no surplus slot remains.
-    Models in ``retired_models`` are never re-pinned.
+    Just-retired workers from the same plan reuse next so a retire+add
+    (for example mimo-v2.5-free → mimo-v2.6-flash-free) keeps the freed
+    worker id and dispatcher minute instead of growing a new slot while
+    the lock still lists that id as expected. New worker ids are
+    allocated only when no surplus or just-freed slot remains. Models in
+    ``retired_models`` are never re-pinned. Permanently retired worker
+    ids stay occupied.
 
     Args:
         remaining_rows: Roster rows after planned retirements.
         unused: Live free OpenCode models missing from the incoming TSV.
         lock: Optional retirement lock.
+        reusable_slots: Rows dropped by this plan's retirements. Eligible
+            unused-free adds may convert these slots instead of growing.
 
     Returns:
         Ordered pin additions apply will write to the TSV.
     """
     retired_models = set(lock["retired_models"]) if lock is not None else set()
+    permanently_retired = (
+        {int(item) for item in lock["retired_workers"]} if lock is not None else set()
+    )
     eligible = [
         item
         for item in unused
@@ -388,14 +399,22 @@ def plan_additions(
     ]
     eligible.sort(key=lambda item: item.model)
     convertible = surplus_big_pickle_rows(remaining_rows)
+    reusable = [
+        row
+        for row in reusable_slots
+        if int(row["worker"]) not in permanently_retired
+    ]
+    reusable.sort(key=lambda row: int(row["worker"]))
     occupied = roster_worker_ids(remaining_rows)
     if lock is not None:
-        occupied |= {int(item) for item in lock["retired_workers"]}
+        occupied |= permanently_retired
         occupied |= {int(item) for item in lock["expected_workers"]}
+    occupied -= {int(row["worker"]) for row in reusable}
 
     additions: list[PinAddition] = []
-    grow: list[UnusedFreeModel] = []
+    leftover: list[UnusedFreeModel] = []
     convert_index = 0
+    reuse_index = 0
     for item in eligible:
         if convert_index < len(convertible):
             slot = convertible[convert_index]
@@ -414,11 +433,29 @@ def plan_additions(
                 )
             )
             continue
-        grow.append(item)
+        if reuse_index < len(reusable):
+            slot = reusable[reuse_index]
+            reuse_index += 1
+            additions.append(
+                PinAddition(
+                    worker=slot["worker"],
+                    source="opencode-free",
+                    model=item.model,
+                    action="convert",
+                    previous_model=slot["model"],
+                    reason=(
+                        "reuse just-retired worker slot for unused free "
+                        "OpenCode model"
+                    ),
+                )
+            )
+            occupied.add(int(slot["worker"]))
+            continue
+        leftover.append(item)
 
-    if grow:
-        new_ids = next_available_worker_ids(occupied, len(grow))
-        for worker_id, item in zip(new_ids, grow, strict=True):
+    if leftover:
+        new_ids = next_available_worker_ids(occupied, len(leftover))
+        for worker_id, item in zip(new_ids, leftover, strict=True):
             additions.append(
                 PinAddition(
                     worker=str(worker_id),
@@ -513,11 +550,19 @@ def plan_retirement(
     unused, paid = unused_free_opencode_models(catalogs.get("opencode"), roster_free)
     retired_workers = {item.worker for item in retirements}
     remaining = [row for row in rows if row["worker"] not in retired_workers]
+    reusable_slots = [row for row in rows if row["worker"] in retired_workers]
     locked_unused = tuple(
         item.model for item in unused if item.model in retired_models
     )
     additions = (
-        plan_additions(remaining, unused, lock=lock) if add_unused_free else ()
+        plan_additions(
+            remaining,
+            unused,
+            lock=lock,
+            reusable_slots=reusable_slots,
+        )
+        if add_unused_free
+        else ()
     )
     return RetirementPlan(
         retirements=retirements,
@@ -545,11 +590,21 @@ def apply_plan(
 
     Returns:
         Remaining rows with dispatcher minutes balanced to the validator
-        ±1 invariant. Converted workers keep their ids; grown pins receive
-        new ids after the highest occupied/retired worker.
+        ±1 invariant. Converted workers keep their ids and minutes;
+        just-retired workers reused by the same plan stay on the roster
+        with the new unused-free pin. Grown pins receive new ids after
+        the highest occupied/retired worker and a ``SCHEDULE_MINUTES``
+        value from rebalance.
     """
     retired_workers = {item.worker for item in plan.retirements}
-    remaining = [row for row in rows if row["worker"] not in retired_workers]
+    converted_workers = {
+        item.worker for item in plan.additions if item.action == "convert"
+    }
+    remaining = [
+        row
+        for row in rows
+        if row["worker"] not in retired_workers or row["worker"] in converted_workers
+    ]
     remaining = _apply_additions(remaining, plan.additions)
     return rebalance_schedule_minutes(remaining)
 
@@ -728,10 +783,19 @@ def run(argv: Sequence[str] | None = None) -> int:
             and row["minute"] != before_minutes[row["worker"]]
         )
         write_roster_rows(roster_path, remaining, load_roster_comments(roster_path))
+        reused_workers = {
+            int(item.worker)
+            for item in plan.additions
+            if item.action == "convert"
+        }
         sync_roster_lock(
             remaining,
             lock_path=lock_path,
-            extra_retired_workers=(int(item.worker) for item in plan.retirements),
+            extra_retired_workers=(
+                int(item.worker)
+                for item in plan.retirements
+                if int(item.worker) not in reused_workers
+            ),
             extra_retired_models=(item.model for item in plan.retirements),
         )
         converted = sum(1 for item in plan.additions if item.action == "convert")
