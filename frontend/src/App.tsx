@@ -18,8 +18,6 @@ import api, {
 } from './services/api'
 import { 
   isDefinitiveAuthenticationFailure,
-  isServiceUnavailable,
-  isNetworkError,
   createAuthError,
   type AuthState,
   type AuthStatus,
@@ -45,7 +43,8 @@ declare global {
 }
 
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 15000
-const AUTH_BOOTSTRAP_RETRY_DELAY_MS = 1000
+const AUTH_BOOTSTRAP_MAX_RETRIES = 5
+const AUTH_RETRY_BASE_DELAY_MS = 1000
 
 type BugReportSubmit = (
   reportType: ReportType,
@@ -95,11 +94,7 @@ export function useAuth() {
   if (!context) throw new Error('useAuth must be used within an AuthProvider')
   return context
 }
-
-const AUTH_BOOTSTRAP_TIMEOUT_MS = 15000
-const AUTH_BOOTSTRAP_MAX_RETRIES = 5
-const AUTH_RETRY_BASE_DELAY_MS = 1000
-
+ 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>({
     status: 'checking',
@@ -124,81 +119,80 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
-  const clearAuthError = useCallback(() => {
-    setAuthState(prev => ({
-      ...prev,
-      error: null,
-    }))
-  }, [])
+const clearAuthError = useCallback(() => {
+     setAuthState(prev => ({
+       ...prev,
+       error: null,
+     }))
+   }, [])
 
-  const retryAuth = useCallback(async () => {
-    setAuthState(prev => ({
-      ...prev,
-      isLoading: true,
-      error: null,
-    }))
+   const recoverSession = useCallback((timeout?: number): Promise<void> => {
+     if (!recoveryPromise.current) {
+       recoveryPromise.current = (async () => {
+         try {
+           if (isSessionRefreshRejected()) {
+             markDefinitivelyUnauthenticated()
+             throw Object.assign(new Error('Session refresh unavailable'), {
+               isAxiosError: true,
+               response: { status: 401 },
+             })
+           }
+           await refreshSession({ skipAuthRedirect: true })
+           const response = await api.get<AuthUser>('/v1/auth/me', {
+             timeout,
+             skipAuthRedirect: true,
+           })
+           setAuthState(prev => ({
+             ...prev,
+             status: 'authenticated',
+             isLoading: false,
+             user: response,
+             error: null,
+             retryCount: 0,
+             lastRetryAt: null,
+           }))
+         } catch (error) {
+           const authError = createAuthError(error)
+           if (isDefinitiveAuthenticationFailure(error)) {
+             markDefinitivelyUnauthenticated()
+           } else {
+             setAuthState(prev => ({
+               ...prev,
+               status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
+               isLoading: false,
+               error: authError,
+               retryCount: prev.retryCount + 1,
+               lastRetryAt: Date.now(),
+             }))
+           }
+           throw error
+         }
+       })().finally(() => {
+         recoveryPromise.current = null
+       }))
+     }
+     return recoveryPromise.current
+   }, [markDefinitivelyUnauthenticated]);
 
-    try {
-      await recoverSession(AUTH_BOOTSTRAP_TIMEOUT_MS)
-    } catch (error) {
-      const authError = createAuthError(error)
-      setAuthState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: authError,
-      }))
-      throw error
-    }
-  }, [recoverSession])
+   const retryAuth = useCallback(async () => {
+     setAuthState(prev => ({
+       ...prev,
+       isLoading: true,
+       error: null,
+     }))
 
-  const recoverSession = useCallback((timeout?: number): Promise<void> => {
-    if (!recoveryPromise.current) {
-      recoveryPromise.current = (async () => {
-        try {
-          if (isSessionRefreshRejected()) {
-            markDefinitivelyUnauthenticated()
-            throw Object.assign(new Error('Session refresh unavailable'), {
-              isAxiosError: true,
-              response: { status: 401 },
-            })
-          }
-          await refreshSession({ skipAuthRedirect: true })
-          const response = await api.get<AuthUser>('/v1/auth/me', {
-            timeout,
-            skipAuthRedirect: true,
-          })
-          setAuthState(prev => ({
-            ...prev,
-            status: 'authenticated',
-            isLoading: false,
-            user: response,
-            error: null,
-            retryCount: 0,
-            lastRetryAt: null,
-          }))
-        } catch (error) {
-          const authError = createAuthError(error)
-          if (isDefinitiveAuthenticationFailure(error)) {
-            markDefinitivelyUnauthenticated()
-          } else {
-            setAuthState(prev => ({
-              ...prev,
-              status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
-              isLoading: false,
-              error: authError,
-              retryCount: prev.retryCount + 1,
-              lastRetryAt: Date.now(),
-            }))
-          }
-          throw error
-        }
-      })().finally(() => {
-        recoveryPromise.current = null
-      })
-    }
-
-    return recoveryPromise.current
-  }, [markDefinitivelyUnauthenticated])
+     try {
+       await recoverSession(AUTH_BOOTSTRAP_TIMEOUT_MS)
+     } catch (error) {
+       const authError = createAuthError(error)
+       setAuthState(prev => ({
+         ...prev,
+         isLoading: false,
+         error: authError,
+       }))
+       throw error
+     }
+   }, [recoverSession])
 
   const revalidateSession = useCallback(async (timeout?: number) => {
     try {

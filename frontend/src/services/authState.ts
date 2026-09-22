@@ -1,4 +1,6 @@
 import { AxiosError } from 'axios'
+import axios from 'axios'
+import type { AuthUser } from '../types'
 
 export type AuthStatus =
   | 'checking'

@@ -6,7 +6,6 @@ import {
   calculateRetryDelay,
   type AuthError 
 } from '../services/authState'
-import axios from 'axios'
 
 describe('Auth State Service', () => {
   describe('isDefinitiveAuthenticationFailure', () => {

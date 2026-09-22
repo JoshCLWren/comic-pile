@@ -158,7 +158,7 @@ function NavIcon({ name }: { name: NavIconName }) {
 
 export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const location = useLocation()
-  const { isAuthenticated, isLoading, user, logout } = useAuth()
+  const { authState, logout } = useAuth()
   const { collapsed, toggleCollapsed } = useNavCollapse()
   const navigate = useNavigate()
   const { isMobile } = useResponsive()
@@ -245,7 +245,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     navigate('/login')
   }, [logout, navigate])
 
-  if (!isAuthenticated) return null
+  if (!authState || authState.status !== 'authenticated') return null
 
   const navItemClass = (active: boolean) =>
     `nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${
@@ -330,16 +330,16 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           {visibleSecondaryNavItems.map((item) => renderNavItem(item, isActive(item.path), true))}
         </div>
         <div className={`border-t border-[var(--glass-border)] ${collapsed ? 'px-2 py-3' : 'px-3 py-3'}`}>
-          {collapsed ? (
-            <div className="flex flex-col items-center gap-2">
-              {isLoading ? (
-                <span className="text-xs font-medium text-[var(--theme-text-muted)]">…</span>
-              ) : user?.username ? (
+{collapsed ? (
+             <div className="flex flex-col items-center gap-2">
+               {authState.isLoading ? (
+                 <span className="text-xs font-medium text-[var(--theme-text-muted)]">…</span>
+) : authState.user?.username ? (
                 <span
                   className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-xs font-bold uppercase text-[var(--theme-text-primary)]"
-                  title={user.username}
+                  title={authState.user?.username}
                 >
-                  {user.username.charAt(0)}
+                  {authState.user?.username.charAt(0)}
                 </span>
               ) : null}
               <div
@@ -365,12 +365,12 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
                     {option.id === 'classic' ? 'C' : option.id === 'ink-gold' ? 'IG' : 'CC'}
                   </button>
                 ))}
-              </div>
-              {isAuthenticated && (
-                <div className="flex w-8">
-                  <BugReportButton onSubmit={onBugReportSubmit} variant="sidebar" collapsed />
-                </div>
-              )}
+</div>
+               {authState.status === 'authenticated' && (
+                 <div className="flex w-8">
+                   <BugReportButton onSubmit={onBugReportSubmit} variant="sidebar" collapsed />
+                 </div>
+               )}
               <button
                 type="button"
                 onClick={handleLogout}
@@ -386,10 +386,10 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
             </div>
           ) : (
             <>
-              {isLoading ? (
-                <span className="text-xs font-medium text-[var(--theme-text-muted)]">Loading...</span>
-              ) : user?.username ? (
-                <span className="block truncate text-xs font-medium text-[var(--theme-text-muted)]">{user.username}</span>
+{authState.isLoading ? (
+                 <span className="text-xs font-medium text-[var(--theme-text-muted)]">Loading...</span>
+               ) : authState.user?.username ? (
+                <span className="block truncate text-xs font-medium text-[var(--theme-text-muted)]">{authState.user?.username}</span>
               ) : null}
               <div
                 className="mt-2 flex flex-wrap items-center justify-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
@@ -414,11 +414,11 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
                   </button>
                 ))}
               </div>
-              {isAuthenticated && (
-                <div className="mt-2 w-full">
-                  <BugReportButton onSubmit={onBugReportSubmit} variant="sidebar" />
-                </div>
-              )}
+{authState.status === 'authenticated' && (
+                 <div className="mt-2 w-full">
+                   <BugReportButton onSubmit={onBugReportSubmit} variant="sidebar" />
+                 </div>
+               )}
               <button onClick={handleLogout} className="mt-2 w-full px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors" aria-label="Log out">
                 Log Out
               </button>
