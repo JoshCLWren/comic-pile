@@ -267,8 +267,6 @@ const clearAuthError = useCallback(() => {
         }
 
         // Handle service unavailable and network errors with retry logic
-        const retryDelay = calculateRetryDelay(authState.retryCount + 1, AUTH_RETRY_BASE_DELAY_MS)
-        
         if (isMounted) {
           setAuthState(prev => ({
             ...prev,
@@ -282,9 +280,14 @@ const clearAuthError = useCallback(() => {
 
         if (!isMounted) return
         
-        retryTimer = window.setTimeout(() => {
-          void validateSession()
-        }, retryDelay)
+        // Bounded retry: do not schedule beyond max to stop indefinite spinning
+        const nextRetryCount = authState.retryCount + 1
+        if (nextRetryCount <= AUTH_BOOTSTRAP_MAX_RETRIES) {
+          const retryDelay = calculateRetryDelay(nextRetryCount, AUTH_RETRY_BASE_DELAY_MS)
+          retryTimer = window.setTimeout(() => {
+            void validateSession()
+          }, retryDelay)
+        }
       }
     }
 
@@ -322,14 +325,26 @@ const clearAuthError = useCallback(() => {
       }))
     } catch (error) {
       const authError = createAuthError(error)
-      clearAccessToken()
-      setAuthState(prev => ({
-        ...prev,
-        status: 'unauthenticated',
-        isLoading: false,
-        user: null,
-        error: authError,
-      }))
+      if (isDefinitiveAuthenticationFailure(error)) {
+        clearAccessToken()
+        setAuthState(prev => ({
+          ...prev,
+          status: 'unauthenticated',
+          isLoading: false,
+          user: null,
+          error: authError,
+        }))
+      } else {
+        // Preserve session for service/network failures (degraded state)
+        setAuthState(prev => ({
+          ...prev,
+          status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
+          isLoading: false,
+          error: authError,
+          retryCount: prev.retryCount + 1,
+          lastRetryAt: Date.now(),
+        }))
+      }
       throw error
     }
   }
