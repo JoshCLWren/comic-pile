@@ -1,10 +1,14 @@
 # Remote cache re-enable decision
 
-Updated: 2026-09-05
+Updated: 2026-09-21
 
-## Decision
+## Current Status
 
-**GO redis — pending Josh's production env flips.**
+**DISABLED redis — quota exhaustion (issue #2590).**
+
+Production Redis/Upstash caching was disabled on 2026-09-21 due to free-tier quota exhaustion. Current usage (~300k commands/month) exceeds the 500k free allowance and would disrupt service if continued. The application now runs entirely from database-backed caching.
+
+The `CACHE_ENABLED=false` setting is enforced in production. Redis credentials remain configured for potential future re-enablement, but the `effective_provider` logic ensures no Redis commands are issued until explicitly re-enabled.
 
 `provider_recommendation()` returned `"upstash"` on the 2026-09-05 samples.
 The production-demand half of the gate is also closed: Vercel production
@@ -93,13 +97,16 @@ The historical benchmark corpus is useful for latency/load testing but is not a 
 
 ## Re-enable gate
 
-A future staged enablement may set `CACHE_ENABLED=true` only after all of these are true:
+Redis caching will remain disabled until a fresh evidence pass demonstrates that the cache provides sufficient benefit to justify the free-tier quota usage. A future staged enablement may set `CACHE_ENABLED=true` only after all of these are true:
 
-1. A recent production observation window provides counts for the representative cached flows, or an equivalent trustworthy command-rate measurement (`make cache-usage`).
-2. The observed mix, multiplied by the documented per-flow ceilings, projects below **350,000 application commands/month**.
-3. The projection preserves the **150,000-command (30%) provider headroom** for retries, diagnostics, provider-console activity, and measurement error.
-4. Multi-instance generation invalidation and lazy startup tests remain green.
-5. The first rollout is reversible without a code deploy.
+1. A fresh Neon hot-path evidence pass demonstrates that database-backed performance is insufficient for user experience.
+2. A recent production observation window provides counts for the representative cached flows, or an equivalent trustworthy command-rate measurement (`make cache-usage`).
+3. The observed mix, multiplied by the documented per-flow ceilings, projects below **350,000 application commands/month**.
+4. The projection preserves the **150,000-command (30%) provider headroom** for retries, diagnostics, provider-console activity, and measurement error.
+5. Multi-instance generation invalidation and lazy startup tests remain green.
+6. The first rollout is reversible without a code deploy.
+
+**Current status (2026-09-21):** Redis is disabled. No evidence pass has been conducted yet to justify re-enablement.
 
 ## Rollback boundary
 
@@ -118,12 +125,13 @@ The re-enable evaluation added the operational guardrails the decision was missi
 
 ### Go / no-go memo
 
-**Decision: GO redis.** `provider_recommendation()` returned `"upstash"`.
-Command budget is a GO (1,990 projected commands/month). Josh confirmed:
+**Decision: DISABLED redis.** Quota exhaustion (issue #2590).
+Current usage (~300k commands/month) exceeds the 500k free allowance.
 
-1. `CACHE_PROVIDER=redis`
-2. `CACHE_ENABLED=true`
-3. `CACHE_QUOTA_THROTTLE_ENABLED=true`
+Josh confirmed:
 
-Rollback remains `CACHE_ENABLED=false`. The temporary
-`GET /api/v1/health/cache-latency` route is removed.
+1. `CACHE_PROVIDER=redis` (credentials remain configured)
+2. `CACHE_ENABLED=false` (enforced 2026-09-21)
+3. Application runs database-backed only
+
+Redis will remain disabled until a fresh Neon hot-path evidence pass demonstrates sufficient performance benefit to justify quota usage.

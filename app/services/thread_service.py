@@ -653,6 +653,18 @@ async def delete_thread(db: AsyncSession, user_id: int, thread_id: int) -> None:
                         n["position"] = idx
                         normalized.append(n)
                 plan.nodes_json = normalized
+                # Keep the normalized membership/provenance in step with the
+                # pruned JSON so deleted issues leave no orphan plan rows.
+                from app.schemas.continuity_plan import ContinuityPlanNode
+                from app.services.reading_plan_normalization import (
+                    rebuild_plan_membership,
+                )
+
+                await rebuild_plan_membership(
+                    db,
+                    plan_id=plan.id,
+                    nodes=[ContinuityPlanNode.model_validate(n) for n in normalized],
+                )
                 # Remove plan-owned rules that pointed at deleted issues.
                 marker = f"continuity-plan:{plan.id}"
                 if deleted_issue_ids:

@@ -29,7 +29,8 @@ from app.repositories.session_repository import (
     latest_action_event,
 )
 from app.repositories.thread_repository import find_owned, threads_for_user
-from app.schemas import RateRequest, ThreadResponse
+from app.schemas import RateRequest
+from app.schemas.roll_v2 import RateResponse, RollLastRead, RollReconciliation
 from app.services.snapshot_contract import (
     BLOCKED_CHANGES_KEY,
     QUEUE_CHANGES_KEY,
@@ -260,7 +261,7 @@ async def rate_thread(
     rate_data: RateRequest,
     current_user: User,
     db: AsyncSession,
-) -> ThreadResponse:
+) -> RateResponse:
     """Rate current reading and update its thread.
 
     Args:
@@ -585,22 +586,42 @@ async def rate_thread(
 
     await invalidate_user_view(user_id)
 
-    return ThreadResponse(
-        id=resp_id,
-        title=resp_title,
-        format=resp_format,
-        issues_remaining=resp_issues_remaining,
-        queue_position=resp_queue_position,
-        status=resp_status,
-        last_rating=resp_last_rating,
-        last_activity_at=resp_last_activity_at,
-        notes=resp_notes,
-        is_test=resp_is_test,
-        is_blocked=resp_is_blocked,
-        created_at=resp_created_at,
-        total_issues=resp_total_issues,
-        reading_progress=resp_reading_progress,
-        next_unread_issue_id=resp_next_unread_issue_id,
-        next_unread_issue_number=resp_next_unread_issue_number,
-        blocking_reasons=[],
+    # Create base ThreadResponse data
+    thread_response_data = {
+        "id": resp_id,
+        "title": resp_title,
+        "format": resp_format,
+        "issues_remaining": resp_issues_remaining,
+        "queue_position": resp_queue_position,
+        "status": resp_status,
+        "last_rating": resp_last_rating,
+        "last_activity_at": resp_last_activity_at,
+        "notes": resp_notes,
+        "is_test": resp_is_test,
+        "is_blocked": resp_is_blocked,
+        "created_at": resp_created_at,
+        "total_issues": resp_total_issues,
+        "reading_progress": resp_reading_progress,
+        "next_unread_issue_id": resp_next_unread_issue_id,
+        "next_unread_issue_number": resp_next_unread_issue_number,
+        "blocking_reasons": [],
+    }
+    
+    # Roll reconciliation describes the issue just read (not the next
+    # unread one), so it stays present even when the thread completes.
+    roll_reconciliation = None
+    if rated_issue_id is not None:
+        roll_reconciliation = RollReconciliation(
+            last_read=RollLastRead(
+                issue_id=rated_issue_id,
+                issue_number=rated_issue_number,
+                thread_id=resp_id,
+                thread_title=resp_title,
+                read_at=resp_last_activity_at,
+            )
+        )
+    
+    return RateResponse(
+        **thread_response_data,
+        roll_reconciliation=roll_reconciliation,
     )

@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import AppSettings
+from app.exceptions import DatabaseUnavailableError
 from app.middleware.request_logging import (
     _safe_get_request_body,
     redact_headers,
@@ -17,6 +18,9 @@ from app.middleware.request_logging import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Bounded retry-after window for dependency failures (seconds)
+RETRY_AFTER_SECONDS = 30
 
 
 def register_exception_handlers(app: FastAPI, app_settings: AppSettings) -> None:
@@ -32,19 +36,39 @@ def register_exception_handlers(app: FastAPI, app_settings: AppSettings) -> None
     async def global_exception_handler(request: Request, exc: Exception):
         """Handle all unhandled exceptions with full stacktrace logging.
 
+        If the exception is database-related, it is classified as a retryable 503
+        rather than a generic 500, so operators can distinguish transient DB
+        unavailability from actual application bugs.
+
         Args:
             request: FastAPI request object.
             exc: Exception that was raised.
 
         Returns:
-            JSON response with 500 status code.
+            JSON response with appropriate status code.
         """
+        # Check if this is a database-related error that should be 503
+        exc_type = type(exc).__name__
+        mro_names = [c.__name__ for c in type(exc).__mro__]
+        exc_names = {exc_type, *mro_names}
+        is_db_error = any(
+            name in exc_names
+            for name in ("DBAPIError", "OperationalError", "InterfaceError", "InternalError", "DisconnectionError")
+        ) or any("Timeout" in name for name in exc_names) or "asyncpg" in type(exc).__module__
+
+        if is_db_error:
+            status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+            detail = "Database temporarily unavailable"
+        else:
+            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+            detail = "Internal server error"
+
         error_data = {
             "timestamp": datetime.now(UTC).isoformat(),
             "method": request.method,
             "path": request.url.path,
             "query_params": str(request.url.query) if request.url.query else None,
-            "error_type": type(exc).__name__,
+            "error_type": exc_type,
             "error_message": str(exc),
             "stacktrace": traceback.format_exc(),
             "client_host": request.client.host if request.client else None,
@@ -66,14 +90,70 @@ def register_exception_handlers(app: FastAPI, app_settings: AppSettings) -> None
         error_data = sanitize_for_logging(error_data, environment)
 
         logger.error(
-            f"Unhandled Exception: {type(exc).__name__}",
+            f"Exception: {exc_type}",
             extra=error_data,
             exc_info=True,
         )
         return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "Internal server error"},
+            status_code=status_code,
+            content={"detail": detail},
         )
+
+    @app.exception_handler(DatabaseUnavailableError)
+    async def database_unavailable_handler(request: Request, exc: DatabaseUnavailableError):
+        """Handle database unavailability with a stable 503 contract.
+
+        Returns a retryable 503 Service Unavailable with:
+        - Machine-readable error code: "database_unavailable"
+        - Sanitized user-facing detail
+        - Retry-After header (bounded)
+        - Correlation request ID for log tracing
+        - Structured server logs with exception class/SQLSTATE/route
+
+        Args:
+            request: FastAPI request object.
+            exc: DatabaseUnavailableError with original error context.
+
+        Returns:
+            JSON response with 503 status code.
+        """
+        request_id = getattr(request.state, "request_id", None)
+        log_context = exc.to_log_context()
+        log_context.update(
+            {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "method": request.method,
+                "path": request.url.path,
+                "query_params": str(request.url.query) if request.url.query else None,
+                "request_id": request_id,
+                "client_host": request.client.host if request.client else None,
+                "user_agent": request.headers.get("user-agent"),
+                "level": "ERROR",
+            }
+        )
+
+        # Sanitize for production logging
+        log_context = sanitize_for_logging(log_context, environment)
+
+        logger.error(
+            f"Database Unavailable: {exc.error_class or 'unknown'}",
+            extra=log_context,
+        )
+
+        response = JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "error": {
+                    "code": "database_unavailable",
+                    "message": "Database temporarily unavailable. Please retry.",
+                    "status": "SERVICE_UNAVAILABLE",
+                }
+            },
+        )
+        response.headers["Retry-After"] = str(RETRY_AFTER_SECONDS)
+        if request_id:
+            response.headers["X-Request-ID"] = request_id
+        return response
 
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException):
