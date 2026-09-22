@@ -177,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             navigate('/', { replace: true })
           }
         }
-      } catch () {
+      } catch (_error) {
         // Ignore errors during retry, keep polling
       }
     }, 5000)
