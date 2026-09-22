@@ -71,6 +71,9 @@ const IdentityInboxPage = lazyRoute('identityInbox')
 
 export interface AuthContextValue {
   authState: AuthState
+  isAuthenticated: boolean
+  isLoading: boolean
+  user: AuthUser | null
   login: (accessToken: string) => Promise<void>
   logout: () => void
   revalidateSession: (timeout?: number) => Promise<void>
@@ -167,9 +170,9 @@ const clearAuthError = useCallback(() => {
            }
            throw error
          }
-       })().finally(() => {
-         recoveryPromise.current = null
-       }))
+      })().finally(() => {
+        recoveryPromise.current = null
+      })
      }
      return recoveryPromise.current
    }, [markDefinitivelyUnauthenticated]);

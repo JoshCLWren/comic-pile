@@ -66,7 +66,6 @@ export const test = base.extend<AuthFixtures>({
         const mock = {
           status: 200,
           body: null,
-          networkError: null,
           pending: true,
           as: (name: string) => {
             mock.name = name
@@ -79,7 +78,7 @@ export const test = base.extend<AuthFixtures>({
             return mock
           },
           networkError: (message: string) => {
-            mock.networkError = message
+            (mock as any).networkError = message
             apiMocks.set(mockKey, mock)
             return mock
           }
@@ -92,7 +91,6 @@ export const test = base.extend<AuthFixtures>({
         const mock = {
           status: 200,
           body: null,
-          networkError: null,
           pending: true,
           as: (name: string) => {
             mock.name = name

@@ -1,4 +1,4 @@
-import { useAuth } from './App'
+import { useAuth } from '../App'
 import { ServiceUnavailableShell } from '../components/DegradedServiceState'
 import type { ReactNode } from 'react'
 import * as React from 'react'
