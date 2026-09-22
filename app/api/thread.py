@@ -73,8 +73,11 @@ async def list_stale_threads(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     days: int = 30,
+    page_size: int = Query(default=200, ge=1, le=200),
 ) -> list[ThreadResponse]:
-    """List the authenticated user's threads not read in ``days`` (default 30)."""
+    """List the authenticated user's threads not read in ``days`` (default 30).
+    The result is capped to ``page_size`` items.
+    """
     try:
         session = await fetch_active_session(db, current_user.id)
         snoozed = session.snoozed_thread_ids if session else None
@@ -84,9 +87,10 @@ async def list_stale_threads(
         )
         if derived_snoozed_ids:
             snoozed_ids = sorted(set(snoozed_ids or []) | derived_snoozed_ids)
-        return await thread_service.list_stale_thread_responses(
+        threads = await thread_service.list_stale_thread_responses(
             db, current_user.id, days, snoozed_ids=snoozed_ids
         )
+        return threads[:page_size]
     except ServiceError as exc:
         raise _map_service_error(exc) from exc
 
