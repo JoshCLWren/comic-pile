@@ -99,7 +99,7 @@ export function selectCorrectionExamples(input: CorrectionExampleInput): Correct
   const familiarPicks = liked.filter((entry) => !isClaimed(entry.title)).slice(0, 2)
   let familiarFormat = ''
   if (familiarPicks.length > 0) {
-    result.something_familiar = familiarPicks.map((entry) => claim(entry.title)).join(' / ')
+    result.something_familiar = familiarPicks.map(entry => claim(entry.title)).join(' / ')
     familiarFormat = normalizedFormat(familiarPicks[0].format)
   }
 
