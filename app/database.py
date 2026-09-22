@@ -6,6 +6,7 @@ import os
 import time
 from collections.abc import AsyncIterator
 
+from fastapi import HTTPException
 from sqlalchemy import event, exc as sqlalchemy_exc, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -341,8 +342,14 @@ async def get_db() -> AsyncIterator[AsyncSession]:
         except (
             TimeoutError,
             sqlalchemy_exc.TimeoutError,
+            sqlalchemy_exc.OperationalError,
+            sqlalchemy_exc.InterfaceError,
             sqlalchemy_exc.DBAPIError,
         ) as error:
+            # Query-bug family: re-raise as HTTPException so the
+            # global handler returns 500 instead of a dependency-outage 503.
+            if isinstance(error, (sqlalchemy_exc.ProgrammingError, sqlalchemy_exc.IntegrityError, sqlalchemy_exc.DataError)):
+                raise HTTPException(status_code=500, detail="Internal server error") from error
             last_error = error
             try:
                 await candidate_context.__aexit__(type(error), error, error.__traceback__)
@@ -424,7 +431,17 @@ async def get_db() -> AsyncIterator[AsyncSession]:
     )
     try:
         yield session
-    except (TimeoutError, sqlalchemy_exc.TimeoutError, sqlalchemy_exc.DBAPIError) as error:
+    except (
+        TimeoutError,
+        sqlalchemy_exc.TimeoutError,
+        sqlalchemy_exc.OperationalError,
+        sqlalchemy_exc.InterfaceError,
+        sqlalchemy_exc.DBAPIError,
+    ) as error:
+        # Query-bug family: re-raise as HTTPException so the
+        # global handler returns 500 instead of a dependency-outage 503.
+        if isinstance(error, (sqlalchemy_exc.ProgrammingError, sqlalchemy_exc.IntegrityError, sqlalchemy_exc.DataError)):
+            raise HTTPException(status_code=500, detail="Internal server error") from error
         # Route mutations are never replayed here: partial route work may have
         # run, so retrying could duplicate writes. Surface a clear 503 instead;
         # closing the context rolls back anything uncommitted.
@@ -442,9 +459,13 @@ async def get_db() -> AsyncIterator[AsyncSession]:
                 error_class=error_class,
                 sqlstate=sqlstate,
             ) from error
-        # Query-bug family: re-raise so the global handler returns the
-        # standard 500 envelope instead of a dependency-outage 503.
-        raise
+        # Other DBAPIError (e.g., InterfaceError without SQLSTATE 53)
+        raise DatabaseUnavailableError(
+            "Database temporarily unavailable",
+            original_error=error,
+            error_class=error_class,
+            sqlstate=sqlstate,
+        ) from error
     finally:
         await opened_context.__aexit__(None, None, None)
 

@@ -343,7 +343,7 @@ async def test_database_unavailable_error_log_context() -> None:
     ctx = exc.to_log_context()
     assert ctx["error_class"] == "InsufficientResourcesError"
     assert ctx["sqlstate"] == "53300"
-    assert "temporarily unavailable" in ctx["message"]
+    assert "temporarily unavailable" in ctx["error_message"]
 
 
 @pytest.mark.asyncio
@@ -357,7 +357,7 @@ async def test_database_unavailable_error_without_original() -> None:
     ctx = exc.to_log_context()
     assert ctx["error_class"] == "CircuitOpen"
     assert ctx["sqlstate"] is None
-    assert "temporarily unavailable" in ctx["message"]
+    assert "temporarily unavailable" in ctx["error_message"]
 
 
 @pytest.mark.asyncio
@@ -432,8 +432,21 @@ async def test_dependency_health_endpoint_still_works(
     async def unavailable_database(_: AsyncSession) -> None:
         raise health_probe.ProbeUnavailableError("database offline")
 
+    # Monkeypatch AsyncSessionLocal to avoid database connection
+    class _FakeSessionContext:
+        def __init__(self, session):
+            self._session = session
+        async def __aenter__(self):
+            return self._session
+        async def __aexit__(self, *args):
+            await self._session.close()
+
+    fake_session = AsyncMock(spec=AsyncSession)
+    fake_session.execute = AsyncMock()
+    fake_session.connection = AsyncMock()
     monkeypatch.setattr(health_probe, "database_probe", unavailable_database)
     monkeypatch.setattr(health_probe, "cache_probe", healthy_cache)
+    monkeypatch.setattr("app.database.AsyncSessionLocal", lambda: _FakeSessionContext(fake_session))
     # The token gate only applies once a token is configured.
     monkeypatch.setenv("HEALTH_CHECK_TOKEN", "test-token")
 
