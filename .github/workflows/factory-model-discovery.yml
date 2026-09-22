@@ -2,7 +2,8 @@ name: Factory Model Discovery
 
 # Sync `.github/free-model-factories.tsv` with OpenCode CLI catalogs both
 # ways: retire dead/410 pins AND add unused free OpenCode models (cost==0,
-# not paid Zen). Surplus big-pickle slots convert first. This is not
+# not paid Zen). Surplus big-pickle slots convert first. Unused
+# big-pickle is never grown as a first pin. This is not
 # OmniRoute routing. NVIDIA catalog presence is `opencode models nvidia`,
 # never integrate.api.nvidia.com alone. NVIDIA catalog adds are out of
 # scope. A #1093 410 marker with Source: nvidia is the durable "turned
@@ -242,6 +243,7 @@ jobs:
               "- **Add** unused free OpenCode models (`cost==0` or free-roster name) that",
               "  were missing from the TSV. Surplus `big-pickle` duplicate slots convert",
               "  first so unique free models do not grow the roster without bound.",
+              "  Unused `big-pickle` is never grown as a first pin.",
               "",
               "Paid Zen is never added. Models in `retired_models` or the 410 lock are",
               "never silently re-pinned. NVIDIA catalog adds are out of scope.",
