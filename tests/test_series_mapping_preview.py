@@ -582,8 +582,20 @@ class TestSeriesMappingPreview:
             assert response.status_code == 200
             data = response.json()
 
-            # Verify scope is available since series has issues in local catalog with thread mapping
-            assert data["scope"]["status"] == "available"
+            # Verify scope is unavailable since local catalog only has the origin issue mapped
+            # (no other issues to produce a safe_exact_match for scope availability)
+            assert data["scope"]["status"] == "unavailable"
+            assert data["scope"]["basis"] == "insufficient_non_thread_evidence"
             assert data["scope"]["series_label"] == "Amazing Spider-Man (1963)"
             assert data["provider_series"]["id"] == "20764"
-            assert len(data["rows"]) > 0
+            assert data["provider_series"]["name"] == "Amazing Spider-Man (1963)"
+            # When scope is unavailable, counts are zeroed and rows are empty per spec
+            assert data["counts"]["already_confirmed"] == 0
+            assert data["counts"]["safe_exact_match"] == 0
+            assert data["counts"]["needs_review_ambiguous"] == 0
+            assert data["counts"]["needs_review_conflict"] == 0
+            assert data["counts"]["unresolved"] == 0
+            assert data["counts"]["excluded_special"] == 0
+            assert data["rows"] == []
+            assert data["preview_token"] is None
+            assert data["expires_at"] is None
