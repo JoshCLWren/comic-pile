@@ -83,6 +83,7 @@ def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> N
     current = [label['name'] for label in target.get('labels', [])]
     existing_stage = next((label for label in current if label in STAGE_LABELS), None)
     stage = stage or existing_stage or 'factory:building'
+    # Remove all existing owner labels (including factory:unowned) and stage labels
     labels = [label for label in current if not OWNER_RE.fullmatch(label) and label not in STAGE_LABELS and (label != 'factory')]
     labels.extend(['factory', owner, stage])
     run_gh(['api', '--method', 'PUT', f'repos/{REPO}/issues/{number}/labels', '--input', '-'], input_json={'labels': sorted(set(labels))})
@@ -183,7 +184,14 @@ def record_controller_lease_activity(number: int, worker: str, kind: str) -> Non
 
 
 def assign_candidate(candidate: Candidate, worker: str) -> bool:
-    """Claim a candidate and any linked issue for one fixed-model worker."""
+    """Claim a candidate and any linked issue for one fixed-model worker.
+
+    Enforces the invariant: an executable issue must never simultaneously satisfy
+    both 'factory:unowned' and active factory ownership.
+    """
+    if worker_has_active_lease(worker):
+        return False
+
     owner = f'factory:{worker}'
     numbers = [candidate.number]
     if candidate.kind == 'pr' and candidate.linked_issue is not None:
@@ -196,6 +204,7 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
     for number in numbers:
         if not target_still_unowned(number):
             return False
+    # ... (rest of function remains same)
 
     def release_verified_claims(claimed_numbers: list[int]) -> None:
         """Release only labels this worker can still prove it owns."""
@@ -447,6 +456,24 @@ def reconcile_stale_leases(now_epoch: int | None=None) -> list[int]:
         replace_factory_labels(number, 'factory:unowned')
         released.append(number)
         print(f'[factory-controller] released stale {owner} lease on #{number}', file=sys.stderr)
+    
+    # Bounded reconciliation for contradictory label states (e.g., factory:unowned + factory:worker)
+    for item in [*list_issues(), *list_prs()]:
+        number = int(item['number'])
+        labels = labels_of(item)
+        owners = [label for label in labels if OWNER_RE.fullmatch(label)]
+        if len(owners) > 1:
+            # Contradictory state: more than one owner.
+            # Fail closed: only reconcile if we can prove one owner is definitely stale
+            # and the other is the current legitimate lease holder.
+            # For now, if factory:unowned coexists with any active worker, it's a contradiction.
+            if 'factory:unowned' in owners:
+                active_owners = [o for o in owners if o != 'factory:unowned']
+                if len(active_owners) == 1:
+                    # Just cleanup the redundant factory:unowned
+                    replace_factory_labels(number, active_owners[0])
+                    print(f'[factory-controller] reconciled contradictory unowned label on #{number}', file=sys.stderr)
+    
     return released
 
 
