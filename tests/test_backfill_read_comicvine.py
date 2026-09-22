@@ -2,25 +2,26 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
 import tempfile
-from collections import defaultdict
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import AsyncSessionLocal
-from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
+from app.models.external_identity import ExternalIdentity
 from app.models.issue import Issue
-from app.models.thread import Thread
-from comic_pile.comicvine_provider import ComicVineClient, ComicVineError, ComicVineRateLimitError
-from scripts.backfill_read_comicvine import ComicVineBackfillOperator, BackfillProgress, BackfillStats
+from comic_pile.comicvine_provider import ComicVineRateLimitError
+from scripts.backfill_read_comicvine import (
+    BackfillProgress,
+    BackfillStats,
+    ComicVineBackfillOperator,
+    ResourceThrottleTracker,
+    parse_args,
+)
 
 
 @pytest.fixture
@@ -30,10 +31,11 @@ def temp_cache_dir() -> Path:
         yield Path(temp_dir)
 
 
-@pytest.fixture
-def mock_database_url() -> str:
-    """Return a mock database URL for testing."""
-    return "postgresql+asyncpg://user:pass@localhost/test"
+@pytest.fixture(autouse=True)
+def _comicvine_api_key() -> None:
+    """Provide a dummy API key so live-mode operator construction works in tests."""
+    with patch.dict(os.environ, {"COMICVINE_API_KEY": "test-key"}):
+        yield
 
 
 @pytest.fixture
@@ -44,21 +46,6 @@ def sample_issues() -> list[Issue]:
         Issue(id=2, thread_id=2, issue_number="2", position=1, status="read"),
         Issue(id=3, thread_id=3, issue_number="3", position=1, status="read"),
     ]
-
-
-@pytest.fixture
-def sample_thread() -> Thread:
-    """Return a sample thread for testing."""
-    return Thread(
-        id=1, 
-        title="Test Thread", 
-        format="Comic", 
-        issues_remaining=1, 
-        total_issues=1, 
-        queue_position=1, 
-        status="active",
-        user_id=1
-    )
 
 
 @pytest.fixture
@@ -77,34 +64,16 @@ def sample_external_identity() -> ExternalIdentity:
 
 
 @pytest_asyncio.fixture
-async def mock_db_session(sample_issues, sample_thread, sample_external_identity) -> AsyncSession:
+async def mock_db_session() -> AsyncSession:
     """Create a mock database session for testing."""
-    # Create in-memory SQLite database for testing
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    
-    # Create tables
-    async with engine.begin() as conn:
-        await conn.run_sync(lambda: Issue.__table__.create(conn))
-        await conn.run_sync(lambda: Thread.__table__.create(conn))
-        await conn.run_sync(lambda: ExternalIdentity.__table__.create(conn))
-        await conn.run_sync(lambda: IssueExternalIdentityMapping.__table__.create(conn))
-        await conn.run_sync(lambda: ThreadExternalSeriesMapping.__table__.create(conn))
-    
-    # Insert sample data
-    async with AsyncSessionLocal() as session:
-        session.add(sample_thread)
-        for issue in sample_issues:
-            session.add(issue)
-        await session.commit()
-    
-    # Mock session for testing
     mock_session = AsyncMock(spec=AsyncSession)
-    mock_session.execute = AsyncMock()
-    mock_session.scalar = AsyncMock()
+    # A plain (synchronous) result mock: AsyncMock children would return
+    # unawaited coroutines for scalar_one_or_none()/scalars()/all().
+    mock_session.execute = AsyncMock(return_value=MagicMock())
     mock_session.add = Mock()
     mock_session.commit = AsyncMock()
     mock_session.flush = AsyncMock()
-    
+
     return mock_session
 
 
@@ -378,11 +347,12 @@ class TestComicVineBackfillOperator:
         )
 
         issue = Issue(id=1, thread_id=1, issue_number="1", position=1, status="read")
-        
-        # Mock identity resolution to return unresolved
-        with patch.object(operator, 'process_issue_identity', return_value="unresolved"):
-            status = await operator.process_issue_creator(mock_db_session, issue)
-            assert status == "unresolved"
+
+        # No confirmed identity and no live client in dry-run mode.
+        mock_db_session.execute.return_value.scalar_one_or_none.return_value = None
+
+        status = await operator.process_issue_creator(mock_db_session, issue)
+        assert status == "unresolved"
 
     @pytest.mark.asyncio
     async def test_process_issue_creator_local_resolution(
@@ -438,15 +408,16 @@ class TestThrottleContinuation:
 
     @pytest.mark.asyncio
     async def test_resource_isolation_after_throttle(
-        self, 
+        self,
         mock_db_session: AsyncSession
     ) -> None:
-        """Test that one throttled resource doesn't terminate unrelated work."""
+        """Test that a throttled resource short-circuits further live calls."""
         operator = ComicVineBackfillOperator(
             user_id=1,
             database_url="sqlite://test",
             cache_dir=Path("/tmp"),
             dry_run=False,
+            min_live_interval_seconds=0.0,
         )
 
         issues = [
@@ -456,21 +427,61 @@ class TestThrottleContinuation:
 
         # Mock identity resolution to return None for both issues
         mock_db_session.execute.return_value.scalar_one_or_none.return_value = None
-        
-        # Mock provider resolution to raise rate limit for first issue only
+
+        # Track provider calls
+        provider_calls = []
+
         async def mock_resolve_identity_provider(db, issue):
-            if issue.id == 1:
-                raise ComicVineRateLimitError("Rate limited")
-            return None
-        
+            provider_calls.append(issue.id)
+            raise ComicVineRateLimitError("Rate limited")
+
         with patch.object(operator, 'resolve_identity_provider', side_effect=mock_resolve_identity_provider):
             # Process first issue - should be rate limited
             status1 = await operator.process_issue_identity(mock_db_session, issues[0])
             assert status1 == "rate_limited"
-            
-            # Process second issue - should still work despite first being rate limited
+
+            # Process second issue - live work for the cooling resource is
+            # skipped without another provider call
             status2 = await operator.process_issue_identity(mock_db_session, issues[1])
-            assert status2 == "unresolved"
+            assert status2 == "rate_limited"
+            assert provider_calls == [1]
+
+    @pytest.mark.asyncio
+    async def test_cooling_resource_does_not_block_other_resources(
+        self,
+        mock_db_session: AsyncSession
+    ) -> None:
+        """Test that a cooling identity resource does not block creator work."""
+        operator = ComicVineBackfillOperator(
+            user_id=1,
+            database_url="sqlite://test",
+            cache_dir=Path("/tmp"),
+            dry_run=False,
+            min_live_interval_seconds=0.0,
+        )
+
+        identity_issue = Issue(id=1, thread_id=1, issue_number="1", position=1, status="read")
+        creator_issue = Issue(id=2, thread_id=2, issue_number="2", position=1, status="read")
+
+        # No local identities anywhere
+        mock_db_session.execute.return_value.scalar_one_or_none.return_value = None
+
+        creator_calls = []
+
+        async def mock_hydrate_creator_provider(db, issue):
+            creator_calls.append(issue.id)
+            return True
+
+        with patch.object(
+            operator, 'resolve_identity_provider', side_effect=ComicVineRateLimitError("Rate limited")
+        ):
+            status = await operator.process_issue_identity(mock_db_session, identity_issue)
+            assert status == "rate_limited"
+
+        with patch.object(operator, 'hydrate_creator_provider', side_effect=mock_hydrate_creator_provider):
+            status = await operator.process_issue_creator(mock_db_session, creator_issue)
+            assert status == "resolved"
+            assert creator_calls == [2]
 
     @pytest.mark.asyncio
     async def test_cached_response_use_during_cooldown(
@@ -686,8 +697,11 @@ class TestArgumentParsing:
             "--cache-dir", "/tmp/cache",
             "--dry-run",
             "--requests-per-hour", "360",
+            "--comicvine-db", "/tmp/comicvine.sqlite",
+            "--report-path", "/tmp/report.json",
+            "--min-live-interval-seconds", "2.5",
         ]
-        
+
         with patch("sys.argv", ["backfill_read_comicvine.py"] + args):
             parsed = parse_args()
             assert parsed.user_id == 1
@@ -695,6 +709,22 @@ class TestArgumentParsing:
             assert parsed.cache_dir == Path("/tmp/cache")
             assert parsed.dry_run is True
             assert parsed.requests_per_hour == 360
+            assert parsed.comicvine_db == Path("/tmp/comicvine.sqlite")
+            assert parsed.report_path == Path("/tmp/report.json")
+            assert parsed.min_live_interval_seconds == 2.5
+
+    def test_parse_args_defaults(self) -> None:
+        """Test default values for the newer optional arguments."""
+        args = [
+            "--user-id", "1",
+            "--database-url", "postgresql://test",
+        ]
+
+        with patch("sys.argv", ["backfill_read_comicvine.py"] + args):
+            parsed = parse_args()
+            assert parsed.comicvine_db is None
+            assert parsed.report_path is None
+            assert parsed.min_live_interval_seconds == 1.0
 
 
 class TestIntegrationScenarios:
@@ -716,16 +746,20 @@ class TestIntegrationScenarios:
 
         # Mock issues to be processed
         mock_db_session.execute.return_value.scalars.return_value.all.return_value = sample_issues
-        
+
         # Mock identity resolution scenarios:
         # Issue 1: resolved locally
         # Issue 2: resolved via provider (rate limited)
         # Issue 3: unresolved
         identity_results = ["resolved", "rate_limited", "unresolved"]
-        
+
         async def mock_process_issue_identity(db, issue):
             return identity_results[issue.id - 1]
-        
+
+        session_cm = MagicMock()
+        session_cm.__aenter__ = AsyncMock(return_value=mock_db_session)
+        session_cm.__aexit__ = AsyncMock(return_value=False)
+
         with patch.object(operator, 'process_issue_identity', side_effect=mock_process_issue_identity):
             with patch.object(operator, 'process_issue_creator') as mock_creator:
                 # Mock creator resolution for issues with resolved identities
@@ -733,12 +767,12 @@ class TestIntegrationScenarios:
                     if issue.id == 1:
                         return "resolved"
                     return "unresolved"
-                
+
                 mock_creator.side_effect = mock_creator_side_effect
-                
-                # Run the backfill
-                stats = await operator.run()
-                
+
+                # Run the backfill with an injected session factory
+                stats = await operator.run(session_factory=lambda: session_cm)
+
                 # Verify statistics
                 assert stats.total_issues == 3
                 assert stats.resolved_identities == 1
@@ -746,11 +780,11 @@ class TestIntegrationScenarios:
                 assert stats.unresolved_identities == 1
                 assert stats.resolved_creators == 1
                 assert stats.unresolved_creators == 0  # Issue 3 never gets to creator phase
-                assert stats.completion_rate == 33.3  # (1 identity + 1 creator) / 3 issues
+                assert stats.completion_rate == pytest.approx(66.67, abs=0.01)
 
     @pytest.mark.asyncio
     async def test_throttle_continuation_across_resources(
-        self, 
+        self,
         mock_db_session: AsyncSession
     ) -> None:
         """Test throttle continuation across different ComicVine resources."""
@@ -759,31 +793,111 @@ class TestIntegrationScenarios:
             database_url="sqlite://test",
             cache_dir=Path("/tmp"),
             dry_run=False,
+            min_live_interval_seconds=0.0,
         )
 
-        issues = [
-            Issue(id=1, thread_id=1, issue_number="1", position=1, status="read"),
-            Issue(id=2, thread_id=2, issue_number="2", position=1, status="read"),
-        ]
+        identity_issue = Issue(id=1, thread_id=1, issue_number="1", position=1, status="read")
+        creator_issue = Issue(id=2, thread_id=2, issue_number="2", position=1, status="read")
 
         # Mock identity resolution to return None for both
         mock_db_session.execute.return_value.scalar_one_or_none.return_value = None
-        
+
         # Track provider calls
         provider_calls = []
-        
+        creator_calls = []
+
         async def mock_resolve_identity_provider(db, issue):
             provider_calls.append(issue.id)
-            if issue.id == 1:
-                raise ComicVineRateLimitError("Search rate limited")
-            return None
-        
+            raise ComicVineRateLimitError("Search rate limited")
+
+        async def mock_hydrate_creator_provider(db, issue):
+            creator_calls.append(issue.id)
+            return True
+
         with patch.object(operator, 'resolve_identity_provider', side_effect=mock_resolve_identity_provider):
-            # Process both issues
-            status1 = await operator.process_issue_identity(mock_db_session, issues[0])
-            status2 = await operator.process_issue_identity(mock_db_session, issues[1])
-            
-            # Verify first issue was rate limited, second still processed
+            # Throttle the identity resource
+            status1 = await operator.process_issue_identity(mock_db_session, identity_issue)
             assert status1 == "rate_limited"
-            assert status2 == "unresolved"
-            assert len(provider_calls) == 2  # Both were attempted
+
+        with patch.object(operator, 'hydrate_creator_provider', side_effect=mock_hydrate_creator_provider):
+            # Creator work on another resource still proceeds
+            status2 = await operator.process_issue_creator(mock_db_session, creator_issue)
+            assert status2 == "resolved"
+
+        assert provider_calls == [1]
+        assert creator_calls == [2]
+
+
+class TestResourceThrottleTracker:
+    """Test the per-resource throttle tracker."""
+
+    def test_backoff_bounded_at_one_hour(self) -> None:
+        """Test that repeated throttles never exceed a one-hour cooldown."""
+        now = [1000.0]
+        tracker = ResourceThrottleTracker(clock=lambda: now[0])
+
+        delays = [tracker.record_throttle("search") for _ in range(10)]
+
+        assert delays[0] == 60.0
+        assert delays[1] == 120.0
+        assert all(delay <= 3600.0 for delay in delays)
+        assert delays[-1] == 3600.0
+        assert tracker.cooling("search") is True
+
+    def test_success_resets_backoff(self) -> None:
+        """Test that a successful request clears the cooldown."""
+        now = [1000.0]
+        tracker = ResourceThrottleTracker(clock=lambda: now[0])
+
+        tracker.record_throttle("search")
+        assert tracker.cooling("search") is True
+
+        tracker.record_success("search")
+        assert tracker.cooling("search") is False
+
+        # Backoff restarts at the base delay after a reset
+        assert tracker.record_throttle("search") == 60.0
+
+    def test_resources_are_independent(self) -> None:
+        """Test that throttling one resource leaves others usable."""
+        tracker = ResourceThrottleTracker()
+
+        tracker.record_throttle("search")
+
+        assert tracker.cooling("search") is True
+        assert tracker.cooling("issue") is False
+
+    def test_snapshot_is_machine_readable(self) -> None:
+        """Test that the throttle snapshot exposes per-resource state."""
+        tracker = ResourceThrottleTracker()
+
+        tracker.record_throttle("search")
+        snapshot = tracker.snapshot()
+
+        assert snapshot["search"]["cooling"] is True
+        assert snapshot["search"]["consecutive_throttles"] == 1
+
+
+class TestBuildReport:
+    """Test the machine-readable backfill report."""
+
+    def test_report_contains_progress_and_throttles(self, temp_cache_dir: Path) -> None:
+        """Test that the report exposes stats and throttle state."""
+        operator = ComicVineBackfillOperator(
+            user_id=1,
+            database_url="sqlite://test",
+            cache_dir=temp_cache_dir,
+            dry_run=True,
+        )
+        operator.progress.stats.total_issues = 2
+        operator.progress.update(1, "identity", "resolved")
+        operator.throttles.record_throttle("search")
+
+        report = operator.build_report()
+
+        assert report["user_id"] == 1
+        assert report["dry_run"] is True
+        assert report["total_issues"] == 2
+        assert report["resolved_identities"] == 1
+        assert report["throttles"]["search"]["cooling"] is True
+        assert "completed_at" in report
