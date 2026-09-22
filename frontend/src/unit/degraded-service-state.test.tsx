@@ -88,7 +88,7 @@ describe('ServiceUnavailableShell', () => {
   })
 
   it('renders children when no service state is active', () => {
-    const { container } = render(
+    render(
       <ServiceUnavailableShell 
         serviceUnavailable={false}
         networkError={false}
@@ -99,11 +99,11 @@ describe('ServiceUnavailableShell', () => {
     )
 
     expect(screen.getByText('Child content')).toBeInTheDocument()
-    expect(container.querySelector('.fixed')).toBeNull()
+    expect(screen.queryByTestId('degraded-service-state')).not.toBeInTheDocument()
   })
 
   it('renders children and degraded state for service unavailable', () => {
-    const { container } = render(
+    render(
       <ServiceUnavailableShell 
         serviceUnavailable={true}
         networkError={false}
@@ -115,11 +115,11 @@ describe('ServiceUnavailableShell', () => {
 
     expect(screen.getByText('Child content')).toBeInTheDocument()
     expect(screen.getByText('Service Unavailable')).toBeInTheDocument()
-    expect(container.querySelector('.fixed')).toBeInTheDocument()
+    expect(screen.getByTestId('degraded-service-state')).toBeInTheDocument()
   })
 
   it('renders children and degraded state for network error', () => {
-    const { container } = render(
+    render(
       <ServiceUnavailableShell 
         serviceUnavailable={false}
         networkError={true}
@@ -131,7 +131,7 @@ describe('ServiceUnavailableShell', () => {
 
     expect(screen.getByText('Child content')).toBeInTheDocument()
     expect(screen.getByText('Connection Issue')).toBeInTheDocument()
-    expect(container.querySelector('.fixed')).toBeInTheDocument()
+    expect(screen.getByTestId('degraded-service-state')).toBeInTheDocument()
   })
 
   it('calls onRetry when retry button is clicked in shell', () => {
