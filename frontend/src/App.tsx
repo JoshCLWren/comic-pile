@@ -87,6 +87,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isServiceUnavailable, setIsServiceUnavailable] = useState(false)
   const [user, setUser] = useState<AuthUser | null>(null)
   const recoveryPromise = useRef<Promise<void> | null>(null)
+  const navigate = useNavigate()
+  const location = useLocation()
 
   const markDefinitivelyUnauthenticated = useCallback(() => {
     clearAccessToken()
@@ -158,7 +160,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let isMounted = true
     let retryTimer: number | undefined
     const authChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('comic-pile-auth') : null
-    const navigate = useNavigate()
 
     // Periodic retry loop when service is temporarily unavailable
     const unavailableInterval = setInterval(async () => {
@@ -176,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             navigate('/', { replace: true })
           }
         }
-      } catch (error) {
+      } catch () {
         // Ignore errors during retry, keep polling
       }
     }, 5000)
@@ -268,7 +269,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       authChannel?.close()
     }
-  }, [isServiceUnavailable, location.state?.from, navigate])
+  }, [isServiceUnavailable, location.state?.from, navigate, markDefinitivelyUnauthenticated, recoverSession])
 
   const login = async (accessToken: string) => {
     setAccessToken(accessToken)
