@@ -3,8 +3,8 @@
 11	nvidia	poolside/laguna-xs-2.1	15	dispatcher	Laguna XS 2.1
 20	nvidia	openai/gpt-oss-20b	45	dispatcher	GPT OSS 20B
 21	nvidia	google/gemma-4-31b-it	50	dispatcher	Gemma 4 31B
-29	opencode-free	big-pickle	0	dispatcher	Catalog Free Slot 29
-41	opencode-free	mimo-v2.5-free	15	dispatcher	OpenCode MiMo V2.5 Free
+29	openrouter-free	qwen/qwen3.8-27b:free	0	dispatcher	OpenRouter Qwen3.8 27B Free
+41	opencode-free	mimo-v2.6-flash-free	15	dispatcher	OpenCode MiMo V2.6 Flash Free
 42	opencode-free	nemotron-3-ultra-free	20	dispatcher	OpenCode Nemotron 3 Ultra Free
 45	opencode-free	nemotron-3.5-lightning-free	35	dispatcher	OpenCode Nemotron 3.5 Lightning Free
 46	kilo-auto	kilo-auto/free	40	dispatcher	Kilo Auto Free · Forge
