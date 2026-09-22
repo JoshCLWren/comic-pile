@@ -25,7 +25,7 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from typing import Any
 
 import httpx
@@ -35,6 +35,11 @@ logger = logging.getLogger(__name__)
 
 
 class NeonMonitorSettings(BaseModel):
+    """Configuration settings for the Neon egress monitor.
+
+    All thresholds and credentials are loaded from environment variables.
+    """
+
     # Neon API authentication
     token: str = Field(..., env="NEON_TOKEN")
     project_id: str = Field(..., env="NEON_PROJECT_ID")
@@ -48,19 +53,40 @@ class NeonMonitorSettings(BaseModel):
     poll_interval_seconds: int = Field(3600, env="NEON_POLL_INTERVAL_SECONDS")
 
     class Config:
+        """Pydantic configuration for loading settings from environment variables."""
+
         env_file = ".env"
         env_file_encoding = "utf-8"
 
 
 @dataclass
 class ConsumptionSample:
+    """A single Neon consumption sample for a given period.
+
+    Attributes:
+        timestamp: When the sample was collected.
+        public_bytes: Public data transfer in bytes.
+        month: The ISO month identifier (e.g. "2026-09").
+    """
+
     timestamp: datetime
     public_bytes: int
     month: str
 
 
 class NeonEgressMonitor:
-    def __init__(self, settings: NeonMonitorSettings):
+    """Monitors Neon egress and alerts on abnormal spend patterns.
+
+    Polls the Neon consumption API, evaluates configured thresholds,
+    and records events for observability.
+    """
+
+    def __init__(self, settings: NeonMonitorSettings) -> None:
+        """Initialize the monitor with its settings and HTTP client.
+
+        Args:
+            settings: The Neon monitor configuration.
+        """
         self.settings = settings
         self.client = httpx.AsyncClient(
             base_url="https://api.neon.tech", headers={"Authorization": f"Bearer {settings.token}"}
@@ -73,7 +99,7 @@ class NeonEgressMonitor:
 
         Returns ``None`` if the API request fails.
         """
-        month = datetime.now(timezone.utc).strftime("%Y-%m")
+        month = datetime.now(UTC).strftime("%Y-%m")
         url = f"/v1/projects/{self.settings.project_id}/consumption/periods"
         params = {"month": month}
         try:
@@ -83,7 +109,7 @@ class NeonEgressMonitor:
             # Expected shape:
             # {"data": {"public_data_transfer_bytes": 123456789}}
             public_bytes = int(data["data"]["public_data_transfer_bytes"])
-            return ConsumptionSample(timestamp=datetime.now(timezone.utc), public_bytes=public_bytes, month=month)
+            return ConsumptionSample(timestamp=datetime.now(UTC), public_bytes=public_bytes, month=month)
         except Exception as exc:  # pragma: no cover - network failure
             logger.warning("Neon consumption fetch failed: %s", exc, exc_info=True)
             return None
@@ -113,8 +139,14 @@ class NeonEgressMonitor:
         else:
             self._log_event("normal", sample)
 
-    def _log_event(self, event_type: str, data: Any) -> None:
-        record = {"type": event_type, "timestamp": datetime.now(timezone.utc).isoformat(), "data": data}
+    def _log_event(self, event_type: str, data: object) -> None:
+        """Record a monitor event for observability.
+
+        Args:
+            event_type: The category of event (e.g. "warning", "normal").
+            data: The payload associated with the event.
+        """
+        record = {"type": event_type, "timestamp": datetime.now(UTC).isoformat(), "data": data}
         logger.info("NeonMonitor event: %s", record)
         self.events.append(record)
 
@@ -132,18 +164,21 @@ class NeonEgressMonitor:
             await asyncio.sleep(self.settings.poll_interval_seconds)
 
     async def close(self) -> None:
+        """Close the underlying HTTP client."""
         await self.client.aclose()
 
 
 # Hook into application startup -------------------------------------------------
 
 def create_neon_monitor() -> NeonEgressMonitor:
+    """Create a NeonEgressMonitor instance from environment settings."""
     return NeonEgressMonitor(NeonMonitorSettings())
 
 # The monitor instance can be imported by the app and scheduled.
 _monitored: NeonEgressMonitor | None = None
 
 async def startup_event() -> None:
+    """Initialize the monitor and schedule periodic sampling."""
     global _monitored
     _monitored = create_neon_monitor()
     # schedule the monitor; noop when tests set TEST_ENVIRONMENT
@@ -151,5 +186,6 @@ async def startup_event() -> None:
         asyncio.create_task(_monitored.start())
 
 async def shutdown_event() -> None:
+    """Gracefully shut down the monitor's HTTP client."""
     if _monitored:
         await _monitored.close()
