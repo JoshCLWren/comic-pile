@@ -615,6 +615,48 @@ def record_claim_released(number: int, worker: str, kind: str, reason: str) -> N
     run_gh(['issue', 'comment', str(number), '--repo', REPO, '--body', marker])
 
 
+def issue_explicitly_closed_by_pr(pr: dict[str, Any]) -> int | None:
+    """Return the issue a PR explicitly claims to close, if any.
+
+    Only explicit closing keywords (``Closes #N``, ``Fixes #N``,
+    ``Resolves #N`` and their inflected forms) in the PR body count. Casual
+    ``#N`` mentions used by stacked/child PRs for cross-reference never claim
+    closure, so they must not suppress fresh intake.
+    """
+    from factory_work_policy import CLOSING_ISSUE_RE
+    match = CLOSING_ISSUE_RE.search(str(pr.get('body') or ''))
+    return int(match.group('issue')) if match else None
+
+
+def linked_issue_from_pr(pr: dict[str, Any]) -> int | None:
+    """Resolve the canonical linked issue for factory assignment/suppression.
+
+    Prefers the durable ``factory/<worker>-<issue>-...`` branch shape, then an
+    explicit closing keyword in the body (``Closes #N``/``Fixes #N``/
+    ``Resolves #N``), then a leading ``Fix #N`` reference in the PR title so
+    labeled local Cursor/fix delivery PRs still suppress duplicate issue
+    intake. Closing references are honored regardless of author or branch
+    naming: a manually opened ``local/*`` PR that explicitly owns an issue must
+    suppress fresh factory implementation (#2164).
+    """
+    from factory_work_policy import linked_issue_from_branch, issue_explicitly_closed_by_pr, TITLE_ISSUE_RE
+    
+    # Try branch shape first
+    linked = linked_issue_from_branch(str(pr.get('headRefName') or ''))
+    if linked is not None:
+        return linked
+    
+    # Try explicit closing keyword in body
+    closed = issue_explicitly_closed_by_pr(pr)
+    if closed is not None:
+        return closed
+    
+    # Try leading reference in title
+    title = str(pr.get('title') or '')
+    match = TITLE_ISSUE_RE.search(title)
+    return int(match.group(1)) if match else None
+
+
 def release_worker(worker: str, reason: str = 'controller-release') -> list[int]:
     """Release all targets still owned by one fixed-model worker immediately.
 
@@ -647,6 +689,175 @@ def release_worker(worker: str, reason: str = 'controller-release') -> list[int]
             pass
         released.append(number)
     return released
+
+
+def selectivity_conflict_recovery(worker: str) -> dict[str, Any]:
+    """Perform selective lease recovery for dual-lease incidents.
+    
+    When a worker owns one canonical PR plus an unrelated accidental issue lease,
+    keep the PR and release only the issue. When an orphan issue lease has an
+    existing canonical PR, release the orphan issue without disturbing the PR.
+    Before releasing, verify the worker still owns the target. Ambiguous
+    multi-PR/multi-issue corruption fails closed rather than guessing.
+    
+    Returns a dict with recovery results and any error messages.
+    """
+    owner = f'factory:{worker}'
+    issues = list_issues()
+    prs = list_prs()
+    
+    # Find all targets owned by this worker
+    owned_issues = []
+    owned_prs = []
+    for item in issues:
+        if owner_of(labels_of(item)) == owner:
+            owned_issues.append(item)
+    for item in prs:
+        if owner_of(labels_of(item)) == owner:
+            owned_prs.append(item)
+    
+    result = {
+        'worker': worker,
+        'recovered_issues': [],
+        'recovered_prs': [],
+        'canonical_prs_preserved': [],
+        'orphan_issues_released': [],
+        'ambiguous_cases': [],
+        'errors': []
+    }
+    
+    # Case 3: Check for ambiguous multi-PR/multi-issue corruption first - fail closed
+    if len(owned_issues) > 1 or len(owned_prs) > 1:
+        # Check for complex patterns that we can't safely resolve
+        complex_patterns = []
+        
+        # Multiple PRs with different linked issues
+        if len(owned_prs) > 1:
+            pr_linked_issues = set()
+            for pr in owned_prs:
+                linked = linked_issue_from_pr(pr)
+                if linked:
+                    pr_linked_issues.add(linked)
+            if len(pr_linked_issues) > 1:
+                complex_patterns.append('multiple PRs with different linked issues')
+        
+        # Multiple issues where some could be linked to PRs not owned by this worker
+        if len(owned_issues) > 1:
+            issue_pr_links = {}
+            for issue in owned_issues:
+                issue_num = int(issue['number'])
+                issue_pr_links[issue_num] = []
+                
+                for pr in prs:
+                    if linked_issue_from_pr(pr) == issue_num:
+                        issue_pr_links[issue_num].append(int(pr['number']))
+            
+            # Check if any issue could be claimed by multiple PRs
+            for issue_num, linked_prs in issue_pr_links.items():
+                if len(linked_prs) > 1:
+                    complex_patterns.append(f'issue {issue_num} claimed by multiple PRs')
+        
+        # Check for individual ambiguous cases
+        for issue in owned_issues:
+            issue_number = int(issue['number'])
+            # No canonical PR found for this issue, check if it's ambiguous
+            other_worker_prs = [p for p in prs if linked_issue_from_pr(p) == issue_number]
+            if other_worker_prs:
+                # This might be ambiguous - multiple workers could claim this issue
+                result['ambiguous_cases'].append({
+                    'issue': issue_number,
+                    'reason': 'multiple workers could claim this issue'
+                })
+        
+        if complex_patterns:
+            result['ambiguous_cases'].extend([{
+                'pattern': pattern,
+                'reason': 'complex multi-PR/multi-issue corruption - failing closed'
+            } for pattern in complex_patterns])
+        
+        # If any ambiguous cases found, fail closed - do not perform any recovery
+        if result['ambiguous_cases']:
+            return result
+    
+    # Case 1: Worker owns canonical PR + unrelated accidental issue lease
+    for pr in owned_prs:
+        pr_number = int(pr['number'])
+        pr_labels = labels_of(pr)
+        
+        # Check if this PR is canonical (has linked issue)
+        linked_issue = linked_issue_from_pr(pr)
+        if linked_issue is None:
+            continue  # Not a canonical PR
+            
+        # Find any unrelated issue leases owned by the same worker
+        for issue in owned_issues:
+            issue_number = int(issue['number'])
+            
+            # Skip if this issue is the linked issue of the PR
+            if issue_number == linked_issue:
+                continue
+                
+            # Verify the worker still owns both targets
+            if not (target_owned_by(issue_number, owner) and target_owned_by(pr_number, owner)):
+                continue
+                
+            # This is a canonical PR + unrelated accidental issue lease
+            # Release only the issue, preserve the PR
+            try:
+                replace_factory_labels(issue_number, 'factory:unowned')
+                record_claim_released(issue_number, worker, 'issue', 'selective-conflict-recovery')
+                result['recovered_issues'].append(issue_number)
+                result['canonical_prs_preserved'].append(pr_number)
+                result['orphan_issues_released'].append(issue_number)
+            except Exception as e:
+                result['errors'].append(f'Failed to release issue {issue_number}: {str(e)}')
+    
+    # Case 2: Orphan issue lease + existing canonical PR
+    for issue in owned_issues:
+        issue_number = int(issue['number'])
+        
+        # Find any canonical PR that would claim this issue
+        linked_pr_found = False
+        for pr in prs:
+            pr_number = int(pr['number'])
+            
+            # Check if this PR would claim the issue (via branch or explicit close)
+            pr_linked_issue = linked_issue_from_branch(pr.get('headRefName', ''))
+            pr_closes_issue = issue_explicitly_closed_by_pr(pr)
+            
+            if pr_linked_issue == issue_number or pr_closes_issue == issue_number:
+                # Verify the PR is still open and not owned by this worker
+                if (str(pr.get('state', 'OPEN')).upper() == 'OPEN' and 
+                    not pr.get('isDraft') and
+                    owner_of(labels_of(pr)) != owner):
+                    
+                    # Verify the worker still owns the issue
+                    if not target_owned_by(issue_number, owner):
+                        continue
+                        
+                    # This is an orphan issue lease + existing canonical PR
+                    # Release only the issue, preserve the PR
+                    try:
+                        replace_factory_labels(issue_number, 'factory:unowned')
+                        record_claim_released(issue_number, worker, 'issue', 'selective-conflict-recovery')
+                        result['recovered_issues'].append(issue_number)
+                        result['orphan_issues_released'].append(issue_number)
+                        linked_pr_found = True
+                        break
+                    except Exception as e:
+                        result['errors'].append(f'Failed to release orphan issue {issue_number}: {str(e)}')
+        
+        if not linked_pr_found and issue_number in [i['number'] for i in owned_issues]:
+            # No canonical PR found for this issue, check if it's ambiguous
+            other_worker_prs = [p for p in prs if linked_issue_from_pr(p) == issue_number]
+            if other_worker_prs:
+                # This might be ambiguous - multiple workers could claim this issue
+                result['ambiguous_cases'].append({
+                    'issue': issue_number,
+                    'reason': 'multiple workers could claim this issue'
+                })
+    
+    return result
 
 
 def check_stale_prs(dry_run: bool = False) -> dict[str, Any]:
@@ -683,6 +894,8 @@ def main() -> int:
     release_parser = subparsers.add_parser('release')
     release_parser.add_argument('--worker', required=True)
     release_parser.add_argument('--reason', default='controller-release')
+    recovery_parser = subparsers.add_parser('conflict-recovery')
+    recovery_parser.add_argument('--worker', required=True)
     args = parser.parse_args()
     if args.command == 'reconcile':
         print(json.dumps({'released': reconcile_stale_leases()}))
@@ -702,6 +915,10 @@ def main() -> int:
         return 0
     if args.command == 'inspect':
         print(json.dumps(inspect_assignment(args.worker)))
+        return 0
+    if args.command == 'conflict-recovery':
+        result = selectivity_conflict_recovery(args.worker)
+        print(json.dumps(result))
         return 0
     print(json.dumps({'released': release_worker(args.worker, reason=args.reason)}))
     return 0
