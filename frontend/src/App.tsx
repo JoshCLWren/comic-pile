@@ -1,4 +1,4 @@
-import { Suspense, createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -16,16 +16,18 @@ import api, {
   refreshSession,
   setAccessToken,
 } from './services/api'
-import { isDefinitiveAuthenticationFailure, isServiceUnavailableError } from './services/authFailure'
+import { isDefinitiveAuthenticationFailure, createAuthError, type AuthState, calculateRetryDelay } from './services/authState'
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import { usePingHeartbeat } from './hooks/usePingHeartbeat'
 import { useScrollRestoration } from './hooks/useScrollRestoration'
 import { PreferencesSync } from './hooks/usePreferences'
+import { useAuthDegradedState } from './hooks/useAuthDegradedState'
 import type { DiagnosticData } from './hooks/useDiagnostics'
 import { ToastProvider } from './contexts/ToastProvider'
 import { BugReportRestoreProvider } from './contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from './contexts/NavCollapseContext'
+import { AuthContext, AuthContextValue, AuthContextLegacyValue, useAuth } from './contexts/AuthContext'
 import './index.css'
 
 declare global {
@@ -35,7 +37,8 @@ declare global {
 }
 
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 15000
-const AUTH_BOOTSTRAP_RETRY_DELAY_MS = 1000
+const AUTH_BOOTSTRAP_MAX_RETRIES = 5
+const AUTH_RETRY_BASE_DELAY_MS = 1000
 
 type BugReportSubmit = (
   reportType: ReportType,
@@ -60,74 +63,105 @@ const LoginPage = lazyRoute('login')
 const RegisterPage = lazyRoute('register')
 const IdentityInboxPage = lazyRoute('identityInbox')
 
-export interface AuthContextValue {
-  isAuthenticated: boolean
-  isLoading: boolean
-  isServiceUnavailable: boolean
-  user: AuthUser | null
-  login: (accessToken: string) => Promise<void>
-  logout: () => void
-  revalidateSession: (timeout?: number) => Promise<void>
-  recoverSession: (timeout?: number) => Promise<void>
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null)
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (!context) throw new Error('useAuth must be used within an AuthProvider')
-  return context
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isServiceUnavailable, setIsServiceUnavailable] = useState(false)
-  const [user, setUser] = useState<AuthUser | null>(null)
+  const [authState, setAuthState] = useState<AuthState>({
+    status: 'checking',
+    isLoading: true,
+    user: null,
+    error: null,
+    retryCount: 0,
+    lastRetryAt: null,
+  })
   const recoveryPromise = useRef<Promise<void> | null>(null)
 
   const markDefinitivelyUnauthenticated = useCallback(() => {
     clearAccessToken()
-    setIsAuthenticated(false)
-    setUser(null)
-    setIsServiceUnavailable(false)
+    setAuthState(prev => ({
+      ...prev,
+      status: 'unauthenticated',
+      isLoading: false,
+      user: null,
+      error: null,
+      retryCount: 0,
+      lastRetryAt: null,
+    }))
   }, [])
 
-  const recoverSession = useCallback((timeout?: number): Promise<void> => {
-    if (!recoveryPromise.current) {
-      recoveryPromise.current = (async () => {
-        try {
-          if (isSessionRefreshRejected()) {
-            markDefinitivelyUnauthenticated()
-            throw Object.assign(new Error('Session refresh unavailable'), {
-              isAxiosError: true,
-              response: { status: 401 },
-            })
-          }
-          await refreshSession({ skipAuthRedirect: true })
-          const response = await api.get<AuthUser>('/v1/auth/me', {
-            timeout,
-            skipAuthRedirect: true,
-          })
-          setUser(response)
-          setIsAuthenticated(true)
-          setIsServiceUnavailable(false)
-        } catch (error) {
-          if (isDefinitiveAuthenticationFailure(error)) {
-            markDefinitivelyUnauthenticated()
-          } else if (isServiceUnavailableError(error)) {
-            setIsServiceUnavailable(true)
-          }
-          throw error
-        }
+  const clearAuthError = useCallback(() => {
+    setAuthState(prev => ({
+      ...prev,
+      error: null,
+    }))
+  }, [])
+
+  const recoverSession = useCallback(
+    (timeout?: number): Promise<void> => {
+     if (!recoveryPromise.current) {
+       recoveryPromise.current = (async () => {
+         try {
+           if (isSessionRefreshRejected()) {
+             markDefinitivelyUnauthenticated()
+             throw Object.assign(new Error('Session refresh unavailable'), {
+               isAxiosError: true,
+               response: { status: 401 },
+             })
+           }
+           await refreshSession({ skipAuthRedirect: true })
+           const response = await api.get<AuthUser>('/v1/auth/me', {
+             timeout,
+             skipAuthRedirect: true,
+           })
+           setAuthState(prev => ({
+             ...prev,
+             status: 'authenticated',
+             isLoading: false,
+             user: response,
+             error: null,
+             retryCount: 0,
+             lastRetryAt: null,
+           }))
+         } catch (error) {
+           const authError = createAuthError(error)
+           if (isDefinitiveAuthenticationFailure(error)) {
+             markDefinitivelyUnauthenticated()
+           } else {
+             setAuthState(prev => ({
+               ...prev,
+               status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
+               isLoading: false,
+               error: authError,
+               retryCount: prev.retryCount + 1,
+               lastRetryAt: Date.now(),
+             }))
+           }
+           throw error
+         }
       })().finally(() => {
         recoveryPromise.current = null
       })
-    }
+     }
+     return recoveryPromise.current
+   }, [markDefinitivelyUnauthenticated]);
 
-    return recoveryPromise.current
-  }, [markDefinitivelyUnauthenticated])
+   const retryAuth = useCallback(async () => {
+     setAuthState(prev => ({
+       ...prev,
+       isLoading: true,
+       error: null,
+     }))
+
+     try {
+       await recoverSession(AUTH_BOOTSTRAP_TIMEOUT_MS)
+     } catch (error) {
+       const authError = createAuthError(error)
+       setAuthState(prev => ({
+         ...prev,
+         isLoading: false,
+         error: authError,
+       }))
+       throw error
+     }
+   }, [recoverSession])
 
   const revalidateSession = useCallback(async (timeout?: number) => {
     try {
@@ -135,14 +169,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         timeout,
         skipAuthRedirect: true,
       })
-      setUser(response)
-      setIsAuthenticated(true)
-      setIsServiceUnavailable(false)
+      setAuthState(prev => ({
+        ...prev,
+        status: 'authenticated',
+        isLoading: false,
+        user: response,
+        error: null,
+        retryCount: 0,
+        lastRetryAt: null,
+      }))
     } catch (error) {
-      if (isServiceUnavailableError(error)) {
-        setIsServiceUnavailable(true)
-        throw error
-      }
+      const authError = createAuthError(error)
       if (isDefinitiveAuthenticationFailure(error)) {
         // The persistent session can usually be renewed silently with the
         // refresh cookie. Only treat the user as logged out when that also fails.
@@ -152,10 +189,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (recoveryError) {
           if (isDefinitiveAuthenticationFailure(recoveryError)) {
             markDefinitivelyUnauthenticated()
-          } else if (isServiceUnavailableError(recoveryError)) {
-            setIsServiceUnavailable(true)
           }
         }
+      } else {
+        setAuthState(prev => ({
+          ...prev,
+          status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
+          isLoading: false,
+          error: authError,
+          retryCount: prev.retryCount + 1,
+          lastRetryAt: Date.now(),
+        }))
       }
       throw error
     }
@@ -165,12 +209,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let isMounted = true
     let retryTimer: number | undefined
     const authChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('comic-pile-auth') : null
+    
     const validateSession = async () => {
       const isPublicAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register'
       if (!getAccessToken() && !window.__COMIC_PILE_ACCESS_TOKEN && isPublicAuthPage) {
-        setIsLoading(false)
+        setAuthState(prev => ({
+          ...prev,
+          status: 'unauthenticated',
+          isLoading: false,
+        }))
         return
       }
+      
       if (window.__COMIC_PILE_ACCESS_TOKEN) {
         setAccessToken(window.__COMIC_PILE_ACCESS_TOKEN)
         delete window.__COMIC_PILE_ACCESS_TOKEN
@@ -180,74 +230,81 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAccessToken(storedToken)
         }
       }
+
       try {
         const response = await api.get<AuthUser>('/v1/auth/me', {
           timeout: AUTH_BOOTSTRAP_TIMEOUT_MS,
           skipAuthRedirect: true,
         })
         if (isMounted) {
-          setUser(response)
-          setIsAuthenticated(true)
-          setIsServiceUnavailable(false)
-        }
-        if (isMounted) {
-          setIsLoading(false)
+          setAuthState(prev => ({
+            ...prev,
+            status: 'authenticated',
+            isLoading: false,
+            user: response,
+            error: null,
+            retryCount: 0,
+            lastRetryAt: null,
+          }))
         }
       } catch (error) {
-        if (!isMounted) {
-          return
-        }
+        if (!isMounted) return
+        
+        const authError = createAuthError(error)
+        
         if (isDefinitiveAuthenticationFailure(error)) {
           // A stale or expired access token is routine on a return visit. Try to
           // renew the session silently with the refresh cookie before surfacing
           // the login screen for a single-user app.
           try {
             await recoverSession(AUTH_BOOTSTRAP_TIMEOUT_MS)
-            if (isMounted) {
-              setIsLoading(false)
-            }
             return
           } catch (recoveryError) {
             if (isDefinitiveAuthenticationFailure(recoveryError)) {
               markDefinitivelyUnauthenticated()
-              setIsLoading(false)
               return
             }
           }
-        } else if (isServiceUnavailableError(error)) {
-          // The database backend is temporarily unavailable. Keep the user's
-          // authenticated session visible and show a degraded state rather than
-          // forcing a login loop. Retry automatically so recovery is detected.
-          setIsServiceUnavailable(true)
-          if (isMounted) {
-            setIsLoading(false)
-          }
+        }
+
+        // Bounded retry: do not schedule beyond max to stop indefinite spinning
+        // Capture the updated retry count synchronously from the state updater
+        // so the effect does not need to depend on authState.retryCount.
+        let nextRetryCount = 0
+        if (isMounted) {
+          setAuthState(prev => {
+            nextRetryCount = prev.retryCount + 1
+            return {
+              ...prev,
+              status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
+              isLoading: false,
+              error: authError,
+              retryCount: nextRetryCount,
+              lastRetryAt: Date.now(),
+            }
+          })
+        }
+
+        if (!isMounted) return
+        if (nextRetryCount <= AUTH_BOOTSTRAP_MAX_RETRIES) {
+          const retryDelay = calculateRetryDelay(nextRetryCount, AUTH_RETRY_BASE_DELAY_MS)
           retryTimer = window.setTimeout(() => {
             void validateSession()
-          }, 5000)
-          return
+          }, retryDelay)
         }
-
-        if (!isMounted) {
-          return
-        }
-        retryTimer = window.setTimeout(() => {
-          void validateSession()
-        }, AUTH_BOOTSTRAP_RETRY_DELAY_MS)
       }
     }
-
-    void validateSession()
 
     if (authChannel) {
       authChannel.onmessage = (event: MessageEvent<{ type?: string }>) => {
         if (event.data?.type === 'logout') {
           markDefinitivelyUnauthenticated()
-          setIsLoading(false)
         }
       }
     }
-
+    
+    void validateSession()
+    
     return () => {
       isMounted = false
       if (retryTimer !== undefined) {
@@ -261,12 +318,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(accessToken)
     try {
       const response = await api.get<AuthUser>('/v1/auth/me', { skipAuthRedirect: true })
-      setUser(response)
-      setIsAuthenticated(true)
+      setAuthState(prev => ({
+        ...prev,
+        status: 'authenticated',
+        isLoading: false,
+        user: response,
+        error: null,
+        retryCount: 0,
+        lastRetryAt: null,
+      }))
     } catch (error) {
-      clearAccessToken()
-      setIsAuthenticated(false)
-      setUser(null)
+      const authError = createAuthError(error)
+      // Preserve the freshly issued session only when the hydration failure is
+      // positively identified as a transient outage (503 / network). A
+      // definitive 401 — or an unclassifiable validation failure — keeps the
+      // legacy invalid-credentials behavior: clear the token and log out.
+      if (isDefinitiveAuthenticationFailure(error) || authError === null) {
+        clearAccessToken()
+        setAuthState(prev => ({
+          ...prev,
+          status: 'unauthenticated',
+          isLoading: false,
+          user: null,
+          error: authError,
+        }))
+      } else {
+        // Preserve session for service/network failures (degraded state)
+        setAuthState(prev => ({
+          ...prev,
+          status: authError?.type === 'service_unavailable' ? 'service_unavailable' : 'network_error',
+          isLoading: false,
+          error: authError,
+          retryCount: prev.retryCount + 1,
+          lastRetryAt: Date.now(),
+        }))
+      }
       throw error
     }
   }
@@ -280,23 +366,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  return <AuthContext.Provider value={{ isAuthenticated, isLoading, isServiceUnavailable, user, login, logout, revalidateSession, recoverSession }}>{children}</AuthContext.Provider>
+  // Legacy context value for backward compatibility
+  const legacyValue: AuthContextLegacyValue = {
+    isAuthenticated: authState.status === 'authenticated',
+    isLoading: authState.isLoading,
+    user: authState.user,
+  }
+
+  return (
+    <AuthContext.Provider
+      value={{
+        ...legacyValue,
+        authState,
+        login,
+        logout,
+        revalidateSession,
+        recoverSession,
+        retryAuth,
+        clearAuthError,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading, isServiceUnavailable } = useAuth()
+  const { authState } = useAuth()
   const location = useLocation()
-  if (isLoading) return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Checking authentication...</div>
-  if (isServiceUnavailable) return <div className="min-h-screen flex flex-col items-center justify-center text-center text-stone-500">ComicPile is temporarily unavailable. Please try again in a moment.</div>
-  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />
+  
+  if (authState.isLoading) {
+    return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Checking authentication...</div>
+  }
+  
+  if (authState.status === 'unauthenticated') {
+    return <Navigate to="/login" state={{ from: location }} replace />
+  }
+  
+  if (authState.status === 'service_unavailable' || authState.status === 'network_error') {
+    // Show the degraded service state instead of redirecting
+    return children
+  }
+  
   return children
 }
 
 function PublicRoute({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { authState } = useAuth()
   const location = useLocation()
-  if (isLoading) return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Loading...</div>
-  if (isAuthenticated) return <Navigate to={location.state?.from?.pathname || '/'} replace />
+  
+  if (authState.isLoading) {
+    return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Loading...</div>
+  }
+  
+  if (authState.status === 'authenticated') {
+    return <Navigate to={location.state?.from?.pathname || '/'} replace />
+  }
+  
   return children
 }
 
@@ -328,8 +454,11 @@ function RouteChunkPrefetcher({ enabled }: { enabled: boolean }) {
 
 function AppRoutes() {
   const { submit } = useBugReport()
-  const { isAuthenticated } = useAuth()
+  const { authState, ServiceUnavailableWrapper } = useAuthDegradedState()
   useScrollRestoration()
+  
+  const isAuthenticated = authState.status === 'authenticated'
+  
   return (
     <Suspense fallback={<div className="text-center text-stone-500">Loading page...</div>}>
       <RouteChunkPrefetcher enabled={isAuthenticated} />
@@ -338,21 +467,133 @@ function AppRoutes() {
         <Route path="/register" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><RegisterPage /></PublicLayout></PublicRoute>} />
         <Route path="/rate" element={<Navigate to="/" replace />} />
         <Route path="/analytics" element={<Navigate to="/" replace />} />
-        <Route path="/" element={<ProtectedRoute><AuthenticatedLayout wide onBugReportSubmit={submit}><RollPage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/queue" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><QueuePage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/thread/:id" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ThreadDetailView /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/creators/:creatorKey" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><CreatorDetailPage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/history" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HistoryPage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/sessions/:id" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><SessionPage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/crossovers" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><CrossoversPage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/crossovers/:group" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><CrossoverDetailPage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/continuity-plans" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ContinuityPlansIndexPage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/continuity-plans/new" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ContinuityPlannerPage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/continuity-plans/:id" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><ContinuityPlannerPage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/whats-new" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><WhatsNewPage /></AuthenticatedLayout></ProtectedRoute>} />
-        <Route path="/glossary" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><HelpPage /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout wide onBugReportSubmit={submit}>
+                <RollPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/queue" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <QueuePage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/thread/:id" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <ThreadDetailView />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/creators/:creatorKey" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <CreatorDetailPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/history" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <HistoryPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/sessions/:id" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <SessionPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/crossovers" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <CrossoversPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/crossovers/:group" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <CrossoverDetailPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/continuity-plans" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <ContinuityPlansIndexPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/continuity-plans/new" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <ContinuityPlannerPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/continuity-plans/:id" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <ContinuityPlannerPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/whats-new" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <WhatsNewPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/glossary" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <HelpPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
         <Route path="/help" element={<Navigate to="/glossary" replace />} />
-        <Route path="/identity-inbox" element={<ProtectedRoute><AuthenticatedLayout onBugReportSubmit={submit}><IdentityInboxPage /></AuthenticatedLayout></ProtectedRoute>} />
+        <Route path="/identity-inbox" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <IdentityInboxPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
       </Routes>
     </Suspense>
   )
@@ -372,5 +613,6 @@ function App() {
   return <BrowserRouter><QueryClientProvider client={queryClient}><BugReportRestoreProvider><ToastProvider><AuthProvider><NavCollapseProvider><AuthResumeBoundary><AppRoutes /></AuthResumeBoundary></NavCollapseProvider></AuthProvider></ToastProvider></BugReportRestoreProvider></QueryClientProvider></BrowserRouter>
 }
 
-export { AppRoutes }
+export { AppRoutes, useAuth }
+export type { AuthContextValue, AuthContextLegacyValue }
 export default App
