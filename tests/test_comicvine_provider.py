@@ -383,8 +383,9 @@ def test_cached_response_usable_during_cooldown(tmp_path: Path, monkeypatch: pyt
     # Request should return the cached response
     response = asyncio.run(client.request("issue", "issue/4000-7", {"field_list": "id,name"}))
     assert response.from_cache is True
-    assert response.payload["results"] is not None
-    assert response.payload["results"]["id"] == 7
+    results = response.payload.get("results")
+    assert isinstance(results, dict)
+    assert results.get("id") == 7
 
 
 def test_resource_isolation_after_throttle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
