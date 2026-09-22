@@ -28,6 +28,40 @@ benchmarks/results/
 coverage/
 *.log
 
+# Tests and test fixtures (not imported by production request path)
+tests/
+tests_e2e/
+tests/**
+tests_e2e/**
+
+# Repository docs and non-runtime material
+docs/
+*.md
+*.txt
+
+# CI / automation / factory scripts (not imported by api/index.py)
+scripts/
+.github/
+
+# Frontend source/build inputs already emitted by static build
+frontend/src/
+frontend/public/
+
+# Coverage / lint / type artifacts
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Migration files not needed at serverless request time
+alembic/
+
+# Factory / agent / prompt artifacts not imported by api/index.py
+.agents/
+.opencode/
+prompts/
+
 # Database backups and exports
 *.dump
 *.sql
