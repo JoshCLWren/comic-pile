@@ -12,11 +12,11 @@ from collections.abc import AsyncGenerator, AsyncIterator
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException, status
 from sqlalchemy import exc as sqlalchemy_exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import database
+from app.exceptions import DatabaseUnavailableError
 
 
 class _FakeSessionContext:
@@ -72,11 +72,10 @@ async def test_get_db_times_out_stalled_first_connection(
     monkeypatch.setattr(database, "DATABASE_DEPENDENCY_TIMEOUT_SECONDS", 0.01)
 
     dependency: AsyncIterator[AsyncSession] = database.get_db()
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(DatabaseUnavailableError) as exc_info:
         await anext(dependency)
 
-    assert exc_info.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-    assert exc_info.value.detail == "Database temporarily unavailable"
+    assert str(exc_info.value) == "Database temporarily unavailable"
 
 
 @pytest.mark.asyncio
@@ -159,14 +158,14 @@ async def test_get_db_sustained_failure_is_bounded_and_opens_circuit(
     monkeypatch.setattr(database, "DATABASE_RETRY_BACKOFF_SECONDS", 0.0)
     monkeypatch.setattr(database, "DATABASE_CIRCUIT_COOLDOWN_SECONDS", 10.0)
 
-    with pytest.raises(HTTPException) as first_error:
+    with pytest.raises(DatabaseUnavailableError) as first_error:
         await anext(database.get_db())
-    assert first_error.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert str(first_error.value) == "Database temporarily unavailable"
     assert len(sessions) == 2
 
-    with pytest.raises(HTTPException) as second_error:
+    with pytest.raises(DatabaseUnavailableError) as second_error:
         await anext(database.get_db())
-    assert second_error.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert str(second_error.value) == "Database temporarily unavailable"
     assert len(sessions) == 2
 
 
@@ -190,7 +189,7 @@ async def test_get_db_circuit_closes_after_cooldown_and_success(
     monkeypatch.setattr(database, "DATABASE_RETRY_BACKOFF_SECONDS", 0.0)
     monkeypatch.setattr(database, "DATABASE_CIRCUIT_COOLDOWN_SECONDS", 0.05)
 
-    with pytest.raises(HTTPException):
+    with pytest.raises(DatabaseUnavailableError):
         await anext(database.get_db())
 
     await asyncio.sleep(0.06)
@@ -218,11 +217,10 @@ async def test_get_db_post_open_database_error_returns_503_without_retry(
     yielded_session = await anext(dependency)
     assert yielded_session is session
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(DatabaseUnavailableError) as exc_info:
         await dependency.athrow(_stale_connection_error())
 
-    assert exc_info.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-    assert exc_info.value.detail == "Database temporarily unavailable"
+    assert str(exc_info.value) == "Database temporarily unavailable"
     session.connection.assert_awaited_once()
     session.close.assert_awaited_once()
 

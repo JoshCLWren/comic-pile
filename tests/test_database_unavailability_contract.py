@@ -4,13 +4,12 @@ Covers the acceptance criteria for classifying database dependency failures
 as a stable 503 instead of generic 500.
 """
 
-import asyncio
 from collections.abc import AsyncIterator
 from typing import Annotated
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import FastAPI, Depends, status
+from fastapi import Depends, status
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import exc as sqlalchemy_exc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,26 +80,6 @@ def _make_integrity_error() -> sqlalchemy_exc.IntegrityError:
         {},
         Exception("duplicate key value violates unique constraint"),
     )
-
-
-@pytest.fixture
-def test_app_with_error_route() -> FastAPI:
-    """Create a test app with a route that triggers a database error."""
-    test_app = create_app(serve_frontend=False)
-
-    @test_app.get("/test-db-error")
-    async def test_db_error(db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
-        # This will trigger the post-yield exception handler
-        await db.execute("SELECT 1")
-        return {"status": "ok"}
-
-    @test_app.get("/test-auth")
-    async def test_auth(db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
-        # Simulate an auth-like endpoint that needs the database
-        await db.execute("SELECT 1")
-        return {"status": "authenticated"}
-
-    return test_app
 
 
 @pytest.mark.asyncio
@@ -436,7 +415,6 @@ async def test_database_unavailable_response_structure(
     assert "token" not in response_text
     assert "neon" not in response_text
     assert "quota" not in response_text
-    assert "connection" not in response_text or "connection" in "database connection"  # allow generic
 
 
 @pytest.mark.asyncio
@@ -456,6 +434,8 @@ async def test_dependency_health_endpoint_still_works(
 
     monkeypatch.setattr(health_probe, "database_probe", unavailable_database)
     monkeypatch.setattr(health_probe, "cache_probe", healthy_cache)
+    # The token gate only applies once a token is configured.
+    monkeypatch.setenv("HEALTH_CHECK_TOKEN", "test-token")
 
     transport = ASGITransport(app=test_app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -464,7 +444,6 @@ async def test_dependency_health_endpoint_still_works(
         assert response.status_code == 404
 
         # With token, should return 503 for unhealthy
-        monkeypatch.setenv("HEALTH_CHECK_TOKEN", "test-token")
         response = await client.get(
             "/api/v1/health/dependencies", headers={"X-Health-Token": "test-token"}
         )

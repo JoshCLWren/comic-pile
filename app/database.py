@@ -6,7 +6,6 @@ import os
 import time
 from collections.abc import AsyncIterator
 
-from fastapi import HTTPException, status
 from sqlalchemy import event, exc as sqlalchemy_exc, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -31,6 +30,13 @@ def _is_database_unavailable_error(error: BaseException) -> tuple[bool, str | No
 
     Does NOT match arbitrary SQL/programming/data errors (those remain 500).
 
+    SQLAlchemy's DBAPIError hierarchy already separates these concerns:
+    OperationalError (and pool TimeoutError) signals a connection/resource
+    problem, while ProgrammingError, IntegrityError, and DataError signal
+    application/query bugs. The classifier follows that boundary so stale
+    pooled connections and refused connects stay 503 while query bugs stay
+    500.
+
     Args:
         error: The exception to classify.
 
@@ -43,6 +49,18 @@ def _is_database_unavailable_error(error: BaseException) -> tuple[bool, str | No
     # Check for asyncpg InsufficientResourcesError specifically
     if error_class == "InsufficientResourcesError":
         return True, error_class, None
+
+    # Query-bug family: never database unavailability. These must remain 500s
+    # so infrastructure incidents are not confused with application bugs.
+    if isinstance(
+        error,
+        (
+            sqlalchemy_exc.ProgrammingError,
+            sqlalchemy_exc.IntegrityError,
+            sqlalchemy_exc.DataError,
+        ),
+    ):
+        return False, None, None
 
     # Check SQLAlchemy DBAPIError for wrapped asyncpg exceptions
     if isinstance(error, sqlalchemy_exc.DBAPIError):
@@ -61,23 +79,20 @@ def _is_database_unavailable_error(error: BaseException) -> tuple[bool, str | No
         if sqlstate and sqlstate.startswith("53"):
             return True, error_class, sqlstate
 
-    # Check for other connection-related SQLAlchemy exceptions
+    # OperationalError is SQLAlchemy's connection/resource failure class
+    # (stale pooled connections, refused connects, exhausted quotas). All of
+    # these are retryable dependency outages, not query bugs.
     if isinstance(error, sqlalchemy_exc.OperationalError):
-        # OperationalError often wraps connection failures
         orig = getattr(error, "orig", None)
-        if orig is not None:
-            orig_class = type(orig).__name__
-            sqlstate = getattr(orig, "sqlstate", None)
-            if sqlstate and sqlstate.startswith("53"):
-                return True, orig_class, sqlstate
-            # Common connection failure patterns
-            if orig_class in (
-                "InterfaceError",
-                "ConnectionError",
-                "OperationalError",
-                "TimeoutError",
-            ):
-                return True, orig_class, sqlstate
+        sqlstate = getattr(orig, "sqlstate", None) if orig is not None else None
+        if not sqlstate:
+            sqlstate = getattr(error, "sqlstate", None)
+        orig_class = type(orig).__name__ if orig is not None else error_class
+        return True, orig_class, sqlstate
+
+    # Pool checkout exhaustion: the database cannot hand out a connection.
+    if isinstance(error, sqlalchemy_exc.TimeoutError):
+        return True, error_class, None
 
     # Check for asyncio/timeout errors during acquisition
     if isinstance(error, (TimeoutError, asyncio.TimeoutError)):
@@ -293,8 +308,8 @@ async def get_db() -> AsyncIterator[AsyncSession]:
         DatabaseUnavailableError: If connection acquisition cannot complete within the
             configured dependency budget (or the failure circuit is open), or
             when route work fails with a database unavailability error after the session was
-            handed out.
-        HTTPException: For other database errors that are not classified as unavailability.
+            handed out. Other database errors (query bugs) propagate unchanged
+            so the global handler returns the standard 500 envelope.
     """
     global _database_circuit_open_until
 
@@ -392,11 +407,10 @@ async def get_db() -> AsyncIterator[AsyncSession]:
                 error_class=error_class,
                 sqlstate=sqlstate,
             ) from last_error
-        elif last_error:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Database error",
-            ) from last_error
+        elif last_error is not None:
+            # Query-bug family: re-raise so the global handler returns the
+            # standard 500 envelope instead of a dependency-outage 503.
+            raise last_error
         else:
             raise DatabaseUnavailableError(
                 "Database temporarily unavailable",
@@ -428,10 +442,9 @@ async def get_db() -> AsyncIterator[AsyncSession]:
                 error_class=error_class,
                 sqlstate=sqlstate,
             ) from error
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error",
-        ) from error
+        # Query-bug family: re-raise so the global handler returns the
+        # standard 500 envelope instead of a dependency-outage 503.
+        raise
     finally:
         await opened_context.__aexit__(None, None, None)
 
