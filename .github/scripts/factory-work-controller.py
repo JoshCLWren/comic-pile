@@ -22,6 +22,7 @@ from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SEC
 from stale_pr_decay import StalePRGuard
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
+ASSIGNMENT_WRITER_WORKFLOW_PATH = ".github/workflows/fixed-model-factory-dispatch.yml"
 STRIKE_RESET_RE = re.compile(
     r"comic-pile-factory-strike-reset-v1:issue-(?P<issue>\d+):pr-(?P<pr>\d+):"
     r"excluded-producer-(?P<worker>\d+|unknown)"
@@ -80,7 +81,11 @@ def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> N
     intermediate owner states. A post-write claim verification is performed by
     ``assign_candidate``.
     """
-    if os.environ.get('GITHUB_ACTIONS') == 'true' and not dispatcher_identity_verified():
+    if (
+        FIXED_OWNER_RE.fullmatch(owner)
+        and os.environ.get('GITHUB_ACTIONS', '').strip().lower() == 'true'
+        and not dispatcher_identity_verified()
+    ):
         raise RuntimeError('dispatcher authorization failed: mutation blocked for non-dispatcher workflow')
     target = target_json(number)
     current = [label['name'] for label in target.get('labels', [])]
@@ -181,23 +186,18 @@ def target_owned_by(number: int, owner: str) -> bool:
 def dispatcher_identity_verified() -> bool:
     """Return True only when running inside the canonical dispatcher workflow.
 
-    In GitHub Actions, authorization fails closed unless the current run
-    resolves to the dispatcher file path (not only a display-name match,
-    which can be spoofed). Local/operator/test invocation remains possible.
+    Local tests and operator diagnostics remain usable outside GitHub Actions.
+    In Actions, authorization is tied to the repository-qualified workflow file
+    identity rather than the non-unique workflow display name.
     """
-    if os.environ.get('GITHUB_ACTIONS') != 'true':
+    if os.environ.get('GITHUB_ACTIONS', '').strip().lower() != 'true':
         return True
-    run_id = os.environ.get('GITHUB_RUN_ID', '').strip()
-    if not run_id or not run_id.isdigit():
-        return False
-    try:
-        payload = gh_json(['api', f'repos/{REPO}/actions/runs/{run_id}'])
-    except Exception:
-        return False
-    if not isinstance(payload, dict):
-        return False
-    path = payload.get('path')
-    return isinstance(path, str) and path == '.github/workflows/fixed-model-factory-dispatch.yml'
+    repository = os.environ.get('GITHUB_REPOSITORY', '').strip()
+    workflow_ref = os.environ.get('GITHUB_WORKFLOW_REF', '').strip()
+    workflow_file = workflow_ref.partition('@')[0]
+    return bool(repository) and workflow_file == (
+        f"{repository}/{ASSIGNMENT_WRITER_WORKFLOW_PATH}"
+    )
 
 
 def record_controller_lease_activity(number: int, worker: str, kind: str) -> None:
@@ -223,6 +223,9 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
     for number in numbers:
         if not target_still_unowned(number):
             return False
+
+    if worker_has_active_lease(worker):
+        return False
 
     def release_verified_claims(claimed_numbers: list[int]) -> None:
         """Release only labels this worker can still prove it owns."""
