@@ -17,11 +17,6 @@
       }
     }
   ],
-  "functions": {
-    "api/index.py": {
-      "excludeFiles": "tests/**"
-    }
-  },
   "routes": [
     {
       "src": "/api(?:/.*)?",

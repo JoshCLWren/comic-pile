@@ -31,21 +31,13 @@ coverage/
 # Tests and test fixtures (not imported by production request path)
 tests/
 tests_e2e/
-tests/**
-tests_e2e/**
 
 # Repository docs and non-runtime material
 docs/
-*.md
-*.txt
 
 # CI / automation / factory scripts (not imported by api/index.py)
 scripts/
 .github/
-
-# Frontend source/build inputs already emitted by static build
-frontend/src/
-frontend/public/
 
 # Migration files not needed at serverless request time
 alembic/
