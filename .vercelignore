@@ -28,6 +28,25 @@ benchmarks/results/
 coverage/
 *.log
 
+# Tests and test fixtures (not imported by production request path)
+tests/
+tests_e2e/
+
+# Repository docs and non-runtime material
+docs/
+
+# CI / automation / factory scripts (not imported by api/index.py)
+scripts/
+.github/
+
+# Migration files not needed at serverless request time
+alembic/
+
+# Factory / agent / prompt artifacts not imported by api/index.py
+.agents/
+.opencode/
+prompts/
+
 # Database backups and exports
 *.dump
 *.sql
