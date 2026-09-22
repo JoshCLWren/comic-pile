@@ -32,6 +32,7 @@ def test_opencode_free_pins_accept_free_roster_ids(validate) -> None:
     """OpenCode free lanes accept big-pickle, *-free, and muse-spark ids."""
     assert validate.opencode_model_is_free('big-pickle')
     assert validate.opencode_model_is_free('mimo-v2.5-free')
+    assert validate.opencode_model_is_free('mimo-v2.6-flash-free')
     assert validate.opencode_model_is_free('muse-spark-1.2-contributor-free')
     assert not validate.opencode_model_is_free('paid-frontier')
     assert not validate.opencode_model_is_free('openrouter/foo:free')
@@ -42,8 +43,10 @@ def test_openrouter_free_pins_require_free_tier_ids(validate) -> None:
     assert validate.openrouter_model_is_free('cohere/north-mini-code:free')
     assert validate.openrouter_model_is_free('openrouter/free')
     assert validate.openrouter_model_is_free('stealth/union-alpha')
+    assert validate.openrouter_model_is_free('qwen/qwen3.8-27b:free')
     assert not validate.openrouter_model_is_free('stealth/ox-alpha')
     assert not validate.openrouter_model_is_free('openai/gpt-4o')
+    assert not validate.openrouter_model_is_free('xiaomi/mimo-v2.6-flash')
 
 
 def test_manifest_openrouter_pins_are_all_free(validate) -> None:

@@ -3,7 +3,7 @@
   "providers": {
     "opencode": [
       {"id": "big-pickle", "cost": {"input": 0, "output": 0}},
-      {"id": "mimo-v2.5-free", "cost": {"input": 0, "output": 0}},
+      {"id": "mimo-v2.6-flash-free", "cost": {"input": 0, "output": 0}},
       {"id": "nemotron-3-ultra-free", "cost": {"input": 0, "output": 0}},
       {"id": "nemotron-3.5-lightning-free", "cost": {"input": 0, "output": 0}},
       {"id": "muse-spark-1.2-contributor-free", "cost": {"input": 0, "output": 0}},
@@ -43,7 +43,8 @@
       {"id": "thinkingmachines/inkling:free"},
       {"id": "thinkingmachines/inkling-small:free"},
       {"id": "dots-studio/dots-3-note-preview:free"},
-      {"id": "stealth/union-alpha"}
+      {"id": "stealth/union-alpha"},
+      {"id": "qwen/qwen3.8-27b:free"}
     ]
   }
 }
