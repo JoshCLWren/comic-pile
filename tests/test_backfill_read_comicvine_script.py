@@ -6,6 +6,7 @@ import importlib.util
 from pathlib import Path
 import sys
 from types import ModuleType
+from typing import Protocol
 from unittest.mock import AsyncMock
 
 import pytest
@@ -17,6 +18,26 @@ from app.models.external_identity import (
     IssueExternalIdentityMapping,
     ThreadExternalSeriesMapping,
 )
+
+
+class _ReadIssueLike(Protocol):
+    """Structural shape of the operator's ``ReadIssue`` dataclass."""
+
+    issue_id: int
+    thread_id: int
+    thread_title: str
+    issue_number: str
+    position: int
+    identity_id: int | None
+    external_id: str | None
+    has_creator_credits: bool
+    has_person_credit_source: bool
+    creator_credit_count: int
+    series_identity_id: int | None
+    series_external_id: str | None
+    series_volume_id: int | None
+    series_name: str | None
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/backfill_read_comicvine.py"
@@ -36,7 +57,7 @@ def _module() -> ModuleType:
     return module
 
 
-def _issue(cli: ModuleType, **overrides: object) -> object:
+def _issue(cli: ModuleType, **overrides: object) -> _ReadIssueLike:
     """Build one unmapped read issue with confirmed series evidence."""
     values: dict[str, object] = {
         "issue_id": 7,
