@@ -122,9 +122,10 @@ class NeonEgressMonitor:
     def _evaluate_warnings(self, sample: ConsumptionSample) -> None:
         """Determine if any thresholds are exceeded and log the event."""
         last = self.last_sample
-        if last is None:
-            # First sample, nothing to compare
+        if last is None or sample is last:
+            # First sample or identical resample — establish baseline
             self._log_event("first_sample", sample)
+            self.last_sample = sample
             return
 
         # Period rollover: if the sample is from a different month than the
@@ -168,6 +169,7 @@ class NeonEgressMonitor:
             self._log_event("warning", detail)
         else:
             self._log_event("normal", sample)
+        self.last_sample = sample
 
     def _log_event(self, event_type: str, data: object) -> None:
         """Record a monitor event for observability.
@@ -193,7 +195,6 @@ class NeonEgressMonitor:
         while True:
             sample = await self._fetch_monthly_consumption()
             if sample:
-                self.last_sample = sample
                 self._evaluate_warnings(sample)
             await asyncio.sleep(self.settings.neon_poll_interval_seconds)
 
