@@ -1,4 +1,4 @@
-import { Suspense, createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -16,14 +16,7 @@ import api, {
   refreshSession,
   setAccessToken,
 } from './services/api'
-import { 
-  isDefinitiveAuthenticationFailure,
-  createAuthError,
-  type AuthState,
-  type AuthStatus,
-  type AuthError,
-  calculateRetryDelay,
-} from './services/authState'
+import { isDefinitiveAuthenticationFailure, createAuthError, type AuthState, type AuthStatus, type AuthError, calculateRetryDelay } from './services/authState'
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import { usePingHeartbeat } from './hooks/usePingHeartbeat'
@@ -34,6 +27,7 @@ import type { DiagnosticData } from './hooks/useDiagnostics'
 import { ToastProvider } from './contexts/ToastProvider'
 import { BugReportRestoreProvider } from './contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from './contexts/NavCollapseContext'
+import { AuthContext, AuthContextValue, AuthContextLegacyValue, useAuth } from './contexts/AuthContext'
 import './index.css'
 
 declare global {
@@ -69,35 +63,6 @@ const LoginPage = lazyRoute('login')
 const RegisterPage = lazyRoute('register')
 const IdentityInboxPage = lazyRoute('identityInbox')
 
-export interface AuthContextValue {
-  authState: AuthState
-  isAuthenticated: boolean
-  isLoading: boolean
-  user: AuthUser | null
-  login: (accessToken: string) => Promise<void>
-  logout: () => void
-  revalidateSession: (timeout?: number) => Promise<void>
-  recoverSession: (timeout?: number) => Promise<void>
-  retryAuth: () => Promise<void>
-  clearAuthError: () => void
-}
-
-// Legacy properties for backward compatibility
-export interface AuthContextLegacyValue {
-  isAuthenticated: boolean
-  isLoading: boolean
-  user: AuthUser | null
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null)
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (!context) throw new Error('useAuth must be used within an AuthProvider')
-  return context
-}
- 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>({
     status: 'checking',
