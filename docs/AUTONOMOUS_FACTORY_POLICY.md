@@ -282,6 +282,54 @@ Key rules for factory workers:
 - A factory must not post the final `<!-- product-acceptance:v1 -->` verdict as the deciding authority, mark the parent `ralph-status:done`, or close the parent.
 - Duplicate factory PRs that attempt to close already-delivered child work do not satisfy product acceptance.
 
+## Adaptive stale-PR decay guard (ADR)
+
+### Context
+
+Factory PRs converge quickly: P25 at 1.27h, P50 at 2.80h, P75 at 7.37h, P90 at 11.58h, max at 37.96h. Long-lived implementation attempts indicate failed convergence. The existing semantic strike policy does not cover this failure mode — CI churn, transient model/provider failures, merge/rebase churn, worker handoffs, stale reviews, and no-diff handoffs do not consume strikes.
+
+### Decision
+
+Define staleness relative to a rolling population of the **last 100 eligible successfully merged Factory PRs**. The implementation calculates PR lifetime from `created_at` (never `updated_at`):
+- For merged PRs: `merged_at - created_at`
+- For open PRs: `now - created_at`
+
+The threshold uses a robust distribution-derived rule: **`2 × P90`** as the default candidate, compared with a median/MAD formulation. The final formula uses the more conservative (larger) of the two, subject to a documented lower floor of **1 hour** and a cold-start fallback of **24 hours** when fewer than 10 merged PRs exist.
+
+### Expiration behavior
+
+When an autonomous Factory implementation PR crosses the stale threshold:
+1. Persist a trusted controller marker/comment (`comic-pile-factory-stale-expiration-v1`) recording the observed age, baseline sample, formula, and threshold
+2. Close/cancel that PR implementation attempt
+3. Release/reset Factory ownership state as necessary
+4. Return the linked issue to unowned executable implementation from current `main`
+5. Ensure the stale branch/PR cannot immediately re-enter repair/review loops
+6. Preserve enough provenance to audit why the attempt was expired
+
+Staleness is an **attempt-level circuit breaker**, just like semantic strike exhaustion. It must not close the underlying product issue unless a separate terminal condition applies.
+
+### Relationship to semantic strikes
+
+- **Semantic strikes:** repeated evidence that an implementation is substantively wrong
+- **Stale decay:** evidence that an implementation has failed to converge in normal Factory time, regardless of cause
+- Neither mechanism increments or masquerades as the other
+
+### Scope/eligibility
+
+Only autonomous Factory implementation PRs should participate. Exclude Dependabot, manual/Codex work, infrastructure PRs, and other non-product automation. The baseline population uses the same Factory-implementation definition as the PRs being guarded.
+
+### Implementation
+
+The `stale_pr_decay.py` module in `.github/scripts/` provides:
+- `get_staleness_baseline()` — builds the rolling population baseline
+- `is_stale_attempt()` — checks if a PR age exceeds the threshold
+- `process_stale_prs()` — evaluates and expires stale PRs
+- `StalePRGuard` — configurable guard class
+- `build_stale_expiration_marker()` / `parse_stale_marker()` — durable marker support
+- `get_staleness_observability()` — logging summary
+
+The controller exposes a `stale` subcommand: `factory-work-controller.py stale [--dry-run]`.
+
 ## Semantic review strike policy
 
 A factory implementation attempt gets three substantive semantic repair cycles. A cycle is counted once per distinct PR head that receives a trusted controller-authored `verdict-repair` semantic review marker. Mirrored comments, duplicate markers for the same head, stale-head results, CI failures, merge conflicts, provider failures, and no-diff handoffs do not consume this semantic strike budget.
@@ -306,6 +354,7 @@ Use the existing canonical marker schemas:
 - released: `<!-- comic-pile-factory-claim-released-v3:<target>:<worker>:<epoch>:<reason> -->`
 - merge closure: `<!-- comic-pile-factory-merge-closure-v1:pr-<pr>:issue-<issue> -->`
 - product acceptance: `<!-- product-acceptance:v1 -->`
+- stale expiration: `<!-- comic-pile-factory-stale-expiration-v1:pr-<pr>:issue-<issue>:age-<s>:sample-<n>:formula-<f>:threshold-<t> -->`
 
 ## Durable resume packet
 

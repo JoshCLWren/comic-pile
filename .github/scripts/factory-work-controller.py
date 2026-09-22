@@ -19,6 +19,7 @@ from factory_capacity_policy import (
     remaining_omniroute_free_entry_slots,
 )
 from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments)
+from stale_pr_decay import StalePRGuard
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 STRIKE_RESET_RE = re.compile(
@@ -648,12 +649,33 @@ def release_worker(worker: str, reason: str = 'controller-release') -> list[int]
     return released
 
 
+def check_stale_prs(dry_run: bool = False) -> dict[str, Any]:
+    """Evaluate open Factory PRs for staleness and expire any that cross the threshold.
+
+    Returns a dict with the baseline statistics and expiration results.
+    This integrates the adaptive stale-PR decay guard into the controller.
+    """
+    guard = StalePRGuard()
+    prs = list_prs()
+    baseline = guard.get_baseline(prs)
+    results = guard.process_stale_prs(prs=prs, dry_run=dry_run)
+    expired = [r for r in results if r.get("status") == "expired"]
+    return {
+        "baseline": baseline,
+        "results": results,
+        "expired_count": len(expired),
+        "dry_run": dry_run,
+    }
+
+
 def main() -> int:
     """Run the factory controller command-line interface."""
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest='command', required=True)
     subparsers.add_parser('reconcile')
     subparsers.add_parser('capacity')
+    stale_parser = subparsers.add_parser('stale')
+    stale_parser.add_argument('--dry-run', action='store_true', help='Report without taking action')
     assign_parser = subparsers.add_parser('assign')
     assign_parser.add_argument('--worker', required=True)
     inspect_parser = subparsers.add_parser('inspect')
@@ -667,6 +689,9 @@ def main() -> int:
         return 0
     if args.command == 'capacity':
         print(json.dumps(omniroute_free_entry_capacity()))
+        return 0
+    if args.command == 'stale':
+        print(json.dumps(check_stale_prs(dry_run=args.dry_run)))
         return 0
     if args.command == 'assign':
         candidate = assign(args.worker)
