@@ -217,7 +217,7 @@ async def get_series_with_issues(
     # Get issues that belong to this series from the catalog.
     # Filter threads to those with confirmed series mappings for the specific series.
     issues_result = await db.execute(
-        select(ExternalIdentity, IssueExternalIdentityMapping, Thread, ThreadExternalSeriesMapping)
+        select(ExternalIdentity, IssueExternalIdentityMapping, Issue, Thread, ThreadExternalSeriesMapping)
         .join(
             IssueExternalIdentityMapping,
             IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
@@ -242,12 +242,12 @@ async def get_series_with_issues(
             ThreadExternalSeriesMapping.status == "confirmed",
         )
     )
-    
+
     issues_with_mappings = []
-    for issue_identity, issue_mapping, thread, _tsm in issues_result:
+    for issue_identity, issue_mapping, issue, thread, _tsm in issues_result:
         issue_info = {
             "issue_id": issue_mapping.issue_id,
-            "issue_number": issue_identity.external_id,
+            "issue_number": issue.issue_number,
             "title": issue_identity.metadata_json.get("name") if issue_identity.metadata_json else None,
             "thread_id": thread.id,
             "thread_title": thread.title,
