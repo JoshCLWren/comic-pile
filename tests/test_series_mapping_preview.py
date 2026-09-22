@@ -785,7 +785,7 @@ class TestSeriesMappingPreview:
 
             try:
                 verify_preview_token(tampered_token, expected_user_id=sample_data["user"].id)
-                assert False, "tampered token should not verify"
+                raise AssertionError("tampered token should not verify")
             except Exception as exc:
                 assert "invalid_preview_token" in str(exc.detail) if hasattr(exc, "detail") else True
 
@@ -811,7 +811,7 @@ class TestSeriesMappingPreview:
 
         try:
             verify_preview_token(expired_token, expected_user_id=user_id)
-            assert False, "expired token should not verify"
+            raise AssertionError("expired token should not verify")
         except Exception as exc:
             detail = getattr(exc, "detail", "")
             assert "preview_token_expired" in str(detail) or "expired" in str(detail).lower()
