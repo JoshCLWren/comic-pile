@@ -132,7 +132,7 @@ def test_unauthorized_actions_workflow_cannot_replace_numbered_labels(
 
     monkeypatch.setattr(controller, "run_gh", fake_run)
 
-    with pytest.raises(RuntimeError, match="fixed-model-factory-dispatch.yml"):
+    with pytest.raises(RuntimeError, match="dispatcher authorization failed"):
         controller.replace_factory_labels(2859, "factory:46", "factory:building")
 
     assert writes == []
@@ -290,6 +290,8 @@ def test_assign_candidate_rechecks_target_before_mutation(
         "replace_factory_labels",
         lambda *args: writes.append(args),
     )
+    # Mock the GitHub API call to avoid GH_TOKEN error
+    monkeypatch.setattr(controller, "target_json", lambda _number: {"labels": [{"name": "factory:unowned"}]})
 
     assert controller.assign_candidate(candidate, "46") is False
     assert writes == []
