@@ -40,7 +40,7 @@ vi.mock('../services/api', () => {
 })
 
 import { PreferencesSync } from '../hooks/usePreferences'
-import { AuthProvider, useAuth } from '../contexts/AuthContext'
+import { AuthProvider, useAuth } from '../App'
 
 let auth: AuthContextValue | null = null
 
