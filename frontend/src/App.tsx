@@ -590,5 +590,5 @@ function App() {
   return <BrowserRouter><QueryClientProvider client={queryClient}><BugReportRestoreProvider><ToastProvider><AuthProvider><NavCollapseProvider><AuthResumeBoundary><AppRoutes /></AuthResumeBoundary></NavCollapseProvider></AuthProvider></ToastProvider></BugReportRestoreProvider></QueryClientProvider></BrowserRouter>
 }
 
-export { AppRoutes }
+export { AppRoutes, useAuth, AuthContextValue, AuthContextLegacyValue }
 export default App
