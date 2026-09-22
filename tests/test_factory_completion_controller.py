@@ -19,7 +19,7 @@ def test_completion_claims_stop_at_omniroute_free_entry_cap():
     assert "omniroute_free_entry_has_capacity" in text
     assert "OmniRoute free-entry cap reached" in text
     assert text.index("omniroute_free_entry_has_capacity") < text.index(
-        "order_candidates_for_worker(remaining, worker)"
+        "controller.assign(worker, kinds=('pr',))"
     )
 
 
