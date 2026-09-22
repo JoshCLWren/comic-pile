@@ -3,8 +3,8 @@
 
 This is Phase 2 of the read-comic creator backfill. The creator backfill can only
 hydrate issues that have a confirmed ComicVine issue identity. This operator
-fills more of those identities at the thread/series level, then the existing
-``backfill_read_comicvine.py`` command can be rerun to hydrate creator credits.
+fills more of those identities at the thread/series level so a later creator
+hydration pass can hydrate credits for the newly confirmed rows.
 
 The script is intentionally isolated from ``app.*`` and the Pydantic settings
 stack. It reads the already-exported ``DATABASE_URL`` from the process
@@ -34,9 +34,6 @@ Examples:
     uv run python scripts/resolve_read_comicvine_series.py --user-id 1 --dry-run
     uv run python scripts/resolve_read_comicvine_series.py --user-id 1 --limit-threads 20
     uv run python scripts/resolve_read_comicvine_series.py --user-id 1
-
-After it finishes, rerun:
-    uv run python scripts/backfill_read_comicvine.py --user-id 1
 """
 
 from __future__ import annotations

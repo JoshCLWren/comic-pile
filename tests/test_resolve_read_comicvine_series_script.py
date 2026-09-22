@@ -7,6 +7,8 @@ from pathlib import Path
 import sys
 from types import ModuleType
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/resolve_read_comicvine_series.py"
 
@@ -260,26 +262,20 @@ def test_thread_classification_uses_single_year_title_hint() -> None:
 
 
 def test_database_url_requires_explicit_export_and_never_falls_back(
-    monkeypatch: object,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Operator never silently falls back to test or local database URLs."""
     cli = _module()
     source = SCRIPT.read_text(encoding="utf-8")
-    assert "TEST_DATABASE_URL" not in source
-    assert "ENVIRONMENT" not in source or "os.environ.get(\"DATABASE_URL\"" in source
-    # When DATABASE_URL is missing, the helper exits rather than guessing.
-    delenv = getattr(monkeypatch, "delenv", None)
-    if callable(delenv):
-        delenv("DATABASE_URL", raising=False)
-    else:
-        import os
-
-        os.environ.pop("DATABASE_URL", None)
-    try:
+    # The refusal message may mention TEST_DATABASE_URL, but the script must never read it.
+    for line in source.splitlines():
+        if "TEST_DATABASE_URL" in line:
+            assert "os.environ" not in line
+    assert "ENVIRONMENT" not in source or 'os.environ.get("DATABASE_URL"' in source
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(SystemExit) as exc_info:
         cli._require_database_url(None)
-        assert False, "expected SystemExit when DATABASE_URL is missing"
-    except SystemExit as exc:
-        assert "DATABASE_URL is required" in str(exc)
+    assert "DATABASE_URL is required" in str(exc_info.value)
 
 
 def test_unusual_labels_require_exact_provider_evidence() -> None:
