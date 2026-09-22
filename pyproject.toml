@@ -4,16 +4,17 @@ version = "0.1.0"
 description = "Dice-Driven Comic Reading Tracker - FastAPI + React + Tailwind CSS"
 readme = "README.md"
 requires-python = ">=3.14"
+# Production dependency set installed into the Vercel Python function and the
+# slim DevContainer (issue #2841). Keep this list to packages the deployed
+# request path (api/index.py -> app.main.create_app) actually imports. Server
+# and migration tooling lives in the `server` and `migrate` dependency groups,
+# which every other runtime discovers through `tool.uv.default-groups`.
 dependencies = [
     "fastapi>=0.100.0",
-    "uvicorn[standard]>=0.20.0",
     "sqlalchemy>=2.0.0",
-    "alembic>=1.12.0",
-    "jinja2>=3.1.0",
     "pillow>=11.0.0",
     "pydantic[email]>=2.0.0",
     "python-multipart>=0.0.6",
-    "psycopg[binary]>=3.1.0",
     "asyncpg>=0.29.0",
     "slowapi>=0.1.9",
     "python-dotenv>=1.0.0",
@@ -23,11 +24,12 @@ dependencies = [
     "pydantic-settings>=2.12.0",
     "filelock>=3.25.2",
     "PyGithub>=2.0.0",
-    "pytest-xdist>=3.0.0",
-    "pyyaml>=6.0.0",
     "upstash-redis>=1.7.0",
 ]
 
+# Local development and test tooling. Installed by default for `uv sync` /
+# `uv run` environments. Test-only and operator/script packages that the Vercel
+# function does not import belong here (e.g. pytest-xdist, pyyaml).
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
@@ -49,7 +51,30 @@ dev = [
     "bcrypt",
     "aiosqlite>=0.19.0",
     "jsonschema>=4.0.0",
+    "pyyaml>=6.0.0",
 ]
+
+# Database migration + operator tooling (alembic + its sync psycopg driver).
+# Workflows that need migrations (deploy-production, Docker runtime, CI
+# migration-health, local `make migrate`) get this through the default groups;
+# the Vercel request runtime does not install dependency groups.
+migrate = [
+    "alembic>=1.12.0",
+    "psycopg[binary]>=3.1.0",
+]
+
+# ASGI server runtime used by the Docker/Compose deployment image and local
+# `uvicorn` dev servers. The Vercel function needs no uvicorn: the Vercel
+# Python runtime drives the ASGI app directly.
+server = [
+    "uvicorn[standard]>=0.20.0",
+]
+
+# Repositories and containers that are not the Vercel function install the
+# dev test stack plus the server/migrate groups by default; `--no-dev` still
+# keeps server + migrate so the Docker runtime and deploy migration step work.
+[tool.uv]
+default-groups = ["dev", "migrate", "server"]
 
 [[tool.uv.index]]
 name = "pypi"
