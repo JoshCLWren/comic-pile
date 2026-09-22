@@ -1,8 +1,9 @@
-"""Endpoint-aware ComicVine provider client with persistent cache and rate limiting."""
+"""Endpoint-aware ComicVine provider client with persistent cache, resource throttling, and cooldown recovery."""
 
 from __future__ import annotations
 
 import asyncio
+import email.utils
 import hashlib
 import json
 import time
@@ -17,6 +18,7 @@ from filelock import FileLock
 
 COMICVINE_BASE_URL = "https://comicvine.gamespot.com/api"
 DEFAULT_REQUESTS_PER_HOUR = 180
+DEFAULT_NO_HEADER_COOLDOWN = 60.0
 COLLECTION_PAGE_LIMIT = 100
 DEEP_ISSUE_FIELDS = (
     "id",
@@ -41,6 +43,11 @@ class ComicVineError(RuntimeError):
 class ComicVineRateLimitError(ComicVineError):
     """Raised when local or provider rate limiting prevents a request."""
 
+    def __init__(self, message: str, retry_after: float | None = None) -> None:
+        """Initialize with a message and optional retry-after seconds."""
+        super().__init__(message)
+        self.retry_after = retry_after
+
 
 @dataclass(frozen=True)
 class ComicVineResponse:
@@ -49,6 +56,107 @@ class ComicVineResponse:
     payload: dict[str, object]
     from_cache: bool
     cache_key: str
+
+
+@dataclass(frozen=True)
+class ResourceCooldown:
+    """Persisted cooldown state for a single ComicVine resource."""
+
+    resource: str
+    cooldown_until: float
+    retry_after: float | None
+
+    @property
+    def remaining(self) -> float | None:
+        """Seconds until cooldown expires, or None if already expired."""
+        remaining = self.cooldown_until - time.time()
+        return remaining if remaining > 0 else None
+
+
+class PersistentResourceThrottleTracker:
+    """Persist per-resource cooldown deadlines so restarts retain throttled state."""
+
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        clock: Callable[[], float] = time.time,
+    ) -> None:
+        """Configure the persistent resource throttle tracker.
+
+        Args:
+            path: JSON cooldown state path.
+            clock: Time source used by tests and production.
+        """
+        self.path = Path(path)
+        self._clock = clock
+        self._lock = FileLock(f"{self.path}.lock")
+
+    def _read(self) -> dict[str, dict[str, object]]:
+        if not self.path.exists():
+            return {}
+        try:
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+        return raw
+
+    def _write(self, state: Mapping[str, dict[str, object]]) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temp = self.path.with_suffix(f"{self.path.suffix}.tmp")
+        temp.write_text(json.dumps(state, sort_keys=True), encoding="utf-8")
+        temp.replace(self.path)
+
+    def cleanup(self) -> None:
+        """Remove expired cooldown entries from persisted state."""
+        now = float(self._clock())
+        with self._lock:
+            state = self._read()
+            kept: dict[str, dict[str, object]] = {}
+            for resource, entry in state.items():
+                until = float(entry.get("cooldown_until", 0))
+                if until > now:
+                    kept[resource] = entry
+            self._write(kept)
+
+    def set_cooldown(self, resource: str, cooldown_until: float, retry_after: float | None = None) -> None:
+        """Record a cooldown deadline for a resource."""
+        with self._lock:
+            state = self._read()
+            state[resource] = {
+                "cooldown_until": cooldown_until,
+                "retry_after": retry_after,
+            }
+            self._write(state)
+
+    def reset(self, resource: str) -> None:
+        """Clear the cooldown for a resource after a successful request."""
+        with self._lock:
+            state = self._read()
+            state.pop(resource, None)
+            self._write(state)
+
+    def get_cooldown(self, resource: str) -> ResourceCooldown | None:
+        """Return the active cooldown for a resource, or None if none exists or it expired."""
+        state = self._read()
+        entry = state.get(resource)
+        if entry is None:
+            return None
+        cooldown_until = float(entry.get("cooldown_until", 0))
+        retry_after = entry.get("retry_after")
+        if isinstance(retry_after, (int, float)):
+            retry_after = float(retry_after)
+        else:
+            retry_after = None
+        if cooldown_until <= float(self._clock()):
+            return None
+        return ResourceCooldown(resource=resource, cooldown_until=cooldown_until, retry_after=retry_after)
+
+    def is_throttled(self, resource: str) -> bool:
+        """Return whether a resource is currently in cooldown."""
+        return self.get_cooldown(resource) is not None
 
 
 class PersistentEndpointLimiter:
@@ -121,8 +229,34 @@ class PersistentEndpointLimiter:
             self._write(ledger)
 
 
+def _parse_retry_after(header_value: str | None, clock: Callable[[], float] = time.time) -> float | None:
+    """Parse a Retry-After header value as delta-seconds or HTTP date.
+
+    Args:
+        header_value: The Retry-After header string.
+        clock: Time source used for HTTP-date comparison.
+
+    Returns:
+        Seconds until the cooldown expires, or None if the value cannot be parsed.
+    """
+    if not header_value:
+        return None
+    header_value = header_value.strip()
+    try:
+        return float(header_value)
+    except (ValueError, TypeError):
+        pass
+    try:
+        parsed = email.utils.parsedate_to_datetime(header_value)
+        if parsed is not None:
+            return (parsed.timestamp() - clock())
+    except (TypeError, ValueError, OSError):
+        pass
+    return None
+
+
 class ComicVineClient:
-    """Fetch ComicVine resources with endpoint-specific contracts and resumable caching."""
+    """Fetch ComicVine resources with endpoint-specific contracts, resource throttling, and resumable caching."""
 
     def __init__(
         self,
@@ -137,7 +271,7 @@ class ComicVineClient:
 
         Args:
             api_key: ComicVine API key. It is never included in cache keys or persisted payload metadata.
-            cache_dir: Directory for raw successful response cache and request ledger.
+            cache_dir: Directory for raw successful response cache, request ledger, and throttle state.
             requests_per_hour: Conservative rolling-hour budget per endpoint path.
             base_url: Provider API base URL.
             timeout_seconds: Network timeout per request.
@@ -152,6 +286,10 @@ class ComicVineClient:
             self.cache_dir / "request-ledger.json",
             requests_per_hour=requests_per_hour,
         )
+        self.throttle_tracker = PersistentResourceThrottleTracker(
+            self.cache_dir / "throttle-state.json",
+        )
+        self._clock = time.time
 
     @staticmethod
     def _cache_key(endpoint: str, params: Mapping[str, object]) -> str:
@@ -192,8 +330,12 @@ class ComicVineClient:
             with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
                 decoded = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            if exc.code == 429:
-                raise ComicVineRateLimitError("ComicVine returned HTTP 429") from exc
+            if exc.code in (420, 429):
+                retry_after = _parse_retry_after(exc.headers.get("Retry-After"), self._clock)
+                raise ComicVineRateLimitError(
+                    f"ComicVine returned HTTP {exc.code}",
+                    retry_after=retry_after,
+                ) from exc
             raise ComicVineError(f"ComicVine HTTP {exc.code} for {endpoint}") from exc
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise ComicVineError(f"ComicVine request failed for {endpoint}: {exc}") from exc
@@ -205,6 +347,10 @@ class ComicVineClient:
                 f"ComicVine API error for {endpoint}: {decoded.get('error', status_code)!r}"
             )
         return decoded
+
+    def _is_in_resource_cooldown(self, endpoint_bucket: str) -> bool:
+        """Check if a resource is currently in a persisted cooldown."""
+        return self.throttle_tracker.is_throttled(endpoint_bucket)
 
     async def request(
         self,
@@ -224,14 +370,40 @@ class ComicVineClient:
 
         Returns:
             Decoded provider payload with cache provenance.
+
+        Raises:
+            ComicVineRateLimitError: When the provider is throttled and no cached response is available.
         """
         cache_key = self._cache_key(endpoint, params)
+        cached: dict[str, object] | None = None
         if not refresh:
             cached = self._read_cache(cache_key)
             if cached is not None:
                 return ComicVineResponse(cached, True, cache_key)
+        if self._is_in_resource_cooldown(endpoint_bucket):
+            remaining = self.throttle_tracker.get_cooldown(endpoint_bucket)
+            if remaining is not None:
+                raise ComicVineRateLimitError(
+                    f"ComicVine resource {endpoint_bucket!r} is in cooldown",
+                    retry_after=remaining.retry_after,
+                )
+            raise ComicVineRateLimitError(
+                f"ComicVine resource {endpoint_bucket!r} is in cooldown with no Retry-After"
+            )
         self.limiter.acquire(endpoint_bucket)
-        payload = await asyncio.to_thread(self._request_sync, endpoint, params)
+        try:
+            payload = await asyncio.to_thread(self._request_sync, endpoint, params)
+        except ComicVineRateLimitError as exc:
+            self.throttle_tracker.set_cooldown(
+                endpoint_bucket,
+                float(self._clock()) + (exc.retry_after if exc.retry_after else DEFAULT_NO_HEADER_COOLDOWN),
+                retry_after=exc.retry_after,
+            )
+            cached = self._read_cache(cache_key)
+            if cached is not None:
+                return ComicVineResponse(cached, True, cache_key)
+            raise
+        self.throttle_tracker.reset(endpoint_bucket)
         self._write_cache(cache_key, payload)
         return ComicVineResponse(payload, False, cache_key)
 

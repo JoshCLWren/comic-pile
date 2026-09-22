@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 import urllib.error
 from pathlib import Path
 
@@ -14,6 +16,8 @@ from comic_pile.comicvine_provider import (
     ComicVineError,
     ComicVineRateLimitError,
     PersistentEndpointLimiter,
+    PersistentResourceThrottleTracker,
+    _parse_retry_after,
 )
 
 
@@ -265,3 +269,211 @@ async def test_story_arc_preserves_provider_membership_without_claiming_reading_
     response = await client.fetch_story_arc(8)
 
     assert response.payload["results"] == {"id": 8, "issues": raw_members}
+
+
+def test_parse_retry_after_delta_seconds() -> None:
+    """Retry-After as delta-seconds should be parsed as a float."""
+    result = _parse_retry_after("120")
+    assert result == 120.0
+
+
+def test_parse_retry_after_http_date() -> None:
+    """Retry-After as an HTTP date should be parsed as seconds until that date."""
+    import time as _time
+    future = _time.time() + 300
+    http_date = _time.strftime("%a, %d %b %Y %H:%M:%S GMT", _time.gmtime(future))
+    result = _parse_retry_after(http_date, clock=_time.time)
+    assert result is not None and 290 < result < 310, f"Expected ~300, got {result}"
+
+
+def test_parse_retry_after_invalid() -> None:
+    """Unparseable Retry-After should return None."""
+    assert _parse_retry_after("") is None
+    assert _parse_retry_after("invalid") is None
+
+
+class FakeHttpErrorWithHeaders(urllib.error.HTTPError):
+    """HTTPError that carries custom headers for Retry-After testing."""
+
+    def __init__(self, code: int, headers: dict[str, str]) -> None:
+        """Initialize with HTTP status code and headers."""
+        super().__init__("https://example.invalid", code, "throttled", headers, None)
+        self.code = code
+
+
+def test_http_420_is_treated_as_throttle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """HTTP 420 must be treated as a provider throttle like HTTP 429."""
+    client = ComicVineClient("secret", tmp_path)
+
+    def rate_limited_420(request: object, timeout: float) -> FakeUrlResponse:
+        raise FakeHttpErrorWithHeaders(420, {"Retry-After": "120"})
+
+    monkeypatch.setattr("urllib.request.urlopen", rate_limited_420)
+    with pytest.raises(ComicVineRateLimitError) as exc_info:
+        client._request_sync("issue/4000-7", {})
+    assert exc_info.value.retry_after == 120.0
+
+
+def test_http_429_parses_retry_after_delta_seconds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """HTTP 429 with Retry-After delta-seconds must set the retry_after on the error."""
+    client = ComicVineClient("secret", tmp_path)
+
+    def rate_limited(request: object, timeout: float) -> FakeUrlResponse:
+        raise FakeHttpErrorWithHeaders(429, {"Retry-After": "60"})
+
+    monkeypatch.setattr("urllib.request.urlopen", rate_limited)
+    with pytest.raises(ComicVineRateLimitError) as exc_info:
+        client._request_sync("issue/4000-7", {})
+    assert exc_info.value.retry_after == 60.0
+
+
+def test_http_429_parses_retry_after_http_date(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """HTTP 429 with Retry-After HTTP-date must be converted to seconds."""
+    import time
+    future = time.time() + 180
+    http_date = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime(future))
+    client = ComicVineClient("secret", tmp_path)
+
+    def rate_limited(request: object, timeout: float) -> FakeUrlResponse:
+        raise FakeHttpErrorWithHeaders(429, {"Retry-After": http_date})
+
+    monkeypatch.setattr("urllib.request.urlopen", rate_limited)
+    with pytest.raises(ComicVineRateLimitError) as exc_info:
+        client._request_sync("issue/4000-7", {})
+    assert exc_info.value.retry_after is not None and 170 < exc_info.value.retry_after < 190
+
+
+def test_no_header_throttle_has_bounded_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A throttle without Retry-After must use the default bounded cooldown."""
+    client = ComicVineClient("secret", tmp_path)
+
+    def rate_limited_no_header(request: object, timeout: float) -> FakeUrlResponse:
+        raise urllib.error.HTTPError("https://example.invalid", 429, "slow down", {}, None)
+
+    monkeypatch.setattr("urllib.request.urlopen", rate_limited_no_header)
+    with pytest.raises(ComicVineRateLimitError):
+        asyncio.run(
+            client.request("issue", "issue/4000-7", {}, refresh=True)
+        )
+
+    assert client.throttle_tracker.is_throttled("issue")
+
+
+def test_persisted_cooldown_survives_restart(tmp_path: Path) -> None:
+    """A finite cooldown must persist across new client instances."""
+    tracker = PersistentResourceThrottleTracker(tmp_path / "throttle-state.json")
+    tracker.set_cooldown("issue", time.time() + 300)
+
+    client2 = ComicVineClient("secret", tmp_path)
+    assert client2.throttle_tracker.is_throttled("issue")
+    assert client2.throttle_tracker.get_cooldown("issue") is not None
+
+
+def test_cached_response_usable_during_cooldown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cached responses must remain usable even when a resource is in cooldown."""
+    client = ComicVineClient("secret", tmp_path)
+
+    # Write a cached response
+    cache_key = client._cache_key("issue/4000-7", {"field_list": "id,name"})
+    client._write_cache(cache_key, {"status_code": 1, "results": {"id": 7}})
+
+    # Put resource in cooldown
+    client.throttle_tracker.set_cooldown("issue", time.time() + 300)
+
+    # Request should return the cached response
+    response = asyncio.run(client.request("issue", "issue/4000-7", {"field_list": "id,name"}))
+    assert response.from_cache is True
+    assert response.payload["results"] is not None
+    assert response.payload["results"]["id"] == 7
+
+
+def test_resource_isolation_after_throttle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Throttling resource A must not prevent resource B from being used."""
+    client = ComicVineClient("secret", tmp_path)
+    client.throttle_tracker.set_cooldown("issue", time.time() + 300)
+
+    calls: list[str] = []
+
+    def fake_request(endpoint: str, params: object) -> dict[str, object]:
+        calls.append(endpoint)
+        return {"status_code": 1, "results": {"id": 7}}
+
+    monkeypatch.setattr(client, "_request_sync", fake_request)
+
+    # issue is throttled but volume should still work
+    response = asyncio.run(client.fetch_volume(7))
+    assert response.from_cache is False
+    assert "volume" in calls[0]
+    assert client.throttle_tracker.is_throttled("issue")
+    assert not client.throttle_tracker.is_throttled("volume")
+
+
+def test_success_resets_cooldown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A successful request must reset the cooldown for that resource."""
+    client = ComicVineClient("secret", tmp_path)
+    client.throttle_tracker.set_cooldown("issue", time.time() - 100)
+
+    assert not client.throttle_tracker.is_throttled("issue")
+
+    def fake_request(endpoint: str, params: object) -> dict[str, object]:
+        return {"status_code": 1, "results": {"id": 7}}
+
+    monkeypatch.setattr(client, "_request_sync", fake_request)
+    asyncio.run(client.fetch_issue(7))
+
+    assert not client.throttle_tracker.is_throttled("issue")
+
+
+def test_throttle_sets_cooldown_on_request_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """When a request is throttled, the cooldown must be set on the resource."""
+    client = ComicVineClient("secret", tmp_path)
+
+    def rate_limited(request: object, timeout: float) -> FakeUrlResponse:
+        raise FakeHttpErrorWithHeaders(429, {"Retry-After": "120"})
+
+    monkeypatch.setattr("urllib.request.urlopen", rate_limited)
+
+    with pytest.raises(ComicVineRateLimitError):
+        asyncio.run(
+            client.request("issue", "issue/4000-7", {}, refresh=True)
+        )
+    assert client.throttle_tracker.is_throttled("issue")
+    assert client.throttle_tracker.get_cooldown("issue") is not None
+
+
+def test_throttle_no_cached_response_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """When throttled and no cached response exists, the error must be raised."""
+    client = ComicVineClient("secret", tmp_path)
+    client.throttle_tracker.set_cooldown("issue", time.time() + 300)
+
+    with pytest.raises(ComicVineRateLimitError, match="cooldown"):
+        asyncio.run(
+            client.request("issue", "issue/4000-7", {"field_list": "id,name"})
+        )
+
+
+def test_throttle_tracker_persists_state(tmp_path: Path) -> None:
+    """PersistentResourceThrottleTracker must survive serialization and restart."""
+    future = time.time() + 99999.0
+    tracker = PersistentResourceThrottleTracker(tmp_path / "cooldown.json")
+    tracker.set_cooldown("issue", future, retry_after=120.0)
+
+    assert tracker.is_throttled("issue")
+    cooldown = tracker.get_cooldown("issue")
+    assert cooldown is not None
+    assert cooldown.cooldown_until == future
+    assert cooldown.retry_after == 120.0
+
+    tracker.reset("issue")
+    assert not tracker.is_throttled("issue")
+
+
+def test_throttle_tracker_cleanup_expired(tmp_path: Path) -> None:
+    """Cleanup must remove expired cooldown entries."""
+    tracker = PersistentResourceThrottleTracker(tmp_path / "cooldown.json")
+    tracker.set_cooldown("issue", 1.0)
+    tracker.set_cooldown("volume", 9999999999.0)
+    tracker.cleanup()
+
+    assert not tracker.is_throttled("issue")
+    assert tracker.is_throttled("volume")
