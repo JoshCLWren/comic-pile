@@ -275,6 +275,9 @@ def has_stale_expiration_marker(
 ) -> bool:
     """Return whether a PR already has a trusted stale-expiration marker."""
     for comment in comments:
+        # Debug: print the type and structure of comment
+        if not isinstance(comment, dict):
+            continue
         if not comment_is_trusted(comment):
             continue
         body = str(comment.get("body") or "")
