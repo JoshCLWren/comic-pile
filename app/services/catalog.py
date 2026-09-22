@@ -641,7 +641,7 @@ async def preview_series_mapping(
         if _is_special_issue(issue_number):
             classification = "excluded_special"
             counts["excluded_special"] += 1
-        elif _is_conflicting_mapping(issue_info, provider, provider_series_external_id):
+        elif _is_conflicting_mapping(issue_info, provider):
             classification = "needs_review_conflict"
             counts["needs_review_conflict"] += 1
         elif _is_ambiguous(issue_number):
@@ -774,7 +774,7 @@ def _is_exact_match(issue_number: str, origin_issue_number: str) -> bool:
     return _normalize_issue_number(issue_number) == _normalize_issue_number(origin_issue_number)
 
 
-def _is_conflicting_mapping(issue_info: dict, provider: str, series_external_id: str) -> bool:
+def _is_conflicting_mapping(issue_info: dict, provider: str) -> bool:
     """Check if issue has a confirmed mapping that conflicts with the selected series."""
     if issue_info.get("current_mapping_status") != "confirmed":
         return False

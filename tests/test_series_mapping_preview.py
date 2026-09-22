@@ -5,7 +5,7 @@ from httpx import AsyncClient
 from unittest.mock import patch, AsyncMock
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
 
 
 class TestSeriesMappingPreview:
@@ -516,3 +516,74 @@ class TestSeriesMappingPreview:
         data = response.json()
         assert data["scope"]["status"] == "unavailable"
         assert data["scope"]["basis"] == "origin_issue_not_found"
+
+    @pytest.mark.asyncio
+    async def test_preview_series_mapping_local_catalog_path(self, auth_client: AsyncClient, async_db: AsyncSession, sample_data):
+        """Test preview using local catalog when series exists locally."""
+        issue = sample_data["issue"]
+
+        # Create a series in the local catalog
+        series_identity = ExternalIdentity(
+            provider="comicvine",
+            entity_type="series",
+            external_id="20764",
+            external_url="https://comicvine.gamespot.com/amazing-spider-man-1963/4050-20764/",
+            metadata_json={"name": "Amazing Spider-Man (1963)", "publisher": {"name": "Marvel Comics"}},
+        )
+        async_db.add(series_identity)
+        await async_db.flush()
+
+        # Create an external identity for the issue in the local catalog
+        issue_ext_identity = ExternalIdentity(
+            provider="comicvine",
+            entity_type="issue",
+            external_id="12345",
+            external_url="https://comicvine.gamespot.com/issue/4000-12345/",
+            metadata_json={"name": "Amazing Spider-Man #1", "issue_number": "1"},
+        )
+        async_db.add(issue_ext_identity)
+        await async_db.flush()
+
+        # Create issue-external identity mapping
+        issue_mapping = IssueExternalIdentityMapping(
+            issue_id=issue.id,
+            external_identity_id=issue_ext_identity.id,
+            status="confirmed",
+            evidence_source="test",
+            confidence=1.0,
+        )
+        async_db.add(issue_mapping)
+        await async_db.flush()
+
+        # Create a thread-series mapping for the origin issue's thread
+        series_mapping = ThreadExternalSeriesMapping(
+            thread_id=issue.thread_id,
+            external_identity_id=series_identity.id,
+            status="confirmed",
+            evidence_source="test",
+        )
+        async_db.add(series_mapping)
+        await async_db.commit()
+
+        # Mock ComicVine client to return None (local catalog path)
+        with patch("app.services.catalog._get_comicvine_client") as mock_get_client:
+            mock_get_client.return_value = None
+
+            # Make the request
+            response = await auth_client.post(
+                "/api/v1/catalog/series-mappings/preview",
+                json={
+                    "origin_issue_id": issue.id,
+                    "provider": "comicvine",
+                    "provider_series_external_id": "20764"
+                }
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+
+            # Verify scope is available since series has issues in local catalog with thread mapping
+            assert data["scope"]["status"] == "available"
+            assert data["scope"]["series_label"] == "Amazing Spider-Man (1963)"
+            assert data["provider_series"]["id"] == "20764"
+            assert len(data["rows"]) > 0

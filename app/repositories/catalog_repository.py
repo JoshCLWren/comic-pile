@@ -168,6 +168,16 @@ async def list_issue_mappings(
     return list(result.scalars().all())
 
 
+def _extract_publisher_name(metadata_json: dict[str, object] | None) -> str | None:
+    """Extract publisher name from metadata JSON."""
+    if not metadata_json:
+        return None
+    publisher = metadata_json.get("publisher")
+    if isinstance(publisher, dict):
+        return publisher.get("name")
+    return publisher if isinstance(publisher, str) else None
+
+
 async def get_series_with_issues(
     db: AsyncSession,
     *,
@@ -187,7 +197,7 @@ async def get_series_with_issues(
         Tuple of (series_info, issues_with_mappings) where series_info is None
         if not found, and issues_with_mappings contains issue data with mapping status.
     """
-    from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+    from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
     from app.models.issue import Issue
     from app.models.thread import Thread
     
@@ -204,10 +214,10 @@ async def get_series_with_issues(
     if series_identity is None:
         return None, []
     
-    # Get issues that belong to this series from the catalog
-    # Use ThreadExternalSeriesMapping to find threads confirmed for this series
+    # Get issues that belong to this series from the catalog.
+    # Filter threads to those with confirmed series mappings for the specific series.
     issues_result = await db.execute(
-        select(ExternalIdentity, IssueExternalIdentityMapping, Thread)
+        select(ExternalIdentity, IssueExternalIdentityMapping, Thread, ThreadExternalSeriesMapping)
         .join(
             IssueExternalIdentityMapping,
             IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
@@ -220,7 +230,7 @@ async def get_series_with_issues(
             Thread,
             Thread.id == Issue.thread_id,
         )
-        .outerjoin(
+        .join(
             ThreadExternalSeriesMapping,
             ThreadExternalSeriesMapping.thread_id == Thread.id,
         )
@@ -228,11 +238,13 @@ async def get_series_with_issues(
             ExternalIdentity.entity_type == "issue",
             ExternalIdentity.provider == provider.strip().lower(),
             Thread.user_id == user_id,
+            ThreadExternalSeriesMapping.external_identity_id == series_identity.id,
+            ThreadExternalSeriesMapping.status == "confirmed",
         )
     )
     
     issues_with_mappings = []
-    for issue_identity, issue_mapping, thread in issues_result:
+    for issue_identity, issue_mapping, thread, _tsm in issues_result:
         issue_info = {
             "issue_id": issue_mapping.issue_id,
             "issue_number": issue_identity.external_id,
@@ -250,7 +262,7 @@ async def get_series_with_issues(
     series_info = {
         "id": series_identity.external_id,
         "name": series_identity.metadata_json.get("name") if series_identity.metadata_json else None,
-        "publisher": series_identity.metadata_json.get("publisher") if series_identity.metadata_json else None,
+        "publisher": _extract_publisher_name(series_identity.metadata_json),
         "start_year": series_identity.metadata_json.get("start_year"),
         "count_of_issues": series_identity.metadata_json.get("count_of_issues"),
         "site_detail_url": series_identity.external_url,
@@ -305,7 +317,7 @@ async def get_issue_by_id(
     return {
         "issue_id": issue.id,
         "issue_number": issue.issue_number,
-        "title": getattr(issue, "title", None),
+        "title": identity.metadata_json.get("name") if identity and identity.metadata_json else None,
         "thread_id": thread.id,
         "thread_title": thread.title,
         "current_mapping_status": mapping.status if mapping is not None else None,
