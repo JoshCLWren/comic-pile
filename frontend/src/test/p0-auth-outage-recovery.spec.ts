@@ -1,4 +1,4 @@
-import { test, expect } from '../fixtures/auth-fixtures'
+import { test, expect } from './auth-fixtures'
 
 test.describe('Auth Outage Recovery', () => {
   test('reproduces incident: authenticated visit -> auth/me failure -> degraded state -> recovery -> original route', async ({

@@ -1,24 +1,33 @@
-import { test as base, type APIRequestContext } from '@playwright/test'
+import { test as base } from '@playwright/test'
+
+type MockObject = {
+  status: number
+  body: any
+  networkError: string | null
+  pending: boolean
+  name?: string
+  as: (name: string) => MockObject
+  reply: (status: number, body?: any) => MockObject
+  networkErrorMethod: (message: string) => MockObject
+}
 
 type AuthFixtures = {
   mockApi: {
     setupAuthUser: () => Promise<void>
-    get: (path: string) => { as: (name: string) => any; reply: (status: number, body?: any) => any; networkError: (message: string) => any }
-    post: (path: string) => { as: (name: string) => any; reply: (status: number, body?: any) => any }
+    get: (path: string) => MockObject
+    post: (path: string) => MockObject
   }
 }
 
 export const test = base.extend<AuthFixtures>({
   mockApi: async ({ page }, use) => {
-    const apiMocks = new Map<string, any>()
+    const apiMocks = new Map<string, MockObject>()
     
-    // Setup API mocking
     await page.route('**/api/**', async (route) => {
       const request = route.request()
       const url = request.url()
       const method = request.method()
       
-      // Find matching mock
       const mockKey = `${method}:${url}`
       const mock = apiMocks.get(mockKey)
       
@@ -34,14 +43,12 @@ export const test = base.extend<AuthFixtures>({
           })
         }
       } else {
-        // If no mock found, continue with the request
         await route.continue()
       }
     })
 
     const mockApi = {
       setupAuthUser: async () => {
-        // Setup a mock authenticated user
         await mockApi.post('/api/v1/auth/login')
           .as('login')
           .reply(200, {
@@ -63,9 +70,10 @@ export const test = base.extend<AuthFixtures>({
 
       get: (path: string) => {
         const mockKey = `GET:${path}`
-        const mock = {
+        const mock: MockObject = {
           status: 200,
           body: null,
+          networkError: null,
           pending: true,
           as: (name: string) => {
             mock.name = name
@@ -77,8 +85,8 @@ export const test = base.extend<AuthFixtures>({
             apiMocks.set(mockKey, mock)
             return mock
           },
-          networkError: (message: string) => {
-            (mock as any).networkError = message
+          networkErrorMethod: (message: string) => {
+            mock.networkError = message
             apiMocks.set(mockKey, mock)
             return mock
           }
@@ -88,9 +96,10 @@ export const test = base.extend<AuthFixtures>({
 
       post: (path: string) => {
         const mockKey = `POST:${path}`
-        const mock = {
+        const mock: MockObject = {
           status: 200,
           body: null,
+          networkError: null,
           pending: true,
           as: (name: string) => {
             mock.name = name
@@ -101,7 +110,8 @@ export const test = base.extend<AuthFixtures>({
             mock.body = body
             apiMocks.set(mockKey, mock)
             return mock
-          }
+          },
+          networkErrorMethod: () => mock
         }
         return mock
       }
