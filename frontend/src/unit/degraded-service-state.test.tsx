@@ -1,6 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { DegradedServiceState, ServiceUnavailableShell } from '../components/DegradedServiceState'
-import { AuthStatus } from '../services/authState'
 
 describe('DegradedServiceState', () => {
   const mockOnRetry = vi.fn()

@@ -4,7 +4,6 @@ import {
   isNetworkError, 
   createAuthError,
   calculateRetryDelay,
-  type AuthError 
 } from '../services/authState'
 
 describe('Auth State Service', () => {

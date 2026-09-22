@@ -330,11 +330,11 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           {visibleSecondaryNavItems.map((item) => renderNavItem(item, isActive(item.path), true))}
         </div>
         <div className={`border-t border-[var(--glass-border)] ${collapsed ? 'px-2 py-3' : 'px-3 py-3'}`}>
-{collapsed ? (
-             <div className="flex flex-col items-center gap-2">
-               {authState.isLoading ? (
-                 <span className="text-xs font-medium text-[var(--theme-text-muted)]">…</span>
-) : authState.user?.username ? (
+          {collapsed ? (
+            <div className="flex flex-col items-center gap-2">
+              {authState.isLoading ? (
+                <span className="text-xs font-medium text-[var(--theme-text-muted)]">…</span>
+              ) : authState.user?.username ? (
                 <span
                   className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-xs font-bold uppercase text-[var(--theme-text-primary)]"
                   title={authState.user?.username}
@@ -365,12 +365,12 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
                     {option.id === 'classic' ? 'C' : option.id === 'ink-gold' ? 'IG' : 'CC'}
                   </button>
                 ))}
-</div>
-               {authState.status === 'authenticated' && (
-                 <div className="flex w-8">
-                   <BugReportButton onSubmit={onBugReportSubmit} variant="sidebar" collapsed />
-                 </div>
-               )}
+              </div>
+              {authState.status === 'authenticated' && (
+                <div className="flex w-8">
+                  <BugReportButton onSubmit={onBugReportSubmit} variant="sidebar" collapsed />
+                </div>
+              )}
               <button
                 type="button"
                 onClick={handleLogout}
@@ -386,9 +386,9 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
             </div>
           ) : (
             <>
-{authState.isLoading ? (
-                 <span className="text-xs font-medium text-[var(--theme-text-muted)]">Loading...</span>
-               ) : authState.user?.username ? (
+              {authState.isLoading ? (
+                <span className="text-xs font-medium text-[var(--theme-text-muted)]">Loading...</span>
+              ) : authState.user?.username ? (
                 <span className="block truncate text-xs font-medium text-[var(--theme-text-muted)]">{authState.user?.username}</span>
               ) : null}
               <div
@@ -414,11 +414,11 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
                   </button>
                 ))}
               </div>
-{authState.status === 'authenticated' && (
-                 <div className="mt-2 w-full">
-                   <BugReportButton onSubmit={onBugReportSubmit} variant="sidebar" />
-                 </div>
-               )}
+              {authState.status === 'authenticated' && (
+                <div className="mt-2 w-full">
+                  <BugReportButton onSubmit={onBugReportSubmit} variant="sidebar" />
+                </div>
+              )}
               <button onClick={handleLogout} className="mt-2 w-full px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors" aria-label="Log out">
                 Log Out
               </button>
