@@ -20,40 +20,6 @@ from sqlalchemy import exc as sqlalchemy_exc
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import (
-    admin,
-    analytics,
-    auth,
-    bug_report,
-    catalog,
-    cbl_plan_adoption,
-    comicvine_resolution,
-    creators,
-    debug,
-    dependency,
-    health,
-    identity_inbox,
-    images,
-    issue,
-    issue_identity,
-    metrics,
-    ping,
-    performance_metric,
-    queue,
-    rate,
-    reading_mode,
-    reading_orders,
-    recommendation_diagnostics,
-    roll,
-    session,
-    snooze,
-    taste,
-    thread,
-    traffic_metrics,
-    undo,
-    preferences,
-    taste_signal,
-)
 from app.cache import cache
 from app.config import get_app_settings, get_database_settings, get_redis_settings
 from app.csrf import (
@@ -131,6 +97,187 @@ logger.info(
     "Application database configured",
     extra={"database": safe_connection_metadata(_db_settings.database_url)},
 )
+
+
+def _register_lightweight_routers(app: FastAPI) -> None:
+    """Register lightweight routers that are always needed.
+
+    These routers have zero or negligible import overhead and are needed for
+    basic functionality and cold-start mitigation.
+    """
+    # Lightweight ping endpoint for cold-start mitigation (issue #1389).
+    # Zero database/ORM overhead; keeps Vercel serverless functions warm.
+    from app.api import ping
+
+    app.include_router(ping.router, prefix="/api", tags=["ping"])
+
+    # Expose the metrics router in every environment so production performance
+    # tracking (issue #834) and future regression checks can read startup
+    # telemetry. It returns only process startup epoch and duration.
+    from app.api import metrics
+
+    app.include_router(metrics.router, prefix="/api", tags=["metrics"])
+    app.include_router(metrics.router, prefix="/api/v1", tags=["metrics"])
+
+
+def _register_heavy_routers(app: FastAPI) -> None:
+    """Register routers that may pull in heavier optional dependencies.
+
+    These are moved behind lazy imports so a cold start that only serves /api/ping
+    does not pay the cost of image-processing or performance-telemetry stacks.
+    """
+    # Performance metrics collection and query (issue #834).
+    # Records and exposes production startup and page-load timing data
+    # so regressions can be tied to deployments. Versioned-surface only:
+    # new client resources must not introduce bare /api/* routes.
+    from app.api import performance_metric
+
+    app.include_router(
+        performance_metric.router,
+        prefix="/api/v1/performance-metrics",
+        tags=["performance-metrics"],
+    )
+
+    # Edge-cacheable remote cover image optimizer. Unauthenticated by design
+    # (<img> tags cannot send auth); strictly allowlisted upstreams only.
+    from app.api import images
+
+    app.include_router(images.router, tags=["images"])
+
+
+def _register_core_routers(app: FastAPI) -> None:
+    """Register core API routers that are always needed.
+
+    These imports are deferred to function scope so they are not executed at
+    module load time, reducing the cold-start import graph.
+    """
+    # API route prefix convention:
+
+    # - Every domain resource is reachable under the versioned /api/v1/* surface.
+    # - Legacy resources remain available under /api/* as compatibility aliases.
+    # - Retained auth, session, snooze, undo, roll, and rating resources have
+    #   explicit v1 aliases while legacy paths remain compatibility surfaces.
+    # - Admin (internal ops), bug reports, metrics, and non-production debug
+    #   tooling expose canonical /api/v1 twins of their legacy mounts.
+    # - Ping is operational telemetry exempt from versioning; test helpers stay
+    #   test-only tooling under bare /api/test/* in test environments.
+    # Add new client resources under /api/v1/*; do not introduce new bare
+    # /api/* routes.
+    from app.api import admin
+    from app.api import analytics
+    from app.api import auth
+    from app.api import bug_report
+    from app.api import catalog
+    from app.api import cbl_plan_adoption
+    from app.api import comicvine_resolution
+    from app.api import creators
+    from app.api import dependency
+    from app.api import health
+    from app.api import identity_inbox
+    from app.api import issue
+    from app.api import issue_identity
+    from app.api import preferences
+    from app.api import queue
+    from app.api import rate
+    from app.api import reading_mode
+    from app.api import reading_orders
+    from app.api import recommendation_diagnostics
+    from app.api import roll
+    from app.api import session
+    from app.api import snooze
+    from app.api import taste
+    from app.api import taste_signal
+    from app.api import thread
+    from app.api import traffic_metrics
+    from app.api import undo
+
+    app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
+    app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
+    # Roll v2: versioned-only, no unversioned alias per #2716
+    app.include_router(roll.v2_router, prefix="/api/v2/roll", tags=["roll"])
+    app.include_router(admin.router, prefix="/api", tags=["admin"])
+    app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
+    app.include_router(analytics.router, prefix="/api", tags=["analytics"])
+    app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
+    app.include_router(health.router, prefix="/api", tags=["health"])
+    app.include_router(health.router, prefix="/api/v1", tags=["health"])
+    app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
+    app.include_router(bug_report.router, prefix="/api/v1/bug-reports", tags=["bug-reports"])
+    app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+    app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+    app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
+    app.include_router(thread.router, prefix="/api/v1/threads", tags=["threads"])
+    # New client resources (e.g. paginated completed threads for issue #2567)
+    # are versioned-only: no bare /api/* twin.
+    app.include_router(thread.v1_router, prefix="/api/v1/threads", tags=["threads"])
+    app.include_router(issue.router, tags=["issues"])
+    app.include_router(comicvine_resolution.router, tags=["comicvine-resolution"])
+    app.include_router(creators.router, tags=["creators"])
+    app.include_router(taste.router, prefix="/api/v1", tags=["taste"])
+    app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
+    app.include_router(rate.router, prefix="/api/v1/rate", tags=["rate"])
+    app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
+    app.include_router(queue.router, prefix="/api/v1/queue", tags=["queue"])
+    app.include_router(reading_orders.router, tags=["reading-orders"])
+    app.include_router(
+        recommendation_diagnostics.router, prefix="/api", tags=["recommendations"]
+    )
+    app.include_router(session.router, prefix="/api/sessions", tags=["session"])
+    app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
+    app.include_router(reading_mode.router, tags=["reading-mode"])
+    app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
+    app.include_router(snooze.router, prefix="/api/v1/snooze", tags=["snooze"])
+    app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
+    app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
+    app.include_router(preferences.router, prefix="/api/v1", tags=["users"])
+    app.include_router(taste_signal.router, prefix="/api/v1", tags=["taste-signals"])
+    app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
+    app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
+    app.include_router(catalog.router, tags=["catalog"])
+    app.include_router(identity_inbox.router, tags=["identity-inbox"])
+    app.include_router(issue_identity.router, tags=["issue-identity"])
+    app.include_router(cbl_plan_adoption.router, tags=["cbl-adoption-commit"])
+
+
+def _register_debug_routers(app: FastAPI, environment: str) -> None:
+    """Register debug routers in non-production environments.
+
+    Args:
+        app: The FastAPI application instance.
+        environment: Current application environment string.
+    """
+    if environment != "production":
+        from app.api import debug
+
+        app.include_router(debug.router, prefix="/api", tags=["debug"])
+        app.include_router(debug.router, prefix="/api/v1", tags=["debug"])
+
+
+def _register_test_routers(app: FastAPI) -> None:
+    """Register test-helper routers when running in the test environment."""
+    if os.getenv("TEST_ENVIRONMENT") == "true":
+        from app.api.test_helpers import router as test_helpers_router
+
+        app.include_router(test_helpers_router, prefix="/api", tags=["test"])
+
+
+def register_all_routers(app: FastAPI, environment: str) -> None:
+    """Register all routers in optimized order.
+
+    Router modules are imported lazily inside each sub-function so that a cold
+    ping invocation does not load the full import graph. Registration order:
+    lightweight (ping, metrics) -> core API routers -> heavy/optional routers
+    -> environment-specific debug and test routers.
+
+    Args:
+        app: The FastAPI application instance.
+        environment: Current application environment string.
+    """
+    _register_lightweight_routers(app)
+    _register_core_routers(app)
+    _register_heavy_routers(app)
+    _register_debug_routers(app, environment)
+    _register_test_routers(app)
 
 
 def create_app(*, serve_frontend: bool = True) -> FastAPI:
@@ -213,101 +360,14 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
         return await call_next(request)
 
-    # Expose the metrics router in every environment so production performance
-    # tracking (issue #834) and future regression checks can read startup
-    # telemetry. It returns only process startup epoch and duration.
-    app.include_router(metrics.router, prefix="/api", tags=["metrics"])
-    app.include_router(metrics.router, prefix="/api/v1", tags=["metrics"])
-
-    # Lightweight ping endpoint for cold-start mitigation (issue #1389).
-    # Zero database/ORM overhead; keeps Vercel serverless functions warm.
-    app.include_router(ping.router, prefix="/api", tags=["ping"])
-
-    # Performance metrics collection and query (issue #834).
-    # Records and exposes production startup and page-load timing data
-    # so regressions can be tied to deployments. Versioned-surface only:
-    # new client resources must not introduce bare /api/* routes.
-    app.include_router(
-        performance_metric.router,
-        prefix="/api/v1/performance-metrics",
-        tags=["performance-metrics"],
-    )
-
-    # Edge-cacheable remote cover image optimizer. Unauthenticated by design
-    # (<img> tags cannot send auth); strictly allowlisted upstreams only.
-    app.include_router(images.router, tags=["images"])
+    # Register all routers with deferred imports to reduce cold-start cost.
+    register_all_routers(app, app_settings.environment)
 
     # Error-only request logging (body redaction + environment-aware sanitization).
     add_request_logging_middleware(app, app_settings.environment)
 
     # Global, HTTP, and validation exception handlers (environment-aware logging).
     register_exception_handlers(app, app_settings)
-
-    # API route prefix convention:
-
-    # - Every domain resource is reachable under the versioned /api/v1/* surface.
-    # - Legacy resources remain available under /api/* as compatibility aliases.
-    # - Retained auth, session, snooze, undo, roll, and rating resources have
-    #   explicit v1 aliases while legacy paths remain compatibility surfaces.
-    # - Admin (internal ops), bug reports, metrics, and non-production debug
-    #   tooling expose canonical /api/v1 twins of their legacy mounts.
-    # - Ping is operational telemetry exempt from versioning; test helpers stay
-    #   test-only tooling under bare /api/test/* in test environments.
-    # Add new client resources under /api/v1/*; do not introduce new bare
-    # /api/* routes.
-    app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
-    app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
-    # Roll v2: versioned-only, no unversioned alias per #2716
-    app.include_router(roll.v2_router, prefix="/api/v2/roll", tags=["roll"])
-    app.include_router(admin.router, prefix="/api", tags=["admin"])
-    app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
-    app.include_router(analytics.router, prefix="/api", tags=["analytics"])
-    app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
-    app.include_router(health.router, prefix="/api", tags=["health"])
-    app.include_router(health.router, prefix="/api/v1", tags=["health"])
-    app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
-    app.include_router(bug_report.router, prefix="/api/v1/bug-reports", tags=["bug-reports"])
-    app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-    app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-    app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
-    app.include_router(thread.router, prefix="/api/v1/threads", tags=["threads"])
-    # New client resources (e.g. paginated completed threads for issue #2567)
-    # are versioned-only: no bare /api/* twin.
-    app.include_router(thread.v1_router, prefix="/api/v1/threads", tags=["threads"])
-    if app_settings.environment != "production":
-        app.include_router(debug.router, prefix="/api", tags=["debug"])
-        app.include_router(debug.router, prefix="/api/v1", tags=["debug"])
-    app.include_router(issue.router, tags=["issues"])
-    app.include_router(comicvine_resolution.router, tags=["comicvine-resolution"])
-    app.include_router(creators.router, tags=["creators"])
-    app.include_router(taste.router, prefix="/api/v1", tags=["taste"])
-    app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
-    app.include_router(rate.router, prefix="/api/v1/rate", tags=["rate"])
-    app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
-    app.include_router(queue.router, prefix="/api/v1/queue", tags=["queue"])
-    app.include_router(reading_orders.router, tags=["reading-orders"])
-    app.include_router(
-        recommendation_diagnostics.router, prefix="/api", tags=["recommendations"]
-    )
-    app.include_router(session.router, prefix="/api/sessions", tags=["session"])
-    app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
-    app.include_router(reading_mode.router, tags=["reading-mode"])
-    app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
-    app.include_router(snooze.router, prefix="/api/v1/snooze", tags=["snooze"])
-    app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
-    app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
-    app.include_router(preferences.router, prefix="/api/v1", tags=["users"])
-    app.include_router(taste_signal.router, prefix="/api/v1", tags=["taste-signals"])
-    app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
-    app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
-    app.include_router(catalog.router, tags=["catalog"])
-    app.include_router(identity_inbox.router, tags=["identity-inbox"])
-    app.include_router(issue_identity.router, tags=["issue-identity"])
-    app.include_router(cbl_plan_adoption.router, tags=["cbl-adoption-commit"])
-    if os.getenv("TEST_ENVIRONMENT") == "true":
-        from app.api.test_helpers import router as test_helpers_router
-
-        app.include_router(test_helpers_router, prefix="/api", tags=["test"])
 
     def _assert_production_frontend_assets() -> None:
         """Ensure required frontend artifacts exist in production.
