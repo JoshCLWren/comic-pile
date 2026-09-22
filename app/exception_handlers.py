@@ -45,12 +45,12 @@ def register_exception_handlers(app: FastAPI, app_settings: AppSettings) -> None
         """
         # Check if this is a database-related error that should be 503
         exc_type = type(exc).__name__
-        is_db_error = (
-            "DBAPIError" in exc_type
-            or "TimeoutError" in exc_type
-            or "OperationalError" in exc_type
-            or "InterfaceError" in exc_type
-        )
+        mro_names = [c.__name__ for c in type(exc).__mro__]
+        exc_names = {exc_type, *mro_names}
+        is_db_error = any(
+            name in exc_names
+            for name in ("DBAPIError", "OperationalError", "InterfaceError", "InternalError", "DisconnectionError")
+        ) or any("Timeout" in name for name in exc_names) or "asyncpg" in type(exc).__module__
 
         if is_db_error:
             status_code = status.HTTP_503_SERVICE_UNAVAILABLE
@@ -70,7 +70,7 @@ def register_exception_handlers(app: FastAPI, app_settings: AppSettings) -> None
             "client_host": request.client.host if request.client else None,
             "user_agent": request.headers.get("user-agent"),
             "headers": redact_headers(dict(request.headers)),
-            "level": "ERROR" if is_db_error else "ERROR",
+            "level": "ERROR",
         }
 
         if environment != "production":

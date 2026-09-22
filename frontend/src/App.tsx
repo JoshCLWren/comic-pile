@@ -1,6 +1,6 @@
 import { Suspense, createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from './query/queryClient'
 import { lazyRoute } from './routes/routeModules'
@@ -16,8 +16,7 @@ import api, {
   refreshSession,
   setAccessToken,
 } from './services/api'
-import { isDefinitiveAuthenticationFailure } from './services/authFailure'
-import { isServiceUnavailableError } from './services/authFailure'
+import { isDefinitiveAuthenticationFailure, isServiceUnavailableError } from './services/authFailure'
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import { usePingHeartbeat } from './hooks/usePingHeartbeat'
@@ -87,8 +86,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isServiceUnavailable, setIsServiceUnavailable] = useState(false)
   const [user, setUser] = useState<AuthUser | null>(null)
   const recoveryPromise = useRef<Promise<void> | null>(null)
-  const navigate = useNavigate()
-  const location = useLocation()
 
   const markDefinitivelyUnauthenticated = useCallback(() => {
     clearAccessToken()
@@ -115,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           })
           setUser(response)
           setIsAuthenticated(true)
+          setIsServiceUnavailable(false)
         } catch (error) {
           if (isDefinitiveAuthenticationFailure(error)) {
             markDefinitivelyUnauthenticated()
@@ -139,7 +137,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       setUser(response)
       setIsAuthenticated(true)
+      setIsServiceUnavailable(false)
     } catch (error) {
+      if (isServiceUnavailableError(error)) {
+        setIsServiceUnavailable(true)
+        throw error
+      }
       if (isDefinitiveAuthenticationFailure(error)) {
         // The persistent session can usually be renewed silently with the
         // refresh cookie. Only treat the user as logged out when that also fails.
@@ -149,6 +152,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (recoveryError) {
           if (isDefinitiveAuthenticationFailure(recoveryError)) {
             markDefinitivelyUnauthenticated()
+          } else if (isServiceUnavailableError(recoveryError)) {
+            setIsServiceUnavailable(true)
           }
         }
       }
@@ -160,28 +165,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let isMounted = true
     let retryTimer: number | undefined
     const authChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('comic-pile-auth') : null
-
-    // Periodic retry loop when service is temporarily unavailable
-    const unavailableInterval = setInterval(async () => {
-      if (!isMounted || !isServiceUnavailable) {
-        clearInterval(unavailableInterval)
-        return
-      }
-      try {
-        await validateSession()
-        if (isMounted && isServiceUnavailable) {
-          setIsServiceUnavailable(false)
-          if (location.state?.from) {
-            navigate(location.state.from.pathname, { replace: true })
-          } else {
-            navigate('/', { replace: true })
-          }
-        }
-      } catch (_error) {
-        // Ignore errors during retry, keep polling
-      }
-    }, 5000)
-
     const validateSession = async () => {
       const isPublicAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register'
       if (!getAccessToken() && !window.__COMIC_PILE_ACCESS_TOKEN && isPublicAuthPage) {
@@ -205,6 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isMounted) {
           setUser(response)
           setIsAuthenticated(true)
+          setIsServiceUnavailable(false)
         }
         if (isMounted) {
           setIsLoading(false)
@@ -233,11 +217,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else if (isServiceUnavailableError(error)) {
           // The database backend is temporarily unavailable. Keep the user's
           // authenticated session visible and show a degraded state rather than
-          // forcing a login loop.
+          // forcing a login loop. Retry automatically so recovery is detected.
           setIsServiceUnavailable(true)
           if (isMounted) {
             setIsLoading(false)
           }
+          retryTimer = window.setTimeout(() => {
+            void validateSession()
+          }, 5000)
           return
         }
 
@@ -263,13 +250,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       isMounted = false
-      clearInterval(unavailableInterval)
       if (retryTimer !== undefined) {
         window.clearTimeout(retryTimer)
       }
       authChannel?.close()
     }
-  }, [isServiceUnavailable, location.state?.from, navigate, markDefinitivelyUnauthenticated, recoverSession])
+  }, [markDefinitivelyUnauthenticated, recoverSession])
 
   const login = async (accessToken: string) => {
     setAccessToken(accessToken)
