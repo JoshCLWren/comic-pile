@@ -43,5 +43,5 @@ class DatabaseUnavailableError(Exception):
         return {
             "error_class": self.error_class,
             "sqlstate": self.sqlstate,
-            "message": str(self),
+            "error_message": str(self),
         }
