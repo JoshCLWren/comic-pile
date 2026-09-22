@@ -155,7 +155,9 @@ async def test_search_series_passes_offset_and_reports_paging_metadata() -> None
 
     response = await search_comicvine_series(client, "Superman", limit=10, offset=10)
 
-    assert client.requests[0]["offset"] == 10
+    # Verify ComicVine API receives page=11 (1-based) instead of offset=10 (0-based)
+    assert client.requests[0]["page"] == 11
+    assert "offset" not in client.requests[0]
     assert client.requests[0]["limit"] == 10
     assert response.offset == 10
     assert response.limit == 10
@@ -189,10 +191,78 @@ async def test_search_series_clamps_negative_offset_and_limit() -> None:
 
     response = await search_comicvine_series(client, "Spider-Man", limit=-5, offset=-3)
 
-    assert client.requests[0]["offset"] == 0
+    # Verify ComicVine API receives page=1 (1-based) instead of offset=0 (0-based)
+    assert client.requests[0]["page"] == 1
+    assert "offset" not in client.requests[0]
     assert client.requests[0]["limit"] == 1
     assert response.offset == 0
     assert response.limit == 1
+
+
+@pytest.mark.asyncio
+async def test_search_series_uses_page_parameter_instead_of_offset() -> None:
+    """ComicVine search API should receive page (1-based) instead of offset (0-based)."""
+    client = FakeSearchClient(
+        payload={
+            "results": [
+                {"id": 1000 + n, "name": f"Page 1 Series {n}"} for n in range(10)
+            ],
+            "number_of_total_results": 25,
+        }
+    )
+
+    response = await search_comicvine_series(client, "Batman", limit=10, offset=10)
+
+    # Verify ComicVine API receives page=11 (1-based) instead of offset=10 (0-based)
+    assert client.requests[0]["page"] == 11
+    assert "offset" not in client.requests[0]
+    assert client.requests[0]["limit"] == 10
+    assert response.offset == 10
+    assert response.limit == 10
+    assert response.total_available == 25
+    assert response.has_more is True
+    assert response.next_offset == 20
+
+
+@pytest.mark.asyncio
+async def test_search_series_different_pages_return_different_results() -> None:
+    """Load more should append new comicvine_volume_id IDs, not repeat page 1 results."""
+    page1_client = FakeSearchClient(
+        payload={
+            "results": [
+                {"id": 1000 + n, "name": f"Series {n}"} for n in range(10)
+            ],
+            "number_of_total_results": 25,
+        }
+    )
+    
+    page2_client = FakeSearchClient(
+        payload={
+            "results": [
+                {"id": 2000 + n, "name": f"Series {n}"} for n in range(10)
+            ],
+            "number_of_total_results": 25,
+        }
+    )
+
+    # First page (offset=0 -> page=1)
+    response1 = await search_comicvine_series(page1_client, "Ultimate Spider-Man", limit=10, offset=0)
+    
+    # Second page (offset=10 -> page=11)  
+    response2 = await search_comicvine_series(page2_client, "Ultimate Spider-Man", limit=10, offset=10)
+
+    # Verify different pages return different IDs
+    page1_ids = {result.comicvine_volume_id for result in response1.results}
+    page2_ids = {result.comicvine_volume_id for result in response2.results}
+    
+    assert page1_ids.isdisjoint(page2_ids), "Page 1 and Page 2 should have different volume IDs"
+    assert min(page2_ids) > max(page1_ids), "Page 2 IDs should be higher than Page 1 IDs"
+    
+    # Verify pagination metadata works correctly
+    assert response1.has_more is True
+    assert response1.next_offset == 10
+    assert response2.has_more is True
+    assert response2.next_offset == 20
 
 
 @pytest.mark.asyncio

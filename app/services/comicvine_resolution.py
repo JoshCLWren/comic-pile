@@ -76,22 +76,24 @@ async def search_comicvine_series(
 ) -> ComicVineSeriesSearchResponse:
     """Search ComicVine volumes/series by title.
 
-    Uses ComicVine offset semantics so a caller can page through more than
-    the first page without discarding earlier results. The response exposes
-    ``offset``, ``limit``, ``has_more``, and ``next_offset`` so the client can
-    render a bounded load-more contract instead of dead-ending at page one.
+    Uses ComicVine page semantics internally (1-based) while maintaining offset-based
+    API compatibility for callers. The response exposes ``offset``, ``limit``, 
+    ``has_more``, and ``next_offset`` so the client can render a bounded load-more 
+    contract instead of dead-ending at page one.
 
     Args:
         client: Optional live ComicVine client. When ``None``, returns empty results.
         query: Search query string.
         limit: Maximum results to return (1-100).
-        offset: Zero-based provider offset for the requested page.
+        offset: Zero-based caller offset for the requested page.
 
     Returns:
         Series search results with paging metadata.
     """
     clamped_limit = max(1, min(limit, 100))
     clamped_offset = max(0, offset)
+    # Convert 0-based offset to 1-based page for ComicVine API
+    page = clamped_offset + 1
     if client is None or not query.strip():
         return ComicVineSeriesSearchResponse(
             query=query,
@@ -110,7 +112,7 @@ async def search_comicvine_series(
             "query": query,
             "resources": "volume",
             "limit": clamped_limit,
-            "offset": clamped_offset,
+            "page": page,
             "field_list": "id,name,publisher,start_year,count_of_issues,site_detail_url,image",
         },
     )
