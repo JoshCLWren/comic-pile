@@ -527,7 +527,7 @@ class ComicVineBackfillOperator:
             db,
             provider="comicvine",
             entity_type="issue",
-            external_id=str(candidate.issue_id),
+            external_id=f"4000-{candidate.issue_id}",
             external_url=f"https://comicvine.gamespot.com/issue/4000-{candidate.issue_id}/",
             metadata_json={
                 "volume_id": candidate.volume_id,

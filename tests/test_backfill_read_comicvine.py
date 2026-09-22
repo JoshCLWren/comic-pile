@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.external_identity import ExternalIdentity
 from app.models.issue import Issue
+from app.models.thread import Thread
 from comic_pile.comicvine_identity_repair import (
     CandidateScore,
     ComicVineCandidate,
@@ -74,7 +75,9 @@ def sample_external_identity() -> ExternalIdentity:
 async def mock_db_session() -> AsyncMock:
     """Create a mock database session for testing."""
     mock_session = AsyncMock(spec=AsyncSession)
-    # Create a proper async result mock
+    mock_thread = Mock(spec=Thread)
+    mock_thread.title = "Test Title"
+    mock_session.get = AsyncMock(return_value=mock_thread)
     mock_result = MagicMock()
     mock_result.scalar_one_or_none = Mock(return_value=None)
     mock_result.scalars = Mock(return_value=MagicMock(all=Mock(return_value=[])))
