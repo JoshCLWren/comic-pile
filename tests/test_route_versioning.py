@@ -238,6 +238,8 @@ def test_no_new_bare_api_client_routes() -> None:
             continue
         if path.startswith("/api/v1/"):
             continue
+        if path.startswith("/api/v2/"):
+            continue
         if path in _BARE_API_EXCEPTIONS:
             continue
         assert path in grandfathered_bare_api, (
