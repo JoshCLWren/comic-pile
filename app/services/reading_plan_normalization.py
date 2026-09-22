@@ -165,7 +165,9 @@ async def rebuild_plan_membership(
             plan_source_id=snapshot_ids[raw_path],
             source_position=position,
         )
-        for occurrence_id, raw_path, position in sorted(placement_keys)
+        for occurrence_id, raw_path, position in sorted(
+            placement_keys, key=lambda key: (key[0], key[1], key[2] is None, key[2] or 0)
+        )
     ]
     if placements:
         await reading_plan_repository.add_plan_source_placements(

@@ -519,6 +519,7 @@ async def test_membership_rebuild_keeps_distinct_progress_with_duplicates(
             ref_id=issue.id,
             lane_id="main",
             position=0,
+            convergence_gate=[],
         ),
         ContinuityPlanNode(
             id="recap",
@@ -526,6 +527,7 @@ async def test_membership_rebuild_keeps_distinct_progress_with_duplicates(
             ref_id=issue.id,
             lane_id="main",
             position=1,
+            convergence_gate=[],
         ),
     ]
     await reading_plan_normalization.rebuild_plan_membership(
