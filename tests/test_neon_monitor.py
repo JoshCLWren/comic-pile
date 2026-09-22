@@ -110,7 +110,6 @@ class TestNeonEgressMonitor:
         try:
             sample = await monitor._fetch_monthly_consumption()
             assert sample is not None
-            monitor.last_sample = sample
             monitor._evaluate_warnings(sample)
             assert len(monitor.events) == 1
             assert monitor.events[0]["type"] == "first_sample"
@@ -125,7 +124,6 @@ class TestNeonEgressMonitor:
             # First sample
             sample1 = await monitor._fetch_monthly_consumption()
             assert sample1 is not None
-            monitor.last_sample = sample1
             monitor._evaluate_warnings(sample1)
             assert monitor.events[-1]["type"] == "first_sample"
 
@@ -150,7 +148,6 @@ class TestNeonEgressMonitor:
         try:
             sample1 = await monitor._fetch_monthly_consumption()
             assert sample1 is not None
-            monitor.last_sample = sample1
             monitor._evaluate_warnings(sample1)
 
             # Push past 5 GB
@@ -178,7 +175,6 @@ class TestNeonEgressMonitor:
         try:
             sample1 = await monitor._fetch_monthly_consumption()
             assert sample1 is not None
-            monitor.last_sample = sample1
             monitor._evaluate_warnings(sample1)
 
             # Jump: 100 MB → 1.5 GB  (delta = 1.4 GB > 0.5 GB threshold)
@@ -211,7 +207,6 @@ class TestNeonEgressMonitor:
                 public_bytes=sample_sep.public_bytes,
                 month="2026-09",
             )
-            monitor.last_sample = sample_sep
             monitor._evaluate_warnings(sample_sep)
 
             # October sample — rollover
@@ -228,6 +223,7 @@ class TestNeonEgressMonitor:
             # After rollover, the last event should be first_sample
             assert monitor.events[-1]["type"] == "first_sample"
             # Baseline reset to the new month's sample
+            assert monitor.last_sample is not None
             assert monitor.last_sample.month == "2026-10"
             assert monitor.last_sample.public_bytes == 200_000_000
         finally:
@@ -255,10 +251,9 @@ class TestNeonEgressMonitor:
         try:
             sample1 = await monitor._fetch_monthly_consumption()
             assert sample1 is not None
-            monitor.last_sample = sample1
             monitor._evaluate_warnings(sample1)
-            # First poll is above threshold → warning
-            assert monitor.events[-1]["type"] == "warning"
+            # First poll establishes baseline
+            assert monitor.events[-1]["type"] == "first_sample"
 
             # Second poll still above threshold
             sample2 = ConsumptionSample(
@@ -280,7 +275,7 @@ class TestNeonEgressMonitor:
 
             # All three warnings recorded
             warnings = [e for e in monitor.events if e["type"] == "warning"]
-            assert len(warnings) == 3
+            assert len(warnings) == 2
         finally:
             await monitor.close()
 

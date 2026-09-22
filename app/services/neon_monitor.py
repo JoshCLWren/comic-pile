@@ -149,8 +149,8 @@ class NeonEgressMonitor:
     def _evaluate_warnings(self, sample: ConsumptionSample) -> None:
         """Determine if any thresholds are exceeded and log the event."""
         last = self.last_sample
-        if last is None or sample is last:
-            # First sample or identical resample — establish baseline
+        if last is None:
+            # First sample, nothing to compare
             self._log_event("first_sample", sample)
             self.last_sample = sample
             return
