@@ -24,11 +24,13 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import Literal, TypedDict
 
-from sqlalchemy import select
+from sqlalchemy import String, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.comicvine_hydration import hydrate_issue
+from app.external_identities import upsert_external_identity
 from app.models.external_identity import (
     ExternalIdentity,
     IssueExternalIdentityMapping,
@@ -36,7 +38,9 @@ from app.models.external_identity import (
 )
 from app.models.issue import Issue
 from app.models.thread import Thread
+from comic_pile.comicvine_identity_repair import ComicVineRepairContext
 from comic_pile.comicvine_provider import ComicVineClient, ComicVineError, ComicVineRateLimitError
+from comic_pile.comicvine_repair_pipeline import repair_identity
 from comic_pile.local_comicvine import LocalComicVineSnapshot
 
 SessionFactory = Callable[[], AbstractAsyncContextManager[AsyncSession]]
@@ -46,6 +50,53 @@ _CREATOR_RESOURCE = "issue"
 
 _THROTTLE_BASE_SECONDS = 60.0
 _THROTTLE_MAX_SECONDS = 3600.0
+
+
+def _normalize_issue_label(value: object) -> str:
+    """Normalize an issue number or human label for comparison.
+
+    Args:
+        value: Raw issue label from ComicPile or provider metadata.
+
+    Returns:
+        Lowercased, NFKC-normalized label with any leading hash removed.
+    """
+    if value is None:
+        return ""
+    return " ".join(str(value).strip().casefold().removeprefix("#").strip().split())
+
+
+def _provider_issue_id(external_id: str) -> int | None:
+    """Extract the numeric ComicVine issue ID from a stored external ID.
+
+    Args:
+        external_id: Stored provider external ID, optionally ``4000-`` prefixed.
+
+    Returns:
+        The integer ComicVine issue ID, or None when not numeric.
+    """
+    normalized = external_id.removeprefix("4000-").strip()
+    return int(normalized) if normalized.isdigit() else None
+
+
+def _identity_matches_issue(identity: ExternalIdentity, issue_number: str) -> bool:
+    """Return whether an external issue identity matches one ComicPile issue label.
+
+    Args:
+        identity: External ComicVine issue identity.
+        issue_number: ComicPile issue number label to match.
+
+    Returns:
+        True when the stored label (issue number or issue name) matches.
+    """
+    expected = _normalize_issue_label(issue_number)
+    if not expected:
+        return False
+    metadata = identity.metadata_json or {}
+    return any(
+        _normalize_issue_label(metadata.get(key)) == expected
+        for key in ("issue_number", "name")
+    )
 
 
 class ThrottleResourceSnapshot(TypedDict):
@@ -323,9 +374,6 @@ class ComicVineBackfillOperator:
         if series_identity is None:
             return None
 
-        # For now, implement basic series-to-issue resolution
-        # This is a simplified version - full implementation would include
-        # volume roster matching and issue number disambiguation
         metadata = series_identity.metadata_json or {}
         volume_id = metadata.get("volume_id")
 
@@ -337,7 +385,9 @@ class ComicVineBackfillOperator:
         ):
             return None
 
-        # Look for existing issue mappings for this volume
+        # Look for existing issue mappings for this volume. Label equality is
+        # enforced below so a same-volume identity with a different issue label
+        # is never auto-confirmed.
         issue_result = await db.execute(
             select(ExternalIdentity)
             .join(
@@ -347,11 +397,14 @@ class ComicVineBackfillOperator:
             .where(
                 ExternalIdentity.provider == "comicvine",
                 ExternalIdentity.entity_type == "issue",
-                ExternalIdentity.metadata_json["volume_id"].astext == str(volume_id),
+                cast(ExternalIdentity.metadata_json["volume_id"], String) == str(volume_id),
             )
             .limit(1)
         )
-        return issue_result.scalar_one_or_none()
+        identity = issue_result.scalar_one_or_none()
+        if identity is None or not _identity_matches_issue(identity, issue.issue_number):
+            return None
+        return identity
 
     async def _snapshot_corroborates_issue(self, volume_id: object, issue_number: str) -> bool:
         """Check the local SQLite snapshot roster for one volume issue number.
@@ -433,26 +486,64 @@ class ComicVineBackfillOperator:
         self._last_live_start = self._clock()
 
     async def resolve_identity_provider(self, db: AsyncSession, issue: Issue) -> ExternalIdentity | None:
-        """Try to resolve ComicVine identity using the live provider.
+        """Try to resolve ComicVine identity using local snapshot then live provider.
+
+        Reuses the repair pipeline's conservative local-then-live candidate
+        resolution so the backfill operator shares the same confidence gates as
+        the interactive repair flow. Only a ``confirmed`` decision is promoted;
+        ambiguous ``candidate`` outcomes stay unresolved and the mapping is never
+        silently guessed.
 
         Args:
             db: Async database session.
             issue: Issue to resolve.
 
         Returns:
-            Resolved external identity if found, None otherwise.
+            Resolved external identity if confirmed, None otherwise.
         """
-        if self.client is None:
+        client = self.client
+        if client is None:
             return None
 
-        # This is a simplified implementation - full implementation would include
-        # title search, volume matching, and issue number disambiguation
-        # For now, we'll use a placeholder that would be implemented based on
-        # the series resolution logic from the closed PR
-        return None
+        thread = await db.get(Thread, issue.thread_id)
+        if thread is None or not thread.title.strip():
+            return None
+
+        context = ComicVineRepairContext(
+            title=thread.title,
+            issue_label=issue.issue_number,
+        )
+        decision, _scores = await repair_identity(
+            snapshot=self.snapshot,
+            client=client,
+            context=context,
+            thread_issue_labels=[],
+        )
+        if decision.status != "confirmed" or decision.winner is None:
+            return None
+
+        candidate = decision.winner.candidate
+        return await upsert_external_identity(
+            db,
+            provider="comicvine",
+            entity_type="issue",
+            external_id=str(candidate.issue_id),
+            external_url=f"https://comicvine.gamespot.com/issue/4000-{candidate.issue_id}/",
+            metadata_json={
+                "volume_id": candidate.volume_id,
+                "volume_name": candidate.volume_name,
+                "issue_number": candidate.issue_number,
+                "name": candidate.issue_name,
+            },
+        )
 
     async def hydrate_creator_locally(self, db: AsyncSession, issue: Issue) -> bool:
         """Hydrate creator data using local evidence only.
+
+        A confirmed issue identity whose stored metadata already carries creator
+        credits (``creator_credits`` from the hydration path, or legacy
+        ``person_credits``) is satisfied by stored evidence alone, so no live
+        provider call is needed.
 
         Args:
             db: Async database session.
@@ -461,8 +552,56 @@ class ComicVineBackfillOperator:
         Returns:
             True if creators were hydrated, False otherwise.
         """
-        # Check if issue has confirmed ComicVine identity
-        identity_result = await db.execute(
+        identity = await self._confirmed_issue_identity(db, issue)
+        if identity is None:
+            return False
+
+        metadata = identity.metadata_json or {}
+        credits = metadata.get("creator_credits") or metadata.get("person_credits")
+        return bool(credits)
+
+    async def hydrate_creator_provider(self, db: AsyncSession, issue: Issue) -> bool:
+        """Deep-hydrate creator metadata for a confirmed issue identity.
+
+        Fetches the full singular issue metadata (including creator credits)
+        through the provider client and persists normalized creator metadata on
+        the identity so later local passes read credits from storage.
+
+        Args:
+            db: Async database session.
+            issue: Issue to hydrate.
+
+        Returns:
+            True if creators were hydrated, False otherwise.
+        """
+        client = self.client
+        if client is None:
+            return False
+
+        identity = await self._confirmed_issue_identity(db, issue)
+        if identity is None:
+            return False
+
+        comicvine_issue_id = _provider_issue_id(identity.external_id)
+        if comicvine_issue_id is None:
+            return False
+
+        hydrated = await hydrate_issue(db, client, comicvine_issue_id)
+        metadata = hydrated.metadata_json or {}
+        credits = metadata.get("creator_credits") or metadata.get("person_credits")
+        return bool(credits)
+
+    async def _confirmed_issue_identity(self, db: AsyncSession, issue: Issue) -> ExternalIdentity | None:
+        """Return the confirmed ComicVine issue identity for one issue.
+
+        Args:
+            db: Async database session.
+            issue: Issue whose confirmed identity is requested.
+
+        Returns:
+            The confirmed identity, or None when no confirmed mapping exists.
+        """
+        result = await db.execute(
             select(ExternalIdentity)
             .join(
                 IssueExternalIdentityMapping,
@@ -475,41 +614,7 @@ class ComicVineBackfillOperator:
             )
             .limit(1)
         )
-        identity = identity_result.scalar_one_or_none()
-
-        if identity is None:
-            return False
-
-        # Check if creator data already exists locally
-        creator_metadata = identity.metadata_json or {}
-        person_credits = creator_metadata.get("person_credits", [])
-
-        if person_credits:
-            # Normalize legacy creator data to new format
-            # This would be implemented based on the creator hydration logic
-            # from the closed PR
-            return True
-
-        return False
-
-    async def hydrate_creator_provider(self, db: AsyncSession, issue: Issue) -> bool:
-        """Hydrate creator data using the live provider.
-
-        Args:
-            db: Async database session.
-            issue: Issue to hydrate.
-
-        Returns:
-            True if creators were hydrated, False otherwise.
-        """
-        if self.client is None:
-            return False
-
-        # This is a simplified implementation - full implementation would include
-        # fetching full issue metadata and extracting creator credits
-        # For now, we'll use a placeholder that would be implemented based on
-        # the creator hydration logic from the closed PR
-        return False
+        return result.scalar_one_or_none()
 
     async def process_issue_identity(self, db: AsyncSession, issue: Issue) -> Literal["resolved", "unresolved", "rate_limited", "error"]:
         """Process identity resolution for a single issue.
@@ -679,7 +784,7 @@ class ComicVineBackfillOperator:
                     f"  Creators: {progress.stats.resolved_creators} resolved, "
                     f"{progress.stats.unresolved_creators} unresolved"
                 )
-                print(f"  Completion: {progress.completion_rate:.1f}%")
+                print(f"  Completion: {progress.stats.completion_rate:.1f}%")
                 print()
 
     async def run(self, session_factory: SessionFactory | None = None) -> BackfillStats:

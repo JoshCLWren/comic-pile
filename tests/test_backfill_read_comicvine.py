@@ -15,7 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.external_identity import ExternalIdentity
 from app.models.issue import Issue
+from comic_pile.comicvine_identity_repair import (
+    CandidateScore,
+    ComicVineCandidate,
+    RepairDecision,
+)
 from comic_pile.comicvine_provider import ComicVineRateLimitError
+from scripts import backfill_read_comicvine as backfill_module
 from scripts.backfill_read_comicvine import (
     BackfillProgress,
     BackfillStats,
@@ -282,12 +288,15 @@ class TestComicVineBackfillOperator:
 
         issue = Issue(id=1, thread_id=1, issue_number="1", position=1, status="read")
         
-        # Mock local resolution to return identity (two calls: series then issue)
+        # Mock local resolution to return identity (three calls: series, issue, then
+        # the existing-mapping lookup inside confirmation)
         mock_result_1 = MagicMock()
         mock_result_1.scalar_one_or_none.return_value = sample_external_identity
         mock_result_2 = MagicMock()
         mock_result_2.scalar_one_or_none.return_value = sample_external_identity
-        mock_db_session.execute.side_effect = [mock_result_1, mock_result_2]
+        mock_result_3 = MagicMock()
+        mock_result_3.scalar_one_or_none.return_value = None
+        mock_db_session.execute.side_effect = [mock_result_1, mock_result_2, mock_result_3]
         
         status = await operator.process_issue_identity(mock_db_session, issue)
         assert status == "resolved"
@@ -906,3 +915,205 @@ class TestBuildReport:
         assert report["resolved_identities"] == 1
         assert report["throttles"]["search"]["cooling"] is True
         assert "completed_at" in report
+
+
+class TestProviderPaths:
+    """Test the provider-backed operator paths (repair pipeline + hydration)."""
+
+    @pytest.mark.asyncio
+    async def test_resolve_identity_provider_confirms_strong_candidate(
+        self,
+        mock_db_session: AsyncMock,
+        sample_external_identity: ExternalIdentity,
+    ) -> None:
+        """Test provider resolution promotes a strong, unambiguous candidate."""
+        operator = ComicVineBackfillOperator(
+            user_id=1,
+            database_url="sqlite://test",
+            cache_dir=Path("/tmp"),
+            dry_run=False,
+            min_live_interval_seconds=0.0,
+        )
+        issue = Issue(id=1, thread_id=1, issue_number="1", position=1, status="read")
+
+        candidate = ComicVineCandidate(
+            issue_id=123,
+            volume_id=456,
+            volume_name="Volume",
+            issue_number="1",
+            issue_name="First",
+        )
+        score = CandidateScore(
+            candidate=candidate,
+            score=0.9,
+            evidence=("issue number matches",),
+            rejection_reason=None,
+            stale_snapshot=False,
+        )
+        decision = RepairDecision(
+            status="confirmed",
+            winner=score,
+            candidates=(score,),
+            reason="top candidate is strong and unambiguous",
+        )
+
+        with patch.object(
+            backfill_module,
+            "repair_identity",
+            new=AsyncMock(return_value=(decision, (score,))),
+        ):
+            with patch.object(
+                backfill_module,
+                "upsert_external_identity",
+                new=AsyncMock(return_value=sample_external_identity),
+            ) as mock_upsert:
+                identity = await operator.resolve_identity_provider(mock_db_session, issue)
+
+        assert identity is sample_external_identity
+        mock_upsert.assert_awaited_once_with(
+            mock_db_session,
+            provider="comicvine",
+            entity_type="issue",
+            external_id="4000-123",
+            external_url="https://comicvine.gamespot.com/issue/4000-123/",
+            metadata_json={
+                "volume_id": 456,
+                "volume_name": "Volume",
+                "issue_number": "1",
+                "name": "First",
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_resolve_identity_provider_ignores_ambiguous_candidate(
+        self,
+        mock_db_session: AsyncMock,
+    ) -> None:
+        """Test a merely ``candidate`` decision stays unresolved (never a guess)."""
+        operator = ComicVineBackfillOperator(
+            user_id=1,
+            database_url="sqlite://test",
+            cache_dir=Path("/tmp"),
+            dry_run=False,
+            min_live_interval_seconds=0.0,
+        )
+        issue = Issue(id=1, thread_id=1, issue_number="1", position=1, status="read")
+
+        candidate = ComicVineCandidate(
+            issue_id=123,
+            volume_id=456,
+            volume_name="Volume",
+            issue_number="1",
+            issue_name="First",
+        )
+        score = CandidateScore(
+            candidate=candidate,
+            score=0.6,
+            evidence=("issue number matches",),
+            rejection_reason=None,
+            stale_snapshot=False,
+        )
+        decision = RepairDecision(
+            status="candidate",
+            winner=None,
+            candidates=(score,),
+            reason="multiple or insufficiently strong candidates require review",
+        )
+
+        with patch.object(
+            backfill_module,
+            "repair_identity",
+            new=AsyncMock(return_value=(decision, (score,))),
+        ):
+            with patch.object(
+                backfill_module,
+                "upsert_external_identity",
+                new=AsyncMock(),
+            ) as mock_upsert:
+                identity = await operator.resolve_identity_provider(mock_db_session, issue)
+
+        assert identity is None
+        mock_upsert.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_hydrate_creator_locally_from_stored_credits(
+        self,
+        mock_db_session: AsyncMock,
+        sample_external_identity: ExternalIdentity,
+    ) -> None:
+        """Test local creator hydration succeeds from stored creator credits."""
+        operator = ComicVineBackfillOperator(
+            user_id=1,
+            database_url="sqlite://test",
+            cache_dir=Path("/tmp"),
+            dry_run=True,
+        )
+        issue = Issue(id=1, thread_id=1, issue_number="1", position=1, status="read")
+
+        sample_external_identity.metadata_json = {
+            "volume_id": 456,
+            "issue_number": "1",
+            "creator_credits": [{"id": 1, "name": "Writer"}],
+        }
+        mock_db_session.execute.return_value.scalar_one_or_none.return_value = (
+            sample_external_identity
+        )
+
+        assert await operator.hydrate_creator_locally(mock_db_session, issue) is True
+
+    @pytest.mark.asyncio
+    async def test_hydrate_creator_locally_false_without_credits(
+        self,
+        mock_db_session: AsyncMock,
+        sample_external_identity: ExternalIdentity,
+    ) -> None:
+        """Test local creator hydration is False without stored creator credits."""
+        operator = ComicVineBackfillOperator(
+            user_id=1,
+            database_url="sqlite://test",
+            cache_dir=Path("/tmp"),
+            dry_run=True,
+        )
+        issue = Issue(id=1, thread_id=1, issue_number="1", position=1, status="read")
+
+        sample_external_identity.metadata_json = {"volume_id": 456, "issue_number": "1"}
+        mock_db_session.execute.return_value.scalar_one_or_none.return_value = (
+            sample_external_identity
+        )
+
+        assert await operator.hydrate_creator_locally(mock_db_session, issue) is False
+
+    @pytest.mark.asyncio
+    async def test_hydrate_creator_provider_deep_hydrates_issue(
+        self,
+        mock_db_session: AsyncMock,
+        sample_external_identity: ExternalIdentity,
+    ) -> None:
+        """Test provider creator hydration deep-fetches the confirmed issue."""
+        operator = ComicVineBackfillOperator(
+            user_id=1,
+            database_url="sqlite://test",
+            cache_dir=Path("/tmp"),
+            dry_run=False,
+            min_live_interval_seconds=0.0,
+        )
+        issue = Issue(id=1, thread_id=1, issue_number="1", position=1, status="read")
+
+        hydrated = ExternalIdentity(
+            id=1,
+            provider="comicvine",
+            entity_type="issue",
+            external_id="4000-123",
+            metadata_json={"creator_credits": [{"id": 1, "name": "Writer"}]},
+        )
+        mock_db_session.execute.return_value.scalar_one_or_none.return_value = (
+            sample_external_identity
+        )
+        with patch.object(
+            backfill_module,
+            "hydrate_issue",
+            new=AsyncMock(return_value=hydrated),
+        ) as mock_hydrate:
+            assert await operator.hydrate_creator_provider(mock_db_session, issue) is True
+
+        mock_hydrate.assert_awaited_once_with(mock_db_session, operator.client, 123)
