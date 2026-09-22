@@ -691,6 +691,7 @@ def test_opencode_free_display_name_matches_roster_style() -> None:
     assert ROSTER.opencode_free_display_name("nemotron-3.5-lightning-free") == (
         "OpenCode Nemotron 3.5 Lightning Free"
     )
+    assert ROSTER.opencode_free_display_name("big-pickle") == "OpenCode Big Pickle"
 
 
 def test_surplus_big_pickle_converts_highest_worker_first() -> None:
@@ -841,6 +842,57 @@ def test_apply_grows_when_no_surplus_big_pickle_remains() -> None:
     assert any(
         row["worker"] == "39" and row["model"] == "big-pickle" for row in remaining
     )
+    for row in remaining:
+        assert int(row["minute"]) in ROSTER.SCHEDULE_MINUTES
+    assert "big-pickle" not in {item.model for item in grow}
+
+
+def test_apply_does_not_grow_first_big_pickle_when_absent() -> None:
+    """#2849: unused big-pickle is not grown onto a new worker id.
+
+    Unique OpenCode frees already occupy the roster, so the only unused
+    catalog-free id is ``big-pickle``. Discovery must not allocate worker
+    72 (or any other new id) just to pin the first pickle.
+    """
+    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
+    rows = [
+        _row("41", "opencode-free", "mimo-v2.6-flash-free", minute="5"),
+        _row("42", "opencode-free", "nemotron-3-ultra-free", minute="10"),
+        _row("45", "opencode-free", "nemotron-3.5-lightning-free", minute="15"),
+        _row("46", "kilo-auto", "kilo-auto/free", minute="20"),
+        _row("47", "opencode-free", "muse-spark-1.2-contributor-free", minute="25"),
+        _row("58", "opencode-free", "muse-spark-1.3-contributor-free", minute="30"),
+        _row("59", "opencode-free", "ling-3.0-flash-fin-free", minute="35"),
+    ]
+
+    plan = RETIRE.plan_retirement(rows, catalogs)
+    remaining = RETIRE.apply_plan(rows, plan)
+
+    assert "big-pickle" in {item.model for item in plan.unused_free}
+    assert plan.additions == ()
+    assert not any(row["model"] == "big-pickle" for row in remaining)
+    assert {row["worker"] for row in remaining} == {row["worker"] for row in rows}
+    assert any(row["worker"] == "46" and row["model"] == "kilo-auto/free" for row in remaining)
+
+
+def test_apply_grows_unique_frees_when_big_pickle_absent() -> None:
+    """Unique unused frees still grow when the roster has no pickle pin."""
+    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
+    rows = [
+        _row("41", "opencode-free", "mimo-v2.6-flash-free", minute="10"),
+        _row("46", "kilo-auto", "kilo-auto/free", minute="15"),
+    ]
+
+    plan = RETIRE.plan_retirement(rows, catalogs)
+    grow = [item for item in plan.additions if item.action == "add"]
+    remaining = RETIRE.apply_plan(rows, plan)
+
+    assert grow
+    assert "big-pickle" not in {item.model for item in plan.additions}
+    assert "ling-3.0-flash-fin-free" in {item.model for item in grow}
+    assert "muse-spark-1.3-contributor-free" in {item.model for item in grow}
+    assert not any(row["model"] == "big-pickle" for row in remaining)
+    assert any(row["worker"] == "46" and row["model"] == "kilo-auto/free" for row in remaining)
     for row in remaining:
         assert int(row["minute"]) in ROSTER.SCHEDULE_MINUTES
 
@@ -1080,8 +1132,13 @@ def test_committed_tsv_pins_ling_and_muse_spark_13_via_add_path() -> None:
     assert ROSTER.schedule_is_balanced(rows)
 
 
-def test_committed_tsv_converts_surplus_pickle_to_openrouter_nex_and_ling() -> None:
-    """Workers 48-50 stay expected and pin procurement OpenRouter free models."""
+def test_committed_tsv_converts_workers_48_and_49_to_opencode_big_pickle() -> None:
+    """Workers 48-49 convert in place to OpenCode Big Pickle; 50 stays Ling VL.
+
+    OpenRouter Nex N2.5 Pro/Mini free pins expire 2026-09-25. Same worker
+    ids and dispatcher minutes stay; kilo-auto 46 is untouched. Surplus
+    pickle slots are convert fodder for later unique Zen frees.
+    """
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
     by_worker = {row["worker"]: row for row in rows}
@@ -1092,19 +1149,19 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_nex_and_ling() -> N
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["48"] == {
         "worker": "48",
-        "source": "openrouter-free",
-        "model": "nex-agi/nex-n2.5-pro:free",
+        "source": "opencode-free",
+        "model": "big-pickle",
         "minute": "50",
         "scheduler": "dispatcher",
-        "display_name": "OpenRouter Nex N2.5 Pro Free",
+        "display_name": "OpenCode Big Pickle",
     }
     assert by_worker["49"] == {
         "worker": "49",
-        "source": "openrouter-free",
-        "model": "nex-agi/nex-n2.5-mini:free",
+        "source": "opencode-free",
+        "model": "big-pickle",
         "minute": "55",
         "scheduler": "dispatcher",
-        "display_name": "OpenRouter Nex N2.5 Mini Free",
+        "display_name": "OpenCode Big Pickle",
     }
     assert by_worker["50"] == {
         "worker": "50",
@@ -1114,10 +1171,71 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_nex_and_ling() -> N
         "scheduler": "dispatcher",
         "display_name": "OpenRouter Ling 3.0 Flash VL Free",
     }
-    assert ROSTER.openrouter_model_is_free(by_worker["48"]["model"])
-    assert ROSTER.openrouter_model_is_free(by_worker["49"]["model"])
+    assert "nex-agi/nex-n2.5-pro:free" not in {row["model"] for row in rows}
+    assert "nex-agi/nex-n2.5-mini:free" not in {row["model"] for row in rows}
+    assert "z-ai/glm-5.2:free" not in {row["model"] for row in rows}
+    assert "xiaomi/mimo-v2.6-flash" not in {row["model"] for row in rows}
+    assert 72 not in lock["expected_workers"]
+    assert "72" not in by_worker
+    assert ROSTER.opencode_model_is_free(by_worker["48"]["model"])
+    assert ROSTER.opencode_model_is_free(by_worker["49"]["model"])
     assert ROSTER.openrouter_model_is_free(by_worker["50"]["model"])
+    assert ROSTER.opencode_free_display_name("big-pickle") == (
+        by_worker["48"]["display_name"]
+    )
+    catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
+    assert "big-pickle" in catalogs["opencode"].model_ids()
     assert ROSTER.schedule_is_balanced(rows)
+    assert sum(1 for row in rows if row["model"] == "big-pickle") == 2
+
+
+def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
+    tmp_path: Path,
+) -> None:
+    """Fixture apply on the converted roster is a no-op (no grow-72 pickle).
+
+    Unique OpenCode frees are already pinned. Surplus pickle on 48/49
+    stays convert fodder instead of discovery allocating a new worker.
+    """
+    source_roster = ROOT / ".github" / "free-model-factories.tsv"
+    source_lock = ROOT / ".github" / "factory-expected-workers.json"
+    roster = tmp_path / "free-model-factories.tsv"
+    lock_path = tmp_path / "factory-expected-workers.json"
+    roster.write_text(source_roster.read_text(encoding="utf-8"), encoding="utf-8")
+    lock_path.write_text(source_lock.read_text(encoding="utf-8"), encoding="utf-8")
+    before_rows = ROSTER.load_roster_rows(roster)
+    before_lock = ROSTER.load_roster_lock(lock_path)
+    before_workers = [row["worker"] for row in before_rows]
+
+    status = RETIRE.run(
+        [
+            "apply",
+            "--roster",
+            str(roster),
+            "--lock",
+            str(lock_path),
+            "--catalog-json",
+            str(FIXTURES / "keep-present.json"),
+            "--retirement-comments",
+            str(FIXTURES / "nvidia-410-comments.json"),
+        ]
+    )
+    remaining = ROSTER.load_roster_rows(roster)
+    lock = ROSTER.load_roster_lock(lock_path)
+    by_worker = {row["worker"]: row for row in remaining}
+
+    assert status == 0
+    assert [row["worker"] for row in remaining] == before_workers
+    assert set(lock["expected_workers"]) == set(before_lock["expected_workers"])
+    assert 72 not in lock["expected_workers"]
+    assert "72" not in by_worker
+    assert by_worker["46"]["model"] == "kilo-auto/free"
+    assert by_worker["48"]["model"] == "big-pickle"
+    assert by_worker["48"]["minute"] == "50"
+    assert by_worker["49"]["model"] == "big-pickle"
+    assert by_worker["49"]["minute"] == "55"
+    assert sum(1 for row in remaining if row["model"] == "big-pickle") == 2
+    assert ROSTER.schedule_is_balanced(remaining)
 
 
 def test_committed_tsv_converts_surplus_pickle_to_openrouter_nemotron_ultra_and_inkling() -> None:
@@ -1130,8 +1248,8 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_nemotron_ultra_and_
     assert {51, 52, 53}.isdisjoint(set(lock["retired_workers"]))
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["48"]["source"] == "openrouter-free"
-    assert by_worker["48"]["model"] == "nex-agi/nex-n2.5-pro:free"
+    assert by_worker["48"]["source"] == "opencode-free"
+    assert by_worker["48"]["model"] == "big-pickle"
     assert by_worker["51"] == {
         "worker": "51",
         "source": "openrouter-free",
@@ -1293,7 +1411,7 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_qwen38_27b() -> Non
     catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
     assert "qwen/qwen3.8-27b:free" in catalogs["openrouter"].model_ids()
     assert ROSTER.schedule_is_balanced(rows)
-    assert sum(1 for row in rows if row["model"] == "big-pickle") == 0
+    assert sum(1 for row in rows if row["model"] == "big-pickle") == 2
 
 
 def test_committed_tsv_upgrades_worker_41_to_opencode_mimo_v26_flash() -> None:

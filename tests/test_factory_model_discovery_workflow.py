@@ -81,6 +81,7 @@ def test_discovery_adds_unused_free_by_default() -> None:
     assert "Unused free models are listed for operators" not in workflow
     assert "Added to the TSV" in workflow
     assert "Surplus `big-pickle`" in workflow
+    assert "Unused `big-pickle` is never grown as a first pin." in workflow
     assert "ADD_UNUSED_FREE" in workflow
 
 

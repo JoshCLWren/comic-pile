@@ -6,9 +6,11 @@ NVIDIA pins with a sticky #1093 HTTP 410 retirement marker, **and** pins
 unused free OpenCode models (cost==0 / free-roster name, not paid Zen)
 onto ``.github/free-model-factories.tsv``. Surplus ``big-pickle``
 duplicate slots convert first so unique free models do not grow the
-roster without bound. Models in the retirement lock or a 410 marker are
-never silently re-pinned. NVIDIA catalog adds are out of scope. NVIDIA
-catalog presence is ``opencode models nvidia``, never
+roster without bound. Unused ``big-pickle`` is never grown as a first
+pin when the roster has none; surplus duplicates stay convert fodder.
+Models in the retirement lock or a 410 marker are never silently
+re-pinned. NVIDIA catalog adds are out of scope. NVIDIA catalog
+presence is ``opencode models nvidia``, never
 integrate.api.nvidia.com.
 """
 
@@ -35,6 +37,7 @@ from factory_roster import (
     RosterRow,
     default_lock_path,
     default_roster_path,
+    is_big_pickle,
     load_roster_comments,
     load_roster_lock,
     load_roster_rows,
@@ -374,9 +377,11 @@ def plan_additions(
     (for example mimo-v2.5-free → mimo-v2.6-flash-free) keeps the freed
     worker id and dispatcher minute instead of growing a new slot while
     the lock still lists that id as expected. New worker ids are
-    allocated only when no surplus or just-freed slot remains. Models in
-    ``retired_models`` are never re-pinned. Permanently retired worker
-    ids stay occupied.
+    allocated only when no surplus or just-freed slot remains. Unused
+    ``big-pickle`` is never grown or converted onto as a first pin;
+    surplus pickle slots remain the convert source for unique frees.
+    Models in ``retired_models`` are never re-pinned. Permanently
+    retired worker ids stay occupied.
 
     Args:
         remaining_rows: Roster rows after planned retirements.
@@ -395,7 +400,7 @@ def plan_additions(
     eligible = [
         item
         for item in unused
-        if item.model not in retired_models
+        if item.model not in retired_models and not is_big_pickle(item.model)
     ]
     eligible.sort(key=lambda item: item.model)
     convertible = surplus_big_pickle_rows(remaining_rows)
