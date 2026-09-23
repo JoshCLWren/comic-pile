@@ -326,6 +326,16 @@ class GitHubSettings(BaseSettings):
         description="GitHub repository name",
         json_schema_extra={"env": "GITHUB_REPO_NAME"},
     )
+    latticery_token: str = Field(
+        default="",
+        description="Dedicated GitHub PAT for JoshCLWren/Latticery cross-repository delivery operations (requires repo scope)",
+        json_schema_extra={"env": "LATTICERY_TOKEN"},
+    )
+    allowed_target_repos: list[str] = Field(
+        default_factory=lambda: ["JoshCLWren/comic-pile", "JoshCLWren/Latticery"],
+        description="Allowlisted target repositories for cross-repo factory delivery",
+        json_schema_extra={"env": "ALLOWED_TARGET_REPOS"},
+    )
 
     @property
     def is_configured(self) -> bool:
@@ -335,6 +345,60 @@ class GitHubSettings(BaseSettings):
             and self.github_repo_owner.strip()
             and self.github_repo_name.strip()
         )
+
+    @property
+    def is_latticery_configured(self) -> bool:
+        """Return True if the LATTICERY_TOKEN is available for cross-repo delivery."""
+        return bool(self.latticery_token.strip())
+
+    @property
+    def default_target_repo(self) -> str:
+        """Return the default target repository (ComicPile itself)."""
+        if self.github_repo_owner.strip() and self.github_repo_name.strip():
+            return f"{self.github_repo_owner}/{self.github_repo_name}"
+        return "JoshCLWren/comic-pile"
+
+    def validate_target_repo(self, target_repo: str) -> str:
+        """Validate that a target repository is allowlisted.
+
+        Args:
+            target_repo: The target repository string (owner/name).
+
+        Returns:
+            The validated target repository string.
+
+        Raises:
+            ValueError: If the target repository is not allowlisted.
+        """
+        if target_repo not in self.allowed_target_repos:
+            raise ValueError(
+                f"Target repository '{target_repo}' is not allowlisted. "
+                f"Allowed: {self.allowed_target_repos}"
+            )
+        return target_repo
+
+    def get_credential_for_repo(self, target_repo: str) -> str:
+        """Get the appropriate GitHub token for a target repository.
+
+        Args:
+            target_repo: The target repository string (owner/name).
+
+        Returns:
+            The GitHub token string for the target repository.
+
+        Raises:
+            ValueError: If the target repository is not allowlisted.
+            RuntimeError: If LATTICERY_TOKEN is required but unavailable.
+        """
+        self.validate_target_repo(target_repo)
+        if target_repo == "JoshCLWren/Latticery":
+            if not self.is_latticery_configured:
+                raise RuntimeError(
+                    "LATTICERY_TOKEN is required for JoshCLWren/Latticery delivery "
+                    "but is not configured. Fail-closed."
+                )
+            return self.latticery_token
+        return self.github_token
 
 
 class RedisSettings(BaseSettings):
