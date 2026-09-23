@@ -1148,15 +1148,19 @@ def test_committed_tsv_converts_nex_to_pickle_then_surplus_to_space_bunny_free()
     replaced in place by OpenCode Big Pickle on workers 48-49. Discovery
     then converted the highest surplus pickle (49) to unused
     ``space-bunny-free``. Worker 48 stays surplus pickle convert fodder.
-    Same worker ids and dispatcher minutes stay; kilo-auto 46 is untouched.
+    Worker 50 later retired when ``inclusionai/ling-3.0-flash-vl:free``
+    left the live OpenRouter/OpenCode catalogs. Remaining worker ids and
+    dispatcher minutes stay; kilo-auto 46 is untouched.
     ``deepseek-v4-flash-free`` stays lock-retired and is not re-pinned.
     """
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
     by_worker = {row["worker"]: row for row in rows}
 
-    assert {48, 49, 50}.issubset(set(lock["expected_workers"]))
-    assert {48, 49, 50}.isdisjoint(set(lock["retired_workers"]))
+    assert {48, 49}.issubset(set(lock["expected_workers"]))
+    assert 50 not in lock["expected_workers"]
+    assert {48, 49}.isdisjoint(set(lock["retired_workers"]))
+    assert 50 in lock["retired_workers"]
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["48"] == {
@@ -1175,14 +1179,9 @@ def test_committed_tsv_converts_nex_to_pickle_then_surplus_to_space_bunny_free()
         "scheduler": "dispatcher",
         "display_name": "OpenCode Space Bunny Free",
     }
-    assert by_worker["50"] == {
-        "worker": "50",
-        "source": "openrouter-free",
-        "model": "inclusionai/ling-3.0-flash-vl:free",
-        "minute": "0",
-        "scheduler": "dispatcher",
-        "display_name": "OpenRouter Ling 3.0 Flash VL Free",
-    }
+    assert "50" not in by_worker
+    assert "inclusionai/ling-3.0-flash-vl:free" not in {row["model"] for row in rows}
+    assert "inclusionai/ling-3.0-flash-vl:free" in lock["retired_models"]
     assert "nex-agi/nex-n2.5-pro:free" not in {row["model"] for row in rows}
     assert "nex-agi/nex-n2.5-mini:free" not in {row["model"] for row in rows}
     assert "z-ai/glm-5.2:free" not in {row["model"] for row in rows}
@@ -1193,7 +1192,6 @@ def test_committed_tsv_converts_nex_to_pickle_then_surplus_to_space_bunny_free()
     assert "72" not in by_worker
     assert ROSTER.opencode_model_is_free(by_worker["48"]["model"])
     assert ROSTER.opencode_model_is_free(by_worker["49"]["model"])
-    assert ROSTER.openrouter_model_is_free(by_worker["50"]["model"])
     assert ROSTER.opencode_free_display_name("big-pickle") == (
         by_worker["48"]["display_name"]
     )
