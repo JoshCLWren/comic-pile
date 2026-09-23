@@ -17,8 +17,9 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 # fmt: on
 
-from app.schemas.delivery import CrossRepoDeliveryRequest
-from app.services.delivery import DeliveryService
+# noqa: E402
+from app.schemas.delivery import CrossRepoDeliveryRequest # noqa: E402
+from app.services.delivery import DeliveryService # noqa: E402
 
 
 def create_delivery_request() -> CrossRepoDeliveryRequest:
