@@ -16,8 +16,8 @@ FACTORY_RUN = (
     / "workflows"
     / "free-model-factory-run.yml"
 )
-PINNED_OPENCODE_VERSION = "1.18.29"
-PINNED_OPENCODE_SHA256 = "ea800b7ff56226b70952126c9fc1e2517ca4c4b5682fd9d3f9e87449697a1194"
+PINNED_OPENCODE_VERSION = "1.18.32"
+PINNED_OPENCODE_SHA256 = "3046e0404fdc60fb80307e7a47824ba07477364178a4d09baa8548496dd6d43b"
 
 
 def test_discovery_workflow_is_scheduled_and_dispatchable() -> None:
