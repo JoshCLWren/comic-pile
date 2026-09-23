@@ -12,11 +12,13 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.delivery import (
     CrossRepoDeliveryRequest,
-    DeliveryRecordCreate,
     DeliveryRecordResponse,
+    DeliveryRecordUpdate,
     DeliveryResult,
 )
 from app.services.delivery import DeliveryService
+
+delivery_service = DeliveryService()
 
 router = APIRouter()
 
@@ -26,7 +28,6 @@ async def create_delivery_request(
     request: CrossRepoDeliveryRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-    delivery_service: Annotated[DeliveryService, Depends()],
 ) -> DeliveryResult:
     """Create a cross-repository delivery request.
     
@@ -49,7 +50,6 @@ async def create_delivery_request(
             - worker_id: Factory worker ID
         db: Async database session
         current_user: Authenticated user
-        delivery_service: Delivery service instance
         
     Returns:
         DeliveryResult with operation outcome and tracking information
@@ -76,7 +76,6 @@ async def create_delivery_request(
 async def list_delivery_records(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-    delivery_service: Annotated[DeliveryService, Depends()],
 ) -> list[DeliveryRecordResponse]:
     """List all delivery records.
     
@@ -96,7 +95,6 @@ async def get_delivery_record(
     delivery_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-    delivery_service: Annotated[DeliveryService, Depends()],
 ) -> DeliveryRecordResponse:
     """Get a specific delivery record by ID.
     
@@ -126,7 +124,6 @@ async def get_delivery_by_target_branch(
     branch_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-    delivery_service: Annotated[DeliveryService, Depends()],
 ) -> DeliveryRecordResponse:
     """Get delivery record by target repository and branch name.
     
@@ -156,10 +153,9 @@ async def get_delivery_by_target_branch(
 @router.patch("/delivery/{delivery_id}", response_model=DeliveryRecordResponse)
 async def update_delivery_record(
     delivery_id: int,
-    update_data: DeliveryRecordCreate,
+    update_data: DeliveryRecordUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-    delivery_service: Annotated[DeliveryService, Depends()],
 ) -> DeliveryRecordResponse:
     """Update a delivery record.
     
@@ -168,7 +164,6 @@ async def update_delivery_record(
         update_data: Fields to update
         db: Async database session
         current_user: Authenticated user
-        delivery_service: Delivery service instance
         
     Returns:
         Updated delivery record
