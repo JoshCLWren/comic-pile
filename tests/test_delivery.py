@@ -385,11 +385,12 @@ async def test_service_mark_delivery_failed(mock_db_session: AsyncSession) -> No
         worker_id="factory:71",
     )
     mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_record))
-    mock_session.flush = AsyncMock()
+    flush_mock = AsyncMock()
+    mock_session.flush = flush_mock
     mock_session.refresh = AsyncMock()
 
     await _mark_failed(mock_session, 1, "Branch creation failed")
-    mock_session.flush.assert_called()
+    flush_mock.assert_called()
 
 
 async def _mark_failed(mock_session: AsyncSession, delivery_id: int, error: str) -> None:
@@ -463,12 +464,13 @@ async def test_service_create_pr_record(mock_db_session: AsyncSession) -> None:
     )
     mock_session = mock_db_session
     mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_record))
-    mock_session.flush = AsyncMock()
+    flush_mock = AsyncMock()
+    mock_session.flush = flush_mock
     mock_session.refresh = AsyncMock()
 
     result = await _create_pr_record(mock_session, 1, 99)
     assert result is not None
-    mock_session.flush.assert_called()
+    flush_mock.assert_called()
 
 
 async def _create_pr_record(mock_session: AsyncSession, delivery_id: int, pr_number: int) -> DeliveryRecordModel | None:
@@ -503,7 +505,7 @@ def test_latticery_credential_not_in_error_message() -> None:
         settings.get_credential_for_repo("JoshCLWren/Latticery")
     assert "LATTICERY_TOKEN" in str(exc_info.value)
     # But the actual token value must NOT appear in the error message
-    assert "" not in str(exc_info.value) or "secret" not in str(exc_info.value).lower()
+    assert "secret" not in str(exc_info.value).lower()
 
 
 def test_comicpile_token_not_used_for_latticery() -> None:
@@ -571,7 +573,6 @@ def test_full_delivery_contract_comicpile_default() -> None:
     """
     settings = GitHubSettings()
     assert settings.default_target_repo == "JoshCLWren/comic-pile"
-    assert settings.is_latticery_configured is False or True  # Either is fine
     # ComicPile delivery never raises RuntimeError
     token = settings.get_credential_for_repo("JoshCLWren/comic-pile")
     assert isinstance(token, str)

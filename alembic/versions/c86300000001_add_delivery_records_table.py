@@ -1,7 +1,7 @@
 """Add delivery_records table for cross-repository factory delivery ledger.
 
 Revision ID: c86300000001
-Revises: c86100000001
+Revises: c86200000001
 Create Date: 2026-09-23 00:00:00.000000
 """
 
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = "c86300000001"
-down_revision: str | None = "c86100000001"
+down_revision: str | None = "c86200000001"
 branch_labels: str | None = None
 depends_on: str | None = None
 
