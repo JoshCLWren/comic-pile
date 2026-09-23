@@ -870,3 +870,54 @@ def test_selective_conflict_recovery_current_owner_verification(
     # Verify that no labels were changed
     assert len(replaced_labels) == 0
     assert len(recorded_releases) == 0
+
+
+def test_reconcile_contradictory_labels_repairs_unowned_plus_worker(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Unowned coexisting with one worker lease keeps the worker and drops unowned."""
+    issues = [issue(3001, "factory", "factory:unowned", "factory:13", "factory:building")]
+    replaced: list[tuple[int, str, str | None]] = []
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: replaced.append((number, owner, stage)),
+    )
+
+    assert controller.reconcile_contradictory_labels(issues, []) == [3001]
+    assert replaced == [(3001, "factory:13", None)]
+
+
+def test_reconcile_contradictory_labels_fails_closed_on_two_workers(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two distinct active leases must not be resolved by guessing."""
+    issues = [issue(3002, "factory", "factory:unowned", "factory:13", "factory:14")]
+    replaced: list[tuple[int, str, str | None]] = []
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: replaced.append((number, owner, stage)),
+    )
+
+    assert controller.reconcile_contradictory_labels(issues, []) == []
+    assert replaced == []
+
+
+def test_reconcile_contradictory_labels_leaves_clean_targets_alone(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Singly-owned and purely-unowned targets are not rewritten."""
+    issues = [
+        issue(3003, "factory", "factory:13", "factory:building"),
+        issue(3004, "factory", "factory:unowned"),
+    ]
+    replaced: list[tuple[int, str, str | None]] = []
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: replaced.append((number, owner, stage)),
+    )
+
+    assert controller.reconcile_contradictory_labels(issues, []) == []
+    assert replaced == []

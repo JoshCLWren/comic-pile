@@ -214,8 +214,6 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
     Enforces the invariant: an executable issue must never simultaneously satisfy
     both 'factory:unowned' and active factory ownership.
     """
-    if worker_has_active_lease(worker):
-        return False
     if os.environ.get('GITHUB_ACTIONS', '').strip().lower() == 'true' and not dispatcher_identity_verified():
         return False
     owner = f'factory:{worker}'
@@ -230,6 +228,9 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
     for number in numbers:
         if not target_still_unowned(number):
             return False
+
+    if worker_has_active_lease(worker):
+        return False
 
     def release_verified_claims(claimed_numbers: list[int]) -> None:
         """Release only labels this worker can still prove it owns."""
@@ -465,6 +466,38 @@ def owned_targets(issues: list[dict[str, Any]] | None=None, prs: list[dict[str, 
     return targets
 
 
+def reconcile_contradictory_labels(
+    issues: list[dict[str, Any]] | None=None,
+    prs: list[dict[str, Any]] | None=None,
+) -> list[int]:
+    """Repair pre-existing contradictory ownership labels without fresh assignment.
+
+    A target carrying both ``factory:unowned`` and exactly one active worker
+    lease is contradictory: it claims to be simultaneously unowned and owned.
+    Remove the redundant ``factory:unowned`` label while preserving the active
+    owner and workflow stage. Fail closed (repair nothing) when the legitimate
+    owner cannot be determined, e.g. two distinct active worker leases.
+    """
+    issue_items = list_issues() if issues is None else issues
+    pr_items = list_prs() if prs is None else prs
+    repaired: list[int] = []
+    for item in [*issue_items, *pr_items]:
+        owners = [label for label in labels_of(item) if OWNER_RE.fullmatch(label)]
+        if len(owners) <= 1 or 'factory:unowned' not in owners:
+            continue
+        active_owners = [owner for owner in owners if owner != 'factory:unowned']
+        if len(active_owners) != 1:
+            continue
+        number = int(item['number'])
+        replace_factory_labels(number, active_owners[0])
+        repaired.append(number)
+        print(
+            f'[factory-controller] reconciled contradictory unowned label on #{number}',
+            file=sys.stderr,
+        )
+    return repaired
+
+
 def reconcile_stale_leases(now_epoch: int | None=None) -> list[int]:
     """Release only leases whose inactivity and age are both provable."""
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
@@ -486,24 +519,6 @@ def reconcile_stale_leases(now_epoch: int | None=None) -> list[int]:
         replace_factory_labels(number, 'factory:unowned')
         released.append(number)
         print(f'[factory-controller] released stale {owner} lease on #{number}', file=sys.stderr)
-    
-    # Bounded reconciliation for contradictory label states (e.g., factory:unowned + factory:worker)
-    for item in [*list_issues(), *list_prs()]:
-        number = int(item['number'])
-        labels = labels_of(item)
-        owners = [label for label in labels if OWNER_RE.fullmatch(label)]
-        if len(owners) > 1:
-            # Contradictory state: more than one owner.
-            # Fail closed: only reconcile if we can prove one owner is definitely stale
-            # and the other is the current legitimate lease holder.
-            # For now, if factory:unowned coexists with any active worker, it's a contradiction.
-            if 'factory:unowned' in owners:
-                active_owners = [o for o in owners if o != 'factory:unowned']
-                if len(active_owners) == 1:
-                    # Just cleanup the redundant factory:unowned
-                    replace_factory_labels(number, active_owners[0])
-                    print(f'[factory-controller] reconciled contradictory unowned label on #{number}', file=sys.stderr)
-    
     return released
 
 
@@ -925,7 +940,9 @@ def main() -> int:
     recovery_parser.add_argument('--worker', required=True)
     args = parser.parse_args()
     if args.command == 'reconcile':
-        print(json.dumps({'released': reconcile_stale_leases()}))
+        released = reconcile_stale_leases()
+        repaired = reconcile_contradictory_labels()
+        print(json.dumps({'released': released, 'contradictions_repaired': repaired}))
         return 0
     if args.command == 'capacity':
         print(json.dumps(omniroute_free_entry_capacity()))
