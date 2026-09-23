@@ -8,11 +8,8 @@ Acceptance criteria covered:
 - casual-reference non-blocking
 - no ComicPile-specific exclusions/leaks
 """
-import pytest
 from latticery_extraction.dependency_policy import (
-    DEP_ON_RE,
     MANUAL_ONLY_MARKER,
-    DependencyDeclaration,
     dependency_declarations,
     has_unresolved_dependencies,
     is_explicit_dependency_reference,
