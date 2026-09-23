@@ -78,7 +78,9 @@ export function deriveCorrectionExamples(
 
   // Rated threads are already filtered to >=4.0 and sorted high->low.
   // For effort we sort by issues_remaining when available.
-  const withEffort = ratedThreads.filter((t) => typeof t.issues_remaining === 'number')
+  const withEffort = ratedThreads.filter(
+    (t) => t.issues_remaining !== null && t.issues_remaining !== undefined,
+  )
   const sortedByEffort = [...(withEffort.length > 0 ? withEffort : ratedThreads)].sort(
     (a, b) => (a.issues_remaining ?? 999) - (b.issues_remaining ?? 999),
   )

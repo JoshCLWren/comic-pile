@@ -90,8 +90,7 @@ class AnalyticsService:
                     title=thread.title,
                     rating=thread.last_rating if thread.last_rating is not None else 0.0,
                     format=normalize_format_value(thread.format),
-    issues_remaining=thread.issues_remaining,
-
+                    issues_remaining=thread.issues_remaining,
                 )
                 for thread in top_threads
             ],
