@@ -234,7 +234,6 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(taste_signal.router, prefix="/api/v1", tags=["taste-signals"])
     app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
-    app.include_router(delivery.router, prefix="/api", tags=["delivery"])
     app.include_router(delivery.router, prefix="/api/v1", tags=["delivery"])
     app.include_router(catalog.router, tags=["catalog"])
     app.include_router(identity_inbox.router, tags=["identity-inbox"])
@@ -681,8 +680,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                 _heavy_state["in_progress"] = False
 
     # Expose for tests and get_db fallback
-    app.state.ensure_heavy_init = _ensure_heavy_init  # type: ignore[attr-defined]
-    app.state.heavy_init_state = _heavy_state  # type: ignore[attr-defined]
+    setattr(app.state, "ensure_heavy_init", _ensure_heavy_init)
+    setattr(app.state, "heavy_init_state", _heavy_state)
 
     @app.on_event("startup")
     async def startup_event():

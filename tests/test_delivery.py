@@ -13,6 +13,7 @@ Covers issue #2874 acceptance criteria:
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -24,9 +25,12 @@ from app.models.delivery import DeliveryRecord as DeliveryRecordModel
 from app.services.delivery import DeliveryService
 from app.schemas.delivery import (
     CrossRepoDeliveryRequest,
+    DeliveryFilePayload,
     DeliveryRecordCreate,
     TargetRepositoryValidation,
 )
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 # ---------------------------------------------------------------------------
@@ -644,3 +648,209 @@ async def test_service_deliver_to_target_fails_closed_without_token() -> None:
     # should raise RuntimeError for Latticery
     with pytest.raises(RuntimeError, match="LATTICERY_TOKEN"):
         service.get_credential_for_target("JoshCLWren/Latticery")
+
+
+# ---------------------------------------------------------------------------
+# File-content delivery (bootstrap defect regression for #2875)
+# ---------------------------------------------------------------------------
+
+
+def test_delivery_file_payload_accepts_relative_paths() -> None:
+    """DeliveryFilePayload accepts safe relative repository paths."""
+    payload = DeliveryFilePayload(
+        path="src/latticery/dependency_policy.py",
+        content="print('ok')\n",
+    )
+    assert payload.path == "src/latticery/dependency_policy.py"
+    assert payload.content == "print('ok')\n"
+
+
+def test_delivery_file_payload_rejects_traversal() -> None:
+    """DeliveryFilePayload rejects absolute and parent-traversal paths."""
+    with pytest.raises(ValidationError):
+        DeliveryFilePayload(path="/etc/passwd", content="x")
+    with pytest.raises(ValidationError):
+        DeliveryFilePayload(path="../escape.py", content="x")
+    with pytest.raises(ValidationError):
+        DeliveryFilePayload(path="src/../../evil.py", content="x")
+
+
+def test_cross_repo_request_includes_file_payloads() -> None:
+    """CrossRepoDeliveryRequest carries file payloads for content delivery."""
+    req = CrossRepoDeliveryRequest(
+        target_repository="JoshCLWren/Latticery",
+        branch_name="factory/2875-first-extraction-slice",
+        worker_id="factory-54",
+        title="Add extraction slice",
+        files=[
+            DeliveryFilePayload(
+                path="src/latticery/dependency_policy.py",
+                content="VALUE = 1\n",
+            )
+        ],
+        commit_message="Add extraction slice",
+    )
+    assert len(req.files) == 1
+    assert req.files[0].path == "src/latticery/dependency_policy.py"
+    assert req.commit_message == "Add extraction slice"
+
+
+def test_cross_repo_request_files_default_empty() -> None:
+    """CrossRepoDeliveryRequest.files defaults to an empty list."""
+    req = CrossRepoDeliveryRequest(
+        target_repository="JoshCLWren/Latticery",
+        branch_name="factory/empty-ok",
+        worker_id="factory-54",
+        title="No files",
+    )
+    assert req.files == []
+
+
+def _mock_delivery_db() -> AsyncSession:
+    """Build an async session mock that assigns a record id on refresh."""
+
+    async def _refresh(obj: object) -> None:
+        if getattr(obj, "id", None) is None:
+            setattr(obj, "id", 1)
+
+    session = MagicMock(spec=AsyncSession)
+    session.add = MagicMock()
+    session.flush = AsyncMock()
+    session.refresh = AsyncMock(side_effect=_refresh)
+    session.commit = AsyncMock()
+    session.execute = AsyncMock()
+    return session
+
+
+def _mock_repo_with_files(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    """Install a class-level mock GitHub repo that records content-commit calls."""
+    from github import GithubException
+
+    repo = MagicMock()
+    client = MagicMock()
+
+    base_ref = MagicMock()
+    base_ref.object.sha = "base-sha"
+    base_commit = MagicMock()
+    base_commit.commit.tree = MagicMock(name="base-tree")
+    blob = MagicMock()
+    blob.sha = "blob-sha"
+    tree = MagicMock()
+    commit = MagicMock()
+    commit.sha = "content-commit-sha"
+    pr = MagicMock()
+    pr.number = 77
+
+    def get_git_ref(name: str) -> MagicMock:
+        if name == "heads/main":
+            return base_ref
+        raise GithubException(404, {"message": "Not Found"}, None)
+
+    repo.get_git_ref.side_effect = get_git_ref
+    repo.get_commit.return_value = base_commit
+    repo.create_git_blob.return_value = blob
+    repo.create_git_tree.return_value = tree
+    repo.create_git_commit.return_value = commit
+    repo.create_pull.return_value = pr
+
+    monkeypatch.setattr(
+        DeliveryService,
+        "get_target_repo_client",
+        lambda self, _target=None: (client, repo),
+    )
+    return repo
+
+
+@pytest.mark.asyncio
+async def test_deliver_to_target_commits_file_content(monkeypatch: pytest.MonkeyPatch) -> None:
+    """deliver_to_target writes file blobs/tree/commit before opening the PR.
+
+    Regression for the bootstrap defect where delivery only created an empty
+    branch and PR, so extraction content never reached the target repository.
+    """
+    repo = _mock_repo_with_files(monkeypatch)
+    service = DeliveryService()
+    db = _mock_delivery_db()
+
+    request = CrossRepoDeliveryRequest(
+        target_repository="JoshCLWren/comic-pile",
+        branch_name="factory/2875-first-extraction-slice",
+        worker_id="factory-54",
+        title="Add extraction slice",
+        body="Coordination issue #2875",
+        files=[
+            DeliveryFilePayload(
+                path="src/latticery/dependency_policy.py",
+                content="VALUE = 1\n",
+            ),
+            DeliveryFilePayload(
+                path="src/latticery/executable_policy.py",
+                content="VALUE = 2\n",
+            ),
+        ],
+        commit_message="Add extraction slice",
+        issue_number=2875,
+    )
+
+    result = await service.deliver_to_target(db, request)
+
+    assert result.success is True
+    assert result.target_pr_number == 77
+    assert repo.create_git_blob.call_count == 2
+    repo.create_git_tree.assert_called_once()
+    repo.create_git_commit.assert_called_once()
+    commit_args = repo.create_git_commit.call_args[0]
+    assert commit_args[0] == "Add extraction slice"
+    repo.create_git_ref.assert_called_once()
+    ref_name = repo.create_git_ref.call_args[0][0]
+    assert ref_name == "refs/heads/factory/2875-first-extraction-slice"
+    # Content commit must be the ref target, not the empty base SHA.
+    assert repo.create_git_ref.call_args[0][1] == "content-commit-sha"
+    repo.create_pull.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_deliver_to_target_without_files_keeps_branch_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """deliver_to_target without files still creates a branch without content commits."""
+    repo = _mock_repo_with_files(monkeypatch)
+    service = DeliveryService()
+    db = _mock_delivery_db()
+
+    request = CrossRepoDeliveryRequest(
+        target_repository="JoshCLWren/comic-pile",
+        branch_name="factory/no-files-branch",
+        worker_id="factory-54",
+        title="Branch only",
+        files=[],
+    )
+
+    result = await service.deliver_to_target(db, request)
+
+    assert result.success is True
+    repo.create_git_blob.assert_not_called()
+    repo.create_git_tree.assert_not_called()
+    repo.create_git_commit.assert_not_called()
+    repo.create_git_ref.assert_called_once()
+    assert repo.create_git_ref.call_args[0][1] == "base-sha"
+    repo.create_pull.assert_called_once()
+
+
+def test_to_latticery_source_rewrites_staging_imports() -> None:
+    """Staging sources are rewritten to the latticery package import path."""
+    import importlib.util
+
+    script_path = PROJECT_ROOT / "scripts" / "deliver_latticery_extraction.py"
+    spec = importlib.util.spec_from_file_location(
+        "deliver_latticery_extraction_under_test", script_path
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    rewritten = module.to_latticery_source(
+        "from latticery_extraction.dependency_policy import parse_dependency_numbers\n"
+    )
+    assert "latticery.dependency_policy" in rewritten
+    assert "latticery_extraction" not in rewritten
