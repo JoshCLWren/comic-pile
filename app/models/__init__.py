@@ -7,6 +7,7 @@ from app.models.continuity_rule import ContinuityRule, ContinuityRuleSelectedMem
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList
 from app.models.dependency import Dependency
 from app.models.dependency_group import DependencyGroup, DependencyGroupMembership
+from app.models.delivery import DeliveryRecord
 from app.models.event import Event
 from app.models.recommendation_context import RecommendationContext
 from app.models.external_identity import (
@@ -49,6 +50,7 @@ __all__ = [
     "Dependency",
     "DependencyGroup",
     "DependencyGroupMembership",
+    "DeliveryRecord",
     "Event",
     "ExternalIdentity",
     "RecommendationContext",
