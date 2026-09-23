@@ -127,7 +127,7 @@ Closes #2875
             result = await delivery_service.deliver_to_target(db, delivery_request)
             
             if result.success:
-                print(f"✅ Delivery successful!")
+                print("✅ Delivery successful!")
                 print(f"   Target: {result.target_repository}")
                 print(f"   Branch: {result.target_branch}")
                 print(f"   PR: #{result.target_pr_number}")

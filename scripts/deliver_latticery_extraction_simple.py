@@ -8,8 +8,6 @@ Usage:
     python scripts/deliver_latticery_extraction_simple.py
 """
 
-import asyncio
-import os
 import sys
 from pathlib import Path
 
@@ -157,7 +155,7 @@ def simulate_delivery() -> None:
     print(f"   Target Branch: {delivery_request.branch_name}")
     print(f"   Target PR: #{12345}")  # Simulated PR number
     print(f"   Delivery Key: {delivery_request.target_repository}/branch-{delivery_request.branch_name}")
-    print(f"   Credential Source: LATTICERY_TOKEN")
+    print("   Credential Source: LATTICERY_TOKEN")
     
     print("\n🎯 Next Steps for Actual Delivery:")
     print("=" * 60)
