@@ -73,10 +73,6 @@ server = [
 # Repositories and containers that are not the Vercel function install the
 # dev test stack plus the server/migrate groups by default; `--no-dev` still
 # keeps server + migrate so the Docker runtime and deploy migration step work.
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["latticery*"]
-
 [tool.uv]
 default-groups = ["dev", "migrate", "server"]
 
