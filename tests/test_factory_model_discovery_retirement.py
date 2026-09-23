@@ -692,6 +692,9 @@ def test_opencode_free_display_name_matches_roster_style() -> None:
         "OpenCode Nemotron 3.5 Lightning Free"
     )
     assert ROSTER.opencode_free_display_name("big-pickle") == "OpenCode Big Pickle"
+    assert ROSTER.opencode_free_display_name("space-bunny-free") == (
+        "OpenCode Space Bunny Free"
+    )
 
 
 def test_surplus_big_pickle_converts_highest_worker_first() -> None:
@@ -717,6 +720,7 @@ def test_unused_free_converts_surplus_big_pickle_instead_of_growing() -> None:
         _row("42", "opencode-free", "nemotron-3-ultra-free", minute="15"),
         _row("45", "opencode-free", "nemotron-3.5-lightning-free", minute="20"),
         _row("47", "opencode-free", "muse-spark-1.2-contributor-free", minute="25"),
+        _row("49", "opencode-free", "space-bunny-free", minute="40"),
         _row("58", "opencode-free", "big-pickle", minute="30"),
         _row("59", "opencode-free", "big-pickle", minute="35"),
         *[
@@ -726,7 +730,7 @@ def test_unused_free_converts_surplus_big_pickle_instead_of_growing() -> None:
                 "poolside/laguna-xs-2.1",
                 minute=str(minute),
             )
-            for index, minute in enumerate((40, 45, 50, 55))
+            for index, minute in enumerate((45, 50, 55))
         ],
     ]
 
@@ -861,6 +865,7 @@ def test_apply_does_not_grow_first_big_pickle_when_absent() -> None:
         _row("45", "opencode-free", "nemotron-3.5-lightning-free", minute="15"),
         _row("46", "kilo-auto", "kilo-auto/free", minute="20"),
         _row("47", "opencode-free", "muse-spark-1.2-contributor-free", minute="25"),
+        _row("49", "opencode-free", "space-bunny-free", minute="40"),
         _row("58", "opencode-free", "muse-spark-1.3-contributor-free", minute="30"),
         _row("59", "opencode-free", "ling-3.0-flash-fin-free", minute="35"),
     ]
@@ -901,8 +906,9 @@ def _balanced_grow_roster() -> list[dict[str, str]]:
     """Return a ±1 roster with one big-pickle and one unused-free hole.
 
     All keep-present free OpenCode models except ``ling-3.0-flash-fin-free``
-    are already pinned, so apply must grow a new worker rather than convert.
-    Twelve slots cover every dispatcher minute so the validator loop applies.
+    are already pinned (including ``space-bunny-free``), so apply must grow
+    a new worker rather than convert. Twelve slots cover every dispatcher
+    minute so the validator loop applies.
     """
     return [
         _row("39", "opencode-free", "big-pickle", minute="0"),
@@ -912,6 +918,7 @@ def _balanced_grow_roster() -> list[dict[str, str]]:
         _row("46", "kilo-auto", "kilo-auto/free", minute="20"),
         _row("47", "opencode-free", "muse-spark-1.2-contributor-free", minute="25"),
         _row("48", "opencode-free", "muse-spark-1.3-contributor-free", minute="30"),
+        _row("49", "opencode-free", "space-bunny-free", minute="35"),
         *[
             _row(
                 str(201 + index),
@@ -919,7 +926,7 @@ def _balanced_grow_roster() -> list[dict[str, str]]:
                 "poolside/laguna-xs-2.1",
                 minute=str(minute),
             )
-            for index, minute in enumerate((35, 40, 45, 50, 55))
+            for index, minute in enumerate((40, 45, 50, 55))
         ],
     ]
 
@@ -935,6 +942,7 @@ def _balanced_mimo_upgrade_roster() -> list[dict[str, str]]:
         _row("47", "opencode-free", "muse-spark-1.2-contributor-free", minute="30"),
         _row("48", "opencode-free", "muse-spark-1.3-contributor-free", minute="35"),
         _row("49", "opencode-free", "ling-3.0-flash-fin-free", minute="40"),
+        _row("50", "opencode-free", "space-bunny-free", minute="45"),
         *[
             _row(
                 str(201 + index),
@@ -942,7 +950,7 @@ def _balanced_mimo_upgrade_roster() -> list[dict[str, str]]:
                 "poolside/laguna-xs-2.1",
                 minute=str(minute),
             )
-            for index, minute in enumerate((5, 45, 50, 55))
+            for index, minute in enumerate((5, 50, 55))
         ],
     ]
 
@@ -1132,12 +1140,15 @@ def test_committed_tsv_pins_ling_and_muse_spark_13_via_add_path() -> None:
     assert ROSTER.schedule_is_balanced(rows)
 
 
-def test_committed_tsv_converts_workers_48_and_49_to_opencode_big_pickle() -> None:
-    """Workers 48-49 convert in place to OpenCode Big Pickle; 50 stays Ling VL.
+def test_committed_tsv_converts_nex_to_pickle_then_surplus_to_space_bunny_free() -> None:
+    """Nex pins became pickles; one surplus pickle converted to Space Bunny.
 
-    OpenRouter Nex N2.5 Pro/Mini free pins expire 2026-09-25. Same worker
-    ids and dispatcher minutes stay; kilo-auto 46 is untouched. Surplus
-    pickle slots are convert fodder for later unique Zen frees.
+    OpenRouter Nex N2.5 Pro/Mini free pins expired 2026-09-25 and were
+    replaced in place by OpenCode Big Pickle on workers 48-49. Discovery
+    then converted the highest surplus pickle (49) to unused
+    ``space-bunny-free``. Worker 48 stays surplus pickle convert fodder.
+    Same worker ids and dispatcher minutes stay; kilo-auto 46 is untouched.
+    ``deepseek-v4-flash-free`` stays lock-retired and is not re-pinned.
     """
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
@@ -1158,10 +1169,10 @@ def test_committed_tsv_converts_workers_48_and_49_to_opencode_big_pickle() -> No
     assert by_worker["49"] == {
         "worker": "49",
         "source": "opencode-free",
-        "model": "big-pickle",
+        "model": "space-bunny-free",
         "minute": "55",
         "scheduler": "dispatcher",
-        "display_name": "OpenCode Big Pickle",
+        "display_name": "OpenCode Space Bunny Free",
     }
     assert by_worker["50"] == {
         "worker": "50",
@@ -1175,6 +1186,8 @@ def test_committed_tsv_converts_workers_48_and_49_to_opencode_big_pickle() -> No
     assert "nex-agi/nex-n2.5-mini:free" not in {row["model"] for row in rows}
     assert "z-ai/glm-5.2:free" not in {row["model"] for row in rows}
     assert "xiaomi/mimo-v2.6-flash" not in {row["model"] for row in rows}
+    assert "deepseek-v4-flash-free" not in {row["model"] for row in rows}
+    assert "deepseek-v4-flash-free" in lock["retired_models"]
     assert 72 not in lock["expected_workers"]
     assert "72" not in by_worker
     assert ROSTER.opencode_model_is_free(by_worker["48"]["model"])
@@ -1183,10 +1196,14 @@ def test_committed_tsv_converts_workers_48_and_49_to_opencode_big_pickle() -> No
     assert ROSTER.opencode_free_display_name("big-pickle") == (
         by_worker["48"]["display_name"]
     )
+    assert ROSTER.opencode_free_display_name("space-bunny-free") == (
+        by_worker["49"]["display_name"]
+    )
     catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
     assert "big-pickle" in catalogs["opencode"].model_ids()
+    assert "space-bunny-free" in catalogs["opencode"].model_ids()
     assert ROSTER.schedule_is_balanced(rows)
-    assert sum(1 for row in rows if row["model"] == "big-pickle") == 2
+    assert sum(1 for row in rows if row["model"] == "big-pickle") == 1
 
 
 def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
@@ -1194,8 +1211,9 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
 ) -> None:
     """Fixture apply on the converted roster is a no-op (no grow-72 pickle).
 
-    Unique OpenCode frees are already pinned. Surplus pickle on 48/49
-    stays convert fodder instead of discovery allocating a new worker.
+    Unique OpenCode frees including ``space-bunny-free`` are already pinned.
+    The remaining surplus pickle on 48 stays convert fodder instead of
+    discovery allocating a new worker.
     """
     source_roster = ROOT / ".github" / "free-model-factories.tsv"
     source_lock = ROOT / ".github" / "factory-expected-workers.json"
@@ -1232,9 +1250,12 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["48"]["model"] == "big-pickle"
     assert by_worker["48"]["minute"] == "50"
-    assert by_worker["49"]["model"] == "big-pickle"
+    assert by_worker["49"]["model"] == "space-bunny-free"
     assert by_worker["49"]["minute"] == "55"
-    assert sum(1 for row in remaining if row["model"] == "big-pickle") == 2
+    assert by_worker["49"]["display_name"] == ROSTER.opencode_free_display_name(
+        "space-bunny-free"
+    )
+    assert sum(1 for row in remaining if row["model"] == "big-pickle") == 1
     assert ROSTER.schedule_is_balanced(remaining)
 
 
@@ -1411,7 +1432,7 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_qwen38_27b() -> Non
     catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
     assert "qwen/qwen3.8-27b:free" in catalogs["openrouter"].model_ids()
     assert ROSTER.schedule_is_balanced(rows)
-    assert sum(1 for row in rows if row["model"] == "big-pickle") == 2
+    assert sum(1 for row in rows if row["model"] == "big-pickle") == 1
 
 
 def test_committed_tsv_upgrades_worker_41_to_opencode_mimo_v26_flash() -> None:

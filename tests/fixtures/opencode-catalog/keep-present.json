@@ -3,6 +3,7 @@
   "providers": {
     "opencode": [
       {"id": "big-pickle", "cost": {"input": 0, "output": 0}},
+      {"id": "space-bunny-free", "cost": {"input": 0, "output": 0}},
       {"id": "mimo-v2.6-flash-free", "cost": {"input": 0, "output": 0}},
       {"id": "nemotron-3-ultra-free", "cost": {"input": 0, "output": 0}},
       {"id": "nemotron-3.5-lightning-free", "cost": {"input": 0, "output": 0}},
