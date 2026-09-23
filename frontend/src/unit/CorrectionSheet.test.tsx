@@ -170,7 +170,7 @@ describe('CorrectionSheet', () => {
 
     // Each steerable choice should have an example drawn from history
     expect(screen.getByTestId('correction-example-even_easier')).toHaveTextContent('Jimmy Olsen')
-    expect(screen.getByTestId('correction-example-keep_level_different')).toHaveTextContent('Hellboy')
+    expect(screen.getByTestId('correction-example-keep_level_different')).toHaveTextContent('Planetary')
     expect(screen.getByTestId('correction-example-something_familiar')).toHaveTextContent('Planetary')
     expect(screen.getByTestId('correction-example-something_different')).toHaveTextContent('Jimmy Olsen')
     // Surprise me example is marked illustrative/random

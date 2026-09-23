@@ -40,7 +40,7 @@ const CHOICES: CorrectionChoiceMeta[] = [
   {
     id: 'keep_level_different',
     label: 'Keep about the same effort',
-    description: 'Keep the current commitment level, but choose another comic.',
+    description: 'Keep the current commitment, but choose another comic.',
     patch: { intent: 'balanced' },
   },
   {
