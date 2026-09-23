@@ -1283,6 +1283,7 @@ CREATE INDEX ix_issue_thread_number ON issues(thread_id, issue_number);
 CREATE INDEX ix_issue_thread_position ON issues(thread_id, position);
 CREATE INDEX ix_thread_user_status_position ON threads(user_id, status, queue_position);
 CREATE INDEX ix_thread_user_status_blocked_position ON threads(user_id, status, is_blocked, queue_position);
+CREATE INDEX ix_dependencies_target_issue_id ON dependencies(target_issue_id);
 ```
 
 ---
