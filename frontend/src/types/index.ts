@@ -292,6 +292,7 @@ export interface TopRatedThread {
   title: string;
   rating: number;
   format: string;
+  issues_remaining?: number | null;
 }
 
 export interface AnalyticsMetrics {

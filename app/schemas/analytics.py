@@ -25,6 +25,7 @@ class TopRatedThread(BaseModel):
     title: str
     rating: float
     format: str
+    issues_remaining: int | None = None
 
 
 class AnalyticsMetricsResponse(BaseModel):
