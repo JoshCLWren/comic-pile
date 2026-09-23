@@ -2,17 +2,12 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
 
 # Explicit prerequisite declaration pattern (generic; no host-specific labels/numbers).
 DEP_ON_RE = re.compile(r"(?:[Dd]epends?\s+on)\s+([^\n]+)")
 NUMBER_REF_RE = re.compile(r"#(\d+)")
 DEPENDENCY_SEPARATORS = frozenset({"and", "&", "+", ","})
-
-# Casual reference pattern: standalone #N mentions not tied to a declaration.
-CASUAL_REF_RE = re.compile(r"#(\d+)")
 
 MANUAL_ONLY_MARKER = "<!-- factory-execution:manual-only -->"
 

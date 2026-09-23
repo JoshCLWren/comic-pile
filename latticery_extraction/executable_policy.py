@@ -1,7 +1,7 @@
 """Pure executable-work eligibility domain (no GitHub/network side effects)."""
 from __future__ import annotations
 
-from latticery.dependency_policy import (
+from latticery_extraction.dependency_policy import (
     MANUAL_ONLY_MARKER,
     has_unresolved_dependencies,
 )
@@ -34,9 +34,8 @@ def eligibility_reason(body: str, open_prerequisites: set[int]) -> str | None:
     """Return a deterministic reason if not executable, else None."""
     if MANUAL_ONLY_MARKER in body:
         return "manual-only marker present"
-    declared = set()
     # Re-use pure dependency scanner without importing internals unnecessarily.
-    from latticery.dependency_policy import parse_dependency_numbers
+    from latticery_extraction.dependency_policy import parse_dependency_numbers
 
     declared = parse_dependency_numbers(body)
     unresolved = declared & open_prerequisites

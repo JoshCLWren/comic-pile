@@ -9,16 +9,16 @@ Acceptance criteria covered:
 - no ComicPile-specific exclusions/leaks
 """
 import pytest
-from latticery.dependency_policy import (
+from latticery_extraction.dependency_policy import (
     DEP_ON_RE,
     MANUAL_ONLY_MARKER,
     DependencyDeclaration,
+    dependency_declarations,
     has_unresolved_dependencies,
     is_explicit_dependency_reference,
     parse_dependency_numbers,
-    dependency_declarations,
 )
-from latticery.executable_policy import eligibility_reason, is_executable
+from latticery_extraction.executable_policy import eligibility_reason, is_executable
 
 
 class TestExplicitDependencies:
@@ -100,15 +100,19 @@ class TestNoHostLeakage:
 
     def test_no_hardcoded_issue_numbers_in_domain(self) -> None:
         # The domain modules should not contain specific issue IDs.
-        import inspect, latticery.dependency_policy as dp
-        import latticery.executable_policy as ep
+        import inspect
+        import latticery_extraction.dependency_policy as dp
+        import latticery_extraction.executable_policy as ep
+
         source = inspect.getsource(dp) + inspect.getsource(ep)
         # The known excluded issues from ComicPile factory policy are 679, 1093, 1109.
         for bad in (679, 1093, 1109):
             assert str(bad) not in source, f"host-specific issue number {bad} leaked into domain"
 
     def test_no_comic_pile_labels(self) -> None:
-        import inspect, latticery.dependency_policy as dp
+        import inspect
+        import latticery_extraction.dependency_policy as dp
+
         source = inspect.getsource(dp)
         assert "factory:unowned" not in source
         assert "ralph-status" not in source
