@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
+import json
 from pathlib import Path
 import sys
 from types import ModuleType
@@ -509,3 +511,149 @@ async def test_locally_satisfiable_creator_work_makes_no_provider_request(
     assert result.creator_credits == 2
     normalize.assert_awaited_once()
     assert normalize.call_args.kwargs["identity_id"] == 12
+
+
+@pytest.mark.asyncio
+async def test_throttled_deep_fetch_is_deferred_not_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A throttled issue-metadata resource defers the issue instead of failing it."""
+    cli = _module()
+    issue = _issue(
+        cli,
+        identity_id=10,
+        external_id="4005",
+        has_creator_credits=False,
+        has_person_credit_source=False,
+        creator_credit_count=0,
+    )
+
+    monkeypatch.setattr(
+        cli,
+        "_fetch_deep_metadata",
+        AsyncMock(side_effect=cli.ComicVineRateLimitError("throttled")),
+    )
+
+    result = await cli._process_issue(
+        object(),
+        _NoProviderClient(),
+        user_id=1,
+        issue=issue,
+        dry_run=False,
+        refresh=False,
+    )
+
+    assert result.status == "rate-limited"
+    assert result.comicvine_issue_id == "4005"
+    assert "issue metadata is cooling" in (result.detail or "")
+
+
+@pytest.mark.asyncio
+async def test_throttled_roster_resolution_is_deferred_not_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A throttled issues-roster resource defers unmapped resolution instead of ending the pass."""
+    cli = _module()
+    issue = _issue(cli)
+
+    monkeypatch.setattr(
+        cli,
+        "_resolve_unmapped_issue",
+        AsyncMock(side_effect=cli.ComicVineRateLimitError("throttled")),
+    )
+
+    result = await cli._process_issue(
+        object(),
+        _NoProviderClient(),
+        user_id=1,
+        issue=issue,
+        dry_run=False,
+        refresh=False,
+    )
+
+    assert result.status == "rate-limited"
+    assert result.comicvine_issue_id is None
+    assert "issues roster is cooling" in (result.detail or "")
+
+
+@pytest.mark.asyncio
+async def test_rate_limited_issue_does_not_terminate_unrelated_work(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """One throttled resource defers its issue while the operator still finishes other work."""
+    cli = _module()
+    first = _issue(cli, issue_id=1)
+    second = _issue(
+        cli,
+        issue_id=2,
+        identity_id=10,
+        external_id="4005",
+        has_creator_credits=True,
+        has_person_credit_source=True,
+        creator_credit_count=3,
+    )
+
+    rate_limited = cli.BackfillResult(
+        issue_id=1,
+        thread_id=3,
+        title="Example",
+        issue_number="5",
+        status="rate-limited",
+        detail="ComicVine issues roster is cooling; deferred: throttled",
+    )
+    complete = cli.BackfillResult(
+        issue_id=2,
+        thread_id=3,
+        title="Example",
+        issue_number="5",
+        status="complete",
+        comicvine_issue_id="4005",
+        creator_credits=3,
+    )
+
+    monkeypatch.setattr(cli, "_user_exists", AsyncMock(return_value=True))
+    monkeypatch.setattr(
+        cli,
+        "_load_read_issues",
+        AsyncMock(return_value=[first, second]),
+    )
+    monkeypatch.setattr(cli, "_engine", lambda database_url: AsyncMock())
+
+    class _FakeSession:
+        """Stand-in session that never touches a database connection."""
+
+        async def __aenter__(self) -> _FakeSession:
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+    monkeypatch.setattr(
+        cli,
+        "async_sessionmaker",
+        lambda *args: lambda **kwargs: _FakeSession(),
+    )
+    process = AsyncMock(side_effect=[rate_limited, complete])
+    monkeypatch.setattr(cli, "_process_issue", process)
+    monkeypatch.setenv("COMICVINE_API_KEY", "test-key")
+    monkeypatch.setenv("COMICVINE_CACHE_DIR", str(tmp_path))
+
+    args = argparse.Namespace(
+        user_id=1,
+        database_url="postgresql://owner:secret@example.invalid/neondb",
+        dry_run=False,
+        refresh=False,
+        limit=None,
+        report=tmp_path / "report.json",
+    )
+
+    exit_code = await cli._run(args)
+
+    assert exit_code == 0
+    report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    statuses = [entry["status"] for entry in report["issues"]]
+    assert statuses == ["rate-limited", "complete"]
+    assert report["summary"]["statuses"]["rate-limited"] == 1
+    assert report["summary"]["statuses"]["complete"] == 1
+    assert process.await_count == 2

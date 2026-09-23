@@ -727,12 +727,22 @@ async def _process_issue(
                 ),
             )
         assert client is not None
-        resolved = await _resolve_unmapped_issue(
-            db,
-            client,
-            user_id=user_id,
-            issue=issue,
-        )
+        try:
+            resolved = await _resolve_unmapped_issue(
+                db,
+                client,
+                user_id=user_id,
+                issue=issue,
+            )
+        except ComicVineRateLimitError as exc:
+            return BackfillResult(
+                issue_id=issue.issue_id,
+                thread_id=issue.thread_id,
+                title=issue.thread_title,
+                issue_number=issue.issue_number,
+                status="rate-limited",
+                detail=f"ComicVine issues roster is cooling; deferred: {exc}",
+            )
         if resolved is None:
             return BackfillResult(
                 issue_id=issue.issue_id,
@@ -775,13 +785,25 @@ async def _process_issue(
 
     if refresh or not has_creator_credits:
         assert client is not None
-        creator_count = await _fetch_deep_metadata(
-            db,
-            client,
-            identity_id=identity_id,
-            external_id=external_id,
-            refresh=refresh,
-        )
+        try:
+            creator_count = await _fetch_deep_metadata(
+                db,
+                client,
+                identity_id=identity_id,
+                external_id=external_id,
+                refresh=refresh,
+            )
+        except ComicVineRateLimitError as exc:
+            return BackfillResult(
+                issue_id=issue.issue_id,
+                thread_id=issue.thread_id,
+                title=issue.thread_title,
+                issue_number=issue.issue_number,
+                status="rate-limited",
+                comicvine_issue_id=external_id,
+                creator_credits=creator_count,
+                detail=f"ComicVine issue metadata is cooling; deferred: {exc}",
+            )
         has_creator_credits = True
 
     return BackfillResult(
@@ -899,10 +921,9 @@ async def _run(args: argparse.Namespace) -> int:
 
                 if result.status == "rate-limited":
                     print(
-                        "ComicVine rate limit reached. Stopping cleanly; "
-                        "rerun the same command later."
+                        "ComicVine resource throttle deferred this issue; "
+                        "continuing with other satisfiable work."
                     )
-                    break
     finally:
         await engine.dispose()
 
