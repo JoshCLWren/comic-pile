@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
-from app.models.delivery import DeliveryRecord as DeliveryRecordModel
+from app.auth import get_current_user
+from app.database import get_db
+from app.models.user import User
 from app.schemas.delivery import (
     CrossRepoDeliveryRequest,
     DeliveryRecordCreate,
@@ -25,7 +25,7 @@ router = APIRouter()
 async def create_delivery_request(
     request: CrossRepoDeliveryRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
     delivery_service: Annotated[DeliveryService, Depends()],
 ) -> DeliveryResult:
     """Create a cross-repository delivery request.
@@ -75,7 +75,8 @@ async def create_delivery_request(
 @router.get("/delivery", response_model=list[DeliveryRecordResponse])
 async def list_delivery_records(
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    delivery_service: Annotated[DeliveryService, Depends()],
 ) -> list[DeliveryRecordResponse]:
     """List all delivery records.
     
@@ -86,8 +87,7 @@ async def list_delivery_records(
     Returns:
         List of delivery records
     """
-    result = await db.execute(select(DeliveryRecordModel))
-    records = result.scalars().all()
+    records = await delivery_service.list_delivery_records(db)
     return [DeliveryRecordResponse.model_validate(record) for record in records]
 
 
@@ -95,7 +95,8 @@ async def list_delivery_records(
 async def get_delivery_record(
     delivery_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    delivery_service: Annotated[DeliveryService, Depends()],
 ) -> DeliveryRecordResponse:
     """Get a specific delivery record by ID.
     
@@ -110,10 +111,7 @@ async def get_delivery_record(
     Raises:
         HTTPException: If delivery record not found
     """
-    result = await db.execute(
-        select(DeliveryRecordModel).where(DeliveryRecordModel.id == delivery_id)
-    )
-    record = result.scalar_one_or_none()
+    record = await delivery_service.get_delivery_record(db, delivery_id)
     if record is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -127,7 +125,8 @@ async def get_delivery_by_target_branch(
     target_repository: str,
     branch_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    delivery_service: Annotated[DeliveryService, Depends()],
 ) -> DeliveryRecordResponse:
     """Get delivery record by target repository and branch name.
     
@@ -143,13 +142,9 @@ async def get_delivery_by_target_branch(
     Raises:
         HTTPException: If delivery record not found
     """
-    result = await db.execute(
-        select(DeliveryRecordModel).where(
-            DeliveryRecordModel.target_repository == target_repository,
-            DeliveryRecordModel.target_branch == branch_name,
-        )
+    record = await delivery_service.find_delivery_by_target_branch(
+        db, target_repository, branch_name
     )
-    record = result.scalar_one_or_none()
     if record is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -163,7 +158,7 @@ async def update_delivery_record(
     delivery_id: int,
     update_data: DeliveryRecordCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
     delivery_service: Annotated[DeliveryService, Depends()],
 ) -> DeliveryRecordResponse:
     """Update a delivery record.

@@ -108,6 +108,20 @@ class DeliveryService:
         await db.refresh(record)
         return record
 
+    async def list_delivery_records(
+        self, db: AsyncSession,
+    ) -> list[DeliveryRecordModel]:
+        """List all delivery records.
+
+        Args:
+            db: Async database session.
+
+        Returns:
+            List of all delivery records.
+        """
+        result = await db.execute(select(DeliveryRecordModel))
+        return result.scalars().all()
+
     async def update_delivery_record(
         self,
         db: AsyncSession,
