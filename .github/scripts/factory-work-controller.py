@@ -18,9 +18,11 @@ from factory_capacity_policy import (
     omniroute_enabled,
     remaining_omniroute_free_entry_slots,
 )
-from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, labels_of, lease_is_stale, linked_issue_from_branch, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments)
+from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments)
+from stale_pr_decay import StalePRGuard
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
+ASSIGNMENT_WRITER_WORKFLOW_PATH = ".github/workflows/fixed-model-factory-dispatch.yml"
 STRIKE_RESET_RE = re.compile(
     r"comic-pile-factory-strike-reset-v1:issue-(?P<issue>\d+):pr-(?P<pr>\d+):"
     r"excluded-producer-(?P<worker>\d+|unknown)"
@@ -79,6 +81,12 @@ def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> N
     intermediate owner states. A post-write claim verification is performed by
     ``assign_candidate``.
     """
+    if (
+        FIXED_OWNER_RE.fullmatch(owner)
+        and os.environ.get('GITHUB_ACTIONS', '').strip().lower() == 'true'
+        and not dispatcher_identity_verified()
+    ):
+        raise RuntimeError('dispatcher authorization failed: mutation blocked for non-dispatcher workflow')
     target = target_json(number)
     current = [label['name'] for label in target.get('labels', [])]
     existing_stage = next((label for label in current if label in STAGE_LABELS), None)
@@ -175,6 +183,23 @@ def target_owned_by(number: int, owner: str) -> bool:
     return active_owners == {owner}
 
 
+def dispatcher_identity_verified() -> bool:
+    """Return True only when running inside the canonical dispatcher workflow.
+
+    Local tests and operator diagnostics remain usable outside GitHub Actions.
+    In Actions, authorization is tied to the repository-qualified workflow file
+    identity rather than the non-unique workflow display name.
+    """
+    if os.environ.get('GITHUB_ACTIONS', '').strip().lower() != 'true':
+        return True
+    repository = os.environ.get('GITHUB_REPOSITORY', '').strip()
+    workflow_ref = os.environ.get('GITHUB_WORKFLOW_REF', '').strip()
+    workflow_file = workflow_ref.partition('@')[0]
+    return bool(repository) and workflow_file == (
+        f"{repository}/{ASSIGNMENT_WRITER_WORKFLOW_PATH}"
+    )
+
+
 def record_controller_lease_activity(number: int, worker: str, kind: str) -> None:
     """Persist a trusted lease timestamp before dispatcher handoff."""
     epoch = int(time.time())
@@ -184,6 +209,8 @@ def record_controller_lease_activity(number: int, worker: str, kind: str) -> Non
 
 def assign_candidate(candidate: Candidate, worker: str) -> bool:
     """Claim a candidate and any linked issue for one fixed-model worker."""
+    if os.environ.get('GITHUB_ACTIONS') == 'true' and not dispatcher_identity_verified():
+        return False
     owner = f'factory:{worker}'
     numbers = [candidate.number]
     if candidate.kind == 'pr' and candidate.linked_issue is not None:
@@ -197,6 +224,9 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
         if not target_still_unowned(number):
             return False
 
+    if worker_has_active_lease(worker):
+        return False
+
     def release_verified_claims(claimed_numbers: list[int]) -> None:
         """Release only labels this worker can still prove it owns."""
         for claimed_number in claimed_numbers:
@@ -208,6 +238,11 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
     claimed: list[int] = []
     try:
         for number in numbers:
+            # Revalidate immediately before the first lease mutation so a stale
+            # idle snapshot cannot create a second lease.
+            if not target_still_unowned(number):
+                release_verified_claims(claimed)
+                return False
             if candidate.kind == 'issue':
                 stage = 'factory:building'
                 kind = 'issue'
@@ -648,12 +683,207 @@ def release_worker(worker: str, reason: str = 'controller-release') -> list[int]
     return released
 
 
+def selectivity_conflict_recovery(worker: str) -> dict[str, Any]:
+    """Perform selective lease recovery for dual-lease incidents.
+    
+    When a worker owns one canonical PR plus an unrelated accidental issue lease,
+    keep the PR and release only the issue. When an orphan issue lease has an
+    existing canonical PR, release the orphan issue without disturbing the PR.
+    Before releasing, verify the worker still owns the target. Ambiguous
+    multi-PR/multi-issue corruption fails closed rather than guessing.
+    
+    Returns a dict with recovery results and any error messages.
+    """
+    owner = f'factory:{worker}'
+    issues = list_issues()
+    prs = list_prs()
+    
+    # Find all targets owned by this worker
+    owned_issues = []
+    owned_prs = []
+    for item in issues:
+        if owner_of(labels_of(item)) == owner:
+            owned_issues.append(item)
+    for item in prs:
+        if owner_of(labels_of(item)) == owner:
+            owned_prs.append(item)
+    
+    result = {
+        'worker': worker,
+        'recovered_issues': [],
+        'recovered_prs': [],
+        'canonical_prs_preserved': [],
+        'orphan_issues_released': [],
+        'ambiguous_cases': [],
+        'errors': []
+    }
+    
+    # Case 3: Check for ambiguous multi-PR/multi-issue corruption first - fail closed
+    if len(owned_issues) > 1 or len(owned_prs) > 1:
+        # Check for complex patterns that we can't safely resolve
+        complex_patterns = []
+        
+        # Multiple PRs with different linked issues
+        if len(owned_prs) > 1:
+            pr_linked_issues = set()
+            for pr in owned_prs:
+                linked = linked_issue_from_pr(pr)
+                if linked:
+                    pr_linked_issues.add(linked)
+            if len(pr_linked_issues) > 1:
+                complex_patterns.append('multiple PRs with different linked issues')
+        
+        # Multiple issues where some could be linked to PRs not owned by this worker
+        if len(owned_issues) > 1:
+            issue_pr_links = {}
+            for issue in owned_issues:
+                issue_num = int(issue['number'])
+                issue_pr_links[issue_num] = []
+                
+                for pr in prs:
+                    if linked_issue_from_pr(pr) == issue_num:
+                        issue_pr_links[issue_num].append(int(pr['number']))
+            
+            # Check if any issue could be claimed by multiple PRs
+            for issue_num, linked_prs in issue_pr_links.items():
+                if len(linked_prs) > 1:
+                    complex_patterns.append(f'issue {issue_num} claimed by multiple PRs')
+        
+        # Check for individual ambiguous cases
+        for issue in owned_issues:
+            issue_number = int(issue['number'])
+            # No canonical PR found for this issue, check if it's ambiguous
+            other_worker_prs = [
+                p for p in prs
+                if linked_issue_from_pr(p) == issue_number and owner_of(labels_of(p)) != owner
+            ]
+            if other_worker_prs:
+                # This might be ambiguous - multiple workers could claim this issue
+                result['ambiguous_cases'].append({
+                    'issue': issue_number,
+                    'reason': 'multiple workers could claim this issue'
+                })
+        
+        if complex_patterns:
+            result['ambiguous_cases'].extend([{
+                'pattern': pattern,
+                'reason': 'complex multi-PR/multi-issue corruption - failing closed'
+            } for pattern in complex_patterns])
+        
+        # If any ambiguous cases found, fail closed - do not perform any recovery
+        if result['ambiguous_cases']:
+            return result
+    
+    # Case 1: Worker owns canonical PR + unrelated accidental issue lease
+    for pr in owned_prs:
+        pr_number = int(pr['number'])
+        
+        # Check if this PR is canonical (has linked issue)
+        linked_issue = linked_issue_from_pr(pr)
+        if linked_issue is None:
+            continue  # Not a canonical PR
+            
+        # Find any unrelated issue leases owned by the same worker
+        for issue in owned_issues:
+            issue_number = int(issue['number'])
+            
+            # Skip if this issue is the linked issue of the PR
+            if issue_number == linked_issue:
+                continue
+                
+            # Verify the worker still owns both targets
+            if not (target_owned_by(issue_number, owner) and target_owned_by(pr_number, owner)):
+                continue
+                
+            # This is a canonical PR + unrelated accidental issue lease
+            # Release only the issue, preserve the PR
+            try:
+                replace_factory_labels(issue_number, 'factory:unowned')
+                record_claim_released(issue_number, worker, 'issue', 'selective-conflict-recovery')
+                result['recovered_issues'].append(issue_number)
+                result['canonical_prs_preserved'].append(pr_number)
+                result['orphan_issues_released'].append(issue_number)
+            except Exception as e:
+                result['errors'].append(f'Failed to release issue {issue_number}: {str(e)}')
+    
+    # Case 2: Orphan issue lease + existing canonical PR
+    for issue in owned_issues:
+        issue_number = int(issue['number'])
+        
+        # Find any canonical PR that would claim this issue
+        linked_pr_found = False
+        for pr in prs:
+            pr_number = int(pr['number'])
+            
+            # Check if this PR would claim the issue (via branch or explicit close)
+            pr_linked_issue = linked_issue_from_branch(pr.get('headRefName', ''))
+            pr_closes_issue = issue_explicitly_closed_by_pr(pr)
+            
+            if pr_linked_issue == issue_number or pr_closes_issue == issue_number:
+                # Verify the PR is still open and not owned by this worker
+                if (str(pr.get('state', 'OPEN')).upper() == 'OPEN' and 
+                    not pr.get('isDraft') and
+                    owner_of(labels_of(pr)) != owner):
+                    
+                    # Verify the worker still owns the issue
+                    if not target_owned_by(issue_number, owner):
+                        continue
+                        
+                    # This is an orphan issue lease + existing canonical PR
+                    # Release only the issue, preserve the PR
+                    try:
+                        replace_factory_labels(issue_number, 'factory:unowned')
+                        record_claim_released(issue_number, worker, 'issue', 'selective-conflict-recovery')
+                        result['recovered_issues'].append(issue_number)
+                        result['orphan_issues_released'].append(issue_number)
+                        linked_pr_found = True
+                        break
+                    except Exception as e:
+                        result['errors'].append(f'Failed to release orphan issue {issue_number}: {str(e)}')
+        
+        if not linked_pr_found:
+            # No canonical PR found for this issue, check if it's ambiguous
+            other_worker_prs = [
+                p for p in prs
+                if linked_issue_from_pr(p) == issue_number and owner_of(labels_of(p)) != owner
+            ]
+            if other_worker_prs:
+                # This might be ambiguous - multiple workers could claim this issue
+                result['ambiguous_cases'].append({
+                    'issue': issue_number,
+                    'reason': 'multiple workers could claim this issue'
+                })
+    
+    return result
+
+
+def check_stale_prs(dry_run: bool = False) -> dict[str, Any]:
+    """Evaluate open Factory PRs for staleness and expire any that cross the threshold.
+
+    Returns a dict with the baseline statistics and expiration results.
+    This integrates the adaptive stale-PR decay guard into the controller.
+    """
+    guard = StalePRGuard()
+    prs = list_prs()
+    baseline = guard.get_baseline(prs)
+    results = guard.process_stale_prs(prs=prs, dry_run=dry_run)
+    expired = [r for r in results if r.get("status") == "expired"]
+    return {
+        "baseline": baseline,
+        "results": results,
+        "expired_count": len(expired),
+        "dry_run": dry_run,
+    }
+
+
 def main() -> int:
     """Run the factory controller command-line interface."""
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest='command', required=True)
     subparsers.add_parser('reconcile')
     subparsers.add_parser('capacity')
+    stale_parser = subparsers.add_parser('stale')
+    stale_parser.add_argument('--dry-run', action='store_true', help='Report without taking action')
     assign_parser = subparsers.add_parser('assign')
     assign_parser.add_argument('--worker', required=True)
     inspect_parser = subparsers.add_parser('inspect')
@@ -661,12 +891,17 @@ def main() -> int:
     release_parser = subparsers.add_parser('release')
     release_parser.add_argument('--worker', required=True)
     release_parser.add_argument('--reason', default='controller-release')
+    recovery_parser = subparsers.add_parser('conflict-recovery')
+    recovery_parser.add_argument('--worker', required=True)
     args = parser.parse_args()
     if args.command == 'reconcile':
         print(json.dumps({'released': reconcile_stale_leases()}))
         return 0
     if args.command == 'capacity':
         print(json.dumps(omniroute_free_entry_capacity()))
+        return 0
+    if args.command == 'stale':
+        print(json.dumps(check_stale_prs(dry_run=args.dry_run)))
         return 0
     if args.command == 'assign':
         candidate = assign(args.worker)
@@ -677,6 +912,10 @@ def main() -> int:
         return 0
     if args.command == 'inspect':
         print(json.dumps(inspect_assignment(args.worker)))
+        return 0
+    if args.command == 'conflict-recovery':
+        result = selectivity_conflict_recovery(args.worker)
+        print(json.dumps(result))
         return 0
     print(json.dumps({'released': release_worker(args.worker, reason=args.reason)}))
     return 0

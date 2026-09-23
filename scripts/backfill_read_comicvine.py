@@ -1,925 +1,934 @@
 #!/usr/bin/env python3
-r"""Local-first ComicVine read backfill operator for identity resolution and creator hydration.
+"""Backfill ComicVine creator metadata for read ComicPile issues.
 
-Single documented operator command::
+This operator command is intentionally isolated from ``app.database`` and the
+Pydantic settings stack. It reads the already-exported ``DATABASE_URL`` from
+the process environment (for example, from direnv), creates its own SQLAlchemy
+engine, and never falls back to a local or test database.
 
-    python scripts/backfill_read_comicvine.py --user-id 1 \\
-        --database-url postgresql+asyncpg://user:pass@localhost/comicpile \\
-        --comicvine-db /data/comicvine.sqlite --report-path /tmp/backfill-report.json
+For every non-test issue with ``status = 'read'`` owned by the selected user it:
 
-The pipeline exhausts local evidence before live provider work, paces live
-request starts, isolates per-resource throttle cooldowns, stays resumable via
-per-issue commits, and always emits a machine-readable JSON report.
+* reuses a confirmed ComicVine issue mapping when one exists;
+* adds normalized ``creator_credits`` locally when stored provider metadata
+  already contains legacy/deep ``person_credits``;
+* otherwise fetches the singular ComicVine issue and persists normalized deep
+  metadata, including creator credits;
+* for unmapped numeric issues, attempts conservative series-volume resolution:
+  one confirmed ComicVine series, one exact issue-number match, one provider
+  result. Ambiguous or unprovable matches remain unresolved.
+
+The command is idempotent and resumable. ComicVine's existing persistent cache
+and endpoint rate limiter are reused. The inventory query deliberately selects
+only metadata-state flags and series identifiers, not every large provider JSON
+blob in the read library.
+
+Examples:
+    uv run python scripts/backfill_read_comicvine.py --user-id 1 --dry-run
+    uv run python scripts/backfill_read_comicvine.py --user-id 1 --limit 25
+    uv run python scripts/backfill_read_comicvine.py --user-id 1
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+from dataclasses import asdict, dataclass
+from datetime import datetime
+import importlib
 import json
 import os
-import sys
-import time
-from collections.abc import Callable
-from contextlib import AbstractAsyncContextManager
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal, TypedDict
+import sys
+import unicodedata
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-from sqlalchemy import String, cast, select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
-from app.comicvine_hydration import hydrate_issue
-from app.external_identities import upsert_external_identity
-from app.models.external_identity import (
-    ExternalIdentity,
-    IssueExternalIdentityMapping,
-    ThreadExternalSeriesMapping,
-)
-from app.models.issue import Issue
-from app.models.thread import Thread
-from comic_pile.comicvine_identity_repair import ComicVineRepairContext
-from comic_pile.comicvine_provider import ComicVineClient, ComicVineError, ComicVineRateLimitError
-from comic_pile.comicvine_repair_pipeline import repair_identity
-from comic_pile.local_comicvine import LocalComicVineSnapshot
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-SessionFactory = Callable[[], AbstractAsyncContextManager[AsyncSession]]
+_comicvine_provider = importlib.import_module("comic_pile.comicvine_provider")
+ComicVineClient = _comicvine_provider.ComicVineClient
+ComicVineError = _comicvine_provider.ComicVineError
+ComicVineRateLimitError = _comicvine_provider.ComicVineRateLimitError
 
-_IDENTITY_RESOURCE = "search"
-_CREATOR_RESOURCE = "issue"
-
-_THROTTLE_BASE_SECONDS = 60.0
-_THROTTLE_MAX_SECONDS = 3600.0
+DEFAULT_REPORT = Path("/tmp/comicpile-read-comicvine-backfill.json")
 
 
-def _normalize_issue_label(value: object) -> str:
-    """Normalize an issue number or human label for comparison.
+@dataclass(frozen=True)
+class ReadIssue:
+    """One read issue plus the bounded ComicVine evidence needed by the operator."""
 
-    Args:
-        value: Raw issue label from ComicPile or provider metadata.
+    issue_id: int
+    thread_id: int
+    thread_title: str
+    issue_number: str
+    position: int
+    identity_id: int | None
+    external_id: str | None
+    has_creator_credits: bool
+    has_person_credit_source: bool
+    creator_credit_count: int
+    series_identity_id: int | None
+    series_external_id: str | None
+    series_volume_id: int | None
+    series_name: str | None
 
-    Returns:
-        Lowercased, NFKC-normalized label with any leading hash removed.
-    """
+
+@dataclass
+class BackfillResult:
+    """Machine-readable outcome for one attempted read-issue backfill."""
+
+    issue_id: int
+    thread_id: int
+    title: str
+    issue_number: str
+    status: str
+    comicvine_issue_id: str | None = None
+    creator_credits: int = 0
+    detail: str | None = None
+
+
+def _async_url(raw: str) -> str:
+    """Normalize a Neon/libpq URL into a SQLAlchemy asyncpg URL."""
+    url = raw.strip()
+    if url.startswith("postgresql://"):
+        url = "postgresql+asyncpg://" + url[len("postgresql://") :]
+    elif url.startswith("postgres://"):
+        url = "postgresql+asyncpg://" + url[len("postgres://") :]
+
+    parsed = urlparse(url)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query.pop("channel_binding", None)
+    sslmode = query.pop("sslmode", None)
+    if sslmode in {"require", "verify-full", "verify-ca"} or "ssl" not in query:
+        query["ssl"] = "require"
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
+def _require_database_url(explicit: str | None) -> str:
+    """Return only an explicitly supplied/process-exported database URL."""
+    value = explicit if explicit is not None else os.environ.get("DATABASE_URL")
+    if value is None or not value.strip():
+        raise SystemExit(
+            "DATABASE_URL is required. This script never falls back to app config, "
+            "TEST_DATABASE_URL, or a local database."
+        )
+    return value.strip()
+
+
+def _database_target(database_url: str) -> tuple[str, str]:
+    """Return safe host/database display values without credentials."""
+    parsed = urlparse(database_url)
+    return parsed.hostname or "<unknown>", parsed.path.lstrip("/") or "<unknown>"
+
+
+def _normalize_issue_label(value: str | None) -> str:
+    """Normalize issue labels exactly like the deterministic app resolver."""
     if value is None:
         return ""
-    return " ".join(str(value).strip().casefold().removeprefix("#").strip().split())
+    normalized = unicodedata.normalize("NFKC", value).strip()
+    normalized = normalized.removeprefix("#").strip()
+    return " ".join(normalized.split()).lower()
 
 
-def _provider_issue_id(external_id: str) -> int | None:
-    """Extract the numeric ComicVine issue ID from a stored external ID.
-
-    Args:
-        external_id: Stored provider external ID, optionally ``4000-`` prefixed.
-
-    Returns:
-        The integer ComicVine issue ID, or None when not numeric.
-    """
-    normalized = external_id.removeprefix("4000-").strip()
-    return int(normalized) if normalized.isdigit() else None
-
-
-def _identity_matches_issue(identity: ExternalIdentity, issue_number: str) -> bool:
-    """Return whether an external issue identity matches one ComicPile issue label.
-
-    Args:
-        identity: External ComicVine issue identity.
-        issue_number: ComicPile issue number label to match.
-
-    Returns:
-        True when the stored label (issue number or issue name) matches.
-    """
-    expected = _normalize_issue_label(issue_number)
-    if not expected:
+def _is_ambiguous_special(label: str | None) -> bool:
+    """Return true for labels that likely belong to a separate provider volume."""
+    normalized = _normalize_issue_label(label)
+    if not normalized or normalized.isdigit():
         return False
-    metadata = identity.metadata_json or {}
-    return any(
-        _normalize_issue_label(metadata.get(key)) == expected
-        for key in ("issue_number", "name")
+    for keyword in ("annual", "special", "one-shot", "giant"):
+        if normalized.startswith(keyword) or f" {keyword} " in f" {normalized} ":
+            return True
+    return False
+
+
+def _integer(value: object) -> int | None:
+    """Coerce a numeric provider value without accepting booleans."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
+
+
+def _string(value: object) -> str | None:
+    """Coerce a non-empty string/int provider value to text."""
+    if isinstance(value, (str, int)) and not isinstance(value, bool):
+        normalized = str(value).strip()
+        return normalized or None
+    return None
+
+
+def _series_volume_id(volume_id: object, external_id: str | None) -> int | None:
+    """Resolve a ComicVine volume ID from metadata first, stable identity second."""
+    found = _integer(volume_id)
+    if found is not None:
+        return found
+    if external_id:
+        return _integer(external_id.removeprefix("4050-").strip())
+    return None
+
+
+def _compact_reference(value: object) -> dict[str, object] | None:
+    """Keep only stable fields from a ComicVine relationship object."""
+    if not isinstance(value, dict):
+        return None
+    allowed = ("id", "name", "api_detail_url", "site_detail_url")
+    compact = {key: value[key] for key in allowed if key in value}
+    if "role" in value:
+        compact["role"] = value["role"]
+    return compact
+
+
+def _compact_references(value: object) -> list[dict[str, object]]:
+    """Normalize a ComicVine relationship array."""
+    if not isinstance(value, list):
+        return []
+    return [
+        compact
+        for item in value
+        if (compact := _compact_reference(item)) is not None
+    ]
+
+
+def _provider_timestamp(value: object) -> datetime | None:
+    """Parse an optional ComicVine update timestamp."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _normalize_issue_metadata(result: dict[str, object]) -> dict[str, object]:
+    """Normalize the singular issue payload into ComicPile's creator-aware shape."""
+    image = result.get("image") if isinstance(result.get("image"), dict) else None
+    primary_image: str | None = None
+    if isinstance(image, dict):
+        for key in ("original_url", "super_url", "medium_url", "small_url"):
+            candidate = image.get(key)
+            if isinstance(candidate, str) and candidate:
+                primary_image = candidate
+                break
+
+    return {
+        "name": result.get("name"),
+        "issue_number": result.get("issue_number"),
+        "cover_date": result.get("cover_date"),
+        "store_date": result.get("store_date"),
+        "volume": _compact_reference(result.get("volume")),
+        "primary_image": primary_image,
+        "creator_credits": _compact_references(result.get("person_credits")),
+        "characters": _compact_references(result.get("character_credits")),
+        "teams": _compact_references(result.get("team_credits")),
+        "story_arcs": _compact_references(result.get("story_arc_credits")),
+        "raw_provider_payload": result,
+    }
+
+
+def _creator_credit_count(metadata: dict[str, object]) -> int:
+    """Count analytics-addressable normalized creator credits."""
+    credits = metadata.get("creator_credits")
+    if not isinstance(credits, list):
+        return 0
+    return sum(
+        1
+        for credit in credits
+        if isinstance(credit, dict)
+        and _integer(credit.get("id")) is not None
+        and isinstance(credit.get("name"), str)
+        and bool(str(credit["name"]).strip())
     )
 
 
-class ThrottleResourceSnapshot(TypedDict):
-    """Snapshot of a single resource's throttle state."""
-
-    cooling: bool
-    cooldown_remaining_seconds: float
-    consecutive_throttles: int
-
-
-class ThrottleSnapshot(TypedDict):
-    """Full throttle snapshot mapping resource names to their state."""
-
-    search: ThrottleResourceSnapshot
-    issue: ThrottleResourceSnapshot
-
-
-class BackfillReport(TypedDict):
-    """Machine-readable backfill report."""
-
-    user_id: int
-    dry_run: bool
-    requests_per_hour: int
-    local_snapshot_available: bool
-    total_issues: int
-    resolved_identities: int
-    resolved_creators: int
-    unresolved_identities: int
-    unresolved_creators: int
-    rate_limited: int
-    errors: int
-    skipped_existing: int
-    completion_rate: float
-    throttles: dict[str, ThrottleResourceSnapshot]
-    completed_at: str
-
-
-@dataclass
-class BackfillStats:
-    """Execution statistics for the backfill operation."""
-
-    total_issues: int = 0
-    resolved_identities: int = 0
-    resolved_creators: int = 0
-    unresolved_identities: int = 0
-    unresolved_creators: int = 0
-    rate_limited: int = 0
-    errors: int = 0
-    skipped_existing: int = 0
-
-    @property
-    def completion_rate(self) -> float:
-        """Calculate completion rate as a percentage."""
-        if self.total_issues == 0:
-            return 0.0
-        return ((self.resolved_identities + self.resolved_creators) / self.total_issues) * 100
-
-
-@dataclass
-class BackfillProgress:
-    """Real-time progress tracking for the backfill operation."""
-
-    current_issue: int = 0
-    current_phase: Literal["identity", "creator"] = "identity"
-    stats: BackfillStats = field(default_factory=BackfillStats)
-    start_time: datetime = field(default_factory=lambda: datetime.now(UTC))
-    last_update: datetime = field(default_factory=lambda: datetime.now(UTC))
-
-    def update(self, issue_id: int, phase: Literal["identity", "creator"], status: str) -> None:
-        """Update progress for a single issue."""
-        self.current_issue = issue_id
-        self.current_phase = phase
-        self.last_update = datetime.now(UTC)
-
-        normalized = status
-        if status == "resolved":
-            normalized = f"resolved_{phase}"
-        elif status == "unresolved":
-            normalized = f"unresolved_{phase}"
-
-        if normalized == "resolved_identity":
-            self.stats.resolved_identities += 1
-        elif normalized == "resolved_creator":
-            self.stats.resolved_creators += 1
-        elif normalized == "unresolved_identity":
-            self.stats.unresolved_identities += 1
-        elif normalized == "unresolved_creator":
-            self.stats.unresolved_creators += 1
-        elif normalized == "rate_limited":
-            self.stats.rate_limited += 1
-        elif normalized == "error":
-            self.stats.errors += 1
-        elif normalized == "skipped":
-            self.stats.skipped_existing += 1
-
-
-class ResourceThrottleTracker:
-    """Track per-resource ComicVine cooldowns with bounded fallback backoff.
-
-    One throttled resource must not terminate unrelated satisfiable work, so
-    cooldown state is kept per resource (for example ``search`` versus
-    ``issue``). Backoff doubles from a one-minute base, is bounded at one
-    hour, and resets on the next successful live request for that resource.
-    """
-
-    def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
-        """Configure the tracker with an injectable clock for tests.
-
-        Args:
-            clock: Time source returning seconds; defaults to monotonic time.
-        """
-        self._clock = clock
-        self._cooldown_until: dict[str, float] = {}
-        self._consecutive_throttles: dict[str, int] = {}
-
-    def cooling(self, resource: str) -> bool:
-        """Return whether the resource is inside an active throttle cooldown."""
-        return self._cooldown_until.get(resource, 0.0) > self._clock()
-
-    def cooldown_remaining(self, resource: str) -> float:
-        """Return remaining cooldown seconds for the resource, or 0.0."""
-        return max(0.0, self._cooldown_until.get(resource, 0.0) - self._clock())
-
-    def record_throttle(self, resource: str) -> float:
-        """Record a throttle signal and return the applied cooldown in seconds.
-
-        Args:
-            resource: Throttled ComicVine resource bucket.
-
-        Returns:
-            Applied cooldown delay, bounded at one hour.
-        """
-        consecutive = self._consecutive_throttles.get(resource, 0) + 1
-        self._consecutive_throttles[resource] = consecutive
-        delay = min(_THROTTLE_MAX_SECONDS, _THROTTLE_BASE_SECONDS * (2.0 ** (consecutive - 1)))
-        self._cooldown_until[resource] = self._clock() + delay
-        return delay
-
-    def record_success(self, resource: str) -> None:
-        """Reset backoff state after a successful live request.
-
-        Args:
-            resource: ComicVine resource bucket that succeeded.
-        """
-        self._consecutive_throttles.pop(resource, None)
-        self._cooldown_until.pop(resource, None)
-
-    def snapshot(self) -> dict[str, ThrottleResourceSnapshot]:
-        """Return machine-readable per-resource throttle state."""
-        resources = sorted(set(self._cooldown_until) | set(self._consecutive_throttles))
-        return {
-            resource: {
-                "cooling": self.cooling(resource),
-                "cooldown_remaining_seconds": round(self.cooldown_remaining(resource), 3),
-                "consecutive_throttles": self._consecutive_throttles.get(resource, 0),
-            }
-            for resource in resources
-        }
-
-
-class ComicVineBackfillOperator:
-    """Production-safe ComicVine backfill operator with local-first resolution."""
-
-    def __init__(
-        self,
-        user_id: int,
-        database_url: str,
-        cache_dir: Path,
-        dry_run: bool = False,
-        requests_per_hour: int = 180,
-        comicvine_db: Path | None = None,
-        report_path: Path | None = None,
-        min_live_interval_seconds: float = 1.0,
-        clock: Callable[[], float] = time.monotonic,
-    ):
-        """Initialize the backfill operator.
-
-        Args:
-            user_id: Target user ID for the backfill operation.
-            database_url: Database connection URL (must be explicit, no .env loading).
-            cache_dir: Directory for ComicVine cache persistence.
-            dry_run: If True, only report what would be done.
-            requests_per_hour: Rolling request ceiling per endpoint.
-            comicvine_db: Optional local ComicVine SQLite snapshot; local evidence
-                from it is exhausted before live calls when configured.
-            report_path: Optional path for the machine-readable JSON report.
-            min_live_interval_seconds: Minimum spacing between live request starts.
-            clock: Time source for pacing and throttle backoff.
-        """
-        self.user_id = user_id
-        self.database_url = database_url
-        self.cache_dir = cache_dir
-        self.dry_run = dry_run
-        self.requests_per_hour = requests_per_hour
-        self.report_path = report_path
-        self.min_live_interval_seconds = min_live_interval_seconds
-        self._clock = clock
-        self._last_live_start = 0.0
-
-        self.snapshot = LocalComicVineSnapshot(comicvine_db)
-        self.throttles = ResourceThrottleTracker(clock=clock)
-
-        # Initialize ComicVine client if not in dry run mode
-        self.client: ComicVineClient | None = None
-        if not dry_run:
-            api_key = os.environ.get("COMICVINE_API_KEY", "").strip()
-            if not api_key:
-                raise RuntimeError("COMICVINE_API_KEY is required for live backfill operations")
-            self.client = ComicVineClient(api_key, cache_dir, requests_per_hour=requests_per_hour)
-
-        # Progress tracking
-        self.progress = BackfillProgress()
-
-    async def get_read_issues(self, db: AsyncSession) -> list[Issue]:
-        """Get all read issues for the target user that need backfill processing.
-
-        Args:
-            db: Async database session.
-
-        Returns:
-            List of read issues that need processing.
-        """
-        result = await db.execute(
-            select(Issue)
-            .join(Thread, Thread.id == Issue.thread_id)
-            .where(
-                Thread.user_id == self.user_id,
-                Issue.status == "read",
-                # Exclude issues that already have confirmed ComicVine identities
-                ~Issue.id.in_(
-                    select(IssueExternalIdentityMapping.issue_id).join(
-                        ExternalIdentity,
-                        ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
-                    ).where(
-                        ExternalIdentity.provider == "comicvine",
-                        IssueExternalIdentityMapping.status == "confirmed",
-                    )
-                ),
-            )
-            .order_by(Thread.queue_position, Issue.position)
-        )
-        return list(result.scalars().all())
-
-    async def resolve_identity_locally(self, db: AsyncSession, issue: Issue) -> ExternalIdentity | None:
-        """Try to resolve ComicVine identity using local evidence only.
-
-        Args:
-            db: Async database session.
-            issue: Issue to resolve.
-
-        Returns:
-            Resolved external identity if found locally, None otherwise.
-        """
-        # Check if thread has a confirmed series mapping
-        series_result = await db.execute(
-            select(ExternalIdentity)
-            .join(
-                ThreadExternalSeriesMapping,
-                ThreadExternalSeriesMapping.external_identity_id == ExternalIdentity.id,
-            )
-            .where(
-                ThreadExternalSeriesMapping.thread_id == issue.thread_id,
-                ThreadExternalSeriesMapping.status == "confirmed",
-                ExternalIdentity.provider == "comicvine",
-                ExternalIdentity.entity_type == "series",
-            )
-            .order_by(
-                ThreadExternalSeriesMapping.confidence.desc().nullslast(),
-                ExternalIdentity.id,
-            )
-            .limit(1)
-        )
-        series_identity = series_result.scalar_one_or_none()
-
-        if series_identity is None:
-            return None
-
-        metadata = series_identity.metadata_json or {}
-        volume_id = metadata.get("volume_id")
-
-        if volume_id is None:
-            return None
-
-        if self.snapshot.available and not await self._snapshot_corroborates_issue(
-            volume_id, issue.issue_number
-        ):
-            return None
-
-        # Look for existing issue mappings for this volume. Label equality is
-        # enforced below so a same-volume identity with a different issue label
-        # is never auto-confirmed.
-        issue_result = await db.execute(
-            select(ExternalIdentity)
-            .join(
-                IssueExternalIdentityMapping,
-                IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
-            )
-            .where(
-                ExternalIdentity.provider == "comicvine",
-                ExternalIdentity.entity_type == "issue",
-                cast(ExternalIdentity.metadata_json["volume_id"], String) == str(volume_id),
-            )
-            .limit(1)
-        )
-        identity = issue_result.scalar_one_or_none()
-        if identity is None or not _identity_matches_issue(identity, issue.issue_number):
-            return None
-        return identity
-
-    async def _snapshot_corroborates_issue(self, volume_id: object, issue_number: str) -> bool:
-        """Check the local SQLite snapshot roster for one volume issue number.
-
-        Args:
-            volume_id: ComicVine volume ID from the confirmed series mapping.
-            issue_number: ComicPile issue number label to corroborate.
-
-        Returns:
-            True when the local roster contains the issue label, False otherwise
-            (including when the volume ID is unusable or the snapshot errors).
-        """
-        try:
-            volume = int(volume_id) if not isinstance(volume_id, bool) else -1
-        except (TypeError, ValueError):
-            return False
-        try:
-            rows = await asyncio.to_thread(self.snapshot.get_volume_issues, volume)
-        except Exception:
-            # A damaged snapshot means "no local evidence", not a fatal error;
-            # the caller falls through to the remaining local/provider paths.
-            return False
-        expected = (issue_number or "").strip().casefold().removeprefix("#").strip()
-        for row in rows:
-            for raw_label in (row.data.get("issue_number"), row.data.get("name")):
-                if raw_label is None:
-                    continue
-                label = str(raw_label).strip().casefold().removeprefix("#").strip()
-                if label and label == expected:
-                    return True
-        return False
-
-    async def _confirm_issue_identity(
-        self,
-        db: AsyncSession,
-        issue_id: int,
-        external_identity_id: int,
-        evidence_source: str,
-    ) -> None:
-        """Idempotently confirm one issue identity mapping via the ORM.
-
-        Args:
-            db: Async database session.
-            issue_id: ComicPile issue ID.
-            external_identity_id: Resolved external identity ID.
-            evidence_source: Provenance label for the confirmation.
-        """
-        result = await db.execute(
-            select(IssueExternalIdentityMapping).where(
-                IssueExternalIdentityMapping.issue_id == issue_id,
-                IssueExternalIdentityMapping.external_identity_id == external_identity_id,
-            )
-        )
-        mapping = result.scalar_one_or_none()
-        if mapping is None:
-            db.add(
-                IssueExternalIdentityMapping(
-                    issue_id=issue_id,
-                    external_identity_id=external_identity_id,
-                    status="confirmed",
-                    confidence=1.0,
-                    evidence_source=evidence_source,
-                    evidence_json={"resolution": evidence_source},
-                )
-            )
-        else:
-            mapping.status = "confirmed"
-            mapping.confidence = 1.0
-            mapping.evidence_source = evidence_source
-        await db.flush()
-
-    async def _pace_live_start(self) -> None:
-        """Stagger live provider starts so a fresh run does not burst."""
-        if self.min_live_interval_seconds <= 0:
-            return
-        wait = self.min_live_interval_seconds - (self._clock() - self._last_live_start)
-        if wait > 0:
-            await asyncio.sleep(wait)
-        self._last_live_start = self._clock()
-
-    async def resolve_identity_provider(self, db: AsyncSession, issue: Issue) -> ExternalIdentity | None:
-        """Try to resolve ComicVine identity using local snapshot then live provider.
-
-        Reuses the repair pipeline's conservative local-then-live candidate
-        resolution so the backfill operator shares the same confidence gates as
-        the interactive repair flow. Only a ``confirmed`` decision is promoted;
-        ambiguous ``candidate`` outcomes stay unresolved and the mapping is never
-        silently guessed.
-
-        Args:
-            db: Async database session.
-            issue: Issue to resolve.
-
-        Returns:
-            Resolved external identity if confirmed, None otherwise.
-        """
-        client = self.client
-        if client is None:
-            return None
-
-        thread = await db.get(Thread, issue.thread_id)
-        if thread is None or not thread.title.strip():
-            return None
-
-        context = ComicVineRepairContext(
-            title=thread.title,
-            issue_label=issue.issue_number,
-        )
-        decision, _scores = await repair_identity(
-            snapshot=self.snapshot,
-            client=client,
-            context=context,
-            thread_issue_labels=[],
-        )
-        if decision.status != "confirmed" or decision.winner is None:
-            return None
-
-        candidate = decision.winner.candidate
-        return await upsert_external_identity(
-            db,
-            provider="comicvine",
-            entity_type="issue",
-            external_id=f"4000-{candidate.issue_id}",
-            external_url=f"https://comicvine.gamespot.com/issue/4000-{candidate.issue_id}/",
-            metadata_json={
-                "volume_id": candidate.volume_id,
-                "volume_name": candidate.volume_name,
-                "issue_number": candidate.issue_number,
-                "name": candidate.issue_name,
-            },
-        )
-
-    async def hydrate_creator_locally(self, db: AsyncSession, issue: Issue) -> bool:
-        """Hydrate creator data using local evidence only.
-
-        A confirmed issue identity whose stored metadata already carries creator
-        credits (``creator_credits`` from the hydration path, or legacy
-        ``person_credits``) is satisfied by stored evidence alone, so no live
-        provider call is needed.
-
-        Args:
-            db: Async database session.
-            issue: Issue to hydrate.
-
-        Returns:
-            True if creators were hydrated, False otherwise.
-        """
-        identity = await self._confirmed_issue_identity(db, issue)
-        if identity is None:
-            return False
-
-        metadata = identity.metadata_json or {}
-        credits = metadata.get("creator_credits") or metadata.get("person_credits")
-        return bool(credits)
-
-    async def hydrate_creator_provider(self, db: AsyncSession, issue: Issue) -> bool:
-        """Deep-hydrate creator metadata for a confirmed issue identity.
-
-        Fetches the full singular issue metadata (including creator credits)
-        through the provider client and persists normalized creator metadata on
-        the identity so later local passes read credits from storage.
-
-        Args:
-            db: Async database session.
-            issue: Issue to hydrate.
-
-        Returns:
-            True if creators were hydrated, False otherwise.
-        """
-        client = self.client
-        if client is None:
-            return False
-
-        identity = await self._confirmed_issue_identity(db, issue)
-        if identity is None:
-            return False
-
-        comicvine_issue_id = _provider_issue_id(identity.external_id)
-        if comicvine_issue_id is None:
-            return False
-
-        hydrated = await hydrate_issue(db, client, comicvine_issue_id)
-        metadata = hydrated.metadata_json or {}
-        credits = metadata.get("creator_credits") or metadata.get("person_credits")
-        return bool(credits)
-
-    async def _confirmed_issue_identity(self, db: AsyncSession, issue: Issue) -> ExternalIdentity | None:
-        """Return the confirmed ComicVine issue identity for one issue.
-
-        Args:
-            db: Async database session.
-            issue: Issue whose confirmed identity is requested.
-
-        Returns:
-            The confirmed identity, or None when no confirmed mapping exists.
-        """
-        result = await db.execute(
-            select(ExternalIdentity)
-            .join(
-                IssueExternalIdentityMapping,
-                IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
-            )
-            .where(
-                IssueExternalIdentityMapping.issue_id == issue.id,
-                IssueExternalIdentityMapping.status == "confirmed",
-                ExternalIdentity.provider == "comicvine",
-            )
-            .limit(1)
-        )
-        return result.scalar_one_or_none()
-
-    async def process_issue_identity(self, db: AsyncSession, issue: Issue) -> Literal["resolved", "unresolved", "rate_limited", "error"]:
-        """Process identity resolution for a single issue.
-
-        Local evidence (including the configured SQLite snapshot) is always
-        attempted first. Live provider work for a cooling resource short
-        circuits to ``rate_limited`` so unrelated work can continue.
-
-        Args:
-            db: Async database session.
-            issue: Issue to process.
-
-        Returns:
-            Status of the identity resolution attempt.
-        """
-        try:
-            # First try local resolution
-            identity = await self.resolve_identity_locally(db, issue)
-            if identity is not None:
-                if not self.dry_run:
-                    await self._confirm_issue_identity(
-                        db, issue.id, identity.id, "local_resolution"
-                    )
-                return "resolved"
-
-            # Then try provider resolution
-            if self.client is not None:
-                if self.throttles.cooling(_IDENTITY_RESOURCE):
-                    return "rate_limited"
-                try:
-                    await self._pace_live_start()
-                    identity = await self.resolve_identity_provider(db, issue)
-                    if identity is not None:
-                        if not self.dry_run:
-                            await self._confirm_issue_identity(
-                                db, issue.id, identity.id, "provider_resolution"
-                            )
-                        self.throttles.record_success(_IDENTITY_RESOURCE)
-                        return "resolved"
-                except ComicVineRateLimitError:
-                    self.throttles.record_throttle(_IDENTITY_RESOURCE)
-                    return "rate_limited"
-                except ComicVineError:
-                    return "error"
-
-            return "unresolved"
-
-        except Exception as exc:
-            print(f"Error processing identity for issue {issue.id}: {exc}", file=sys.stderr)
-            return "error"
-
-    async def process_issue_creator(self, db: AsyncSession, issue: Issue) -> Literal["resolved", "unresolved", "rate_limited", "error"]:
-        """Process creator hydration for a single issue.
-
-        A cooling creator resource short circuits to ``rate_limited`` without
-        blocking identity work for other issues.
-
-        Args:
-            db: Async database session.
-            issue: Issue to process.
-
-        Returns:
-            Status of the creator hydration attempt.
-        """
-        try:
-            # First try local hydration
-            if await self.hydrate_creator_locally(db, issue):
-                return "resolved"
-
-            # Then try provider hydration
-            if self.client is not None:
-                if self.throttles.cooling(_CREATOR_RESOURCE):
-                    return "rate_limited"
-                try:
-                    await self._pace_live_start()
-                    if await self.hydrate_creator_provider(db, issue):
-                        self.throttles.record_success(_CREATOR_RESOURCE)
-                        return "resolved"
-                except ComicVineRateLimitError:
-                    self.throttles.record_throttle(_CREATOR_RESOURCE)
-                    return "rate_limited"
-                except ComicVineError:
-                    return "error"
-
-            return "unresolved"
-
-        except Exception as exc:
-            print(f"Error processing creator for issue {issue.id}: {exc}", file=sys.stderr)
-            return "error"
-
-    async def process_issue(self, db: AsyncSession, issue: Issue) -> None:
-        """Process a single issue through both identity and creator phases.
-
-        Args:
-            db: Async database session.
-            issue: Issue to process.
-        """
-        # Phase 1: Identity resolution
-        identity_status = await self.process_issue_identity(db, issue)
-        self.progress.update(issue.id, "identity", identity_status)
-
-        # Only proceed to creator phase if identity was resolved
-        if identity_status == "resolved":
-            creator_status = await self.process_issue_creator(db, issue)
-            self.progress.update(issue.id, "creator", creator_status)
-
-    def build_report(self) -> BackfillReport:
-        """Return a machine-readable summary of the backfill run.
-
-        Returns:
-            JSON-compatible report with progress statistics, per-resource
-            throttle state, and local snapshot availability.
-        """
-        stats = self.progress.stats
-        return {
-            "user_id": self.user_id,
-            "dry_run": self.dry_run,
-            "requests_per_hour": self.requests_per_hour,
-            "local_snapshot_available": self.snapshot.available,
-            "total_issues": stats.total_issues,
-            "resolved_identities": stats.resolved_identities,
-            "resolved_creators": stats.resolved_creators,
-            "unresolved_identities": stats.unresolved_identities,
-            "unresolved_creators": stats.unresolved_creators,
-            "rate_limited": stats.rate_limited,
-            "errors": stats.errors,
-            "skipped_existing": stats.skipped_existing,
-            "completion_rate": round(stats.completion_rate, 1),
-            "throttles": self.throttles.snapshot(),
-            "completed_at": datetime.now(UTC).isoformat(),
-        }
-
-    async def _run_with_session_factory(self, session_factory: SessionFactory) -> None:
-        """Process every outstanding read issue with per-issue commits.
-
-        Per-issue commits keep the command idempotent and safely resumable
-        after interruption.
-
-        Args:
-            session_factory: Factory producing async database sessions bound to
-                the explicit operator database URL.
-        """
-        async with session_factory() as db:
-            issues = await self.get_read_issues(db)
-            total_count = len(issues)
-            self.progress.stats.total_issues = total_count
-
-            print(f"Found {total_count} read issues needing ComicVine backfill")
-            print()
-
-            for i, issue in enumerate(issues, 1):
-                print(f"Processing issue {i}/{total_count} (ID: {issue.id})")
-
-                await self.process_issue(db, issue)
-
-                # Commit after each issue to maintain resumability
-                await db.commit()
-
-                # Report progress
-                progress = self.progress
-                print(
-                    f"  Identity: {progress.stats.resolved_identities} resolved, "
-                    f"{progress.stats.unresolved_identities} unresolved, "
-                    f"{progress.stats.rate_limited} rate limited"
-                )
-                print(
-                    f"  Creators: {progress.stats.resolved_creators} resolved, "
-                    f"{progress.stats.unresolved_creators} unresolved"
-                )
-                print(f"  Completion: {progress.stats.completion_rate:.1f}%")
-                print()
-
-    async def run(self, session_factory: SessionFactory | None = None) -> BackfillStats:
-        """Execute the complete backfill operation.
-
-        Args:
-            session_factory: Optional session factory for tests. Production
-                always builds sessions from the explicit ``database_url`` so no
-                ambient configuration is loaded.
-
-        Returns:
-            Final statistics for the operation.
-        """
-        print(f"Starting ComicVine backfill for user {self.user_id}")
-        print(f"Database: {self.database_url}")
-        print(f"Cache directory: {self.cache_dir}")
-        print(f"Dry run: {self.dry_run}")
-        print(f"Requests per hour: {self.requests_per_hour}")
-        print(f"Local snapshot available: {self.snapshot.available}")
-        print()
-
-        if session_factory is None:
-            engine = create_async_engine(self.database_url)
-            try:
-                await self._run_with_session_factory(
-                    async_sessionmaker(engine, expire_on_commit=False)
-                )
-            finally:
-                await engine.dispose()
-        else:
-            await self._run_with_session_factory(session_factory)
-
-        # Final report
-        stats = self.progress.stats
-        print("Backfill completed!")
-        print(f"Total issues processed: {stats.total_issues}")
-        print(f"Identities resolved: {stats.resolved_identities}")
-        print(f"Creators resolved: {stats.resolved_creators}")
-        print(f"Identities unresolved: {stats.unresolved_identities}")
-        print(f"Creators unresolved: {stats.unresolved_creators}")
-        print(f"Rate limited: {stats.rate_limited}")
-        print(f"Errors: {stats.errors}")
-        print(f"Skipped (already complete): {stats.skipped_existing}")
-        print(f"Final completion rate: {stats.completion_rate:.1f}%")
-
-        report = self.build_report()
-        print(json.dumps(report, indent=2, sort_keys=True))
-        if self.report_path is not None:
-            self.report_path.parent.mkdir(parents=True, exist_ok=True)
-            self.report_path.write_text(
-                json.dumps(report, indent=2, sort_keys=True), encoding="utf-8"
-            )
-
-        return stats
-
-
-def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments.
-
-    Returns:
-        Parsed CLI arguments.
-    """
+def _parser() -> argparse.ArgumentParser:
+    """Build the operator CLI parser."""
     parser = argparse.ArgumentParser(
-        description="Local-first ComicVine read backfill operator for identity resolution and creator hydration",
+        description="Backfill ComicVine creator metadata for read ComicPile issues."
     )
-    parser.add_argument("--user-id", type=int, required=True, help="Target user ID for backfill")
+    parser.add_argument("--user-id", type=int, default=1)
     parser.add_argument(
         "--database-url",
-        type=str,
-        required=True,
-        help="Database connection URL (explicit, no .env loading)",
-    )
-    parser.add_argument(
-        "--cache-dir",
-        type=Path,
-        default=Path("/tmp/comicpile-comicvine"),
-        help="Directory for ComicVine cache persistence",
+        default=None,
+        help="Override DATABASE_URL. If omitted, the already-exported DATABASE_URL is required.",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Report what would be done without making changes",
+        help="Inventory current mappings/metadata without calling ComicVine or writing rows.",
     )
     parser.add_argument(
-        "--requests-per-hour",
-        type=int,
-        default=180,
-        help="Rolling request ceiling per endpoint (default: 180)",
+        "--refresh",
+        action="store_true",
+        help="Force singular ComicVine issue refresh even when creator_credits already exist.",
     )
-    parser.add_argument(
-        "--comicvine-db",
-        type=Path,
-        default=None,
-        help="Optional local ComicVine SQLite snapshot; local evidence from it is "
-        "exhausted before live calls when configured",
-    )
-    parser.add_argument(
-        "--report-path",
-        type=Path,
-        default=None,
-        help="Optional path for the machine-readable JSON report",
-    )
-    parser.add_argument(
-        "--min-live-interval-seconds",
-        type=float,
-        default=1.0,
-        help="Minimum spacing between live request starts (default: 1.0)",
-    )
-
-    return parser.parse_args()
+    parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    return parser
 
 
-def main() -> None:
-    """Run the ComicVine backfill operator."""
-    args = parse_args()
-    
-    try:
-        operator = ComicVineBackfillOperator(
-            user_id=args.user_id,
-            database_url=args.database_url,
-            cache_dir=args.cache_dir,
-            dry_run=args.dry_run,
-            requests_per_hour=args.requests_per_hour,
-            comicvine_db=args.comicvine_db,
-            report_path=args.report_path,
-            min_live_interval_seconds=args.min_live_interval_seconds,
+def _engine(database_url: str) -> AsyncEngine:
+    """Create one small explicit-URL engine for the operator process."""
+    return create_async_engine(
+        _async_url(database_url),
+        pool_pre_ping=True,
+        pool_size=1,
+        max_overflow=0,
+    )
+
+
+async def _load_read_issues(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    limit: int | None,
+) -> list[ReadIssue]:
+    """Load read issues with only bounded creator-state and series evidence."""
+    sql = """
+        SELECT
+            i.id AS issue_id,
+            i.thread_id,
+            t.title AS thread_title,
+            i.issue_number,
+            i.position,
+            issue_cv.identity_id,
+            issue_cv.external_id,
+            COALESCE(issue_cv.has_creator_credits, FALSE) AS has_creator_credits,
+            COALESCE(issue_cv.has_person_credit_source, FALSE) AS has_person_credit_source,
+            COALESCE(issue_cv.creator_credit_count, 0) AS creator_credit_count,
+            series_cv.identity_id AS series_identity_id,
+            series_cv.external_id AS series_external_id,
+            series_cv.volume_id_text,
+            series_cv.series_name
+        FROM issues i
+        JOIN threads t ON t.id = i.thread_id
+        LEFT JOIN LATERAL (
+            SELECT
+                ei.id AS identity_id,
+                ei.external_id,
+                jsonb_typeof(ei.metadata_json::jsonb -> 'creator_credits') = 'array'
+                    AS has_creator_credits,
+                (
+                    jsonb_typeof(ei.metadata_json::jsonb -> 'person_credits') = 'array'
+                    OR jsonb_typeof(
+                        ei.metadata_json::jsonb -> 'raw_provider_payload' -> 'person_credits'
+                    ) = 'array'
+                ) AS has_person_credit_source,
+                CASE
+                    WHEN jsonb_typeof(ei.metadata_json::jsonb -> 'creator_credits') = 'array'
+                    THEN jsonb_array_length(ei.metadata_json::jsonb -> 'creator_credits')
+                    WHEN jsonb_typeof(
+                        ei.metadata_json::jsonb -> 'raw_provider_payload' -> 'person_credits'
+                    ) = 'array'
+                    THEN jsonb_array_length(
+                        ei.metadata_json::jsonb -> 'raw_provider_payload' -> 'person_credits'
+                    )
+                    WHEN jsonb_typeof(ei.metadata_json::jsonb -> 'person_credits') = 'array'
+                    THEN jsonb_array_length(ei.metadata_json::jsonb -> 'person_credits')
+                    ELSE 0
+                END AS creator_credit_count
+            FROM issue_external_identity_mappings iem
+            JOIN external_identities ei
+              ON ei.id = iem.external_identity_id
+            WHERE iem.issue_id = i.id
+              AND iem.status = 'confirmed'
+              AND ei.provider = 'comicvine'
+              AND ei.entity_type = 'issue'
+            ORDER BY iem.confidence DESC NULLS LAST, ei.id
+            LIMIT 1
+        ) issue_cv ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT
+                ei.id AS identity_id,
+                ei.external_id,
+                COALESCE(
+                    ei.metadata_json::jsonb -> 'volume' ->> 'id',
+                    ei.metadata_json::jsonb ->> 'volume_id'
+                ) AS volume_id_text,
+                COALESCE(
+                    ei.metadata_json::jsonb ->> 'volume_name',
+                    ei.metadata_json::jsonb ->> 'name'
+                ) AS series_name
+            FROM thread_external_series_mappings tsm
+            JOIN external_identities ei
+              ON ei.id = tsm.external_identity_id
+            WHERE tsm.thread_id = t.id
+              AND tsm.status = 'confirmed'
+              AND ei.provider = 'comicvine'
+              AND ei.entity_type = 'series'
+            ORDER BY tsm.confidence DESC NULLS LAST, ei.id
+            LIMIT 1
+        ) series_cv ON TRUE
+        WHERE t.user_id = :user_id
+          AND t.is_test IS FALSE
+          AND i.status = 'read'
+        ORDER BY t.queue_position, t.id, i.position, i.id
+    """
+    params: dict[str, object] = {"user_id": user_id}
+    if limit is not None:
+        sql += "\nLIMIT :limit"
+        params["limit"] = limit
+
+    rows = (await db.execute(text(sql), params)).mappings().all()
+    return [
+        ReadIssue(
+            issue_id=int(row["issue_id"]),
+            thread_id=int(row["thread_id"]),
+            thread_title=str(row["thread_title"]),
+            issue_number=str(row["issue_number"]),
+            position=int(row["position"]),
+            identity_id=int(row["identity_id"]) if row["identity_id"] is not None else None,
+            external_id=str(row["external_id"]) if row["external_id"] is not None else None,
+            has_creator_credits=bool(row["has_creator_credits"]),
+            has_person_credit_source=bool(row["has_person_credit_source"]),
+            creator_credit_count=int(row["creator_credit_count"]),
+            series_identity_id=(
+                int(row["series_identity_id"])
+                if row["series_identity_id"] is not None
+                else None
+            ),
+            series_external_id=(
+                str(row["series_external_id"])
+                if row["series_external_id"] is not None
+                else None
+            ),
+            series_volume_id=_series_volume_id(
+                row["volume_id_text"],
+                str(row["series_external_id"])
+                if row["series_external_id"] is not None
+                else None,
+            ),
+            series_name=str(row["series_name"]) if row["series_name"] is not None else None,
+        )
+        for row in rows
+    ]
+
+
+async def _user_exists(db: AsyncSession, user_id: int) -> bool:
+    """Return whether the target user exists on the selected database."""
+    value = await db.scalar(
+        text("SELECT EXISTS(SELECT 1 FROM users WHERE id = :user_id)"),
+        {"user_id": user_id},
+    )
+    return bool(value)
+
+
+async def _normalize_existing_creator_credits(
+    db: AsyncSession,
+    *,
+    identity_id: int,
+) -> int | None:
+    """Merge stored person_credits into creator_credits entirely inside Postgres."""
+    count = await db.scalar(
+        text(
+            """
+            WITH source AS (
+                SELECT CASE
+                    WHEN jsonb_typeof(
+                        metadata_json::jsonb -> 'raw_provider_payload' -> 'person_credits'
+                    ) = 'array'
+                    THEN metadata_json::jsonb -> 'raw_provider_payload' -> 'person_credits'
+                    WHEN jsonb_typeof(metadata_json::jsonb -> 'person_credits') = 'array'
+                    THEN metadata_json::jsonb -> 'person_credits'
+                    ELSE NULL
+                END AS credits
+                FROM external_identities
+                WHERE id = :identity_id
+                  AND provider = 'comicvine'
+                  AND entity_type = 'issue'
+            ), updated AS (
+                UPDATE external_identities ei
+                SET metadata_json = (
+                        ei.metadata_json::jsonb
+                        || jsonb_build_object('creator_credits', source.credits)
+                    )::json,
+                    updated_at = CURRENT_TIMESTAMP
+                FROM source
+                WHERE ei.id = :identity_id
+                  AND source.credits IS NOT NULL
+                RETURNING source.credits
+            )
+            SELECT jsonb_array_length(credits)
+            FROM updated
+            """
+        ),
+        {"identity_id": identity_id},
+    )
+    if count is None:
+        await db.rollback()
+        return None
+    await db.commit()
+    return int(count)
+
+
+async def _persist_deep_metadata(
+    db: AsyncSession,
+    *,
+    identity_id: int,
+    provider_result: dict[str, object],
+) -> int:
+    """Persist one validated singular issue payload and return creator count."""
+    metadata = _normalize_issue_metadata(provider_result)
+    external_url = _string(provider_result.get("site_detail_url"))
+    provider_updated_at = _provider_timestamp(provider_result.get("date_last_updated"))
+    await db.execute(
+        text(
+            """
+            UPDATE external_identities
+            SET external_url = COALESCE(:external_url, external_url),
+                metadata_json = CAST(:metadata_json AS json),
+                provider_updated_at = COALESCE(:provider_updated_at, provider_updated_at),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :identity_id
+              AND provider = 'comicvine'
+              AND entity_type = 'issue'
+            """
+        ),
+        {
+            "identity_id": identity_id,
+            "external_url": external_url,
+            "metadata_json": json.dumps(metadata),
+            "provider_updated_at": provider_updated_at,
+        },
+    )
+    await db.commit()
+    return _creator_credit_count(metadata)
+
+
+async def _confirmed_mapping_conflict(
+    db: AsyncSession,
+    *,
+    issue_id: int,
+    external_identity_id: int,
+) -> bool:
+    """Return whether another confirmed ComicVine issue identity already exists."""
+    value = await db.scalar(
+        text(
+            """
+            SELECT EXISTS(
+                SELECT 1
+                FROM issue_external_identity_mappings iem
+                JOIN external_identities ei
+                  ON ei.id = iem.external_identity_id
+                WHERE iem.issue_id = :issue_id
+                  AND iem.status = 'confirmed'
+                  AND iem.external_identity_id <> :external_identity_id
+                  AND ei.provider = 'comicvine'
+            )
+            """
+        ),
+        {"issue_id": issue_id, "external_identity_id": external_identity_id},
+    )
+    return bool(value)
+
+
+async def _persist_resolved_mapping(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    issue: ReadIssue,
+    provider_row: dict[str, object],
+) -> tuple[int, str] | None:
+    """Persist one uniquely proven series-volume issue mapping."""
+    provider_id = _integer(provider_row.get("id"))
+    if provider_id is None:
+        return None
+
+    owned = await db.scalar(
+        text(
+            """
+            SELECT i.id
+            FROM issues i
+            JOIN threads t ON t.id = i.thread_id
+            WHERE i.id = :issue_id
+              AND t.user_id = :user_id
+            FOR UPDATE OF i
+            """
+        ),
+        {"issue_id": issue.issue_id, "user_id": user_id},
+    )
+    if owned is None:
+        raise RuntimeError(f"issue {issue.issue_id} is not owned by user {user_id}")
+
+    shallow_metadata: dict[str, object] = {
+        "issue_number": _string(provider_row.get("issue_number")),
+        "name": _string(provider_row.get("name")),
+        "volume": _compact_reference(provider_row.get("volume")),
+        "volume_id": issue.series_volume_id,
+        "volume_name": issue.series_name,
+        "source": "series_resolution_volume_roster",
+    }
+    external_url = _string(provider_row.get("site_detail_url"))
+    identity_id = await db.scalar(
+        text(
+            """
+            INSERT INTO external_identities (
+                provider, entity_type, external_id, external_url, metadata_json,
+                provider_updated_at, created_at, updated_at
+            )
+            VALUES (
+                'comicvine', 'issue', :external_id, :external_url,
+                CAST(:metadata_json AS json), NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (provider, entity_type, external_id)
+            DO UPDATE SET
+                external_url = COALESCE(EXCLUDED.external_url, external_identities.external_url),
+                updated_at = CURRENT_TIMESTAMP
+            RETURNING id
+            """
+        ),
+        {
+            "external_id": str(provider_id),
+            "external_url": external_url,
+            "metadata_json": json.dumps(shallow_metadata),
+        },
+    )
+    if identity_id is None:
+        raise RuntimeError("failed to upsert resolved ComicVine identity")
+    identity_id = int(identity_id)
+
+    if await _confirmed_mapping_conflict(
+        db,
+        issue_id=issue.issue_id,
+        external_identity_id=identity_id,
+    ):
+        await db.rollback()
+        return None
+
+    await db.execute(
+        text(
+            """
+            INSERT INTO issue_external_identity_mappings (
+                issue_id, external_identity_id, status, evidence_source,
+                evidence_json, confidence, rejection_reason, created_at, updated_at
+            )
+            VALUES (
+                :issue_id, :external_identity_id, 'confirmed',
+                'series_volume_resolution', CAST('{}' AS json), 1.0, NULL,
+                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (issue_id, external_identity_id)
+            DO UPDATE SET
+                status = 'confirmed',
+                evidence_source = 'series_volume_resolution',
+                confidence = 1.0,
+                rejection_reason = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            """
+        ),
+        {"issue_id": issue.issue_id, "external_identity_id": identity_id},
+    )
+    await db.commit()
+    return identity_id, str(provider_id)
+
+
+async def _resolve_unmapped_issue(
+    db: AsyncSession,
+    client: ComicVineClient,
+    *,
+    user_id: int,
+    issue: ReadIssue,
+) -> tuple[int, str] | None:
+    """Resolve one unmapped issue only from confirmed-series exact-number evidence."""
+    if issue.series_identity_id is None or issue.series_volume_id is None:
+        return None
+    if _is_ambiguous_special(issue.issue_number):
+        return None
+
+    expected = _normalize_issue_label(issue.issue_number)
+    if not expected or not expected.isdigit():
+        return None
+
+    rows = await client.fetch_volume_issues(issue.series_volume_id)
+    matches: dict[int, dict[str, object]] = {}
+    for row in rows:
+        row_label = _normalize_issue_label(_string(row.get("issue_number")))
+        if row_label != expected:
+            continue
+        provider_id = _integer(row.get("id"))
+        if provider_id is not None:
+            matches.setdefault(provider_id, row)
+
+    if len(matches) != 1:
+        return None
+    return await _persist_resolved_mapping(
+        db,
+        user_id=user_id,
+        issue=issue,
+        provider_row=next(iter(matches.values())),
+    )
+
+
+async def _fetch_deep_metadata(
+    db: AsyncSession,
+    client: ComicVineClient,
+    *,
+    identity_id: int,
+    external_id: str,
+    refresh: bool,
+) -> int:
+    """Fetch, validate, and persist one singular ComicVine issue payload."""
+    provider_id = _integer(external_id.removeprefix("4000-"))
+    if provider_id is None:
+        raise ValueError(f"invalid ComicVine issue external_id {external_id!r}")
+
+    response = await client.fetch_issue(provider_id, refresh=refresh)
+    result = response.payload.get("results")
+    if not isinstance(result, dict):
+        raise ComicVineError(f"ComicVine issue {provider_id} returned a non-object result")
+    if _integer(result.get("id")) != provider_id:
+        raise ComicVineError(
+            f"ComicVine identity mismatch: requested {provider_id}, got {result.get('id')!r}"
+        )
+    return await _persist_deep_metadata(
+        db,
+        identity_id=identity_id,
+        provider_result=result,
+    )
+
+
+async def _process_issue(
+    db: AsyncSession,
+    client: ComicVineClient | None,
+    *,
+    user_id: int,
+    issue: ReadIssue,
+    dry_run: bool,
+    refresh: bool,
+) -> BackfillResult:
+    """Process one issue without guessing through ambiguous identity evidence."""
+    identity_id = issue.identity_id
+    external_id = issue.external_id
+    has_creator_credits = issue.has_creator_credits
+    has_person_credit_source = issue.has_person_credit_source
+    creator_count = issue.creator_credit_count
+
+    if identity_id is None or external_id is None:
+        if dry_run:
+            return BackfillResult(
+                issue_id=issue.issue_id,
+                thread_id=issue.thread_id,
+                title=issue.thread_title,
+                issue_number=issue.issue_number,
+                status="unmapped",
+                detail=(
+                    "No confirmed ComicVine issue mapping. "
+                    + (
+                        "A confirmed series mapping exists."
+                        if issue.series_identity_id is not None
+                        else "No confirmed series mapping exists."
+                    )
+                ),
+            )
+        assert client is not None
+        resolved = await _resolve_unmapped_issue(
+            db,
+            client,
+            user_id=user_id,
+            issue=issue,
+        )
+        if resolved is None:
+            return BackfillResult(
+                issue_id=issue.issue_id,
+                thread_id=issue.thread_id,
+                title=issue.thread_title,
+                issue_number=issue.issue_number,
+                status="unresolved",
+                detail="Could not prove one unique ComicVine issue mapping.",
+            )
+        identity_id, external_id = resolved
+        has_creator_credits = False
+        has_person_credit_source = False
+        creator_count = 0
+
+    if dry_run:
+        if has_creator_credits:
+            status = "complete"
+        elif has_person_credit_source:
+            status = "needs-normalization"
+        else:
+            status = "needs-hydration"
+        return BackfillResult(
+            issue_id=issue.issue_id,
+            thread_id=issue.thread_id,
+            title=issue.thread_title,
+            issue_number=issue.issue_number,
+            status=status,
+            comicvine_issue_id=external_id,
+            creator_credits=creator_count,
         )
 
-        asyncio.run(operator.run())
-            
-    except Exception as exc:
-        print(f"Backfill failed: {exc}", file=sys.stderr)
-        sys.exit(1)
+    if not refresh and not has_creator_credits and has_person_credit_source:
+        normalized_count = await _normalize_existing_creator_credits(
+            db,
+            identity_id=identity_id,
+        )
+        if normalized_count is not None:
+            has_creator_credits = True
+            creator_count = normalized_count
+
+    if refresh or not has_creator_credits:
+        assert client is not None
+        creator_count = await _fetch_deep_metadata(
+            db,
+            client,
+            identity_id=identity_id,
+            external_id=external_id,
+            refresh=refresh,
+        )
+        has_creator_credits = True
+
+    return BackfillResult(
+        issue_id=issue.issue_id,
+        thread_id=issue.thread_id,
+        title=issue.thread_title,
+        issue_number=issue.issue_number,
+        status="complete" if has_creator_credits else "failed",
+        comicvine_issue_id=external_id,
+        creator_credits=creator_count,
+        detail=None if has_creator_credits else "Creator metadata is still incomplete.",
+    )
+
+
+def _summarize(results: list[BackfillResult]) -> dict[str, object]:
+    """Summarize per-issue outcomes for console and JSON reporting."""
+    statuses: dict[str, int] = {}
+    for result in results:
+        statuses[result.status] = statuses.get(result.status, 0) + 1
+    return {
+        "processed": len(results),
+        "statuses": dict(sorted(statuses.items())),
+        "issues_with_creator_credits": sum(r.creator_credits > 0 for r in results),
+        "creator_credit_rows": sum(r.creator_credits for r in results),
+    }
+
+
+async def _run(args: argparse.Namespace) -> int:
+    """Execute one explicit-target backfill pass."""
+    database_url = _require_database_url(args.database_url)
+    host, database = _database_target(database_url)
+    print(f"Database target: host={host} database={database}")
+
+    api_key = os.environ.get("COMICVINE_API_KEY", "").strip()
+    if not args.dry_run and not api_key:
+        raise SystemExit("COMICVINE_API_KEY is required for a live backfill.")
+
+    engine = _engine(database_url)
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    results: list[BackfillResult] = []
+
+    try:
+        async with factory() as db:
+            if not await _user_exists(db, args.user_id):
+                raise SystemExit(
+                    f"user_id={args.user_id} does not exist on "
+                    f"host={host} database={database}; refusing to continue."
+                )
+
+            issues = await _load_read_issues(db, user_id=args.user_id, limit=args.limit)
+            print(f"Found {len(issues)} read non-test issues for user_id={args.user_id}.")
+
+            client: ComicVineClient | None = None
+            if not args.dry_run:
+                client = ComicVineClient(
+                    api_key,
+                    Path(
+                        os.environ.get(
+                            "COMICVINE_CACHE_DIR",
+                            "/tmp/comicpile-comicvine",
+                        )
+                    ),
+                    timeout_seconds=10.0,
+                )
+
+            for index, issue in enumerate(issues, start=1):
+                print(f"[{index}/{len(issues)}] {issue.thread_title} #{issue.issue_number}")
+                try:
+                    result = await _process_issue(
+                        db,
+                        client,
+                        user_id=args.user_id,
+                        issue=issue,
+                        dry_run=args.dry_run,
+                        refresh=args.refresh,
+                    )
+                except ComicVineRateLimitError as exc:
+                    result = BackfillResult(
+                        issue_id=issue.issue_id,
+                        thread_id=issue.thread_id,
+                        title=issue.thread_title,
+                        issue_number=issue.issue_number,
+                        status="rate-limited",
+                        comicvine_issue_id=issue.external_id,
+                        creator_credits=issue.creator_credit_count,
+                        detail=str(exc),
+                    )
+                except (ComicVineError, TimeoutError, ValueError, RuntimeError) as exc:
+                    await db.rollback()
+                    result = BackfillResult(
+                        issue_id=issue.issue_id,
+                        thread_id=issue.thread_id,
+                        title=issue.thread_title,
+                        issue_number=issue.issue_number,
+                        status="failed",
+                        comicvine_issue_id=issue.external_id,
+                        creator_credits=issue.creator_credit_count,
+                        detail=f"{type(exc).__name__}: {exc}",
+                    )
+
+                results.append(result)
+                cv = (
+                    f" cv={result.comicvine_issue_id}"
+                    if result.comicvine_issue_id is not None
+                    else ""
+                )
+                creators = (
+                    f" creators={result.creator_credits}"
+                    if result.comicvine_issue_id is not None
+                    else ""
+                )
+                print(f"  -> {result.status}{cv}{creators}")
+                if result.detail:
+                    print(f"     {result.detail}")
+
+                if result.status == "rate-limited":
+                    print(
+                        "ComicVine rate limit reached. Stopping cleanly; "
+                        "rerun the same command later."
+                    )
+                    break
+    finally:
+        await engine.dispose()
+
+    report = {
+        "user_id": args.user_id,
+        "database": {"host": host, "database": database},
+        "dry_run": args.dry_run,
+        "refresh": args.refresh,
+        "summary": _summarize(results),
+        "issues": [asdict(result) for result in results],
+    }
+    args.report.parent.mkdir(parents=True, exist_ok=True)
+    args.report.write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps(report["summary"], indent=2, sort_keys=True))
+    print(f"Report written to {args.report}")
+
+    return 1 if any(result.status == "failed" for result in results) else 0
+
+
+def main() -> int:
+    """Run the explicit-environment ComicVine backfill CLI."""
+    return asyncio.run(_run(_parser().parse_args()))
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
