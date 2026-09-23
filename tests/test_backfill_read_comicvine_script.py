@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
+import json
 from pathlib import Path
 import sys
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Protocol
 from unittest.mock import AsyncMock
 
@@ -509,3 +511,190 @@ async def test_locally_satisfiable_creator_work_makes_no_provider_request(
     assert result.creator_credits == 2
     normalize.assert_awaited_once()
     assert normalize.call_args.kwargs["identity_id"] == 12
+
+
+@pytest.mark.asyncio
+async def test_local_snapshot_proves_identity_before_provider_work() -> None:
+    """A complete local roster resolves an issue without a provider client."""
+    cli = _module()
+    issue = _issue(cli, series_volume_id=123)
+
+    class Snapshot:
+        available = True
+        path = Path("localcv.db")
+
+        def get_volume_issues(self, volume_id: int) -> list[SimpleNamespace]:
+            assert volume_id == 123
+            return [
+                SimpleNamespace(
+                    data={
+                        "id": 4005,
+                        "issue_number": "5",
+                        "name": "Example",
+                        "volume": {"id": 123, "name": "Example"},
+                    }
+                )
+            ]
+
+    candidate = await cli._resolve_local_identity(
+        object(),
+        Snapshot(),
+        user_id=1,
+        issue=issue,
+        roster_cache={},
+        dry_run=True,
+    )
+
+    assert candidate is not None
+    assert candidate.external_id == "4005"
+    assert candidate.volume_id == 123
+    assert candidate.source == "comicvine-local-sqlite"
+
+
+@pytest.mark.asyncio
+async def test_local_creator_phase_persists_sqlite_credits_without_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Local creator hydration is complete without accepting a provider dependency."""
+    cli = _module()
+    issue = _issue(
+        cli,
+        identity_id=10,
+        external_id="4005",
+        has_creator_credits=False,
+        has_person_credit_source=False,
+    )
+    local_payload = {"id": 4005, "person_credits": [{"id": 1, "name": "Writer"}]}
+    monkeypatch.setattr(cli, "_local_creator_payload", AsyncMock(return_value=local_payload))
+    persist = AsyncMock(return_value=1)
+    monkeypatch.setattr(cli, "_persist_deep_metadata", persist)
+
+    class Snapshot:
+        available = True
+        path = Path("localcv.db")
+
+    database = object()
+    result = await cli._process_local_creator_issue(
+        database,
+        Snapshot(),
+        issue=issue,
+        dry_run=False,
+        refresh=False,
+    )
+
+    assert result.status == "complete"
+    assert result.provenance == "comicvine-local-sqlite"
+    persist.assert_awaited_once_with(
+        database,
+        identity_id=10,
+        provider_result=local_payload,
+    )
+
+
+@pytest.mark.asyncio
+async def test_pipeline_runs_four_stages_in_local_first_order(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The public command records all four stages before any provider stage."""
+    cli = _module()
+    events: list[str] = []
+
+    class Snapshot:
+        available = False
+        path = None
+
+    class Session:
+        async def __aenter__(self) -> Session:
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+    class Engine:
+        async def dispose(self) -> None:
+            return None
+
+    async def local_identity(*args: object, **kwargs: object) -> list[object]:
+        events.append("local-identity")
+        return []
+
+    async def local_creators(*args: object, **kwargs: object) -> list[object]:
+        events.append("local-creators")
+        return []
+
+    async def provider_identity(*args: object, **kwargs: object) -> list[object]:
+        events.append("provider-identity")
+        return []
+
+    async def provider_creators(*args: object, **kwargs: object) -> list[object]:
+        events.append("provider-creators")
+        return []
+
+    monkeypatch.setattr(cli, "_local_snapshot_from_environment", lambda: Snapshot())
+    monkeypatch.setattr(cli, "_user_exists", AsyncMock(return_value=True))
+    monkeypatch.setattr(cli, "_load_read_issues", AsyncMock(return_value=[]))
+    monkeypatch.setattr(cli, "_engine", lambda database_url: Engine())
+    monkeypatch.setattr(
+        cli,
+        "async_sessionmaker",
+        lambda *args, **kwargs: lambda **session_kwargs: Session(),
+    )
+    monkeypatch.setattr(cli, "_run_local_identity_phase", local_identity)
+    monkeypatch.setattr(cli, "_run_local_creator_phase", local_creators)
+    monkeypatch.setattr(cli, "_run_provider_identity_phase", provider_identity)
+    monkeypatch.setattr(cli, "_run_provider_creator_phase", provider_creators)
+
+    args = argparse.Namespace(
+        user_id=1,
+        database_url="postgresql://owner:secret@example.invalid/neondb",
+        dry_run=True,
+        refresh=False,
+        limit=None,
+        report=tmp_path / "report.json",
+    )
+    exit_code = await cli._run(args)
+
+    assert exit_code == 0
+    assert events == [
+        "local-identity",
+        "local-creators",
+        "provider-identity",
+        "provider-creators",
+    ]
+    report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    assert [phase["name"] for phase in report["phases"]] == [
+        "local-identity",
+        "local-creators",
+        "provider-identity",
+        "provider-creators",
+    ]
+    assert all(phase["provider_requests"] == 0 for phase in report["phases"])
+
+
+@pytest.mark.asyncio
+async def test_provider_identity_throttle_defers_one_resource_and_continues(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A throttled identity resource does not stop unrelated provider work."""
+    cli = _module()
+    first = _issue(cli, issue_id=1)
+    second = _issue(cli, issue_id=2, series_volume_id=None, series_external_id=None)
+
+    async def resolve(*args: object, **kwargs: object) -> tuple[int, str]:
+        issue = kwargs["issue"]
+        if issue.issue_id == 1:
+            raise cli.ComicVineRateLimitError("issues cooling", resource="issues")
+        return (99, "4002")
+
+    monkeypatch.setattr(cli, "_resolve_provider_issue", resolve)
+    results = await cli._run_provider_identity_phase(
+        object(),
+        object(),
+        user_id=1,
+        issues=[first, second],
+        dry_run=False,
+    )
+
+    assert [result.status for result in results] == ["rate-limited", "resolved-provider"]
+    assert results[0].resource == "issues"
