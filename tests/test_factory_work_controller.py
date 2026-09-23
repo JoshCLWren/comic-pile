@@ -377,15 +377,6 @@ def test_assign_candidate_refuses_second_active_lease(
     assert controller.assign_candidate(FakeCandidate(), "99") is False
     assert controller.assign_candidate(FakeCandidate(), "1") is True
 
-    class FakeCandidate:
-        number = 1
-        kind = "issue"
-        linked_issue = None
-        conflicted = False
-
-    assert controller.assign_candidate(FakeCandidate(), "99") is False
-    assert controller.assign_candidate(FakeCandidate(), "1") is True
-
 
 def test_selective_conflict_recovery_canonical_pr_plus_stray_issue(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
