@@ -787,6 +787,7 @@ def test_mixed_retire_and_add_rebalances_in_one_plan() -> None:
         _row("23", "opencode-free", "big-pickle", minute="0"),
         _row("39", "opencode-free", "big-pickle", minute="5"),
         _row("41", "opencode-free", "mimo-v2.6-flash-free", minute="10"),
+        _row("49", "opencode-free", "space-bunny-free", minute="40"),
         _row("59", "opencode-free", "big-pickle", minute="15"),
         _row("80", "opencode-free", "absent-free-model", minute="20"),
         _row("201", "opencode-free", "muse-spark-1.2-contributor-free", minute="25"),
@@ -799,7 +800,7 @@ def test_mixed_retire_and_add_rebalances_in_one_plan() -> None:
                 "poolside/laguna-xs-2.1",
                 minute=str(minute),
             )
-            for index, minute in enumerate((40, 45, 50, 55))
+            for index, minute in enumerate((45, 50, 55))
         ],
         _row("208", "nvidia", "poolside/laguna-xs-2.1", minute="0"),
     ]
