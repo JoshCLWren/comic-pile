@@ -118,27 +118,37 @@ async def get_delivery_record(
     return DeliveryRecordResponse.model_validate(record)
 
 
-@router.get("/delivery/target/{target_repository}/branch/{branch_name}", response_model=DeliveryRecordResponse)
+@router.get(
+    "/delivery/target/{owner}/{repo}/branch/{branch_name:path}",
+    response_model=DeliveryRecordResponse,
+)
 async def get_delivery_by_target_branch(
-    target_repository: str,
+    owner: str,
+    repo: str,
     branch_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> DeliveryRecordResponse:
     """Get delivery record by target repository and branch name.
-    
+
+    The target repository is split into ``owner``/``repo`` path segments and the
+    branch name uses the ``:path`` converter so names containing a slash (every
+    allowlisted target and factory branch) are addressable.
+
     Args:
-        target_repository: Target repository name
-        branch_name: Target branch name
+        owner: Target repository owner (e.g. ``JoshCLWren``).
+        repo: Target repository name (e.g. ``Latticery``).
+        branch_name: Target branch name (may contain slashes).
         db: Async database session
         current_user: Authenticated user
-        
+
     Returns:
         Delivery record details
-        
+
     Raises:
         HTTPException: If delivery record not found
     """
+    target_repository = f"{owner}/{repo}"
     record = await delivery_service.find_delivery_by_target_branch(
         db, target_repository, branch_name
     )

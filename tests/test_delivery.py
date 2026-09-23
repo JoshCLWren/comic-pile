@@ -711,14 +711,14 @@ def _mock_delivery_db() -> AsyncSession:
 
     async def _refresh(obj: object) -> None:
         if getattr(obj, "id", None) is None:
-            setattr(obj, "id", 1)
+            object.__setattr__(obj, "id", 1)
 
     session = MagicMock(spec=AsyncSession)
     session.add = MagicMock()
     session.flush = AsyncMock()
     session.refresh = AsyncMock(side_effect=_refresh)
     session.commit = AsyncMock()
-    session.execute = AsyncMock()
+    session.execute = AsyncMock(return_value=MagicMock())
     return session
 
 

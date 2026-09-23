@@ -680,8 +680,11 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                 _heavy_state["in_progress"] = False
 
     # Expose for tests and get_db fallback
-    setattr(app.state, "ensure_heavy_init", _ensure_heavy_init)
-    setattr(app.state, "heavy_init_state", _heavy_state)
+    for _attr_name, _attr_value in (
+        ("ensure_heavy_init", _ensure_heavy_init),
+        ("heavy_init_state", _heavy_state),
+    ):
+        setattr(app.state, _attr_name, _attr_value)
 
     @app.on_event("startup")
     async def startup_event():
