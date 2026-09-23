@@ -155,6 +155,23 @@ def test_v1_debug_alias_matches_legacy_route_methods_outside_production() -> Non
     assert methods_by_path["/api/v1/debug/log"] == methods_by_path["/api/debug/log"]
 
 
+def test_delivery_target_route_addresses_slash_containing_branches() -> None:
+    """Delivery target lookup supports slash-containing repos and branches.
+
+    Regression guard: the delivery target/branch lookup must split the target
+    repository into ``owner``/``repo`` path segments and use the
+    ``{branch_name:path}`` converter, because every allowlisted target
+    repository (e.g. ``JoshCLWren/Latticery``) and factory branch name (e.g.
+    ``factory/2875-first-extraction-slice``) contains slashes. A route that
+    models either as a single path segment can never match a real delivery.
+    """
+    app = create_app(serve_frontend=False)
+    methods_by_path = _collect_routes(app)
+    target_path = "/api/v1/delivery/target/{owner}/{repo}/branch/{branch_name:path}"
+    assert target_path in methods_by_path
+    assert "GET" in methods_by_path[target_path]
+
+
 def test_no_new_bare_api_client_routes() -> None:
     """Regression guard: no client-facing routes under bare /api/* (non-v1)."""
     app = create_app(serve_frontend=False)

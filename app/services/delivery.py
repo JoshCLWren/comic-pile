@@ -19,6 +19,7 @@ from app.database import AsyncSession
 from app.models.delivery import DeliveryRecord as DeliveryRecordModel
 from app.schemas.delivery import (
     CrossRepoDeliveryRequest,
+    DeliveryFilePayload,
     DeliveryRecordCreate,
     DeliveryRecordUpdate,
     DeliveryResult,
@@ -107,6 +108,20 @@ class DeliveryService:
         await db.flush()
         await db.refresh(record)
         return record
+
+    async def list_delivery_records(
+        self, db: AsyncSession,
+    ) -> list[DeliveryRecordModel]:
+        """List all delivery records.
+
+        Args:
+            db: Async database session.
+
+        Returns:
+            List of all delivery records.
+        """
+        result = await db.execute(select(DeliveryRecordModel))
+        return list(result.scalars().all())
 
     async def update_delivery_record(
         self,
@@ -345,6 +360,62 @@ class DeliveryService:
             raise RuntimeError(f"Failed to access target repository {target}: {e.data}") from e
         return client, repo
 
+    @staticmethod
+    def _apply_delivery_files(
+        repo: Repository,
+        *,
+        branch_name: str,
+        base_branch: str,
+        files: list[DeliveryFilePayload],
+        commit_message: str,
+    ) -> None:
+        """Create or update *branch_name* so it contains *files*.
+
+        Builds a git tree from the parent commit (existing branch head when the
+        branch is present, otherwise *base_branch*), writes every file blob,
+        creates one commit, and points the branch at that commit. Without this
+        step a delivery would open an empty PR with no extracted content.
+
+        Args:
+            repo: Target GitHub repository client.
+            branch_name: Delivery branch to create or update.
+            base_branch: Base branch used when the delivery branch is new.
+            files: File payloads to write on the branch.
+            commit_message: Commit message for the content commit.
+
+        Returns:
+            None.
+        """
+        base_ref = repo.get_git_ref(f"heads/{base_branch}")
+        branch_exists = True
+        branch_ref = None
+        try:
+            branch_ref = repo.get_git_ref(f"heads/{branch_name}")
+        except GithubException:
+            branch_exists = False
+
+        parent_sha = branch_ref.object.sha if branch_exists and branch_ref else base_ref.object.sha
+        parent_commit = repo.get_commit(parent_sha)
+
+        tree_entries: list[dict[str, str]] = []
+        for file_payload in files:
+            blob = repo.create_git_blob(file_payload.content, "utf-8")
+            tree_entries.append(
+                {
+                    "path": file_payload.path,
+                    "mode": "100644",
+                    "type": "blob",
+                    "sha": blob.sha,
+                }
+            )
+
+        new_tree = repo.create_git_tree(tree_entries, parent_commit.commit.tree)
+        new_commit = repo.create_git_commit(commit_message, new_tree, [parent_commit.commit])
+        if branch_exists and branch_ref is not None:
+            branch_ref.edit(new_commit.sha)
+        else:
+            repo.create_git_ref(f"refs/heads/{branch_name}", new_commit.sha)
+
     async def deliver_to_target(
         self,
         db: AsyncSession,
@@ -355,7 +426,8 @@ class DeliveryService:
         This method:
         1. Validates the target repository against the allowlist
         2. Selects the correct credential (GITHUB_TOKEN vs LATTICERY_TOKEN)
-        3. Creates a branch on the target repository
+        3. Creates a branch on the target repository, committing any file
+           payloads from the request so the branch is not empty
         4. Creates a PR on the target repository
         5. Records all state in the delivery ledger
 
@@ -387,14 +459,23 @@ class DeliveryService:
         try:
             client, repo = self.get_target_repo_client(target)
 
-            # Create branch on target repo
-            ref_name = f"refs/heads/{request.branch_name}"
-            base_ref = repo.get_git_ref(f"heads/{request.base_branch}")
-            try:
-                repo.create_git_ref(ref_name, base_ref.object.sha)
-            except GithubException:
-                # Branch may already exist
-                pass
+            if request.files:
+                self._apply_delivery_files(
+                    repo,
+                    branch_name=request.branch_name,
+                    base_branch=request.base_branch,
+                    files=request.files,
+                    commit_message=request.commit_message or request.title,
+                )
+            else:
+                # Branch-only delivery: create the branch at base when absent.
+                base_ref = repo.get_git_ref(f"heads/{request.base_branch}")
+                try:
+                    repo.get_git_ref(f"heads/{request.branch_name}")
+                except GithubException:
+                    repo.create_git_ref(
+                        f"refs/heads/{request.branch_name}", base_ref.object.sha
+                    )
 
             # Create PR on target repo
             pr = repo.create_pull(

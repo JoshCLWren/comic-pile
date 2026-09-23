@@ -77,6 +77,25 @@ class TargetRepositoryValidation(BaseModel):
         return v
 
 
+class DeliveryFilePayload(BaseModel):
+    """A single file to write on the target repository delivery branch."""
+
+    path: str = Field(..., min_length=1)
+    content: str
+
+    @field_validator("path")
+    @classmethod
+    def validate_path(cls, v: str) -> str:
+        """Ensure the path is a safe relative repository path."""
+        cleaned = v.strip().replace("\\", "/")
+        if not cleaned or cleaned.startswith("/"):
+            raise ValueError("path must be a relative repository path")
+        parts = cleaned.split("/")
+        if any(part in ("", "..", ".") for part in parts):
+            raise ValueError("path must not contain empty, '.', or '..' segments")
+        return "/".join(parts)
+
+
 class CrossRepoDeliveryRequest(BaseModel):
     """Schema for requesting a cross-repository delivery operation."""
 
@@ -87,6 +106,8 @@ class CrossRepoDeliveryRequest(BaseModel):
     title: str = Field(..., min_length=1)
     body: str | None = Field(default=None)
     base_branch: str = Field(default="main")
+    files: list[DeliveryFilePayload] = Field(default_factory=list)
+    commit_message: str | None = Field(default=None)
 
     @field_validator("target_repository")
     @classmethod
