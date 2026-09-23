@@ -172,6 +172,7 @@ def _register_core_routers(app: FastAPI) -> None:
     from app.api import comicvine_resolution
     from app.api import creators
     from app.api import dependency
+    from app.api import delivery
     from app.api import health
     from app.api import identity_inbox
     from app.api import issue
@@ -233,6 +234,8 @@ def _register_core_routers(app: FastAPI) -> None:
     app.include_router(taste_signal.router, prefix="/api/v1", tags=["taste-signals"])
     app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
+    app.include_router(delivery.router, prefix="/api", tags=["delivery"])
+    app.include_router(delivery.router, prefix="/api/v1", tags=["delivery"])
     app.include_router(catalog.router, tags=["catalog"])
     app.include_router(identity_inbox.router, tags=["identity-inbox"])
     app.include_router(issue_identity.router, tags=["issue-identity"])
