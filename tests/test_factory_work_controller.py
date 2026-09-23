@@ -349,6 +349,35 @@ def test_strike_retry_excludes_only_failed_producer_until_new_implementation_cla
     assert controller.issue_excludes_worker_on_strike_retry(77, "12") is False
 
 
+def test_assign_accepts_kinds_parameter(controller: types.ModuleType) -> None:
+    """assign() must accept a kinds parameter with default None."""
+    import inspect
+    sig = inspect.signature(controller.assign)
+    assert "kinds" in sig.parameters
+    assert sig.parameters["kinds"].default is None
+
+
+def test_assign_candidate_refuses_second_active_lease(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """assign_candidate must refuse when the worker already holds an active lease."""
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda w: w == "99")
+    monkeypatch.setattr(controller, "target_still_unowned", lambda n: True)
+    monkeypatch.setattr(controller, "replace_factory_labels", lambda *a, **k: None)
+    monkeypatch.setattr(controller, "target_owned_by", lambda num, owner: True)
+    monkeypatch.setattr(controller, "record_controller_lease_activity", lambda *a, **k: None)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+    class FakeCandidate:
+        number = 1
+        kind = "issue"
+        linked_issue = None
+        conflicted = False
+
+    assert controller.assign_candidate(FakeCandidate(), "99") is False
+    assert controller.assign_candidate(FakeCandidate(), "1") is True
+
+
 def test_selective_conflict_recovery_canonical_pr_plus_stray_issue(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -363,7 +392,7 @@ def test_selective_conflict_recovery_canonical_pr_plus_stray_issue(
             "createdAt": "2026-09-01T12:00:00Z",
         }
     ]
-    
+
     prs = [
         {
             "number": 2001,
@@ -375,7 +404,7 @@ def test_selective_conflict_recovery_canonical_pr_plus_stray_issue(
             "createdAt": "2026-09-01T12:00:00Z",
         }
     ]
-    
+
     # Mock target_json to verify ownership
     def mock_target_json(number):
         if number == 1001:
@@ -393,38 +422,38 @@ def test_selective_conflict_recovery_canonical_pr_plus_stray_issue(
                 "state": "open",
             }
         return {}
-    
+
     # Mock replace_factory_labels to track calls
     replaced_labels = []
     def mock_replace_factory_labels(number, owner, stage=None):
         replaced_labels.append((number, owner, stage))
-    
+
     # Mock record_claim_released to track calls
     recorded_releases = []
     def mock_record_claim_released(number, worker, kind, reason):
         recorded_releases.append((number, worker, kind, reason))
-    
+
     monkeypatch.setattr(controller, "list_issues", lambda: issues)
     monkeypatch.setattr(controller, "list_prs", lambda: prs)
     monkeypatch.setattr(controller, "target_json", mock_target_json)
     monkeypatch.setattr(controller, "replace_factory_labels", mock_replace_factory_labels)
     monkeypatch.setattr(controller, "record_claim_released", mock_record_claim_released)
     monkeypatch.setattr(controller, "target_owned_by", lambda num, owner: True)
-    
+
     # Run the conflict recovery
     result = controller.selectivity_conflict_recovery("54")
-    
+
     # Verify results
     assert result["worker"] == "54"
     assert 1001 in result["recovered_issues"]
     assert 2001 in result["canonical_prs_preserved"]
     assert 1001 in result["orphan_issues_released"]
     assert len(result["errors"]) == 0
-    
+
     # Verify that the stray issue was released
     assert (1001, "factory:unowned", None) in replaced_labels
     assert (1001, "54", "issue", "selective-conflict-recovery") in recorded_releases
-    
+
     # Verify that the canonical PR was not touched
     pr_label_changes = [call for call in replaced_labels if call[0] == 2001]
     assert len(pr_label_changes) == 0
@@ -444,7 +473,7 @@ def test_selective_conflict_recovery_orphan_issue_plus_canonical_pr(
             "createdAt": "2026-09-01T12:00:00Z",
         }
     ]
-    
+
     prs = [
         {
             "number": 2002,
@@ -457,7 +486,7 @@ def test_selective_conflict_recovery_orphan_issue_plus_canonical_pr(
             "body": "Closes #1002",
         }
     ]
-    
+
     # Mock target_json to verify ownership
     def mock_target_json(number):
         if number == 1002:
@@ -475,33 +504,33 @@ def test_selective_conflict_recovery_orphan_issue_plus_canonical_pr(
                 "state": "open",
             }
         return {}
-    
+
     # Mock replace_factory_labels to track calls
     replaced_labels = []
     def mock_replace_factory_labels(number, owner, stage=None):
         replaced_labels.append((number, owner, stage))
-    
+
     # Mock record_claim_released to track calls
     recorded_releases = []
     def mock_record_claim_released(number, worker, kind, reason):
         recorded_releases.append((number, worker, kind, reason))
-    
+
     monkeypatch.setattr(controller, "list_issues", lambda: issues)
     monkeypatch.setattr(controller, "list_prs", lambda: prs)
     monkeypatch.setattr(controller, "target_json", mock_target_json)
     monkeypatch.setattr(controller, "replace_factory_labels", mock_replace_factory_labels)
     monkeypatch.setattr(controller, "record_claim_released", mock_record_claim_released)
     monkeypatch.setattr(controller, "target_owned_by", lambda num, owner: True)
-    
+
     # Run the conflict recovery
     result = controller.selectivity_conflict_recovery("54")
-    
+
     # Verify results
     assert result["worker"] == "54"
     assert 1002 in result["recovered_issues"]
     assert 1002 in result["orphan_issues_released"]
     assert len(result["errors"]) == 0
-    
+
     # Verify that the orphan issue was released
     assert (1002, "factory:unowned", None) in replaced_labels
     assert (1002, "54", "issue", "selective-conflict-recovery") in recorded_releases
@@ -528,7 +557,7 @@ def test_selective_conflict_recovery_ambiguous_cases_fail_closed(
             "createdAt": "2026-09-01T12:00:00Z",
         }
     ]
-    
+
     prs = [
         {
             "number": 2003,
@@ -549,14 +578,14 @@ def test_selective_conflict_recovery_ambiguous_cases_fail_closed(
             "createdAt": "2026-09-01T12:00:00Z",
         }
     ]
-    
+
     monkeypatch.setattr(controller, "list_issues", lambda: issues)
     monkeypatch.setattr(controller, "list_prs", lambda: prs)
     monkeypatch.setattr(controller, "target_owned_by", lambda num, owner: True)
-    
+
     # Run the conflict recovery
     result = controller.selectivity_conflict_recovery("54")
-    
+
     # Verify that ambiguous cases are detected and not resolved
     assert len(result["ambiguous_cases"]) == 2
     assert {case["issue"] for case in result["ambiguous_cases"]} == {1003, 1004}
@@ -666,7 +695,7 @@ def test_selective_conflict_recovery_preserves_label_state_invariants(
             "createdAt": "2026-09-01T12:00:00Z",
         }
     ]
-    
+
     prs = [
         {
             "number": 2005,
@@ -678,7 +707,7 @@ def test_selective_conflict_recovery_preserves_label_state_invariants(
             "createdAt": "2026-09-01T12:00:00Z",
         }
     ]
-    
+
     # Mock target_json to verify ownership and labels
     def mock_target_json(number):
         if number == 1005:
@@ -696,39 +725,39 @@ def test_selective_conflict_recovery_preserves_label_state_invariants(
                 "state": "open",
             }
         return {}
-    
+
     # Mock replace_factory_labels to track calls
     replaced_labels = []
     def mock_replace_factory_labels(number, owner, stage=None):
         replaced_labels.append((number, owner, stage))
-    
+
     # Mock record_claim_released to track calls
     recorded_releases = []
     def mock_record_claim_released(number, worker, kind, reason):
         recorded_releases.append((number, worker, kind, reason))
-    
+
     monkeypatch.setattr(controller, "list_issues", lambda: issues)
     monkeypatch.setattr(controller, "list_prs", lambda: prs)
     monkeypatch.setattr(controller, "target_json", mock_target_json)
     monkeypatch.setattr(controller, "replace_factory_labels", mock_replace_factory_labels)
     monkeypatch.setattr(controller, "record_claim_released", mock_record_claim_released)
     monkeypatch.setattr(controller, "target_owned_by", lambda num, owner: True)
-    
+
     # Run the conflict recovery
     result = controller.selectivity_conflict_recovery("54")
-    
+
     # Verify results
     assert result["worker"] == "54"
     assert 1005 in result["recovered_issues"]
     assert 2005 in result["canonical_prs_preserved"]
     assert len(result["errors"]) == 0
-    
+
     # Verify that the stray issue was released with proper stage handling
     issue_releases = [call for call in replaced_labels if call[0] == 1005]
     assert len(issue_releases) == 1
     assert issue_releases[0][1] == "factory:unowned"  # Owner released
     # Stage should be None when releasing an issue that's not the PR's linked issue
-    
+
     # Verify that the canonical PR's stage was preserved
     pr_changes = [call for call in replaced_labels if call[0] == 2005]
     assert len(pr_changes) == 0  # PR should not be touched
@@ -782,7 +811,7 @@ def test_selective_conflict_recovery_current_owner_verification(
             "createdAt": "2026-09-01T12:00:00Z",
         }
     ]
-    
+
     prs = [
         {
             "number": 2006,
@@ -794,7 +823,7 @@ def test_selective_conflict_recovery_current_owner_verification(
             "createdAt": "2026-09-01T12:00:00Z",
         }
     ]
-    
+
     # Mock target_json to return different ownership (worker no longer owns)
     def mock_target_json(number):
         if number == 1006:
@@ -812,32 +841,83 @@ def test_selective_conflict_recovery_current_owner_verification(
                 "state": "open",
             }
         return {}
-    
+
     # Mock replace_factory_labels to track calls
     replaced_labels = []
     def mock_replace_factory_labels(number, owner, stage=None):
         replaced_labels.append((number, owner, stage))
-    
+
     # Mock record_claim_released to track calls
     recorded_releases = []
     def mock_record_claim_released(number, worker, kind, reason):
         recorded_releases.append((number, worker, kind, reason))
-    
+
     monkeypatch.setattr(controller, "list_issues", lambda: issues)
     monkeypatch.setattr(controller, "list_prs", lambda: prs)
     monkeypatch.setattr(controller, "target_json", mock_target_json)
     monkeypatch.setattr(controller, "replace_factory_labels", mock_replace_factory_labels)
     monkeypatch.setattr(controller, "record_claim_released", mock_record_claim_released)
     monkeypatch.setattr(controller, "target_owned_by", lambda num, owner: num == 2006)  # Only PR is still owned
-    
+
     # Run the conflict recovery
     result = controller.selectivity_conflict_recovery("54")
-    
+
     # Verify that the stray issue was NOT released because ownership changed
     assert len(result["recovered_issues"]) == 0
     assert len(result["orphan_issues_released"]) == 0
     assert len(result["errors"]) == 0
-    
+
     # Verify that no labels were changed
     assert len(replaced_labels) == 0
     assert len(recorded_releases) == 0
+
+
+def test_reconcile_contradictory_labels_repairs_unowned_plus_worker(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Unowned coexisting with one worker lease keeps the worker and drops unowned."""
+    issues = [issue(3001, "factory", "factory:unowned", "factory:13", "factory:building")]
+    replaced: list[tuple[int, str, str | None]] = []
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: replaced.append((number, owner, stage)),
+    )
+
+    assert controller.reconcile_contradictory_labels(issues, []) == [3001]
+    assert replaced == [(3001, "factory:13", None)]
+
+
+def test_reconcile_contradictory_labels_fails_closed_on_two_workers(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two distinct active leases must not be resolved by guessing."""
+    issues = [issue(3002, "factory", "factory:unowned", "factory:13", "factory:14")]
+    replaced: list[tuple[int, str, str | None]] = []
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: replaced.append((number, owner, stage)),
+    )
+
+    assert controller.reconcile_contradictory_labels(issues, []) == []
+    assert replaced == []
+
+
+def test_reconcile_contradictory_labels_leaves_clean_targets_alone(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Singly-owned and purely-unowned targets are not rewritten."""
+    issues = [
+        issue(3003, "factory", "factory:13", "factory:building"),
+        issue(3004, "factory", "factory:unowned"),
+    ]
+    replaced: list[tuple[int, str, str | None]] = []
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: replaced.append((number, owner, stage)),
+    )
+
+    assert controller.reconcile_contradictory_labels(issues, []) == []
+    assert replaced == []

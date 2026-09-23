@@ -91,6 +91,7 @@ def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> N
     current = [label['name'] for label in target.get('labels', [])]
     existing_stage = next((label for label in current if label in STAGE_LABELS), None)
     stage = stage or existing_stage or 'factory:building'
+    # Remove all existing owner labels (including factory:unowned) and stage labels
     labels = [label for label in current if not OWNER_RE.fullmatch(label) and label not in STAGE_LABELS and (label != 'factory')]
     labels.extend(['factory', owner, stage])
     run_gh(['api', '--method', 'PUT', f'repos/{REPO}/issues/{number}/labels', '--input', '-'], input_json={'labels': sorted(set(labels))})
@@ -208,8 +209,12 @@ def record_controller_lease_activity(number: int, worker: str, kind: str) -> Non
 
 
 def assign_candidate(candidate: Candidate, worker: str) -> bool:
-    """Claim a candidate and any linked issue for one fixed-model worker."""
-    if os.environ.get('GITHUB_ACTIONS') == 'true' and not dispatcher_identity_verified():
+    """Claim a candidate and any linked issue for one fixed-model worker.
+
+    Enforces the invariant: an executable issue must never simultaneously satisfy
+    both 'factory:unowned' and active factory ownership.
+    """
+    if os.environ.get('GITHUB_ACTIONS', '').strip().lower() == 'true' and not dispatcher_identity_verified():
         return False
     owner = f'factory:{worker}'
     numbers = [candidate.number]
@@ -461,6 +466,38 @@ def owned_targets(issues: list[dict[str, Any]] | None=None, prs: list[dict[str, 
     return targets
 
 
+def reconcile_contradictory_labels(
+    issues: list[dict[str, Any]] | None=None,
+    prs: list[dict[str, Any]] | None=None,
+) -> list[int]:
+    """Repair pre-existing contradictory ownership labels without fresh assignment.
+
+    A target carrying both ``factory:unowned`` and exactly one active worker
+    lease is contradictory: it claims to be simultaneously unowned and owned.
+    Remove the redundant ``factory:unowned`` label while preserving the active
+    owner and workflow stage. Fail closed (repair nothing) when the legitimate
+    owner cannot be determined, e.g. two distinct active worker leases.
+    """
+    issue_items = list_issues() if issues is None else issues
+    pr_items = list_prs() if prs is None else prs
+    repaired: list[int] = []
+    for item in [*issue_items, *pr_items]:
+        owners = [label for label in labels_of(item) if OWNER_RE.fullmatch(label)]
+        if len(owners) <= 1 or 'factory:unowned' not in owners:
+            continue
+        active_owners = [owner for owner in owners if owner != 'factory:unowned']
+        if len(active_owners) != 1:
+            continue
+        number = int(item['number'])
+        replace_factory_labels(number, active_owners[0])
+        repaired.append(number)
+        print(
+            f'[factory-controller] reconciled contradictory unowned label on #{number}',
+            file=sys.stderr,
+        )
+    return repaired
+
+
 def reconcile_stale_leases(now_epoch: int | None=None) -> list[int]:
     """Release only leases whose inactivity and age are both provable."""
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
@@ -550,8 +587,13 @@ def omniroute_free_entry_has_capacity() -> bool:
     return omniroute_free_entry_capacity()['remaining'] > 0
 
 
-def assign(worker: str) -> Candidate | None:
-    """Assign the highest-ranked executable work to one fixed-model worker."""
+def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
+    """Assign the highest-ranked executable work to one fixed-model worker.
+
+    When kinds is provided, only candidates whose kind is in the tuple
+    are considered. This allows completion drains to request dispatcher
+    allocation restricted to specific candidate types.
+    """
     if not re.fullmatch('(?:[6-9]|[1-3][0-9]|[4-7][0-9])', worker):
         raise SystemExit(f'unsupported fixed-model worker: {worker}')
     if worker_has_active_lease(worker):
@@ -585,7 +627,9 @@ def assign(worker: str) -> Candidate | None:
         no_diff_attempts_by_issue=issue_retry_counts,
         no_diff_attempt_records=attempt_records,
     )
-    if attempt_records is None:
+    if kinds is not None:
+        candidates = [candidate for candidate in candidates if candidate.kind in kinds]
+    elif attempt_records is None:
         candidates = [candidate for candidate in candidates if candidate.kind == 'pr']
     candidates = order_candidates_for_worker(candidates, worker)
     for candidate in candidates:
@@ -886,6 +930,7 @@ def main() -> int:
     stale_parser.add_argument('--dry-run', action='store_true', help='Report without taking action')
     assign_parser = subparsers.add_parser('assign')
     assign_parser.add_argument('--worker', required=True)
+    assign_parser.add_argument('--kinds', nargs='*', default=None)
     inspect_parser = subparsers.add_parser('inspect')
     inspect_parser.add_argument('--worker', required=True)
     release_parser = subparsers.add_parser('release')
@@ -895,7 +940,9 @@ def main() -> int:
     recovery_parser.add_argument('--worker', required=True)
     args = parser.parse_args()
     if args.command == 'reconcile':
-        print(json.dumps({'released': reconcile_stale_leases()}))
+        released = reconcile_stale_leases()
+        repaired = reconcile_contradictory_labels()
+        print(json.dumps({'released': released, 'contradictions_repaired': repaired}))
         return 0
     if args.command == 'capacity':
         print(json.dumps(omniroute_free_entry_capacity()))
@@ -904,7 +951,7 @@ def main() -> int:
         print(json.dumps(check_stale_prs(dry_run=args.dry_run)))
         return 0
     if args.command == 'assign':
-        candidate = assign(args.worker)
+        candidate = assign(args.worker, kinds=tuple(args.kinds) if args.kinds else None)
         if candidate is None:
             print(json.dumps({'kind': 'none'}))
             return 0
