@@ -216,6 +216,8 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
     """
     if worker_has_active_lease(worker):
         return False
+    if os.environ.get('GITHUB_ACTIONS', '').strip().lower() == 'true' and not dispatcher_identity_verified():
+        return False
     owner = f'factory:{worker}'
     numbers = [candidate.number]
     if candidate.kind == 'pr' and candidate.linked_issue is not None:
@@ -228,9 +230,6 @@ def assign_candidate(candidate: Candidate, worker: str) -> bool:
     for number in numbers:
         if not target_still_unowned(number):
             return False
-
-    if worker_has_active_lease(worker):
-        return False
 
     def release_verified_claims(claimed_numbers: list[int]) -> None:
         """Release only labels this worker can still prove it owns."""

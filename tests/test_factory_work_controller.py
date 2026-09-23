@@ -349,7 +349,7 @@ def test_strike_retry_excludes_only_failed_producer_until_new_implementation_cla
     assert controller.issue_excludes_worker_on_strike_retry(77, "12") is False
 
 
-def test_assign_accepts_kinds_parameter() -> None:
+def test_assign_accepts_kinds_parameter(controller: types.ModuleType) -> None:
     """assign() must accept a kinds parameter with default None."""
     import inspect
     sig = inspect.signature(controller.assign)
@@ -364,6 +364,18 @@ def test_assign_candidate_refuses_second_active_lease(
     monkeypatch.setattr(controller, "worker_has_active_lease", lambda w: w == "99")
     monkeypatch.setattr(controller, "target_still_unowned", lambda n: True)
     monkeypatch.setattr(controller, "replace_factory_labels", lambda *a, **k: None)
+    monkeypatch.setattr(controller, "target_owned_by", lambda num, owner: True)
+    monkeypatch.setattr(controller, "record_controller_lease_activity", lambda *a, **k: None)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+
+    class FakeCandidate:
+        number = 1
+        kind = "issue"
+        linked_issue = None
+        conflicted = False
+
+    assert controller.assign_candidate(FakeCandidate(), "99") is False
+    assert controller.assign_candidate(FakeCandidate(), "1") is True
 
     class FakeCandidate:
         number = 1
