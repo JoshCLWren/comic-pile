@@ -328,7 +328,7 @@ class GitHubSettings(BaseSettings):
     )
     latticery_token: str = Field(
         default="",
-        description="Dedicated GitHub PAT for JoshCLWren/Latticery cross-repository delivery operations",
+        description="Dedicated GitHub PAT for JoshCLWren/Latticery cross-repository delivery operations (requires repo scope)",
         json_schema_extra={"env": "LATTICERY_TOKEN"},
     )
     allowed_target_repos: list[str] = Field(

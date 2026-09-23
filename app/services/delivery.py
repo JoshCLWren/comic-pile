@@ -406,6 +406,8 @@ class DeliveryService:
 
             # Update delivery record with PR info
             await self.create_pr_record(db, record.id, pr.number)
+            await db.commit()
+            await db.refresh(record)
 
             return DeliveryResult(
                 success=True,
@@ -419,6 +421,8 @@ class DeliveryService:
         except Exception as e:
             logger.exception("Cross-repo delivery failed for %s", target)
             await self.mark_delivery_failed(db, record.id, str(e))
+            await db.commit()
+            await db.refresh(record)
             return DeliveryResult(
                 success=False,
                 target_repository=target,
