@@ -469,3 +469,42 @@ def test_record_stale_expiration_releases_issue_before_closing_and_marks_last(
     assert events[1] == ("close", 42)
     assert events[2][0] == "comment"
     assert marker in events[2][1]
+
+
+
+def test_reset_issue_to_unowned_makes_open_issue_executable(monkeypatch) -> None:
+    """Stale cleanup returns an open linked issue to building intake."""
+    monkeypatch.setattr(
+        module,
+        "gh_json",
+        lambda args, **kwargs: {"state": "open", "labels": []},
+    )
+    writes: list[tuple[int, str, str]] = []
+    monkeypatch.setattr(
+        module,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: writes.append((number, owner, stage)),
+    )
+
+    module.reset_issue_to_unowned(100)
+
+    assert writes == [(100, "factory:unowned", "factory:building")]
+
+
+def test_reset_issue_to_unowned_respects_terminal_closed_issue(monkeypatch) -> None:
+    """A separately closed product issue is not resurrected by stale PR cleanup."""
+    monkeypatch.setattr(
+        module,
+        "gh_json",
+        lambda args, **kwargs: {"state": "closed", "state_reason": "not_planned"},
+    )
+    writes: list[tuple[int, str, str | None]] = []
+    monkeypatch.setattr(
+        module,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: writes.append((number, owner, stage)),
+    )
+
+    module.reset_issue_to_unowned(100)
+
+    assert writes == []
