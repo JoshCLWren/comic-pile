@@ -555,9 +555,9 @@ async def _load_read_issues(
         ) series_cv ON TRUE
         LEFT JOIN LATERAL (
             SELECT ARRAY_AGG(DISTINCT COALESCE(
-                ei.metadata_json::jsonb -> 'volume' ->> 'id',
-                ei.metadata_json::jsonb ->> 'volume_id',
-                ei.metadata_json::jsonb -> 'raw_provider_payload' -> 'volume' ->> 'id'
+                sibling_ei.metadata_json::jsonb -> 'volume' ->> 'id',
+                sibling_ei.metadata_json::jsonb ->> 'volume_id',
+                sibling_ei.metadata_json::jsonb -> 'raw_provider_payload' -> 'volume' ->> 'id'
             )) AS sibling_volume_ids
             FROM issues sibling_issue
             JOIN issue_external_identity_mappings sibling_iem
