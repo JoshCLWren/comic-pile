@@ -1,0 +1,23 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting alembic
+  Downloading alembic-1.20.0-py3-none-any.whl.metadata (7.3 kB)
+Collecting psycopg[binary]
+  Downloading psycopg-3.3.6-py3-none-any.whl.metadata (4.4 kB)
+Requirement already satisfied: SQLAlchemy>=2.0 in /home/runner/.local/lib/python3.12/site-packages (from alembic) (2.0.54)
+Collecting Mako (from alembic)
+  Downloading mako-1.4.3-py3-none-any.whl.metadata (2.9 kB)
+Requirement already satisfied: typing-extensions>=4.12 in /home/runner/.local/lib/python3.12/site-packages (from alembic) (4.16.0)
+Collecting psycopg-binary==3.3.6 (from psycopg[binary])
+  Downloading psycopg_binary-3.3.6-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.7 kB)
+Requirement already satisfied: greenlet>=1 in /home/runner/.local/lib/python3.12/site-packages (from SQLAlchemy>=2.0->alembic) (3.5.6)
+Requirement already satisfied: MarkupSafe>=2.0 in /usr/lib/python3/dist-packages (from Mako->alembic) (2.1.5)
+Downloading alembic-1.20.0-py3-none-any.whl (268 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 268.7/268.7 kB 4.7 MB/s eta 0:00:00
+Downloading psycopg_binary-3.3.6-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (5.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.2/5.2 MB 34.0 MB/s eta 0:00:00
+Downloading mako-1.4.3-py3-none-any.whl (80 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 80.2/80.2 kB 41.6 MB/s eta 0:00:00
+Downloading psycopg-3.3.6-py3-none-any.whl (215 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 215.5/215.5 kB 95.1 MB/s eta 0:00:00
+Installing collected packages: psycopg-binary, psycopg, Mako, alembic
+Successfully installed Mako-1.4.3 alembic-1.20.0 psycopg-3.3.6 psycopg-binary-3.3.6

@@ -1,0 +1,51 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting fastapi
+  Downloading fastapi-0.141.1-py3-none-any.whl.metadata (27 kB)
+Collecting python-multipart
+  Downloading python_multipart-0.0.32-py3-none-any.whl.metadata (2.1 kB)
+Collecting slowapi
+  Downloading slowapi-0.1.10-py3-none-any.whl.metadata (3.3 kB)
+Requirement already satisfied: python-dotenv in /home/runner/.local/lib/python3.12/site-packages (1.2.3)
+Collecting starlette>=0.46.0 (from fastapi)
+  Downloading starlette-1.7.0-py3-none-any.whl.metadata (6.6 kB)
+Collecting pydantic>=2.9.0 (from fastapi)
+  Downloading pydantic-2.13.5-py3-none-any.whl.metadata (110 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 110.2/110.2 kB 4.3 MB/s eta 0:00:00
+Requirement already satisfied: typing-extensions>=4.8.0 in /home/runner/.local/lib/python3.12/site-packages (from fastapi) (4.16.0)
+Collecting typing-inspection>=0.4.2 (from fastapi)
+  Downloading typing_inspection-0.4.4-py3-none-any.whl.metadata (2.6 kB)
+Collecting annotated-doc>=0.0.2 (from fastapi)
+  Downloading annotated_doc-0.0.5-py3-none-any.whl.metadata (6.5 kB)
+Collecting limits>=2.3 (from slowapi)
+  Downloading limits-5.8.0-py3-none-any.whl.metadata (10 kB)
+Collecting deprecated>=1.2 (from limits>=2.3->slowapi)
+  Downloading deprecated-1.3.1-py2.py3-none-any.whl.metadata (5.9 kB)
+Requirement already satisfied: packaging>=21 in /usr/lib/python3/dist-packages (from limits>=2.3->slowapi) (24.0)
+Collecting annotated-types>=0.6.0 (from pydantic>=2.9.0->fastapi)
+  Downloading annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+Collecting pydantic-core==2.46.5 (from pydantic>=2.9.0->fastapi)
+  Downloading pydantic_core-2.46.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.6 kB)
+Requirement already satisfied: anyio<5,>=4.0.0 in /home/runner/.local/lib/python3.12/site-packages (from starlette>=0.46.0->fastapi) (4.15.1)
+Requirement already satisfied: idna>=2.8 in /usr/lib/python3/dist-packages (from anyio<5,>=4.0.0->starlette>=0.46.0->fastapi) (3.6)
+Collecting wrapt<3,>=1.10 (from deprecated>=1.2->limits>=2.3->slowapi)
+  Downloading wrapt-2.4.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (7.4 kB)
+Downloading fastapi-0.141.1-py3-none-any.whl (131 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 132.0/132.0 kB 3.8 MB/s eta 0:00:00
+Downloading python_multipart-0.0.32-py3-none-any.whl (30 kB)
+Downloading slowapi-0.1.10-py3-none-any.whl (14 kB)
+Downloading annotated_doc-0.0.5-py3-none-any.whl (5.3 kB)
+Downloading limits-5.8.0-py3-none-any.whl (60 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 61.0/61.0 kB 26.5 MB/s eta 0:00:00
+Downloading pydantic-2.13.5-py3-none-any.whl (472 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 472.6/472.6 kB 17.7 MB/s eta 0:00:00
+Downloading pydantic_core-2.46.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 31.4 MB/s eta 0:00:00
+Downloading starlette-1.7.0-py3-none-any.whl (78 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 79.0/79.0 kB 41.1 MB/s eta 0:00:00
+Downloading typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+Downloading deprecated-1.3.1-py2.py3-none-any.whl (11 kB)
+Downloading wrapt-2.4.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (236 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 236.3/236.3 kB 13.5 MB/s eta 0:00:00
+Installing collected packages: wrapt, typing-inspection, python-multipart, pydantic-core, annotated-types, annotated-doc, starlette, pydantic, deprecated, limits, fastapi, slowapi
+Successfully installed annotated-doc-0.0.5 annotated-types-0.8.0 deprecated-1.3.1 fastapi-0.141.1 limits-5.8.0 pydantic-2.13.5 pydantic-core-2.46.5 python-multipart-0.0.32 slowapi-0.1.10 starlette-1.7.0 typing-inspection-0.4.4 wrapt-2.4.1
