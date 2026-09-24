@@ -75,8 +75,13 @@ def test_roster_tick_defaults_to_twelve_workers_with_source_diverse_seed():
     assert "source_seed=" in workflow
     assert "source-diverse seed" in workflow
     assert 'python3 "$controller" capacity' in workflow
+    assert 'python3 "$controller" stale' in workflow
+    assert ".github/scripts/stale_pr_decay.py" in workflow
     assert 'jq -c --argjson n "$remaining" \'.[0:$n]\'' in workflow
     assert "OmniRoute free-entry cap is exhausted" in workflow
+    assert workflow.index('python3 "$controller" stale') < workflow.index(
+        'python3 "$controller" reconcile'
+    )
     assert workflow.index('python3 "$controller" reconcile') < workflow.index(
         'python3 "$controller" capacity'
     )
