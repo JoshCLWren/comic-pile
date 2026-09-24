@@ -356,8 +356,11 @@ def close_pr_implementation(pr_number: int) -> None:
 
 
 def reset_issue_to_unowned(number: int) -> None:
-    """Reset an issue to unowned state after stale expiration."""
-    replace_factory_labels(number, "factory:unowned")
+    """Return an open linked issue to executable implementation intake."""
+    target = gh_json(["api", f"repos/{REPO}/issues/{number}"])
+    if not isinstance(target, dict) or str(target.get("state") or "").lower() != "open":
+        return
+    replace_factory_labels(number, "factory:unowned", "factory:building")
 
 
 def replace_factory_labels(number: int, owner: str, stage: str | None = None) -> None:
