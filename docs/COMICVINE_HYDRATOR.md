@@ -2,6 +2,46 @@
 
 The ComicVine hydrator inspects comics that already exist in ComicPile and writes a machine-readable JSON report. It does not modify threads, issues, reading progress, ratings, dependencies, continuity rules, or confirmed provider mappings.
 
+## Read-issue identity and creator backfill
+
+Use `scripts/backfill_read_comicvine.py` as the single operator entrypoint for read
+issues. It targets only the explicitly exported `DATABASE_URL` and runs four resumable
+stages in order:
+
+1. prove and persist every identity supported by the configured local ComicVine SQLite snapshot;
+2. hydrate every creator payload available from stored metadata or that snapshot;
+3. use ComicVine only for identities still unresolved after the local stages; and
+4. hydrate creator metadata for identities that became satisfiable in stage 3.
+
+A run can be interrupted and rerun. Confirmed mappings, normalized metadata, provider
+responses, request pacing, and resource cooldowns are persisted or enforced by the
+operator. A throttle on one resource defers only work needing that resource; other
+resources continue. Headerless throttles use bounded per-resource backoff, and a
+successful request resets that resource's backoff.
+
+Set `COMICVINE_API_KEY` only when provider-dependent work remains. The operator
+paces uncached live request starts at 1.5 seconds. Set `COMICVINE_LOCAL_DB` (or
+`COMICPILE_COMICVINE_SQLITE_PATH`) to a local snapshot path to enable local-first
+identity and creator work. The command never falls back to test or local databases.
+
+Preview the same four stages without writes or provider calls:
+
+```bash
+DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \\
+  --user-id 1 --dry-run
+```
+
+Run or resume the live pipeline:
+
+```bash
+COMICVINE_API_KEY=... DATABASE_URL=... uv run python scripts/backfill_read_comicvine.py \\
+  --user-id 1 --report .cache/comicvine-read-backfill.json
+```
+
+The JSON report records phase order, per-issue results, pending work, throttled
+resources, and live request counts. `--refresh` forces provider metadata refresh
+for already mapped issues; without it, stored and local data are exhausted first.
+
 ## Report-only local run
 
 Use the local ComicVine snapshot and optional CBL mirror first. This mode does not require a ComicVine API key and does not make provider requests.

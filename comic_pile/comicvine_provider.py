@@ -19,6 +19,8 @@ from filelock import FileLock
 COMICVINE_BASE_URL = "https://comicvine.gamespot.com/api"
 DEFAULT_REQUESTS_PER_HOUR = 180
 DEFAULT_NO_HEADER_COOLDOWN = 60.0
+DEFAULT_MAX_NO_HEADER_COOLDOWN = 3600.0
+DEFAULT_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS = 0.0
 COLLECTION_PAGE_LIMIT = 100
 DEEP_ISSUE_FIELDS = (
     "id",
@@ -43,10 +45,20 @@ class ComicVineError(RuntimeError):
 class ComicVineRateLimitError(ComicVineError):
     """Raised when local or provider rate limiting prevents a request."""
 
-    def __init__(self, message: str, retry_after: float | None = None) -> None:
-        """Initialize with a message and optional retry-after seconds."""
+    def __init__(
+        self,
+        message: str,
+        retry_after: float | None = None,
+        *,
+        resource: str | None = None,
+        retry_after_seconds: float | None = None,
+    ) -> None:
+        """Initialize with a message and optional retry-after/resource details."""
+        resolved_retry_after = retry_after if retry_after is not None else retry_after_seconds
         super().__init__(message)
-        self.retry_after = retry_after
+        self.retry_after = resolved_retry_after
+        self.retry_after_seconds = resolved_retry_after
+        self.resource = resource
 
 
 @dataclass(frozen=True)
@@ -65,6 +77,7 @@ class ResourceCooldown:
     resource: str
     cooldown_until: float
     retry_after: float | None
+    headerless_attempts: int = 0
 
     @property
     def remaining(self) -> float | None:
@@ -110,26 +123,62 @@ class PersistentResourceThrottleTracker:
         temp.replace(self.path)
 
     def cleanup(self) -> None:
-        """Remove expired cooldown entries from persisted state."""
-        now = float(self._clock())
+        """Retain expired entries so only a successful request resets backoff state."""
         with self._lock:
             state = self._read()
-            kept: dict[str, dict[str, object]] = {}
-            for resource, entry in state.items():
-                until = float(entry.get("cooldown_until", 0))
-                if until > now:
-                    kept[resource] = entry
-            self._write(kept)
+            self._write(state)
 
-    def set_cooldown(self, resource: str, cooldown_until: float, retry_after: float | None = None) -> None:
+    def set_cooldown(
+        self,
+        resource: str,
+        cooldown_until: float,
+        retry_after: float | None = None,
+        *,
+        headerless_attempts: int | None = None,
+    ) -> None:
         """Record a cooldown deadline for a resource."""
         with self._lock:
             state = self._read()
+            previous = state.get(resource, {})
+            attempts = (
+                int(previous.get("headerless_attempts", 0))
+                if headerless_attempts is None
+                else max(0, headerless_attempts)
+            )
             state[resource] = {
                 "cooldown_until": cooldown_until,
                 "retry_after": retry_after,
+                "headerless_attempts": attempts,
             }
             self._write(state)
+
+    def record_throttle(
+        self,
+        resource: str,
+        *,
+        retry_after: float | None,
+    ) -> float:
+        """Record a throttle and return its effective cooldown in seconds."""
+        with self._lock:
+            state = self._read()
+            previous = state.get(resource, {})
+            attempts = int(previous.get("headerless_attempts", 0))
+            if retry_after is None:
+                attempts += 1
+                exponent = min(max(attempts - 1, 0), 20)
+                delay = min(
+                    DEFAULT_NO_HEADER_COOLDOWN * (2**exponent),
+                    DEFAULT_MAX_NO_HEADER_COOLDOWN,
+                )
+            else:
+                delay = max(0.0, float(retry_after))
+            state[resource] = {
+                "cooldown_until": float(self._clock()) + delay,
+                "retry_after": retry_after,
+                "headerless_attempts": max(0, attempts),
+            }
+            self._write(state)
+            return delay
 
     def reset(self, resource: str) -> None:
         """Clear the cooldown for a resource after a successful request."""
@@ -150,9 +199,16 @@ class PersistentResourceThrottleTracker:
             retry_after = float(retry_after)
         else:
             retry_after = None
+        raw_attempts = entry.get("headerless_attempts", 0)
+        headerless_attempts = int(raw_attempts) if isinstance(raw_attempts, (int, float)) else 0
         if cooldown_until <= float(self._clock()):
             return None
-        return ResourceCooldown(resource=resource, cooldown_until=cooldown_until, retry_after=retry_after)
+        return ResourceCooldown(
+            resource=resource,
+            cooldown_until=cooldown_until,
+            retry_after=retry_after,
+            headerless_attempts=max(0, headerless_attempts),
+        )
 
     def is_throttled(self, resource: str) -> bool:
         """Return whether a resource is currently in cooldown."""
@@ -222,7 +278,8 @@ class PersistentEndpointLimiter:
             recent = [stamp for stamp in ledger.get(endpoint, []) if stamp > cutoff]
             if len(recent) >= self.requests_per_hour:
                 raise ComicVineRateLimitError(
-                    f"ComicVine local rate budget exhausted for endpoint {endpoint!r}"
+                    f"ComicVine local rate budget exhausted for endpoint {endpoint!r}",
+                    resource=endpoint,
                 )
             recent.append(now)
             ledger[endpoint] = recent
@@ -264,6 +321,9 @@ class ComicVineClient:
         cache_dir: str | Path,
         *,
         requests_per_hour: int = DEFAULT_REQUESTS_PER_HOUR,
+        minimum_live_request_interval_seconds: float = (
+            DEFAULT_MINIMUM_LIVE_REQUEST_INTERVAL_SECONDS
+        ),
         base_url: str = COMICVINE_BASE_URL,
         timeout_seconds: float = 30.0,
     ) -> None:
@@ -272,16 +332,20 @@ class ComicVineClient:
         Args:
             api_key: ComicVine API key. It is never included in cache keys or persisted payload metadata.
             cache_dir: Directory for raw successful response cache, request ledger, and throttle state.
-            requests_per_hour: Conservative rolling-hour budget per endpoint path.
+            requests_per_hour: Rolling-hour budget per endpoint path.
+            minimum_live_request_interval_seconds: Minimum delay between uncached live request starts.
             base_url: Provider API base URL.
             timeout_seconds: Network timeout per request.
         """
         if not api_key.strip():
             raise ValueError("api_key is required")
+        if minimum_live_request_interval_seconds < 0:
+            raise ValueError("minimum_live_request_interval_seconds must be non-negative")
         self.api_key = api_key
         self.cache_dir = Path(cache_dir)
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
+        self.minimum_live_request_interval_seconds = minimum_live_request_interval_seconds
         self.limiter = PersistentEndpointLimiter(
             self.cache_dir / "request-ledger.json",
             requests_per_hour=requests_per_hour,
@@ -290,6 +354,9 @@ class ComicVineClient:
             self.cache_dir / "throttle-state.json",
         )
         self._clock = time.time
+        self._live_request_lock = asyncio.Lock()
+        self._last_live_request_started_at: float | None = None
+        self.live_request_starts = 0
 
     @staticmethod
     def _cache_key(endpoint: str, params: Mapping[str, object]) -> str:
@@ -317,6 +384,19 @@ class ComicVineClient:
         temp = path.with_suffix(".tmp")
         temp.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
         temp.replace(path)
+
+    async def _pace_live_request(self) -> None:
+        """Space uncached live request starts to avoid provider velocity bursts."""
+        interval = self.minimum_live_request_interval_seconds
+        if interval > 0:
+            async with self._live_request_lock:
+                now = time.monotonic()
+                if self._last_live_request_started_at is not None:
+                    delay = self._last_live_request_started_at + interval - now
+                    if delay > 0:
+                        await asyncio.sleep(delay)
+                self._last_live_request_started_at = time.monotonic()
+        self.live_request_starts += 1
 
     def _request_sync(self, endpoint: str, params: Mapping[str, object]) -> dict[str, object]:
         query = {
@@ -380,25 +460,29 @@ class ComicVineClient:
             cached = self._read_cache(cache_key)
             if cached is not None:
                 return ComicVineResponse(cached, True, cache_key)
-        if self._is_in_resource_cooldown(endpoint_bucket):
-            remaining = self.throttle_tracker.get_cooldown(endpoint_bucket)
-            if remaining is not None:
-                raise ComicVineRateLimitError(
-                    f"ComicVine resource {endpoint_bucket!r} is in cooldown",
-                    retry_after=remaining.retry_after,
-                )
+        cooldown = self.throttle_tracker.get_cooldown(endpoint_bucket)
+        if cooldown is not None:
             raise ComicVineRateLimitError(
-                f"ComicVine resource {endpoint_bucket!r} is in cooldown with no Retry-After"
+                f"ComicVine resource {endpoint_bucket!r} is in cooldown",
+                retry_after=cooldown.retry_after,
+                resource=endpoint_bucket,
             )
-        self.limiter.acquire(endpoint_bucket)
+        try:
+            self.limiter.acquire(endpoint_bucket)
+        except ComicVineRateLimitError as exc:
+            exc.resource = endpoint_bucket
+            raise
+        await self._pace_live_request()
         try:
             payload = await asyncio.to_thread(self._request_sync, endpoint, params)
         except ComicVineRateLimitError as exc:
-            self.throttle_tracker.set_cooldown(
+            effective_delay = self.throttle_tracker.record_throttle(
                 endpoint_bucket,
-                float(self._clock()) + (exc.retry_after if exc.retry_after else DEFAULT_NO_HEADER_COOLDOWN),
                 retry_after=exc.retry_after,
             )
+            exc.resource = endpoint_bucket
+            exc.retry_after = effective_delay
+            exc.retry_after_seconds = effective_delay
             cached = self._read_cache(cache_key)
             if cached is not None:
                 return ComicVineResponse(cached, True, cache_key)

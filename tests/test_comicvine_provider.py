@@ -470,7 +470,7 @@ def test_throttle_tracker_persists_state(tmp_path: Path) -> None:
 
 
 def test_throttle_tracker_cleanup_expired(tmp_path: Path) -> None:
-    """Cleanup must remove expired cooldown entries."""
+    """Cleanup should make expired cooldown entries inactive."""
     tracker = PersistentResourceThrottleTracker(tmp_path / "cooldown.json")
     tracker.set_cooldown("issue", 1.0)
     tracker.set_cooldown("volume", 9999999999.0)
@@ -478,3 +478,59 @@ def test_throttle_tracker_cleanup_expired(tmp_path: Path) -> None:
 
     assert not tracker.is_throttled("issue")
     assert tracker.is_throttled("volume")
+
+
+def test_headerless_backoff_escalates_and_resets_per_resource(tmp_path: Path) -> None:
+    """Headerless throttles back off exponentially to one hour until success."""
+    now = [1000.0]
+    tracker = PersistentResourceThrottleTracker(
+        tmp_path / "cooldown.json",
+        clock=lambda: now[0],
+    )
+
+    assert tracker.record_throttle("issue", retry_after=None) == 60.0
+    now[0] += 61
+    assert tracker.record_throttle("issue", retry_after=None) == 120.0
+    now[0] += 121
+    assert tracker.record_throttle("issue", retry_after=None) == 240.0
+    now[0] += 241
+    assert tracker.record_throttle("issue", retry_after=None) == 480.0
+    now[0] += 481
+    assert tracker.record_throttle("issue", retry_after=None) == 960.0
+    now[0] += 961
+    assert tracker.record_throttle("issue", retry_after=None) == 1920.0
+    now[0] += 1921
+    assert tracker.record_throttle("issue", retry_after=None) == 3600.0
+    now[0] += 3601
+    assert tracker.record_throttle("issue", retry_after=None) == 3600.0
+    assert tracker.record_throttle("volume", retry_after=None) == 60.0
+
+    tracker.reset("issue")
+    now[0] += 1
+    assert tracker.record_throttle("issue", retry_after=None) == 60.0
+
+
+@pytest.mark.asyncio
+async def test_live_request_starts_are_paced_without_pacing_cache_reads(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only uncached live starts consume the configured pacing interval."""
+    client = ComicVineClient(
+        "secret",
+        tmp_path,
+        minimum_live_request_interval_seconds=60.0,
+    )
+    delays: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        delays.append(delay)
+
+    monkeypatch.setattr("asyncio.sleep", fake_sleep)
+    await client._pace_live_request()
+    await client._pace_live_request()
+
+    assert len(delays) == 1
+    assert delays[0] > 0
+    assert client.live_request_starts == 2
+
