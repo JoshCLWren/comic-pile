@@ -246,6 +246,14 @@ jobs:
           gh workflow run factory-ready-merge-drain.yml \
             --repo "$GITHUB_REPOSITORY" --ref main
 
+      - name: Expire stale factory PR attempts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/factory-work-controller.py stale
+
       - name: Resolve and dispatch fixed workers
         shell: bash
         env:
@@ -504,9 +512,6 @@ jobs:
           fi
 
           [[ "$workers" != '[]' ]] || { echo 'Dispatcher resolved no workers' >&2; exit 1; }
-
-          echo 'Expiring stale factory PR attempts before assignment'
-          python3 "$controller" stale
 
           echo 'Reconciling abandoned factory leases before assignment'
           python3 "$controller" reconcile
