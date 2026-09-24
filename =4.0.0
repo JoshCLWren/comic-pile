@@ -1,0 +1,101 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting pytest-xdist
+  Downloading pytest_xdist-3.8.0-py3-none-any.whl.metadata (3.0 kB)
+Collecting pytest-playwright==0.7.0
+  Downloading pytest_playwright-0.7.0-py3-none-any.whl.metadata (14 kB)
+Collecting playwright
+  Downloading playwright-1.63.0-py3-none-manylinux1_x86_64.whl.metadata (3.3 kB)
+Collecting aiosqlite
+  Downloading aiosqlite-0.22.1-py3-none-any.whl.metadata (4.3 kB)
+Requirement already satisfied: jsonschema in /usr/lib/python3/dist-packages (4.10.3)
+Requirement already satisfied: pyyaml in /usr/lib/python3/dist-packages (6.0.1)
+Collecting faker
+  Downloading faker-40.39.0-py3-none-any.whl.metadata (16 kB)
+Collecting email-validator
+  Downloading email_validator-2.3.0-py3-none-any.whl.metadata (26 kB)
+Requirement already satisfied: bcrypt in /usr/lib/python3/dist-packages (3.2.2)
+Collecting PyGithub
+  Downloading pygithub-2.10.0-py3-none-any.whl.metadata (3.9 kB)
+Requirement already satisfied: filelock in /usr/local/lib/python3.12/dist-packages (4.0.1)
+Requirement already satisfied: typing_extensions in /home/runner/.local/lib/python3.12/site-packages (4.16.0)
+Collecting python-jose[cryptography]
+  Downloading python_jose-3.5.0-py2.py3-none-any.whl.metadata (5.5 kB)
+Collecting pytest<9.0.0,>=6.2.4 (from pytest-playwright==0.7.0)
+  Downloading pytest-8.4.2-py3-none-any.whl.metadata (7.7 kB)
+Collecting pytest-base-url<3.0.0,>=1.0.0 (from pytest-playwright==0.7.0)
+  Downloading pytest_base_url-2.1.0-py3-none-any.whl.metadata (6.6 kB)
+Collecting python-slugify<9.0.0,>=6.0.0 (from pytest-playwright==0.7.0)
+  Downloading python_slugify-8.0.4-py2.py3-none-any.whl.metadata (8.5 kB)
+Collecting execnet>=2.1 (from pytest-xdist)
+  Downloading execnet-2.1.2-py3-none-any.whl.metadata (2.9 kB)
+Collecting pyee<14,>=13 (from playwright)
+  Downloading pyee-13.0.1-py3-none-any.whl.metadata (3.0 kB)
+Requirement already satisfied: greenlet<4.0.0,>=3.1.1 in /home/runner/.local/lib/python3.12/site-packages (from playwright) (3.5.6)
+Requirement already satisfied: attrs>=17.4.0 in /usr/lib/python3/dist-packages (from jsonschema) (23.2.0)
+Requirement already satisfied: pyrsistent!=0.17.0,!=0.17.1,!=0.17.2,>=0.14.0 in /usr/lib/python3/dist-packages (from jsonschema) (0.20.0)
+Collecting dnspython>=2.0.0 (from email-validator)
+  Downloading dnspython-2.8.0-py3-none-any.whl.metadata (5.7 kB)
+Requirement already satisfied: idna>=2.0.0 in /usr/lib/python3/dist-packages (from email-validator) (3.6)
+Collecting ecdsa!=0.15 (from python-jose[cryptography])
+  Downloading ecdsa-0.19.2-py2.py3-none-any.whl.metadata (29 kB)
+Collecting rsa!=4.1.1,!=4.4,<5.0,>=4.0 (from python-jose[cryptography])
+  Downloading rsa-4.9.1-py3-none-any.whl.metadata (5.6 kB)
+Collecting pyasn1>=0.5.0 (from python-jose[cryptography])
+  Downloading pyasn1-0.6.4-py3-none-any.whl.metadata (8.4 kB)
+Requirement already satisfied: cryptography>=3.4.0 in /usr/lib/python3/dist-packages (from python-jose[cryptography]) (41.0.7)
+Collecting pynacl>=1.4.0 (from PyGithub)
+  Downloading pynacl-1.6.2-cp38-abi3-manylinux_2_34_x86_64.whl.metadata (10.0 kB)
+Requirement already satisfied: requests>=2.14.0 in /usr/lib/python3/dist-packages (from PyGithub) (2.31.0)
+Requirement already satisfied: pyjwt>=2.4.0 in /usr/lib/python3/dist-packages (from pyjwt[crypto]>=2.4.0->PyGithub) (2.7.0)
+Requirement already satisfied: urllib3>=1.26.0 in /usr/lib/python3/dist-packages (from PyGithub) (2.0.7)
+Requirement already satisfied: six>=1.9.0 in /usr/lib/python3/dist-packages (from ecdsa!=0.15->python-jose[cryptography]) (1.16.0)
+Collecting cffi>=2.0.0 (from pynacl>=1.4.0->PyGithub)
+  Downloading cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+Requirement already satisfied: iniconfig>=1 in /home/runner/.local/lib/python3.12/site-packages (from pytest<9.0.0,>=6.2.4->pytest-playwright==0.7.0) (2.3.0)
+Requirement already satisfied: packaging>=20 in /usr/lib/python3/dist-packages (from pytest<9.0.0,>=6.2.4->pytest-playwright==0.7.0) (24.0)
+Requirement already satisfied: pluggy<2,>=1.5 in /home/runner/.local/lib/python3.12/site-packages (from pytest<9.0.0,>=6.2.4->pytest-playwright==0.7.0) (1.6.0)
+Requirement already satisfied: pygments>=2.7.2 in /usr/lib/python3/dist-packages (from pytest<9.0.0,>=6.2.4->pytest-playwright==0.7.0) (2.17.2)
+Collecting text-unidecode>=1.3 (from python-slugify<9.0.0,>=6.0.0->pytest-playwright==0.7.0)
+  Downloading text_unidecode-1.3-py2.py3-none-any.whl.metadata (2.4 kB)
+Collecting pycparser (from cffi>=2.0.0->pynacl>=1.4.0->PyGithub)
+  Downloading pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
+Downloading pytest_playwright-0.7.0-py3-none-any.whl (16 kB)
+Downloading pytest_xdist-3.8.0-py3-none-any.whl (46 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 46.4/46.4 kB 6.8 MB/s eta 0:00:00
+Downloading playwright-1.63.0-py3-none-manylinux1_x86_64.whl (48.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 48.2/48.2 MB 35.1 MB/s eta 0:00:00
+Downloading aiosqlite-0.22.1-py3-none-any.whl (17 kB)
+Downloading faker-40.39.0-py3-none-any.whl (2.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 127.2 MB/s eta 0:00:00
+Downloading email_validator-2.3.0-py3-none-any.whl (35 kB)
+Downloading pygithub-2.10.0-py3-none-any.whl (455 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 455.6/455.6 kB 124.8 MB/s eta 0:00:00
+Downloading dnspython-2.8.0-py3-none-any.whl (331 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 331.1/331.1 kB 120.5 MB/s eta 0:00:00
+Downloading ecdsa-0.19.2-py2.py3-none-any.whl (150 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 150.8/150.8 kB 81.6 MB/s eta 0:00:00
+Downloading execnet-2.1.2-py3-none-any.whl (40 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 40.7/40.7 kB 20.8 MB/s eta 0:00:00
+Downloading pyasn1-0.6.4-py3-none-any.whl (84 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 84.4/84.4 kB 43.9 MB/s eta 0:00:00
+Downloading pyee-13.0.1-py3-none-any.whl (15 kB)
+Downloading pynacl-1.6.2-cp38-abi3-manylinux_2_34_x86_64.whl (1.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.4/1.4 MB 122.6 MB/s eta 0:00:00
+Downloading pytest-8.4.2-py3-none-any.whl (365 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 365.8/365.8 kB 106.0 MB/s eta 0:00:00
+Downloading pytest_base_url-2.1.0-py3-none-any.whl (5.3 kB)
+Downloading python_slugify-8.0.4-py2.py3-none-any.whl (10 kB)
+Downloading rsa-4.9.1-py3-none-any.whl (34 kB)
+Downloading python_jose-3.5.0-py2.py3-none-any.whl (34 kB)
+Downloading cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (221 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 221.8/221.8 kB 97.0 MB/s eta 0:00:00
+Downloading text_unidecode-1.3-py2.py3-none-any.whl (78 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 78.2/78.2 kB 37.2 MB/s eta 0:00:00
+Downloading pycparser-3.0-py3-none-any.whl (48 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 48.2/48.2 kB 25.7 MB/s eta 0:00:00
+Installing collected packages: text-unidecode, python-slugify, pytest, pyee, pycparser, pyasn1, faker, execnet, ecdsa, dnspython, aiosqlite, rsa, pytest-xdist, pytest-base-url, playwright, email-validator, cffi, python-jose, pytest-playwright, pynacl, PyGithub
+  Attempting uninstall: pytest
+    Found existing installation: pytest 9.1.1
+    Uninstalling pytest-9.1.1:
+      Successfully uninstalled pytest-9.1.1
+Successfully installed PyGithub-2.10.0 aiosqlite-0.22.1 cffi-2.1.1 dnspython-2.8.0 ecdsa-0.19.2 email-validator-2.3.0 execnet-2.1.2 faker-40.39.0 playwright-1.63.0 pyasn1-0.6.4 pycparser-3.0 pyee-13.0.1 pynacl-1.6.2 pytest-8.4.2 pytest-base-url-2.1.0 pytest-playwright-0.7.0 pytest-xdist-3.8.0 python-jose-3.5.0 python-slugify-8.0.4 rsa-4.9.1 text-unidecode-1.3

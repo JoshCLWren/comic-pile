@@ -1,0 +1,14 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting upstash-redis
+  Downloading upstash_redis-1.8.0-py3-none-any.whl.metadata (8.8 kB)
+Requirement already satisfied: httpx<1,>=0.23.0 in /home/runner/.local/lib/python3.12/site-packages (from upstash-redis) (0.28.1)
+Requirement already satisfied: anyio in /home/runner/.local/lib/python3.12/site-packages (from httpx<1,>=0.23.0->upstash-redis) (4.15.1)
+Requirement already satisfied: certifi in /usr/lib/python3/dist-packages (from httpx<1,>=0.23.0->upstash-redis) (2023.11.17)
+Requirement already satisfied: httpcore==1.* in /home/runner/.local/lib/python3.12/site-packages (from httpx<1,>=0.23.0->upstash-redis) (1.0.9)
+Requirement already satisfied: idna in /usr/lib/python3/dist-packages (from httpx<1,>=0.23.0->upstash-redis) (3.6)
+Requirement already satisfied: h11>=0.16 in /home/runner/.local/lib/python3.12/site-packages (from httpcore==1.*->httpx<1,>=0.23.0->upstash-redis) (0.16.0)
+Requirement already satisfied: typing_extensions>=4.16.0 in /home/runner/.local/lib/python3.12/site-packages (from anyio->httpx<1,>=0.23.0->upstash-redis) (4.16.0)
+Downloading upstash_redis-1.8.0-py3-none-any.whl (49 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 50.0/50.0 kB 2.2 MB/s eta 0:00:00
+Installing collected packages: upstash-redis
+Successfully installed upstash-redis-1.8.0
