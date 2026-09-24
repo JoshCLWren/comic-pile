@@ -973,3 +973,66 @@ async def test_cross_series_prerequisite_blocks_roll_pool(async_db):
     pool_after = await get_roll_pool(user.id, async_db)
     pool_ids_after = [t.id for t in pool_after]
     assert jle.id in pool_ids_after, "JLE must appear in roll pool after prerequisite is read"
+
+
+async def test_target_issue_id_index_exists(async_db):
+    """The dependencies table must have an index on target_issue_id for blocked-thread joins."""
+    result = await async_db.execute(
+        text(
+            "SELECT indexname FROM pg_indexes WHERE tablename = 'dependencies' "
+            "AND indexname = 'ix_dependencies_target_issue_id'"
+        )
+    )
+    assert result.scalar_one_or_none() is not None, (
+        "Index ix_dependencies_target_issue_id must exist on dependencies(target_issue_id)"
+    )
+
+
+async def test_blocked_thread_query_uses_target_issue_id_index(async_db):
+    """Blocked-thread joins on target_issue_id must resolve correctly with the new index."""
+    user = User(username="index_test_user", created_at=datetime.now(UTC))
+    async_db.add(user)
+    await async_db.flush()
+
+    source_thread = Thread(
+        title="SourceThread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    target_thread = Thread(
+        title="TargetThread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    async_db.add_all([source_thread, target_thread])
+    await async_db.flush()
+
+    source_issue = Issue(thread_id=source_thread.id, issue_number="1", position=1, status="unread")
+    target_issue = Issue(thread_id=target_thread.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([source_issue, target_issue])
+    await async_db.flush()
+
+    source_thread.next_unread_issue_id = source_issue.id
+    target_thread.next_unread_issue_id = target_issue.id
+
+    async_db.add(Dependency(source_issue_id=source_issue.id, target_issue_id=target_issue.id))
+    await async_db.commit()
+
+    blocked = await get_blocked_thread_ids(user.id, async_db)
+    assert target_thread.id in blocked, "Thread should be blocked via target_issue_id join"
+
+    result = await async_db.execute(
+        text(
+            "SELECT indexname FROM pg_indexes WHERE tablename = 'dependencies' "
+            "AND indexname = 'ix_dependencies_target_issue_id'"
+        )
+    )
+    assert result.scalar_one_or_none() is not None

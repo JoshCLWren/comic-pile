@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -37,6 +37,7 @@ class Dependency(Base):
             name="ck_dependency_exactly_one_type",
         ),
         UniqueConstraint("source_issue_id", "target_issue_id", name="uq_dependency_issue_edge"),
+        Index("ix_dependencies_target_issue_id", "target_issue_id"),
     )
 
     source_issue: Mapped[Issue] = relationship(
