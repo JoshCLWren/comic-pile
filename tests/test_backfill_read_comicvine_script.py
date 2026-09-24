@@ -682,7 +682,7 @@ async def test_provider_identity_throttle_defers_one_resource_and_continues(
     second = _issue(cli, issue_id=2, series_volume_id=None, series_external_id=None)
 
     async def resolve(*args: object, **kwargs: object) -> tuple[int, str]:
-        issue = kwargs["issue"]
+        issue: _ReadIssueLike = kwargs["issue"]
         if issue.issue_id == 1:
             raise cli.ComicVineRateLimitError("issues cooling", resource="issues")
         return (99, "4002")

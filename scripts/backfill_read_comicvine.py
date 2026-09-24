@@ -34,7 +34,6 @@ import asyncio
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime
-import importlib
 import json
 import os
 from pathlib import Path
@@ -51,15 +50,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-_comicvine_provider = importlib.import_module("comic_pile.comicvine_provider")
-ComicVineClient = _comicvine_provider.ComicVineClient
-ComicVineError = _comicvine_provider.ComicVineError
-ComicVineRateLimitError = _comicvine_provider.ComicVineRateLimitError
-
 from comic_pile.comicvine_identity_repair import normalize_title
 from comic_pile.local_comicvine import (
     LOCAL_COMICVINE_DB_ENV,
     LocalComicVineSnapshot,
+)
+from comic_pile.comicvine_provider import (
+    ComicVineClient,
+    ComicVineError,
+    ComicVineRateLimitError,
 )
 
 DEFAULT_REPORT = Path("/tmp/comicpile-read-comicvine-backfill.json")
@@ -319,7 +318,7 @@ async def _find_local_identity_candidate(
         volume_ids = {
             volume_id
             for hit in exact_hits
-            if (volume_id := _integer(hit.data.get("id"))) is not None
+            if (volume_id := _integer(hit.get("id"))) is not None
         }
         if not volume_ids:
             return None
