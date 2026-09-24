@@ -26,6 +26,7 @@ on:
       - '.github/workflows/free-model-factory-entry.yml'
       - '.github/workflows/free-model-factory-run.yml'
       - '.github/scripts/factory-work-controller.py'
+      - '.github/scripts/stale_pr_decay.py'
       - '.github/scripts/factory-review-controller.py'
       - '.github/scripts/factory_work_policy.py'
       - '.github/scripts/factory_review_policy.py'
@@ -503,6 +504,9 @@ jobs:
           fi
 
           [[ "$workers" != '[]' ]] || { echo 'Dispatcher resolved no workers' >&2; exit 1; }
+
+          echo 'Expiring stale factory PR attempts before assignment'
+          python3 "$controller" stale
 
           echo 'Reconciling abandoned factory leases before assignment'
           python3 "$controller" reconcile
