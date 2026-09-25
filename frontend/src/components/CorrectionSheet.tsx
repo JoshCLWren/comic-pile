@@ -17,20 +17,48 @@ interface CorrectionSheetProps {
   onOpenQuiz?: () => void
   /** Whether the reading-mode quiz is surfaced in this build (issue #1945 gate). */
   quizEnabled?: boolean
+  /** Optional personalized examples for steering choices. */
+  examples?: Record<CorrectionChoiceId, string | null>
 }
 
 interface CorrectionChoice {
   id: CorrectionChoiceId
   label: string
+  explanation: string
   patch: SessionModeUpdateRequest
 }
 
 const CHOICES: CorrectionChoice[] = [
-  { id: 'even_easier', label: 'Even easier', patch: { bandwidth: 'light' } },
-  { id: 'keep_level_different', label: 'Keep this level, different comic', patch: { intent: 'balanced' } },
-  { id: 'something_familiar', label: 'Something familiar', patch: { intent: 'familiar' } },
-  { id: 'something_different', label: 'Something different', patch: { intent: 'explore' } },
-  { id: 'pure_random', label: 'Pure random', patch: { intent: 'random' } },
+  {
+    id: 'even_easier',
+    label: 'Give me something lighter',
+    explanation: 'Favor a lower-commitment/easier read.',
+    patch: { bandwidth: 'light' },
+  },
+  {
+    id: 'keep_level_different',
+    label: 'Keep about the same effort',
+    explanation: 'Keep the current commitment level, but choose another comic.',
+    patch: { intent: 'balanced' },
+  },
+  {
+    id: 'something_familiar',
+    label: 'Stay close to what I’ve liked',
+    explanation: 'Favor something similar to comics I’ve rated well.',
+    patch: { intent: 'familiar' },
+  },
+  {
+    id: 'something_different',
+    label: 'Give me a change of pace',
+    explanation: 'Favor something meaningfully different from recent/high-rated reads.',
+    patch: { intent: 'explore' },
+  },
+  {
+    id: 'pure_random',
+    label: 'Surprise me',
+    explanation: 'Do not steer by similarity or effort preference for this reroll.',
+    patch: { intent: 'random' },
+  },
 ]
 
 /**
