@@ -22,7 +22,6 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 from sqlalchemy.engine import Connection, make_url
-from sqlalchemy.pool import NullPool
 
 from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
 from app.database import Base, get_db
