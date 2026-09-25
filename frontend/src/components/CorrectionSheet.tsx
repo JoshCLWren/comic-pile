@@ -130,6 +130,7 @@ export default function CorrectionSheet({
           >
             <div className="flex flex-col">
               <span>{choice.label}</span>
+              <span className="text-xs text-[var(--theme-text-muted)] mt-1">{choice.explanation}</span>
               {examples?.[choice.id] && (
                 <span className="text-xs text-[var(--theme-text-muted)] mt-1">
                   {examples[choice.id]}
