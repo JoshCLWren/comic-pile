@@ -473,7 +473,6 @@ def test_record_stale_expiration_releases_issue_before_closing_and_marks_last(
     assert marker in comment_args
 
 
-
 def test_reset_issue_to_unowned_makes_open_issue_executable(monkeypatch) -> None:
     """Stale cleanup returns an open linked issue to building intake."""
     monkeypatch.setattr(
