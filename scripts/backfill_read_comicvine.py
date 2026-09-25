@@ -181,7 +181,18 @@ def _title_search_hint(title: str) -> tuple[str, int | None]:
         year_match = _YEAR_SUFFIX_RE.search(remaining)
     if year_match is None:
         return remaining, None
-    return remaining[: year_match.start()].rstrip(), int(year_match.group("start" if "start" in year_match.groupdict() else "year"))
+    
+    # Extract start year from match
+    group_dict = year_match.groupdict()
+    start_year_str = group_dict.get("start") or group_dict.get("year")
+    
+    if start_year_str is None:
+        return remaining, None
+        
+    try:
+        return remaining[: year_match.start()].rstrip(), int(start_year_str)
+    except ValueError:
+        return remaining, None
 
 
 def _integer(value: object) -> int | None:
@@ -960,38 +971,67 @@ async def _resolve_provider_issue(
         for volume_id in (issue.series_volume_id, *issue.sibling_volume_ids)
         if volume_id is not None
     }
+    
+    # If no confirmed series volume, try search based on title/year hint
     if not volume_ids:
         search_row = await _provider_search_volume(client, issue.thread_title)
-        if search_row is None:
-            return None
-        searched_volume_id = _integer(search_row.get("id"))
-        if searched_volume_id is None:
-            return None
-        volume_ids = {searched_volume_id}
+        if search_row is not None:
+            searched_volume_id = _integer(search_row.get("id"))
+            if searched_volume_id is not None:
+                volume_ids.add(searched_volume_id)
+
+    if not volume_ids:
+        return None
 
     candidates: list[tuple[int, int, dict[str, object]]] = []
     for volume_id in sorted(volume_ids):
         roster = await _provider_volume_issues(client, volume_id, roster_cache)
         for provider_id, row in _local_issue_matches(roster, issue.issue_number).items():
             candidates.append((volume_id, provider_id, row))
-    if len(candidates) != 1:
-        return None
-    matched_volume_id, _provider_id, provider_row = candidates[0]
-    volume_reference = provider_row.get("volume")
-    volume_name = (
-        volume_reference.get("name")
-        if isinstance(volume_reference, dict)
-        else issue.series_name
-    )
-    return await _persist_resolved_mapping(
-        db,
-        user_id=user_id,
-        issue=issue,
-        provider_row=provider_row,
-        volume_id=matched_volume_id,
-        volume_name=_string(volume_name),
-        evidence_source="provider_volume_roster_resolution",
-    )
+
+    # Conservative Resolution:
+    # 1. If exactly one provider issue matches across all candidate volumes, it's unique.
+    if len(candidates) == 1:
+        matched_volume_id, _provider_id, provider_row = candidates[0]
+        volume_reference = provider_row.get("volume")
+        volume_name = (
+            volume_reference.get("name")
+            if isinstance(volume_reference, dict)
+            else issue.series_name
+        )
+        return await _persist_resolved_mapping(
+            db,
+            user_id=user_id,
+            issue=issue,
+            provider_row=provider_row,
+            volume_id=matched_volume_id,
+            volume_name=_string(volume_name),
+            evidence_source="provider_volume_roster_resolution",
+        )
+
+    # 2. If multiple provider issues match, check if they all belong to the same provider issue ID.
+    unique_provider_ids = {c[1] for c in candidates}
+    if len(unique_provider_ids) == 1:
+        provider_id = next(iter(unique_provider_ids))
+        matched_volume_id, _, provider_row = next(c for c in candidates if c[1] == provider_id)
+        volume_reference = provider_row.get("volume")
+        volume_name = (
+            volume_reference.get("name")
+            if isinstance(volume_reference, dict)
+            else issue.series_name
+        )
+        return await _persist_resolved_mapping(
+            db,
+            user_id=user_id,
+            issue=issue,
+            provider_row=provider_row,
+            volume_id=matched_volume_id,
+            volume_name=_string(volume_name),
+            evidence_source="provider_volume_roster_resolution",
+        )
+
+    # 3. Ambiguous: Multiple different provider issues match.
+    return None
 
 
 async def _fetch_deep_metadata(
