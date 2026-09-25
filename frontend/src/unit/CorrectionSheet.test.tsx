@@ -49,9 +49,11 @@ describe('CorrectionSheet', () => {
         onClose={vi.fn()}
         onSubmit={vi.fn()}
         examples={{
-          something_familiar: 'Based on your ratings, think more Planetary / Hellboy territory.',
-          pure_random: null,
           even_easier: 'Think more like Superman\'s Pal Jimmy Olsen #134.',
+          keep_level_different: null,
+          something_familiar: 'Based on your ratings, think more Planetary / Hellboy territory.',
+          something_different: null,
+          pure_random: null,
         }}
       />,
     )
