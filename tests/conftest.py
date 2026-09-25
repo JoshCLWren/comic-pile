@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 from sqlalchemy.engine import Connection, make_url
+from sqlalchemy.pool import NullPool
 
 from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
 from app.database import Base, get_db
@@ -203,12 +204,7 @@ async def db_engine(
     global _SHARED_TEST_ENGINE
 
     database_url = get_test_database_url()
-    engine = create_async_engine(
-        database_url,
-        echo=False,
-        pool_size=5,
-        max_overflow=0,
-    )
+    engine = create_async_engine(database_url, echo=False, poolclass=NullPool)
 
     should_init = worker_id == "master" or worker_id == "gw0"
     is_xdist = worker_id.startswith("gw")
