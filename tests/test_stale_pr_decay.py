@@ -468,7 +468,9 @@ def test_record_stale_expiration_releases_issue_before_closing_and_marks_last(
     assert events[0] == ("reset", 100)
     assert events[1] == ("close", 42)
     assert events[2][0] == "comment"
-    assert marker in events[2][1]
+    comment_args = events[2][1]
+    assert isinstance(comment_args, tuple)
+    assert marker in comment_args
 
 
 
