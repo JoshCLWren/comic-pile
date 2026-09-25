@@ -204,7 +204,12 @@ async def db_engine(
     global _SHARED_TEST_ENGINE
 
     database_url = get_test_database_url()
-    engine = create_async_engine(database_url, echo=False, poolclass=NullPool)
+    engine = create_async_engine(
+        database_url,
+        echo=False,
+        pool_size=5,
+        max_overflow=0,
+    )
 
     should_init = worker_id == "master" or worker_id == "gw0"
     is_xdist = worker_id.startswith("gw")
