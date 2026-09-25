@@ -41,10 +41,10 @@ const CHOICES: CorrectionChoice[] = [
     explanation: 'Keep the current commitment level, but choose another comic.',
     patch: { intent: 'balanced' },
   },
-  {
+{
     id: 'something_familiar',
-    label: 'Stay close to what I’ve liked',
-    explanation: 'Favor something similar to comics I’ve rated well.',
+    label: "Stay close to what I've liked",
+    explanation: "Favor something similar to comics I've rated well.",
     patch: { intent: 'familiar' },
   },
   {
