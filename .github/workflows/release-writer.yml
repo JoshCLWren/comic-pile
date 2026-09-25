@@ -57,17 +57,22 @@ jobs:
       - name: Install pinned FCM discovery CLI
         run: npm install --global --ignore-scripts free-coding-models@0.5.69
 
-      - name: Select a healthy NVIDIA model
+      - name: Select healthy NVIDIA models
         id: model
+        shell: bash
         run: |
+          set -Eeuo pipefail
           fcm_output="$(free-coding-models --json --origin nvidia --hide-unconfigured --best --no-telemetry)"
           candidates="$(printf '%s\n' "$fcm_output" | python scripts/select_fcm_nvidia_model.py)"
-          selected_model="$(printf '%s\n' "$candidates" | head -n 1)"
-          if [[ -z "$selected_model" ]]; then
+          if [[ -z "$candidates" ]]; then
             echo 'No configured NVIDIA release-writer model is available' >&2
             exit 1
           fi
-          echo "model=$selected_model" >> "$GITHUB_OUTPUT"
+          {
+            echo 'models<<EOF'
+            printf '%s\n' "$candidates"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build release-writer prompt
         id: prompt
@@ -77,7 +82,7 @@ jobs:
           INPUT_PR: ${{ inputs.pr_number }}
         run: |
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            prompt="Process merged pull request #${EVENT_PR} in ${GITHUB_REPOSITORY}. Verify it is merged, inspect its changed-file summary and linked issue context, then publish or explicitly skip it according to the release-writer contract."
+            prompt="Process merged pull request #${EVENT_PR} in ${GITHUB_REPOSITORY}. Check the exact source in the release ledger first, then verify it is merged, inspect its changed-file summary and linked issue context, and publish or explicitly skip it according to the release-writer contract."
           elif [[ -n "$INPUT_PR" ]]; then
             prompt="Reconcile merged pull request #${INPUT_PR} in ${GITHUB_REPOSITORY}. Check the release ledger first, then publish it if missing or report a source conflict."
           else
@@ -88,9 +93,31 @@ jobs:
       - name: Run dedicated release writer
         env:
           GH_TOKEN: ${{ github.token }}
-          MODEL: ${{ steps.model.outputs.model }}
+          MODELS: ${{ steps.model.outputs.models }}
           PROMPT: ${{ steps.prompt.outputs.prompt }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          opencode run -m "$MODEL" --agent release-writer --auto --dir "$GITHUB_WORKSPACE" --title "ComicPile release writer" "$PROMPT"
+          mapfile -t models <<< "$MODELS"
+          for model in "${models[@]}"; do
+            [[ -n "$model" ]] || continue
+            attempt_log="$(mktemp)"
+            echo "::notice::Running release writer with $model"
+            set +e
+            opencode run -m "$model" --agent release-writer --auto --dir "$GITHUB_WORKSPACE" --title "ComicPile release writer" "$PROMPT" 2>&1 | tee "$attempt_log"
+            status=${PIPESTATUS[0]}
+            set -e
+            if [[ $status -eq 0 ]]; then
+              rm -f "$attempt_log"
+              exit 0
+            fi
+            if grep -Eqi 'Too Many Requests|status.?429|HTTP.?429|rate.?limit' "$attempt_log"; then
+              echo "::warning::Release-writer model $model was rate-limited; trying the next healthy NVIDIA candidate."
+              rm -f "$attempt_log"
+              continue
+            fi
+            rm -f "$attempt_log"
+            exit "$status"
+          done
+          echo '::error::Every healthy NVIDIA release-writer model was rate-limited.'
+          exit 1
