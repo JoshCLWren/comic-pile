@@ -20,19 +20,20 @@ Treat that compact JSON array as the authoritative reconciliation set. It is alr
 
 For each merged pull request you are asked to process:
 
-1. During reconciliation, call `python scripts/release_writer.py check <repository> <pr-number> <merge-sha>` before doing detailed inspection. If the exact source already exists, continue immediately to the next candidate. A source conflict is an error and must never be silently overwritten.
-2. If the source is missing, verify it is actually merged and collect context using only the read-only helper commands:
+1. Establish the exact source identity before checking the ledger. If the prompt or `recent` output does not already provide the merge SHA and merged timestamp, call `python scripts/release_writer.py pr <repository> <pr-number>` first. Never call `check` without all three required arguments.
+2. Call `python scripts/release_writer.py check <repository> <pr-number> <merge-sha>`. If the exact source already exists, continue immediately to the next candidate. A source conflict is an error and must never be silently overwritten.
+3. If the source is missing, verify it is actually merged and collect any remaining context using only the read-only helper commands:
    - `python scripts/release_writer.py pr <repository> <pr-number>` for title, body, merged state, merge SHA, and merged timestamp;
    - `python scripts/release_writer.py files <repository> <pr-number>` for the changed-file summary;
    - `python scripts/release_writer.py issues <repository> <pr-number>` for linked issue references.
    Never call `gh api` directly for inspection.
-3. Classify the change as `public` or `internal`. Do not force a public note for test-only, generated-only, documentation-only, or strictly internal maintenance.
-4. For a public change, construct exactly one JSON object matching the release-ledger API contract and call:
+4. Classify the change as `public` or `internal`. Do not force a public note for test-only, generated-only, documentation-only, or strictly internal maintenance.
+5. For a public change, construct exactly one JSON object matching the release-ledger API contract and call:
    `python scripts/release_writer.py publish '<json>'`
-5. For an internal change, call:
-   `python scripts/release_writer.py skip '<json>'`
-   with repository, PR number, merge SHA, merged timestamp, and a concise reason. The helper records a durable hidden internal source record so future reconciliation does not repeatedly reclassify the same PR.
-6. To retract a broken or placeholder public release, call:
+6. For an internal change, call `python scripts/release_writer.py skip '<json>'` using exactly these fields:
+   `{"source_repository":"owner/repo","source_pr_number":123,"source_merge_sha":"abc1234","merged_at":"2026-01-01T00:00:00Z","reason":"Concise internal-only reason"}`
+   Do not rename them to `repository`, `pr_number`, or `merge_sha`. The helper records a durable hidden internal source record so future reconciliation does not repeatedly reclassify the same PR.
+7. To retract a broken or placeholder public release, call:
    `python scripts/release_writer.py retract <repository> <pr-number> <merge-sha>`
    with the repository, PR number, and merge SHA of the release to retract.
 
