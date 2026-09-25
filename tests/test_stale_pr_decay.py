@@ -435,3 +435,77 @@ def test_get_staleness_baseline_sample_size_cap():
     prs = [make_pr(i, merged=f"2026-08-{16+i}T12:00:00Z") for i in range(1, 200)]
     baseline = get_staleness_baseline(prs, now_epoch=now, limit=10)
     assert baseline["sample_size"] <= 10
+
+
+def test_record_stale_expiration_releases_issue_before_closing_and_marks_last(
+    monkeypatch,
+) -> None:
+    """A stale PR cannot close before its linked issue is safely reusable."""
+    events: list[tuple[str, object]] = []
+    monkeypatch.setattr(
+        module,
+        "reset_issue_to_unowned",
+        lambda number: events.append(("reset", number)),
+    )
+    monkeypatch.setattr(
+        module,
+        "close_pr_implementation",
+        lambda number: events.append(("close", number)),
+    )
+    monkeypatch.setattr(
+        module,
+        "run_gh",
+        lambda args, **kwargs: events.append(("comment", tuple(args))),
+    )
+
+    marker = module.record_stale_expiration(
+        42,
+        100,
+        90_000,
+        {"sample_size": 50, "formula": "2x_p90", "threshold_seconds": 23_200},
+    )
+
+    assert events[0] == ("reset", 100)
+    assert events[1] == ("close", 42)
+    assert events[2][0] == "comment"
+    comment_args = events[2][1]
+    assert isinstance(comment_args, tuple)
+    assert marker in comment_args
+
+
+def test_reset_issue_to_unowned_makes_open_issue_executable(monkeypatch) -> None:
+    """Stale cleanup returns an open linked issue to building intake."""
+    monkeypatch.setattr(
+        module,
+        "gh_json",
+        lambda args, **kwargs: {"state": "open", "labels": []},
+    )
+    writes: list[tuple[int, str, str]] = []
+    monkeypatch.setattr(
+        module,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: writes.append((number, owner, stage)),
+    )
+
+    module.reset_issue_to_unowned(100)
+
+    assert writes == [(100, "factory:unowned", "factory:building")]
+
+
+def test_reset_issue_to_unowned_respects_terminal_closed_issue(monkeypatch) -> None:
+    """A separately closed product issue is not resurrected by stale PR cleanup."""
+    monkeypatch.setattr(
+        module,
+        "gh_json",
+        lambda args, **kwargs: {"state": "closed", "state_reason": "not_planned"},
+    )
+    writes: list[tuple[int, str, str | None]] = []
+    monkeypatch.setattr(
+        module,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: writes.append((number, owner, stage)),
+    )
+
+    module.reset_issue_to_unowned(100)
+
+    assert writes == []

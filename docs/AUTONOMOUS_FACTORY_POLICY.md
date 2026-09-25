@@ -299,12 +299,16 @@ The threshold uses a robust distribution-derived rule: **`2 × P90`** as the def
 ### Expiration behavior
 
 When an autonomous Factory implementation PR crosses the stale threshold:
-1. Persist a trusted controller marker/comment (`comic-pile-factory-stale-expiration-v1`) recording the observed age, baseline sample, formula, and threshold
+1. Release/reset the linked issue to unowned executable implementation from current `main`
 2. Close/cancel that PR implementation attempt
-3. Release/reset Factory ownership state as necessary
-4. Return the linked issue to unowned executable implementation from current `main`
-5. Ensure the stale branch/PR cannot immediately re-enter repair/review loops
-6. Preserve enough provenance to audit why the attempt was expired
+3. Persist a trusted controller marker/comment (`comic-pile-factory-stale-expiration-v1`) recording the observed age, baseline sample, formula, and threshold
+4. Ensure the stale branch/PR cannot immediately re-enter repair/review loops
+5. Preserve enough provenance to audit why the attempt was expired
+
+The mutation order is deliberate. Resetting the issue while its canonical PR is still
+open is safe because the open PR suppresses duplicate issue intake. Writing the
+marker last keeps a partial GitHub failure retryable instead of recording a false
+completed expiration.
 
 Staleness is an **attempt-level circuit breaker**, just like semantic strike exhaustion. It must not close the underlying product issue unless a separate terminal condition applies.
 
@@ -329,6 +333,8 @@ The `stale_pr_decay.py` module in `.github/scripts/` provides:
 - `get_staleness_observability()` — logging summary
 
 The controller exposes a `stale` subcommand: `factory-work-controller.py stale [--dry-run]`.
+The fixed-model dispatcher invokes `stale` once per serialized dispatch tick,
+after the ready-PR merge drain and before new assignments are selected.
 
 ## Semantic review strike policy
 

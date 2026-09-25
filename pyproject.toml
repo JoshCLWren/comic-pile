@@ -11,7 +11,7 @@ requires-python = ">=3.14"
 # which every other runtime discovers through `tool.uv.default-groups`.
 dependencies = [
     "fastapi>=0.100.0",
-    "sqlalchemy>=2.0.0",
+    "sqlalchemy>=2.0.53",
     "pillow>=11.0.0",
     "pydantic[email]>=2.0.0",
     "python-multipart>=0.0.6",

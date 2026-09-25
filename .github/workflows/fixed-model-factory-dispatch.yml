@@ -26,6 +26,7 @@ on:
       - '.github/workflows/free-model-factory-entry.yml'
       - '.github/workflows/free-model-factory-run.yml'
       - '.github/scripts/factory-work-controller.py'
+      - '.github/scripts/stale_pr_decay.py'
       - '.github/scripts/factory-review-controller.py'
       - '.github/scripts/factory_work_policy.py'
       - '.github/scripts/factory_review_policy.py'
@@ -244,6 +245,14 @@ jobs:
           # scheduler, so every healthy dispatcher tick drags it along.
           gh workflow run factory-ready-merge-drain.yml \
             --repo "$GITHUB_REPOSITORY" --ref main
+
+      - name: Expire stale factory PR attempts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/factory-work-controller.py stale
 
       - name: Resolve and dispatch fixed workers
         shell: bash
