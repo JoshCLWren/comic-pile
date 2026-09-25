@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "comic_pile"
 version = "0.1.0"
@@ -92,6 +96,7 @@ testpaths = ["tests", "tests_e2e"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+pythonpath = ["src"]
 addopts = [
     "--cov=comic_pile",
     "--cov-report=term-missing",
@@ -103,8 +108,12 @@ markers = [
     "integration: marks tests as integration tests (requires Playwright)",
 ]
 
+[tool.setuptools.packages.find]
+where = [".", "src"]
+include = ["app", "comic_pile", "tests", "latticery"]
+
 [tool.coverage.run]
-source = ["app", "comic_pile"]
+source = ["app", "comic_pile", "latticery"]
 branch = true
 omit = [
     "*/tests/*",
@@ -131,13 +140,13 @@ exclude = [".venv", "__pycache__", "*.pyc", ".git", "node_modules", "alembic/ver
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "C4", "D", "ANN401"]
 ignore = ["D203", "D213", "E501", "B008", "I001"]
-per-file-ignores = { "alembic/env.py" = ["F401"], "alembic/versions/*.py" = ["D415"], "app/cache.py" = ["D102", "D107", "ANN401"], "tests/conftest.py" = ["D205", "D209", "N806", "F841"], "tests/test_queue_cursor_semantics.py" = ["D102", "F401"], ".github/scripts/*.py" = ["D", "ANN401", "UP017"], "tests/test_factory_*.py" = ["D"] }
+per-file-ignores = { "alembic/env.py" = ["F401"], "alembic/versions/*.py" = ["D415"], "app/cache.py" = ["D102", "D107", "ANN401"], "tests/conftest.py" = ["D205", "D209", "N806", "F841"], "tests/test_queue_cursor_semantics.py" = ["D102", "F401"], ".github/scripts/*.py" = ["D", "ANN401", "UP017"], "tests/test_factory_*.py" = ["D"], "src/latticery/**" = ["D"] }
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.pyright]
-include = ["app", "comic_pile", "tests"]
+include = ["app", "comic_pile", "tests", "src/latticery"]
 exclude = ["**/node_modules", "**/__pycache__", ".venv", "alembic/versions/*.py"]
 venvPath = "."
 venv = ".venv"
@@ -146,7 +155,7 @@ venv = ".venv"
 python-version = "3.14"
 
 [tool.ty.src]
-include = ["app", "comic_pile", "tests"]
+include = ["app", "comic_pile", "tests", "src/latticery"]
 exclude = ["scripts/**", "alembic/versions/**", "tests/test_scripts_verify_reading_order.py", "tests/test_factory_review_gate.py"]
 
 [tool.ty.terminal]
