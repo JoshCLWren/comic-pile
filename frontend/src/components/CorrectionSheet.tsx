@@ -80,6 +80,7 @@ export default function CorrectionSheet({
   onSubmit,
   onOpenQuiz,
   quizEnabled = false,
+  examples,
 }: CorrectionSheetProps) {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
