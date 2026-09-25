@@ -306,6 +306,9 @@ jobs:
           exit 1
 
       - name: Run backend tests
+        env:
+          DB_POOL_SIZE: "1"
+          DB_MAX_OVERFLOW: "0"
         run: pytest tests/ --cov=comic_pile --cov-report=xml
 
       - name: Upload coverage to Codecov
