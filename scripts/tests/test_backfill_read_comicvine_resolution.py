@@ -1,11 +1,10 @@
-import asyncio
+"""Tests for ComicVine read-issue identity resolution logic."""
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from scripts.backfill_read_comicvine import (
     _title_search_hint,
     _resolve_provider_issue,
     ReadIssue,
-    _normalize_issue_label,
 )
 
 @pytest.mark.parametrize("title, expected", [
@@ -15,10 +14,12 @@ from scripts.backfill_read_comicvine import (
     ("The Avengers (1963-present)", ("The Avengers", 1963)),
 ])
 def test_title_search_hint(title, expected):
+    """Test the title search hint extraction logic."""
     assert _title_search_hint(title) == expected
 
 @pytest.mark.asyncio
 async def test_resolve_provider_issue_unique_match():
+    """Test resolution when exactly one provider issue matches."""
     db = AsyncMock()
     client = AsyncMock()
     
@@ -46,6 +47,7 @@ async def test_resolve_provider_issue_unique_match():
 
 @pytest.mark.asyncio
 async def test_resolve_provider_issue_ambiguous_match():
+    """Test resolution when multiple different provider issues match."""
     db = AsyncMock()
     client = AsyncMock()
     
@@ -73,6 +75,7 @@ async def test_resolve_provider_issue_ambiguous_match():
 
 @pytest.mark.asyncio
 async def test_resolve_provider_issue_same_identity_different_volumes():
+    """Test resolution when multiple volumes point to the same provider issue."""
     db = AsyncMock()
     client = AsyncMock()
     
