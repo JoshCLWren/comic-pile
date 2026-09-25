@@ -128,7 +128,14 @@ export default function CorrectionSheet({
             onClick={() => handleChoice(choice)}
             className="w-full text-left rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 py-3 text-[var(--theme-text-primary)] text-sm transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
           >
-            {choice.label}
+            <div className="flex flex-col">
+              <span>{choice.label}</span>
+              {examples?.[choice.id] && (
+                <span className="text-xs text-[var(--theme-text-muted)] mt-1">
+                  {examples[choice.id]}
+                </span>
+              )}
+            </div>
           </button>
         ))}
       </fieldset>
