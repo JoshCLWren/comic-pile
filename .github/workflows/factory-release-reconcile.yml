@@ -1,0 +1,50 @@
+name: Factory Release Reconciliation
+
+on:
+  workflow_run:
+    workflows:
+      - Factory Ready Merge Drain
+      - Fixed Model Factory Dispatcher
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      backfill_since:
+        description: Optional ISO-8601 lower bound
+        required: false
+        type: string
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: factory-release-reconciliation
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request release reconciliation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_STARTED: ${{ github.event.workflow_run.created_at }}
+          INPUT_SINCE: ${{ inputs.backfill_since }}
+        run: |
+          set -Eeuo pipefail
+          since="$INPUT_SINCE"
+          if [[ -z "$since" && "$EVENT_NAME" == "workflow_run" ]]; then
+            since="$WORKFLOW_STARTED"
+          fi
+          if [[ -n "$since" ]]; then
+            gh workflow run release-writer.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f "backfill_since=$since"
+          else
+            gh workflow run release-writer.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main
+          fi
