@@ -12,10 +12,10 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Sequence
 
 _GITHUB_API_BASE = "https://api.github.com"
 _RATE_LIMIT_PATTERN = re.compile(
