@@ -43,9 +43,8 @@ import sys
 import unicodedata
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-# Import sqlalchemy components lazily; tests do not require them.
-# Async SQLAlchemy components imported lazily or omitted for test environments.
-# from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
