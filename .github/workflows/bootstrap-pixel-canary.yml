@@ -22,8 +22,26 @@ jobs:
           ref: factory/add-pixel-canary
           fetch-depth: 0
 
+      - name: Restore patch targets from main
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git fetch origin main
+          git checkout origin/main -- \
+            .github/free-model-factories.tsv \
+            .github/factory-expected-workers.json \
+            .github/scripts/factory_roster.py \
+            .github/workflows/free-model-factory-run.yml \
+            .github/scripts/validate-free-model-factories.py \
+            tests/test_free_provider_pin_guards.py \
+            tests/test_factory_executor_selection_workflow.py
+
       - name: Patch factory control plane
-        run: python3 .github/scripts/bootstrap_pixel_canary.py
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/bootstrap_pixel_canary.py
+          cp .github/workflows/free-model-factory-run.yml .github/patched-free-model-factory-run.yml
 
       - name: Validate patched control plane
         shell: bash
@@ -37,7 +55,7 @@ jobs:
           python3 .github/scripts/validate-free-model-factories.py
           git diff --check
 
-      - name: Publish patched files
+      - name: Publish non-workflow files and patched runner blob
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -46,7 +64,6 @@ jobs:
             '.github/free-model-factories.tsv'
             '.github/factory-expected-workers.json'
             '.github/scripts/factory_roster.py'
-            '.github/workflows/free-model-factory-run.yml'
             '.github/scripts/validate-free-model-factories.py'
             'tests/test_free_provider_pin_guards.py'
             'tests/test_factory_executor_selection_workflow.py'
@@ -61,10 +78,9 @@ jobs:
               -f branch="$branch" >/dev/null
           done
 
-          for path in '.github/scripts/bootstrap_pixel_canary.py' '.github/workflows/bootstrap-pixel-canary.yml'; do
-            sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${branch}" --jq '.sha')"
-            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/contents/${path}" \
-              -f message='chore: remove Pixel Canary bootstrap artifact' \
-              -f sha="$sha" \
-              -f branch="$branch" >/dev/null
-          done
+          temp='.github/patched-free-model-factory-run.yml'
+          content="$(base64 -w0 "$temp")"
+          gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${temp}" \
+            -f message='chore: stage patched Pixel Canary runner blob' \
+            -f content="$content" \
+            -f branch="$branch" >/dev/null
