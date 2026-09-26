@@ -16,6 +16,8 @@ on:
         required: false
       OLLAMA_API_KEY:
         required: false
+      AI_GATEWAY_API_KEY:
+        required: false
       OMNIROUTE_API_KEY:
         required: false
       OMNIROUTE_MANAGEMENT_API_KEY:
@@ -55,6 +57,7 @@ jobs:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}
       OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+      AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
       OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
       OMNIROUTE_MANAGEMENT_API_KEY: ${{ secrets.OMNIROUTE_MANAGEMENT_API_KEY }}
       OMNIROUTE_BASE_URL: ${{ vars.OMNIROUTE_BASE_URL }}
@@ -131,6 +134,11 @@ jobs:
               else
                 if [[ -n "${OLLAMA_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-OLLAMA_API_KEY'; fi
               fi
+              ;;
+            vercel-ai-gateway)
+              runtime_model="vercel-ai-gateway/${model}"
+              branch_suffix='vercel-ai-gateway'
+              if [[ -n "${AI_GATEWAY_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-AI_GATEWAY_API_KEY'; fi
               ;;
             omniroute-free)
               # INCIDENT: OmniRoute stays dark unless FACTORY_OMNIROUTE_ENABLED is on.
@@ -255,7 +263,7 @@ jobs:
           discovery_outcome="$RUNNER_TEMP/factory-discovery-outcome"
 
           case "$SOURCE" in
-            nvidia|kilo-auto|z-ai|ollama-cloud)
+            nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway)
               # These adapters cannot enumerate reliably. Preserve the lane
               # request and let the existing real invocation/probe prove it.
               {
@@ -506,7 +514,8 @@ jobs:
           steps.lane.outputs.configured == 'true' &&
           (
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'z-ai' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'ollama-cloud'
+            (steps.executor.outputs.source || steps.lane.outputs.source) == 'ollama-cloud' ||
+            (steps.executor.outputs.source || steps.lane.outputs.source) == 'vercel-ai-gateway'
           )
         shell: bash
         env:
@@ -526,6 +535,12 @@ jobs:
               base_url='https://ollama.com/v1'
               provider_id='ollama-cloud'
               provider_name='Ollama Cloud free capacity'
+              ;;
+            vercel-ai-gateway)
+              key="${AI_GATEWAY_API_KEY:-}"
+              base_url='https://ai-gateway.vercel.sh/v1'
+              provider_id='vercel-ai-gateway'
+              provider_name='Vercel AI Gateway free capacity'
               ;;
             *)
               echo "Unsupported OpenAI-compatible factory source: ${SOURCE}" >&2
@@ -559,6 +574,30 @@ jobs:
               }
             }' > "$HOME/.config/opencode/opencode.json"
           chmod 600 "$HOME/.config/opencode/opencode.json"
+
+      - name: Require Pixel Canary to remain zero-price
+        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'vercel-ai-gateway'
+        shell: bash
+        env:
+          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+        run: |
+          set -Eeuo pipefail
+          catalog="$RUNNER_TEMP/vercel-ai-gateway-models.json"
+          curl --silent --show-error --fail-with-body \
+            --connect-timeout 5 --max-time 30 \
+            https://ai-gateway.vercel.sh/v1/models > "$catalog"
+          if ! jq -e --arg model "$MODEL" '
+            [.data[] | select(
+              .id == $model and
+              ((.pricing.input // "1") | tonumber) == 0 and
+              ((.pricing.output // "1") | tonumber) == 0
+            )] | length == 1
+          ' "$catalog" >/dev/null; then
+            echo "Pixel Canary is missing or no longer zero-price; refusing free-fleet execution: ${MODEL}" >&2
+            printf 'model_unavailable\tVercel AI Gateway model is missing or no longer zero-price: %s\n' "$MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
+            exit 1
+          fi
+          echo "Verified zero-price Vercel AI Gateway model: ${MODEL}"
 
       - name: Probe pinned NVIDIA model before OpenCode smoke
         if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'nvidia'
@@ -690,6 +729,34 @@ jobs:
             exit 1
           fi
           [[ -z "$(git status --porcelain)" ]] || { echo 'Model smoke modified the worktree' >&2; exit 1; }
+
+      - name: Prove Pixel Canary can use OpenCode tools
+        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'vercel-ai-gateway'
+        shell: bash
+        env:
+          RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
+        run: |
+          set -Eeuo pipefail
+          before="$(git status --porcelain)"
+          [[ -z "$before" ]] || { echo 'Tool smoke requires clean worktree' >&2; exit 1; }
+          set +e
+          timeout --signal=TERM --kill-after=10s 180s \
+            opencode run -m "$RUNTIME_MODEL" --agent build --dir "$GITHUB_WORKSPACE" \
+            --title 'ComicPile Pixel Canary tool smoke' \
+            'Use the shell tool exactly once to run: printf PIXEL_CANARY_TOOL_OK. Then reply with exactly PIXEL_CANARY_AGENT_OK. Do not edit files.' \
+            2>&1 | tee "$RUNNER_TEMP/pixel-canary-tool-smoke.log"
+          status=${PIPESTATUS[0]}
+          set -e
+          (( status == 0 )) || exit "$status"
+          grep -q 'PIXEL_CANARY_TOOL_OK' "$RUNNER_TEMP/pixel-canary-tool-smoke.log" || {
+            echo 'Pixel Canary did not demonstrate OpenCode tool execution' >&2
+            exit 1
+          }
+          grep -q 'PIXEL_CANARY_AGENT_OK' "$RUNNER_TEMP/pixel-canary-tool-smoke.log" || {
+            echo 'Pixel Canary did not complete the tool smoke contract' >&2
+            exit 1
+          }
+          [[ -z "$(git status --porcelain)" ]] || { echo 'Pixel Canary tool smoke modified the worktree' >&2; exit 1; }
 
       - name: Smoke Kilo Auto Free through Kilo CLI
         if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'kilo-auto'
