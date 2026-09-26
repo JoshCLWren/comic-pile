@@ -38,6 +38,8 @@ For the merged pull request you are asked to process:
 5. For an internal change, call `python scripts/release_writer.py skip '<json>'` using exactly:
    `{"source_repository":"owner/repo","source_pr_number":123,"source_merge_sha":"abc1234",`
    `"merged_at":"2026-01-01T00:00:00Z","reason":"Concise internal-only reason"}`.
+   Do not rename them to `repository`, `pr_number`, or `merge_sha`; the helper expects the exact
+   source field names shown above.
    The helper records a durable hidden internal source record so reconciliation does not repeatedly
    reclassify the same PR.
 6. Before exiting, call the exact `check` command again. Exit successfully only after the source
