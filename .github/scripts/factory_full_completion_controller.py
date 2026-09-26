@@ -2,7 +2,6 @@
 """Allocate completion workers from current demand and idle fleet capacity."""
 from __future__ import annotations
 
-import dataclasses
 import importlib.util
 import json
 import sys
@@ -101,42 +100,6 @@ def current_demand(controller, *, now_epoch: int | None = None) -> tuple[FleetDe
     return demand, capacity
 
 
-def configure_demand_selection(controller, *, target: int) -> None:
-    """Select completion workers from calculated demand instead of threshold tiers."""
-    controller.REVIEW_BACKLOG_LIMIT = 1
-    controller.completion_batch_size = lambda backlog: target if backlog > 0 else 0
-
-    def select_workers(
-        workers,
-        *,
-        review_backlog,
-        owned_workers=None,
-        health=None,
-        now_epoch=None,
-    ):
-        del review_backlog
-        owned_workers = owned_workers or set()
-        health = health or {}
-        now_epoch = int(time.time()) if now_epoch is None else now_epoch
-
-        healthy: list[str] = []
-        degraded: list[str] = []
-        for worker in workers:
-            if worker in owned_workers:
-                continue
-            state = controller.worker_health_state(worker, health, now_epoch=now_epoch)
-            if state == "healthy":
-                healthy.append(worker)
-            elif state == "degraded":
-                degraded.append(worker)
-
-        healthy.sort(key=int)
-        degraded.sort(key=int)
-        return (healthy + degraded)[:target]
-
-    controller.select_completion_workers = select_workers
-
-
 def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
     """Persist demand, allocation, and claim results for operational verification."""
     selected = list(result.get("selected_workers") or [])
@@ -213,39 +176,58 @@ def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
         print(f"[factory-completion] unable to persist funnel telemetry: {exc}", file=sys.stderr)
 
 
+def signal_dispatch(controller, demand: FleetDemand, capacity: dict[str, object]) -> dict[str, object]:
+    """Signal the dispatcher with demand and capacity without assigning or launching.
+
+    Capacity refill may perform recovery/reconciliation but does not
+    directly assign workers or launch entries. Healthy one-for-one
+    refill signals an explicit-worker dispatcher mode that cannot create
+    a self-perpetuating roster chain. Broad bootstrap signals roster mode.
+    """
+    target = completion_worker_target(demand)
+    now_epoch = int(time.time())
+    manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
+    candidates = controller.load_manifest_candidates(manifest)
+    owned = controller.owned_worker_ids(controller.load_controller().list_issues() + controller.load_controller().list_prs())
+
+    # Perform recovery/reconciliation without assignment
+    work_controller = controller.load_controller()
+    work_controller.reconcile_stale_leases(now_epoch=now_epoch)
+    work_controller.reconcile_contradictory_labels()
+
+    eligible = [
+        candidate["worker"]
+        for candidate in candidates
+        if candidate["worker"] not in owned
+        and controller.worker_is_executable(
+            candidate["worker"],
+            {},
+            now_epoch=now_epoch,
+        )
+    ]
+    eligible.sort(key=int)
+
+    # Determine mode: explicit-worker for one-for-one, roster for broad bootstrap
+    mode = "explicit-worker" if 0 < target <= 1 else "roster"
+
+    return {
+        "signal": mode,
+        "selected_workers": eligible[:target] if target > 0 else [],
+        "completion_demand": demand.completion,
+        "production_demand": demand.production,
+        "idle_workers": demand.idle_workers,
+        "completion_share": demand.completion_share,
+        "completion_target": target,
+        "idle_executable_workers": len(eligible),
+        "capacity": capacity,
+        "assignments": [],
+    }
+
+
 def main() -> int:
     controller = load_controller()
     demand, capacity = current_demand(controller)
-    target = completion_worker_target(demand)
-    configure_demand_selection(controller, target=target)
-
-    original_load_work_controller = controller.load_controller
-
-    def load_pr_only_work_controller():
-        work_controller = original_load_work_controller()
-        original_assign_candidate = work_controller.assign_candidate
-
-        def assign_completion_candidate(candidate, worker):
-            if candidate.kind == "pr" and candidate.linked_issue is not None:
-                candidate = dataclasses.replace(candidate, linked_issue=None)
-            return original_assign_candidate(candidate, worker)
-
-        work_controller.assign_candidate = assign_completion_candidate
-        return work_controller
-
-    controller.load_controller = load_pr_only_work_controller
-
-    result = controller.assign_completion_batch()
-    result.update(
-        {
-            "completion_demand": demand.completion,
-            "production_demand": demand.production,
-            "idle_workers": demand.idle_workers,
-            "completion_share": demand.completion_share,
-            "completion_target": target,
-            **capacity,
-        }
-    )
+    result = signal_dispatch(controller, demand, capacity)
     persist_funnel_telemetry(controller, result)
     print(json.dumps(result, sort_keys=True))
     return 0

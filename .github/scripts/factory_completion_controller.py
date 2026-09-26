@@ -542,8 +542,13 @@ def candidate_is_batch_executable(
     return cache[number]
 
 
-def assign_completion_batch(*, now_epoch: int | None = None) -> dict[str, object]:
-    """Claim one bounded batch of existing completion-stage PRs."""
+def signal_completion_mode(*, now_epoch: int | None = None) -> dict[str, object]:
+    """Signal dispatcher completion mode without directly assigning or launching entries.
+
+    Completion drain wakes dispatcher completion mode and does not directly
+    assign or launch Factory entries. Demand-driven completion allocation
+    runs inside the dispatcher serialization boundary.
+    """
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
     controller = load_controller()
     policy = load_policy()
@@ -553,7 +558,14 @@ def assign_completion_batch(*, now_epoch: int | None = None) -> dict[str, object
     prs = controller.list_prs()
     backlog = policy.factory_review_backlog_count(prs)
     if backlog < REVIEW_BACKLOG_LIMIT:
-        return {"backlog": backlog, "selected_workers": [], "assignments": []}
+        return {
+            "backlog": backlog,
+            "selected_workers": [],
+            "signal": "idle",
+            "capacity": controller.omniroute_free_entry_capacity(),
+            "completion_target": 0,
+            "assignments": [],
+        }
 
     manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
     workers = load_manifest_workers(manifest)
@@ -563,7 +575,8 @@ def assign_completion_batch(*, now_epoch: int | None = None) -> dict[str, object
         health = latest_worker_health(comments, trusted=policy.comment_is_trusted)
     except RuntimeError as exc:
         print(
-            f"[factory-completion] heartbeat health unavailable; dispatching without cooldowns: {exc}",
+            f"[factory-completion] heartbeat health unavailable; "
+            f"dispatching without cooldowns: {exc}",
             file=sys.stderr,
         )
         health = {}
@@ -576,39 +589,31 @@ def assign_completion_batch(*, now_epoch: int | None = None) -> dict[str, object
         now_epoch=now_epoch,
     )
 
-    assignments: list[dict[str, object]] = []
-    for worker in selected:
-        if not controller.omniroute_free_entry_has_capacity():
-            print(
-                "[factory-completion] OmniRoute free-entry cap reached; "
-                "stopping completion claims",
-                file=sys.stderr,
-            )
-            break
-        result = controller.assign(worker, kinds=('pr',))
-        if result is None:
-            continue
-        assignments.append(
-            {
-                "worker": worker,
-                "number": result.number,
-                "stage": result.stage,
-                "conflicted": result.conflicted,
-            }
-        )
-
     return {
         "backlog": backlog,
         "selected_workers": selected,
-        "assignments": assignments,
+        "signal": "completion",
+        "capacity": controller.omniroute_free_entry_capacity(),
+        "completion_target": len(selected),
+        "assignments": [],
     }
+
+
+def assign_completion_batch(*, now_epoch: int | None = None) -> dict[str, object]:
+    """Return completion batch signal data without direct assignment.
+
+    Deprecated: use signal_completion_mode() instead. This method now
+    delegates to signal_completion_mode() to satisfy the contract that
+    completion drain contains no direct assignment path.
+    """
+    return signal_completion_mode(now_epoch=now_epoch)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--now-epoch", type=int)
     args = parser.parse_args()
-    print(json.dumps(assign_completion_batch(now_epoch=args.now_epoch), sort_keys=True))
+    print(json.dumps(signal_completion_mode(now_epoch=args.now_epoch), sort_keys=True))
     return 0
 
 
