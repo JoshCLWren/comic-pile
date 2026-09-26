@@ -8,6 +8,10 @@ on:
     types: [completed]
   workflow_dispatch:
     inputs:
+      pr_number:
+        description: Optional exact merged pull request to reconcile
+        required: false
+        type: string
       backfill_since:
         description: Optional ISO-8601 lower bound
         required: false
@@ -16,6 +20,7 @@ on:
 permissions:
   actions: write
   contents: read
+  pull-requests: read
 
 concurrency:
   group: factory-release-reconciliation
@@ -31,20 +36,50 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           WORKFLOW_STARTED: ${{ github.event.workflow_run.created_at }}
+          INPUT_PR: ${{ inputs.pr_number }}
           INPUT_SINCE: ${{ inputs.backfill_since }}
         run: |
           set -Eeuo pipefail
-          since="$INPUT_SINCE"
-          if [[ -z "$since" && "$EVENT_NAME" == "workflow_run" ]]; then
-            since="$WORKFLOW_STARTED"
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ -n "$INPUT_PR" ]]; then
+              gh workflow run release-writer.yml \
+                --repo "$GITHUB_REPOSITORY" \
+                --ref main \
+                -f "pr_number=$INPUT_PR"
+            elif [[ -n "$INPUT_SINCE" ]]; then
+              gh workflow run release-writer.yml \
+                --repo "$GITHUB_REPOSITORY" \
+                --ref main \
+                -f "backfill_since=$INPUT_SINCE"
+            else
+              gh workflow run release-writer.yml \
+                --repo "$GITHUB_REPOSITORY" \
+                --ref main
+            fi
+            exit 0
           fi
-          if [[ -n "$since" ]]; then
+
+          if [[ -z "$WORKFLOW_STARTED" ]]; then
+            echo 'Factory workflow start time is unavailable; refusing an unbounded dispatch.' >&2
+            exit 1
+          fi
+
+          mapfile -t merged_prs < <(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/pulls?state=closed&base=main&sort=updated&direction=desc&per_page=100" \
+              --jq ".[] | select(.merged_at != null and .merged_at >= \"$WORKFLOW_STARTED\") | .number"
+          )
+
+          if (( ${#merged_prs[@]} == 0 )); then
+            echo "No PRs merged after factory workflow start $WORKFLOW_STARTED; nothing to reconcile."
+            exit 0
+          fi
+
+          for pr in "${merged_prs[@]}"; do
+            echo "Dispatching exact release reconciliation for merged PR #$pr"
             gh workflow run release-writer.yml \
               --repo "$GITHUB_REPOSITORY" \
               --ref main \
-              -f "backfill_since=$since"
-          else
-            gh workflow run release-writer.yml \
-              --repo "$GITHUB_REPOSITORY" \
-              --ref main
-          fi
+              -f "pr_number=$pr"
+          done
