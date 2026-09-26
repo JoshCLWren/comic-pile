@@ -14,6 +14,8 @@ jobs:
   patch:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -35,13 +37,34 @@ jobs:
           python3 .github/scripts/validate-free-model-factories.py
           git diff --check
 
-      - name: Commit patched lane
+      - name: Publish patched files
         shell: bash
         run: |
           set -Eeuo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git diff --cached --check
-          git commit -m 'feat: add Pixel Canary factory lane'
-          git push origin HEAD:factory/add-pixel-canary
+          branch='factory/add-pixel-canary'
+          files=(
+            '.github/free-model-factories.tsv'
+            '.github/factory-expected-workers.json'
+            '.github/scripts/factory_roster.py'
+            '.github/workflows/free-model-factory-run.yml'
+            '.github/scripts/validate-free-model-factories.py'
+            'tests/test_free_provider_pin_guards.py'
+            'tests/test_factory_executor_selection_workflow.py'
+          )
+          for path in "${files[@]}"; do
+            sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${branch}" --jq '.sha')"
+            content="$(base64 -w0 "$path")"
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${path}" \
+              -f message='feat: add Pixel Canary factory lane' \
+              -f content="$content" \
+              -f sha="$sha" \
+              -f branch="$branch" >/dev/null
+          done
+
+          for path in '.github/scripts/bootstrap_pixel_canary.py' '.github/workflows/bootstrap-pixel-canary.yml'; do
+            sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${branch}" --jq '.sha')"
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/contents/${path}" \
+              -f message='chore: remove Pixel Canary bootstrap artifact' \
+              -f sha="$sha" \
+              -f branch="$branch" >/dev/null
+          done
