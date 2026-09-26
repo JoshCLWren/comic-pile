@@ -18,7 +18,7 @@ from factory_capacity_policy import (
     omniroute_enabled,
     remaining_omniroute_free_entry_slots,
 )
-from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments)
+from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments, stage_of)
 from stale_pr_decay import StalePRGuard
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
