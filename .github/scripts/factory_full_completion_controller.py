@@ -183,27 +183,27 @@ def signal_dispatch(controller, demand: FleetDemand, capacity: dict[str, object]
     directly assign workers or launch entries. Healthy one-for-one
     refill signals an explicit-worker dispatcher mode that cannot create
     a self-perpetuating roster chain. Broad bootstrap signals roster mode.
+
+    The executable worker set is derived from the capacity report passed in
+    by current_demand() so it stays consistent with the measured idle_workers
+    count instead of re-deriving health from an empty snapshot.
     """
     target = completion_worker_target(demand)
     now_epoch = int(time.time())
-    manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
-    candidates = controller.load_manifest_candidates(manifest)
-    owned = controller.owned_worker_ids(controller.load_controller().list_issues() + controller.load_controller().list_prs())
+    owned = controller.owned_worker_ids(
+        controller.load_controller().list_issues() + controller.load_controller().list_prs()
+    )
 
     # Perform recovery/reconciliation without assignment
     work_controller = controller.load_controller()
     work_controller.reconcile_stale_leases(now_epoch=now_epoch)
     work_controller.reconcile_contradictory_labels()
 
+    executable_candidates = list(capacity.get("executable_candidates") or [])
     eligible = [
-        candidate["worker"]
-        for candidate in candidates
-        if candidate["worker"] not in owned
-        and controller.worker_is_executable(
-            candidate["worker"],
-            {},
-            now_epoch=now_epoch,
-        )
+        str(candidate["worker"])
+        for candidate in executable_candidates
+        if str(candidate["worker"]) not in owned
     ]
     eligible.sort(key=int)
 

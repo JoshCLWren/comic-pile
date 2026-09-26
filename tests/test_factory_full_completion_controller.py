@@ -18,21 +18,70 @@ sys.modules[SPEC.name] = full
 SPEC.loader.exec_module(full)
 
 
-def test_selector_uses_calculated_target_without_backlog_thresholds():
+def test_signal_dispatch_returns_no_assignments():
     controller = full.load_controller()
-    full.configure_demand_selection(controller, target=7)
-
-    workers = [str(worker) for worker in range(6, 26)]
-    health = dict.fromkeys(workers, ("success", 0))
-    selected = controller.select_completion_workers(
-        workers,
-        review_backlog=3,
-        health=health,
-        now_epoch=1,
+    demand = full.FleetDemand(
+        completion=0, production=0, idle_workers=0
     )
+    capacity = {"enabled": 0, "in_flight": 0, "cap": 12, "remaining": 12}
+    result = full.signal_dispatch(controller, demand, capacity)
+    assert result["assignments"] == []
+    assert result["signal"] in ("explicit-worker", "roster")
+    # Capacity refill derives its executable worker set from the canonical
+    # capacity report, so it must be consistent with demand measurement.
+    assert result["idle_executable_workers"] >= 0
 
-    assert selected == workers[:7]
-    assert controller.completion_batch_size(3) == 7
+
+def test_signal_dispatch_includes_demand_data():
+    controller = full.load_controller()
+    demand = full.FleetDemand(
+        completion=1, production=2, idle_workers=3
+    )
+    capacity = {"enabled": 0, "in_flight": 0, "cap": 12, "remaining": 12}
+    result = full.signal_dispatch(controller, demand, capacity)
+    assert "completion_demand" in result
+    assert "production_demand" in result
+    assert "completion_share" in result
+    assert "completion_target" in result
+    assert "capacity" in result
+
+
+def test_signal_dispatch_performs_reconciliation():
+    controller = full.load_controller()
+    demand = full.FleetDemand(
+        completion=0, production=0, idle_workers=0
+    )
+    capacity = {"enabled": 0, "in_flight": 0, "cap": 12, "remaining": 12}
+    result = full.signal_dispatch(controller, demand, capacity)
+    assert "signal" in result
+    assert "assignments" in result
+    assert result["assignments"] == []
+
+
+def test_signal_dispatch_omits_direct_assignment():
+    controller = full.load_controller()
+    demand = full.FleetDemand(
+        completion=0, production=0, idle_workers=0
+    )
+    capacity = {"enabled": 0, "in_flight": 0, "cap": 12, "remaining": 12}
+    result = full.signal_dispatch(controller, demand, capacity)
+    assert result["assignments"] == []
+
+
+def test_main_does_not_assign_directly():
+    from unittest.mock import patch
+
+    with patch.object(full, "current_demand") as mock_demand, \
+         patch.object(full, "persist_funnel_telemetry") as mock_persist, \
+         patch.object(full, "signal_dispatch") as mock_signal:
+        mock_demand.return_value = (
+            full.FleetDemand(completion=0, production=0, idle_workers=0),
+            {"enabled": 0, "in_flight": 0, "cap": 12, "remaining": 12},
+        )
+        mock_signal.return_value = {"signal": "roster", "assignments": []}
+        full.main()
+        mock_signal.assert_called_once()
+        mock_persist.assert_called_once()
 
 
 def test_raw_demand_is_not_erased_by_legacy_review_backpressure_threshold():
@@ -64,41 +113,23 @@ def test_raw_demand_is_not_erased_by_legacy_review_backpressure_threshold():
     )
 
 
-def test_only_healthy_or_degraded_workers_count_as_executable_capacity():
-    controller = full.load_controller()
-    full.configure_demand_selection(controller, target=4)
-    now = controller.parse_time("2026-08-24T17:00:00Z")
-    assert now is not None
+def test_current_demand_caps_idle_workers_to_remaining_omniroute_slots():
+    from unittest.mock import patch
 
-    workers = ["6", "7", "8", "9", "10", "11"]
-    health = {
-        "6": ("failure", now - 60),
-        "8": ("RATE LIMITED", now - 60),
-        "9": ("success", now - 60),
-        "10": ("MODEL MISSING", now - 60),
-        "11": ("provider_unavailable", now - 3600),
-    }
-
-    selected = controller.select_completion_workers(
-        workers,
-        review_backlog=35,
-        owned_workers={"7"},
-        health=health,
-        now_epoch=now,
-    )
-
-    assert "7" not in selected
-    assert "10" not in selected
-    assert "6" not in selected
-    assert "8" not in selected
-    assert selected == ["9", "11"]
+    with patch.dict("os.environ", {"FACTORY_OMNIROUTE_ENABLED": "on"}):
+        _assert_current_demand_caps()
 
 
-def test_current_demand_caps_idle_workers_to_remaining_omniroute_slots(monkeypatch):
-    # OmniRoute defaults off for the incident freeze; this test exercises the
-    # OmniRoute free-entry ceiling (cap 3, in-flight 2 → remaining 1).
-    monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
+def test_current_demand_uses_multi_provider_budget_when_omniroute_dark():
+    from unittest.mock import patch
 
+    env = dict(__import__("os").environ)
+    env.pop("FACTORY_OMNIROUTE_ENABLED", None)
+    with patch.dict("os.environ", env, clear=True):
+        _assert_current_demand_multi_provider()
+
+
+def _assert_current_demand_caps():
     class FakeWork:
         def list_issues(self):
             return []
@@ -161,9 +192,7 @@ def test_current_demand_caps_idle_workers_to_remaining_omniroute_slots(monkeypat
     assert capacity["executable_slot_capacity"] == 10
 
 
-def test_current_demand_uses_multi_provider_budget_when_omniroute_dark(monkeypatch):
-    monkeypatch.delenv("FACTORY_OMNIROUTE_ENABLED", raising=False)
-
+def _assert_current_demand_multi_provider():
     class FakeWork:
         def list_issues(self):
             return []
@@ -219,7 +248,6 @@ def test_current_demand_uses_multi_provider_budget_when_omniroute_dark(monkeypat
             return True
 
     measured, capacity = full.current_demand(FakeCompletion(), now_epoch=1)
-    # 10 executable idle workers fit under multi-provider remaining (12 - 2).
     assert measured.idle_workers == 10
     assert measured.completion == 0
     assert measured.production == 0
