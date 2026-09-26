@@ -39,7 +39,7 @@ OPENCODE_DISPLAY_TOKEN_OVERRIDES = {"mimo": "MiMo"}
 OPENCODE_MUSE_SPARK_RE = re.compile(r"muse-spark", re.IGNORECASE)
 _VERSIONISH_TOKEN_RE = re.compile(r"^v?\d+(?:\.\d+)*$", re.IGNORECASE)
 CATALOG_SOURCES = frozenset({"opencode-free", "nvidia", "openrouter-free"})
-PROTECTED_SOURCES = frozenset({"kilo-auto", "z-ai", "ollama-cloud"})
+PROTECTED_SOURCES = frozenset({"kilo-auto", "z-ai", "ollama-cloud", "vercel-ai-gateway"})
 Z_AI_FREE_MODELS = frozenset({"glm-4.5-flash"})
 OLLAMA_CLOUD_FREE_MODELS = frozenset({"nemotron-3-nano:30b", "gpt-oss:20b"})
 # Time-boxed $0 OpenRouter promo catalog ids that omit the ``:free`` suffix.
