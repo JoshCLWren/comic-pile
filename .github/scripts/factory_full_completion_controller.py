@@ -190,14 +190,25 @@ def signal_dispatch(controller, demand: FleetDemand, capacity: dict[str, object]
     """
     target = completion_worker_target(demand)
     now_epoch = int(time.time())
-    owned = controller.owned_worker_ids(
-        controller.load_controller().list_issues() + controller.load_controller().list_prs()
-    )
+    try:
+        work_controller = controller.load_controller()
+        owned = controller.owned_worker_ids(
+            work_controller.list_issues() + work_controller.list_prs()
+        )
 
-    # Perform recovery/reconciliation without assignment
-    work_controller = controller.load_controller()
-    work_controller.reconcile_stale_leases(now_epoch=now_epoch)
-    work_controller.reconcile_contradictory_labels()
+        # Perform recovery/reconciliation without assignment
+        work_controller.reconcile_stale_leases(now_epoch=now_epoch)
+        work_controller.reconcile_contradictory_labels()
+    except RuntimeError as exc:
+        # Signal-only path must stay fail-open: when GitHub evidence is
+        # unavailable (e.g. no gh auth in CI), still wake the dispatcher
+        # with demand/capacity data instead of crashing.
+        print(
+            f"[factory-completion] signal evidence unavailable; "
+            f"continuing without reconciliation: {exc}",
+            file=sys.stderr,
+        )
+        owned = set()
 
     executable_candidates = list(capacity.get("executable_candidates") or [])
     eligible = [

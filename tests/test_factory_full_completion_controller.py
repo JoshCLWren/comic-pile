@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import MagicMock
 
 scripts_dir = Path(__file__).resolve().parents[1] / ".github" / "scripts"
 sys.path.insert(0, str(scripts_dir))
@@ -21,13 +23,35 @@ sys.modules[SPEC.name] = full
 SPEC.loader.exec_module(full)
 
 
+@contextmanager
+def stubbed_work_controller(controller):
+    """Replace the gh-backed work controller with an offline stub.
+
+    signal_dispatch only needs owned-worker lookup and reconciliation
+    hooks from the work controller; stubbing keeps these regression tests
+    hermetic (no gh auth or network required).
+    """
+    work = MagicMock()
+    work.list_issues.return_value = []
+    work.list_prs.return_value = []
+    work.reconcile_stale_leases.return_value = []
+    work.reconcile_contradictory_labels.return_value = []
+    original = controller.load_controller
+    controller.load_controller = lambda: work
+    try:
+        yield work
+    finally:
+        controller.load_controller = original
+
+
 def test_signal_dispatch_returns_no_assignments():
     controller = full.load_controller()
     demand = full.FleetDemand(
         completion=0, production=0, idle_workers=0
     )
     capacity = {"enabled": 0, "in_flight": 0, "cap": 12, "remaining": 12}
-    result = full.signal_dispatch(controller, demand, capacity)
+    with stubbed_work_controller(controller):
+        result = full.signal_dispatch(controller, demand, capacity)
     assert result["assignments"] == []
     assert result["signal"] in ("explicit-worker", "roster")
     # Capacity refill derives its executable worker set from the canonical
@@ -41,7 +65,8 @@ def test_signal_dispatch_includes_demand_data():
         completion=1, production=2, idle_workers=3
     )
     capacity = {"enabled": 0, "in_flight": 0, "cap": 12, "remaining": 12}
-    result = full.signal_dispatch(controller, demand, capacity)
+    with stubbed_work_controller(controller):
+        result = full.signal_dispatch(controller, demand, capacity)
     assert "completion_demand" in result
     assert "production_demand" in result
     assert "completion_share" in result
@@ -55,10 +80,13 @@ def test_signal_dispatch_performs_reconciliation():
         completion=0, production=0, idle_workers=0
     )
     capacity = {"enabled": 0, "in_flight": 0, "cap": 12, "remaining": 12}
-    result = full.signal_dispatch(controller, demand, capacity)
+    with stubbed_work_controller(controller) as work:
+        result = full.signal_dispatch(controller, demand, capacity)
     assert "signal" in result
     assert "assignments" in result
     assert result["assignments"] == []
+    work.reconcile_stale_leases.assert_called_once()
+    work.reconcile_contradictory_labels.assert_called_once()
 
 
 def test_signal_dispatch_omits_direct_assignment():
@@ -67,7 +95,8 @@ def test_signal_dispatch_omits_direct_assignment():
         completion=0, production=0, idle_workers=0
     )
     capacity = {"enabled": 0, "in_flight": 0, "cap": 12, "remaining": 12}
-    result = full.signal_dispatch(controller, demand, capacity)
+    with stubbed_work_controller(controller):
+        result = full.signal_dispatch(controller, demand, capacity)
     assert result["assignments"] == []
 
 
