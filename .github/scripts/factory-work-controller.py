@@ -103,7 +103,11 @@ def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> N
     labels.extend(['factory', final_owner])
     if final_stage:
         labels.append(final_stage)
-        
+    # Enforce ralph-status invariant: in-progress without real owner -> pending
+    if 'ralph-status:in-progress' in current and final_owner == 'factory:unowned':
+        labels = [l for l in labels if l != 'ralph-status:in-progress']
+        labels.append('ralph-status:pending')
+    
     run_gh(['api', '--method', 'PUT', f'repos/{REPO}/issues/{number}/labels', '--input', '-'], input_json={'labels': sorted(set(labels))})
 
 
@@ -700,6 +704,7 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
         )
         return None
     reconcile_stale_leases()
+    reconcile_contradictory_labels()
     issues = list_issues()
     prs = list_prs()
     try:
