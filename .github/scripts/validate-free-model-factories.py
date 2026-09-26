@@ -77,6 +77,11 @@ def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
                 f'worker {worker} ollama-cloud pin must be a documented free '
                 f'starter model, got {model!r}'
             )
+        elif source == 'vercel-ai-gateway':
+            assert model == 'stealth/pixel-canary', (
+                f'worker {worker} vercel-ai-gateway pin must be the current '
+                f'zero-price Pixel Canary promo, got {model!r}'
+            )
 
 
 def main() -> None:
@@ -157,14 +162,19 @@ def main() -> None:
     assert 'OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}' in runner
     assert 'Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}' in runner
     assert 'OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}' in runner
+    assert 'AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}' in runner
     assert 'nvidia)' in runner
     assert 'opencode-free|openrouter-free)' in runner
     assert 'kilo-auto)' in runner
     assert 'z-ai|ollama-cloud)' in runner
-    assert 'nvidia|kilo-auto|z-ai|ollama-cloud)' in runner
+    assert 'vercel-ai-gateway)' in runner
+    assert 'nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway)' in runner
     assert 'Configure OpenAI-compatible factory provider' in runner
     assert 'https://api.z.ai/api/paas/v4' in runner
     assert 'https://ollama.com/v1' in runner
+    assert 'https://ai-gateway.vercel.sh/v1' in runner
+    assert 'Require Pixel Canary to remain zero-price' in runner
+    assert 'Prove Pixel Canary can use OpenCode tools' in runner
     assert 'omniroute-disabled-incident' in runner
     assert 'FACTORY_OMNIROUTE_ENABLED' in runner
     # INCIDENT: catalog free-code lanes keep lane pins while OmniRoute is dark.
