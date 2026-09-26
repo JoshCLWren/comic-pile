@@ -222,13 +222,56 @@ def producer_worker_from_pr(pr: dict[str, Any]) -> str | None:
     return producer_worker_from_values(branch=str(pr.get('headRefName') or ''), body=str(pr.get('body') or ''))
 
 
+# ... existing code ...
 def stage_of(labels: Iterable[str]) -> str | None:
     """Return the deterministic current factory lifecycle stage."""
     present = set(labels)
     return next((label for label in STAGE_PRECEDENCE if label in present), None)
 
 
+def normalize_target_state(labels: set[str], current_owner: str | None) -> tuple[str, str | None]:
+    """Enforce label-state invariants for a target.
+
+    Returns a tuple of (normalized_owner, normalized_stage).
+    
+    Invariants:
+    1. If owner is 'factory:unowned':
+       - Stage cannot be 'factory:building'.
+       - If 'ralph-status:blocked' is present, stage must be 'factory:blocked'.
+       - Otherwise, if no other stage is present, it is 'factory:building' ONLY if owned.
+       - For unowned, if no stage is present or it's 'factory:building', it should be None (or 'factory:building' is removed).
+    2. If 'ralph-status:done' is present:
+       - No transient factory stage or owner labels should remain.
+       - Owner becomes 'factory:unowned' (or None, but for consistency 'factory:unowned').
+       - Stage becomes None.
+    3. If 'ralph-status:in-progress' is present but owner is 'factory:unowned':
+       - Normalize to 'ralph-status:pending' (implicit via labels) and owner 'factory:unowned'.
+    """
+    # Handle Done state first - it overrides everything
+    if 'ralph-status:done' in labels:
+        return 'factory:unowned', None
+
+    # Resolve ownership
+    owner = current_owner or owner_of(labels) or 'factory:unowned'
+    
+    # Handle blocked unowned
+    if owner == 'factory:unowned' and 'ralph-status:blocked' in labels:
+        return 'factory:unowned', 'factory:blocked'
+
+    # Handle building unowned (contradiction)
+    if owner == 'factory:unowned':
+        stage = stage_of(labels)
+        if stage == 'factory:building':
+            return 'factory:unowned', None # Remove building stage if unowned
+        return owner, stage
+
+    # Owned targets
+    return owner, stage_of(labels)
+
+
 def provenance_lane(labels: set[str]) -> int:
+# ... existing code ...
+
     """Return the deterministic assignment lane for a label set."""
     if 'main-breakage' in labels:
         return 0
