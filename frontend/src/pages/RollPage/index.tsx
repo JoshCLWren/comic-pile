@@ -16,6 +16,7 @@ import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../../hooks/useQ
 import { useTasteDiscoveries } from '../../hooks/useTasteDiscoveries'
 import { useRate } from '../../hooks'
 import { useSessionMode } from '../../hooks/useSessionMode'
+import { useCorrectionSheetExamples } from '../../hooks/useCorrectionSheetExamples'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
 import { threadsApi } from '../../services/api-threads'
@@ -70,6 +71,9 @@ export default function RollPage() {
   const [isCorrectionOpen, setIsCorrectionOpen] = useState(false)
 
   const sessionModeMutation = useSessionMode()
+  // One bounded request serves the whole sheet, and only while the sheet is
+  // actually open (issue #2744). A failed lookup leaves the sheet on plain copy.
+  const { examples: correctionExamples } = useCorrectionSheetExamples(isCorrectionOpen)
 
   const handleModeSelectorSubmit = useCallback(
     async (patch: SessionModeUpdateRequest) => {
@@ -487,6 +491,7 @@ export default function RollPage() {
           onSubmit={handleCorrectionSubmit}
           onOpenQuiz={handleOpenQuiz}
           quizEnabled={FEATURES.readingModeQuiz}
+          examples={correctionExamples}
         />
       </div>
     </div>

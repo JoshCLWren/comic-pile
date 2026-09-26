@@ -224,6 +224,10 @@ def _register_core_routers(app: FastAPI) -> None:
         recommendation_diagnostics.router, prefix="/api", tags=["recommendations"]
     )
     app.include_router(session.router, prefix="/api/sessions", tags=["session"])
+    # Versioned-only new client resources (e.g. the #2744 correction-sheet
+    # examples) have no bare /api/* twin. The v1 router is registered before the
+    # legacy twin so its literal paths resolve ahead of /{session_id}.
+    app.include_router(session.v1_router, prefix="/api/v1/sessions", tags=["session"])
     app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
     app.include_router(reading_mode.router, tags=["reading-mode"])
     app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])

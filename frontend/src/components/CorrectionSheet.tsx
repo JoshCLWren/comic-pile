@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import Modal from './Modal'
-import type { SessionModeUpdateRequest, CorrectionChoiceId, CorrectionSheetExamplesResponse } from '../types'
+import type { SessionModeUpdateRequest, CorrectionChoiceId } from '../types'
+import type { CorrectionExamples } from '../hooks/useCorrectionSheetExamples'
 
 interface CorrectionSheetProps {
   isOpen: boolean
@@ -10,8 +11,12 @@ interface CorrectionSheetProps {
   onOpenQuiz?: () => void
   /** Whether the reading-mode quiz is surfaced in this build (issue #1945 gate). */
   quizEnabled?: boolean
-  /** Optional personalized examples for steering choices. */
-  examples?: Record<CorrectionChoiceId, string | null>
+  /**
+   * Optional per-choice example lines drawn from the reader's own rated history
+   * (issue #2744). A `null` entry means no honest example exists and the choice
+   * renders its explanation alone.
+   */
+  examples?: CorrectionExamples
 }
 
 interface CorrectionChoice {
@@ -123,9 +128,14 @@ export default function CorrectionSheet({
           >
             <div className="flex flex-col">
               <span>{choice.label}</span>
-              <span className="text-xs text-[var(--theme-text-muted)] mt-1">{choice.explanation}</span>
+              <span className="mt-1 text-sm text-[var(--theme-text-muted)]">
+                {choice.explanation}
+              </span>
               {examples?.[choice.id] && (
-                <span className="text-xs text-[var(--theme-text-muted)] mt-1">
+                <span
+                  className="mt-1 text-xs text-[var(--theme-text-muted)]"
+                  data-testid={`correction-choice-${choice.id}-example`}
+                >
                   {examples[choice.id]}
                 </span>
               )}

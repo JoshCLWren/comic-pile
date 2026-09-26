@@ -5,6 +5,7 @@ Always use next_issue_id and next_issue_number instead. The old fields are kept 
 backward compatibility but will be removed in a future version.
 """
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Literal
@@ -457,7 +458,12 @@ class SessionMode(BaseModel):
 
 
 class CorrectionChoiceId(StrEnum):
-    """Correction sheet choice identifiers."""
+    """Correction sheet choice identifiers.
+
+    These values are the wire contract between the Roll correction sheet and
+    this response. Field names on :class:`CorrectionSheetExamplesResponse` match
+    the member values so a mapping built here can never drift from the schema.
+    """
 
     EVEN_EASIER = "even_easier"
     KEEP_LEVEL_DIFFERENT = "keep_level_different"
@@ -492,16 +498,38 @@ class CorrectionSheetExamplesResponse(BaseModel):
     )
     pure_random: str | None = Field(
         default=None,
-        description="Example for 'Surprise me' (always null; steering is explicitly disabled)",
+        description=(
+            "Always null. 'Surprise me' disables similarity and effort steering, "
+            "so no preference-derived example is shown."
+        ),
     )
 
     @classmethod
-    def empty(cls) -> CorrectionSheetExamplesResponse:
-        """Return an instance with all fields set to None."""
+    def from_examples(
+        cls,
+        examples: Mapping[CorrectionChoiceId, str | None],
+    ) -> CorrectionSheetExamplesResponse:
+        """Build a response from a choice-id keyed mapping.
+
+        Choices missing from the mapping resolve to ``None`` so partial history
+        degrades to plain copy instead of raising.
+
+        Args:
+            examples: Example line per choice, keyed by choice id.
+
+        Returns:
+            CorrectionSheetExamplesResponse with one field per known choice.
+        """
         return cls(
-            even_easier=None,
-            keep_level_different=None,
-            something_familiar=None,
-            something_different=None,
-            pure_random=None,
+            **{choice.value: examples.get(choice) for choice in CorrectionChoiceId},
         )
+
+    @classmethod
+    def empty(cls) -> CorrectionSheetExamplesResponse:
+        """Return an instance with all fields set to None.
+
+        Returns:
+            A response with no examples, used when the reader has no usable
+            rated history.
+        """
+        return cls.from_examples(dict[CorrectionChoiceId, str | None]())

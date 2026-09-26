@@ -42,6 +42,12 @@ from app.services.correction_examples import generate_correction_examples
 from comic_pile.session import get_current_die, get_or_create, is_active
 
 router = APIRouter(tags=["sessions"])
+#: Versioned-only surface for new session client resources. ``app.main`` mounts
+#: this router *before* :data:`router` at the ``/api/v1/sessions`` prefix so a
+#: literal path always wins over the ``/{session_id}`` parameter route, and it
+#: is never mounted under bare ``/api/*`` (see docs/API.md and the convention
+#: comment in app/main.py).
+v1_router = APIRouter(tags=["sessions"])
 
 
 EVENT_TYPE_DESCRIPTIONS: dict[str, str] = {
@@ -1005,7 +1011,7 @@ async def restore_session_start(
     )
 
 
-@router.get("/correction-examples", response_model=CorrectionSheetExamplesResponse)
+@v1_router.get("/correction-examples", response_model=CorrectionSheetExamplesResponse)
 @limiter.limit("60/minute")
 async def get_correction_sheet_examples(
     request: Request,
