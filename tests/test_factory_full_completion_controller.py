@@ -5,6 +5,9 @@ import importlib.util
 import sys
 from pathlib import Path
 
+scripts_dir = Path(__file__).resolve().parents[1] / ".github" / "scripts"
+sys.path.insert(0, str(scripts_dir))
+
 SCRIPT = (
     Path(__file__).resolve().parents[1]
     / ".github"
