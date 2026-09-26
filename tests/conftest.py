@@ -40,6 +40,8 @@ TRUNCATE_TEST_DATA_SQL = text(
     "RESTART IDENTITY CASCADE;"
 )
 _SHARED_TEST_ENGINE: AsyncEngine | None = None
+_CONNECTION_REAP_INTERVAL = 25
+_tests_since_connection_reap = 0
 
 
 def _get_xdist_sync_dir(tmp_path_factory: pytest.TempPathFactory | None) -> Path:
@@ -378,7 +380,7 @@ async def clear_test_cache() -> AsyncIterator[None]:
 
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
-async def reset_global_engine_pool() -> AsyncIterator[None]:
+async def reset_global_engine_pool(worker_id: str) -> AsyncIterator[None]:
     """Release global-engine connections before their test event loop closes.
 
     This fixture must not depend on ``db_engine``: it applies to every test,
@@ -390,6 +392,31 @@ async def reset_global_engine_pool() -> AsyncIterator[None]:
 
     yield
     await async_engine.dispose()
+
+    # Python 3.14 cancellation can strand asyncpg connections whose event loop
+    # has already closed. A long sequential suite eventually exhausts
+    # PostgreSQL even though every normal fixture path closes its connection.
+    # Reap only periodically and only for the non-xdist runner: terminating
+    # database-wide sessions would interfere with other xdist workers.
+    global _tests_since_connection_reap
+    _tests_since_connection_reap += 1
+    if worker_id != "master" or _tests_since_connection_reap < _CONNECTION_REAP_INTERVAL:
+        return
+
+    _tests_since_connection_reap = 0
+    engine = _SHARED_TEST_ENGINE
+    if engine is None or engine.dialect.name != "postgresql":
+        return
+
+    async with engine.connect() as connection:
+        await connection.execute(
+            text(
+                "SELECT pg_terminate_backend(pid) "
+                "FROM pg_stat_activity "
+                "WHERE datname = current_database() "
+                "AND pid <> pg_backend_pid()"
+            )
+        )
 
 
 def get_test_database_url() -> str:

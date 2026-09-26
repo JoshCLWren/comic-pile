@@ -7,6 +7,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE_WRITER_AGENT = ROOT / ".opencode" / "agents" / "release-writer.md"
 RELEASE_WRITER_HELPER = ROOT / "scripts" / "release_writer.py"
+RELEASE_WRITER_WORKFLOW = ROOT / ".github" / "workflows" / "release-writer.yml"
 
 
 def _load_agent_permission() -> dict:
@@ -78,6 +79,32 @@ def test_release_writer_contract_requires_reader_facing_copy_rules() -> None:
     assert "incomplete fix" in agent_text
     assert "loading states" in agent_text
     assert "Spell-check every title, category, and summary" in agent_text
+
+
+def test_release_writer_contract_documents_exact_source_and_skip_shape() -> None:
+    """Avoid wasting model calls on malformed check and skip helper invocations."""
+    agent_text = RELEASE_WRITER_AGENT.read_text(encoding="utf-8")
+    assert "Never call `check` without all three required arguments" in agent_text
+    for field in (
+        "source_repository",
+        "source_pr_number",
+        "source_merge_sha",
+        "merged_at",
+        "reason",
+    ):
+        assert field in agent_text
+    assert "Do not rename them to `repository`, `pr_number`, or `merge_sha`" in agent_text
+
+
+def test_release_writer_workflow_falls_back_on_provider_rate_limits() -> None:
+    """A transient NVIDIA 429 should try another healthy model without hiding real failures."""
+    workflow = RELEASE_WRITER_WORKFLOW.read_text(encoding="utf-8")
+    assert "models<<EOF" in workflow
+    assert 'mapfile -t models <<< "$MODELS"' in workflow
+    assert "Too Many Requests" in workflow
+    assert "rate.?limit" in workflow
+    assert "trying the next healthy NVIDIA candidate" in workflow
+    assert 'exit "$status"' in workflow
 
 
 def test_release_writer_all_read_helpers_are_get_only(monkeypatch) -> None:
