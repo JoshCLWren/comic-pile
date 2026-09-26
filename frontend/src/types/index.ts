@@ -213,6 +213,21 @@ export interface SessionModeUpdateRequest {
   intent?: ReadingIntent | null
 }
 
+export type CorrectionChoiceId =
+  | 'even_easier'
+  | 'keep_level_different'
+  | 'something_familiar'
+  | 'something_different'
+  | 'pure_random'
+
+export interface CorrectionSheetExamplesResponse {
+  even_easier: string | null
+  keep_level_different: string | null
+  something_familiar: string | null
+  something_different: string | null
+  pure_random: string | null
+}
+
 export interface ReadingModeState {
   bandwidth: ReadingBandwidth | null
   intent: ReadingIntent | null

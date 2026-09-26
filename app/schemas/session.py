@@ -6,6 +6,7 @@ backward compatibility but will be removed in a future version.
 """
 
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_serializer
@@ -453,3 +454,54 @@ class SessionMode(BaseModel):
         default=None,
         description="Compact guidance when mode differs from prediction (null when no correction)",
     )
+
+
+class CorrectionChoiceId(str, Enum):
+    """Correction sheet choice identifiers."""
+
+    EVEN_EASIER = "even_easier"
+    KEEP_LEVEL_DIFFERENT = "keep_level_different"
+    SOMETHING_FAMILIAR = "something_familiar"
+    SOMETHING_DIFFERENT = "something_different"
+    PURE_RANDOM = "pure_random"
+
+
+class CorrectionSheetExamplesResponse(BaseModel):
+    """Personalized examples for the correction sheet steering choices.
+
+    Each field corresponds to a correction choice and contains a compact
+    example drawn from the user's own rated/read history, or ``null`` when
+    no honest example exists for that option.
+    """
+
+    even_easier: str | None = Field(
+        default=None,
+        description="Example for 'Give me something lighter' (lower-commitment read)",
+    )
+    keep_level_different: str | None = Field(
+        default=None,
+        description="Example for 'Keep about the same effort' (same commitment, different comic)",
+    )
+    something_familiar: str | None = Field(
+        default=None,
+        description="Example for 'Stay close to what I've liked' (similar to highly rated comics)",
+    )
+    something_different: str | None = Field(
+        default=None,
+        description="Example for 'Give me a change of pace' (different from recent/high-rated reads)",
+    )
+    pure_random: str | None = Field(
+        default=None,
+        description="Example for 'Surprise me' (always null; steering is explicitly disabled)",
+    )
+
+    @classmethod
+    def empty(cls) -> "CorrectionSheetExamplesResponse":
+        """Return an instance with all fields set to None."""
+        return cls(
+            even_easier=None,
+            keep_level_different=None,
+            something_familiar=None,
+            something_different=None,
+            pure_random=None,
+        )

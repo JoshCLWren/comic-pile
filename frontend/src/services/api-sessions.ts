@@ -1,5 +1,6 @@
 import api from './api'
 import type {
+  CorrectionSheetExamplesResponse,
   SessionCurrent,
   SessionDetails,
   SessionListResponse,
@@ -29,4 +30,5 @@ export const sessionApi = {
   restoreSessionStart: (id: number | string) => api.post<void>(`/v1/sessions/${id}/restore-session-start`),
   updateMode: (data: SessionModeUpdateRequest) =>
     api.patch<SessionModeResponse, SessionModeUpdateRequest>('/v1/roll/session-mode', data),
+  getCorrectionExamples: () => api.get<CorrectionSheetExamplesResponse>('/v1/sessions/correction-examples'),
 }

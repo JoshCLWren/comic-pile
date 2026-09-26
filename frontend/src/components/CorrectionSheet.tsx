@@ -1,13 +1,6 @@
 import { useCallback, useState } from 'react'
 import Modal from './Modal'
-import type { SessionModeUpdateRequest } from '../types'
-
-export type CorrectionChoiceId =
-  | 'even_easier'
-  | 'keep_level_different'
-  | 'something_familiar'
-  | 'something_different'
-  | 'pure_random'
+import type { SessionModeUpdateRequest, CorrectionChoiceId, CorrectionSheetExamplesResponse } from '../types'
 
 interface CorrectionSheetProps {
   isOpen: boolean
