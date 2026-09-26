@@ -5,7 +5,9 @@ Always use next_issue_id and next_issue_number instead. The old fields are kept 
 backward compatibility but will be removed in a future version.
 """
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_serializer
@@ -453,3 +455,81 @@ class SessionMode(BaseModel):
         default=None,
         description="Compact guidance when mode differs from prediction (null when no correction)",
     )
+
+
+class CorrectionChoiceId(StrEnum):
+    """Correction sheet choice identifiers.
+
+    These values are the wire contract between the Roll correction sheet and
+    this response. Field names on :class:`CorrectionSheetExamplesResponse` match
+    the member values so a mapping built here can never drift from the schema.
+    """
+
+    EVEN_EASIER = "even_easier"
+    KEEP_LEVEL_DIFFERENT = "keep_level_different"
+    SOMETHING_FAMILIAR = "something_familiar"
+    SOMETHING_DIFFERENT = "something_different"
+    PURE_RANDOM = "pure_random"
+
+
+class CorrectionSheetExamplesResponse(BaseModel):
+    """Personalized examples for the correction sheet steering choices.
+
+    Each field corresponds to a correction choice and contains a compact
+    example drawn from the user's own rated/read history, or ``null`` when
+    no honest example exists for that option.
+    """
+
+    even_easier: str | None = Field(
+        default=None,
+        description="Example for 'Give me something lighter' (lower-commitment read)",
+    )
+    keep_level_different: str | None = Field(
+        default=None,
+        description="Example for 'Keep about the same effort' (same commitment, different comic)",
+    )
+    something_familiar: str | None = Field(
+        default=None,
+        description="Example for 'Stay close to what I've liked' (similar to highly rated comics)",
+    )
+    something_different: str | None = Field(
+        default=None,
+        description="Example for 'Give me a change of pace' (different from recent/high-rated reads)",
+    )
+    pure_random: str | None = Field(
+        default=None,
+        description=(
+            "Always null. 'Surprise me' disables similarity and effort steering, "
+            "so no preference-derived example is shown."
+        ),
+    )
+
+    @classmethod
+    def from_examples(
+        cls,
+        examples: Mapping[CorrectionChoiceId, str | None],
+    ) -> CorrectionSheetExamplesResponse:
+        """Build a response from a choice-id keyed mapping.
+
+        Choices missing from the mapping resolve to ``None`` so partial history
+        degrades to plain copy instead of raising.
+
+        Args:
+            examples: Example line per choice, keyed by choice id.
+
+        Returns:
+            CorrectionSheetExamplesResponse with one field per known choice.
+        """
+        return cls(
+            **{choice.value: examples.get(choice) for choice in CorrectionChoiceId},
+        )
+
+    @classmethod
+    def empty(cls) -> CorrectionSheetExamplesResponse:
+        """Return an instance with all fields set to None.
+
+        Returns:
+            A response with no examples, used when the reader has no usable
+            rated history.
+        """
+        return cls.from_examples(dict[CorrectionChoiceId, str | None]())

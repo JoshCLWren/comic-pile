@@ -76,6 +76,8 @@ from app.schemas.session import (
     SessionListResponse,
     SessionMode,
     SessionResponse,
+    CorrectionChoiceId,
+    CorrectionSheetExamplesResponse,
 )
 from app.schemas.snapshot import SnapshotResponse, SnapshotsListResponse
 from app.schemas.thread import (
@@ -169,6 +171,8 @@ __all__ = [
     "SessionMode",
     "SessionBandwidthState",
     "SessionIntentState",
+    "CorrectionChoiceId",
+    "CorrectionSheetExamplesResponse",
     # Snapshot
     "SnapshotResponse",
     "SnapshotsListResponse",

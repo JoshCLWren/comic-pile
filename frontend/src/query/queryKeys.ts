@@ -114,6 +114,12 @@ export const queryKeys = {
     page: ({ pageToken, pageSize }: SessionPageKeyOptions) =>
       ['session', 'pages', { pageToken: pageToken ?? null, pageSize }] as const,
     detail: (sessionId: number) => ['session', 'detail', sessionId] as const,
+    /**
+     * Canonical key for the #2744 correction-sheet example lines. Examples are
+     * derived from the reader's own rating history, so this key is invalidated
+     * alongside the roll/queue mutations that change that history.
+     */
+    correctionExamples: () => ['session', 'correction-examples'] as const,
   },
   roll: {
     all: ['roll'] as const,

@@ -1,13 +1,7 @@
 import { useCallback, useState } from 'react'
 import Modal from './Modal'
-import type { SessionModeUpdateRequest } from '../types'
-
-export type CorrectionChoiceId =
-  | 'even_easier'
-  | 'keep_level_different'
-  | 'something_familiar'
-  | 'something_different'
-  | 'pure_random'
+import type { SessionModeUpdateRequest, CorrectionChoiceId } from '../types'
+import type { CorrectionExamples } from '../hooks/useCorrectionSheetExamples'
 
 interface CorrectionSheetProps {
   isOpen: boolean
@@ -17,20 +11,52 @@ interface CorrectionSheetProps {
   onOpenQuiz?: () => void
   /** Whether the reading-mode quiz is surfaced in this build (issue #1945 gate). */
   quizEnabled?: boolean
+  /**
+   * Optional per-choice example lines drawn from the reader's own rated history
+   * (issue #2744). A `null` entry means no honest example exists and the choice
+   * renders its explanation alone.
+   */
+  examples?: CorrectionExamples
 }
 
 interface CorrectionChoice {
   id: CorrectionChoiceId
   label: string
+  explanation: string
   patch: SessionModeUpdateRequest
 }
 
 const CHOICES: CorrectionChoice[] = [
-  { id: 'even_easier', label: 'Even easier', patch: { bandwidth: 'light' } },
-  { id: 'keep_level_different', label: 'Keep this level, different comic', patch: { intent: 'balanced' } },
-  { id: 'something_familiar', label: 'Something familiar', patch: { intent: 'familiar' } },
-  { id: 'something_different', label: 'Something different', patch: { intent: 'explore' } },
-  { id: 'pure_random', label: 'Pure random', patch: { intent: 'random' } },
+  {
+    id: 'even_easier',
+    label: 'Give me something lighter',
+    explanation: 'Favor a lower-commitment/easier read.',
+    patch: { bandwidth: 'light' },
+  },
+  {
+    id: 'keep_level_different',
+    label: 'Keep about the same effort',
+    explanation: 'Keep the current commitment level, but choose another comic.',
+    patch: { intent: 'balanced' },
+  },
+  {
+    id: 'something_familiar',
+    label: "Stay close to what I've liked",
+    explanation: "Favor something similar to comics I've rated well.",
+    patch: { intent: 'familiar' },
+  },
+  {
+    id: 'something_different',
+    label: 'Give me a change of pace',
+    explanation: 'Favor something meaningfully different from recent/high-rated reads.',
+    patch: { intent: 'explore' },
+  },
+  {
+    id: 'pure_random',
+    label: 'Surprise me',
+    explanation: 'Do not steer by similarity or effort preference for this reroll.',
+    patch: { intent: 'random' },
+  },
 ]
 
 /**
@@ -52,6 +78,7 @@ export default function CorrectionSheet({
   onSubmit,
   onOpenQuiz,
   quizEnabled = false,
+  examples,
 }: CorrectionSheetProps) {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -99,7 +126,20 @@ export default function CorrectionSheet({
             onClick={() => handleChoice(choice)}
             className="w-full text-left rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 py-3 text-[var(--theme-text-primary)] text-sm transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] disabled:opacity-50"
           >
-            {choice.label}
+            <div className="flex flex-col">
+              <span>{choice.label}</span>
+              <span className="mt-1 text-sm text-[var(--theme-text-muted)]">
+                {choice.explanation}
+              </span>
+              {examples?.[choice.id] && (
+                <span
+                  className="mt-1 text-xs text-[var(--theme-text-muted)]"
+                  data-testid={`correction-choice-${choice.id}-example`}
+                >
+                  {examples[choice.id]}
+                </span>
+              )}
+            </div>
           </button>
         ))}
       </fieldset>

@@ -17,12 +17,97 @@ describe('CorrectionSheet', () => {
 
     expect(screen.getByTestId('correction-sheet')).toBeInTheDocument()
     expect(screen.getByText('Not the vibe?')).toBeInTheDocument()
-    expect(screen.getByTestId('correction-choice-even_easier')).toHaveTextContent('Even easier')
-    expect(screen.getByTestId('correction-choice-keep_level_different')).toHaveTextContent('Keep this level, different comic')
-    expect(screen.getByTestId('correction-choice-something_familiar')).toHaveTextContent('Something familiar')
-    expect(screen.getByTestId('correction-choice-something_different')).toHaveTextContent('Something different')
-    expect(screen.getByTestId('correction-choice-pure_random')).toHaveTextContent('Pure random')
+    expect(screen.getByTestId('correction-choice-even_easier')).toHaveTextContent('Give me something lighter')
+    expect(screen.getByTestId('correction-choice-keep_level_different')).toHaveTextContent('Keep about the same effort')
+    expect(screen.getByTestId('correction-choice-something_familiar')).toHaveTextContent("Stay close to what I've liked")
+    expect(screen.getByTestId('correction-choice-something_different')).toHaveTextContent('Give me a change of pace')
+    expect(screen.getByTestId('correction-choice-pure_random')).toHaveTextContent('Surprise me')
     expect(screen.getByTestId('correction-sheet-dismiss')).toHaveTextContent('Dismiss')
+  })
+
+  it('shows explanations for every steerable choice', () => {
+    render(<CorrectionSheet isOpen={true} onClose={vi.fn()} onSubmit={vi.fn()} />)
+
+    expect(screen.getByTestId('correction-choice-even_easier')).toHaveTextContent('Favor a lower-commitment/easier read.')
+    expect(screen.getByTestId('correction-choice-keep_level_different')).toHaveTextContent('Keep the current commitment level, but choose another comic.')
+    expect(screen.getByTestId('correction-choice-something_familiar')).toHaveTextContent('Favor something similar to comics I\'ve rated well.')
+    expect(screen.getByTestId('correction-choice-something_different')).toHaveTextContent('Favor something meaningfully different from recent/high-rated reads.')
+  })
+
+  it('shows Surprise me explanation that steering is not applied', () => {
+    render(<CorrectionSheet isOpen={true} onClose={vi.fn()} onSubmit={vi.fn()} />)
+
+    const surpriseButton = screen.getByTestId('correction-choice-pure_random')
+    expect(surpriseButton).toHaveTextContent('Surprise me')
+    expect(surpriseButton).toHaveTextContent('Do not steer by similarity or effort preference for this reroll.')
+  })
+
+  it('shows personalized examples when provided', () => {
+    render(
+      <CorrectionSheet
+        isOpen={true}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+        examples={{
+          even_easier: 'Think more like Superman\'s Pal Jimmy Olsen #134.',
+          keep_level_different: null,
+          something_familiar: 'Based on your ratings, think more Planetary / Hellboy territory.',
+          something_different: null,
+          pure_random: null,
+        }}
+      />,
+    )
+
+    expect(screen.getByTestId('correction-choice-even_easier-example')).toHaveTextContent(
+      "Think more like Superman's Pal Jimmy Olsen #134.",
+    )
+    expect(screen.getByTestId('correction-choice-something_familiar-example')).toHaveTextContent(
+      'Based on your ratings, think more Planetary / Hellboy territory.',
+    )
+  })
+
+  it('omits an example line for choices with no honest example', () => {
+    render(
+      <CorrectionSheet
+        isOpen={true}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+        examples={{
+          even_easier: 'Think more like Superman\'s Pal Jimmy Olsen #134.',
+          keep_level_different: null,
+          something_familiar: null,
+          something_different: null,
+          pure_random: null,
+        }}
+      />,
+    )
+
+    expect(screen.getByTestId('correction-choice-even_easier-example')).toBeInTheDocument()
+    expect(
+      screen.queryByTestId('correction-choice-keep_level_different-example'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByTestId('correction-choice-something_familiar-example'),
+    ).not.toBeInTheDocument()
+    // The choice itself still explains what it does without an example.
+    expect(screen.getByTestId('correction-choice-something_familiar')).toHaveTextContent(
+      "Stay close to what I've liked",
+    )
+    // Surprise me never shows a preference-derived example line.
+    expect(
+      screen.queryByTestId('correction-choice-pure_random-example'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('degrades cleanly when no personalized examples exist', () => {
+    render(<CorrectionSheet isOpen={true} onClose={vi.fn()} onSubmit={vi.fn()} />)
+
+    const familiarButton = screen.getByTestId('correction-choice-something_familiar')
+    expect(familiarButton).toHaveTextContent("Stay close to what I've liked")
+    expect(familiarButton).toHaveTextContent('Favor something similar to comics I\'ve rated well.')
+    expect(
+      screen.queryByTestId('correction-choice-something_familiar-example'),
+    ).not.toBeInTheDocument()
   })
 
   it('submits the correct patch for each choice', async () => {
