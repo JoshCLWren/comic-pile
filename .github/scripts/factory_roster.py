@@ -28,7 +28,7 @@ ROSTER_FIELDNAMES = (
 SCHEDULE_MINUTES = tuple(range(0, 60, 5))
 OPENCODE_ALWAYS_FREE = frozenset({"big-pickle"})
 # Time-boxed $0 OpenCode Zen promo catalog ids that omit a ``-free`` suffix.
-OPENCODE_FREE_PROMO_IDS = frozenset({"union-alpha", "longcat-2.5-preview"})
+OPENCODE_FREE_PROMO_IDS = frozenset({"union-alpha"})
 BIG_PICKLE_MODEL = "big-pickle"
 # Keep this many healthy big-pickle pins when converting surplus duplicates
 # into newly discovered unique free OpenCode models. Extra big-pickle slots

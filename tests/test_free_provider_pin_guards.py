@@ -97,3 +97,27 @@ def test_opencode_zen_promo_union_alpha_is_free(validate) -> None:
     assert validate.opencode_model_is_free("union-alpha")
     assert not validate.opencode_model_is_free("stealth/union-alpha")
 
+
+def test_opencode_longcat_lane_pins_gateway_id_not_analytics_slug(validate) -> None:
+    """LongCat lane pins the Zen gateway id, not OpenCode's analytics slug.
+
+    OpenCode's public data surface uses ``longcat-2.5-preview`` as a usage
+    slug, but the Zen gateway, models.dev, and the OpenCode Zen docs all
+    publish ``longcat-2.5-preview-free`` as the callable model id. The
+    analytics slug must not be whitelisted as free, otherwise a
+    non-existent id passes the fail-closed opencode-free guard and the lane
+    fails at OpenCode smoke on every run.
+    """
+    assert validate.opencode_model_is_free("longcat-2.5-preview-free")
+    assert not validate.opencode_model_is_free("longcat-2.5-preview")
+
+    manifest = Path(".github/free-model-factories.tsv")
+    pinned: list[str] = []
+    for line in manifest.read_text(encoding="utf-8").splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        fields = line.split("\t")
+        if fields[1] == "opencode-free":
+            pinned.append(fields[2])
+    assert "longcat-2.5-preview-free" in pinned
+    assert "longcat-2.5-preview" not in pinned

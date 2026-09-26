@@ -10,6 +10,7 @@
       {"id": "muse-spark-1.2-contributor-free", "cost": {"input": 0, "output": 0}},
       {"id": "muse-spark-1.3-contributor-free", "cost": {"input": 0, "output": 0}},
       {"id": "ling-3.0-flash-fin-free", "cost": {"input": 0, "output": 0}},
+      {"id": "longcat-2.5-preview-free", "cost": {"input": 0, "output": 0}},
       {"id": "deepseek-v4-flash", "cost": {"input": 1.2, "output": 1.2}}
     ],
     "nvidia": [
