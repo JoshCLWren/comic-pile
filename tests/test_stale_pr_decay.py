@@ -412,6 +412,46 @@ def test_parse_stale_marker_partial():
     assert marker["pr"] == 7
 
 
+def test_workflow_invokes_stale_pr_decay():
+    """Regression test: scheduled Factory control-plane must invoke stale-PR decay.
+
+    This test proves that the dispatched workflow YAML contains the canonical
+    stale-PR decay command from #2853. It must not be satisfied merely by
+    retaining stale workflow-run run cleanup — the assertion specifically checks
+    for the ``factory-work-controller.py stale`` invocation.
+    """
+    ws = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "fixed-model-factory-dispatch.yml"
+    assert ws.exists(), f"Workflow file not found: {ws}"
+    text = ws.read_text()
+    # Check for the canonical stale-PR decay invocation from the controller.
+    assert "factory-work-controller.py stale" in text, (
+        "Workflow must invoke `factory-work-controller.py stale` as part of the "
+        "scheduled control-plane tick (see issue #2869). "
+        "Do not satisfy this by retaining only stale workflow-run cleanup."
+    )
+    # Distinguish from stale workflow-run cancellation: the workflow also
+    # contains run-cleanup logic but the test specifically asserts the
+    # controller stale subcommand is present.
+    assert "gh run cancel" in text  # run cleanup exists but is distinct
+
+
+def test_workflow_invokes_stale_pr_decay_distinct_from_run_cleanup():
+    """Ensure the test distinguishes controller stale from run-cleanup logic.
+
+    An implementation that merely keeps "gh run cancel" logic without the
+    controller stale subcommand must not pass this assertion.
+    """
+    ws = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "fixed-model-factory-dispatch.yml"
+    assert ws.exists(), f"Workflow file not found: {ws}"
+    text = ws.read_text()
+    # The controller stale subcommand must be present.
+    assert "factory-work-controller.py stale" in text, (
+        "Controller stale subcommand must be present in the dispatched workflow."
+    )
+    # But mere presence of run-cleanup is insufficient.
+    assert "gh run cancel" in text  # run cleanup is separate from controller stale
+
+
 def test_calculate_percentile_interpolation():
     """Linear interpolation between values is correct."""
     values = [10.0, 20.0, 30.0, 40.0, 50.0]
