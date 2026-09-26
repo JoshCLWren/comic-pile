@@ -19,7 +19,6 @@ from app.models import Event, Issue, Session as SessionModel, Snapshot, Thread, 
 from app.models.thread import normalize_format_value
 from app.schemas import (
     ActiveThreadInfo,
-    CorrectionChoiceId,
     CorrectionSheetExamplesResponse,
     EventDetail,
     SessionDetailsResponse,
