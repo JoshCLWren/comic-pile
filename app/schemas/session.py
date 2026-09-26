@@ -6,7 +6,7 @@ backward compatibility but will be removed in a future version.
 """
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_serializer
@@ -456,7 +456,7 @@ class SessionMode(BaseModel):
     )
 
 
-class CorrectionChoiceId(str, Enum):
+class CorrectionChoiceId(StrEnum):
     """Correction sheet choice identifiers."""
 
     EVEN_EASIER = "even_easier"
@@ -496,7 +496,7 @@ class CorrectionSheetExamplesResponse(BaseModel):
     )
 
     @classmethod
-    def empty(cls) -> "CorrectionSheetExamplesResponse":
+    def empty(cls) -> CorrectionSheetExamplesResponse:
         """Return an instance with all fields set to None."""
         return cls(
             even_easier=None,

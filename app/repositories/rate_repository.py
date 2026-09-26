@@ -62,11 +62,6 @@ async def fetch_user_rated_threads(
         select(Event.thread_id, Thread.title, Event.rating)
         .join(Thread, Thread.id == Event.thread_id)
         .where(Event.type == "rate")
-        .where(Event.session_id.in_(
-            select(Event.session_id)
-            .where(Event.type == "rate")
-            .where(Event.thread_id.is_not(None))
-        ))
         .where(Thread.user_id == user_id)
         .where(Event.rating >= min_rating)
         .where(Event.thread_id.is_not(None))

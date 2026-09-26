@@ -50,10 +50,10 @@ async def generate_correction_examples(
     rated_titles = {tid: (title, rating) for tid, title, rating in all_rated}
 
     # Find lighter example: a thread with lower effort estimate
-    lighter_example = _find_lighter_example(db, user_id, rated_titles)
+    lighter_example = _find_lighter_example(rated_titles)
 
     # Find same-effort example: a thread with similar effort to recent average
-    same_effort_example = _find_same_effort_example(db, user_id, rated_titles, recent_rated)
+    same_effort_example = await _find_same_effort_example(db, user_id, rated_titles, recent_rated)
 
     # Find familiar example: highest-rated thread
     familiar_example = _find_familiar_example(highly_rated)
@@ -70,21 +70,17 @@ async def generate_correction_examples(
     )
 
 
-def _find_lighter_example(
-    db: AsyncSession,
-    user_id: int,
-    rated_titles: dict[int, tuple[str, float]],
-) -> str | None:
+def _find_lighter_example(rated_titles: dict[int, tuple[str, float]]) -> str | None:
     """Find an example of a lighter/lower-commitment read."""
     # For now, use a simple heuristic: look for shorter formats or lower issue counts
     # In a full implementation, this would use the effort estimation model
-    for tid, (title, rating) in rated_titles.items():
+    for _tid, (title, rating) in rated_titles.items():
         if rating >= 3.5:
             # Prefer completed or shorter series as "lighter" examples
             if any(kw in title.lower() for kw in ["annual", "special", "one-shot", "oneshot", "#1"]):
                 return f"Think more like {title}."
     # Fallback: use the first highly rated thread
-    for tid, (title, rating) in rated_titles.items():
+    for _tid, (title, rating) in rated_titles.items():
         if rating >= 3.5:
             return f"Think more like {title}."
     return None
@@ -102,8 +98,8 @@ async def _find_same_effort_example(
 
     # Get effort estimate for recent threads to understand current "level"
     recent_efforts: list[EffortEstimate] = []
-    for tid, title, rating in recent_rated[:5]:
-        effort = await compute_effort_estimate(db, user_id=user_id, thread_id=tid)
+    for tid, _title, _rating in recent_rated[:5]:
+        effort = await compute_effort_estimate(db, user_id=user_id, thread_id=tid, issue_id=None)
         recent_efforts.append(effort)
 
     if not recent_efforts:
@@ -119,7 +115,9 @@ async def _find_same_effort_example(
 
     for tid, (title, rating) in rated_titles.items():
         if rating >= 3.0:  # Reasonably liked
-            effort = await compute_effort_estimate(db, user_id=user_id, thread_id=tid)
+            effort = await compute_effort_estimate(
+                db, user_id=user_id, thread_id=tid, issue_id=None
+            )
             if effort.band == target_band:
                 return f"Think more like {title}."
 
@@ -133,13 +131,10 @@ def _find_familiar_example(
     if not highly_rated:
         return None
 
-    # Use the highest-rated thread as the familiar example
-    _, title, rating = highly_rated[0]
-    if rating >= 4.5:
-        return f"Based on your ratings, think more {title} territory."
-    elif rating >= 4.0:
-        return f"Based on your ratings, think more {title} territory."
-    return None
+    # Use the highest-rated thread as the familiar example; the caller only
+    # supplies threads rated at or above the "liked" threshold.
+    _, title, _rating = highly_rated[0]
+    return f"Based on your ratings, think more {title} territory."
 
 
 def _find_different_example(
@@ -159,7 +154,7 @@ def _find_different_example(
         familiar_titles.add(title.lower())
 
     # Find a rated thread that's not in the familiar set
-    for tid, (title, rating) in rated_titles.items():
+    for _tid, (title, rating) in rated_titles.items():
         if rating >= 3.0 and title.lower() not in familiar_titles:
             return f"Based on your ratings, think more {title} territory."
 
