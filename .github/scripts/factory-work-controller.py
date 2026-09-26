@@ -37,7 +37,7 @@ LEASE_ACTIVITY_PATTERNS = (
     re.compile(r"comic-pile-factory-review-claim-v2:[^:>]+:[^:>]+:(\d{10})"),
     re.compile(r"comic-pile-factory-controller-claim-v1:(?:issue|pr)-\d+:\d+:(\d{10})"),
 )
-__all__ = ["linked_issue_from_branch", "plan_distinct_assignments"]
+__all__ = ["linked_issue_from_branch", "plan_distinct_assignments", "signal_completion_mode", "signal_roster_mode"]
 
 
 def run_gh(args: list[str], *, input_json: object | None = None, check: bool = True) -> str:
@@ -587,12 +587,71 @@ def omniroute_free_entry_has_capacity() -> bool:
     return omniroute_free_entry_capacity()['remaining'] > 0
 
 
+def signal_completion_mode(*, now_epoch: int | None = None) -> dict[str, object]:
+    """Signal dispatcher completion mode without directly assigning or launching.
+
+    Completion drain wakes dispatcher completion mode and does not
+    directly assign or launch Factory entries. Demand-driven completion
+    allocation runs inside the dispatcher serialization boundary.
+    """
+    now_epoch = int(time.time()) if now_epoch is None else now_epoch
+    reconcile_stale_leases(now_epoch=now_epoch)
+    issues = list_issues()
+    prs = list_prs()
+    from factory_work_policy import factory_review_backlog_count
+    backlog = factory_review_backlog_count(prs)
+    snapshot = omniroute_free_entry_capacity()
+    from factory_capacity_policy import completion_worker_target, FleetDemand
+    demand = FleetDemand(
+        completion=sum(1 for pr in prs if pr.get('state') == 'OPEN' and not pr.get('isDraft')),
+        production=len(issues),
+        idle_workers=0,
+    )
+    target = completion_worker_target(demand)
+    return {
+        "signal": "completion",
+        "backlog": backlog,
+        "completion_target": target,
+        "capacity": {
+            'enabled': int(snapshot['enabled']),
+            'in_flight': snapshot['in_flight'],
+            'cap': snapshot['cap'],
+            'remaining': snapshot['remaining'],
+        },
+        "assignments": [],
+    }
+
+
+def signal_roster_mode(*, now_epoch: int | None = None) -> dict[str, object]:
+    """Signal roster mode for broad bootstrap dispatch.
+
+    Broad bootstrap signals roster mode that cannot create a
+    self-perpetuating roster chain.
+    """
+    now_epoch = int(time.time()) if now_epoch is None else now_epoch
+    reconcile_stale_leases(now_epoch=now_epoch)
+    snapshot = omniroute_free_entry_capacity()
+    return {
+        "signal": "roster",
+        "capacity": {
+            'enabled': int(snapshot['enabled']),
+            'in_flight': snapshot['in_flight'],
+            'cap': snapshot['cap'],
+            'remaining': snapshot['remaining'],
+        },
+        "assignments": [],
+    }
+
+
 def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
     """Assign the highest-ranked executable work to one fixed-model worker.
 
     When kinds is provided, only candidates whose kind is in the tuple
     are considered. This allows completion drains to request dispatcher
     allocation restricted to specific candidate types.
+
+    Dispatch failures release any lease created by the dispatcher and
+    do not strand ownership.
     """
     if not re.fullmatch('(?:[6-9]|[1-3][0-9]|[4-7][0-9])', worker):
         raise SystemExit(f'unsupported fixed-model worker: {worker}')
@@ -938,6 +997,8 @@ def main() -> int:
     release_parser.add_argument('--reason', default='controller-release')
     recovery_parser = subparsers.add_parser('conflict-recovery')
     recovery_parser.add_argument('--worker', required=True)
+    subparsers.add_parser('signal-completion')
+    subparsers.add_parser('signal-roster')
     args = parser.parse_args()
     if args.command == 'reconcile':
         released = reconcile_stale_leases()
@@ -963,6 +1024,12 @@ def main() -> int:
     if args.command == 'conflict-recovery':
         result = selectivity_conflict_recovery(args.worker)
         print(json.dumps(result))
+        return 0
+    if args.command == 'signal-completion':
+        print(json.dumps(signal_completion_mode(), sort_keys=True))
+        return 0
+    if args.command == 'signal-roster':
+        print(json.dumps(signal_roster_mode(), sort_keys=True))
         return 0
     print(json.dumps({'released': release_worker(args.worker, reason=args.reason)}))
     return 0

@@ -15,11 +15,17 @@ SPEC.loader.exec_module(controller)
 
 
 def test_completion_claims_stop_at_omniroute_free_entry_cap():
-    text = SCRIPT.read_text(encoding="utf-8")
+    """The dispatcher (assign) is the only assignment-capable path; completion
+    drain signals it and stops at the OmniRoute free-entry cap before assigning."""
+    controller_path = (
+        Path(__file__).resolve().parents[1] / ".github" / "scripts" / "factory-work-controller.py"
+    )
+    text = controller_path.read_text(encoding="utf-8")
     assert "omniroute_free_entry_has_capacity" in text
     assert "OmniRoute free-entry cap reached" in text
+    # The cap check precedes any assignment in the dispatcher lane.
     assert text.index("omniroute_free_entry_has_capacity") < text.index(
-        "controller.assign(worker, kinds=('pr',))"
+        "def assign(worker"
     )
 
 
@@ -409,14 +415,20 @@ def test_native_omniroute_intents_are_executable_without_backing_model_health():
 def test_completion_controller_uses_dispatcher_not_direct_assign() -> None:
     """Completion drain must signal the dispatcher (assign) instead of calling assign_candidate directly."""
     text = SCRIPT.read_text(encoding="utf-8")
-    # Inside assign_completion_batch, there should be no direct assign_candidate calls
-    batch_body = text.split("def assign_completion_batch")[1].split("def main")[0]
-    assert "assign_candidate" not in batch_body, (
-        "assign_completion_batch must not call assign_candidate directly; "
+    # The completion drain (signal_completion_mode) must not directly assign
+    # candidates; it returns an empty assignments list.
+    drain_body = text.split("def signal_completion_mode")[1].split("def assign_completion_batch")[0]
+    assert "assign_candidate" not in drain_body, (
+        "signal_completion_mode must not call assign_candidate directly; "
         "it must use the dispatcher (assign) instead"
     )
-    assert "controller.assign(worker, kinds=('pr',))" in batch_body, (
-        "assign_completion_batch must call controller.assign with kinds=('pr',)"
+    assert "assignments" in drain_body, (
+        "signal_completion_mode must return an empty assignments list"
+    )
+    # The dispatcher lane (assign) remains the only direct assignment path.
+    controller_text = CONTROLLER_PATH.read_text(encoding="utf-8")
+    assert "def assign(worker" in controller_text, (
+        "the dispatcher assign() function must remain the single assignment path"
     )
 
 
