@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { threadsApi } from '../../services/api-threads'
 import { getApiErrorDetail } from '../../utils/apiError'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
-import type { RollResponse, Thread } from '../../types'
+import type { RollResponse, ThreadListItem } from '../../types'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { ThreadMetadata } from './types'
 
@@ -50,7 +50,7 @@ export function useRollModals({
     setIsActionSheetOpen,
   } = state
 
-  const [overrideThreads, setOverrideThreads] = useState<Thread[] | null>(null)
+  const [overrideThreads, setOverrideThreads] = useState<ThreadListItem[] | null>(null)
 
   useEffect(() => {
     if (!isOverrideOpen || overrideThreads) return
@@ -60,7 +60,7 @@ export function useRollModals({
     const snoozedIds = new Set(snoozedThreads.map((thread) => thread.id))
 
     async function loadAllOverrideThreads() {
-      const collected: Thread[] = []
+      const collected: ThreadListItem[] = []
       let pageToken: string | null = null
       do {
         const result = await threadsApi.list({ page_size: 200 }, pageToken ?? undefined)

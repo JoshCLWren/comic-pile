@@ -1,15 +1,15 @@
 import type { ReactNode } from 'react'
-import type { Thread } from '../../types'
+import type { ThreadListItem } from '../../types'
 import VirtualizedThreadList, {
   type QueueVirtualizer,
   type UseWindowVirtualizerOptions,
 } from './VirtualizedThreadList'
 
 interface QueueListProps {
-  activeThreads: Thread[]
-  filteredThreads: Thread[]
+  activeThreads: ThreadListItem[]
+  filteredThreads: ThreadListItem[]
   reorderError: string | null
-  renderItem: (thread: Thread, index: number) => ReactNode
+  renderItem: (thread: ThreadListItem, index: number) => ReactNode
   isSearching: boolean
   sentinelRef: React.Ref<HTMLDivElement>
   hasNextPage: boolean

@@ -24,7 +24,7 @@ import { useToast } from '../contexts/useToast'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
-import type { Thread } from '../types'
+import type { ThreadListItem } from '../types'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 
 vi.mock('../hooks/useThread', () => ({
@@ -418,13 +418,13 @@ describe('Keyboard Accessibility', () => {
   it('filters and sorts active threads while preserving completed threads', async () => {
     const user = userEvent.setup()
     mockedUseQueueThreads.mockImplementation((searchTerm: string, _sort: string) => {
-      let data: Thread[] = []
+      let data: ThreadListItem[] = []
       if (searchTerm !== 'missing') {
         // The backend owns page ordering: alphabetical requests return the
         // keyset title-cursor order, position returns queue position order.
-        const zeta = { id: 1, title: 'Zeta', format: 'Comic', status: 'active' as const, queue_position: 2, issues_remaining: 1, total_issues: null, created_at: '2024-01-01', is_blocked: false, blocking_reasons: [] }
-        const alpha = { id: 2, title: 'Alpha', format: 'Comic', status: 'active' as const, queue_position: 1, issues_remaining: 2, total_issues: null, created_at: '2025-01-01', is_blocked: false, blocking_reasons: [] }
-        const done = { id: 3, title: 'Done', format: 'Comic', status: 'completed' as const, queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [] }
+        const zeta = { id: 1, title: 'Zeta', format: 'Comic', status: 'active' as const, queue_position: 2, issues_remaining: 1, total_issues: null, created_at: '2024-01-01', is_blocked: false, blocking_reasons: [], last_activity_at: null }
+        const alpha = { id: 2, title: 'Alpha', format: 'Comic', status: 'active' as const, queue_position: 1, issues_remaining: 2, total_issues: null, created_at: '2025-01-01', is_blocked: false, blocking_reasons: [], last_activity_at: null }
+        const done = { id: 3, title: 'Done', format: 'Comic', status: 'completed' as const, queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [], last_activity_at: null }
         data = [alpha, zeta, done]
       }
       return {
@@ -449,10 +449,10 @@ describe('Keyboard Accessibility', () => {
   it('shows correct empty state when search matches only completed threads', async () => {
     const user = userEvent.setup()
     mockedUseQueueThreads.mockImplementation((searchTerm: string) => {
-      let data: Thread[] = []
+      let data: ThreadListItem[] = []
       if (searchTerm === 'done') {
         data = [
-          { id: 2, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [] },
+          { id: 2, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [], last_activity_at: null },
         ]
       }
       return {

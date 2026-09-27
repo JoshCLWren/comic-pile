@@ -22,6 +22,7 @@ const mockThread = {
   reading_progress: null,
   blocking_reasons: [],
   is_blocked: false,
+  last_activity_at: null,
   created_at: '2024-01-01T00:00:00Z',
 }
 
