@@ -91,7 +91,7 @@ if (typeof global.document === 'undefined') {
 if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
   // SAFETY: test setup runs in Node; it installs the minimal localStorage user-event needs
   // SAFETY: type assertion needed to add localStorage property to the global window object
-  ;(window as { localStorage?: unknown }).localStorage = {
+  (window as { localStorage?: unknown }).localStorage = {
     clear: vi.fn(),
     getItem: vi.fn(),
     setItem: vi.fn(),
