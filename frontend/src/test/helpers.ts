@@ -304,6 +304,7 @@ export async function getPasswordResetToken(page: Page, email: string): Promise<
     );
   }
 
+  // SAFETY: the response.ok() check above and the test-helper endpoint contract guarantee `token`
   const data = await response.json() as { token: string };
   return data.token;
 }
