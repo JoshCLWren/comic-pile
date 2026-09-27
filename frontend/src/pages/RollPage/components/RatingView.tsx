@@ -31,9 +31,9 @@ export function RatingView({ data }: RatingViewProps) {
   } = data
 
   return (
-    <div ref={ratingViewTopRef} data-testid="rating-view-top" className="relative z-10 space-y-4 p-3 md:p-4">
+    <div ref={ratingViewTopRef} data-testid="rating-view-top" className="relative z-10 space-y-4 p-3 md:p-4 max-w-full overflow-x-hidden">
       <div
-        className="grid items-start gap-4 lg:grid-cols-2 lg:gap-6"
+        className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-6 min-w-0"
         data-testid="rating-pillars-grid"
       >
         <div className="min-w-0" data-testid="rating-region-comic">
