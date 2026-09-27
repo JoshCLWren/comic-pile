@@ -222,35 +222,60 @@ class SeriesMappingPreviewProviderSeries(BaseModel):
 
 
 class SeriesMappingCommitRequest(BaseModel):
-    """Schema for series mapping commit requests."""
+    """Schema for series mapping commit requests.
+
+    Row shape and preview membership are both commit-time contract checks, so the
+    service owns them and reports a single ``422 invalid_approved_row`` detail
+    rather than leaking two different error envelopes for one failure class.
+    """
 
     preview_token: str = Field(..., min_length=1, description="Signed preview token from preview endpoint")
-    idempotency_key: str = Field(..., min_length=1, description="Unique key for idempotent commits")
-    approved_row_ids: list[str] = Field(..., description="List of approved row IDs (e.g., 'issue:789') - must be safe_exact_match only")
+    idempotency_key: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Unique key for idempotent commits of the material request",
+    )
+    approved_row_ids: list[str] = Field(
+        ...,
+        description="Approved preview row IDs (e.g. 'issue:789'); only rows the "
+        "referenced preview classified safe_exact_match may be approved",
+    )
 
-    @field_validator("approved_row_ids")
-    @classmethod
-    def validate_approved_row_ids(cls, approved_row_ids: list[str]) -> list[str]:
-        """Validate that all approved row IDs are properly formatted."""
-        for row_id in approved_row_ids:
-            if not row_id.startswith("issue:"):
-                raise ValueError(f"invalid row_id format: {row_id} - must start with 'issue:'")
-            try:
-                int(row_id[6:])  # Extract and validate issue number part
-            except ValueError:
-                raise ValueError(f"invalid row_id format: {row_id} - issue number must be integer")
-        return approved_row_ids
+
+class SeriesMappingCommitSeriesMapping(BaseModel):
+    """Schema for the confirmed series mapping summary in commit responses."""
+
+    provider: str = Field(..., min_length=1, description="Provider that owns the series identity")
+    external_id: str = Field(..., min_length=1, description="Provider-specific series identifier")
+    status: str = Field(..., min_length=1, description="Mapping status established by the commit")
+    evidence_source: str = Field(..., min_length=1, description="Provenance recorded for the confirmation")
 
 
 class SeriesMappingCommitResponse(BaseModel):
     """Schema for series mapping commit responses."""
 
-    idempotency_key: str = Field(..., description="Original idempotency key")
-    confirmed_issue_ids: list[int] = Field(default_factory=list, description="Issue IDs that were newly confirmed")
-    already_confirmed_issue_ids: list[int] = Field(default_factory=list, description="Issue IDs that were already confirmed")
-    needs_review_issue_ids: list[int] = Field(default_factory=list, description="Issue IDs that still need review")
-    hydration_queued_issue_ids: list[int] = Field(default_factory=list, description="Issue IDs queued for metadata hydration")
-    series_mapping: dict[str, object] = Field(..., description="Information about the confirmed series mapping")
+    idempotency_key: str = Field(..., min_length=1, description="Idempotency key of the material request")
+    confirmed_issue_ids: list[int] = Field(
+        default_factory=list,
+        description="Issue IDs whose mapping this commit transitioned to confirmed",
+    )
+    already_confirmed_issue_ids: list[int] = Field(
+        default_factory=list,
+        description="Issue IDs already confirmed by the referenced preview (no write performed)",
+    )
+    needs_review_issue_ids: list[int] = Field(
+        default_factory=list,
+        description="Issue IDs still awaiting issue-level correction",
+    )
+    hydration_queued_issue_ids: list[int] = Field(
+        default_factory=list,
+        description="Issue IDs whose provider metadata hydration was queued after commit",
+    )
+    series_mapping: SeriesMappingCommitSeriesMapping = Field(
+        ...,
+        description="The confirmed series mapping established by the commit",
+    )
 
 
 class SeriesMappingPreviewResponse(BaseModel):

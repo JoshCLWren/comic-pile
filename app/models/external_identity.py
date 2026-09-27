@@ -87,6 +87,39 @@ class IssueExternalIdentityMapping(Base):
     )
 
 
+class SeriesMappingCommitReceipt(Base):
+    """Durable idempotency receipt for one user-approved series mapping commit.
+
+    The receipt is the durable record of a material commit request. It is written
+    inside the same transaction as the identity writes, so a stored receipt
+    always means the confirmed mappings it describes are durable. A retry with
+    the same ``idempotency_key`` and the same ``request_digest`` replays the
+    stored response; a different digest is an idempotency conflict.
+    """
+
+    __tablename__ = "series_mapping_commit_receipts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    request_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    provider_series_external_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    origin_issue_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    response_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "idempotency_key", name="uq_series_mapping_commit_receipt_key"),
+        Index("ix_series_mapping_commit_receipt_user_id", "user_id"),
+    )
+
+
 class ThreadExternalSeriesMapping(Base):
     """Non-exclusive external series evidence associated with a reading-project thread."""
 

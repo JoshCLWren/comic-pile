@@ -13,6 +13,7 @@ from app.models.recommendation_context import RecommendationContext
 from app.models.external_identity import (
     ExternalIdentity,
     IssueExternalIdentityMapping,
+    SeriesMappingCommitReceipt,
     ThreadExternalSeriesMapping,
 )
 from app.models.failed_login_attempt import FailedLoginAttempt
@@ -54,6 +55,7 @@ __all__ = [
     "Event",
     "ExternalIdentity",
     "RecommendationContext",
+    "SeriesMappingCommitReceipt",
     "FailedLoginAttempt",
     "Issue",
     "IssueExternalIdentityMapping",

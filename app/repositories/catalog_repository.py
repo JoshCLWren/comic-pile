@@ -8,12 +8,17 @@ boundaries.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.external_identity import ExternalIdentity
 
 if TYPE_CHECKING:
-    from app.models.external_identity import ThreadExternalSeriesMapping, IssueExternalIdentityMapping
+    from app.models.external_identity import (
+        IssueExternalIdentityMapping,
+        SeriesMappingCommitReceipt,
+        ThreadExternalSeriesMapping,
+    )
 
 
 async def search_catalog_series(
@@ -247,6 +252,7 @@ async def get_series_with_issues(
     for issue_identity, issue_mapping, issue, thread, _tsm in issues_result:
         issue_info = {
             "issue_id": issue_mapping.issue_id,
+            "comicpile_issue_id": issue_mapping.issue_id,
             "issue_number": issue.issue_number,
             "title": issue_identity.metadata_json.get("name") if issue_identity.metadata_json else None,
             "thread_id": thread.id,
@@ -316,6 +322,7 @@ async def get_issue_by_id(
 
     return {
         "issue_id": issue.id,
+        "comicpile_issue_id": issue.id,
         "issue_number": issue.issue_number,
         "title": identity.metadata_json.get("name") if identity and identity.metadata_json else None,
         "thread_id": thread.id,
@@ -325,3 +332,282 @@ async def get_issue_by_id(
         "external_id": identity.external_id if identity is not None else None,
         "confidence": mapping.confidence if mapping is not None else None,
     }
+
+
+async def filter_owned_issue_ids(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    issue_ids: list[int],
+) -> set[int]:
+    """Return the subset of issue IDs the user owns.
+
+    Args:
+        db: Database session.
+        user_id: Owner user ID.
+        issue_ids: Candidate ComicPile issue IDs.
+
+    Returns:
+        The subset of ``issue_ids`` belonging to a thread owned by ``user_id``.
+    """
+    from app.models.issue import Issue
+    from app.models.thread import Thread
+
+    if not issue_ids:
+        return set()
+
+    result = await db.execute(
+        select(Issue.id)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(Issue.id.in_(issue_ids), Thread.user_id == user_id)
+    )
+    return set(result.scalars().all())
+
+
+async def find_confirmed_identity_conflict(
+    db: AsyncSession,
+    *,
+    issue_id: int,
+    provider: str,
+    external_identity_id: int,
+) -> int | None:
+    """Find a confirmed same-provider mapping that disagrees with the target identity.
+
+    Args:
+        db: Database session.
+        issue_id: ComicPile issue ID.
+        provider: Provider name.
+        external_identity_id: External identity the bulk commit intends to confirm.
+
+    Returns:
+        The conflicting mapping row id, or ``None`` when the issue has no other
+        confirmed mapping for ``provider``.
+    """
+    from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+
+    result = await db.execute(
+        select(IssueExternalIdentityMapping.id)
+        .join(
+            ExternalIdentity,
+            ExternalIdentity.id == IssueExternalIdentityMapping.external_identity_id,
+        )
+        .where(
+            IssueExternalIdentityMapping.issue_id == issue_id,
+            IssueExternalIdentityMapping.status == "confirmed",
+            IssueExternalIdentityMapping.external_identity_id != external_identity_id,
+            ExternalIdentity.provider == provider,
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def confirm_issue_mapping(
+    db: AsyncSession,
+    *,
+    issue_id: int,
+    external_identity_id: int,
+    evidence_source: str,
+    confidence: float,
+) -> bool:
+    """Confirm one issue-external identity mapping, converging on concurrent writers.
+
+    The write is an ``ON CONFLICT DO NOTHING`` insert followed by an update, so two
+    concurrent identical commits never create duplicate mappings. Returns ``True``
+    when this call is the one that transitioned the mapping into ``confirmed``.
+
+    Args:
+        db: Database session owned by the calling service's transaction.
+        issue_id: ComicPile issue ID.
+        external_identity_id: External issue identity to confirm.
+        evidence_source: Provenance recorded for the confirmation.
+        confidence: Confidence recorded for the confirmation.
+
+    Returns:
+        True when this call performed the unresolved/candidate to confirmed transition.
+    """
+    from app.models.external_identity import IssueExternalIdentityMapping
+
+    statement = (
+        pg_insert(IssueExternalIdentityMapping)
+        .values(
+            issue_id=issue_id,
+            external_identity_id=external_identity_id,
+            status="confirmed",
+            evidence_source=evidence_source,
+            confidence=confidence,
+        )
+        .on_conflict_do_nothing(
+            index_elements=[
+                IssueExternalIdentityMapping.__table__.c.issue_id,
+                IssueExternalIdentityMapping.__table__.c.external_identity_id,
+            ]
+        )
+        .returning(IssueExternalIdentityMapping.id)
+    )
+    inserted_id = (await db.execute(statement)).scalar_one_or_none()
+    if inserted_id is not None:
+        return True
+
+    mapping = (
+        await db.execute(
+            select(IssueExternalIdentityMapping).where(
+                IssueExternalIdentityMapping.issue_id == issue_id,
+                IssueExternalIdentityMapping.external_identity_id == external_identity_id,
+            )
+        )
+    ).scalar_one()
+    if mapping.status == "confirmed":
+        return False
+    mapping.status = "confirmed"
+    mapping.evidence_source = evidence_source
+    mapping.confidence = confidence
+    await db.flush()
+    return True
+
+
+async def get_confirmed_issue_external_id(
+    db: AsyncSession,
+    *,
+    issue_id: int,
+    provider: str,
+) -> str | None:
+    """Return the provider external ID backing a confirmed issue mapping.
+
+    Args:
+        db: Database session.
+        issue_id: ComicPile issue ID.
+        provider: Provider name.
+
+    Returns:
+        The provider external ID of the confirmed mapping, or ``None``.
+    """
+    from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
+
+    return (
+        await db.execute(
+            select(ExternalIdentity.external_id)
+            .join(
+                IssueExternalIdentityMapping,
+                IssueExternalIdentityMapping.external_identity_id == ExternalIdentity.id,
+            )
+            .where(
+                IssueExternalIdentityMapping.issue_id == issue_id,
+                IssueExternalIdentityMapping.status == "confirmed",
+                ExternalIdentity.provider == provider,
+            )
+            .order_by(IssueExternalIdentityMapping.id)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+
+async def get_commit_receipt(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    idempotency_key: str,
+) -> SeriesMappingCommitReceipt | None:
+    """Load a stored series-mapping commit receipt for one user and key.
+
+    Args:
+        db: Database session.
+        user_id: Owner user ID.
+        idempotency_key: Client-supplied idempotency key.
+
+    Returns:
+        The stored receipt, or ``None`` when the key has not been used.
+    """
+    from app.models.external_identity import SeriesMappingCommitReceipt
+
+    return (
+        await db.execute(
+            select(SeriesMappingCommitReceipt).where(
+                SeriesMappingCommitReceipt.user_id == user_id,
+                SeriesMappingCommitReceipt.idempotency_key == idempotency_key,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def reserve_commit_receipt(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    idempotency_key: str,
+    request_digest: str,
+    provider: str,
+    provider_series_external_id: str,
+    origin_issue_id: int,
+) -> bool:
+    """Attempt to reserve an idempotency key inside the caller's transaction.
+
+    PostgreSQL's speculative insertion waits for a concurrent inserter of the same
+    key, so a lost race means the winning transaction has already committed and its
+    receipt is readable. A losing caller must replay the stored response instead of
+    repeating identity writes.
+
+    Args:
+        db: Database session owned by the calling service's transaction.
+        user_id: Owner user ID.
+        idempotency_key: Client-supplied idempotency key.
+        request_digest: Digest of the complete material commit request.
+        provider: Provider name bound to the token.
+        provider_series_external_id: Provider series identity bound to the token.
+        origin_issue_id: Anchor issue bound to the token.
+
+    Returns:
+        True when this call reserved the key, False when it is already taken.
+    """
+    from app.models.external_identity import SeriesMappingCommitReceipt
+
+    statement = (
+        pg_insert(SeriesMappingCommitReceipt)
+        .values(
+            user_id=user_id,
+            idempotency_key=idempotency_key,
+            request_digest=request_digest,
+            provider=provider,
+            provider_series_external_id=provider_series_external_id,
+            origin_issue_id=origin_issue_id,
+            response_json={},
+        )
+        .on_conflict_do_nothing(
+            index_elements=[
+                SeriesMappingCommitReceipt.__table__.c.user_id,
+                SeriesMappingCommitReceipt.__table__.c.idempotency_key,
+            ]
+        )
+        .returning(SeriesMappingCommitReceipt.id)
+    )
+    return (await db.execute(statement)).scalar_one_or_none() is not None
+
+
+async def record_commit_receipt_response(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    idempotency_key: str,
+    response_json: dict[str, object],
+) -> None:
+    """Store the logical commit result on its reserved receipt.
+
+    Args:
+        db: Database session owned by the calling service's transaction.
+        user_id: Owner user ID.
+        idempotency_key: Client-supplied idempotency key.
+        response_json: Serialized logical commit result.
+    """
+    from app.models.external_identity import SeriesMappingCommitReceipt
+
+    receipt = (
+        await db.execute(
+            select(SeriesMappingCommitReceipt).where(
+                SeriesMappingCommitReceipt.user_id == user_id,
+                SeriesMappingCommitReceipt.idempotency_key == idempotency_key,
+            )
+        )
+    ).scalar_one()
+    receipt.response_json = response_json
+    await db.flush()
+

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -22,6 +22,8 @@ from app.schemas.catalog import (
     IssueExternalIdentityMappingResponse,
     SeriesMappingPreviewRequest,
     SeriesMappingPreviewResponse,
+    SeriesMappingCommitRequest,
+    SeriesMappingCommitResponse,
 )
 from app.services.catalog import (
     upsert_catalog_series as upsert_catalog_series_svc,
@@ -33,7 +35,15 @@ from app.services.catalog import (
     list_series_mappings as list_series_mappings_svc,
     list_issue_mappings as list_issue_mappings_svc,
     preview_series_mapping as preview_series_mapping_svc,
+    commit_series_mapping as commit_series_mapping_svc,
 )
+from app.services.errors import ConflictError, InvalidRequestError, ServiceError
+
+_COMMIT_ERROR_STATUS: dict[type[ServiceError], int] = {
+    InvalidRequestError: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    ConflictError: status.HTTP_409_CONFLICT,
+}
+
 
 def _dt_to_ts(dt: datetime | None) -> float | None:
     """Convert datetime to Unix timestamp."""
@@ -462,37 +472,47 @@ async def commit_series_mapping(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> SeriesMappingCommitResponse:
-    """Commit approved series mappings from a preview.
-    
-    This endpoint applies only the reviewed bulk-safe mappings from a series-mapping
-    preview, establishes confirmed series evidence with provenance, and hands metadata
-    hydration to existing infrastructure.
-    
+    """Commit approved safe series mappings from a referenced preview.
+
+    Only rows the referenced preview classified ``safe_exact_match`` may be
+    approved. The service revalidates the signed preview token, re-derives the
+    current scope, writes every identity change and its durable idempotency
+    receipt in one transaction, and dispatches metadata hydration only after that
+    transaction commits.
+
     Args:
         request: Commit request with preview token, idempotency key, and approved row IDs.
         current_user: Authenticated user for authorization.
         db: Database session.
-        
+
     Returns:
-        Commit response with confirmed, already confirmed, and needs review issue IDs.
-        
+        Commit response with confirmed, already-confirmed, needs-review, and
+        hydration-queued issue IDs plus the confirmed series mapping summary.
+
     Raises:
-        HTTPException: For various error conditions including stale tokens, conflicts,
-            invalid input, and idempotency violations.
+        HTTPException: 409 for ``preview_expired``, ``preview_stale``,
+            ``confirmed_mapping_conflict``, and ``idempotency_conflict``;
+            422 for ``invalid_approved_row``.
     """
-    commit_response = await commit_series_mapping_svc(
-        db,
-        user_id=current_user.id,
-        preview_token=request.preview_token,
-        idempotency_key=request.idempotency_key,
-        approved_row_ids=request.approved_row_ids,
-    )
-    
+    try:
+        commit_result = await commit_series_mapping_svc(
+            db,
+            user_id=current_user.id,
+            preview_token=request.preview_token,
+            idempotency_key=request.idempotency_key,
+            approved_row_ids=request.approved_row_ids,
+        )
+    except ServiceError as exc:
+        raise HTTPException(
+            status_code=_COMMIT_ERROR_STATUS[type(exc)],
+            detail=exc.detail,
+        ) from exc
+
     return SeriesMappingCommitResponse(
-        idempotency_key=commit_response["idempotency_key"],
-        confirmed_issue_ids=commit_response["confirmed_issue_ids"],
-        already_confirmed_issue_ids=commit_response["already_confirmed_issue_ids"],
-        needs_review_issue_ids=commit_response["needs_review_issue_ids"],
-        hydration_queued_issue_ids=commit_response["hydration_queued_issue_ids"],
-        series_mapping=commit_response["series_mapping"],
+        idempotency_key=commit_result["idempotency_key"],
+        confirmed_issue_ids=commit_result["confirmed_issue_ids"],
+        already_confirmed_issue_ids=commit_result["already_confirmed_issue_ids"],
+        needs_review_issue_ids=commit_result["needs_review_issue_ids"],
+        hydration_queued_issue_ids=commit_result["hydration_queued_issue_ids"],
+        series_mapping=commit_result["series_mapping"],
     )
