@@ -1,74 +1,11 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { ReactNode } from 'react'
 import { BrowserRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { cast } from '../utils/cast'
 import { ToastProvider } from '../contexts/ToastProvider'
-import { useBugReportRestore } from '../contexts/useBugReportRestore'
-import {
-  useMoveToBack,
-  useMoveToFront,
-  useMoveToPosition,
-  useQueueThreads,
-  useShuffleQueue,
-} from '../hooks/useQueue'
-import { useSession } from '../hooks/useSession'
-import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
-import {
-  useCreateThread,
-  useDeleteThread,
-  useReactivateThread,
-  useUpdateThread,
-} from '../hooks/useThread'
 import QueuePage from '../pages/QueuePage'
-
-vi.mock('../hooks/useThread', () => ({
-  useCreateThread: vi.fn(),
-  useUpdateThread: vi.fn(),
-  useDeleteThread: vi.fn(),
-  useReactivateThread: vi.fn(),
-}))
-
-vi.mock('../hooks/useQueue', () => ({
-  useMoveToFront: vi.fn(),
-  useMoveToBack: vi.fn(),
-  useMoveToPosition: vi.fn(),
-  useQueueThreads: vi.fn(),
-  useShuffleQueue: vi.fn(),
-}))
-
-vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
-vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
-vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
-vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
-
-vi.mock('../services/api', () => ({
-  threadsApi: { setPending: vi.fn() },
-  dependenciesApi: {
-    listBlockedThreadIds: vi.fn().mockResolvedValue([]),
-    getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
-  },
-}))
-
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    create: vi.fn().mockResolvedValue({ issues: [] }),
-    markRead: vi.fn().mockResolvedValue(undefined),
-    bulkMarkRead: vi.fn().mockResolvedValue(undefined),
-    bulkMarkUnread: vi.fn().mockResolvedValue(undefined),
-    migrateThread: vi.fn().mockResolvedValue({}),
-  },
-}))
-
-vi.mock('../contexts/useToast', () => ({
-  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
-}))
-
-const mockedUseQueueThreads = cast<ReturnType<typeof vi.fn>>(vi.mocked(useQueueThreads))
-const mockedUseSession = cast<ReturnType<typeof vi.fn>>(vi.mocked(useSession))
-const mockedUseSnooze = cast<ReturnType<typeof vi.fn>>(vi.mocked(useSnooze))
-const mockedUseUnsnooze = cast<ReturnType<typeof vi.fn>>(vi.mocked(useUnsnooze))
+import type { QueuePageDependencies } from '../pages/QueuePage/dependencies'
+import { createQueuePageDoubles, createThreadFixture } from './support/queuePageHarness'
 
 class NoopIntersectionObserver {
   observe(): void {
@@ -88,79 +25,39 @@ class NoopIntersectionObserver {
 beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', NoopIntersectionObserver)
   vi.stubGlobal('alert', vi.fn())
-  // SAFETY: mockReturnValue accepts partial hook returns; never cast bypasses full-type requirements
-  vi.mocked(useCreateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useUpdateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useDeleteThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useReactivateThread).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useMoveToFront).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useMoveToBack).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useMoveToPosition).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useShuffleQueue).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-  mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
-  vi.mocked(useBugReportRestore).mockReturnValue({
-    setRestoreAction: vi.fn(),
-    clearRestoreAction: vi.fn(),
-    restoreLastView: vi.fn(),
-  } as never)
 })
 
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function renderQueue(): void {
+function renderQueue(dependencies?: Partial<QueuePageDependencies>): void {
   render(
     <BrowserRouter>
       <ToastProvider>
-        <QueuePage />
+        <QueuePage dependencies={dependencies} />
       </ToastProvider>
     </BrowserRouter>,
   )
 }
 
 it('offers a retry affordance when the next-page fetch fails', async () => {
-  const loadMore = vi.fn().mockResolvedValue(undefined)
-  mockedUseQueueThreads.mockReturnValue({
-    data: [
-      {
-        id: 1,
-        title: 'Saga',
-        format: 'Comic',
-        status: 'active',
-        queue_position: 1,
-        issues_remaining: 5,
+  let loadMoreCalls = 0
+  const doubles = createQueuePageDoubles({
+    threads: {
+      data: [createThreadFixture({ id: 1, title: 'Saga' })],
+      isPending: false,
+      isError: true,
+      nextPageToken: 'page-2',
+      loadMore: async () => {
+        loadMoreCalls += 1
       },
-    ],
-    isPending: false,
-    isError: true,
-    refetch: vi.fn(),
-    nextPageToken: 'page-2',
-    loadMore,
-  })
-  mockedUseSession.mockReturnValue({
-    data: { pending_thread_id: 1, snoozed_threads: [] },
-    refetch: vi.fn(),
+    },
+    session: { pending_thread_id: 1, snoozed_threads: [] },
   })
 
   const user = userEvent.setup()
-  renderQueue()
+  renderQueue(doubles.deps)
 
   const retry = await screen.findByTestId('queue-load-more-retry')
   expect(retry).toBeInTheDocument()
@@ -168,34 +65,22 @@ it('offers a retry affordance when the next-page fetch fails', async () => {
   await user.click(retry)
 
   await waitFor(() => {
-    expect(loadMore).toHaveBeenCalled()
+    expect(loadMoreCalls).toBe(1)
   })
 })
 
 it('does not offer a retry affordance when there is no further page', async () => {
-  mockedUseQueueThreads.mockReturnValue({
-    data: [
-      {
-        id: 1,
-        title: 'Saga',
-        format: 'Comic',
-        status: 'active',
-        queue_position: 1,
-        issues_remaining: 5,
-      },
-    ],
-    isPending: false,
-    isError: true,
-    refetch: vi.fn(),
-    nextPageToken: null,
-    loadMore: vi.fn().mockResolvedValue(undefined),
-  })
-  mockedUseSession.mockReturnValue({
-    data: { pending_thread_id: 1, snoozed_threads: [] },
-    refetch: vi.fn(),
+  const doubles = createQueuePageDoubles({
+    threads: {
+      data: [createThreadFixture({ id: 1, title: 'Saga' })],
+      isPending: false,
+      isError: true,
+      nextPageToken: null,
+    },
+    session: { pending_thread_id: 1, snoozed_threads: [] },
   })
 
-  renderQueue()
+  renderQueue(doubles.deps)
 
   expect(screen.queryByTestId('queue-load-more-retry')).not.toBeInTheDocument()
 })

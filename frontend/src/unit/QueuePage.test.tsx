@@ -4,182 +4,46 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
 import { ToastProvider } from '../contexts/ToastProvider'
-import {
-  useCreateThread,
-  useDeleteThread,
-  useReactivateThread,
-  useUpdateThread,
-} from '../hooks/useThread'
-import {
-  useMoveToBack,
-  useMoveToFront,
-  useMoveToPosition,
-  useQueueThreads,
-  useShuffleQueue,
-} from '../hooks/useQueue'
-import { useSession } from '../hooks/useSession'
-import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
-import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
-import { useToast } from '../contexts/useToast'
-import { threadsApi } from '../services/api-threads'
-import { dependenciesApi } from '../services/api'
-import { issuesApi } from '../services/api-issues'
 import type { Thread } from '../types'
-import { useBugReportRestore } from '../contexts/useBugReportRestore'
+import {
+  createIssueFixture,
+  createQueuePageDoubles,
+  createThreadFixture,
+  type QueuePageDoubles,
+} from './support/queuePageHarness'
 
-vi.mock('../hooks/useThread', () => ({
-  useCreateThread: vi.fn(),
-  useUpdateThread: vi.fn(),
-  useDeleteThread: vi.fn(),
-  useReactivateThread: vi.fn(),
-}))
-
-vi.mock('../hooks/useQueue', () => ({
-  useMoveToFront: vi.fn(),
-  useMoveToBack: vi.fn(),
-  useMoveToPosition: vi.fn(),
-  useQueueThreads: vi.fn(),
-  useShuffleQueue: vi.fn(),
-}))
-
-vi.mock('../hooks/useSession', () => ({
-  useSession: vi.fn(),
-}))
-
-vi.mock('../hooks/useSnooze', () => ({
-  useSnooze: vi.fn(),
-  useUnsnooze: vi.fn(),
-}))
-
-vi.mock('../hooks/useQueueBlockingInfo', () => ({
-  useQueueBlockingInfo: vi.fn(() => ({})),
-}))
-
-vi.mock('../services/api-threads', () => ({
-  threadsApi: {
-    setPending: vi.fn(),
-  },
-}))
-
-vi.mock('../services/api', () => ({
-  dependenciesApi: {
-    listBlockedThreadIds: vi.fn().mockResolvedValue([]),
-    getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
-  },
-}))
-
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    create: vi.fn().mockResolvedValue({ issues: [] }),
-    markRead: vi.fn().mockResolvedValue(undefined),
-    bulkMarkRead: vi.fn().mockResolvedValue(undefined),
-    bulkMarkUnread: vi.fn().mockResolvedValue(undefined),
-    migrateThread: vi.fn().mockResolvedValue({}),
-  },
-}))
-
-vi.mock('../contexts/useBugReportRestore', () => ({
-  useBugReportRestore: vi.fn(),
-}))
-
-vi.mock('../contexts/useToast', () => ({
-  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
-}))
-
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseCreateThread = vi.mocked(useCreateThread) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseDeleteThread = vi.mocked(useDeleteThread) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseReactivateThread = vi.mocked(useReactivateThread) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseSession = vi.mocked(useSession) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseQueueBlockingInfo = vi.mocked(useQueueBlockingInfo) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseSnooze = vi.mocked(useSnooze) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedThreadsApi = vi.mocked(threadsApi) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedDependenciesApi = vi.mocked(dependenciesApi) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedIssuesApi = vi.mocked(issuesApi) as any
-
-beforeEach(() => {
-  vi.stubGlobal('alert', vi.fn())
-  mockedUseQueueThreads.mockReturnValue({
-    data: [
-      { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
-      { id: 2, title: 'Descender', format: 'Comic', status: 'completed', issues_remaining: 0 },
-    ],
-    isPending: false,
-    refetch: vi.fn(),
-  })
-  mockedUseCreateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseDeleteThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseSession.mockReturnValue({
-    data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
-    refetch: vi.fn(),
-  })
-  mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseBugReportRestore.mockReturnValue({
-    setRestoreAction: vi.fn(),
-    clearRestoreAction: vi.fn(),
-    restoreLastView: vi.fn(),
-  })
-  // SAFETY: full response shape satisfies RollResponse; never cast bypasses strict mock typing
-  mockedThreadsApi.setPending.mockResolvedValue({
-    thread_id: 1,
-    title: 'Saga',
-    format: 'Comic',
-    issues_remaining: 5,
-    queue_position: 1,
-    die_size: 6,
-    result: 1,
-    offset: 0,
-    snoozed_count: 0,
-    issue_id: null,
-    issue_number: null,
-    next_issue_id: null,
-    next_issue_number: null,
-    total_issues: null,
-    reading_progress: null,
-  } as never)
+const SAGA = createThreadFixture({ id: 1, title: 'Saga', queue_position: 1, issues_remaining: 5 })
+const DESCENDER = createThreadFixture({
+  id: 2,
+  title: 'Descender',
+  queue_position: 0,
+  issues_remaining: 0,
+  status: 'completed',
 })
 
-  it('renders queue items and opens create modal', async () => {
-  const user = userEvent.setup()
+/** Render the page with an injected double set and return the doubles for assertions. */
+function renderQueuePage(
+  doubles: QueuePageDoubles = createQueuePageDoubles({
+    threads: { data: [SAGA, DESCENDER] },
+  }),
+): QueuePageDoubles {
   render(
     <BrowserRouter>
       <ToastProvider>
-        <QueuePage />
+        <QueuePage dependencies={doubles.deps} />
       </ToastProvider>
-    </BrowserRouter>
+    </BrowserRouter>,
   )
+  return doubles
+}
+
+beforeEach(() => {
+  vi.stubGlobal('alert', vi.fn())
+})
+
+it('renders queue items and opens create modal', async () => {
+  const user = userEvent.setup()
+  renderQueuePage()
 
   expect(screen.getAllByText('Saga')[0]).toBeInTheDocument()
   expect(screen.getByText('Descender')).toBeInTheDocument()
@@ -190,82 +54,52 @@ beforeEach(() => {
   expect(screen.getByRole('heading', { name: /add series/i })).toBeInTheDocument()
 })
 
-  it('registers a restore target while the create modal is open', async () => {
+it('registers a restore target while the create modal is open', async () => {
   const user = userEvent.setup()
-  const restoreState = {
-    setRestoreAction: vi.fn(),
-    clearRestoreAction: vi.fn(),
-    restoreLastView: vi.fn(),
-  }
-  mockedUseBugReportRestore.mockReturnValue(restoreState)
+  const doubles = createQueuePageDoubles({ threads: { data: [SAGA] } })
 
   render(
     <BrowserRouter>
       <ToastProvider>
-        <QueuePage />
+        <QueuePage dependencies={doubles.deps} />
       </ToastProvider>
-    </BrowserRouter>
+    </BrowserRouter>,
   )
 
   await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
 
-  expect(restoreState.setRestoreAction).toHaveBeenCalled()
+  expect(doubles.restore.setRestoreAction).toHaveBeenCalled()
 
   await user.click(screen.getByLabelText('Close modal'))
 
   await waitFor(() => {
-    expect(restoreState.clearRestoreAction).toHaveBeenCalled()
+    expect(doubles.restore.clearRestoreAction).toHaveBeenCalled()
   })
 })
 
-  it('shuffles the queue from the header control', async () => {
-  const mockRefetch = vi.fn()
-  const mockShuffle = { mutate: vi.fn(), isPending: false }
-  mockedUseQueueThreads.mockReturnValue({
-    data: [
-      { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
-      { id: 3, title: 'Spawn', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 7 },
-      { id: 2, title: 'Descender', format: 'Comic', status: 'completed', issues_remaining: 0 },
-    ],
-    isLoading: false,
-    refetch: mockRefetch,
+it('shuffles the queue from the header control', async () => {
+  const doubles = createQueuePageDoubles({
+    threads: {
+      data: [
+        SAGA,
+        createThreadFixture({ id: 3, title: 'Spawn', queue_position: 2, issues_remaining: 7 }),
+        DESCENDER,
+      ],
+    },
   })
-  mockedUseShuffleQueue.mockReturnValue(mockShuffle)
 
   const user = userEvent.setup()
-  render(
-    <BrowserRouter>
-      <ToastProvider>
-        <QueuePage />
-      </ToastProvider>
-    </BrowserRouter>
-  )
+  renderQueuePage(doubles)
 
   await user.click(screen.getByRole('button', { name: /shuffle/i }))
 
-  expect(mockShuffle.mutate).toHaveBeenCalled()
+  expect(doubles.mutations.shuffle.calls).toHaveLength(1)
 })
 
 describe('Visible action Snooze/Unsnooze', () => {
-  const mockSnoozeMutation = { mutate: vi.fn(), isPending: false }
-  const mockUnsnoozeMutation = { mutate: vi.fn(), isPending: false }
-
-  beforeEach(() => {
-    mockSnoozeMutation.mutate.mockReset()
-    mockUnsnoozeMutation.mutate.mockReset()
-    mockedUseSnooze.mockReturnValue(mockSnoozeMutation)
-    mockedUseUnsnooze.mockReturnValue(mockUnsnoozeMutation)
-  })
-
   it('shows visible actions for thread cards', async () => {
     const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    renderQueuePage()
 
     const readButtons = screen.getAllByLabelText('Read')
     expect(readButtons.length).toBeGreaterThan(0)
@@ -278,223 +112,162 @@ describe('Visible action Snooze/Unsnooze', () => {
   })
 
   it('calls snooze mutation when the pending comic Snooze action is clicked', async () => {
-    mockedUseSession.mockReturnValue({
-      data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [], pending_thread_id: 1 },
-      refetch: vi.fn(),
+    const doubles = createQueuePageDoubles({
+      threads: { data: [SAGA] },
+      session: { pending_thread_id: 1, snoozed_threads: [] },
     })
 
     const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    renderQueuePage(doubles)
 
     const snoozeButtons = screen.getAllByRole('button', { name: /series actions/i })
     await user.click(snoozeButtons[0])
     await user.click(screen.getByRole('menuitem', { name: /^snooze$/i }))
 
-    expect(mockSnoozeMutation.mutate).toHaveBeenCalledWith(1)
-    expect(mockUnsnoozeMutation.mutate).not.toHaveBeenCalled()
+    expect(doubles.mutations.snooze.calls).toEqual([1])
+    expect(doubles.mutations.unsnooze.calls).toHaveLength(0)
   })
 
   it('calls unsnooze mutation when the Unsnooze action is clicked', async () => {
-    mockedUseSession.mockReturnValue({
-      data: {
-        snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
-        skipped_thread_ids: [],
-        skipped_threads: [],
-      },
-      refetch: vi.fn(),
+    const doubles = createQueuePageDoubles({
+      threads: { data: [SAGA] },
+      session: { pending_thread_id: null, snoozed_threads: [SAGA] },
     })
 
     const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    renderQueuePage(doubles)
 
     const unsnoozeButtons = screen.getAllByRole('button', { name: /series actions/i })
     await user.click(unsnoozeButtons[0])
     await user.click(screen.getByRole('menuitem', { name: /^unsnooze$/i }))
 
-    expect(mockUnsnoozeMutation.mutate).toHaveBeenCalledWith(1)
-    expect(mockSnoozeMutation.mutate).not.toHaveBeenCalled()
+    expect(doubles.mutations.unsnooze.calls).toEqual([1])
+    expect(doubles.mutations.snooze.calls).toHaveLength(0)
   })
 
   it('refetches session but not the full thread list after snooze action', async () => {
-    const mockRefetchSession = vi.fn()
-    const mockRefetch = vi.fn()
-    mockedUseSession.mockReturnValue({
-      data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [], pending_thread_id: 1 },
-      refetch: mockRefetchSession,
-    })
-    mockedUseQueueThreads.mockReturnValue({
-      data: [
-        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
-      ],
-      isLoading: false,
-      refetch: mockRefetch,
+    const doubles = createQueuePageDoubles({
+      threads: { data: [SAGA] },
+      session: { pending_thread_id: 1, snoozed_threads: [] },
     })
 
     const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    renderQueuePage(doubles)
 
     const snoozeButtons = screen.getAllByRole('button', { name: /series actions/i })
     await user.click(snoozeButtons[0])
     await user.click(screen.getByRole('menuitem', { name: /^snooze$/i }))
 
     await waitFor(() => {
-      expect(mockRefetchSession).toHaveBeenCalled()
+      expect(doubles.session.refetchCalls).toBeGreaterThan(0)
     })
-    expect(mockRefetch).not.toHaveBeenCalled()
+    expect(doubles.threads.refetchCalls).toBe(0)
   })
 
   it('refetches session but not the full thread list after unsnooze action', async () => {
-    const mockRefetchSession = vi.fn()
-    const mockRefetch = vi.fn()
-    mockedUseSession.mockReturnValue({
-      data: {
-        snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
-        skipped_thread_ids: [],
-        skipped_threads: [],
-      },
-      refetch: mockRefetchSession,
-    })
-    mockedUseQueueThreads.mockReturnValue({
-      data: [
-        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
-      ],
-      isLoading: false,
-      refetch: mockRefetch,
+    const doubles = createQueuePageDoubles({
+      threads: { data: [SAGA] },
+      session: { pending_thread_id: null, snoozed_threads: [SAGA] },
     })
 
     const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    renderQueuePage(doubles)
 
     const unsnoozeButtons = screen.getAllByRole('button', { name: /series actions/i })
     await user.click(unsnoozeButtons[0])
     await user.click(screen.getByRole('menuitem', { name: /^unsnooze$/i }))
 
     await waitFor(() => {
-      expect(mockRefetchSession).toHaveBeenCalled()
+      expect(doubles.session.refetchCalls).toBeGreaterThan(0)
     })
-    expect(mockRefetch).not.toHaveBeenCalled()
+    expect(doubles.threads.refetchCalls).toBe(0)
   })
 })
 
 describe('Keyboard Accessibility', () => {
   it('thread card is present and focusable', () => {
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    renderQueuePage()
 
     const threadItems = screen.getAllByTestId('queue-thread-item')
     expect(threadItems.length).toBeGreaterThan(0)
   })
 })
 
-  it('filters and sorts active threads while preserving completed threads', async () => {
-    const user = userEvent.setup()
-    mockedUseQueueThreads.mockImplementation((searchTerm: string, _sort: string) => {
-      let data: Thread[] = []
-      if (searchTerm !== 'missing') {
-        // The backend owns page ordering: alphabetical requests return the
-        // keyset title-cursor order, position returns queue position order.
-        const zeta = { id: 1, title: 'Zeta', format: 'Comic', status: 'active' as const, queue_position: 2, issues_remaining: 1, total_issues: null, created_at: '2024-01-01', is_blocked: false, blocking_reasons: [] }
-        const alpha = { id: 2, title: 'Alpha', format: 'Comic', status: 'active' as const, queue_position: 1, issues_remaining: 2, total_issues: null, created_at: '2025-01-01', is_blocked: false, blocking_reasons: [] }
-        const done = { id: 3, title: 'Done', format: 'Comic', status: 'completed' as const, queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [] }
-        data = [alpha, zeta, done]
-      }
-      return {
-        data,
-        isPending: false,
-        isError: false,
-        refetch: vi.fn(),
-        nextPageToken: null,
-        loadMore: vi.fn(),
-      }
-    })
-    render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-    expect(screen.getByText('Done')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Title' }))
-    const cards = screen.getAllByTestId('queue-thread-item')
-    expect(cards[0]).toHaveTextContent('Alpha')
-    await user.type(screen.getByPlaceholderText('Search...'), 'missing')
-    // Search is debounced (300ms) so the parent query only commits after the delay.
-    await waitFor(() => expect(screen.getByText('No active series match your search')).toBeInTheDocument(), { timeout: 2000 })
-  })
-
-  it('shows correct empty state when search matches only completed threads', async () => {
-    const user = userEvent.setup()
-    mockedUseQueueThreads.mockImplementation((searchTerm: string) => {
-      let data: Thread[] = []
-      if (searchTerm === 'done') {
-        data = [
-          { id: 2, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [] },
-        ]
-      }
-      return {
-        data,
-        isPending: false,
-        isError: false,
-        refetch: vi.fn(),
-        nextPageToken: null,
-        loadMore: vi.fn(),
-      }
-    })
-    render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-    await user.type(screen.getByPlaceholderText('Search...'), 'done')
-    await waitFor(() => expect(screen.getByText('No active series match your search')).toBeInTheDocument(), { timeout: 2000 })
-  })
-
-  it('creates a simple issue range and marks the requested issues read', async () => {
+it('filters and sorts active threads while preserving completed threads', async () => {
   const user = userEvent.setup()
-  const create = vi.fn().mockResolvedValue({ id: 44 })
-  mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
-  mockedThreadsApi.setPending.mockResolvedValue({})
-  mockedUseQueueThreads.mockReturnValue({ data: [], isLoading: false, refetch: vi.fn() })
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  const zeta = createThreadFixture({ id: 1, title: 'Zeta', queue_position: 2, issues_remaining: 1 })
+  const alpha = createThreadFixture({ id: 2, title: 'Alpha', queue_position: 1, issues_remaining: 2 })
+  const done = createThreadFixture({
+    id: 3,
+    title: 'Done',
+    queue_position: 0,
+    issues_remaining: 0,
+    status: 'completed',
+    notes: 'Finished',
+  })
+  // The backend owns page ordering: alphabetical requests return the
+  // keyset title-cursor order, position returns queue position order.
+  const doubles = createQueuePageDoubles({
+    resolveThreads: (searchTerm) => ({
+      data: searchTerm === 'missing' ? [] : [alpha, zeta, done],
+    }),
+  })
+
+  renderQueuePage(doubles)
+  expect(screen.getByText('Done')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Title' }))
+  const cards = screen.getAllByTestId('queue-thread-item')
+  expect(cards[0]).toHaveTextContent('Alpha')
+  await user.type(screen.getByPlaceholderText('Search...'), 'missing')
+  // Search is debounced (300ms) so the parent query only commits after the delay.
+  await waitFor(
+    () => expect(screen.getByText('No active series match your search')).toBeInTheDocument(),
+    { timeout: 2000 },
+  )
+})
+
+it('shows correct empty state when search matches only completed threads', async () => {
+  const user = userEvent.setup()
+  const doubles = createQueuePageDoubles({
+    resolveThreads: (searchTerm) => ({
+      data:
+        searchTerm === 'done'
+          ? [createThreadFixture({ id: 2, title: 'Done', queue_position: 0, issues_remaining: 0, status: 'completed', notes: 'Finished' })]
+          : [],
+    }),
+  })
+
+  renderQueuePage(doubles)
+  await user.type(screen.getByPlaceholderText('Search...'), 'done')
+  await waitFor(
+    () => expect(screen.getByText('No active series match your search')).toBeInTheDocument(),
+    { timeout: 2000 },
+  )
+})
+
+it('creates a simple issue range and marks the requested issues read', async () => {
+  const user = userEvent.setup()
+  const doubles = createQueuePageDoubles({ threads: { data: [] } })
+  doubles.mutations.create.setImplementation(async () => ({ id: 44 }))
+
+  renderQueuePage(doubles)
   await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'New Series')
   await user.clear(screen.getByLabelText('Issues'))
   await user.type(screen.getByLabelText('Issues'), '1-5')
   await user.type(screen.getByLabelText(/Issues already read/i), '2')
   await user.click(screen.getByRole('button', { name: /create series/i }))
-  await waitFor(() => expect(create).toHaveBeenCalled())
+
+  await waitFor(() => expect(doubles.mutations.create.calls).toHaveLength(1))
 })
 
-  it('opens edit, reposition, dependency, and completed reactivation flows', async () => {
+it('opens edit, reposition, dependency, and completed reactivation flows', async () => {
   const user = userEvent.setup()
-  const refetch = vi.fn()
-  mockedUseQueueThreads.mockReturnValue({ data: [
-    { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 3, total_issues: null, created_at: '2024-01-01' },
-    { id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0, created_at: '2023-01-01' },
-  ], isLoading: false, refetch })
-  const update = vi.fn().mockResolvedValue({})
-  mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  const doubles = createQueuePageDoubles({
+    threads: { data: [SAGA, DESCENDER] },
+  })
+
+  renderQueuePage(doubles)
   const menu = screen.getAllByRole('button', { name: /series actions/i })[0]
   await user.click(menu)
   await user.click(screen.getByRole('menuitem', { name: /edit/i }))
@@ -509,13 +282,27 @@ describe('Keyboard Accessibility', () => {
   await user.click(screen.getByRole('button', { name: /add to queue/i }))
 })
 
-  it('renders loading and empty queue states', async () => {
+it('renders loading and empty queue states', async () => {
   const user = userEvent.setup()
-  mockedUseQueueThreads.mockReturnValue({ data: undefined, isPending: true, refetch: vi.fn() })
-  const { rerender } = render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  const doubles = createQueuePageDoubles({ threads: { data: null, isPending: true } })
+
+  const { rerender } = render(
+    <BrowserRouter>
+      <ToastProvider>
+        <QueuePage dependencies={doubles.deps} />
+      </ToastProvider>
+    </BrowserRouter>,
+  )
   expect(screen.getByRole('status')).toBeInTheDocument()
-  mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
-  rerender(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+
+  doubles.threads.set({ data: [], isPending: false })
+  rerender(
+    <BrowserRouter>
+      <ToastProvider>
+        <QueuePage dependencies={doubles.deps} />
+      </ToastProvider>
+    </BrowserRouter>,
+  )
   expect(screen.getByTestId('queue-empty')).toBeInTheDocument()
   expect(screen.getByText('Nothing to roll yet')).toBeInTheDocument()
   expect(
@@ -525,67 +312,65 @@ describe('Keyboard Accessibility', () => {
   expect(screen.getByRole('heading', { name: /add series/i })).toBeInTheDocument()
 })
 
-  it('prevents reading blocked threads and reports delete failures', async () => {
+it('prevents reading blocked threads and reports delete failures', async () => {
   const user = userEvent.setup()
-  const deleteMutation = { mutate: vi.fn().mockRejectedValue(new Error('delete failed')), isPending: false }
-  mockedUseDeleteThread.mockReturnValue(deleteMutation)
-  mockedUseQueueThreads.mockReturnValue({ data: [{ id: 1, title: 'Blocked', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, is_blocked: true, total_issues: null, blocking_reasons: ['Blocked by: Prequel'] }], isPending: false, refetch: vi.fn() })
-  mockedUseQueueBlockingInfo.mockReturnValue({ 1: [{ label: 'Blocked by: Prequel' }] })
-  const showToast = vi.fn()
-  vi.mocked(useToast).mockReturnValue({ showToast, removeToast: vi.fn(), toasts: [] })
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  const doubles = createQueuePageDoubles({
+    threads: {
+      data: [createThreadFixture({ id: 1, title: 'Blocked', is_blocked: true, blocking_reasons: ['Blocked by: Prequel'] })],
+    },
+    blockingInfo: { 1: [{ label: 'Blocked by: Prequel' }] },
+  })
+  doubles.mutations.remove.setImplementation(async () => {
+    throw new Error('delete failed')
+  })
+
+  renderQueuePage(doubles)
   const readButton = screen.getByLabelText('Read')
   expect(readButton).toBeDisabled()
   expect(readButton).toHaveAttribute('title', expect.stringContaining('Blocked by: Prequel'))
-  expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()
+  expect(doubles.setPendingCalls).toHaveLength(0)
   expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
   await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /delete/i }))
   expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /delete series/i }))
-  await waitFor(() => expect(deleteMutation.mutate).toHaveBeenCalledWith(1))
+  await waitFor(() => expect(doubles.mutations.remove.calls).toEqual([1]))
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('delete failed'))
-  expect(showToast).toHaveBeenCalledWith(expect.stringContaining('delete failed'), 'error')
+  expect(doubles.toasts.showToast).toHaveBeenCalledWith(
+    expect.stringContaining('delete failed'),
+    'error',
+  )
 })
 
 it('keeps the thread when delete confirmation is cancelled', async () => {
   const user = userEvent.setup()
-  const remove = vi.fn().mockResolvedValue(undefined)
-  mockedUseDeleteThread.mockReturnValue({ mutate: remove, isPending: false })
-  mockedUseQueueThreads.mockReturnValue({
-    data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 4 }],
-    isPending: false,
-    refetch: vi.fn(),
-  })
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  const doubles = createQueuePageDoubles({ threads: { data: [SAGA] } })
+
+  renderQueuePage(doubles)
   await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /delete/i }))
   expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /cancel/i }))
   expect(screen.queryByRole('heading', { name: /delete series/i })).not.toBeInTheDocument()
-  expect(remove).not.toHaveBeenCalled()
+  expect(doubles.mutations.remove.calls).toHaveLength(0)
 })
 
-  it('supports created-date sorting and drag reorder failure feedback', async () => {
+it('supports created-date sorting and drag reorder failure feedback', async () => {
   const user = userEvent.setup()
-  const move = { mutate: vi.fn().mockRejectedValue(new Error('reorder failed')), isPending: false }
-  mockedUseMoveToPosition.mockReturnValue(move)
-  mockedUseQueueThreads.mockImplementation((_searchTerm: string, sort: string) => ({
+  const newThread = createThreadFixture({ id: 2, title: 'New', queue_position: 2, issues_remaining: 1 })
+  const oldThread = createThreadFixture({ id: 1, title: 'Old', queue_position: 1, issues_remaining: 1 })
+  const doubles = createQueuePageDoubles({
     // Backend created cursor returns newest-first server order; the client
     // must not re-sort concatenated pages (issue #2452).
-    data: sort === 'created'
-      ? [
-        { id: 2, title: 'New', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, created_at: '2025-01-01' },
-        { id: 1, title: 'Old', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 1, created_at: '2024-01-01' },
-      ]
-      : [
-        { id: 1, title: 'Old', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 1, created_at: '2024-01-01' },
-        { id: 2, title: 'New', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1, created_at: '2025-01-01' },
-      ],
-    isPending: false,
-    refetch: vi.fn(),
-  }))
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+    resolveThreads: (_searchTerm, sort) => ({
+      data: sort === 'created' ? [newThread, oldThread] : [oldThread, newThread],
+    }),
+  })
+  doubles.mutations.moveToPosition.setImplementation(async () => {
+    throw new Error('reorder failed')
+  })
+
+  renderQueuePage(doubles)
   await user.click(screen.getByRole('button', { name: 'Recently added' }))
   const cards = screen.getAllByTestId('queue-thread-item')
   expect(cards[0]).toHaveTextContent('New')
@@ -594,25 +379,14 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   const targetCard = cards[1]!
   fireEvent.dragOver(targetCard)
   fireEvent.drop(targetCard, { dataTransfer: { getData: () => '1' } })
-  await waitFor(() => expect(move.mutate).toHaveBeenCalled())
+  await waitFor(() => expect(doubles.mutations.moveToPosition.calls.length).toBeGreaterThan(0))
 })
 
-  it('executes every queue action-menu operation', async () => {
+it('executes every queue action-menu operation', async () => {
   const user = userEvent.setup()
-  const front = vi.fn().mockResolvedValue(undefined)
-  const back = vi.fn().mockResolvedValue(undefined)
-  const remove = vi.fn().mockResolvedValue(undefined)
-  const refetch = vi.fn()
-  mockedUseMoveToFront.mockReturnValue({ mutate: front, isPending: false })
-  mockedUseMoveToBack.mockReturnValue({ mutate: back, isPending: false })
-  mockedUseDeleteThread.mockReturnValue({ mutate: remove, isPending: false })
-  mockedUseQueueThreads.mockReturnValue({
-    data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 4 }],
-    isPending: false,
-    refetch,
-  })
+  const doubles = createQueuePageDoubles({ threads: { data: [SAGA] } })
 
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  renderQueuePage(doubles)
   const openMenu = async () => user.click(screen.getByRole('button', { name: /series actions/i }))
 
   await openMenu()
@@ -624,9 +398,9 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /delete series/i }))
 
-  expect(front).toHaveBeenCalledWith(1)
-  expect(back).toHaveBeenCalledWith(1)
-  await waitFor(() => expect(remove).toHaveBeenCalledWith(1))
+  expect(doubles.mutations.moveToFront.calls).toEqual([1])
+  expect(doubles.mutations.moveToBack.calls).toEqual([1])
+  await waitFor(() => expect(doubles.mutations.remove.calls).toEqual([1]))
 
   await openMenu()
   await user.click(screen.getByRole('menuitem', { name: /reposition/i }))
@@ -634,15 +408,24 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   await user.click(screen.getByTestId('position-slider-cancel'))
 })
 
-  it('reports queue mutation failures and invalid reposition requests', async () => {
+it('reports queue mutation failures and invalid reposition requests', async () => {
   const user = userEvent.setup()
-  mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('front failed')), isPending: false })
-  mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('shuffle failed')), isPending: false })
-  mockedUseQueueThreads.mockReturnValue({ data: [
-    { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 1 },
-    { id: 2, title: 'Spawn', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1 },
-  ], isPending: false, refetch: vi.fn() })
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  const doubles = createQueuePageDoubles({
+    threads: {
+      data: [
+        SAGA,
+        createThreadFixture({ id: 2, title: 'Spawn', queue_position: 2, issues_remaining: 1 }),
+      ],
+    },
+  })
+  doubles.mutations.moveToFront.setImplementation(async () => {
+    throw new Error('front failed')
+  })
+  doubles.mutations.shuffle.setImplementation(async () => {
+    throw new Error('shuffle failed')
+  })
+
+  renderQueuePage(doubles)
   await user.click(screen.getByRole('button', { name: /shuffle/i }))
   await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('shuffle')))
   await user.click(screen.getAllByRole('button', { name: /series actions/i })[0]!)
@@ -655,21 +438,23 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   await user.click(screen.getByTestId('position-slider-confirm'))
 })
 
-  it('creates a literal issue range and reports create failures', async () => {
+it('creates a literal issue range and reports create failures', async () => {
   const user = userEvent.setup()
-  const create = vi.fn().mockResolvedValue({ id: 55 })
-  mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
-  mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  const doubles = createQueuePageDoubles({ threads: { data: [] } })
+  doubles.mutations.create.setImplementation(async () => ({ id: 55 }))
+
+  renderQueuePage(doubles)
   await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Annuals')
   await user.clear(screen.getByLabelText('Issues'))
   await user.type(screen.getByLabelText('Issues'), 'Annual 1, 5-7')
   await user.type(screen.getByLabelText(/Issues already read/i), '1')
   await user.click(screen.getByRole('button', { name: /create series/i }))
-  await waitFor(() => expect(create).toHaveBeenCalled())
+  await waitFor(() => expect(doubles.mutations.create.calls).toHaveLength(1))
 
-  mockedUseCreateThread.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('create failed')), isPending: false })
+  doubles.mutations.create.setImplementation(async () => {
+    throw new Error('create failed')
+  })
   await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Broken')
   await user.type(screen.getByLabelText('Issues'), '1')
@@ -677,14 +462,17 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('create failed')))
 })
 
-  it('uses thread blocked state without loading dependency details, and handles edit failure', async () => {
+it('uses thread blocked state without loading dependency details, and handles edit failure', async () => {
   const user = userEvent.setup()
-  const update = vi.fn().mockRejectedValue(new Error('update failed'))
-  mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
-  mockedUseQueueThreads.mockReturnValue({ data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', is_blocked: true, queue_position: 1, issues_remaining: 2, total_issues: null }], isPending: false, refetch: vi.fn() })
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
-  expect(mockedDependenciesApi.listBlockedThreadIds).not.toHaveBeenCalled()
-  expect(mockedDependenciesApi.getBlockingInfo).not.toHaveBeenCalled()
+  const doubles = createQueuePageDoubles({
+    threads: { data: [createThreadFixture({ id: 1, title: 'Saga', is_blocked: true, issues_remaining: 2 })] },
+  })
+  doubles.mutations.update.setImplementation(async () => {
+    throw new Error('update failed')
+  })
+
+  renderQueuePage(doubles)
+  expect(doubles.services.dependenciesApi.getBatchBlockingInfo).not.toHaveBeenCalled()
   await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /dependencies/i }))
   expect(screen.getByRole('heading', { name: /dependencies:/i })).toBeInTheDocument()
@@ -692,19 +480,21 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /edit/i }))
   await user.click(screen.getByRole('button', { name: /save changes/i }))
-  await waitFor(() => expect(update).toHaveBeenCalled())
+  await waitFor(() => expect(doubles.mutations.update.calls).toHaveLength(1))
 })
 
-  it('covers drag cancellation and successful repositioning', async () => {
+it('covers drag cancellation and successful repositioning', async () => {
   const user = userEvent.setup()
-  const move = vi.fn().mockResolvedValue(undefined)
-  const refetch = vi.fn()
-  mockedUseMoveToPosition.mockReturnValue({ mutate: move, isPending: false })
-  mockedUseQueueThreads.mockReturnValue({ data: [
-    { id: 1, title: 'One', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 1 },
-    { id: 2, title: 'Two', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1 },
-  ], isPending: false, refetch })
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  const doubles = createQueuePageDoubles({
+    threads: {
+      data: [
+        SAGA,
+        createThreadFixture({ id: 2, title: 'Two', queue_position: 2, issues_remaining: 1 }),
+      ],
+    },
+  })
+
+  renderQueuePage(doubles)
   const cards = screen.getAllByTestId('queue-thread-item')
   const drag = screen.getAllByRole('button', { name: 'Drag to reorder' })
   fireEvent.dragStart(drag[0]!, { dataTransfer: { effectAllowed: '', setData: vi.fn() } })
@@ -713,34 +503,41 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   await user.click(screen.getByRole('menuitem', { name: /reposition/i }))
   fireEvent.change(screen.getByRole('slider'), { target: { value: '1' } })
   await user.click(screen.getByTestId('position-slider-confirm'))
-  await waitFor(() => expect(move).toHaveBeenCalled())
+  await waitFor(() => expect(doubles.mutations.moveToPosition.calls).toHaveLength(1))
 })
 
-  it('creates complex ranges and marks the requested issues read', async () => {
+it('creates complex ranges and marks the requested issues read', async () => {
   const user = userEvent.setup()
-  const create = vi.fn().mockResolvedValue({ id: 77 })
-  mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
-  mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
-  mockedIssuesApi.create.mockResolvedValue({ issues: [{ id: 11 }, { id: 12 }] })
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  const doubles = createQueuePageDoubles({ threads: { data: [] } })
+  doubles.mutations.create.setImplementation(async () => ({ id: 77 }))
+  doubles.services.issuesApi.create.mockResolvedValue({
+    issues: [createIssueFixture({ id: 11 }), createIssueFixture({ id: 12 })],
+    total_count: 2,
+    page_size: 100,
+    next_page_token: null,
+  })
+
+  renderQueuePage(doubles)
   await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Complex')
   await user.type(screen.getByLabelText('Issues'), 'Annual 1, 5-7')
   await user.type(screen.getByLabelText(/Issues already read/i), '2')
   await user.click(screen.getByRole('button', { name: /create series/i }))
-  await waitFor(() => expect(mockedIssuesApi.bulkMarkRead).toHaveBeenCalledWith([11, 12]))
+  await waitFor(() => expect(doubles.services.issuesApi.bulkMarkRead).toHaveBeenCalledWith([11, 12]))
 })
 
-  it('creates a later single issue without requiring earlier issues', async () => {
+it('creates a later single issue without requiring earlier issues', async () => {
   const user = userEvent.setup()
-  const create = vi.fn().mockResolvedValue({ id: 78 })
-  mockedIssuesApi.markRead.mockClear()
-  mockedIssuesApi.bulkMarkRead.mockClear()
-  mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
-  mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
-  mockedIssuesApi.create.mockResolvedValue({ issues: [{ id: 71, issue_number: '71' }] })
+  const doubles = createQueuePageDoubles({ threads: { data: [] } })
+  doubles.mutations.create.setImplementation(async () => ({ id: 78 }))
+  doubles.services.issuesApi.create.mockResolvedValue({
+    issues: [createIssueFixture({ id: 71, issue_number: '71' })],
+    total_count: 1,
+    page_size: 100,
+    next_page_token: null,
+  })
 
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  renderQueuePage(doubles)
   await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Marvel Graphic Novel')
   await user.type(screen.getByLabelText('Issues'), '71')
@@ -751,28 +548,33 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
 
   await user.click(screen.getByRole('button', { name: /create series/i }))
 
-  await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({
-    title: 'Marvel Graphic Novel',
-    issues_remaining: 1,
-  })))
-  expect(mockedIssuesApi.create).toHaveBeenCalledWith(78, '71')
-  expect(mockedIssuesApi.markRead).not.toHaveBeenCalled()
-  expect(mockedIssuesApi.bulkMarkRead).not.toHaveBeenCalled()
+  await waitFor(() =>
+    expect(doubles.mutations.create.calls[0]).toEqual(
+      expect.objectContaining({ title: 'Marvel Graphic Novel', issues_remaining: 1 }),
+    ),
+  )
+  expect(doubles.services.issuesApi.create).toHaveBeenCalledWith(78, '71')
+  expect(doubles.services.issuesApi.markRead).not.toHaveBeenCalled()
+  expect(doubles.services.issuesApi.bulkMarkRead).not.toHaveBeenCalled()
 })
 
-  it('handles reactivation success and failure from completed threads', async () => {
+it('handles reactivation success and failure from completed threads', async () => {
   const user = userEvent.setup()
-  const reactivate = vi.fn().mockResolvedValue({})
-  mockedUseReactivateThread.mockReturnValue({ mutate: reactivate, isPending: false })
-  mockedUseQueueThreads.mockReturnValue({ data: [{ id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }], isPending: false, refetch: vi.fn() })
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  const doubles = createQueuePageDoubles({ threads: { data: [DESCENDER] } })
+  doubles.mutations.reactivate.setImplementation(async () => ({}))
+
+  renderQueuePage(doubles)
   await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0])
   await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')
   fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '3' } })
   await user.click(screen.getByRole('button', { name: /add to queue/i }))
-  await waitFor(() => expect(reactivate).toHaveBeenCalledWith({ thread_id: 2, issues_to_add: 3 }))
+  await waitFor(() =>
+    expect(doubles.mutations.reactivate.calls).toEqual([{ thread_id: 2, issues_to_add: 3 }]),
+  )
 
-  mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('reactivate failed')), isPending: false })
+  doubles.mutations.reactivate.setImplementation(async () => {
+    throw new Error('reactivate failed')
+  })
   await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0])
   await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')
   await user.click(screen.getByRole('button', { name: /add to queue/i }))
@@ -781,30 +583,22 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   )
 })
 
-  it('uses the virtualized queue without loading hidden blocked-thread reasons', async () => {
-  vi.stubGlobal('ResizeObserver', class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  })
-  Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, value: 600 })
-  Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 1024 })
-  const manyThreads = Array.from({ length: 55 }, (_, index) => ({
-    id: index + 1,
-    title: `Thread ${index + 1}`,
-    format: 'Comic',
-    status: 'active',
-    queue_position: index + 1,
-    issues_remaining: 1,
-    is_blocked: index === 0,
-  }))
-  mockedUseQueueThreads.mockReturnValue({ data: manyThreads, isPending: false, refetch: vi.fn() })
-  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+it('uses the virtualized queue without loading hidden blocked-thread reasons', async () => {
+  const manyThreads: Thread[] = Array.from({ length: 55 }, (_unused, index) =>
+    createThreadFixture({
+      id: index + 1,
+      title: `Thread ${index + 1}`,
+      queue_position: index + 1,
+      issues_remaining: 1,
+      is_blocked: index === 0,
+    }),
+  )
+  const doubles = createQueuePageDoubles({ threads: { data: manyThreads } })
+
+  renderQueuePage(doubles)
   await waitFor(() => expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument())
   expect(screen.getByRole('list', { name: 'Series queue' })).toBeInTheDocument()
-  expect(mockedDependenciesApi.listBlockedThreadIds).not.toHaveBeenCalled()
-  expect(mockedDependenciesApi.getBlockingInfo).not.toHaveBeenCalled()
-  vi.unstubAllGlobals()
+  expect(doubles.services.dependenciesApi.getBatchBlockingInfo).not.toHaveBeenCalled()
 })
 
 describe('Roll nudge after first thread creation', () => {
@@ -817,16 +611,10 @@ describe('Roll nudge after first thread creation', () => {
 
   it('shows Ready to roll? modal after first thread creation', async () => {
     const user = userEvent.setup()
-    const mockCreate = vi.fn().mockResolvedValue({ id: 1 })
-    mockedUseCreateThread.mockReturnValue({ mutate: mockCreate, isPending: false })
-    
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    const doubles = createQueuePageDoubles({ threads: { data: [] } })
+    doubles.mutations.create.setImplementation(async () => ({ id: 1 }))
+
+    renderQueuePage(doubles)
 
     // Open create modal
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
@@ -839,25 +627,21 @@ describe('Roll nudge after first thread creation', () => {
     await user.click(screen.getByRole('button', { name: /create series/i }))
 
     // Wait for creation to complete and the roll nudge modal to appear
-    await waitFor(() => expect(screen.getByRole('heading', { name: /ready to roll\?/i })).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /ready to roll\?/i })).toBeInTheDocument(),
+    )
     expect(screen.getByText(/you've created your first series!/i)).toBeInTheDocument()
   })
 
   it('does not show roll nudge if user has dismissed it before', async () => {
     // Mock dismissed state in localStorage
     vi.spyOn(Storage.prototype, 'getItem').mockReturnValue('true')
-    
+
     const user = userEvent.setup()
-    const mockCreate = vi.fn().mockResolvedValue({ id: 1 })
-    mockedUseCreateThread.mockReturnValue({ mutate: mockCreate, isPending: false })
-    
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    const doubles = createQueuePageDoubles({ threads: { data: [] } })
+    doubles.mutations.create.setImplementation(async () => ({ id: 1 }))
+
+    renderQueuePage(doubles)
 
     // Open create modal
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
@@ -869,7 +653,7 @@ describe('Roll nudge after first thread creation', () => {
     await user.click(screen.getByRole('button', { name: /create series/i }))
 
     // Wait for creation to complete
-    await waitFor(() => expect(mockCreate).toHaveBeenCalled())
+    await waitFor(() => expect(doubles.mutations.create.calls).toHaveLength(1))
 
     // Check that Ready to roll? modal does NOT appear
     expect(screen.queryByRole('heading', { name: /ready to roll\?/i })).not.toBeInTheDocument()
@@ -877,16 +661,10 @@ describe('Roll nudge after first thread creation', () => {
 
   it('navigates to roll page when clicking Let\'s Roll! button', async () => {
     const user = userEvent.setup()
-    const mockCreate = vi.fn().mockResolvedValue({ id: 1 })
-    mockedUseCreateThread.mockReturnValue({ mutate: mockCreate, isPending: false })
-    
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    const doubles = createQueuePageDoubles({ threads: { data: [] } })
+    doubles.mutations.create.setImplementation(async () => ({ id: 1 }))
+
+    renderQueuePage(doubles)
 
     // Open create modal and submit
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
@@ -896,27 +674,25 @@ describe('Roll nudge after first thread creation', () => {
     await user.click(screen.getByRole('button', { name: /create series/i }))
 
     // Wait for modal to appear
-    await waitFor(() => expect(screen.getByRole('heading', { name: /ready to roll\?/i })).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /ready to roll\?/i })).toBeInTheDocument(),
+    )
 
     // Click Let's Roll! button
     await user.click(screen.getByRole('button', { name: /let's roll!/i }))
 
     // Modal should close after clicking the button
-    await waitFor(() => expect(screen.queryByRole('heading', { name: /ready to roll\?/i })).not.toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: /ready to roll\?/i })).not.toBeInTheDocument(),
+    )
   })
 
   it('dismisses roll nudge when clicking Maybe Later button', async () => {
     const user = userEvent.setup()
-    const mockCreate = vi.fn().mockResolvedValue({ id: 1 })
-    mockedUseCreateThread.mockReturnValue({ mutate: mockCreate, isPending: false })
-    
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    const doubles = createQueuePageDoubles({ threads: { data: [] } })
+    doubles.mutations.create.setImplementation(async () => ({ id: 1 }))
+
+    renderQueuePage(doubles)
 
     // Open create modal and submit
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
@@ -926,15 +702,20 @@ describe('Roll nudge after first thread creation', () => {
     await user.click(screen.getByRole('button', { name: /create series/i }))
 
     // Wait for modal to appear
-    await waitFor(() => expect(screen.getByRole('heading', { name: /ready to roll\?/i })).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /ready to roll\?/i })).toBeInTheDocument(),
+    )
 
     // Click Maybe Later button
     await user.click(screen.getByRole('button', { name: /maybe later/i }))
 
     // Check that modal is closed
     expect(screen.queryByRole('heading', { name: /ready to roll\?/i })).not.toBeInTheDocument()
-    
+
     // Check that dismissed state is saved to localStorage
-    expect(Storage.prototype.setItem).toHaveBeenCalledWith('comic-pile-roll-nudge-dismissed', 'true')
+    expect(Storage.prototype.setItem).toHaveBeenCalledWith(
+      'comic-pile-roll-nudge-dismissed',
+      'true',
+    )
   })
 })

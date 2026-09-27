@@ -79,12 +79,28 @@ interface UseQueueModalsResult {
 }
 
 /**
+ * Injectable seams for the modal hook tree. Production callers omit `deps` so
+ * every seam resolves to the real service/hook; tests substitute deterministic
+ * doubles without module mocking.
+ */
+export interface UseQueueModalsDeps {
+  issuesApi?: Pick<
+    typeof issuesApi,
+    'create' | 'markRead' | 'bulkMarkRead' | 'bulkMarkUnread' | 'migrateThread'
+  >
+  bugReportRestoreHook?: typeof useBugReportRestore
+}
+
+/**
  * Centralized modal lifecycle, restore-action registration, and form state for
  * every modal the Queue page coordinates. The hook returns plain handlers and
  * presentational state so the page can compose the modal modules without
  * re-implementing the navigation, bug-report-restore, or location-state wiring.
  */
-export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult {
+export function useQueueModals(
+  params: QueueModalsParams,
+  deps: UseQueueModalsDeps = {},
+): UseQueueModalsResult {
   const {
     threads,
     onCreated,
@@ -97,9 +113,13 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
     isPendingCreate,
     isPendingEdit,
   } = params
+  const {
+    issuesApi: issuesService = issuesApi,
+    bugReportRestoreHook = useBugReportRestore,
+  } = deps
   const navigate = useNavigate()
   const location = useLocation()
-  const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
+  const { setRestoreAction, clearRestoreAction } = bugReportRestoreHook()
 
   const [openModal, setOpenModal] = useState<ModalKey | null>(null)
   const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
@@ -295,9 +315,9 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
             if (isSimpleRange) {
               const requestedLastRead = Number(createForm.lastIssueRead) || 0
               const lastRead = Math.max(0, Math.min(requestedLastRead, issuesRemaining))
-              await issuesApi.migrateThread(result.id, lastRead, issuesRemaining)
+              await issuesService.migrateThread(result.id, lastRead, issuesRemaining)
             } else {
-              const issueListResponse = await issuesApi.create(result.id, createForm.issues.trim())
+              const issueListResponse = await issuesService.create(result.id, createForm.issues.trim())
               const requestedLastRead = Number(createForm.lastIssueRead) || 0
               const lastRead = Math.max(
                 0,
@@ -305,7 +325,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
               )
               if (lastRead > 0 && issueListResponse.issues.length > 0) {
                 const issuesToMark = issueListResponse.issues.slice(0, lastRead)
-                await issuesApi.bulkMarkRead(issuesToMark.map((issue) => issue.id))
+                await issuesService.bulkMarkRead(issuesToMark.map((issue) => issue.id))
               }
             }
           } catch (issueError: unknown) {
@@ -324,7 +344,7 @@ export function useQueueModals(params: QueueModalsParams): UseQueueModalsResult 
         window.alert(`Failed to create series: ${getApiErrorDetail(error)}`)
       }
     },
-    [createForm, closeCreateModal, onCreated, submitCreate],
+    [createForm, closeCreateModal, onCreated, submitCreate, issuesService],
   )
 
   const handleEditSubmit = useCallback(

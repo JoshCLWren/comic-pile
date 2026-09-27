@@ -54,6 +54,21 @@ interface QueueModalsProps {
   showRollNudge: boolean
   onDismissRollNudge: () => void
   onRollNudgeNavigate: () => void
+  /**
+   * Injectable modal primitives. Production leaves this unset so every modal
+   * resolves to the real component; tests substitute faithful stand-ins to
+   * reach a nested dialog without replacing the module graph.
+   */
+  components?: Partial<QueueModalsComponents>
+}
+
+/** Modal primitives composed by this module, exposed as injectable seams. */
+export interface QueueModalsComponents {
+  Modal: typeof Modal
+  PositionSlider: typeof PositionSlider
+  DependencyBuilder: typeof DependencyBuilder
+  MigrationDialog: typeof MigrationDialog
+  IssueToggleList: typeof IssueToggleList
 }
 
 /**
@@ -104,10 +119,18 @@ export function QueueModals({
   showRollNudge,
   onDismissRollNudge,
   onRollNudgeNavigate,
+  components,
 }: QueueModalsProps) {
+  const {
+    Modal: ModalComponent = Modal,
+    PositionSlider: PositionSliderComponent = PositionSlider,
+    DependencyBuilder: DependencyBuilderComponent = DependencyBuilder,
+    MigrationDialog: MigrationDialogComponent = MigrationDialog,
+    IssueToggleList: IssueToggleListComponent = IssueToggleList,
+  } = components ?? {}
   return (
     <>
-      <Modal isOpen={openModal === 'create'} title="Add Series" onClose={onCloseCreate}>
+      <ModalComponent isOpen={openModal === 'create'} title="Add Series" onClose={onCloseCreate}>
         <form className="space-y-4" onSubmit={onCreateSubmit}>
           <div className="space-y-2">
             <label
@@ -222,9 +245,9 @@ export function QueueModals({
             {isPendingCreate ? 'Adding...' : 'Create Series'}
           </button>
         </form>
-      </Modal>
+      </ModalComponent>
 
-      <Modal
+      <ModalComponent
         isOpen={openModal === 'edit'}
         title="Edit Series"
         onClose={onCloseEdit}
@@ -322,7 +345,7 @@ export function QueueModals({
           </form>
 
           {editingThread && editingThread.total_issues !== null && (
-            <IssueToggleList threadId={editingThread.id} onOpenDependencies={onOpenDependencies} onIssueChanged={onIssueChanged} />
+            <IssueToggleListComponent threadId={editingThread.id} onOpenDependencies={onOpenDependencies} onIssueChanged={onIssueChanged} />
           )}
 
           <button
@@ -334,9 +357,9 @@ export function QueueModals({
             {isPendingEdit ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
-      </Modal>
+      </ModalComponent>
 
-      <Modal
+      <ModalComponent
         isOpen={openModal === 'reactivate'}
         title="Add Back to Queue"
         onClose={onCloseReactivate}
@@ -381,16 +404,16 @@ export function QueueModals({
             {isPendingReactivate ? 'Adding to queue...' : 'Add to Queue'}
           </button>
         </form>
-      </Modal>
+      </ModalComponent>
 
-      <Modal
+      <ModalComponent
         isOpen={openModal === 'reposition' && repositioningThread !== null}
         title={`Reposition: ${repositioningThread?.title ?? ''}`}
         onClose={onCloseReposition}
         data-testid="position-slider-modal"
       >
         {repositioningThread && (
-          <PositionSlider
+          <PositionSliderComponent
             threads={activeThreads}
             currentThread={repositioningThread}
             onPositionSelect={onRepositionConfirm}
@@ -398,9 +421,9 @@ export function QueueModals({
             queueSize={queueSize}
           />
         )}
-      </Modal>
+      </ModalComponent>
 
-      <DependencyBuilder
+      <DependencyBuilderComponent
         thread={dependencyThread}
         isOpen={openModal === 'dependency'}
         onClose={onCloseDependency}
@@ -410,7 +433,7 @@ export function QueueModals({
       />
 
       {showMigrationDialog && threadToMigrate && (
-        <MigrationDialog
+        <MigrationDialogComponent
           thread={threadToMigrate}
           onComplete={onMigrationComplete}
           onSkip={onMigrationSkip}
@@ -419,7 +442,7 @@ export function QueueModals({
       )}
 
       {showRollNudge && (
-        <Modal
+        <ModalComponent
           isOpen={true}
           title="Ready to roll?"
           onClose={onDismissRollNudge}
@@ -446,7 +469,7 @@ export function QueueModals({
               </button>
             </div>
           </div>
-        </Modal>
+        </ModalComponent>
       )}
     </>
   )

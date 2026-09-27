@@ -7,6 +7,11 @@ interface DeleteThreadDialogProps {
   error: string | null
   onConfirm: () => void
   onCancel: () => void
+  /**
+   * Injectable dialog primitive. Production leaves this unset so the dialog
+   * resolves to the real `Modal`; tests substitute a faithful stand-in.
+   */
+  Modal?: typeof Modal
 }
 
 /**
@@ -22,9 +27,10 @@ export default function DeleteThreadDialog({
   error,
   onConfirm,
   onCancel,
+  Modal: ModalComponent = Modal,
 }: DeleteThreadDialogProps) {
   return (
-    <Modal
+    <ModalComponent
       isOpen={thread !== null}
       title="Delete Series"
       onClose={onCancel}
@@ -67,6 +73,6 @@ export default function DeleteThreadDialog({
           </div>
         </div>
       )}
-    </Modal>
+    </ModalComponent>
   )
 }

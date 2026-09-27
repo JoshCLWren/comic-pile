@@ -33,7 +33,7 @@ function groupByThread(deps: Dependency[], labelKey: 'source_label' | 'target_la
   return groups
 }
 
-interface DependencyBuilderProps {
+export interface DependencyBuilderProps {
   thread: Thread | null
   isOpen: boolean
   onClose: () => void

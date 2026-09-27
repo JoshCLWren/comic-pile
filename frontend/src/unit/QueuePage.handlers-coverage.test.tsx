@@ -3,103 +3,62 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserRouter, MemoryRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
-import { useCreateThread, useUpdateThread, useDeleteThread, useReactivateThread } from '../hooks/useThread'
-import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
-import { useSession } from '../hooks/useSession'
-import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
-import { threadsApi } from '../services/api-threads'
-import { dependenciesApi } from '../services/api'
-import { issuesApi } from '../services/api-issues'
+import {
+  createCallbackCoverageComponents,
+  createIssueFixture,
+  createQueuePageDoubles,
+  createThreadFixture,
+  type QueuePageDoubles,
+} from './support/queuePageHarness'
 
-vi.mock('../hooks/useThread', () => ({ useCreateThread: vi.fn(), useUpdateThread: vi.fn(), useDeleteThread: vi.fn(), useReactivateThread: vi.fn() }))
-vi.mock('../hooks/useQueue', () => ({ useMoveToBack: vi.fn(), useMoveToFront: vi.fn(), useMoveToPosition: vi.fn(), useQueueThreads: vi.fn(), useShuffleQueue: vi.fn() }))
-vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
-vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
-vi.mock('../services/api-threads', () => ({ threadsApi: { setPending: vi.fn() } }))
-vi.mock('../services/api', () => ({ dependenciesApi: { listBlockedThreadIds: vi.fn(), getBlockingInfo: vi.fn() } }))
-vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
-vi.mock('../services/api-issues', () => ({ issuesApi: { create: vi.fn(), markRead: vi.fn(), bulkMarkRead: vi.fn(), bulkMarkUnread: vi.fn(), migrateThread: vi.fn() } }))
-vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: () => ({ setRestoreAction: vi.fn(), clearRestoreAction: vi.fn() }) }))
-vi.mock('../contexts/useToast', () => ({ useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }) }))
-type CardProps = Record<string, string | (() => void) | ((event: unknown) => void)>
-// SAFETY: mock component receives the exact QueueThreadCard prop callbacks; non-sugar casts expose the minimal callable contract exercised by the tests.
-vi.mock('../pages/QueuePage/QueueThreadCard', () => ({ default: (props: CardProps) => <article><button onClick={props.onCardClick as () => void}>card callback</button><button onClick={() => (props.onDragStart as (event: unknown) => void)({ dataTransfer: { effectAllowed: '', setData: vi.fn() } })}>drag start</button><button onClick={() => (props.onDragOver as (event: unknown) => void)({ preventDefault: vi.fn() })}>drag over</button><button onClick={() => (props.onDrop as (event: unknown) => void)({ preventDefault: vi.fn() })}>drop</button><button onClick={props.onDragEnd as () => void}>drag end</button><button onClick={props.onRead as () => void}>read callback</button><button onClick={props.onEdit as () => void}>edit callback</button><button onClick={props.onSnooze as () => void}>snooze callback</button><button onClick={props.onDelete as () => void}>delete callback</button><button onClick={props.onMoveToFront as () => void}>front callback</button><button onClick={props.onMoveToBack as () => void}>back callback</button><button onClick={props.onReposition as () => void}>reposition callback</button><button onClick={props.onEdit as () => void}>edit modal callback</button><button onClick={props.onDependencies as () => void}>dependencies callback</button></article> }))
-vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children, onClose }: { isOpen: boolean; title: string; children: React.ReactNode; onClose: () => void }) => isOpen ? <section><h2>{title}</h2><button onClick={onClose}>close modal</button>{children}</section> : null }))
-vi.mock('../components/PositionSlider', () => ({ default: ({ onPositionSelect, onCancel }: { onPositionSelect: (n: number) => void; onCancel: () => void }) => <div><button onClick={() => onPositionSelect(0)}>invalid position</button><button onClick={() => onPositionSelect(1)}>confirm position</button><button onClick={onCancel}>cancel position</button></div> }))
-vi.mock('../components/DependencyBuilder', () => ({ default: ({ onClose, onChanged }: { onClose: () => void; onChanged: () => Promise<void> }) => <div><button onClick={onClose}>close dependencies</button><button onClick={() => void onChanged()}>dependency changed</button></div> }))
-vi.mock('../pages/QueuePage/IssueToggleList', () => ({ IssueToggleList: () => <div>issue list</div> }))
-vi.mock('../pages/QueuePage/VirtualizedThreadList', () => ({ VIRTUALIZATION_THRESHOLD: 50, default: ({ threads, renderItem }: { threads: never[]; renderItem: (thread: never, index: number) => React.ReactNode }) => <div data-testid="queue-thread-list">{threads.map((thread, index) => renderItem(thread, index))}</div> }))
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: object literal satisfies the event handler parameter type; as never bridges the gap
-vi.mock('../components/MigrationDialog', () => ({ default: ({ onComplete, onSkip, onClose }: { onComplete: (thread: never) => void; onSkip: () => void; onClose: () => void }) => <div><button onClick={() => onComplete({ id: 1, title: 'Saga' } as never)}>complete migration</button><button onClick={onSkip}>skip migration</button><button onClick={onClose}>close migration</button></div> }))
-
-const thread = { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 3, total_issues: null, created_at: '2024-01-01' }
-const completed = { id: 2, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, total_issues: 3, created_at: '2023-01-01' }
-const mocks = { refetch: vi.fn(), refetchSession: vi.fn(), mutate: vi.fn() }
-
-beforeEach(() => {
-  vi.clearAllMocks()
-  vi.stubGlobal('alert', vi.fn())
-  mocks.mutate.mockResolvedValue(undefined)
-  vi.mocked(useQueueThreads).mockImplementation(() => {
-     // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
-     return {
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mock data shape satisfies the hook return type; as never bridges the type gap
-       data: [thread, completed] as never,
-       isPending: false,
-       isError: false,
-       refetch: mocks.refetch,
-       nextPageToken: null,
-       loadMore: vi.fn(),
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
-     } as never
-   })
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useSession).mockReturnValue({ data: { snoozed_threads: [] }, refetch: mocks.refetchSession } as never)
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useCreateThread).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useUpdateThread).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useDeleteThread).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useReactivateThread).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useMoveToFront).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useMoveToBack).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useMoveToPosition).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useShuffleQueue).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useSnooze).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useUnsnooze).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(threadsApi.setPending).mockResolvedValue({ thread_id: 1 } as never)
-  vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([])
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(issuesApi.create).mockResolvedValue({ issues: [] } as never)
-  vi.mocked(issuesApi.markRead).mockResolvedValue(undefined)
-  vi.mocked(issuesApi.bulkMarkRead).mockResolvedValue(undefined)
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(issuesApi.migrateThread).mockResolvedValue({} as never)
+const SAGA = createThreadFixture({
+  id: 1,
+  title: 'Saga',
+  queue_position: 1,
+  issues_remaining: 3,
+  created_at: '2024-01-01',
+})
+const DONE = createThreadFixture({
+  id: 2,
+  title: 'Done',
+  queue_position: 0,
+  issues_remaining: 0,
+  total_issues: 3,
+  created_at: '2023-01-01',
+  status: 'completed',
 })
 
-function renderPage() {
-  return render(<BrowserRouter><QueuePage /></BrowserRouter>)
+/** Build the callback-coverage double set with the stubbed component tree. */
+function createDoubles(
+  options: Parameters<typeof createQueuePageDoubles>[0] = {},
+): QueuePageDoubles {
+  return createQueuePageDoubles({
+    threads: { data: [SAGA, DONE] },
+    components: createCallbackCoverageComponents(),
+    ...options,
+  })
 }
+
+/** Render the page with an injected double set and return the doubles. */
+function renderPage(
+  doubles: QueuePageDoubles = createDoubles(),
+): QueuePageDoubles {
+  render(
+    <BrowserRouter>
+      <QueuePage dependencies={doubles.deps} />
+    </BrowserRouter>,
+  )
+  return doubles
+}
+
+beforeEach(() => {
+  vi.stubGlobal('alert', vi.fn())
+})
 
 describe('QueuePage callback coverage', () => {
   it('runs card callbacks and closes the dependency flow', async () => {
     const user = userEvent.setup()
-    renderPage()
+    const doubles = renderPage()
     await user.click(screen.getByText('card callback'))
     await user.click(screen.getByText('drag start'))
     await user.click(screen.getByText('drag over'))
@@ -114,14 +73,19 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getByText('dependencies callback'))
     await user.click(screen.getByText('dependency changed'))
     await user.click(screen.getByText('close dependencies'))
-    expect(mocks.mutate).toHaveBeenCalled()
+    expect(doubles.mutations.moveToFront.calls).toHaveLength(1)
   })
 
   it('covers action errors, rejected actions, and reposition validation', async () => {
-    const error = new Error('operation failed')
-    mocks.mutate.mockRejectedValue(error)
+    const doubles = createDoubles()
+    const failAll = async () => {
+      throw new Error('operation failed')
+    }
+    doubles.mutations.snooze.setImplementation(failAll)
+    doubles.mutations.moveToFront.setImplementation(failAll)
+    doubles.mutations.moveToPosition.setImplementation(failAll)
     const user = userEvent.setup()
-    renderPage()
+    renderPage(doubles)
     await user.click(screen.getByText('read callback'))
     await user.click(screen.getByText('snooze callback'))
     await user.click(screen.getByText('front callback'))
@@ -135,13 +99,16 @@ describe('QueuePage callback coverage', () => {
 
   it('submits create, edit, reactivation, and migration dialog flows', async () => {
     const user = userEvent.setup()
-    mocks.mutate.mockResolvedValue({ id: 9 })
-    renderPage()
+    const doubles = createDoubles()
+    doubles.mutations.create.setImplementation(async () => ({ id: 9 }))
+    doubles.mutations.update.setImplementation(async () => ({}))
+    doubles.mutations.reactivate.setImplementation(async () => ({}))
+    renderPage(doubles)
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'New')
     await user.type(screen.getByLabelText('Issues'), '1-2')
     await user.click(screen.getByRole('button', { name: /create series/i }))
-    await waitFor(() => expect(mocks.mutate).toHaveBeenCalled())
+    await waitFor(() => expect(doubles.mutations.create.calls).toHaveLength(1))
 
     await user.click(screen.getByText('edit modal callback'))
     await user.click(screen.getByRole('button', { name: /save changes/i }))
@@ -151,21 +118,31 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getByText('edit modal callback'))
     await user.click(screen.getByRole('button', { name: /migrate to issue tracking/i }))
     await user.click(screen.getByText('skip migration'))
-    expect(mocks.mutate).toHaveBeenCalled()
+    expect(doubles.mutations.update.calls).toHaveLength(1)
   })
 
   it('covers blocked-state failures, complex issue creation, and mutation failures', async () => {
     const user = userEvent.setup()
-    vi.mocked(dependenciesApi.listBlockedThreadIds).mockRejectedValueOnce(new Error('blocked lookup failed'))
-    vi.mocked(issuesApi.create).mockRejectedValueOnce(new Error('issue create failed'))
-    mocks.mutate.mockResolvedValueOnce({ id: 9 })
-    renderPage()
+    const doubles = createDoubles()
+    doubles.services.dependenciesApi.getBatchBlockingInfo.mockRejectedValueOnce(
+      new Error('blocked lookup failed'),
+    )
+    doubles.services.issuesApi.create.mockRejectedValueOnce(new Error('issue create failed'))
+    doubles.mutations.create.setImplementation(async () => ({ id: 9 }))
+    renderPage(doubles)
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'Complex')
     await user.type(screen.getByLabelText('Issues'), 'Annual 1, 3-4')
     await user.click(screen.getByRole('button', { name: /create series/i }))
-    await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('issue create failed')))
-    mocks.mutate.mockRejectedValue(new Error('mutation failed'))
+    await waitFor(() =>
+      expect(alert).toHaveBeenCalledWith(expect.stringContaining('issue create failed')),
+    )
+
+    const failMutation = async () => {
+      throw new Error('mutation failed')
+    }
+    doubles.mutations.snooze.setImplementation(failMutation)
+    doubles.mutations.remove.setImplementation(failMutation)
     await user.click(screen.getByText('snooze callback'))
     await waitFor(() => expect(alert).toHaveBeenCalled())
     await user.click(screen.getByText('delete callback'))
@@ -176,11 +153,10 @@ describe('QueuePage callback coverage', () => {
 
   it('covers migrated edit fields, location-driven create, and migration refresh failure', async () => {
     const user = userEvent.setup()
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-    vi.mocked(useQueueThreads).mockReturnValue({ data: [{ ...thread, total_issues: 4 }] as never, isPending: false, refetch: mocks.refetch } as never)
-    mocks.refetch.mockRejectedValueOnce(new Error('refresh after migration failed'))
-    renderPage()
+    const doubles = createDoubles({
+      threads: { data: [createThreadFixture({ ...SAGA, total_issues: 4 })] },
+    })
+    renderPage(doubles)
     await user.click(screen.getByText('edit modal callback'))
     expect(screen.getByText('issue list')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /close modal/i }))
@@ -188,27 +164,37 @@ describe('QueuePage callback coverage', () => {
   })
 
   it('persists a drag reorder between two active threads', async () => {
-    const second = { ...thread, id: 3, title: 'Second', queue_position: 2 }
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-    vi.mocked(useQueueThreads).mockReturnValue({ data: [thread, second] as never, isPending: false, refetch: mocks.refetch } as never)
-    mocks.mutate.mockResolvedValue(undefined)
+    const second = createThreadFixture({ id: 3, title: 'Second', queue_position: 2 })
+    const doubles = createDoubles({ threads: { data: [SAGA, second] } })
     const user = userEvent.setup()
-    renderPage()
+    renderPage(doubles)
     await user.click(screen.getAllByText('drag start')[0]!)
     await user.click(screen.getAllByText('drag over')[1]!)
     await user.click(screen.getAllByText('drop')[1]!)
-    await waitFor(() => expect(mocks.mutate).toHaveBeenCalledWith({ id: 1, position: 2 }))
+    await waitFor(() =>
+      expect(doubles.mutations.moveToPosition.calls).toEqual([{ id: 1, position: 2 }]),
+    )
   })
 
   it('completes and closes migration dialogs, including refresh failures', async () => {
     const user = userEvent.setup()
-    renderPage()
+    const doubles = createDoubles({
+      threads: {
+        data: [SAGA, DONE],
+        // The migration-completion handler refreshes the queue before the
+        // session; a queue refresh failure is the refresh-failure branch.
+        refetch: async () => {
+          throw new Error('refresh failed')
+        },
+      },
+    })
+    renderPage(doubles)
     await user.click(screen.getByText('edit modal callback'))
     await user.click(screen.getByRole('button', { name: /migrate to issue tracking/i }))
-    mocks.refetchSession.mockRejectedValueOnce(new Error('refresh failed'))
     await user.click(screen.getByText('complete migration'))
-    await waitFor(() => expect(alert).toHaveBeenCalledWith('Failed to refresh data. Please refresh the page.'))
+    await waitFor(() =>
+      expect(alert).toHaveBeenCalledWith('Failed to refresh data. Please refresh the page.'),
+    )
 
     await user.click(screen.getByRole('button', { name: /close modal/i }))
     await user.click(screen.getByText('edit modal callback'))
@@ -218,33 +204,44 @@ describe('QueuePage callback coverage', () => {
   })
 
   it('opens a modal requested through router location state', async () => {
-    render(<MemoryRouter initialEntries={[{ pathname: '/queue', state: { openCreate: true } }]}><QueuePage /></MemoryRouter>)
-    await waitFor(() => expect(screen.getByRole('heading', { name: /add series/i })).toBeInTheDocument())
+    const doubles = createDoubles()
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/queue', state: { openCreate: true } }]}>
+        <QueuePage dependencies={doubles.deps} />
+      </MemoryRouter>,
+    )
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /add series/i })).toBeInTheDocument(),
+    )
   })
 
   it('uses the virtualized queue renderer for large queues', () => {
-    const manyThreads = Array.from({ length: 51 }, (_, index) => ({ ...thread, id: index + 1, queue_position: index + 1 }))
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-    vi.mocked(useQueueThreads).mockReturnValue({ data: manyThreads as never, isPending: false, refetch: mocks.refetch } as never)
-    renderPage()
+    const manyThreads = Array.from({ length: 51 }, (_unused, index) =>
+      createThreadFixture({ id: index + 1, queue_position: index + 1 }),
+    )
+    const doubles = createDoubles({ threads: { data: manyThreads } })
+    renderPage(doubles)
     expect(screen.getAllByText('card callback')).toHaveLength(51)
   })
 
   it('shows issue preview errors and creates complex ranges with read markers', async () => {
     const user = userEvent.setup()
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-    vi.mocked(issuesApi.create).mockResolvedValue({ issues: [{ id: 21, issue_number: 'Annual 1' }] } as never)
-    mocks.mutate.mockResolvedValueOnce({ id: 9 })
-    renderPage()
+    const doubles = createDoubles()
+    doubles.services.issuesApi.create.mockResolvedValue({
+      issues: [createIssueFixture({ id: 21, issue_number: 'Annual 1' })],
+      total_count: 1,
+      page_size: 100,
+      next_page_token: null,
+    })
+    doubles.mutations.create.setImplementation(async () => ({ id: 9 }))
+    renderPage(doubles)
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'Annuals')
     await user.type(screen.getByLabelText('Issues'), 'Annual 1, 3-4')
     await user.type(screen.getByLabelText(/Issues already read/i), '1')
     expect(screen.getByText(/Will create/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /create series/i }))
-    await waitFor(() => expect(issuesApi.bulkMarkRead).toHaveBeenCalledWith([21]))
+    await waitFor(() => expect(doubles.services.issuesApi.bulkMarkRead).toHaveBeenCalledWith([21]))
 
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'Invalid')
@@ -254,7 +251,7 @@ describe('QueuePage callback coverage', () => {
 
   it('alerts the user when create submit is attempted with an invalid issue range', async () => {
     const user = userEvent.setup()
-    renderPage()
+    const doubles = renderPage()
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'Broken Range')
     await user.type(screen.getByLabelText('Issues'), '8-2')
@@ -262,57 +259,58 @@ describe('QueuePage callback coverage', () => {
     await waitFor(() =>
       expect(alert).toHaveBeenCalledWith(expect.stringContaining('Failed to create series')),
     )
-    expect(mocks.mutate).not.toHaveBeenCalled()
+    expect(doubles.mutations.create.calls).toHaveLength(0)
   })
 
   it('loads mixed blocking reasons and leaves a blank reactivation selection untouched', async () => {
-    vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1, 3])
-    vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValueOnce({ blocking_reasons: ['Finish Saga'] }).mockRejectedValueOnce(new Error('reason failed'))
+    const doubles = createDoubles({
+      blockingInfo: { 1: [{ label: 'Finish Saga' }] },
+    })
     const user = userEvent.setup()
-    renderPage()
+    renderPage(doubles)
     await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0]!)
     const form = screen.getByRole('button', { name: /add to queue/i }).closest('form')!
     fireEvent.submit(form)
-    expect(mocks.mutate).not.toHaveBeenCalled()
+    expect(doubles.mutations.reactivate.calls).toHaveLength(0)
   })
 
   it('covers queue sorting, filtering, empty states, and router edit state', async () => {
     const user = userEvent.setup()
-    vi.mocked(useQueueThreads).mockImplementation((searchTerm) => {
-      let data: { id: number; title: string; format: string; status: string; queue_position: number; issues_remaining: number; total_issues: null; created_at: string; is_blocked?: boolean; blocking_reasons?: never[]; notes?: string }[] = []
-      if (searchTerm !== 'missing') {
-        data = [
-          { ...thread, title: 'Zeta', created_at: '2024-01-01' },
-          { ...thread, id: 3, title: 'Alpha', queue_position: 2, created_at: '2025-01-01' },
-        ]
-      }
-      // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
-      return {
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mock data shape satisfies the hook return type; as never bridges the type gap
-        data: data as never,
-        isPending: false,
-        refetch: mocks.refetch,
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mock return object satisfies the hook return type; as never bridges the type gap
-      } as never
+    const zeta = createThreadFixture({ id: 1, title: 'Zeta', queue_position: 1 })
+    const alpha = createThreadFixture({ id: 3, title: 'Alpha', queue_position: 2, created_at: '2025-01-01' })
+    const doubles = createDoubles({
+      resolveThreads: (searchTerm) => ({ data: searchTerm === 'missing' ? [] : [zeta, alpha] }),
     })
-    renderPage()
+    renderPage(doubles)
     await user.click(screen.getByRole('button', { name: 'Title' }))
     await user.click(screen.getByRole('button', { name: 'Recently added' }))
     await user.type(screen.getByPlaceholderText('Search...'), 'missing')
     // Search is debounced (300ms) so the parent query only commits after the delay.
-    await waitFor(() => expect(screen.getByText('No active series match your search')).toBeInTheDocument(), { timeout: 2000 })
+    await waitFor(
+      () => expect(screen.getByText('No active series match your search')).toBeInTheDocument(),
+      { timeout: 2000 },
+    )
     await user.clear(screen.getByPlaceholderText('Search...'))
-    await waitFor(() => expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument(), { timeout: 2000 })
+    await waitFor(() => expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument(), {
+      timeout: 2000,
+    })
 
-    render(<MemoryRouter initialEntries={[{ pathname: '/queue', state: { editThreadId: 1 } }]}><QueuePage /></MemoryRouter>)
-    await waitFor(() => expect(screen.getByRole('heading', { name: /edit series/i })).toBeInTheDocument())
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/queue', state: { editThreadId: 1 } }]}>
+        <QueuePage dependencies={doubles.deps} />
+      </MemoryRouter>,
+    )
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: /edit series/i })).toBeInTheDocument(),
+    )
   })
 
   it('exercises controlled form fields and modal close callbacks', async () => {
     const user = userEvent.setup()
-    renderPage()
+    const doubles = createDoubles()
+    doubles.mutations.update.setImplementation(async () => ({}))
+    doubles.mutations.reactivate.setImplementation(async () => ({}))
+    renderPage(doubles)
 
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.selectOptions(screen.getByLabelText('Format'), 'Graphic Novel')
@@ -335,7 +333,7 @@ describe('QueuePage callback coverage', () => {
     await user.clear(issuesToAdd)
     await user.type(issuesToAdd, '3')
     await user.click(screen.getByRole('button', { name: /add to queue/i }))
-    await waitFor(() => expect(mocks.mutate).toHaveBeenCalled())
+    await waitFor(() => expect(doubles.mutations.reactivate.calls).toHaveLength(1))
 
     await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[1]!)
     await user.click(screen.getByRole('button', { name: /close modal/i }))
@@ -350,42 +348,46 @@ describe('QueuePage callback coverage', () => {
   })
 
   it('handles loading, empty active queues, and failed queue mutations', async () => {
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-    vi.mocked(useQueueThreads).mockReturnValue({ data: undefined, isPending: true, refetch: mocks.refetch } as never)
-    const { unmount } = renderPage()
+    const loadingDoubles = createDoubles({ threads: { data: null, isPending: true } })
+    const { unmount } = renderPage(loadingDoubles)
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
     unmount()
 
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-    vi.mocked(useQueueThreads).mockReturnValue({ data: [completed] as never, isPending: false, refetch: mocks.refetch } as never)
+    const doubles = createDoubles({ threads: { data: [DONE] } })
     const user = userEvent.setup()
-    renderPage()
+    renderPage(doubles)
     expect(screen.getByText('Nothing to roll yet')).toBeInTheDocument()
     expect(screen.getByTestId('queue-empty-add-series')).toBeInTheDocument()
     await user.click(screen.getByTestId('queue-empty-add-series'))
     expect(screen.getByRole('heading', { name: /add series/i })).toBeInTheDocument()
     await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0]!)
-    mocks.mutate.mockRejectedValue(new Error('reactivate failed'))
+    doubles.mutations.reactivate.setImplementation(async () => {
+      throw new Error('reactivate failed')
+    })
     await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')
     await user.click(screen.getByRole('button', { name: /add to queue/i }))
-    await waitFor(() => expect(mocks.mutate).toHaveBeenCalled())
+    await waitFor(() => expect(doubles.mutations.reactivate.calls).toHaveLength(1))
   })
 
   it('covers delete confirmation, shuffle and move failures, and no-op drops', async () => {
     const user = userEvent.setup()
-    const error = new Error('mutation failed')
-    mocks.mutate.mockRejectedValue(error)
-    renderPage()
+    const doubles = createDoubles()
+    const failMutation = async () => {
+      throw new Error('mutation failed')
+    }
+    doubles.mutations.remove.setImplementation(failMutation)
+    doubles.mutations.moveToFront.setImplementation(failMutation)
+    doubles.mutations.moveToBack.setImplementation(failMutation)
+    doubles.mutations.shuffle.setImplementation(failMutation)
+    renderPage(doubles)
     await user.click(screen.getByText('delete callback'))
     expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
-    expect(mocks.mutate).not.toHaveBeenCalled()
+    expect(doubles.mutations.remove.calls).toHaveLength(0)
     await user.click(screen.getByRole('button', { name: /cancel/i }))
     expect(screen.queryByRole('heading', { name: /delete series/i })).not.toBeInTheDocument()
     await user.click(screen.getByText('delete callback'))
     await user.click(screen.getByRole('button', { name: /delete series/i }))
-    await waitFor(() => expect(mocks.mutate).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(doubles.mutations.remove.calls).toEqual([1]))
     await user.click(screen.getByText('front callback'))
     await user.click(screen.getByText('back callback'))
     await user.click(screen.getByRole('button', { name: 'Shuffle' }))
@@ -395,30 +397,24 @@ describe('QueuePage callback coverage', () => {
 
   it('uses snoozed and blocked card branches and reports blocked reads', async () => {
     const user = userEvent.setup()
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-    vi.mocked(useSession).mockReturnValue({ data: { snoozed_threads: [{ id: 1 }] }, refetch: mocks.refetchSession } as never)
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-    vi.mocked(useQueueThreads).mockReturnValue({ data: [{ ...thread, is_blocked: true }] as never, isPending: false, refetch: mocks.refetch } as never)
-    vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1])
-    vi.mocked(dependenciesApi.getBlockingInfo).mockResolvedValue({ blocking_reasons: [] })
-    renderPage()
+    const doubles = createDoubles({
+      threads: { data: [createThreadFixture({ ...SAGA, is_blocked: true })] },
+      session: { pending_thread_id: null, snoozed_threads: [createThreadFixture({ id: 1 })] },
+    })
+    renderPage(doubles)
     await user.click(screen.getByText('read callback'))
     expect(alert).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
     await user.click(screen.getByText('snooze callback'))
-    expect(mocks.mutate).toHaveBeenCalled()
+    expect(doubles.mutations.snooze.calls.length).toBeGreaterThan(0)
   })
 
   it('renders pending mutation labels for create, edit, and reactivation', async () => {
     const user = userEvent.setup()
-  // SAFETY: as never is used for type narrowing in mock data
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-    vi.mocked(useCreateThread).mockReturnValue({ mutate: mocks.mutate, isPending: true } as never)
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-    vi.mocked(useUpdateThread).mockReturnValue({ mutate: mocks.mutate, isPending: true } as never)
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-    vi.mocked(useReactivateThread).mockReturnValue({ mutate: mocks.mutate, isPending: true } as never)
-    renderPage()
+    const doubles = createDoubles()
+    doubles.mutations.create.setPending(true)
+    doubles.mutations.update.setPending(true)
+    doubles.mutations.reactivate.setPending(true)
+    renderPage(doubles)
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0]!)
     expect(screen.getByRole('button', { name: 'Adding...' })).toBeDisabled()
     await user.click(screen.getByRole('button', { name: 'close modal' }))

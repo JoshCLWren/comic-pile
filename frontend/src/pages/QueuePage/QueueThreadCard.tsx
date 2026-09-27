@@ -8,7 +8,7 @@ import type { DependencyGroupSummary } from '../../services/api-dependency-group
 import type { BlockingDependency, Thread } from '../../types'
 import QueueThreadActions from './QueueThreadActions'
 
-interface QueueThreadCardProps {
+export interface QueueThreadCardProps {
   thread: Thread
   index: number
   isBlocked: boolean

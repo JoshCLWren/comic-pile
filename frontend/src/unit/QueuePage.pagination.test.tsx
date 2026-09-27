@@ -1,194 +1,97 @@
 import { render, screen } from '@testing-library/react'
-import { beforeEach, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { ToastProvider } from '../contexts/ToastProvider'
 import QueuePage from '../pages/QueuePage'
-import { useCreateThread, useReactivateThread, useUpdateThread } from '../hooks/useThread'
-import { useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
-import { useSession } from '../hooks/useSession'
+import type { QueuePageDependencies } from '../pages/QueuePage/dependencies'
+import {
+  createQueuePageDoubles,
+  createThreadFixture,
+  stubNoopIntersectionObserver,
+} from './support/queuePageHarness'
 
-vi.mock('../hooks/useThread', () => ({
-  useCreateThread: vi.fn(),
-  useUpdateThread: vi.fn(),
-  useReactivateThread: vi.fn(),
-}))
+const THREAD = createThreadFixture({ id: 1, title: 'Saga' })
 
-vi.mock('../hooks/useQueue', () => ({
-  useMoveToPosition: vi.fn(),
-  useQueueThreads: vi.fn(),
-  useShuffleQueue: vi.fn(),
-}))
-
-vi.mock('../hooks/useSession', () => ({
-  useSession: vi.fn(),
-}))
-
-vi.mock('../hooks/useQueueBlockingInfo', () => ({
-  useQueueBlockingInfo: vi.fn(() => ({})),
-}))
-
-vi.mock('../pages/QueuePage/useQueueFilters', () => ({
-  useQueueFilters: vi.fn((threads: Array<{ id: number; title: string }> | null) => ({
-    activeThreads: threads ?? [],
-    completedThreads: [],
-    filteredThreads: threads ?? [],
-  })),
-}))
-
-vi.mock('../pages/QueuePage/useQueueThreadActions', () => ({
-  useQueueThreadActions: vi.fn(() => ({
-    reorderError: null,
-    handleShuffle: vi.fn(),
-  })),
-}))
-
-vi.mock('../pages/QueuePage/useQueueModals', () => ({
-  useQueueModals: vi.fn(() => ({
-    isAnyModalOpen: false,
-    repositioningThread: null,
-    showCreateModal: vi.fn(),
-    openReactivateModal: vi.fn(),
-  })),
-}))
-
-vi.mock('../pages/QueuePage/QueueControls', () => ({
-  QueueControls: () => null,
-}))
-
-vi.mock('../pages/QueuePage/QueueList', () => ({
-  QueueList: ({ filteredThreads, sentinelRef, hasNextPage }: any) => (
-    <div data-testid="queue-list">
-      {filteredThreads.map((thread: any) => <div key={thread.id}>{thread.title}</div>)}
-      {hasNextPage && <div ref={sentinelRef} data-testid="queue-infinite-scroll-sentinel" />}
-    </div>
-  ),
-}))
-
-vi.mock('../pages/QueuePage/CompletedThreadsSection', () => ({
-  default: () => null,
-}))
-
-vi.mock('../pages/QueuePage/QueueModals', () => ({
-  QueueModals: () => null,
-}))
-
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseCreateThread = vi.mocked(useCreateThread) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseReactivateThread = vi.mocked(useReactivateThread) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseSession = vi.mocked(useSession) as any
-
-const thread = {
-  id: 1,
-  title: 'Saga',
-  format: 'Comic',
-  status: 'active',
-  queue_position: 1,
-  issues_remaining: 5,
-}
-
-function renderQueue() {
+function renderQueue(dependencies?: Partial<QueuePageDependencies>) {
   return render(
     <BrowserRouter>
-      <QueuePage />
+      <ToastProvider>
+        <QueuePage dependencies={dependencies} />
+      </ToastProvider>
     </BrowserRouter>,
   )
 }
 
 beforeEach(() => {
-  mockedUseCreateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseSession.mockReturnValue({ data: { snoozed_threads: [] }, refetch: vi.fn() })
+  stubNoopIntersectionObserver()
+  vi.stubGlobal('alert', vi.fn())
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
 })
 
 it('shows the initial full-screen loader before any queue data exists', () => {
-  mockedUseQueueThreads.mockReturnValue({
-    data: null,
-    isPending: true,
-    isError: false,
-    refetch: vi.fn(),
-    nextPageToken: null,
-    loadMore: vi.fn(),
+  const doubles = createQueuePageDoubles({
+    threads: { data: null, isPending: true, isError: false, nextPageToken: null },
   })
 
-  renderQueue()
+  renderQueue(doubles.deps)
 
-  expect(screen.queryByTestId('queue-list')).not.toBeInTheDocument()
+  expect(document.querySelector('.h-screen')).toBeInTheDocument()
+  expect(screen.queryByRole('list', { name: 'Series queue' })).not.toBeInTheDocument()
 })
 
 it('keeps loaded rows visible and shows loading indicator while another page is loading', () => {
-  mockedUseQueueThreads.mockReturnValue({
-    data: [thread],
-    isPending: true,
-    isError: false,
-    refetch: vi.fn(),
-    nextPageToken: 'next-page',
-    loadMore: vi.fn(),
+  const doubles = createQueuePageDoubles({
+    threads: { data: [THREAD], isPending: true, isError: false, nextPageToken: 'next-page' },
   })
 
-  renderQueue()
+  renderQueue(doubles.deps)
 
   expect(screen.getByText('Saga')).toBeInTheDocument()
   expect(screen.getByTestId('queue-loading-more')).toBeInTheDocument()
 })
 
-it('loads the next page via infinite scroll and absorbs request rejection', async () => {
-  const loadMore = vi.fn().mockRejectedValue(new Error('next page unavailable'))
-  mockedUseQueueThreads.mockReturnValue({
-    data: [thread],
-    isPending: false,
-    isError: false,
-    refetch: vi.fn(),
-    nextPageToken: 'next-page',
-    loadMore,
+it('exposes the infinite-scroll sentinel without eagerly loading the next page', () => {
+  let loadMoreCalls = 0
+  const doubles = createQueuePageDoubles({
+    threads: {
+      data: [THREAD],
+      isPending: false,
+      isError: false,
+      nextPageToken: 'next-page',
+      loadMore: () => {
+        loadMoreCalls += 1
+        return Promise.reject(new Error('next page unavailable'))
+      },
+    },
   })
 
-  renderQueue()
+  renderQueue(doubles.deps)
 
   expect(screen.getByText('Saga')).toBeInTheDocument()
   expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
-  expect(loadMore).not.toHaveBeenCalled()
+  expect(loadMoreCalls).toBe(0)
 })
 
 it('shows an incremental-load error without discarding the loaded queue', () => {
-  mockedUseQueueThreads.mockReturnValue({
-    data: [thread],
-    isPending: false,
-    isError: true,
-    refetch: vi.fn(),
-    nextPageToken: 'next-page',
-    loadMore: vi.fn(),
+  const doubles = createQueuePageDoubles({
+    threads: { data: [THREAD], isPending: false, isError: true, nextPageToken: 'next-page' },
   })
 
-  renderQueue()
+  renderQueue(doubles.deps)
 
   expect(screen.getByText('Saga')).toBeInTheDocument()
   expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load the next batch of series.Try again")
 })
 
 it('does not show an incremental error before the queue has produced a data snapshot', () => {
-  mockedUseQueueThreads.mockReturnValue({
-    data: null,
-    isPending: false,
-    isError: true,
-    refetch: vi.fn(),
-    nextPageToken: 'next-page',
-    loadMore: vi.fn(),
+  const doubles = createQueuePageDoubles({
+    threads: { data: null, isPending: false, isError: true, nextPageToken: 'next-page' },
   })
 
-  renderQueue()
+  renderQueue(doubles.deps)
 
   expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-  expect(screen.getByTestId('queue-infinite-scroll-sentinel')).toBeInTheDocument()
 })

@@ -6,7 +6,7 @@ interface PositionSliderThread {
   queue_position: number
 }
 
-interface PositionSliderProps {
+export interface PositionSliderProps {
   threads: PositionSliderThread[]
   currentThread: PositionSliderThread
   onPositionSelect: (position: number) => void

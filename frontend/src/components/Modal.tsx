@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import OverlayPortal from './OverlayPortal'
 
-interface ModalProps {
+export interface ModalProps {
   isOpen: boolean
   title: string
   onClose: () => void

@@ -21,6 +21,8 @@ import DeleteThreadDialog from './DeleteThreadDialog'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
+import { defaultQueuePageDependencies, resolveQueuePageComponents } from './dependencies'
+import type { QueuePageDependencies, ResolvedQueuePageDependencies } from './dependencies'
 
 /**
  * Route entry for the Queue page. The component composes the focused
@@ -28,8 +30,41 @@ import { useQueueModals as useQueueModalsHook } from './useQueueModals'
  * `CompletedThreadsSection`) plus the page-level navigation/error boundary
  * concerns. Data ownership stays in the page so a second cache layer is
  * never introduced.
+ *
+ * @param dependencies - Optional collaborator seams. Production omits the prop
+ *   and every hook, service, and component resolves to the production
+ *   implementation; tests inject deterministic doubles to exercise page-level
+ *   wiring without module mocking.
  */
-export default function QueuePage() {
+export default function QueuePage({
+  dependencies,
+}: {
+  dependencies?: Partial<QueuePageDependencies>
+} = {}) {
+  const deps: ResolvedQueuePageDependencies = {
+    ...defaultQueuePageDependencies,
+    ...dependencies,
+    components: resolveQueuePageComponents(dependencies?.components),
+  }
+  const {
+    useQueueThreads,
+    useSession,
+    useCreateThread,
+    useUpdateThread,
+    useReactivateThread,
+    useMoveToPosition,
+    useShuffleQueue,
+    useQueueBlockingInfo,
+    useQueueFilters,
+    useQueueThreadActions: useQueueThreadActionsHook,
+    useQueueModals: useQueueModalsSeam,
+    useRollNudge: useRollNudgeSeam,
+    threadsApi: threadService,
+    dependenciesApi: dependencyService,
+    issuesApi: issueService,
+  } = deps
+  const components = deps.components
+
   const navigate = useNavigate()
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
@@ -57,6 +92,7 @@ export default function QueuePage() {
   const authoritativeActiveCount = activeCount ?? activeThreads.length
   const blockingByThreadId = useQueueBlockingInfo(
     activeThreads.map((thread) => thread.id),
+    dependencyService,
   )
 
   const navigateToRoll = useCallback(
@@ -66,12 +102,25 @@ export default function QueuePage() {
     [navigate],
   )
 
-  const actions = useQueueThreadActions({
-    navigateToRoll,
-    refetchSession: async () => {
-      await refetchSession()
+  const actions = useQueueThreadActionsHook(
+    {
+      navigateToRoll,
+      refetchSession: async () => {
+        await refetchSession()
+      },
     },
-  })
+    {
+      deleteHook: deps.useDeleteThread,
+      moveToFrontHook: deps.useMoveToFront,
+      moveToBackHook: deps.useMoveToBack,
+      moveToPositionHook: deps.useMoveToPosition,
+      shuffleHook: deps.useShuffleQueue,
+      snoozeHook: deps.useSnooze,
+      unsnoozeHook: deps.useUnsnooze,
+      toastHook: deps.useToast,
+      setPending: threadService.setPending,
+    },
+  )
 
   const submitCreate = useCallback(
     (input: { title: string; format: string; issues_remaining: number; notes: string | null }) =>
@@ -90,25 +139,31 @@ export default function QueuePage() {
     [reactivateMutation],
   )
 
-  const rollNudge = useRollNudge()
+  const rollNudge = useRollNudgeSeam()
 
-  const modals = useQueueModalsHook({
-    threads,
-    onCreated: rollNudge.onCreated,
-    onUpdated: async () => {},
-    onReactivated: async () => {},
-    refetchSession: async () => {
-      await refetchSession()
+  const modals = useQueueModalsSeam(
+    {
+      threads,
+      onCreated: rollNudge.onCreated,
+      onUpdated: async () => {},
+      onReactivated: async () => {},
+      refetchSession: async () => {
+        await refetchSession()
+      },
+      submitCreate,
+      submitEdit,
+      submitReactivate,
+      isPendingCreate: createMutation.isPending,
+      isPendingEdit: updateMutation.isPending,
+      showRollNudge: rollNudge.showRollNudge,
+      onDismissRollNudge: rollNudge.onDismissRollNudge,
+      onRollNudgeNavigate: rollNudge.onRollNudgeNavigate,
     },
-    submitCreate,
-    submitEdit,
-    submitReactivate,
-    isPendingCreate: createMutation.isPending,
-    isPendingEdit: updateMutation.isPending,
-    showRollNudge: rollNudge.showRollNudge,
-    onDismissRollNudge: rollNudge.onDismissRollNudge,
-    onRollNudgeNavigate: rollNudge.onRollNudgeNavigate,
-  })
+    {
+      issuesApi: issueService,
+      bugReportRestoreHook: deps.useBugReportRestore,
+    },
+  )
 
   const handleIssueChanged = useCallback(() => {
     if (modals.editingThread) {
@@ -154,7 +209,7 @@ export default function QueuePage() {
       const readDisabledReason = blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by dependency'
 
       return (
-        <QueueThreadCard
+        <components.QueueThreadCard
           key={thread.id}
           thread={thread}
           index={index}
@@ -205,7 +260,7 @@ export default function QueuePage() {
   return (
     <PositionMenuProvider>
       <div className="space-y-6 md:space-y-10 pb-[calc(10rem_+_env(safe-area-inset-bottom))] md:pb-10">
-        <QueueControls
+        <components.QueueControls
           activeCount={authoritativeActiveCount}
           shuffleDisabled={shuffleDisabled}
           shufflePending={shuffleQueueMutation.isPending}
@@ -228,7 +283,8 @@ export default function QueuePage() {
           </button>
         )}
 
-        <QueueList
+        <components.QueueList
+          useVirtualizer={deps.useVirtualizer}
           activeThreads={activeThreads}
           filteredThreads={filteredThreads}
           reorderError={actions.reorderError}
@@ -239,7 +295,7 @@ export default function QueuePage() {
           onAddSeries={modals.showCreateModal}
         />
 
-        <CompletedThreadsSection
+        <components.CompletedThreadsSection
           threads={completedThreads}
           onReactivate={modals.openReactivateModal}
         />
@@ -266,7 +322,8 @@ export default function QueuePage() {
           </div>
         )}
 
-        <QueueModals
+        <components.QueueModals
+          components={components.modals}
           openModal={modals.openModal}
           createForm={modals.createForm}
           editForm={modals.editForm}
@@ -312,7 +369,7 @@ export default function QueuePage() {
           onRollNudgeNavigate={modals.rollNudgeNavigate}
         />
 
-        <DeleteThreadDialog
+        <components.DeleteThreadDialog
           thread={actions.pendingDeleteThread}
           isPending={actions.isDeletePending}
           error={actions.deleteError}
