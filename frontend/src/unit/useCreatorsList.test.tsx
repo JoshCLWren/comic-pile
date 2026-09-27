@@ -198,4 +198,42 @@ describe('useCreatorsList', () => {
     expect(result.current.items).toEqual([])
     expect(result.current.coverage).toBeNull()
   })
+
+  it('refetches the current selection on demand', async () => {
+    mockedGetList.mockResolvedValue(makePage({ total: 1 }))
+
+    const { result } = renderHook(() => useCreatorsList({ sort: 'ratings_count' }), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    expect(mockedGetList).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      result.current.refetch()
+    })
+
+    await waitFor(() => expect(mockedGetList).toHaveBeenCalledTimes(2))
+    expect(mockedGetList).toHaveBeenLastCalledWith({
+      search: undefined,
+      sort: 'ratings_count',
+      limit: CREATOR_LIST_PAGE_SIZE,
+      offset: 0,
+    })
+  })
+
+  it('ignores a load-more request when there is no next page', async () => {
+    mockedGetList.mockResolvedValue(makePage({ items: [makeItem({ canonical_creator_key: 'creator:1' })], total: 1 }))
+
+    const { result } = renderHook(() => useCreatorsList({}), { wrapper: createWrapper() })
+
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+    expect(result.current.hasMore).toBe(false)
+
+    await act(async () => {
+      await result.current.loadMore()
+    })
+
+    expect(mockedGetList).toHaveBeenCalledTimes(1)
+  })
 })

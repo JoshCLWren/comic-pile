@@ -49,10 +49,13 @@ const MAIN_NAV_ITEMS: NavItem[] = [
   { path: '/queue', label: 'Queue', icon: 'queue', ariaLabel: 'Queue page' },
   { path: '/history', label: 'History', icon: 'history', ariaLabel: 'History page' },
   { path: '/crossovers', label: 'Crossovers', icon: 'crossovers', ariaLabel: 'Crossovers page' },
-  { path: '/creators', label: 'Creators', icon: 'creators', ariaLabel: 'Creators page' },
 ]
 
 const SECONDARY_NAV_ITEMS: NavItem[] = [
+  // #2774: Creators is a secondary browse surface, so it lives in the sidebar
+  // secondary list and the mobile More menu rather than crowding the phone
+  // bottom bar with a sixth item.
+  { path: '/creators', label: 'Creators', icon: 'creators', ariaLabel: 'Creators page' },
   { path: '/continuity-plans', label: 'Reading plans', icon: 'planner', ariaLabel: 'Reading plans page' },
   { path: '/whats-new', label: "What's new", icon: 'new', ariaLabel: "What's new page" },
   { path: '/glossary', label: 'Glossary', icon: 'glossary', ariaLabel: 'Glossary page' },

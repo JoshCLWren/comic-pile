@@ -221,6 +221,20 @@ describe('CreatorsPage', () => {
     ])
   })
 
+  it('keeps the current ordering when the select reports an unknown value', () => {
+    const seen: CreatorListSelection[] = []
+    mockedHook.mockImplementation((selection) => {
+      seen.push(selection)
+      return baseState()
+    })
+
+    renderPage()
+
+    fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'not_a_sort' } })
+
+    expect(seen.map((selection) => selection.sort)).toEqual(['name'])
+  })
+
   it('passes a trimmed name search through to the bounded discovery contract', () => {
     const seen: CreatorListSelection[] = []
     mockedHook.mockImplementation((selection) => {
