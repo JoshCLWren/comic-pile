@@ -16,7 +16,7 @@ import {
 } from '../hooks'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api'
-import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse } from '../types'
+import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse, ThreadListItem } from '../types'
 import { buildFlowchartGraph } from '../utils/dependencyFlowchartAdapter'
 import { getApiErrorDetail } from '../utils/apiError'
 import { useToast } from '../contexts/useToast'
@@ -34,7 +34,7 @@ function groupByThread(deps: Dependency[], labelKey: 'source_label' | 'target_la
 }
 
 interface DependencyBuilderProps {
-  thread: Thread | null
+  thread: Thread | ThreadListItem | null
   isOpen: boolean
   onClose: () => void
   onChanged?: () => void
@@ -136,7 +136,7 @@ export default function DependencyBuilder({
 
   // Flowchart state
   const [isGraphLoading, setIsGraphLoading] = useState(false)
-  const [flowchartThreads, setFlowchartThreads] = useState<Thread[]>([])
+  const [flowchartThreads, setFlowchartThreads] = useState<ThreadListItem[]>([])
   const [flowchartDependencies, setFlowchartDependencies] = useState<FlowchartDependency[]>([])
   const [flowchartIssueNodes, setFlowchartIssueNodes] = useState<FlowchartNode[]>([])
 
@@ -422,7 +422,9 @@ export default function DependencyBuilder({
                   role="tablist"
                   aria-label="Reading order view"
                   onKeyDown={(e) => {
+                    // SAFETY: the role=tab selector matches only the tab buttons this component renders
                     const tabs = Array.from(e.currentTarget.querySelectorAll('[role="tab"]')) as HTMLElement[];
+                    // SAFETY: the keydown handler runs while focus is on one of the tab buttons it renders
                     const currentIndex = tabs.indexOf(document.activeElement as HTMLElement);
                     if (currentIndex === -1) return;
                     let newIndex = currentIndex;

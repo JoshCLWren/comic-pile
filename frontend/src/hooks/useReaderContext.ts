@@ -3,8 +3,6 @@ import { readerContextApi, type ReaderContextResponse } from '../services/api-re
 import { readingOrdersApi } from '../services/api-reading-orders'
 import { dependenciesApi } from '../services/api'
 import { queryKeys } from '../query/queryKeys'
-import type { ReadingOrder } from '../services/api-reading-orders'
-import type { ConnectedThreadInfo } from '../types'
 
 interface ReaderContextState {
   context: ReaderContextResponse | null
@@ -54,7 +52,7 @@ export function useReadingOrdersForThread(threadId: number | null, enabled = tru
   })
 
   return {
-    readingOrders: data?.reading_orders ?? ([] as ReadingOrder[]),
+    readingOrders: data?.reading_orders ?? [],
     isPending,
     isError,
     error,
@@ -69,7 +67,7 @@ export function useConnectedThreads(threadId: number | null, enabled = true) {
   })
 
   return {
-    connectedThreads: data?.connected_threads ?? ([] as ConnectedThreadInfo[]),
+    connectedThreads: data?.connected_threads ?? [],
     isPending,
     isError,
     error,

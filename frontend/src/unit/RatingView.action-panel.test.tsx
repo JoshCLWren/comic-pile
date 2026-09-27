@@ -3,10 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
+import { ToastProvider } from '../contexts/ToastProvider'
 import { RATING_THRESHOLD } from '../pages/RollPage/utils'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
 import type { ReaderContextResponse } from '../types'
-vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
 vi.mock('../components/Tooltip', () => ({
@@ -89,6 +89,12 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     readerContextError: null,
     ratingViewTopRef: null,
     issuesRemaining: thread.issues_remaining,
+    readingContextRequested: false,
+    readingBoundariesRequested: false,
+    readingOrdersIsLoading: false,
+    readingOrdersError: null,
+    connectedThreadsIsLoading: false,
+    connectedThreadsError: null,
     ...overrides,
   }
 }
@@ -96,7 +102,9 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
 function ratingView(overrides: Partial<RatingViewData> = {}) {
   return (
     <MemoryRouter>
-      <RatingView data={makeRatingViewData(overrides)} />
+      <ToastProvider>
+        <RatingView data={makeRatingViewData(overrides)} />
+      </ToastProvider>
     </MemoryRouter>
   )
 }
@@ -380,6 +388,7 @@ describe('RatingView desktop layout contract (#2711 revises #1943)', () => {
   })
 
   it('contains no Why this?, Reading Context or Reading Boundaries affordance even with populated props', () => {
+    // SAFETY: the reader-context fixture supplies only the fields the rating panel reads
     const { container } = render(ratingView({ readerContext: { issue_id: 100, series: { identity_source: 'comicvine', canonical_series_id: 's1', series_name: 'Saga', average_rating: 4, ratings_count: 1, previous_issue: null, recent_ratings: [], highest_rating: 5, lowest_rating: 1 }, crossovers: [], local_chain: { issues: [], edges: [] } } as any }))
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
     expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()

@@ -6,7 +6,7 @@ import {
   getStateLabel,
   getStateColorClass,
 } from '../utils/comicIdentity'
-import type { ComicVineRelatedIssue } from '../services/api'
+import type { ComicVineRelatedIssue } from '../services/api-comicvine'
 
 function makeRelatedIssue(overrides: Partial<ComicVineRelatedIssue> = {}): ComicVineRelatedIssue {
   return {

@@ -9,6 +9,9 @@ export { useAnalytics } from './useAnalytics'
 export { useBugReport } from './useBugReport'
 export { useComicVineIssueIntelligence } from './useComicVineIssueIntelligence'
 export { useCreatorDetail, creatorDetailQueryOptions, CREATOR_DETAIL_PAGE_SIZE } from './useCreatorDetail'
+export { useCreatorsList, creatorListQueryOptions, CREATOR_LIST_PAGE_SIZE } from './useCreatorsList'
+export type { CreatorListSelection, CreatorListSort, CreatorsListState } from './useCreatorsList'
+export { useDebounce } from './useDebounce'
 export { useCrossoverGroups } from './useCrossoverGroups'
 export {
   useCrossoverGroupsList,

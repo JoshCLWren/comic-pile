@@ -1,23 +1,23 @@
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
+import type { ReactElement, ReactNode } from 'react'
+import { createToastSpy } from './toastSpy'
+import { ToastContextSpy } from './toastTestHarness'
+import { createRouterHarness } from './routerTestHarness'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
 import type { ReaderContextResponse } from '../types'
 
-vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
-vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
-vi.mock('../components/Tooltip', () => ({
-  default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}))
-vi.mock('../components/IssueCorrectionDialog', () => ({ default: () => null }))
-vi.mock('../components/ContinuityCorrectionDialog', () => ({ default: () => null }))
-vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
-  ReadingOrderGroups: () => null,
-}))
-vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
-  ReadingRouteExplanation: () => null,
-}))
+const toast = createToastSpy()
+
+function ToastWrapper({ children }: { children: ReactNode }) {
+  return <ToastContextSpy value={toast}>{children}</ToastContextSpy>
+}
+
+function renderWithToast(ui: ReactElement) {
+  return render(ui, { wrapper: ToastWrapper })
+}
+
 
 function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingViewData {
   return {
@@ -54,15 +54,22 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     readerContextError: null,
     ratingViewTopRef: null,
     issuesRemaining: 5,
+    readingContextRequested: false,
+    readingBoundariesRequested: false,
+    readingOrdersIsLoading: false,
+    readingOrdersError: null,
+    connectedThreadsIsLoading: false,
+    connectedThreadsError: null,
     ...overrides,
   }
 }
 
 function ratingView(overrides: Partial<RatingViewData> = {}) {
+  const { wrapper: RouterWrapper } = createRouterHarness();
   return (
-    <MemoryRouter>
+    <RouterWrapper>
       <RatingView data={makeRatingViewData(overrides)} />
-    </MemoryRouter>
+    </RouterWrapper>
   )
 }
 
@@ -92,14 +99,14 @@ function makeContext(edges: ReaderContextResponse['local_chain']['edges'], serie
 
 describe('RatingView Reading Boundaries retired control (#2711 supersedes #2519)', () => {
   it('renders no Reading Context or Reading Boundaries lazy controls without an active rating thread', () => {
-    render(ratingView({ activeRatingThread: null }))
+    renderWithToast(ratingView({ activeRatingThread: null }))
     expect(screen.queryByTestId('reading-context-button')).not.toBeInTheDocument()
     expect(screen.queryByTestId('reading-boundaries-button')).not.toBeInTheDocument()
     expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
   })
 
   it('renders no lazy controls even with populated reader context', () => {
-    render(ratingView({
+    renderWithToast(ratingView({
       readerContext: makeContext([
         {
           id: 1,
@@ -126,7 +133,7 @@ describe('RatingView Reading Boundaries retired control (#2711 supersedes #2519)
   })
 
   it('reserves no middle-column region after removal', () => {
-    const { container } = render(ratingView({
+    const { container } = renderWithToast(ratingView({
       readerContext: makeContext([], 'Saga'),
     }))
     expect(screen.queryByTestId('rating-region-reading-optional')).not.toBeInTheDocument()
@@ -137,7 +144,7 @@ describe('RatingView Reading Boundaries retired control (#2711 supersedes #2519)
   })
 
   it('does not render boundaries section even when edges exist', () => {
-    render(ratingView({
+    renderWithToast(ratingView({
       readerContext: makeContext([
         {
           id: 1,
@@ -160,7 +167,7 @@ describe('RatingView Reading Boundaries retired control (#2711 supersedes #2519)
   })
 
   it('still renders comic and decision regions and rating actions', () => {
-    render(ratingView({ readerContext: makeContext([], 'Saga') }))
+    renderWithToast(ratingView({ readerContext: makeContext([], 'Saga') }))
     expect(screen.getByTestId('rating-region-comic')).toBeInTheDocument()
     expect(screen.getByTestId('rating-region-decision')).toBeInTheDocument()
     expect(screen.getByRole('slider')).toBeInTheDocument()

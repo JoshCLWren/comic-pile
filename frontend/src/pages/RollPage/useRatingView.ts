@@ -6,7 +6,13 @@ import type { ReaderContextResponse } from '../../types'
 
 interface UseRatingViewParams {
   state: RollPageState & RollPageStateSetters
-  readingDetailsRequested: boolean
+  readerContextRequested: boolean
+  readingContextRequested: boolean
+  readingBoundariesRequested: boolean
+  readingOrdersIsLoading: boolean
+  readingOrdersError: Error | null
+  connectedThreadsIsLoading: boolean
+  connectedThreadsError: Error | null
   rating: {
     updateRatingUI: (value: string) => void
     handleSubmitRating: (finishSession: boolean) => Promise<void>
@@ -45,6 +51,12 @@ export interface RatingViewData {
   readerContextError: Error | null
   ratingViewTopRef: React.RefObject<HTMLDivElement | null> | null
   issuesRemaining: number
+  readingContextRequested: boolean
+  readingBoundariesRequested: boolean
+  readingOrdersIsLoading: boolean
+  readingOrdersError: Error | null
+  connectedThreadsIsLoading: boolean
+  connectedThreadsError: Error | null
 }
 
 /**
@@ -52,13 +64,25 @@ export interface RatingViewData {
  *
  * Moves the useReaderContext call from RollPage into this hook,
  * computing the rating-issue ID from the active thread and the
- * reading-details-requested flag from useRollRating. This reduces
+ * reader-context-requested flag from useRollRating. This reduces
  * RatingView's prop surface from 20+ individual props to a single
  * data object consumed by the hook.
+ *
+ * The optional reading-detail request scopes and their bounded
+ * loading/error state are passed through untouched, so the Reading
+ * Context and Reading Boundaries cards can render their own local
+ * state without reaching back into the page or the global rating
+ * error channel.
  */
 export function useRatingView({
   state,
-  readingDetailsRequested,
+  readerContextRequested,
+  readingContextRequested,
+  readingBoundariesRequested,
+  readingOrdersIsLoading,
+  readingOrdersError,
+  connectedThreadsIsLoading,
+  connectedThreadsError,
   rating,
   snooze,
   onSkip,
@@ -83,7 +107,7 @@ export function useRatingView({
     context: readerContext,
     isLoading: isReaderContextLoading,
     error: readerContextError,
-  } = useReaderContext(ratingIssueId, readingDetailsRequested)
+  } = useReaderContext(ratingIssueId, readerContextRequested)
 
   const predictedDie = computePredictedDie(currentDie, ratingValue)
 
@@ -111,5 +135,11 @@ export function useRatingView({
     readerContextError: readerContextError ?? null,
     ratingViewTopRef,
     issuesRemaining,
+    readingContextRequested,
+    readingBoundariesRequested,
+    readingOrdersIsLoading,
+    readingOrdersError,
+    connectedThreadsIsLoading,
+    connectedThreadsError,
   }
 }

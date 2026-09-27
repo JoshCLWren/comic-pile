@@ -4,12 +4,12 @@ import {
   ContinuityThreadSelector,
 } from '../../components/continuity'
 import type { DependencyGroup } from '../../services/api-dependency-groups'
-import type { Issue, Thread } from '../../types'
+import type { Issue, ThreadListItem } from '../../types'
 import type { ContinuityPlannerEditor } from './useContinuityPlannerEditor'
 
 interface PlannerAddStepsProps {
   editor: ContinuityPlannerEditor
-  threads: Thread[]
+  threads: ThreadListItem[]
   issues: Issue[]
   issuesLoading: boolean
   issueLoadError: string | null

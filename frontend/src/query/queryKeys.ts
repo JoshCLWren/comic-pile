@@ -247,6 +247,14 @@ export const queryKeys = {
   },
   creators: {
     all: ['creators'] as const,
+    /**
+     * Canonical bounded personal creator discovery key (issue #2774). The
+     * pagination cursor lives in `pageParam`, not the key, so every page of
+     * one browse selection shares the stable prefix. `search` is normalized to
+     * a trimmed value (or `undefined` when empty) so the key stays canonical.
+     */
+    list: (params: { search?: string; sort?: 'name' | 'ratings_count' | 'average_rating'; limit?: number }) =>
+      ['creators', 'list', params] as const,
     summaries: (keys: string[]) =>
       ['creators', 'summaries', [...keys].sort()] as const,
   },

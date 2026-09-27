@@ -141,6 +141,7 @@ export default function ContinuityCorrectionDialog({
       }
 
       if (canSaveCurrentIssue) {
+        // SAFETY: canSaveCurrentIssue is true here, so issueId is already narrowed to a number
         await groupsApi.addMember(targetGroup.id, { issue_id: issueId as number });
         addedLabels.push(`issue ${issueNumber ?? '?'}`);
       }

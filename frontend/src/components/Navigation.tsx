@@ -30,6 +30,7 @@ type NavIconName =
   | 'queue'
   | 'history'
   | 'crossovers'
+  | 'creators'
   | 'planner'
   | 'new'
   | 'glossary'
@@ -51,6 +52,10 @@ const MAIN_NAV_ITEMS: NavItem[] = [
 ]
 
 const SECONDARY_NAV_ITEMS: NavItem[] = [
+  // #2774: Creators is a secondary browse surface, so it lives in the sidebar
+  // secondary list and the mobile More menu rather than crowding the phone
+  // bottom bar with a sixth item.
+  { path: '/creators', label: 'Creators', icon: 'creators', ariaLabel: 'Creators page' },
   { path: '/continuity-plans', label: 'Reading plans', icon: 'planner', ariaLabel: 'Reading plans page' },
   { path: '/whats-new', label: "What's new", icon: 'new', ariaLabel: "What's new page" },
   { path: '/glossary', label: 'Glossary', icon: 'glossary', ariaLabel: 'Glossary page' },
@@ -99,6 +104,12 @@ function NavIcon({ name }: { name: NavIconName }) {
         <path d="M4 17h3.5c1.4 0 2.4-.7 3.2-2"></path>
         <path d="M13.3 9c.8-1.3 1.8-2 3.2-2H20"></path>
         <path d="m17 4 3 3-3 3"></path>
+      </>
+    ),
+    creators: (
+      <>
+        <circle cx="12" cy="7" r="4"></circle>
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
       </>
     ),
     planner: (

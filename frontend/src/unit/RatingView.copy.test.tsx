@@ -3,9 +3,9 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
+import { ToastProvider } from '../contexts/ToastProvider'
 import { cast } from '../utils/cast'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
-vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
 vi.mock('../components/Tooltip', () => ({
@@ -68,6 +68,12 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     readerContextError: null,
     ratingViewTopRef: null,
     issuesRemaining: 4,
+    readingContextRequested: false,
+    readingBoundariesRequested: false,
+    readingOrdersIsLoading: false,
+    readingOrdersError: null,
+    connectedThreadsIsLoading: false,
+    connectedThreadsError: null,
     ...overrides,
   }
 }
@@ -75,7 +81,9 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
 function renderRatingView() {
   render(
     <MemoryRouter>
-      <RatingView data={makeRatingViewData()} />
+      <ToastProvider>
+        <RatingView data={makeRatingViewData()} />
+      </ToastProvider>
     </MemoryRouter>,
   )
 }

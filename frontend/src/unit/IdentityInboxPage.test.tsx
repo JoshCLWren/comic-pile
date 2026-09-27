@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import IdentityInboxPage from '../pages/IdentityInboxPage'
-import type { IdentityInboxItem } from '../services/api'
+import type { IdentityInboxItem } from '../services/api-identity'
 
 const mockUseIdentityInbox = vi.fn()
 type MockMutationResult = {

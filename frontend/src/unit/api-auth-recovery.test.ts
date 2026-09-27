@@ -1,27 +1,13 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, expect, it } from 'vitest'
+import { createApiClient, getAccessToken, setAccessToken } from '../services/api'
+import { createTransportDouble } from './transportDouble'
 
-const apiMock = vi.hoisted(() => ({
-  request: vi.fn(),
-  get: vi.fn(),
-  post: vi.fn(),
-  put: vi.fn(),
-  delete: vi.fn(),
-  patch: vi.fn(),
-  interceptors: {
-    request: { use: vi.fn() },
-    response: { use: vi.fn() },
-  },
-}))
+const transport = createTransportDouble()
+createApiClient(() => transport)
 
-vi.mock('axios', () => ({
-  default: {
-    create: vi.fn(() => apiMock),
-  },
-}))
 
-import { getAccessToken, setAccessToken } from '../services/api'
-
-const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] as (
+// SAFETY: transport.interceptors.response.use is a vi.fn(); first call's second arg is the response interceptor with expected signature.
+const responseInterceptor = transport.interceptors.response.use.mock.calls[0][1] as (
   error: {
     config: { url: string; headers?: Record<string, string>; skipAuthRedirect?: boolean }
     response: { status: number }
@@ -29,8 +15,8 @@ const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] a
 ) => Promise<Record<string, string | number | boolean | null>>
 
 beforeEach(() => {
-  apiMock.post.mockReset()
-  apiMock.request.mockReset()
+  transport.post.mockReset()
+  transport.request.mockReset()
   setAccessToken(null)
 })
 
@@ -38,14 +24,14 @@ it('propagates recovery redirect suppression into an internal token refresh', as
   const refreshError = Object.assign(new Error('refresh unauthorized'), {
     response: { status: 401 },
   })
-  apiMock.post.mockRejectedValueOnce(refreshError)
+  transport.post.mockRejectedValueOnce(refreshError)
 
   await expect(responseInterceptor({
     config: { url: '/v1/auth/me', skipAuthRedirect: true },
     response: { status: 401 },
   })).rejects.toBe(refreshError)
 
-  expect(apiMock.post).toHaveBeenCalledWith('/v1/auth/refresh', undefined, {
+  expect(transport.post).toHaveBeenCalledWith('/v1/auth/refresh', undefined, {
     skipAuthRedirect: true,
   })
 })
@@ -66,18 +52,18 @@ it('does not stampede refresh after a missing-cookie 401', async () => {
   const refreshError = Object.assign(new Error('refresh unauthorized'), {
     response: { status: 401 },
   })
-  apiMock.post.mockRejectedValue(refreshError)
+  transport.post.mockRejectedValue(refreshError)
 
   await expect(responseInterceptor({
     config: { url: '/v1/auth/me', skipAuthRedirect: true },
     response: { status: 401 },
   })).rejects.toBe(refreshError)
   expect(getAccessToken()).toBeNull()
-  expect(apiMock.post).toHaveBeenCalledTimes(1)
+  expect(transport.post).toHaveBeenCalledTimes(1)
 
   await expect(responseInterceptor({
     config: { url: '/v1/threads/', skipAuthRedirect: true },
     response: { status: 401 },
   })).rejects.toMatchObject({ response: { status: 401 } })
-  expect(apiMock.post).toHaveBeenCalledTimes(1)
+  expect(transport.post).toHaveBeenCalledTimes(1)
 })

@@ -42,6 +42,10 @@ const thread: Thread = {
   status: 'active',
   is_blocked: false,
   blocking_reasons: [],
+  last_activity_at: null,
+  last_rating: null,
+  notes: null,
+  is_test: false,
   created_at: '2000-01-01T00:00:00Z',
 }
 const callbacks = () => ({
@@ -155,7 +159,7 @@ describe('RatingView', () => {
   function makeData(overrides: Partial<RatingViewData> = {}): RatingViewData {
     return {
       activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5, total_issues: 10, issue_number: '3', next_issue_number: '4', reading_progress: 'in_progress', queue_position: 0, issue_id: 100, next_issue_id: 101 },
-      currentDie: 6, rolledResult: 3, rating: 3.0, predictedDie: 8, errorMessage: '', rateIsPending: false, snoozeIsPending: false, dismissIsPending: false, skipIsPending: false, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn(), readerContext: null, isReaderContextLoading: false, readerContextError: null, ratingViewTopRef: null, issuesRemaining: 5, ...overrides,
+      currentDie: 6, rolledResult: 3, rating: 3.0, predictedDie: 8, errorMessage: '', rateIsPending: false, snoozeIsPending: false, dismissIsPending: false, skipIsPending: false, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn(), readerContext: null, isReaderContextLoading: false, readerContextError: null, ratingViewTopRef: null, issuesRemaining: 5, readingContextRequested: false, readingBoundariesRequested: false, readingOrdersIsLoading: false, readingOrdersError: null, connectedThreadsIsLoading: false, connectedThreadsError: null, ...overrides,
     }
   }
 

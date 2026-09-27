@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { DragEvent } from 'react'
-import type { Thread } from '../../types'
+import type { ThreadListItem } from '../../types'
 import { threadsApi } from '../../services/api-threads'
 import {
   useMoveToBack,
@@ -19,7 +19,7 @@ import { queryClient } from '../../query/queryClient'
 import { getApiErrorDetail } from '../../utils/apiError'
 
 interface UseQueueThreadActionsParams {
-  navigateToRoll: (thread: Thread, response: unknown) => void
+  navigateToRoll: (thread: ThreadListItem, response: unknown) => void
   refetchSession: () => Promise<void>
 }
 
@@ -47,20 +47,20 @@ interface QueueThreadActionResult {
   setReorderError: (message: string | null) => void
   handleDragStart: (threadId: number) => (event: DragEvent<HTMLElement>) => void
   handleDragOver: (threadId: number) => (event: DragEvent<HTMLElement>) => void
-  handleDrop: (threadId: number, activeThreads: Thread[]) => (event: DragEvent<HTMLElement>) => void
+  handleDrop: (threadId: number, activeThreads: ThreadListItem[]) => (event: DragEvent<HTMLElement>) => void
   handleDragEnd: () => void
-  pendingDeleteThread: Thread | null
+  pendingDeleteThread: ThreadListItem | null
   deleteError: string | null
   isDeletePending: boolean
-  requestDelete: (thread: Thread) => void
+  requestDelete: (thread: ThreadListItem) => void
   confirmDelete: () => Promise<void> | void
   cancelDelete: () => void
   handleMoveToFront: (threadId: number) => Promise<void> | void
   handleMoveToBack: (threadId: number) => Promise<void> | void
   handleReposition: (threadId: number, targetPosition: number, total: number) => Promise<void> | void
   handleShuffle: () => Promise<void> | void
-  handleThreadRead: (thread: Thread) => Promise<void> | void
-  handleSnoozeToggle: (thread: Thread, isSnoozed: boolean) => Promise<void> | void
+  handleThreadRead: (thread: ThreadListItem) => Promise<void> | void
+  handleSnoozeToggle: (thread: ThreadListItem, isSnoozed: boolean) => Promise<void> | void
 }
 
 /**
@@ -98,7 +98,7 @@ export function useQueueThreadActions(
   const [draggedThreadId, setDraggedThreadId] = useState<number | null>(null)
   const [dragOverThreadId, setDragOverThreadId] = useState<number | null>(null)
   const [reorderError, setReorderError] = useState<string | null>(null)
-  const [pendingDeleteThread, setPendingDeleteThread] = useState<Thread | null>(null)
+  const [pendingDeleteThread, setPendingDeleteThread] = useState<ThreadListItem | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const handleDragStart = useCallback(
@@ -120,7 +120,7 @@ export function useQueueThreadActions(
   )
 
   const handleDrop = useCallback(
-    (threadId: number, activeThreads: Thread[]) =>
+    (threadId: number, activeThreads: ThreadListItem[]) =>
       (event: DragEvent<HTMLElement>) => {
         event.preventDefault()
         if (!draggedThreadId || draggedThreadId === threadId) {
@@ -152,7 +152,7 @@ export function useQueueThreadActions(
     setDragOverThreadId(null)
   }, [])
 
-  const requestDelete = useCallback((thread: Thread) => {
+  const requestDelete = useCallback((thread: ThreadListItem) => {
     setDeleteError(null)
     setPendingDeleteThread(thread)
   }, [])
@@ -222,7 +222,7 @@ export function useQueueThreadActions(
   }, [shuffleQueueMutation])
 
   const handleThreadRead = useCallback(
-    async (thread: Thread) => {
+    async (thread: ThreadListItem) => {
       if (thread.is_blocked) {
         return
       }
@@ -241,7 +241,7 @@ export function useQueueThreadActions(
   )
 
   const handleSnoozeToggle = useCallback(
-    async (thread: Thread, isSnoozed: boolean) => {
+    async (thread: ThreadListItem, isSnoozed: boolean) => {
       try {
         if (isSnoozed) {
           await unsnoozeMutation.mutate(thread.id)

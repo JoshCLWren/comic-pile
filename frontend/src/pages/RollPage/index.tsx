@@ -261,7 +261,13 @@ export default function RollPage() {
 
   const ratingViewData = useRatingView({
     state,
-    readingDetailsRequested: rating.readingDetailsRequested,
+    readerContextRequested: rating.readerContextRequested,
+    readingContextRequested: rating.readingContextRequested,
+    readingBoundariesRequested: rating.readingBoundariesRequested,
+    readingOrdersIsLoading: rating.readingOrdersIsLoading,
+    readingOrdersError: rating.readingOrdersError,
+    connectedThreadsIsLoading: rating.connectedThreadsIsLoading,
+    connectedThreadsError: rating.connectedThreadsError,
     rating,
     snooze,
     onSkip: handleSkip,

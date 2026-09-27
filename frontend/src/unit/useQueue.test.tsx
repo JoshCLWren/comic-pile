@@ -35,12 +35,16 @@ function createWrapper() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: the endpoint returns no body, so the mock resolves to undefined
   moveToPosition.mockResolvedValue(undefined as never)
+  // SAFETY: the endpoint returns no body, so the mock resolves to undefined
   moveToFront.mockResolvedValue(undefined as never)
+  // SAFETY: the endpoint returns no body, so the mock resolves to undefined
   moveToBack.mockResolvedValue(undefined as never)
+  // SAFETY: the endpoint returns no body, so the mock resolves to undefined
   shuffle.mockResolvedValue(undefined as never)
   invalidate.mockResolvedValue()
-  listThreads.mockResolvedValue({ threads: [], next_page_token: null })
+  listThreads.mockResolvedValue({ threads: [], next_page_token: null, active_count: 0 })
 })
 
 describe('useQueueThreads (bounded incremental loader)', () => {
@@ -61,8 +65,10 @@ describe('useQueueThreads (bounded incremental loader)', () => {
 
   it('passes search and default sort on the initial page', async () => {
     listThreads.mockResolvedValue({
+      // SAFETY: the stubbed page supplies only the fields the pager reads
       threads: [{ id: 1, title: 'Bat' } as never],
       next_page_token: null,
+      active_count: 0,
     })
 
     const wrapper = createWrapper()
@@ -78,9 +84,10 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   })
 
   it('maps the alphabetical UI sort to the title API sort', async () => {
-    listThreads.mockResolvedValue({ threads: [], next_page_token: null })
+    listThreads.mockResolvedValue({ threads: [], next_page_token: null, active_count: 0 })
 
     const wrapper = createWrapper()
+    // SAFETY: the sort literal is one of the values the sort type allows
     const { result } = renderHook(() => useQueueThreads('', 'alphabetical' as QueueSortBy, threadsApi), { wrapper })
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
@@ -92,9 +99,10 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   })
 
   it('does not include page_size when fetching a later cursor page', async () => {
+    // SAFETY: the stubbed page supplies only the fields the pager reads
     listThreads
-      .mockResolvedValueOnce({ threads: [{ id: 1 } as never], next_page_token: 'tok-2' })
-      .mockResolvedValueOnce({ threads: [{ id: 2 } as never], next_page_token: null })
+      .mockResolvedValueOnce({ threads: [{ id: 1 } as never], next_page_token: 'tok-2', active_count: 0 })
+      .mockResolvedValueOnce({ threads: [{ id: 2 } as never], next_page_token: null, active_count: 0 })
 
     const wrapper = createWrapper()
     const { result } = renderHook(() => useQueueThreads(undefined, 'position', threadsApi), { wrapper })
@@ -113,9 +121,10 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   })
 
   it('appends later pages without duplicating rows', async () => {
+    // SAFETY: the stubbed page supplies only the fields the pager reads
     listThreads
-      .mockResolvedValueOnce({ threads: [{ id: 1 } as never], next_page_token: 'tok-2' })
-      .mockResolvedValueOnce({ threads: [{ id: 2 } as never], next_page_token: null })
+      .mockResolvedValueOnce({ threads: [{ id: 1 } as never], next_page_token: 'tok-2', active_count: 0 })
+      .mockResolvedValueOnce({ threads: [{ id: 2 } as never], next_page_token: null, active_count: 0 })
 
     const wrapper = createWrapper()
     const { result } = renderHook(() => useQueueThreads(undefined, 'position', threadsApi), { wrapper })
@@ -132,7 +141,8 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   })
 
   it('loadMore is a no-op when there is no next page', async () => {
-    listThreads.mockResolvedValue({ threads: [{ id: 1 } as never], next_page_token: null })
+    // SAFETY: the stubbed page supplies only the fields the pager reads
+    listThreads.mockResolvedValue({ threads: [{ id: 1 } as never], next_page_token: null, active_count: 0 })
 
     const wrapper = createWrapper()
     const { result } = renderHook(() => useQueueThreads(undefined, 'position', threadsApi), { wrapper })
@@ -147,7 +157,8 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   })
 
   it('reports no next page token at the end of the list', async () => {
-    listThreads.mockResolvedValue({ threads: [{ id: 1 } as never], next_page_token: null })
+    // SAFETY: the stubbed page supplies only the fields the pager reads
+    listThreads.mockResolvedValue({ threads: [{ id: 1 } as never], next_page_token: null, active_count: 0 })
 
     const wrapper = createWrapper()
     const { result } = renderHook(() => useQueueThreads(undefined, 'position', threadsApi), { wrapper })
@@ -169,8 +180,9 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   })
 
   it('surfaces an incremental-load error without discarding loaded pages', async () => {
+    // SAFETY: the stubbed page supplies only the fields the pager reads
     listThreads
-      .mockResolvedValueOnce({ threads: [{ id: 1 } as never], next_page_token: 'tok-2' })
+      .mockResolvedValueOnce({ threads: [{ id: 1 } as never], next_page_token: 'tok-2', active_count: 0 })
       .mockRejectedValueOnce(new Error('next page unavailable'))
 
     const wrapper = createWrapper()
@@ -188,8 +200,9 @@ describe('useQueueThreads (bounded incremental loader)', () => {
   })
 
   it('keeps the previous rows visible while a search-key transition fetches', async () => {
+    // SAFETY: the stubbed page supplies only the fields the pager reads
     listThreads
-      .mockResolvedValueOnce({ threads: [{ id: 1, title: 'Saga' } as never], next_page_token: null })
+      .mockResolvedValueOnce({ threads: [{ id: 1, title: 'Saga' } as never], next_page_token: null, active_count: 0 })
       .mockImplementationOnce(() => new Promise(() => {})) // never resolves: search still in flight
 
     const wrapper = createWrapper()
@@ -232,8 +245,10 @@ describe('useQueueThreads (bounded incremental loader)', () => {
 
   it('keeps previous data visible while search query is fetching (#2343 focus retention)', async () => {
     listThreads.mockResolvedValueOnce({
+      // SAFETY: the stubbed page supplies only the fields the pager reads
       threads: [{ id: 1, title: 'Batman' } as never],
       next_page_token: null,
+      active_count: 0,
     })
 
     const wrapper = createWrapper()
@@ -247,15 +262,16 @@ describe('useQueueThreads (bounded incremental loader)', () => {
     expect(result.current.data).toContainEqual(expect.objectContaining({ id: 1, title: 'Batman' }))
 
     listThreads.mockClear()
-    listThreads.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          setTimeout(
-            () => resolve({ threads: [{ id: 2, title: 'Batgirl' } as never], next_page_token: null }),
-            100,
-          )
-        }),
-    )
+listThreads.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            setTimeout(
+              // SAFETY: the stubbed page supplies only the fields the pager reads
+              () => resolve({ threads: [{ id: 2, title: 'Batgirl' } as never], next_page_token: null, active_count: 0 }),
+              100,
+            )
+          }),
+      )
 
     rerender({ search: 'bat' })
 
@@ -276,12 +292,14 @@ describe('useQueueThreads (bounded incremental loader)', () => {
     const wrapper = createWrapper()
     const { result, rerender } = renderHook(
       ({ sort }: { sort: QueueSortBy }) => useQueueThreads('', sort, threadsApi),
+      // SAFETY: the sort literal is one of the values the sort type allows
       { wrapper, initialProps: { sort: 'position' as QueueSortBy } },
     )
 
     await waitFor(() => expect(result.current.isPending).toBe(false))
     listThreads.mockClear()
 
+    // SAFETY: the sort literal is one of the values the sort type allows
     rerender({ sort: 'created' as QueueSortBy })
 
     await waitFor(() =>

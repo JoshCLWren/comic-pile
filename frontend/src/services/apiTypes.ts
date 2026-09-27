@@ -23,6 +23,8 @@ export interface RollBootstrapApi {
   switchPrerequisite: (request: import('../types/rollBootstrap').RollPrerequisiteSwitchRequest) => Promise<import('../types/rollBootstrap').RollPrerequisiteSwitchResponse>
 }
 
+export type SessionApi = ReturnType<typeof import('./api-sessions').createSessionApi>
+
 export interface CacheEffectsApi {
   applyRatedThreadCache: (client: import('@tanstack/react-query').QueryClient, thread: Thread) => Promise<void>
   invalidateCurrentSessionAfterSnooze: (client: import('@tanstack/react-query').QueryClient) => Promise<void>

@@ -15,6 +15,7 @@ vi.mock('../services/api-releases', () => ({
 const mockedList = vi.mocked(releasesApi.list)
 
 function release(overrides: Partial<Release> = {}): Release {
+  // SAFETY: the release fixture supplies only the fields the hook returns
   return {
     id: 1,
     released_at: '2026-08-11T20:00:00Z',

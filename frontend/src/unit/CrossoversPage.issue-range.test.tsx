@@ -92,6 +92,10 @@ const thread = {
   status: 'active',
   is_blocked: false,
   blocking_reasons: [],
+  last_activity_at: null,
+  last_rating: null,
+  notes: null,
+  is_test: false,
   created_at: '2026-08-01T00:00:00Z',
 }
 const issues = [
@@ -153,6 +157,7 @@ beforeEach(() => {
   vi.spyOn(threadsApi, 'list').mockResolvedValue({
     threads: [thread],
     next_page_token: null,
+    active_count: 1,
   })
   vi.spyOn(threadsApi, 'get').mockResolvedValue(thread)
   vi.spyOn(issuesApi, 'list').mockResolvedValue({

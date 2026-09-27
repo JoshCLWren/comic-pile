@@ -1,7 +1,22 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api'
+import type { ReactElement, ReactNode } from 'react'
+import { createToastSpy } from './toastSpy'
+import { ToastContextSpy } from './toastTestHarness'
+import { comicVineApi } from '../services/api'
+import type { ComicVineIssueIntelligence } from '../services/api-comicvine'
 import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
+
+const toast = createToastSpy()
+
+function ToastWrapper({ children }: { children: ReactNode }) {
+  return <ToastContextSpy value={toast}>{children}</ToastContextSpy>
+}
+
+function renderWithToast(ui: ReactElement) {
+  return render(ui, { wrapper: ToastWrapper })
+}
+
 
 vi.mock('../services/api', async () => {
   const actual = await vi.importActual<typeof import('../services/api')>('../services/api')
@@ -12,14 +27,6 @@ vi.mock('../services/api-reading-orders', () => ({
   readingOrdersApi: {
     list: vi.fn().mockResolvedValue({ reading_orders: [] }),
   },
-}))
-
-vi.mock('../contexts/useToast', () => ({
-  useToast: () => ({
-    showToast: vi.fn(),
-    removeToast: vi.fn(),
-    toasts: [],
-  }),
 }))
 
 const getIntelligence = vi.mocked(comicVineApi.getIssueIntelligence)
@@ -67,7 +74,7 @@ describe('ComicIdentity', () => {
       }],
     })
 
-    render(<ComicIdentity issueId={1} />)
+    renderWithToast(<ComicIdentity issueId={1} />)
     await waitForLoaded()
 
     // Cover image should be visible immediately (not in a collapsed card) and
@@ -123,7 +130,7 @@ describe('ComicIdentity', () => {
       story_arcs: [],
     })
 
-    render(<ComicIdentity issueId={2} />)
+    renderWithToast(<ComicIdentity issueId={2} />)
     await waitForLoaded()
 
     // Should show placeholder SVG, not an img tag
@@ -150,7 +157,7 @@ describe('ComicIdentity', () => {
       story_arcs: [],
     })
 
-    render(<ComicIdentity issueId={3} />)
+    renderWithToast(<ComicIdentity issueId={3} />)
     await waitForLoaded()
 
     const cover = await screen.findByAltText('')
@@ -185,7 +192,7 @@ describe('ComicIdentity', () => {
       story_arcs: [],
     })
 
-    render(<ComicIdentity issueId={4} />)
+    renderWithToast(<ComicIdentity issueId={4} />)
     await waitForLoaded()
 
     // Initially only first 6 creators shown
@@ -229,7 +236,7 @@ describe('ComicIdentity', () => {
       story_arcs: [],
     })
 
-    render(<ComicIdentity issueId={4} />)
+    renderWithToast(<ComicIdentity issueId={4} />)
     await waitForLoaded()
 
     const showAllButton = screen.getByRole('button', { name: /show all 10/i })
@@ -264,7 +271,7 @@ describe('ComicIdentity', () => {
       }],
     })
 
-    render(<ComicIdentity issueId={4} />)
+    renderWithToast(<ComicIdentity issueId={4} />)
     await waitForLoaded()
 
     await waitFor(() => expect(screen.getByText('Creator One')).toBeInTheDocument())
@@ -291,7 +298,7 @@ describe('ComicIdentity', () => {
       story_arcs: [],
     })
 
-    render(<ComicIdentity issueId={4} />)
+    renderWithToast(<ComicIdentity issueId={4} />)
     await waitForLoaded()
 
     const section = screen.getByRole('region', { name: 'Comic details' })
@@ -322,7 +329,7 @@ describe('ComicIdentity', () => {
       story_arcs: manyArcs,
     })
 
-    render(<ComicIdentity issueId={5} />)
+    renderWithToast(<ComicIdentity issueId={5} />)
     await waitForLoaded()
 
     // Initially only first 3 arcs shown
@@ -377,7 +384,7 @@ describe('ComicIdentity', () => {
       }],
     })
 
-    render(<ComicIdentity issueId={6} />)
+    renderWithToast(<ComicIdentity issueId={6} />)
     await waitForLoaded()
 
     await waitFor(() => expect(screen.getByText('Big Arc')).toBeInTheDocument())
@@ -409,14 +416,14 @@ describe('ComicIdentity', () => {
 
   it('renders nothing when issue has no confirmed ComicVine mapping', async () => {
     getIntelligence.mockResolvedValue(null)
-    const { container } = render(<ComicIdentity issueId={9} />)
+    const { container } = renderWithToast(<ComicIdentity issueId={9} />)
     await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(9))
     await waitFor(() => expect(container).toBeEmptyDOMElement())
   })
 
   it('fails closed when metadata loading fails', async () => {
     getIntelligence.mockRejectedValue(new Error('metadata unavailable'))
-    const { container } = render(<ComicIdentity issueId={3} />)
+    const { container } = renderWithToast(<ComicIdentity issueId={3} />)
     await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(3))
     await waitFor(() => expect(screen.queryByLabelText('Loading comic details')).not.toBeInTheDocument())
     expect(container).toBeEmptyDOMElement()
@@ -427,7 +434,7 @@ describe('ComicIdentity', () => {
     getIntelligence.mockImplementation(() => new Promise((resolve) => {
       resolveRequest = resolve
     }))
-    const { unmount } = render(<ComicIdentity issueId={4} />)
+    const { unmount } = renderWithToast(<ComicIdentity issueId={4} />)
     await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(4))
 
     unmount()
@@ -463,7 +470,7 @@ describe('ComicIdentity', () => {
       }],
     })
 
-    render(<ComicIdentity issueId={5} />)
+    renderWithToast(<ComicIdentity issueId={5} />)
     await waitForLoaded()
     const addButton = screen.getByRole('button', { name: /Add Batman #126 to ComicPile/i })
     fireEvent.click(addButton)
@@ -499,7 +506,7 @@ describe('ComicIdentity', () => {
       }],
     })
 
-    render(<ComicIdentity issueId={6} />)
+    renderWithToast(<ComicIdentity issueId={6} />)
     await waitForLoaded()
     const addButton = screen.getByRole('button', { name: /Add Spider-Man #51 to ComicPile/i })
     fireEvent.click(addButton)
@@ -545,7 +552,7 @@ describe('ComicIdentity', () => {
       }],
     })
 
-    render(<ComicIdentity issueId={7} />)
+    renderWithToast(<ComicIdentity issueId={7} />)
     await waitForLoaded()
     const addButton = screen.getByRole('button', { name: /Add X-Men #101 to ComicPile/i })
     fireEvent.click(addButton)
@@ -559,7 +566,7 @@ describe('ComicIdentity', () => {
   })
 
   it('does not request metadata when no issue is selected', () => {
-    const { container } = render(<ComicIdentity issueId={null} />)
+    const { container } = renderWithToast(<ComicIdentity issueId={null} />)
     expect(getIntelligence).not.toHaveBeenCalled()
     expect(container).toBeEmptyDOMElement()
   })
@@ -617,7 +624,7 @@ describe('ComicIdentity', () => {
       ],
     })
 
-    const { container: _container } = render(<ComicIdentity issueId={7} />)
+    const { container: _container } = renderWithToast(<ComicIdentity issueId={7} />)
     await waitForLoaded()
     // Summary text is split, check for the arc count in the summary
     expect(screen.getByText((content) => content.includes('Story arcs') && content.includes('2'))).toBeInTheDocument()
@@ -651,7 +658,7 @@ describe('ComicIdentity', () => {
       story_arcs: [],
     })
 
-    render(<ComicIdentity issueId={8} />)
+    renderWithToast(<ComicIdentity issueId={8} />)
     await waitForLoaded()
 
     // Description should be in a details/summary
@@ -685,7 +692,7 @@ describe('ComicIdentity', () => {
       }],
     })
 
-    render(<ComicIdentity issueId={9} />)
+    renderWithToast(<ComicIdentity issueId={9} />)
     await waitForLoaded()
 
     // Story arcs section should exist with details/summary structure
@@ -728,7 +735,7 @@ describe('ComicIdentity', () => {
       }],
     })
 
-    render(<ComicIdentity issueId={11} />)
+    renderWithToast(<ComicIdentity issueId={11} />)
     await waitForLoaded()
 
     const list = screen.getByTestId('story-arc-issue-list')
@@ -753,7 +760,7 @@ describe('ComicIdentity', () => {
       story_arcs: [],
     })
 
-    render(<ComicIdentity issueId={10} />)
+    renderWithToast(<ComicIdentity issueId={10} />)
     await waitForLoaded()
 
     // Creators section should exist with details/summary structure
@@ -799,7 +806,7 @@ describe('ComicIdentity', () => {
         story_arcs: [],
       })
 
-      render(<ComicIdentity issueId={99} />)
+      renderWithToast(<ComicIdentity issueId={99} />)
       await waitForLoaded()
 
       const cover = screen.getByTestId('comic-cover')
@@ -832,7 +839,7 @@ describe('ComicIdentity', () => {
         story_arcs: [],
       })
 
-      render(<ComicIdentity issueId={100} />)
+      renderWithToast(<ComicIdentity issueId={100} />)
       await waitForLoaded()
 
       const cover = screen.getByTestId('comic-cover')
@@ -862,7 +869,7 @@ describe('ComicIdentity', () => {
         resolveRequest = resolve
       }))
 
-      render(<ComicIdentity issueId={101} />)
+      renderWithToast(<ComicIdentity issueId={101} />)
       await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(101))
 
       const loadingCover = screen.getByTestId('comic-cover')
