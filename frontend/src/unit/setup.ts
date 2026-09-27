@@ -63,14 +63,12 @@ vi.mock('@testing-library/react', async (importOriginal) => {
 
 // Ensure globals exist before user-event and other libraries access them
 if (typeof global.window === 'undefined') {
-  // SAFETY: invariant verified
-  const __globalWindow: typeof global = global as typeof global
-  __globalWindow.window = {}
+  // SAFETY: test setup runs in Node; we assign a minimal window for jsdom compatibility
+  (global as { window?: unknown }).window = {}
 }
 if (typeof global.document === 'undefined') {
-  // SAFETY: invariant verified
-  const __globalDoc: typeof global = global as typeof global
-  __globalDoc.document = {
+  // SAFETY: test setup runs in Node; we assign a minimal document for jsdom compatibility
+  (global as { document?: unknown }).document = {
     addEventListener: () => {},
     removeEventListener: () => {},
     // Minimal DOM methods used by tests
