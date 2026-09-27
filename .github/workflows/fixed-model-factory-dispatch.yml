@@ -255,6 +255,7 @@ jobs:
           python3 .github/scripts/factory-work-controller.py stale
 
       - name: Resolve and dispatch fixed workers
+        id: dispatch_workers
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -355,6 +356,7 @@ jobs:
             while (( attempt <= 3 )); do
               echo "Starting Factory ${worker} (dispatch attempt ${attempt}/3)"
               if gh workflow run free-model-factory-entry.yml --ref main -f worker="$worker"; then
+                dispatched_count=$((dispatched_count + 1))
                 return 0
               fi
               if (( attempt < 3 )); then
@@ -527,19 +529,26 @@ jobs:
 
           if [[ "$workers" == '[]' ]]; then
             echo 'OmniRoute free-entry cap is exhausted; not starting additional Entry sessions'
+            echo "dispatched_count=0" >> "$GITHUB_OUTPUT"
+            echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           echo "Dispatching workers through centralized assignment: $workers"
+          dispatched_count=0
           dispatch_failures=0
           while IFS= read -r worker; do
             dispatch_assigned_worker "$worker" || dispatch_failures=$((dispatch_failures + 1))
           done < <(jq -r '.[]' <<< "$workers")
 
+          echo "Dispatched ${dispatched_count} worker entry workflow(s)"
+          echo "dispatched_count=${dispatched_count}" >> "$GITHUB_OUTPUT"
           if (( dispatch_failures > 0 )); then
+            echo "dispatch_failed=true" >> "$GITHUB_OUTPUT"
             echo "${dispatch_failures} worker dispatch(es) failed after retries; later workers were still attempted" >&2
             exit 1
           fi
+          echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
 
       - name: Self-perpetuate roster cadence
         if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster'))
@@ -547,11 +556,31 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          DISPATCHED_COUNT: ${{ steps.dispatch_workers.outputs.dispatched_count }}
+          DISPATCH_FAILED: ${{ steps.dispatch_workers.outputs.dispatch_failed }}
         run: |
           set -Eeuo pipefail
           # GitHub throttles scheduled delivery to roughly hourly. Roster-mode
-          # dispatch is not subject to that throttle, so chain the next tick.
-          # The hourly cron and recovery workflow restart a broken chain.
-          sleep 240
-          gh workflow run fixed-model-factory-dispatch.yml \
-            --repo "$GITHUB_REPOSITORY" --ref main -f mode=roster
+          # dispatch is not subject to that throttle, but it must not
+          # self-perpetuate on a trustworthy zero-work tick: chain only when at
+          # least one entry workflow was dispatched or dispatch failed before
+          # a trustworthy zero-work result. The hourly cron and recovery
+          # workflow restart a broken chain.
+          dispatched_count="${DISPATCHED_COUNT:-}"
+          dispatch_failed="${DISPATCH_FAILED:-}"
+
+          chain_roster_successor() {
+            sleep 240
+            gh workflow run fixed-model-factory-dispatch.yml \
+              --repo "$GITHUB_REPOSITORY" --ref main -f mode=roster
+          }
+
+          if [[ "$dispatch_failed" == "true" || ( "$dispatched_count" =~ ^[0-9]+$ && "$dispatched_count" -gt 0 ) ]]; then
+            echo "Chaining roster successor (dispatched_count=${dispatched_count}, dispatch_failed=${dispatch_failed})"
+            chain_roster_successor
+          elif [[ "$dispatched_count" == "0" && "$dispatch_failed" == "false" ]]; then
+            echo 'Trustworthy zero-work tick: ending bounded roster session; hourly watchdog cron remains armed'
+          else
+            echo "Dispatch outputs missing or untrustworthy (dispatched_count=${dispatched_count:-<unset>}, dispatch_failed=${dispatch_failed:-<unset>}); chaining roster successor"
+            chain_roster_successor
+          fi
