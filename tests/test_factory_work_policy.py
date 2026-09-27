@@ -1008,3 +1008,92 @@ def test_issue_explicitly_closed_by_pr_recognizes_all_closing_inflections():
         assert policy.linked_issue_from_pr(pr) == 2127, body
     casual = human_pr_fixture(number=2161, body="Related to #2127; see parent.")
     assert policy.issue_explicitly_closed_by_pr(casual) is None
+
+
+def _labels(*names: str) -> set[str]:
+    return set(names)
+
+
+def test_normalize_done_strips_all_transient_factory_state():
+    """ralph-status:done must remove every transient stage/owner label."""
+    for stage in (
+        "factory:building",
+        "factory:review",
+        "factory:changes-requested",
+        "factory:ci",
+        "factory:ready",
+        "factory:blocked",
+    ):
+        labels = _labels("ralph-status:done", "factory:13", stage)
+        assert policy.normalize_target_state(labels, "factory:13") == (
+            "factory:unowned",
+            None,
+        )
+
+
+def test_normalize_drops_redundant_unowned_when_one_active_owner_remains():
+    """A no-persisted-change handoff can leave one active owner with
+    factory:unowned; normalization must keep the legitimate owner and drop
+    the redundant unowned marker and any surviving stage."""
+    labels = _labels("factory", "factory:unowned", "factory:13", "factory:building")
+    assert policy.normalize_target_state(labels, "factory:13") == ("factory:13", None)
+
+
+def test_normalize_blocked_unowned_uses_factory_blocked_stage():
+    """A blocked unowned issue must carry factory:blocked, not factory:building."""
+    labels = _labels("ralph-status:blocked", "factory:unowned")
+    assert policy.normalize_target_state(labels, "factory:unowned") == (
+        "factory:unowned",
+        "factory:blocked",
+    )
+
+
+def test_normalize_unowned_building_strips_building_stage():
+    """factory:building + factory:unowned is contradictory; drop the stage."""
+    labels = _labels("factory", "factory:unowned", "factory:building")
+    assert policy.normalize_target_state(labels, "factory:unowned") == (
+        "factory:unowned",
+        None,
+    )
+
+
+def test_normalize_in_progress_unowned_is_contradictory():
+    """Executable work must never remain ralph-status:in-progress without a real
+    owner; normalization reports unowned with no stage."""
+    labels = _labels("ralph-status:in-progress", "factory:unowned")
+    assert policy.normalize_target_state(labels, "factory:unowned") == (
+        "factory:unowned",
+        None,
+    )
+
+
+def test_normalize_owned_building_is_clean():
+    """A singly-owned target in building state is not contradictory."""
+    labels = _labels("factory", "factory:13", "factory:building")
+    assert policy.normalize_target_state(labels, "factory:13") == (
+        "factory:13",
+        "factory:building",
+    )
+
+
+def test_normalize_preserves_legitimate_review_ci_ready_pr_state():
+    """Review/CI/ready PR states retain their truthful stage semantics."""
+    for stage in ("factory:review", "factory:ci", "factory:ready"):
+        labels = _labels("factory", "factory:unowned", stage)
+        assert policy.normalize_target_state(labels, "factory:unowned") == (
+            "factory:unowned",
+            stage,
+        )
+
+
+def test_normalize_is_idempotent():
+    """Re-running normalization on an already-normalized label set is a no-op."""
+    for labels in (
+        _labels("factory", "factory:unowned", "factory:review"),
+        _labels("ralph-status:blocked", "factory:unowned", "factory:blocked"),
+        _labels("factory", "factory:13", "factory:building"),
+        _labels("ralph-status:done"),
+    ):
+        once = policy.normalize_target_state(labels, policy.owner_of(labels))
+        twice = policy.normalize_target_state(_labels(*once), once[0])
+        assert once == twice, labels

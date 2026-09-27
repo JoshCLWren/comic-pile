@@ -252,7 +252,14 @@ def normalize_target_state(labels: set[str], current_owner: str | None) -> tuple
 
     # Resolve ownership
     owner = current_owner or owner_of(labels) or 'factory:unowned'
-    
+    has_unowned = 'factory:unowned' in labels
+
+    # Contradiction: an active owner may not coexist with factory:unowned.
+    # A no-persisted-change release can leave both behind; drop the redundant
+    # unowned marker and any stage that survived the handoff.
+    if owner != 'factory:unowned' and has_unowned:
+        return owner, None
+
     # Handle blocked unowned
     if owner == 'factory:unowned' and 'ralph-status:blocked' in labels:
         return 'factory:unowned', 'factory:blocked'
@@ -261,7 +268,7 @@ def normalize_target_state(labels: set[str], current_owner: str | None) -> tuple
     if owner == 'factory:unowned':
         stage = stage_of(labels)
         if stage == 'factory:building':
-            return 'factory:unowned', None # Remove building stage if unowned
+            return 'factory:unowned', None  # Remove building stage if unowned
         return owner, stage
 
     # Owned targets

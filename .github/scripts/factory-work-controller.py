@@ -518,9 +518,26 @@ def reconcile_contradictory_labels(
         current_stage = stage_of(current_labels)
         if current_stage != norm_stage:
             is_contradictory = True
-            
+
         # Special case: if it's unowned but still has a building label, it's contradictory
         if owner == 'factory:unowned' and 'factory:building' in current_labels:
+            is_contradictory = True
+
+        # An active owner may not coexist with factory:unowned (no-persisted-change
+        # handoff can leave both behind); drop the redundant unowned marker.
+        # Fail closed when two distinct active leases coexist with unowned:
+        # guessing which owner is legitimate would silently drop a real lease.
+        active_owners = {
+            label for label in current_labels
+            if OWNER_RE.fullmatch(label) and label != 'factory:unowned'
+        }
+        if len(active_owners) == 1 and 'factory:unowned' in current_labels:
+            is_contradictory = True
+        elif len(active_owners) > 1 and 'factory:unowned' in current_labels:
+            is_contradictory = False
+
+        # Executable work must never masquerade as in-progress without a real owner.
+        if 'ralph-status:in-progress' in current_labels and owner == 'factory:unowned':
             is_contradictory = True
             
         if not is_contradictory:

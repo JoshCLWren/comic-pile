@@ -937,6 +937,41 @@ def test_reconcile_contradictory_labels_repairs_done_state(
     assert replaced == [(3007, "factory:unowned", None)]
 
 
+def test_reconcile_contradictory_labels_repairs_unowned_plus_single_worker(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A no-persisted-change handoff can leave one active owner behind with
+    factory:unowned; reconciliation must drop the redundant unowned marker
+    and keep the legitimate owner rather than silently skipping the target."""
+    issues = [issue(3008, "factory", "factory:unowned", "factory:13", "factory:building")]
+    replaced: list[tuple[int, str, str | None]] = []
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: replaced.append((number, owner, stage)),
+    )
+
+    assert controller.reconcile_contradictory_labels(issues, []) == [3008]
+    assert replaced == [(3008, "factory:13", None)]
+
+
+def test_reconcile_contradictory_labels_repairs_in_progress_unowned(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Executable work must never remain ralph-status:in-progress without a real
+    owner; reconciliation must normalize it to unowned with no stage."""
+    issues = [issue(3009, "ralph-status:in-progress", "factory:unowned")]
+    replaced: list[tuple[int, str, str | None]] = []
+    monkeypatch.setattr(
+        controller,
+        "replace_factory_labels",
+        lambda number, owner, stage=None: replaced.append((number, owner, stage)),
+    )
+
+    assert controller.reconcile_contradictory_labels(issues, []) == [3009]
+    assert replaced == [(3009, "factory:unowned", None)]
+
+
 def test_reconcile_contradictory_labels_fails_closed_on_two_workers(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
