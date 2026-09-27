@@ -283,10 +283,10 @@ export async function getPasswordResetToken(page: Page, email: string): Promise<
   const token = await getAuthToken(page);
   const csrfToken = await getCsrfToken(page, token);
 
-  const headers = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-CSRF-Token': csrfToken,
-  } satisfies Record<string, string>;
+  };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -307,7 +307,7 @@ export async function getPasswordResetToken(page: Page, email: string): Promise<
 }
 
 async function getCsrfToken(page: Page, token: string | null): Promise<string> {
-  const headers = {} satisfies Record<string, string>;
+  const headers: Record<string, string> = {};
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -363,14 +363,14 @@ export async function createThread(
     dataWithoutTotal.notes = threadData.notes;
   }
 
-  const jsonHeaders = {} satisfies Record<string, string>;
+  const jsonHeaders: Record<string, string> = {};
   jsonHeaders['Content-Type'] = 'application/json';
   jsonHeaders['X-CSRF-Token'] = csrfToken;
   if (token) {
     jsonHeaders['Authorization'] = `Bearer ${token}`;
   }
-
-  const authHeaders = {} satisfies Record<string, string>;
+  
+  const authHeaders: Record<string, string> = {};
   if (token) {
     authHeaders['Authorization'] = `Bearer ${token}`;
   }

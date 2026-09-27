@@ -121,8 +121,9 @@ describe('ResetPasswordPage', () => {
     mockApi.post.mockRejectedValue({
       response: { data: { detail: 'Token has expired' }, status: 400 },
     });
+    
+    renderPage('?token=valid-token');
 
-    renderPage('?token=expired-token');
 
     const newPasswordInput = screen.getByLabelText(/new password/i);
     const confirmPasswordInput = screen.getByLabelText(/confirm new password/i);
@@ -143,8 +144,9 @@ describe('ResetPasswordPage', () => {
     mockApi.post.mockRejectedValue({
       response: { data: { detail: 'Invalid or expired token' }, status: 400 },
     });
+    
+    renderPage('?token=valid-token');
 
-    renderPage('?token=invalid-token');
 
     const newPasswordInput = screen.getByLabelText(/new password/i);
     const confirmPasswordInput = screen.getByLabelText(/confirm new password/i);
@@ -165,8 +167,9 @@ describe('ResetPasswordPage', () => {
     mockApi.post.mockRejectedValue({
       response: { data: { detail: 'Token has already been used' }, status: 400 },
     });
+    
+    renderPage('?token=valid-token');
 
-    renderPage('?token=used-token');
 
     const newPasswordInput = screen.getByLabelText(/new password/i);
     const confirmPasswordInput = screen.getByLabelText(/confirm new password/i);

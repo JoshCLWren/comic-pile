@@ -37,7 +37,7 @@ export default function ResetPasswordPage() {
     if (!t) {
       setError('This reset link is invalid or has expired. Please request a new password reset link.')
     }
-  }, [location.search])
+  }, [location.search, setToken])
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()

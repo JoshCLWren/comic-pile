@@ -6,7 +6,7 @@ import api from '../services/api';
 
 vi.mock('../services/api');
 
-const mockApi = vi.mocked(api);
+const _mockApi = vi.mocked(api);
 
 const renderPage = () => {
   return render(
