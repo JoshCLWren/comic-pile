@@ -63,7 +63,7 @@ def test_release_writer_helper_documents_all_commands() -> None:
     """Every documented helper command must exist in the release-writer script."""
     helper_text = RELEASE_WRITER_HELPER.read_text(encoding="utf-8")
     agent_text = RELEASE_WRITER_AGENT.read_text(encoding="utf-8")
-    for command in ("recent", "check", "publish", "skip", "retract", "pr", "files", "issues"):
+    for command in ("check", "publish", "skip", "retract", "pr", "files", "issues"):
         assert f'command == "{command}"' in helper_text, f"missing {command} handler"
         assert f"release_writer.py {command}" in agent_text, f"missing {command} docs"
 
@@ -84,7 +84,7 @@ def test_release_writer_contract_requires_reader_facing_copy_rules() -> None:
 def test_release_writer_contract_documents_exact_source_and_skip_shape() -> None:
     """Avoid wasting model calls on malformed check and skip helper invocations."""
     agent_text = RELEASE_WRITER_AGENT.read_text(encoding="utf-8")
-    assert "Never call `check` without all three required arguments" in agent_text
+    assert "check <repository> <pr-number> <merge-sha>" in agent_text
     for field in (
         "source_repository",
         "source_pr_number",
@@ -97,14 +97,15 @@ def test_release_writer_contract_documents_exact_source_and_skip_shape() -> None
 
 
 def test_release_writer_workflow_falls_back_on_provider_rate_limits() -> None:
-    """A transient NVIDIA 429 should try another healthy model without hiding real failures."""
+    """A transient NVIDIA 429 should be handled by the deterministic controller."""
     workflow = RELEASE_WRITER_WORKFLOW.read_text(encoding="utf-8")
+    controller = (ROOT / "scripts" / "release_reconcile.py").read_text(encoding="utf-8")
     assert "models<<EOF" in workflow
-    assert 'mapfile -t models <<< "$MODELS"' in workflow
-    assert "Too Many Requests" in workflow
-    assert "rate.?limit" in workflow
-    assert "trying the next healthy NVIDIA candidate" in workflow
-    assert 'exit "$status"' in workflow
+    assert "RELEASE_WRITER_MODELS" in workflow
+    assert "_RATE_LIMIT_PATTERN" in controller
+    assert "Too Many Requests" in controller
+    assert "rate.?limit" in controller
+    assert "trying the next model" in controller
 
 
 def test_release_writer_all_read_helpers_are_get_only(monkeypatch) -> None:

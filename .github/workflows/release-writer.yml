@@ -10,6 +10,10 @@ on:
         description: Optional merged pull request number to reconcile
         required: false
         type: string
+      backfill_since:
+        description: Optional ISO-8601 lower bound for merged-PR reconciliation
+        required: false
+        type: string
   schedule:
     - cron: '23 * * * *'
 
@@ -17,7 +21,7 @@ jobs:
   publish-release:
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
     permissions:
       contents: read
       pull-requests: read
@@ -26,6 +30,7 @@ jobs:
       RELEASE_API_URL: https://comic-pile.vercel.app/api/v1/releases
       RELEASE_WRITER_TOKEN: ${{ secrets.RELEASE_WRITER_TOKEN }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      RELEASE_BACKFILL_BASELINE: '2026-09-22T20:35:40Z'
     steps:
       - name: Checkout merged main
         uses: actions/checkout@v7
@@ -62,8 +67,18 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          fcm_output="$(free-coding-models --json --origin nvidia --hide-unconfigured --best --no-telemetry)"
-          candidates="$(printf '%s\n' "$fcm_output" | python scripts/select_fcm_nvidia_model.py)"
+          fcm_output="$(
+            free-coding-models \
+              --json \
+              --origin nvidia \
+              --hide-unconfigured \
+              --best \
+              --no-telemetry
+          )"
+          candidates="$(
+            printf '%s\n' "$fcm_output" \
+              | python scripts/select_fcm_nvidia_model.py
+          )"
           if [[ -z "$candidates" ]]; then
             echo 'No configured NVIDIA release-writer model is available' >&2
             exit 1
@@ -74,50 +89,50 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build release-writer prompt
-        id: prompt
+      - name: Determine reconciliation scope
+        id: scope
+        shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          EVENT_PR: ${{ github.event.pull_request.number }}
           INPUT_PR: ${{ inputs.pr_number }}
+          INPUT_SINCE: ${{ inputs.backfill_since }}
         run: |
+          set -Eeuo pipefail
+          args=(--repository "$GITHUB_REPOSITORY")
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            prompt="Process merged pull request #${EVENT_PR} in ${GITHUB_REPOSITORY}. Check the exact source in the release ledger first, then verify it is merged, inspect its changed-file summary and linked issue context, and publish or explicitly skip it according to the release-writer contract."
+            # The deterministic repair landed after a known gap. Rechecking this
+            # baseline is idempotent and guarantees deployment performs backfill.
+            args+=(--since "$RELEASE_BACKFILL_BASELINE")
           elif [[ -n "$INPUT_PR" ]]; then
-            prompt="Reconcile merged pull request #${INPUT_PR} in ${GITHUB_REPOSITORY}. Check the release ledger first, then publish it if missing or report a source conflict."
+            args+=(--pr "$INPUT_PR")
+          elif [[ -n "$INPUT_SINCE" ]]; then
+            args+=(--since "$INPUT_SINCE")
           else
-            prompt="Reconcile the 100 most recently merged pull requests in ${GITHUB_REPOSITORY}. Start with 'python scripts/release_writer.py recent ${GITHUB_REPOSITORY} 100' and treat that output as the authoritative reconciliation set. Process every returned row in order, checking the release ledger before detailed inspection. Publish or explicitly skip only missing entries. Do not discover the reconciliation set with gh api. Stop and report any source-identity conflict instead of overwriting provenance."
+            args+=(--limit 100)
           fi
-          printf 'prompt=%s\n' "$prompt" >> "$GITHUB_OUTPUT"
+          printf '%q ' "${args[@]}" > "$RUNNER_TEMP/release-reconcile-args"
 
-      - name: Run dedicated release writer
+      - name: Run deterministic release reconciliation
         env:
           GH_TOKEN: ${{ github.token }}
-          MODELS: ${{ steps.model.outputs.models }}
-          PROMPT: ${{ steps.prompt.outputs.prompt }}
+          RELEASE_WRITER_MODELS: ${{ steps.model.outputs.models }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          mapfile -t models <<< "$MODELS"
-          for model in "${models[@]}"; do
-            [[ -n "$model" ]] || continue
-            attempt_log="$(mktemp)"
-            echo "::notice::Running release writer with $model"
-            set +e
-            opencode run -m "$model" --agent release-writer --auto --dir "$GITHUB_WORKSPACE" --title "ComicPile release writer" "$PROMPT" 2>&1 | tee "$attempt_log"
-            status=${PIPESTATUS[0]}
-            set -e
-            if [[ $status -eq 0 ]]; then
-              rm -f "$attempt_log"
-              exit 0
-            fi
-            if grep -Eqi 'Too Many Requests|status.?429|HTTP.?429|rate.?limit' "$attempt_log"; then
-              echo "::warning::Release-writer model $model was rate-limited; trying the next healthy NVIDIA candidate."
-              rm -f "$attempt_log"
-              continue
-            fi
-            rm -f "$attempt_log"
-            exit "$status"
-          done
-          echo '::error::Every healthy NVIDIA release-writer model was rate-limited.'
-          exit 1
+          read -r -a args <<< "$(cat "$RUNNER_TEMP/release-reconcile-args")"
+          python scripts/release_reconcile.py \
+            "${args[@]}" \
+            --summary-json "$RUNNER_TEMP/release-reconcile.json" \
+            --summary-markdown "$RUNNER_TEMP/release-reconcile.md"
+
+      - name: Publish reconciliation summary
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f "$RUNNER_TEMP/release-reconcile.md" ]]; then
+            cat "$RUNNER_TEMP/release-reconcile.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '## Release reconciliation' >> "$GITHUB_STEP_SUMMARY"
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Controller exited before producing a summary.' >> "$GITHUB_STEP_SUMMARY"
+          fi
