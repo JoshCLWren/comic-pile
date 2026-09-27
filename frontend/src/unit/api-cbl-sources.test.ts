@@ -1,15 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
+import { createCblSourcesApi } from '../services/api-cbl-sources'
 import type {
   CBLAdoptionPreview,
   CBLAdoptionPreviewEntry,
 } from '../services/api-cbl-sources'
+import { createHttpClientStub } from './httpClientStub'
 
-const api = vi.hoisted(() => ({ post: vi.fn() }))
-
-vi.mock('../services/api', () => ({ default: api }))
-
-import { cblSourcesApi } from '../services/api-cbl-sources'
+const client = createHttpClientStub()
+const cblSourcesApi = createCblSourcesApi(client)
 
 function entry(overrides: Partial<CBLAdoptionPreviewEntry>): CBLAdoptionPreviewEntry {
   return {
@@ -72,8 +71,8 @@ const reviewedPreview = {
 
 describe('cblSourcesApi.commit', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    api.post.mockResolvedValue({
+    client.post.mockReset()
+    client.post.mockResolvedValue({
       id: 77,
       reused_positions: [1],
       created_positions: [2],
@@ -95,7 +94,7 @@ describe('cblSourcesApi.commit', () => {
       excluded_positions: [3],
       unresolved_positions: [4],
     })
-    expect(api.post).toHaveBeenCalledWith(
+    expect(client.post).toHaveBeenCalledWith(
       '/v1/cbl/42/reading-plans/77/adoption-commit',
       {
         entry_decisions: {},
@@ -137,7 +136,7 @@ describe('cblSourcesApi.commit', () => {
       entry_decisions: {},
     })
 
-    expect(api.post).toHaveBeenCalledWith(
+    expect(client.post).toHaveBeenCalledWith(
       '/v1/cbl/42/reading-plans/77/adoption-commit',
       expect.objectContaining({
         series_decisions: [],

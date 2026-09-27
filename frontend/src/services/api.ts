@@ -7,25 +7,14 @@ import axios, {
 import type {
   AnalyticsMetrics,
   AuthTokens,
-  BatchBlockingInfoResponse,
-  BlockingInfoResponse,
   BugReportResponse,
-  ConnectedDependenciesResponse,
-  Dependency,
-  DependencyCreatePayload,
-  IssueDependenciesResponse,
   RollResponse,
   Thread,
-  ThreadDependenciesResponse,
 } from '../types'
+import type { HttpClient, ApiRequestConfig } from './httpClient'
+import { setDefaultHttpClient } from './httpClient'
 
-type ApiRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
-  _retry?: boolean
-  _queued?: boolean
-  skipAuthRedirect?: boolean
-}
-
-interface ApiClient extends Omit<AxiosInstance, 'request' | 'get' | 'delete' | 'head' | 'post' | 'put' | 'patch'> {
+export interface ApiClient extends Omit<AxiosInstance, 'request' | 'get' | 'delete' | 'head' | 'post' | 'put' | 'patch'> {
   request<T = unknown, D = unknown>(config: ApiRequestConfig<D>): Promise<T>
   get<T = unknown>(url: string, config?: ApiRequestConfig): Promise<T>
   delete<T = unknown>(url: string, config?: ApiRequestConfig): Promise<T>
@@ -35,20 +24,18 @@ interface ApiClient extends Omit<AxiosInstance, 'request' | 'get' | 'delete' | '
   patch<T = unknown, D = unknown>(url: string, data?: D, config?: ApiRequestConfig<D>): Promise<T>
 }
 
-const rawApi = axios.create({
-  baseURL: '/api',
-  timeout: 10000,
-})
+/**
+ * Transport `createApiClient` configures.
+ *
+ * The production factory returns a real axios instance; tests can return a
+ * double that records requests and captures the registered interceptors.
+ */
+export type ApiClientTransport = HttpClient & Pick<AxiosInstance, 'interceptors'>
 
 const CSRF_COOKIE_NAME = 'csrf_token'
 const CSRF_HEADER_NAME = 'X-CSRF-Token'
 const CSRF_PROTECTED_METHODS = new Set(['post', 'put', 'patch', 'delete'])
 const AUTH_ENDPOINT_PATHS = new Set(['/v1/auth/login', '/v1/auth/register', '/v1/auth/refresh'])
-
-// Axios returns AxiosResponse by default, but the response interceptor below unwraps to response.data.
-// Cast once at the boundary so callers get strongly typed payload methods.
-// SAFETY: rawApi is an AxiosInstance; response interceptor unwraps .data at the boundary so the ApiClient contract holds.
-const api = rawApi as ApiClient
 
 export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
@@ -56,6 +43,7 @@ let isRedirectingToLogin = false
 let accessToken: string | null = null
 let csrfTokenPromise: Promise<string | null> | null = null
 let failedQueue: Array<{
+  client: ApiClient
   resolve: (value: unknown) => void
   reject: (reason: unknown) => void
   config: ApiRequestConfig
@@ -129,7 +117,14 @@ function buildRejectedRefreshError(): Error & { isAxiosError: true; response: { 
   })
 }
 
-export async function refreshSession(options?: { skipAuthRedirect?: boolean }): Promise<string> {
+export function refreshSession(options?: { skipAuthRedirect?: boolean }): Promise<string> {
+  return refreshSessionOn(api, options)
+}
+
+async function refreshSessionOn(
+  client: ApiClient,
+  options?: { skipAuthRedirect?: boolean },
+): Promise<string> {
   if (sessionRefreshRejected) {
     throw buildRejectedRefreshError()
   }
@@ -140,8 +135,8 @@ export async function refreshSession(options?: { skipAuthRedirect?: boolean }): 
   refreshPromise = (async () => {
     try {
       const response = options?.skipAuthRedirect
-        ? await api.post<AuthTokens>('/v1/auth/refresh', undefined, { skipAuthRedirect: true })
-        : await api.post<AuthTokens>('/v1/auth/refresh')
+        ? await client.post<AuthTokens>('/v1/auth/refresh', undefined, { skipAuthRedirect: true })
+        : await client.post<AuthTokens>('/v1/auth/refresh')
       setAccessToken(response.access_token)
       return response.access_token
     } catch (error) {
@@ -186,7 +181,7 @@ function shouldAttachCsrfToken(config: InternalAxiosRequestConfig): boolean {
   return !AUTH_ENDPOINT_PATHS.has(getRequestPathname(config.url ?? ''))
 }
 
-async function ensureCsrfToken(): Promise<string | null> {
+async function ensureCsrfToken(client: ApiClient): Promise<string | null> {
   const existingToken = getCookieValue(CSRF_COOKIE_NAME)
   if (existingToken) {
     return existingToken
@@ -194,7 +189,7 @@ async function ensureCsrfToken(): Promise<string | null> {
 
   if (!csrfTokenPromise) {
     // SAFETY: only the skipAuthRedirect flag is needed from ApiRequestConfig; other fields have sensible defaults.
-    csrfTokenPromise = api
+    csrfTokenPromise = client
       .get<{ csrf_token: string }>('/v1/auth/csrf', { skipAuthRedirect: true } as ApiRequestConfig)
       .then((response) => response.csrf_token ?? getCookieValue(CSRF_COOKIE_NAME))
       .finally(() => {
@@ -240,8 +235,8 @@ function isAuthenticationFailure(error: AxiosError): boolean {
   return responseData?.detail === 'Not authenticated'
 }
 
-rawApi.interceptors.request.use(
-  async (config: InternalAxiosRequestConfig) => {
+function createRequestInterceptor(client: ApiClient) {
+  return async (config: InternalAxiosRequestConfig) => {
     const token = getAccessToken()
     config.headers = config.headers ?? {}
 
@@ -251,7 +246,7 @@ rawApi.interceptors.request.use(
     }
 
     if (shouldAttachCsrfToken(config)) {
-      const csrfToken = await ensureCsrfToken()
+      const csrfToken = await ensureCsrfToken(client)
       if (csrfToken) {
         // SAFETY: InternalAxiosRequestHeaders is indexable by string key; CSRF header assignment is safe.
         (config.headers as Record<string, string>)[CSRF_HEADER_NAME] = csrfToken
@@ -259,9 +254,8 @@ rawApi.interceptors.request.use(
     }
 
     return config
-  },
-  (error: unknown) => Promise.reject(error),
-)
+  }
+}
 
 function processQueue(error: unknown | null, token: string | null = null): void {
   failedQueue.forEach((prom) => {
@@ -272,15 +266,14 @@ function processQueue(error: unknown | null, token: string | null = null): void 
       // SAFETY: headers is initialized above and is indexable by string; Authorization assignment is safe.
       const authHeaders = prom.config.headers as Record<string, string>
       authHeaders.Authorization = `Bearer ${token}`
-      prom.resolve(api.request(prom.config))
+      prom.resolve(prom.client.request(prom.config))
     }
   })
   failedQueue = []
 }
 
-rawApi.interceptors.response.use(
-  (response) => response.data,
-  async (error: AxiosError) => {
+function createResponseErrorInterceptor(client: ApiClient) {
+  return async (error: AxiosError) => {
     // SAFETY: error.config may be absent for network errors; default to empty object and widen to ApiRequestConfig.
     const originalRequest = (error.config ?? {}) as ApiRequestConfig
 
@@ -317,7 +310,7 @@ rawApi.interceptors.response.use(
 
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject, config: originalRequest })
+          failedQueue.push({ client, resolve, reject, config: originalRequest })
         }).then((token) => token).catch((err) => {
           // SAFETY: rejected value from refresh queue is either an AxiosError or a plain error from processQueue.
           if ((err as AxiosError)?.response?.status === 401) {
@@ -331,7 +324,7 @@ rawApi.interceptors.response.use(
       isRefreshing = true
 
       try {
-        const access_token = await refreshSession({
+        const access_token = await refreshSessionOn(client, {
           skipAuthRedirect: originalRequest.skipAuthRedirect,
         })
 
@@ -342,7 +335,7 @@ rawApi.interceptors.response.use(
         // SAFETY: headers is initialized above and is indexable by string; Authorization assignment is safe.
         const authHeaders = originalRequest.headers as Record<string, string>
         authHeaders.Authorization = `Bearer ${access_token}`
-        return api.request(originalRequest)
+        return client.request(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)
         isRefreshing = false
@@ -362,8 +355,52 @@ rawApi.interceptors.response.use(
       console.error('API Error:', error)
     }
     return Promise.reject(error)
-  },
-)
+  }
+}
+
+/**
+ * Build an API client that carries the production interceptor pipeline.
+ *
+ * Every request the client makes, including CSRF bootstrap, token refresh, and
+ * retry replays, goes back through that same client, so a test can substitute
+ * the transport and still exercise the real auth and CSRF behaviour.
+ *
+ * @param factory - Produces the underlying axios instance to configure.
+ * @returns The configured client exposing payload-returning request methods.
+ */
+export function createApiClient(factory: () => ApiClientTransport): ApiClient {
+  // SAFETY: the factory produces the request methods and the interceptor
+  // registry; the interceptors registered below unwrap responses to payloads,
+  // which is the ApiClient contract those methods already promise.
+  const client = factory() as ApiClient
+  client.interceptors.request.use(
+    createRequestInterceptor(client),
+    (error: unknown) => Promise.reject(error),
+  )
+  client.interceptors.response.use(
+    (response) => response.data,
+    createResponseErrorInterceptor(client),
+  )
+  return client
+}
+
+function createRawApiInstance(): ApiClientTransport {
+  // SAFETY: axios.create returns an AxiosInstance; createApiClient registers the
+  // response interceptor that unwraps `.data`, which is the payload contract.
+  return axios.create({
+    baseURL: '/api',
+    timeout: 10000,
+  }) as ApiClientTransport
+}
+
+// Axios returns AxiosResponse by default, but the response interceptor unwraps to
+// response.data, so the client hands callers strongly typed payload methods.
+const api = createApiClient(createRawApiInstance)
+
+// Service modules are evaluated before this module body runs, so they bind
+// their default singletons through `defaultHttpClient()` and resolve the real
+// transport here.
+setDefaultHttpClient(api)
 
 export default api
 
@@ -382,9 +419,13 @@ export { dependenciesApi } from './api-dependencies'
 
 export { comicVineApi } from './api-comicvine'
 
-export const tasksApi = {
-  getMetrics: () => api.get<AnalyticsMetrics>('/v1/analytics/metrics'),
+export function createTasksApi(client: HttpClient) {
+  return {
+    getMetrics: () => client.get<AnalyticsMetrics>('/v1/analytics/metrics'),
+  }
 }
+
+export const tasksApi = createTasksApi(api)
 
 export { creatorsApi } from './api-creators'
 
@@ -393,15 +434,23 @@ export { creatorsApi } from './api-creators'
 export { snoozeApi } from './api-snooze'
 export { skipApi } from './api-skip'
 
-export const migrationApi = {
-  migrateThread: (threadId: number, data: { last_issue_read: number; total_issues: number }) =>
-    api.post<Thread, { last_issue_read: number; total_issues: number }>(`/v1/threads/${threadId}:migrateToIssues`, data),
+export function createMigrationApi(client: HttpClient) {
+  return {
+    migrateThread: (threadId: number, data: { last_issue_read: number; total_issues: number }) =>
+      client.post<Thread, { last_issue_read: number; total_issues: number }>(`/v1/threads/${threadId}:migrateToIssues`, data),
+  }
 }
 
-export const bugReportsApi = {
-  create: (data: { title: string; description: string; diagnostics?: unknown }) =>
-    api.post<BugReportResponse>('/v1/bug-reports/', data),
+export const migrationApi = createMigrationApi(api)
+
+export function createBugReportsApi(client: HttpClient) {
+  return {
+    create: (data: { title: string; description: string; diagnostics?: unknown }) =>
+      client.post<BugReportResponse>('/v1/bug-reports/', data),
+  }
 }
+
+export const bugReportsApi = createBugReportsApi(api)
 
 export { identityInboxApi } from './api-identity'
 

@@ -1,11 +1,25 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ReactElement, ReactNode } from 'react'
+import { createToastSpy } from './toastSpy'
+import { ToastContextSpy } from './toastTestHarness'
 import { comicVineApi } from '../services/api'
 import type { ComicVineIssueIntelligence } from '../services/api-comicvine'
 import { creatorsApi } from '../services/creatorsApi'
 import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
 import { queryClient } from '../query/queryClient'
+
+const toast = createToastSpy()
+
+function ToastWrapper({ children }: { children: ReactNode }) {
+  return <ToastContextSpy value={toast}>{children}</ToastContextSpy>
+}
+
+function renderWithToast(ui: ReactElement) {
+  return render(ui, { wrapper: ToastWrapper })
+}
+
 
 vi.mock('../services/api', async () => {
   const actual = await vi.importActual<typeof import('../services/api')>('../services/api')
@@ -17,10 +31,6 @@ vi.mock('../services/creatorsApi', () => ({
 vi.mock('../services/api-reading-orders', () => ({
   readingOrdersApi: { list: vi.fn().mockResolvedValue({ reading_orders: [] }) },
 }))
-vi.mock('../contexts/useToast', () => ({
-  useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
-}))
-
 const getIntelligence = vi.mocked(comicVineApi.getIssueIntelligence)
 const getSummaries = vi.mocked(creatorsApi.getSummaries)
 
@@ -93,7 +103,7 @@ describe('ComicIdentity creator analytics (issue #2029)', () => {
   })
 
   function renderIdentity(issueId = 1) {
-    return render(
+    return renderWithToast(
       <QueryClientProvider client={queryClient}>
         <ComicIdentity issueId={issueId} />
       </QueryClientProvider>,

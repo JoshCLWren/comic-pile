@@ -1,17 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
-const apiMock = vi.hoisted(() => ({
-  get: vi.fn(),
-  post: vi.fn(),
-  put: vi.fn(),
-  delete: vi.fn(),
-}))
+import { createContinuityPlansApi } from '../services/api-continuity-plans'
+import { createHttpClientStub } from './httpClientStub'
 
-vi.mock('../services/api', () => ({
-  default: apiMock,
-}))
-
-import { continuityPlansApi } from '../services/api-continuity-plans'
+const client = createHttpClientStub()
+const continuityPlansApi = createContinuityPlansApi(client)
 
 const basePlan = {
   id: 12,
@@ -28,15 +21,15 @@ const basePlan = {
 }
 
 beforeEach(() => {
-  apiMock.get.mockReset()
-  apiMock.post.mockReset()
-  apiMock.put.mockReset()
-  apiMock.delete.mockReset()
+  client.get.mockReset()
+  client.post.mockReset()
+  client.put.mockReset()
+  client.delete.mockReset()
 })
 
 describe('continuityPlansApi', () => {
   it('creates a strict-sequential plan', async () => {
-    apiMock.post.mockResolvedValueOnce(basePlan)
+    client.post.mockResolvedValueOnce(basePlan)
 
     await expect(continuityPlansApi.create({
       name: 'Kirby lane',
@@ -45,7 +38,7 @@ describe('continuityPlansApi', () => {
       nodes: basePlan.nodes,
     })).resolves.toEqual(basePlan)
 
-    expect(apiMock.post).toHaveBeenCalledWith('/v1/continuity-plans/', {
+    expect(client.post).toHaveBeenCalledWith('/v1/continuity-plans/', {
       name: 'Kirby lane',
       ordering_mode: 'strict_sequential',
       lanes: basePlan.lanes,
@@ -54,15 +47,15 @@ describe('continuityPlansApi', () => {
   })
 
   it('loads a plan by id', async () => {
-    apiMock.get.mockResolvedValueOnce(basePlan)
+    client.get.mockResolvedValueOnce(basePlan)
 
     await expect(continuityPlansApi.get(12)).resolves.toEqual(basePlan)
 
-    expect(apiMock.get).toHaveBeenCalledWith('/v1/continuity-plans/12')
+    expect(client.get).toHaveBeenCalledWith('/v1/continuity-plans/12')
   })
 
   it('replaces a plan with a full ordered payload', async () => {
-    apiMock.put.mockResolvedValueOnce(basePlan)
+    client.put.mockResolvedValueOnce(basePlan)
 
     await expect(continuityPlansApi.update(12, {
       name: 'Kirby lane',
@@ -71,7 +64,7 @@ describe('continuityPlansApi', () => {
       nodes: basePlan.nodes,
     })).resolves.toEqual(basePlan)
 
-    expect(apiMock.put).toHaveBeenCalledWith('/v1/continuity-plans/12', {
+    expect(client.put).toHaveBeenCalledWith('/v1/continuity-plans/12', {
       name: 'Kirby lane',
       ordering_mode: 'strict_sequential',
       lanes: basePlan.lanes,
@@ -92,7 +85,7 @@ describe('continuityPlansApi', () => {
         { id: 'b-8', node_type: 'crossover' as const, ref_id: 8, lane_id: 'era-b', position: 0 },
       ],
     }
-    apiMock.post.mockResolvedValueOnce(parallelPlan)
+    client.post.mockResolvedValueOnce(parallelPlan)
 
     await expect(continuityPlansApi.create({
       name: 'Parallel plan',
@@ -101,7 +94,7 @@ describe('continuityPlansApi', () => {
       nodes: parallelPlan.nodes,
     })).resolves.toEqual(parallelPlan)
 
-    expect(apiMock.post).toHaveBeenCalledWith('/v1/continuity-plans/', {
+    expect(client.post).toHaveBeenCalledWith('/v1/continuity-plans/', {
       name: 'Parallel plan',
       ordering_mode: 'informational',
       lanes: parallelPlan.lanes,
