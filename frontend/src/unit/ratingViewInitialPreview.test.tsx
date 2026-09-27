@@ -55,9 +55,11 @@ function renderRatingView({ currentDie, rating, predictedDie }: { currentDie: nu
           onRefreshThread: callbacks.onRefreshThread,
           readerContext: null,
           isReaderContextLoading: false,
-          readerContextError: null,
-          ratingViewTopRef: null,
-          issuesRemaining: 3,
+           readerContextError: null,
+           ratingViewTopRef: null,
+           issuesRemaining: 3,
+           readingOrdersError: null,
+           connectedThreadsError: null,
         }} />
       </ToastProvider>
     </MemoryRouter>

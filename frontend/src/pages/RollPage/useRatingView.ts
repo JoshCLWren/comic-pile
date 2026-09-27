@@ -6,7 +6,11 @@ import type { ReaderContextResponse } from '../../types'
 
 interface UseRatingViewParams {
   state: RollPageState & RollPageStateSetters
-  readingDetailsRequested: boolean
+  readerContextRequested: boolean
+  readingContextRequested: boolean
+  readingBoundariesRequested: boolean
+  readingOrdersError: Error | null
+  connectedThreadsError: Error | null
   rating: {
     updateRatingUI: (value: string) => void
     handleSubmitRating: (finishSession: boolean) => Promise<void>
@@ -45,6 +49,8 @@ export interface RatingViewData {
   readerContextError: Error | null
   ratingViewTopRef: React.RefObject<HTMLDivElement | null> | null
   issuesRemaining: number
+  readingOrdersError: Error | null
+  connectedThreadsError: Error | null
 }
 
 /**
@@ -52,13 +58,17 @@ export interface RatingViewData {
  *
  * Moves the useReaderContext call from RollPage into this hook,
  * computing the rating-issue ID from the active thread and the
- * reading-details-requested flag from useRollRating. This reduces
+ * reader-context-requested flag from useRollRating. This reduces
  * RatingView's prop surface from 20+ individual props to a single
  * data object consumed by the hook.
  */
 export function useRatingView({
   state,
-  readingDetailsRequested,
+   readerContextRequested,
+   readingContextRequested: _readingContextRequested,
+   readingBoundariesRequested: _readingBoundariesRequested,
+   readingOrdersError,
+  connectedThreadsError,
   rating,
   snooze,
   onSkip,
@@ -83,7 +93,7 @@ export function useRatingView({
     context: readerContext,
     isLoading: isReaderContextLoading,
     error: readerContextError,
-  } = useReaderContext(ratingIssueId, readingDetailsRequested)
+  } = useReaderContext(ratingIssueId, readerContextRequested)
 
   const predictedDie = computePredictedDie(currentDie, ratingValue)
 
@@ -111,5 +121,7 @@ export function useRatingView({
     readerContextError: readerContextError ?? null,
     ratingViewTopRef,
     issuesRemaining,
+    readingOrdersError,
+    connectedThreadsError,
   }
 }
