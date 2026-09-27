@@ -26,8 +26,9 @@ function createWrapper() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: Test data supplies only id; remaining ThreadListItem fields are never read by this guard test.
   mockedThreadsApi.list.mockResolvedValue({
-    threads: Array.from({ length: 51 }, (_, index) => ({ id: index + 1 }) as ThreadListItem), // SAFETY: Test data with minimal required fields for ThreadListItem
+    threads: Array.from({ length: 51 }, (_, index) => ({ id: index + 1 }) as ThreadListItem),
     next_page_token: 'page-2',
     active_count: 51,
   })
