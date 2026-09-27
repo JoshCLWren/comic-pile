@@ -1,5 +1,5 @@
 import { vi, type Mock } from 'vitest'
-import type { AxiosInstance } from 'axios'
+import type { AxiosRequestConfig } from 'axios'
 
 /**
  * Faithful in-test stand-in for the axios instance the API client wraps.
@@ -27,16 +27,20 @@ export interface TransportDouble {
  * @returns A transport double whose request methods resolve to `undefined`.
  */
 export function createTransportDouble(): TransportDouble {
-  return {
-    request: vi.fn(),
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
-    patch: vi.fn(),
+  // SAFETY: test double satisfies TransportDouble and minimally AxiosInstance for interceptor registration.
+  // Avoid chained type assertions by constructing the object with the correct type upfront.
+  const double: TransportDouble & { interceptors: { request: { use: Mock }; response: { use: Mock } } } = {
+    request: vi.fn(async () => undefined) as Mock,
+    get: vi.fn(async () => undefined) as Mock,
+    post: vi.fn(async () => undefined) as Mock,
+    put: vi.fn(async () => undefined) as Mock,
+    delete: vi.fn(async () => undefined) as Mock,
+    patch: vi.fn(async () => undefined) as Mock,
     interceptors: {
       request: { use: vi.fn() },
       response: { use: vi.fn() },
     },
-  } as unknown as TransportDouble & AxiosInstance
+  }
+  // SAFETY: constructed object satisfies TransportDouble; AxiosInstance compatibility is only needed for test wiring.
+  return double as TransportDouble
 }

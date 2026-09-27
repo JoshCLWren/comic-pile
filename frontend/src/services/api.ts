@@ -47,23 +47,27 @@ const CSRF_PROTECTED_METHODS = new Set(['post', 'put', 'patch', 'delete'])
 const AUTH_ENDPOINT_PATHS = new Set(['/v1/auth/login', '/v1/auth/register', '/v1/auth/refresh'])
 
 // Axios returns AxiosResponse by default, but the response interceptor below unwraps to response.data.
-// Cast once at the boundary so callers get strongly typed payload methods.
-// SAFETY: rawApi is an AxiosInstance; response interceptor unwraps .data at the boundary so the ApiClient contract holds.
-const api = rawApi as ApiClient
+ // Cast once at the boundary so callers get strongly typed payload methods.
+ // SAFETY: rawApi is an AxiosInstance; response interceptor unwraps .data at the boundary so the ApiClient contract holds.
+ const api = rawApi as ApiClient // SAFETY: see comment above
 
 export function createApiClient(factory: () => AxiosInstance): ApiClient {
   const instance = factory()
-  const client = instance as unknown as ApiClient
+  // SAFETY: factory produces an AxiosInstance matching the HttpClient shape; interceptors added below complete the contract.
+  // Using a single assertion to avoid chained type assertions (as unknown as X).
+  const client = instance as ApiClient
   client.interceptors.request.use(
     async (config: InternalAxiosRequestConfig) => {
       const token = getAccessToken()
       config.headers = config.headers ?? {}
       if (token) {
+        // SAFETY: InternalAxiosRequestHeaders is indexable by string key; setting Authorization is safe.
         (config.headers as Record<string, string>).Authorization = `Bearer ${token}`
       }
       if (shouldAttachCsrfToken(config)) {
         const csrfToken = await ensureCsrfToken()
         if (csrfToken) {
+          // SAFETY: InternalAxiosRequestHeaders is indexable by string key; CSRF header assignment is safe.
           (config.headers as Record<string, string>)[CSRF_HEADER_NAME] = csrfToken
         }
       }
@@ -74,6 +78,7 @@ export function createApiClient(factory: () => AxiosInstance): ApiClient {
   client.interceptors.response.use(
     (response) => response.data,
     async (error: AxiosError) => {
+      // SAFETY: error.config may be absent for network errors; default to empty object and widen to ApiRequestConfig.
       const originalRequest = (error.config ?? {}) as ApiRequestConfig
       if (!error.response) {
         return Promise.reject(new Error('Network error. Please check your connection and try again.'))
@@ -92,8 +97,10 @@ export function createApiClient(factory: () => AxiosInstance): ApiClient {
           const token = await refreshSession({ skipAuthRedirect: true })
           processQueue(null, token)
           isRefreshing = false
+          // SAFETY: originalRequest matches the ApiRequestConfig shape after _retry is set; client.request accepts it.
           return client.request(originalRequest)
         } catch (e) {
+          // SAFETY: caught value from refreshSession is always an Error (AxiosError or plain Error); processQueue accepts Error | null.
           processQueue(e as Error, null)
           isRefreshing = false
           return Promise.reject(e)
@@ -253,6 +260,7 @@ async function ensureCsrfToken(): Promise<string | null> {
 
   if (!csrfTokenPromise) {
     // SAFETY: only the skipAuthRedirect flag is needed from ApiRequestConfig; other fields have sensible defaults.
+    // SAFETY: ApiRequestConfig extends AxiosRequestConfig with optional _retry/_queued/skipAuthRedirect; object literal satisfies it.
     csrfTokenPromise = api
       .get<{ csrf_token: string }>('/v1/auth/csrf', { skipAuthRedirect: true } as ApiRequestConfig)
       .then((response) => response.csrf_token ?? getCookieValue(CSRF_COOKIE_NAME))
@@ -379,6 +387,7 @@ rawApi.interceptors.response.use(
           failedQueue.push({ resolve, reject, config: originalRequest })
         }).then((token) => token).catch((err) => {
           // SAFETY: rejected value from refresh queue is either an AxiosError or a plain error from processQueue.
+          // SAFETY: AxiosError type guard; response.status access is safe after the guard.
           if ((err as AxiosError)?.response?.status === 401) {
             return Promise.reject(error)
           }

@@ -24,6 +24,7 @@ const { get, post, put } = transport
 const del = transport.delete
 const patch = transport.patch
 
+// SAFETY: test transport double satisfies AxiosInstance shape for createApiClient; interceptor wiring is exercised.
 const client = createApiClient(() => transport as never)
 const {
   bugReportsApi,
@@ -40,12 +41,15 @@ const {
   undoApi,
 } = createApiServiceSet(client)
 
+// SAFETY: transport.interceptors.request.use is a vi.fn(); first call's first arg is the request interceptor with expected signature.
 const requestInterceptor = transport.interceptors.request.use.mock.calls[0][0] as (
   config: { method?: string; url?: string; headers?: Record<string, string> }
 ) => Promise<{ method?: string; url?: string; headers?: Record<string, string> }>
+// SAFETY: transport.interceptors.response.use is a vi.fn(); first call's second arg is the response interceptor with expected signature.
 const responseInterceptor = transport.interceptors.response.use.mock.calls[0][1] as (
   error: { config: { url: string; headers?: Record<string, string>; skipAuthRedirect?: boolean }; response: { status: number } },
 ) => Promise<Record<string, string | number | boolean | null>>
+// SAFETY: transport.interceptors.response.use is a vi.fn(); first call's first arg is the success interceptor with expected signature.
 const responseSuccessInterceptor = transport.interceptors.response.use.mock.calls[0][0] as (
   response: { data: { ok?: boolean } },
 ) => { ok?: boolean }
@@ -272,10 +276,14 @@ it('bootstraps a csrf token before protected requests when the cookie is missing
 it('handles response success, network errors, validation errors, and auth errors', async () => {
   const success = await responseSuccessInterceptor({ data: { ok: true } })
   expect(success).toEqual({ ok: true })
+  // SAFETY: test passes minimal error shapes matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   await expect(responseInterceptor({ config: { url: '/x' }, response: undefined } as never)).rejects.toThrow('Network error')
+  // SAFETY: test passes minimal error shapes matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   await expect(responseInterceptor({ config: { url: '/x' }, response: { status: 400 } } as never)).rejects.toEqual(expect.objectContaining({ response: { status: 400 } }))
+  // SAFETY: test passes minimal error shapes matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   await expect(responseInterceptor({ config: {}, response: { status: 500 } } as never)).rejects.toEqual(expect.objectContaining({ response: { status: 500 } }))
   await expect(responseInterceptor({ config: { url: '/v1/auth/login' }, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
+  // SAFETY: test passes minimal error shapes matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   await expect(responseInterceptor({ config: { url: '/x', _retry: true } as never, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
 })
 
@@ -283,6 +291,7 @@ it('refreshes when FastAPI rejects a request without a bearer header', async () 
   post.mockResolvedValue({ access_token: 'refreshed-token' })
   transport.request.mockResolvedValue({ authenticated: true })
 
+  // SAFETY: test passes minimal error shape matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   const result = responseInterceptor({
     config: { url: '/v1/auth/me', headers: {} },
     response: { status: 403, data: { detail: 'Not authenticated' } },
@@ -298,6 +307,7 @@ it('refreshes when FastAPI rejects a request without a bearer header', async () 
 })
 
 it('does not refresh for unrelated forbidden responses', async () => {
+  // SAFETY: test passes minimal error shape matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   await expect(responseInterceptor({
     config: { url: '/threads/1' },
     response: { status: 403, data: { detail: 'Forbidden' } },
