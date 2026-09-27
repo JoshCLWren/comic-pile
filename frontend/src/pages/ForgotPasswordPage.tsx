@@ -103,6 +103,7 @@ export default function ForgotPasswordPage() {
               Email Address
             </label>
             <p className="text-xs text-[var(--theme-text-muted)]">This is the email associated with your Comic Pile account.</p>
+            <p className="text-xs text-[var(--theme-text-muted)]">Use your email address, not your username.</p>
             <input
               id="email"
               type="email"
@@ -117,8 +118,8 @@ export default function ForgotPasswordPage() {
           </div>
 
           {error && (
-            <div className="bg-[var(--theme-danger)]/10 border border-[var(--theme-danger)]/20 rounded-xl px-4 py-3">
-              <p className="text-sm text-[var(--theme-danger)] font-medium">{error}</p>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
+              <p className="text-sm text-red-400 font-medium">{error}</p>
             </div>
           )}
 
