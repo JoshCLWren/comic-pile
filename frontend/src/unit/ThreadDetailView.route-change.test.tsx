@@ -41,6 +41,7 @@ const mockedThreadsApiGet = vi.mocked(threadsApi.get)
 const mockedIssuesApiList = vi.mocked(issuesApi.list)
 
 function threadResult(id: number): Thread {
+  // SAFETY: the thread fixture supplies only the fields the view reads on this route
   return {
     id,
     title: id === 1 ? 'Saga' : 'Monstress',
@@ -82,6 +83,7 @@ function deferred<T>() {
 
 beforeEach(() => {
   routeParams.id = '1'
+  // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   mockedThreadsApiGet.mockReset()
   mockedThreadsApiGet.mockImplementation(async (id: number) => threadResult(id))

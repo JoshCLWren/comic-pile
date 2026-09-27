@@ -144,18 +144,22 @@ export default function ThreadDetailView() {
   }
 
   const getProgressPercentage = (): string | null => {
-    if (thread && thread.total_issues !== null) {
-      const readCount = thread.total_issues - thread.issues_remaining
-      const percentage = Math.round((readCount / thread.total_issues) * 100)
+    // `total_issues` is optional in the generated ThreadResponse; an absent
+    // value and an explicit null both mean "no known total".
+    const totalIssues = thread?.total_issues ?? null
+    if (thread && totalIssues !== null) {
+      const readCount = totalIssues - thread.issues_remaining
+      const percentage = Math.round((readCount / totalIssues) * 100)
       return `${percentage}%`
     }
     return null
   }
 
   const getIssuesReadCount = (): string | null => {
-    if (thread && thread.total_issues !== null) {
-      const readCount = thread.total_issues - thread.issues_remaining
-      return `${readCount} of ${thread.total_issues} issues read`
+    const totalIssues = thread?.total_issues ?? null
+    if (thread && totalIssues !== null) {
+      const readCount = totalIssues - thread.issues_remaining
+      return `${readCount} of ${totalIssues} issues read`
     }
     return null
   }

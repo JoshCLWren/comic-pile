@@ -63,7 +63,7 @@ function renderPage(entry: string) {
 beforeEach(() => {
   vi.clearAllMocks()
   groupsApi.list.mockResolvedValue([annihilation, secretWars])
-  threadsApi.list.mockResolvedValue({ threads: [], next_page_token: null })
+  threadsApi.list.mockResolvedValue({ threads: [], next_page_token: null, active_count: 0 })
 })
 
 describe('CrossoversPage deep links (issue #1877)', () => {

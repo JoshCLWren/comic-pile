@@ -1,4 +1,4 @@
-import type { Dependency, Thread } from '../types'
+import type { Dependency, Thread, ThreadListItem } from '../types'
 
 export type GateStatus = 'blocked' | 'satisfied' | 'dormant'
 
@@ -26,7 +26,12 @@ export type TimelineEntry =
   | { kind: 'span'; span: TimelineSpanEntry }
 
 interface BuildTimelineParams {
-  thread: Thread
+  /**
+   * Either generated thread shape: the queue list item (no `next_unread_issue_id`)
+   * or the thread detail response. The timeline only needs the reading
+   * position, so both are accepted.
+   */
+  thread: Thread | ThreadListItem
   dependencies: Dependency[]
 }
 
@@ -141,18 +146,23 @@ export function buildReadingOrderTimelineEntries({ thread, dependencies }: Build
   )
 
   const nextIssueNumberValue = issueStringToNumber(thread.next_unread_issue_number ?? null)
-  const nextOrderValue = determineOrderValue(nextIssueNumberValue, thread.next_unread_issue_id ?? null)
+  // `next_unread_issue_id` is a detail-only field; the queue list item omits it.
+  const nextUnreadIssueId = 'next_unread_issue_id' in thread ? (thread.next_unread_issue_id ?? null) : null
+  const nextOrderValue = determineOrderValue(nextIssueNumberValue, nextUnreadIssueId)
   const isThreadComplete = thread.issues_remaining === 0
+  // `total_issues` is optional in the generated ThreadResponse; an absent value
+  // and an explicit null both mean "open-ended thread".
+  const totalIssues = thread.total_issues ?? null
 
   const entries: TimelineEntry[] = []
 
   if (sortedGates.length === 0) {
     const spanEntry = createSpanEntry({
       start: 1,
-      end: thread.total_issues,
-      label: thread.total_issues ? `Issues 1–${thread.total_issues}` : 'Issues 1+',
+      end: totalIssues,
+      label: totalIssues ? `Issues 1–${totalIssues}` : 'Issues 1+',
       nextValue: nextIssueNumberValue,
-      isOpenEnded: thread.total_issues == null,
+      isOpenEnded: totalIssues === null,
     })
     entries.push({ kind: 'span', span: spanEntry })
     return entries
@@ -177,7 +187,7 @@ export function buildReadingOrderTimelineEntries({ thread, dependencies }: Build
      const status = resolveGateStatus({
        isThreadComplete,
        gateIssueId: gate.targetIssueId,
-        nextIssueId: thread.next_unread_issue_id ?? null,
+        nextIssueId: nextUnreadIssueId,
        gateValue: gate.orderValue,
        nextValue: nextOrderValue,
      })
@@ -201,16 +211,16 @@ export function buildReadingOrderTimelineEntries({ thread, dependencies }: Build
 
   // Create a span for issues after the last gate, if any
   const afterStart = (lastGateIssueNumber ?? 0) + 1
-  if (thread.total_issues !== null && afterStart <= thread.total_issues) {
+  if (totalIssues !== null && afterStart <= totalIssues) {
     const span = createSpanEntry({
       start: afterStart,
-      end: thread.total_issues,
-      label: `Issues ${afterStart}–${thread.total_issues}`,
+      end: totalIssues,
+      label: `Issues ${afterStart}–${totalIssues}`,
       nextValue: nextIssueNumberValue,
       isOpenEnded: false,
     })
     entries.push({ kind: 'span', span })
-  } else if (thread.total_issues === null) {
+  } else if (totalIssues === null) {
     // For open-ended threads, always show the span after the last gate
     const span = createSpanEntry({
       start: afterStart,

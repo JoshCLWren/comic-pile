@@ -34,6 +34,10 @@ function makeThread(overrides: Partial<Thread>): Thread {
     total_issues: null,
     is_blocked: false,
     blocking_reasons: [],
+    last_activity_at: null,
+    last_rating: null,
+    notes: null,
+    is_test: false,
     created_at: '2024-01-01T00:00:00Z',
     ...overrides,
   }
@@ -84,9 +88,11 @@ describe('useQueueThreadActions', () => {
       { wrapper },
     )
 
+    // SAFETY: the drag-start handler reads only the stubbed dataTransfer members
     act(() => result.current.handleDragStart(1)({ dataTransfer: { effectAllowed: '', setData: vi.fn() } } as never))
     expect(result.current.draggedThreadId).toBe(1)
 
+    // SAFETY: the drag handler reads only the stubbed preventDefault member
     act(() => result.current.handleDragOver(2)({ preventDefault: vi.fn() } as never))
     expect(result.current.dragOverThreadId).toBe(2)
 
@@ -109,8 +115,10 @@ describe('useQueueThreadActions', () => {
       { wrapper },
     )
 
+    // SAFETY: the drag-start handler reads only the stubbed dataTransfer members
     act(() => result.current.handleDragStart(1)({ dataTransfer: { effectAllowed: '', setData: vi.fn() } } as never))
     act(() => result.current.handleDrop(2, [makeThread({ id: 1, queue_position: 5 }), makeThread({ id: 2, queue_position: 2 })])(
+      // SAFETY: the drag handler reads only the stubbed preventDefault member
       { preventDefault: vi.fn() } as never,
     ))
 
@@ -131,9 +139,11 @@ describe('useQueueThreadActions', () => {
       { wrapper },
     )
 
+    // SAFETY: the drag-start handler reads only the stubbed dataTransfer members
     act(() => result.current.handleDragStart(1)({ dataTransfer: { effectAllowed: '', setData: vi.fn() } } as never))
     act(() =>
       result.current.handleDrop(2, [makeThread({ id: 1, queue_position: 5 }), makeThread({ id: 2, queue_position: 2 })])(
+        // SAFETY: the drag handler reads only the stubbed preventDefault member
         { preventDefault: vi.fn() } as never,
       ),
     )

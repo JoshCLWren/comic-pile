@@ -42,6 +42,7 @@ vi.mock('@testing-library/react', async (importOriginal) => {
       ui: Parameters<typeof actual.render>[0],
       options?: Record<string, string | ((props: { children: ReactNode }) => ReactElement) | undefined>,
     ) => {
+      // SAFETY: the wrapper prop is supplied by this file's wrapper factory, never by a caller
       const wrapper = options?.wrapper as
         | ((props: { children: ReactNode }) => ReactElement)
         | undefined
@@ -51,6 +52,7 @@ vi.mock('@testing-library/react', async (importOriginal) => {
       callback: Parameters<typeof actual.renderHook>[0],
       options?: Record<string, string | ((props: { children: ReactNode }) => ReactElement) | undefined>,
     ) => {
+      // SAFETY: the wrapper prop is supplied by this file's wrapper factory, never by a caller
       const wrapper = options?.wrapper as
         | ((props: { children: ReactNode }) => ReactElement)
         | undefined
@@ -61,10 +63,12 @@ vi.mock('@testing-library/react', async (importOriginal) => {
 
 // Ensure globals exist before user-event and other libraries access them
 if (typeof global.window === 'undefined') {
-  ;(global as any).window = {}
+  // SAFETY: test setup runs in Node; we assign a minimal window for jsdom compatibility
+  (global as { window?: unknown }).window = {}
 }
 if (typeof global.document === 'undefined') {
-  ;(global as any).document = {
+  // SAFETY: test setup runs in Node; we assign a minimal document for jsdom compatibility
+  (global as { document?: unknown }).document = {
     addEventListener: () => {},
     removeEventListener: () => {},
     // Minimal DOM methods used by tests
@@ -83,7 +87,8 @@ if (typeof global.document === 'undefined') {
 
 // Provide a minimal localStorage implementation if missing
 if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
-  ;(window as any).localStorage = {
+  // SAFETY: test setup runs in Node; it installs the minimal localStorage user-event needs
+  (window as { localStorage?: unknown }).localStorage = {
     clear: vi.fn(),
     getItem: vi.fn(),
     setItem: vi.fn(),
@@ -92,6 +97,7 @@ if (typeof window === 'undefined' || typeof window.localStorage === 'undefined')
 
 // Make window.scrollTo a no-op in environments where it throws
 if (typeof window !== 'undefined') {
+  // SAFETY: jsdom throws on scrollTo, so the test replaces it with a no-op
   window.scrollTo = (() => undefined) as typeof window.scrollTo
 }
 

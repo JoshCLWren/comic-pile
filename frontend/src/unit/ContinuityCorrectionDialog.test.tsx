@@ -41,6 +41,7 @@ const baseProps: ContinuityCorrectionDialogProps = {
   issueId: 42,
   issueNumber: '10',
   threadTitle: 'The Ultimates',
+  // SAFETY: this case seeds no connected threads
   connectedThreads: [] as ConnectedThreadInfo[],
   onClose: vi.fn(),
   onSuccess: vi.fn(),
@@ -156,6 +157,10 @@ describe('ContinuityCorrectionDialog', () => {
       status: 'active',
       is_blocked: false,
       blocking_reasons: [],
+      last_activity_at: null,
+      last_rating: null,
+      notes: null,
+      is_test: false,
       created_at: '2026-08-06T00:00:00Z',
     }))
 

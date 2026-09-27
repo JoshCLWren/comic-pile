@@ -5,7 +5,7 @@ import {
 } from '../services/api-dependency-groups'
 import { threadsApi } from '../services/api-threads'
 import { issuesApi, type IssueListParams } from '../services/api-issues'
-import type { Issue, Thread, ThreadListResponse } from '../types'
+import type { Issue, ThreadListItem, ThreadListResponse } from '../types'
 import { queryKeys } from '../query/queryKeys'
 import { invalidateAfterCrossoverMutation } from '../query/cacheEffects'
 
@@ -59,18 +59,19 @@ async function fetchAllIssues(threadId: number, issueApi: CrossoverIssuesApi = i
   }
 }
 
-async function fetchAllThreads(threads: CrossoverThreadsApi = threadsApi): Promise<Thread[]> {
-  const collected: Thread[] = []
+async function fetchAllThreads(threads: CrossoverThreadsApi = threadsApi): Promise<ThreadListItem[]> {
+  const threads: ThreadListItem[] = []
   const seenPageTokens = new Set<string>()
   let nextPageToken: string | null = null
 
   while (true) {
     const data: ThreadListResponse = await threads.list({ page_size: 100 }, nextPageToken)
-    collected.push(...data.threads)
-    if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) return collected
+    threads.push(...data.threads)
+    if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) return threads
     seenPageTokens.add(data.next_page_token)
     nextPageToken = data.next_page_token
   }
+}
 }
 
 export function useCrossoverGroupsList(deps: CrossoverApiDeps = {}) {

@@ -4,23 +4,27 @@ import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { continuityPlansApi } from '../services/api-continuity-plans'
 import { issuesApi, type IssueListParams } from '../services/api-issues'
 import { queryKeys } from '../query/queryKeys'
-import type { Issue, Thread } from '../types'
+import type { Issue, ThreadListItem } from '../types'
 
 /**
  * Fetch all threads across all pages.
  * Uses React Query for caching and automatic refetching.
+ *
+ * The paginated thread endpoints return the queue-optimized list item, which is
+ * deliberately narrower than the thread detail response (no `last_rating`,
+ * `is_test`, or `reading_progress`). The result is typed accordingly.
  */
 export function useAllThreads() {
   return useQuery({
     queryKey: queryKeys.thread.list(),
-    queryFn: async (): Promise<Thread[]> => {
-      const result: Thread[] = []
+    queryFn: async (): Promise<ThreadListItem[]> => {
+      const result: ThreadListItem[] = []
       const seen = new Set<string>()
       let token: string | null = null
       do {
         const page = await threadsApi.list({ page_size: 100 }, token)
         result.push(...page.threads)
-        token = page.next_page_token
+        token = page.next_page_token ?? null
         if (token && seen.has(token)) break
         if (token) seen.add(token)
       } while (token)

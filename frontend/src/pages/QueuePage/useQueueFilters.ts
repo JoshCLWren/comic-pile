@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { Thread } from '../../types'
+import type { ThreadListItem } from '../../types'
 
 export type QueueSortBy = 'position' | 'alphabetical' | 'created'
 
@@ -21,7 +21,7 @@ export type QueueSortBy = 'position' | 'alphabetical' | 'created'
  *   owns ordering for every sort mode.
  */
 export function useQueueFilters(
-  threads: Thread[] | null | undefined,
+  threads: ThreadListItem[] | null | undefined,
   _sortBy: QueueSortBy,
 ) {
   const activeThreads = useMemo(

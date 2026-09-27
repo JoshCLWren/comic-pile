@@ -11,6 +11,7 @@ async function getCsrf(page: Page, token: string | null): Promise<string> {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   })
   expect(response.ok()).toBeTruthy()
+  // SAFETY: the test reads only csrf_token from the response body
   const data = await response.json() as { csrf_token?: string }
   expect(data.csrf_token).toBeDefined()
   return data.csrf_token!
@@ -33,6 +34,7 @@ async function getFirstIssueId(page: Page, threadId: number): Promise<number> {
     headers,
   })
   expect(response.ok(), await response.text()).toBeTruthy()
+  // SAFETY: the test reads only the response fields listed in this type
   const data = await response.json() as { issues: Array<{ id: number }> }
   expect(data.issues.length).toBeGreaterThan(0)
   return data.issues[0].id
@@ -49,11 +51,13 @@ async function assertRollEligibility(
     { headers },
   )
   expect(response.ok(), await response.text()).toBeTruthy()
+  // SAFETY: the test reads only the response fields listed in this type
   const payload = await response.json() as { is_blocked: boolean }
   expect(payload.is_blocked).toBe(!expectation.eligible)
 
   const bootstrap = await page.request.get('/api/v1/roll/bootstrap', { headers })
   expect(bootstrap.ok(), await bootstrap.text()).toBeTruthy()
+  // SAFETY: the test reads only the response fields listed in this type
   const roll = await bootstrap.json() as {
     roll_pool: Array<{ id: number }>
     blocked_threads: Array<{ id: number }>
@@ -178,6 +182,7 @@ test.describe('Reading Plan CBL golden path', () => {
       headers,
     })
     expect(planResponse.ok(), await planResponse.text()).toBeTruthy()
+    // SAFETY: the test reads only the response fields listed in this type
     const plan = await planResponse.json() as {
       ordering_mode: string
       nodes: Array<{

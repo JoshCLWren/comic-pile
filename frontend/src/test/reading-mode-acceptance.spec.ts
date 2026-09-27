@@ -19,6 +19,7 @@ import { gotoRollPage, waitForRollPageReady } from './helpers'
 
 async function getAuthToken(page: Page): Promise<string> {
   return page.evaluate(() => {
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     const win = window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }
     return localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN ?? ''
   })
@@ -48,6 +49,7 @@ async function getSessionMode(page: Page): Promise<{
     headers: { Authorization: `Bearer ${token}` },
   })
   expect(response.ok()).toBeTruthy()
+  // SAFETY: the test reads only the session_mode fields it asserts
   const body = (await response.json()) as {
     session_mode: { active_bandwidth: string | null; active_intent: string | null }
   }
@@ -64,6 +66,7 @@ async function createThreadWithIssues(page: Page, title: string): Promise<void> 
     data: { title, format: 'issue', issues_remaining: 10, total_issues: 10 },
   })
   expect(threadRes.ok()).toBeTruthy()
+  // SAFETY: the API returns a created record, so its id is always present
   const thread = (await threadRes.json()) as { id: number }
   const issuesRes = await page.request.post(`/api/v1/threads/${thread.id}/issues`, {
     headers: {

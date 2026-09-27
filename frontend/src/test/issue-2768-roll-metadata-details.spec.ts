@@ -14,7 +14,7 @@
  * 10. Phone/tablet remain free of horizontal overflow.
  */
 import { expect, type Page } from '@playwright/test'
-import { type ComicVineIssueIntelligence } from '../services/api-comicvine'
+import type { ComicVineIssueIntelligence } from '../services/api-comicvine'
 import { test } from './fixtures'
 import { createThread, gotoRollPage } from './helpers'
 

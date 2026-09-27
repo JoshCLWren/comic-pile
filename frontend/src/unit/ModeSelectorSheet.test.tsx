@@ -7,6 +7,7 @@ import type { SessionModeState } from '../types/rollBootstrap'
 
 const defaultProps = {
   isOpen: true,
+  // SAFETY: the sheet starts with no active session mode
   currentMode: null as SessionModeState | null,
   onClose: vi.fn(),
   onSubmit: vi.fn().mockResolvedValue(undefined),

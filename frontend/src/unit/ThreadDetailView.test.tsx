@@ -52,8 +52,10 @@ beforeEach(() => {
   routeParams.id = '1'
   locationState.state = undefined
   navigateSpy.mockReset()
+  // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
   mockedThreadsApiGet.mockReset()
+  // SAFETY: the stubbed thread supplies only the fields this view reads
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1,
     status: 'active', total_issues: null, notes: null,
@@ -94,6 +96,7 @@ it('auto-opens the edit modal when arriving with openEditModal state', async () 
 })
 
 it('does not fetch issues before the Issues section expands', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
     status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
@@ -106,6 +109,7 @@ it('does not fetch issues before the Issues section expands', async () => {
 })
 
 it('fetches one bounded page when the Issues section expands', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
     status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
@@ -125,6 +129,7 @@ it('fetches one bounded page when the Issues section expands', async () => {
 })
 
 it('caches loaded issues under the canonical issue-pages query key', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
     status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
@@ -147,6 +152,7 @@ it('caches loaded issues under the canonical issue-pages query key', async () =>
 })
 
 it('loads the next page without duplicates or gaps', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
     status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
@@ -172,6 +178,7 @@ it('loads the next page without duplicates or gaps', async () => {
 })
 
 it('shows an empty state when the thread has no issues', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 0, queue_position: 1,
     status: 'complete', total_issues: 0, next_unread_issue_number: null, notes: null,
@@ -187,6 +194,7 @@ it('shows an empty state when the thread has no issues', async () => {
 })
 
 it('shows a retry action when loading issues fails', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
     status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: null,
@@ -207,6 +215,7 @@ it('shows a retry action when loading issues fails', async () => {
 })
 
 it('renders migrated progress, paginated issues, and saves edits', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
     status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: 'Keep reading',
@@ -219,6 +228,7 @@ it('renders migrated progress, paginated issues, and saves edits', async () => {
     next_page_token: null, total_count: 2, page_size: 100,
   })
   const mutate = vi.fn().mockResolvedValue({})
+  // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate, isPending: false } as never)
   renderPage()
   await waitFor(() => expect(screen.getByText('80%')).toBeInTheDocument())
@@ -239,6 +249,7 @@ it('stops loading when the route has no thread id', async () => {
 })
 
 it('disables the save action while an edit is pending', async () => {
+  // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: true } as never)
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
@@ -254,6 +265,7 @@ it('shows the error detail when fetching the thread fails', async () => {
 })
 
 it('shows Thread not found when the thread detail is unavailable', async () => {
+  // SAFETY: the endpoint rejects, and the test asserts the error state renders
   mockedThreadsApiGet.mockRejectedValueOnce({
     response: { status: 404, data: { detail: 'Thread not found' } },
   } as never)
@@ -264,6 +276,7 @@ it('shows Thread not found when the thread detail is unavailable', async () => {
 it('navigates back and survives issue and edit failures', async () => {
   mockedIssuesApiList.mockRejectedValueOnce(new Error('issues unavailable'))
   const mutate = vi.fn().mockRejectedValue(new Error('update failed'))
+  // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate, isPending: false } as never)
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
@@ -277,6 +290,7 @@ it('navigates back and survives issue and edit failures', async () => {
 })
 
 it('edits migrated threads and displays the all-read boundary', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 0, queue_position: 1,
     status: 'complete', total_issues: 4, next_unread_issue_number: null,
@@ -292,6 +306,7 @@ it('edits migrated threads and displays the all-read boundary', async () => {
     notes: 'Finished',
   }
   const mutate = vi.fn().mockResolvedValue(updatedThread)
+  // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate, isPending: false } as never)
 
   renderPage()

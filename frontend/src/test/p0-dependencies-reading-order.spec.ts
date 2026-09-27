@@ -27,6 +27,7 @@ async function getCsrfToken(
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   expect(response.ok()).toBeTruthy()
+  // SAFETY: the test reads only csrf_token from the response body
   const data = (await response.json()) as { csrf_token?: string }
   expect(data.csrf_token).toBeDefined()
   return data.csrf_token!
@@ -70,6 +71,7 @@ async function listIssues(
     headers: { Authorization: `Bearer ${token}` },
   })
   expect(response.ok()).toBeTruthy()
+  // SAFETY: the test reads only the issue ids the assertion depends on
   const data = (await response.json()) as { issues: Array<{ id: number; position: number }> }
   return data.issues
 }

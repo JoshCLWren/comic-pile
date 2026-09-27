@@ -49,10 +49,15 @@ function renderWithClient<T>(hook: () => T) {
 }
 
 beforeEach(() => {
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.getCurrent.mockResolvedValue({ id: 1 } as never)
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.list.mockResolvedValue({ sessions: [{ id: 2 }], next_page_token: null } as never)
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.getDetails.mockResolvedValue({ session_id: 3 } as never)
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.getSnapshots.mockResolvedValue({ snapshots: [] } as never)
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.restoreSessionStart.mockResolvedValue({} as never)
 })
 
@@ -72,6 +77,7 @@ it('loads first page of sessions', async () => {
 })
 
 it('is invalidated by queryKeys.session.pages() and queryKeys.session.all', async () => {
+  // SAFETY: the stubbed page supplies only the fields the session pager reads
   mockedSessionApi.list
     .mockReset()
     .mockResolvedValueOnce({ sessions: [{ id: 1 }], next_page_token: null } as never)
@@ -98,6 +104,7 @@ it('is invalidated by queryKeys.session.pages() and queryKeys.session.all', asyn
 })
 
 it('paginates with loadMore and deduplicates sessions', async () => {
+  // SAFETY: the stubbed page supplies only the fields the session pager reads
   mockedSessionApi.list
     .mockReset()
     .mockResolvedValueOnce({ sessions: [{ id: 1 }], next_page_token: 'token2' } as never)
@@ -123,6 +130,7 @@ it('paginates with loadMore and deduplicates sessions', async () => {
 })
 
 it('deduplicates sessions when loading more pages', async () => {
+  // SAFETY: the stubbed page supplies only the fields the session pager reads
   mockedSessionApi.list
     .mockReset()
     .mockResolvedValueOnce({ sessions: [{ id: 1 }, { id: 2 }], next_page_token: 'token2' } as never)
@@ -188,6 +196,7 @@ it('handles empty ids, non-Error failures, persisted session changes, and restor
     setItem: (key: string, value: string) => storage.set(key, value),
     removeItem: (key: string) => storage.delete(key),
   } })
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.getCurrent.mockResolvedValueOnce({ id: 8, user_id: 4 } as never)
   window.localStorage.setItem('comic_pile_last_session_id_4', '7')
   const current = renderWithProvider(() => useSession())
@@ -217,6 +226,7 @@ it('continues when session storage cannot be read or written', async () => {
     setItem: () => { throw new Error('storage write blocked') },
     removeItem: () => { throw new Error('storage remove blocked') },
   } })
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.getCurrent.mockResolvedValueOnce({ id: 12, user_id: 6 } as never)
   const { result } = renderWithProvider(() => useSession())
   await waitFor(() => expect(result.current.data).toEqual({ id: 12, user_id: 6 }))
@@ -247,6 +257,7 @@ it('reports current-session failures and tolerates a malformed current response'
   const failed = renderWithProvider(() => useSession())
   await waitFor(() => expect(failed.result.current.error?.message).toBe('current unavailable'))
 
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.getCurrent.mockResolvedValueOnce({ id: null } as never)
   const malformed = renderWithProvider(() => useSession())
   await waitFor(() => expect(malformed.result.current.isPending).toBe(false))

@@ -67,6 +67,10 @@ const thread = {
   status: 'active',
   is_blocked: false,
   blocking_reasons: [],
+  last_activity_at: null,
+  last_rating: null,
+  notes: null,
+  is_test: false,
   created_at: '2026-08-01T00:00:00Z',
 }
 
@@ -133,6 +137,7 @@ beforeEach(() => {
   threadApi.list.mockResolvedValue({
     threads: [thread, xmenThread],
     next_page_token: null,
+    active_count: 2,
   })
   threadApi.get.mockResolvedValue(thread)
   issueApi.list.mockResolvedValue({
@@ -368,7 +373,7 @@ describe('CrossoversPage membership editing', () => {
   it('distinguishes ambiguous series with counts in dropdown', async () => {
     const starman = { ...thread, id: 99, title: 'Starman', format: 'single issues', issues_remaining: 61, total_issues: 80 }
     const starmanV2 = { ...thread, id: 100, title: 'Starman (Vol. 2) (1994 - 2001)', format: 'single issues', issues_remaining: 5, total_issues: 10 }
-    threadApi.list.mockResolvedValue({ threads: [starman, starmanV2], next_page_token: null })
+    threadApi.list.mockResolvedValue({ threads: [starman, starmanV2], next_page_token: null, active_count: 2 })
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 

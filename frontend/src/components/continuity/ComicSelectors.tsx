@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import type { Issue, Thread } from '../../types'
+import type { Issue, ThreadListItem } from '../../types'
 import { isNumber } from '../../utils/runtimeChecks'
 
 export interface SelectedComic {
-  thread: Thread
+  thread: ThreadListItem
   issue: Issue | null
 }
 
 export interface SelectedIssueRange {
-  thread: Thread
+  thread: ThreadListItem
   startIssue: Issue
   endIssue: Issue
 }
@@ -21,9 +21,9 @@ interface SelectorStateProps {
 }
 
 interface ContinuityThreadSelectorProps extends SelectorStateProps {
-  threads: Thread[]
-  value: Thread | null
-  onChange: (thread: Thread | null) => void
+  threads: ThreadListItem[]
+  value: ThreadListItem | null
+  onChange: (thread: ThreadListItem | null) => void
   label?: string
   excludeThreadId?: number | null
   placeholder?: string
@@ -71,7 +71,7 @@ export function ContinuityThreadSelector({
     }
   }
 
-  function selectThread(thread: Thread) {
+  function selectThread(thread: ThreadListItem) {
     onChange(thread)
     setQuery(thread.title)
   }
@@ -196,7 +196,7 @@ export function ContinuityIssueSelector({
 }
 
 interface ContinuityIssueRangeSelectorProps extends SelectorStateProps {
-  thread: Thread
+  thread: ThreadListItem
   issues: Issue[]
   value: SelectedIssueRange | null
   onChange: (range: SelectedIssueRange | null) => void
