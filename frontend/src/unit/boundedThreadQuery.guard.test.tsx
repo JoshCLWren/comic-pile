@@ -27,7 +27,7 @@ function createWrapper() {
 beforeEach(() => {
   vi.clearAllMocks()
   mockedThreadsApi.list.mockResolvedValue({
-    threads: Array.from({ length: 51 }, (_, index) => ({ id: index + 1 }) as ThreadListItem),
+    threads: Array.from({ length: 51 }, (_, index) => ({ id: index + 1 }) as ThreadListItem), // SAFETY: Test data with minimal required fields for ThreadListItem
     next_page_token: 'page-2',
     active_count: 51,
   })
