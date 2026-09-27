@@ -248,6 +248,7 @@ test.describe('Issue #2919 Roll result layout overlap and clipping', () => {
     const result = await page.evaluate(() => {
       const root = document.getElementById('root')
       const actions = document.querySelector('[data-testid="rating-actions"]')
+      // SAFETY: Both arrays are empty when root or actions is null, so the type assertion is safe
       if (!root || !actions) {
         return { scrollContainers: [] as string[], position: null as string | null }
       }
