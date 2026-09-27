@@ -2,14 +2,11 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
-import { threadsApi } from '../services/api-threads'
-import { dependencyGroupsApi } from '../services/api-dependency-groups'
-import { issuesApi } from '../services/api-issues'
+import type { CrossoverApiDeps } from '../hooks/useCrossovers'
 
-vi.mock('../services/api-dependency-groups', () => ({
-  dependencyGroupsApi: {
+const groupsApi = {
     list: vi.fn(),
     get: vi.fn(),
     create: vi.fn(),
@@ -18,41 +15,18 @@ vi.mock('../services/api-dependency-groups', () => ({
     addMember: vi.fn(),
     addIssueRange: vi.fn(),
     removeMember: vi.fn(),
-    listForThread: vi.fn(),
-    listForThreads: vi.fn(),
-    plansForGroup: vi.fn(),
-    getDetail: vi.fn(),
-  },
-}))
+}
 
-vi.mock('../services/api', () => ({
-  default: {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-  },
-  threadsApi: {
+const threadApi = {
     list: vi.fn(),
     get: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
-    reactivate: vi.fn(),
-    listStale: vi.fn(),
-    setPending: vi.fn(),
-    setCurrentIssue: vi.fn(),
-    listCompleted: vi.fn(),
-  },
-  issuesApi: {
-    list: vi.fn(),
-  },
-}))
+}
 
-const groupsApi = vi.mocked(dependencyGroupsApi)
-const threadApi = vi.mocked(threadsApi)
-const issueApi = vi.mocked(issuesApi)
+const issueApi = {
+    list: vi.fn(),
+}
+
+const pageApi: CrossoverApiDeps = { groups: groupsApi, threads: threadApi, issues: issueApi }
 
 function createWrapper() {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -64,7 +38,7 @@ function createWrapper() {
 function renderPage() {
     return render(
         <MemoryRouter>
-            <CrossoversPage />
+            <CrossoversPage api={pageApi} />
         </MemoryRouter>,
         { wrapper: createWrapper() },
     )
@@ -150,26 +124,22 @@ function selectRange(firstIssueId: string, lastIssueId: string) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.spyOn(dependencyGroupsApi, 'list').mockResolvedValue([crossover])
-  vi.spyOn(dependencyGroupsApi, 'get').mockResolvedValue({ ...crossover, memberships: [] })
-  vi.spyOn(dependencyGroupsApi, 'addIssueRange').mockResolvedValue({ thread_id: 0, start_position: 0, end_position: 0, added_issue_ids: [], already_present_issue_ids: [] })
-  vi.spyOn(dependencyGroupsApi, 'delete').mockResolvedValue(undefined)
-  vi.spyOn(threadsApi, 'list').mockResolvedValue({
+  groupsApi.list.mockResolvedValue([crossover])
+  groupsApi.get.mockResolvedValue({ ...crossover, memberships: [] })
+  groupsApi.addIssueRange.mockResolvedValue({ thread_id: 0, start_position: 0, end_position: 0, added_issue_ids: [], already_present_issue_ids: [] })
+  groupsApi.delete.mockResolvedValue(undefined)
+  threadApi.list.mockResolvedValue({
     threads: [thread],
     next_page_token: null,
     active_count: 1,
   })
-  vi.spyOn(threadsApi, 'get').mockResolvedValue(thread)
-  vi.spyOn(issuesApi, 'list').mockResolvedValue({
+  threadApi.get.mockResolvedValue(thread)
+  issueApi.list.mockResolvedValue({
     issues,
     total_count: issues.length,
     page_size: 100,
     next_page_token: null,
   })
-})
-
-afterEach(() => {
-  vi.restoreAllMocks()
 })
 
 describe('CrossoversPage issue ranges', () => {
