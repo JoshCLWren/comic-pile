@@ -72,7 +72,6 @@ async function fetchAllThreads(threads: CrossoverThreadsApi = threadsApi): Promi
     nextPageToken = data.next_page_token
   }
 }
-}
 
 export function useCrossoverGroupsList(deps: CrossoverApiDeps = {}) {
   const groups = deps.groups ?? dependencyGroupsApi
