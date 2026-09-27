@@ -143,6 +143,15 @@ def main() -> None:
         'python3 "$controller" release --worker "$worker"',
         'while (( attempt <= 3 ))',
         'later workers were still attempted',
+        'id: dispatch_workers',
+        'dispatched_count=0',
+        'dispatched_count=$((dispatched_count + 1))',
+        'echo "dispatched_count=${dispatched_count}" >> "$GITHUB_OUTPUT"',
+        'echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"',
+        'echo "dispatch_failed=true" >> "$GITHUB_OUTPUT"',
+        'steps.dispatch_workers.outputs.dispatched_count',
+        'steps.dispatch_workers.outputs.dispatch_failed',
+        'Trustworthy zero-work tick: ending bounded roster session',
     ):
         assert required in dispatcher, f'deployment/assignment fence missing: {required}'
 

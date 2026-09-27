@@ -88,3 +88,64 @@ def test_roster_tick_defaults_to_twelve_workers_with_source_diverse_seed():
     assert workflow.index('python3 "$controller" reconcile') < workflow.index(
         'python3 "$controller" capacity'
     )
+
+
+def test_dispatch_assigned_worker_counts_successful_entry_dispatches_not_kind_none():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "dispatched_count=0" in workflow
+    assert "dispatched_count=$((dispatched_count + 1))" in workflow
+    # kind=none must remain an uncounted success: no increment on that branch
+    none_branch = workflow.split("none)", 1)[1].split("issue|pr)", 1)[0]
+    assert "dispatched_count" not in none_branch
+    # the increment sits on the successful gh workflow run branch
+    assert workflow.index("dispatched_count=$((dispatched_count + 1))") < workflow.index(
+        "dispatch_assigned_worker \"$worker\" || dispatch_failures"
+    )
+
+
+def test_dispatch_step_emits_dispatched_count_and_dispatch_failed_outputs():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    dispatch_step = workflow.split("Resolve and dispatch fixed workers", 1)[1].split(
+        "Self-perpetuate roster cadence", 1
+    )[0]
+    assert "id: dispatch_workers" in workflow
+    assert 'echo "dispatched_count=${dispatched_count}" >> "$GITHUB_OUTPUT"' in dispatch_step
+    assert 'echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"' in dispatch_step
+    assert 'echo "dispatch_failed=true" >> "$GITHUB_OUTPUT"' in dispatch_step
+    assert 'echo "${dispatch_failures} worker dispatch(es) failed after retries' in dispatch_step
+
+
+def test_capacity_exhausted_early_exit_is_trustworthy_zero():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "OmniRoute free-entry cap is exhausted" in workflow
+    cap_branch = workflow.split("OmniRoute free-entry cap is exhausted", 1)[1][:400]
+    assert 'echo "dispatched_count=0" >> "$GITHUB_OUTPUT"' in cap_branch
+    assert 'echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"' in cap_branch
+
+
+def test_roster_chain_gates_on_dispatched_count_and_dispatch_failed():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    chain_step = workflow.split("Self-perpetuate roster cadence", 1)[1]
+    assert "steps.dispatch_workers.outputs.dispatched_count" in chain_step
+    assert "steps.dispatch_workers.outputs.dispatch_failed" in chain_step
+    assert '[[ "$dispatch_failed" == "true" || ( "$dispatched_count" =~ ^[0-9]+$ && "$dispatched_count" -gt 0 ) ]]' in chain_step
+    assert '[[ "$dispatched_count" == "0" && "$dispatch_failed" == "false" ]]' in chain_step
+    assert "Trustworthy zero-work tick: ending bounded roster session" in chain_step
+    # chained successor still sleeps then triggers the roster mode
+    assert "sleep 240" in chain_step
+    assert "-f mode=roster" in chain_step
+
+
+def test_roster_chain_step_still_fires_on_always_for_schedule_or_roster():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert (
+        "if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster'))"
+        in workflow
+    )
+    assert "- cron: '7 * * * *'" in workflow
+    assert "queue: single" in workflow
