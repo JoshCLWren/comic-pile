@@ -21,109 +21,75 @@ import { useSession } from '../hooks/useSession'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useToast } from '../contexts/useToast'
-import { threadsApi } from '../services/api-threads'
-import { dependenciesApi } from '../services/api'
-import { issuesApi } from '../services/api-issues'
+import { threadsApi as realThreadsApi } from '../services/api-threads'
+import { dependenciesApi as realDependenciesApi } from '../services/api'
+import { issuesApi as realIssuesApi } from '../services/api-issues'
 import type { Thread } from '../types'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 
-vi.mock('../hooks/useThread', () => ({
-  useCreateThread: vi.fn(),
-  useUpdateThread: vi.fn(),
-  useDeleteThread: vi.fn(),
-  useReactivateThread: vi.fn(),
-}))
+// Mock hook functions with proper return types — no module mocking
+const mockedUseCreateThread = vi.fn<ReturnType<typeof useCreateThread>>()
+const mockedUseUpdateThread = vi.fn<ReturnType<typeof useUpdateThread>>()
+const mockedUseDeleteThread = vi.fn<ReturnType<typeof useDeleteThread>>()
+const mockedUseReactivateThread = vi.fn<ReturnType<typeof useReactivateThread>>()
 
-vi.mock('../hooks/useQueue', () => ({
-  useMoveToFront: vi.fn(),
-  useMoveToBack: vi.fn(),
-  useMoveToPosition: vi.fn(),
-  useQueueThreads: vi.fn(),
-  useShuffleQueue: vi.fn(),
-}))
+const mockedUseMoveToFront = vi.fn<ReturnType<typeof useMoveToFront>>()
+const mockedUseMoveToBack = vi.fn<ReturnType<typeof useMoveToBack>>()
+const mockedUseMoveToPosition = vi.fn<ReturnType<typeof useMoveToPosition>>()
+const mockedUseQueueThreads = vi.fn<ReturnType<typeof useQueueThreads>>()
+const mockedUseShuffleQueue = vi.fn<ReturnType<typeof useShuffleQueue>>()
 
-vi.mock('../hooks/useSession', () => ({
-  useSession: vi.fn(),
-}))
+const mockedUseSession = vi.fn<ReturnType<typeof useSession>>()
+const mockedUseSnooze = vi.fn<ReturnType<typeof useSnooze>>()
+const mockedUseUnsnooze = vi.fn<ReturnType<typeof useUnsnooze>>()
+const mockedUseQueueBlockingInfo = vi.fn<ReturnType<typeof useQueueBlockingInfo>>()
 
-vi.mock('../hooks/useSnooze', () => ({
-  useSnooze: vi.fn(),
-  useUnsnooze: vi.fn(),
-}))
+const mockedUseBugReportRestore = vi.fn<ReturnType<typeof useBugReportRestore>>()
+const mockedUseToast = vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }))
 
-vi.mock('../hooks/useQueueBlockingInfo', () => ({
-  useQueueBlockingInfo: vi.fn(() => ({})),
-}))
+// Mock API objects — no module mocking
+const mockedThreadsApi = {
+  setPending: vi.fn<typeof realThreadsApi.setPending>(),
+}
 
-vi.mock('../services/api-threads', () => ({
-  threadsApi: {
-    setPending: vi.fn(),
-  },
-}))
+const mockedDependenciesApi = {
+  listBlockedThreadIds: vi.fn<typeof realDependenciesApi.listBlockedThreadIds>().mockResolvedValue([]),
+  getBlockingInfo: vi.fn<typeof realDependenciesApi.getBlockingInfo>().mockResolvedValue({ blocking_reasons: [] }),
+}
 
-vi.mock('../services/api', () => ({
-  dependenciesApi: {
-    listBlockedThreadIds: vi.fn().mockResolvedValue([]),
-    getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
-  },
-}))
-
-vi.mock('../services/api-issues', () => ({
-  issuesApi: {
-    create: vi.fn().mockResolvedValue({ issues: [] }),
-    markRead: vi.fn().mockResolvedValue(undefined),
-    bulkMarkRead: vi.fn().mockResolvedValue(undefined),
-    bulkMarkUnread: vi.fn().mockResolvedValue(undefined),
-    migrateThread: vi.fn().mockResolvedValue({}),
-  },
-}))
-
-vi.mock('../contexts/useBugReportRestore', () => ({
-  useBugReportRestore: vi.fn(),
-}))
-
-vi.mock('../contexts/useToast', () => ({
-  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
-}))
+const mockedIssuesApi = {
+  create: vi.fn<typeof realIssuesApi.create>().mockResolvedValue({ issues: [] }),
+  markRead: vi.fn<typeof realIssuesApi.markRead>().mockResolvedValue(undefined),
+  bulkMarkRead: vi.fn<typeof realIssuesApi.bulkMarkRead>().mockResolvedValue(undefined),
+  bulkMarkUnread: vi.fn<typeof realIssuesApi.bulkMarkUnread>().mockResolvedValue(undefined),
+  migrateThread: vi.fn<typeof realIssuesApi.migrateThread>().mockResolvedValue({}),
+}
 
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseCreateThread = vi.mocked(useCreateThread) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseDeleteThread = vi.mocked(useDeleteThread) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseReactivateThread = vi.mocked(useReactivateThread) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseSession = vi.mocked(useSession) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseQueueBlockingInfo = vi.mocked(useQueueBlockingInfo) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseSnooze = vi.mocked(useSnooze) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedThreadsApi = vi.mocked(threadsApi) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedDependenciesApi = vi.mocked(dependenciesApi) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedIssuesApi = vi.mocked(issuesApi) as any
+// Mock hook references — using direct mock functions instead of vi.mocked
+const mockUseCreateThread = mockedUseCreateThread
+const mockUseUpdateThread = mockedUseUpdateThread
+const mockUseDeleteThread = mockedUseDeleteThread
+const mockUseReactivateThread = mockedUseReactivateThread
+const mockUseMoveToFront = mockedUseMoveToFront
+const mockUseMoveToBack = mockedUseMoveToBack
+const mockUseMoveToPosition = mockedUseMoveToPosition
+const mockUseShuffleQueue = mockedUseShuffleQueue
+const mockUseSession = mockedUseSession
+const mockUseQueueBlockingInfo = mockedUseQueueBlockingInfo
+const mockUseBugReportRestore = mockedUseBugReportRestore
+const mockUseUnsnooze = mockedUseUnsnooze
+const mockUseSnooze = mockedUseSnooze
+const mockThreadsApi = mockedThreadsApi
+const mockDependenciesApi = mockedDependenciesApi
+const mockIssuesApi = mockedIssuesApi
 
 beforeEach(() => {
   vi.stubGlobal('alert', vi.fn())
+  
+  // Setup mock return values for each hook
   mockedUseQueueThreads.mockReturnValue({
     data: [
       { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
@@ -132,26 +98,34 @@ beforeEach(() => {
     isPending: false,
     refetch: vi.fn(),
   })
+  
   mockedUseCreateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseDeleteThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  
   mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  
   mockedUseSession.mockReturnValue({
     data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
     refetch: vi.fn(),
   })
+  
   mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  
   mockedUseBugReportRestore.mockReturnValue({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
     restoreLastView: vi.fn(),
   })
-  // SAFETY: full response shape satisfies RollResponse; never cast bypasses strict mock typing
+  
+  mockedUseQueueBlockingInfo.mockReturnValue({})
+  
+  // Setup mock API calls
   mockedThreadsApi.setPending.mockResolvedValue({
     thread_id: 1,
     title: 'Saga',
@@ -168,7 +142,7 @@ beforeEach(() => {
     next_issue_number: null,
     total_issues: null,
     reading_progress: null,
-  } as never)
+  })
 })
 
   it('renders queue items and opens create modal', async () => {
