@@ -7,7 +7,36 @@ import { queryClient } from '../query/queryClient';
 import { queryKeys } from '../query/queryKeys';
 import { invalidateAfterDependencyChange, applyMigratedThreadCache } from '../query/cacheEffects';
 
-async function fetchAllUnreadIssues(threadId: number): Promise<Issue[]> {
+/** Dependency service surface the DependencyBuilder depends on. */
+export type DependencyListApi = Pick<
+  typeof dependenciesApi,
+  'listThreadDependencies' | 'listBlockedThreadIds' | 'createDependency' | 'deleteDependency' | 'updateDependency'
+>;
+
+/** Thread service surface the DependencyBuilder depends on. */
+export type DependencyThreadsApi = Pick<typeof threadsApi, 'list'>;
+
+/** Issue service surface the DependencyBuilder depends on. */
+export type DependencyIssuesApi = Pick<typeof issuesApi, 'list'>;
+
+/** Migration service surface the DependencyBuilder depends on. */
+export type DependencyMigrationApi = Pick<typeof migrationApi, 'migrateThread'>;
+
+/**
+ * Injectable service seams for the DependencyBuilder.
+ *
+ * Tests pass faithful in-memory implementations through the component's `api`
+ * prop instead of replacing the service modules themselves, so the component
+ * exercises its real query and mutation wiring against a controllable transport.
+ */
+export interface DependencyBuilderApiDeps {
+  dependencies?: DependencyListApi;
+  threads?: DependencyThreadsApi;
+  issues?: DependencyIssuesApi;
+  migration?: DependencyMigrationApi;
+}
+
+async function fetchAllUnreadIssues(threadId: number, issues: DependencyIssuesApi = issuesApi): Promise<Issue[]> {
   const allIssues: Issue[] = [];
   const seenPageTokens = new Set<string>();
   let nextPageToken: string | null = null;
@@ -20,7 +49,7 @@ async function fetchAllUnreadIssues(threadId: number): Promise<Issue[]> {
     if (nextPageToken) {
       params.page_token = nextPageToken;
     }
-    const data = await issuesApi.list(threadId, params);
+    const data = await issues.list(threadId, params);
     allIssues.push(...data.issues);
 
     if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
@@ -32,53 +61,68 @@ async function fetchAllUnreadIssues(threadId: number): Promise<Issue[]> {
   }
 }
 
-export function useThreadDependencies(threadId: number | null | undefined, enabled = true) {
+export function useThreadDependencies(
+  threadId: number | null | undefined,
+  enabled = true,
+  api: DependencyListApi = dependenciesApi
+) {
   return useQuery<ThreadDependenciesResponse>({
     queryKey: threadId != null ? queryKeys.dependencies.forThread(threadId) : [],
-    queryFn: () => dependenciesApi.listThreadDependencies(threadId!),
+    queryFn: () => api.listThreadDependencies(threadId!),
     enabled: enabled && threadId != null,
     retry: false,
   });
 }
 
-export function useBlockedThreadIds(enabled = true) {
+export function useBlockedThreadIds(enabled = true, api: DependencyListApi = dependenciesApi) {
   return useQuery<number[]>({
     queryKey: queryKeys.dependencies.list(),
-    queryFn: () => dependenciesApi.listBlockedThreadIds(),
+    queryFn: () => api.listBlockedThreadIds(),
     enabled,
     retry: false,
   });
 }
 
-export function useSearchThreads(query: string, enabled = true) {
+export function useSearchThreads(
+  query: string,
+  enabled = true,
+  api: DependencyThreadsApi = threadsApi
+) {
   const normalizedQuery = query.trim();
   return useQuery<ThreadListResponse>({
     queryKey: normalizedQuery.length >= 2
       ? queryKeys.dependencies.search(normalizedQuery)
       : [],
-    queryFn: () => threadsApi.list({ search: normalizedQuery }),
+    queryFn: () => api.list({ search: normalizedQuery }),
     enabled: enabled && normalizedQuery.length >= 2,
     retry: false,
   });
 }
 
-export function useThreadIssuesForDependency(threadId: number | null | undefined, enabled = true) {
+export function useThreadIssuesForDependency(
+  threadId: number | null | undefined,
+  enabled = true,
+  api: DependencyIssuesApi = issuesApi
+) {
   return useQuery<Issue[]>({
     queryKey: threadId != null ? queryKeys.dependencies.issues(threadId) : [],
-    queryFn: () => fetchAllUnreadIssues(threadId!),
+    queryFn: () => fetchAllUnreadIssues(threadId!, api),
     enabled: enabled && threadId != null,
     retry: false,
   });
 }
 
-export function useCreateDependency(threadId: number | undefined) {
+export function useCreateDependency(
+  threadId: number | undefined,
+  api: DependencyListApi = dependenciesApi
+) {
   return useMutation({
     mutationFn: (payload: {
       sourceType: 'thread' | 'issue';
       sourceId: number;
       targetType: 'thread' | 'issue';
       targetId: number;
-    }) => dependenciesApi.createDependency(payload),
+    }) => api.createDependency(payload),
     onSuccess: async () => {
       if (threadId != null) {
         await invalidateAfterDependencyChange(queryClient, threadId);
@@ -87,9 +131,12 @@ export function useCreateDependency(threadId: number | undefined) {
   });
 }
 
-export function useDeleteDependency(threadId: number | undefined) {
+export function useDeleteDependency(
+  threadId: number | undefined,
+  api: DependencyListApi = dependenciesApi
+) {
   return useMutation({
-    mutationFn: (dependencyId: number) => dependenciesApi.deleteDependency(dependencyId),
+    mutationFn: (dependencyId: number) => api.deleteDependency(dependencyId),
     onSuccess: async () => {
       if (threadId != null) {
         await invalidateAfterDependencyChange(queryClient, threadId);
@@ -98,10 +145,13 @@ export function useDeleteDependency(threadId: number | undefined) {
   });
 }
 
-export function useUpdateDependency(threadId: number | undefined) {
+export function useUpdateDependency(
+  threadId: number | undefined,
+  api: DependencyListApi = dependenciesApi
+) {
   return useMutation({
     mutationFn: ({ dependencyId, note }: { dependencyId: number; note: string | null }) =>
-      dependenciesApi.updateDependency(dependencyId, note),
+      api.updateDependency(dependencyId, note),
     onSuccess: async () => {
       if (threadId != null) {
         await invalidateAfterDependencyChange(queryClient, threadId);
@@ -110,10 +160,10 @@ export function useUpdateDependency(threadId: number | undefined) {
   });
 }
 
-export function useMigrateThread() {
+export function useMigrateThread(api: DependencyMigrationApi = migrationApi) {
   return useMutation({
     mutationFn: ({ threadId, lastIssueRead, totalIssues }: { threadId: number; lastIssueRead: number; totalIssues: number }) =>
-      migrationApi.migrateThread(threadId, { last_issue_read: lastIssueRead, total_issues: totalIssues }),
+      api.migrateThread(threadId, { last_issue_read: lastIssueRead, total_issues: totalIssues }),
     onSuccess: async (updatedThread) => {
       await applyMigratedThreadCache(queryClient, updatedThread);
     },

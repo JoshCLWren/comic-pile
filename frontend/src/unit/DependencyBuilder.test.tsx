@@ -4,69 +4,40 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DependencyBuilder from '../components/DependencyBuilder'
 import { ToastProvider } from '../contexts/ToastProvider'
+import type { DependencyBuilderApiDeps } from '../hooks/useDependencies'
 import type { Issue, IssueListResponse, Thread } from '../types'
 
-const mocks = vi.hoisted(() => ({
+const dependenciesApi = {
   listThreadDependencies: vi.fn(),
   listBlockedThreadIds: vi.fn(),
   createDependency: vi.fn(),
   deleteDependency: vi.fn(),
   updateDependency: vi.fn(),
-  listThreads: vi.fn(),
-  listIssues: vi.fn(),
+}
+
+const threadsApi = {
+  list: vi.fn(),
+}
+
+const issuesApi = {
+  list: vi.fn(),
+}
+
+const migrationApi = {
   migrateThread: vi.fn(),
-}))
+}
 
-vi.mock('../services/api-threads', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-threads')>(
-    '../services/api-threads'
-  )
-  return {
-    ...actual,
-    threadsApi: {
-      ...actual.threadsApi,
-      list: mocks.listThreads,
-    },
-  }
-})
-vi.mock('../services/api', async () => {
-  const actual = await vi.importActual<typeof import('../services/api')>(
-    '../services/api'
-  )
-  return {
-    ...actual,
-    dependenciesApi: {
-      listThreadDependencies: mocks.listThreadDependencies,
-      listBlockedThreadIds: mocks.listBlockedThreadIds,
-      createDependency: mocks.createDependency,
-      deleteDependency: mocks.deleteDependency,
-      updateDependency: mocks.updateDependency,
-    },
-    threadsApi: {
-      list: mocks.listThreads,
-    },
-    migrationApi: {
-      migrateThread: mocks.migrateThread,
-    },
-  }
-})
+const builderApi: DependencyBuilderApiDeps = {
+  dependencies: dependenciesApi,
+  threads: threadsApi,
+  issues: issuesApi,
+  migration: migrationApi,
+}
 
-vi.mock('../services/api-issues', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-issues')>(
-    '../services/api-issues'
-  )
-  return {
-    ...actual,
-    issuesApi: {
-      list: mocks.listIssues,
-    },
-  }
-})
-
-const mockedListThreadDependencies = vi.mocked(mocks.listThreadDependencies)
-const mockedListBlockedThreadIds = vi.mocked(mocks.listBlockedThreadIds)
-const mockedListThreads = vi.mocked(mocks.listThreads)
-const mockedListIssues = vi.mocked(mocks.listIssues)
+const mockedListThreadDependencies = vi.mocked(dependenciesApi.listThreadDependencies)
+const mockedListBlockedThreadIds = vi.mocked(dependenciesApi.listBlockedThreadIds)
+const mockedListThreads = vi.mocked(threadsApi.list)
+const mockedListIssues = vi.mocked(issuesApi.list)
 
 function makeThread(overrides: Partial<Thread> & { id: number; title: string }): Thread {
   return {
@@ -127,6 +98,7 @@ function renderBuilder() {
           thread={TARGET_THREAD}
           isOpen
           onClose={() => {}}
+          api={builderApi}
         />
       </ToastProvider>
     </QueryClientProvider>,

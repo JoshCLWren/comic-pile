@@ -20,6 +20,7 @@ export {
   useAddCrossoverMember,
   useAddCrossoverIssueRange,
   useRemoveCrossoverMember,
+  type CrossoverApiDeps,
 } from './useCrossovers'
 export { useDependencyGroups } from './useDependencyGroups'
 export {
@@ -31,6 +32,7 @@ export {
   useDeleteDependency,
   useUpdateDependency,
   useMigrateThread,
+  type DependencyBuilderApiDeps,
 } from './useDependencies'
 export { useReaderContext, useReadingOrdersForThread, useConnectedThreads } from './useReaderContext'
 export { useTasteDiscoveries } from './useTasteDiscoveries'

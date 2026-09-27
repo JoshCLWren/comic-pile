@@ -13,6 +13,7 @@ import {
   useDeleteDependency,
   useUpdateDependency,
   useMigrateThread,
+  type DependencyBuilderApiDeps,
 } from '../hooks'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api'
@@ -38,6 +39,12 @@ interface DependencyBuilderProps {
   isOpen: boolean
   onClose: () => void
   onChanged?: () => void
+  /**
+   * Optional service seams. Production callers omit this and use the real
+   * services; tests inject faithful in-memory implementations instead of
+   * replacing the service modules themselves.
+   */
+  api?: DependencyBuilderApiDeps
 }
 
 export default function DependencyBuilder({
@@ -45,7 +52,12 @@ export default function DependencyBuilder({
   isOpen,
   onClose,
   onChanged,
+  api = {},
 }: DependencyBuilderProps) {
+  const dependencyApi = api.dependencies ?? dependenciesApi
+  const threadApi = api.threads ?? threadsApi
+  const issueApi = api.issues
+  const migrationApi = api.migration
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedThreadId, setSelectedThreadId] = useState<number | null>(null)
   const [showReadingOrder, setShowReadingOrder] = useState(false)
@@ -76,15 +88,15 @@ export default function DependencyBuilder({
     isPending: isLoadingDeps,
     error: depsError,
     refetch: refetchDependencies,
-  } = useThreadDependencies(threadId, isOpen)
+  } = useThreadDependencies(threadId, isOpen, dependencyApi)
 
-  const { data: blockedIdsData } = useBlockedThreadIds(isOpen && showReadingOrder)
+  const { data: blockedIdsData } = useBlockedThreadIds(isOpen && showReadingOrder, dependencyApi)
 
   const {
     data: searchResultsData,
     isPending: isSearching,
     error: searchError,
-  } = useSearchThreads(searchQuery, isOpen)
+  } = useSearchThreads(searchQuery, isOpen, threadApi)
 
   const searchResults = useMemo(
     () => (searchResultsData?.threads ?? []).filter((candidate) => candidate.id !== threadId),
@@ -107,18 +119,18 @@ export default function DependencyBuilder({
     data: sourceIssues,
     isPending: isLoadingSourceIssues,
     error: sourceIssuesError,
-  } = useThreadIssuesForDependency(selectedThreadId, issuesEnabled)
+  } = useThreadIssuesForDependency(selectedThreadId, issuesEnabled, issueApi)
 
   const {
     data: targetIssues,
     isPending: isLoadingTargetIssues,
     error: targetIssuesError,
-  } = useThreadIssuesForDependency(threadId, issuesEnabled)
+  } = useThreadIssuesForDependency(threadId, issuesEnabled, issueApi)
 
-  const createDependencyMutation = useCreateDependency(threadId)
-  const deleteDependencyMutation = useDeleteDependency(threadId)
-  const updateDependencyMutation = useUpdateDependency(threadId)
-  const migrateThreadMutation = useMigrateThread()
+  const createDependencyMutation = useCreateDependency(threadId, dependencyApi)
+  const deleteDependencyMutation = useDeleteDependency(threadId, dependencyApi)
+  const updateDependencyMutation = useUpdateDependency(threadId, dependencyApi)
+  const migrateThreadMutation = useMigrateThread(migrationApi)
 
   const dependencies = useMemo(
     () => dependenciesData ?? { blocking: [], blocked_by: [] },
@@ -144,14 +156,14 @@ export default function DependencyBuilder({
     if (!threadId) return
     setIsGraphLoading(true)
     try {
-      const depsData = await dependenciesApi.listThreadDependencies(threadId)
+      const depsData = await dependencyApi.listThreadDependencies(threadId)
 
       const allDeps = [...depsData.blocking, ...depsData.blocked_by]
       const graph = buildFlowchartGraph(allDeps, threadId)
       const relatedIds = graph.relatedThreadIds
       const allEdges = graph.edges
 
-      const allThreads = await threadsApi.list()
+      const allThreads = await threadApi.list()
       const relatedThreads = allThreads.threads.filter((t) => relatedIds.has(t.id))
 
       setFlowchartThreads(relatedThreads)
@@ -162,12 +174,12 @@ export default function DependencyBuilder({
     } finally {
       setIsGraphLoading(false)
     }
-  }, [threadId])
+  }, [threadId, dependencyApi, threadApi])
 
   useEffect(() => {
     if (pendingDeletion) {
       clearTimeout(pendingDeletion.timeoutId)
-      dependenciesApi.deleteDependency(pendingDeletion.dependencyId)
+      dependencyApi.deleteDependency(pendingDeletion.dependencyId)
         .then(() => {
           onChanged?.()
         })
@@ -191,7 +203,7 @@ export default function DependencyBuilder({
     setShowInlineMigration(false)
 
     refetchDependencies()
-  }, [isOpen, threadId, refetchDependencies, onChanged, pendingDeletion, toast])
+  }, [isOpen, threadId, refetchDependencies, onChanged, pendingDeletion, toast, dependencyApi])
 
   useEffect(() => {
     if (sourceIssuesError) {
