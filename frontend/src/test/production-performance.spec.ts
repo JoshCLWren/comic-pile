@@ -51,6 +51,7 @@ test('records production startup and queue milestones', async ({ page }, testInf
   expect(documentResponse, 'Initial document response').not.toBeNull()
 
   const navigation = await page.evaluate(() => {
+    // SAFETY: performance.getEntriesByType always returns an array, and navigation entries are always PerformanceNavigationTiming
     const [entry] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[]
     return entry
       ? { responseStart: entry.responseStart, startTime: entry.startTime }
