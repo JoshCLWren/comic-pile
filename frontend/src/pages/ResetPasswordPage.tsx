@@ -133,7 +133,7 @@ export default function ResetPasswordPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-6" data-testid="reset-password-form">
           <div className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="newPassword" className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)]">
