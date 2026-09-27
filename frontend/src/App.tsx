@@ -22,7 +22,7 @@ import { useBugReport } from './hooks/useBugReport'
 import { usePingHeartbeat } from './hooks/usePingHeartbeat'
 import { useScrollRestoration } from './hooks/useScrollRestoration'
 import { PreferencesSync } from './hooks/usePreferences'
-import { useAuthDegradedState } from './hooks/useAuthDegradedState'
+import { useAuthDegradedState, ServiceUnavailableWrapper } from './hooks/useAuthDegradedState'
 import type { DiagnosticData } from './hooks/useDiagnostics'
 import { ToastProvider } from './contexts/ToastProvider'
 import { BugReportRestoreProvider } from './contexts/BugReportRestoreContext'
@@ -51,6 +51,7 @@ const RollPage = lazyRoute('roll')
 const QueuePage = lazyRoute('queue')
 const ThreadDetailView = lazyRoute('threadDetail')
 const CreatorDetailPage = lazyRoute('creatorDetail')
+const CreatorsPage = lazyRoute('creators')
 const HistoryPage = lazyRoute('history')
 const SessionPage = lazyRoute('session')
 const CrossoversPage = lazyRoute('crossovers')
@@ -64,6 +65,7 @@ const RegisterPage = lazyRoute('register')
 const ForgotPasswordPage = lazyRoute('forgotPassword')
 const ResetPasswordPage = lazyRoute('resetPassword')
 const IdentityInboxPage = lazyRoute('identityInbox')
+const LandingPage = lazyRoute('landing')
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>({
@@ -432,6 +434,35 @@ function PublicRoute({ children }: { children: ReactNode }) {
   return children
 }
 
+function RootRoute({ onBugReportSubmit }: { onBugReportSubmit: BugReportSubmit }) {
+  const { authState } = useAuth()
+
+  if (authState.isLoading) {
+    return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Checking authentication...</div>
+  }
+
+  // Only a definitively unauthenticated visitor sees the logged-out landing page.
+  // Degraded states (service_unavailable/network_error) must keep the authenticated
+  // shell so the "your session is still active" recovery overlay stays coherent.
+  if (authState.status === 'unauthenticated') {
+    return (
+      <PublicLayout onBugReportSubmit={onBugReportSubmit}>
+        <LandingPage />
+      </PublicLayout>
+    )
+  }
+
+  return (
+    <ProtectedRoute>
+      <ServiceUnavailableWrapper>
+        <AuthenticatedLayout wide onBugReportSubmit={onBugReportSubmit}>
+          <RollPage />
+        </AuthenticatedLayout>
+      </ServiceUnavailableWrapper>
+    </ProtectedRoute>
+  )
+}
+
 function AuthenticatedLayout({ children, onBugReportSubmit, wide = false }: { children: ReactNode; onBugReportSubmit: BugReportSubmit; wide?: boolean }) {
   const maxWidthClass = wide ? 'max-w-lg md:max-w-2xl lg:max-w-5xl xl:max-w-[1536px]' : 'max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl';
   return (
@@ -475,15 +506,7 @@ function AppRoutes() {
         <Route path="/reset-password" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><ResetPasswordPage /></PublicLayout></PublicRoute>} />
         <Route path="/rate" element={<Navigate to="/" replace />} />
         <Route path="/analytics" element={<Navigate to="/" replace />} />
-        <Route path="/" element={
-          <ProtectedRoute>
-            <ServiceUnavailableWrapper>
-              <AuthenticatedLayout wide onBugReportSubmit={submit}>
-                <RollPage />
-              </AuthenticatedLayout>
-            </ServiceUnavailableWrapper>
-          </ProtectedRoute>
-        } />
+        <Route path="/" element={<RootRoute onBugReportSubmit={submit} />} />
         <Route path="/queue" element={
           <ProtectedRoute>
             <ServiceUnavailableWrapper>
@@ -525,6 +548,15 @@ function AppRoutes() {
             <ServiceUnavailableWrapper>
               <AuthenticatedLayout onBugReportSubmit={submit}>
                 <SessionPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/creators" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <CreatorsPage />
               </AuthenticatedLayout>
             </ServiceUnavailableWrapper>
           </ProtectedRoute>
