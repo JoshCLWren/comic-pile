@@ -36,6 +36,10 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     total_issues: null,
     is_blocked: false,
     blocking_reasons: [],
+    last_activity_at: null,
+    last_rating: null,
+    notes: null,
+    is_test: false,
     created_at: '2024-01-01T00:00:00Z',
     ...overrides,
   }

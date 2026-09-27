@@ -5,7 +5,7 @@ import MigrationDialog from '../../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../../components/SimpleMigrationDialog'
 import GlossaryLink from '../../../components/GlossaryLink'
 import { DICE_LADDER } from '../../../components/diceLadder'
-import type { Thread } from '../../../types'
+import type { Thread, ThreadListItem } from '../../../types'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 import type { RatingThread } from '../types'
 
@@ -89,7 +89,7 @@ interface RollModalsProps {
   onSimpleMigrationComplete: (issueNumber: string) => void
   onCloseSimpleMigration: () => void
   isOverrideOpen: boolean
-  overrideThreads: Thread[] | null
+  overrideThreads: ThreadListItem[] | null
   overrideThreadId: string
   onOverrideThreadIdChange: (value: string) => void
   overrideErrorMessage: string

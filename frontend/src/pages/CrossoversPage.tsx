@@ -9,7 +9,7 @@ import {
 import { type DependencyGroup, type DependencyGroupMember } from '../services/api-dependency-groups'
 import type { Issue } from '../types'
 import GlossaryLink from '../components/GlossaryLink'
-import type { Thread } from '../types'
+import type { ThreadListItem } from '../types'
 import { isString } from '../utils/runtimeChecks'
 import {
   useCrossoverGroupsList,
@@ -76,8 +76,8 @@ export default function CrossoversPage() {
   const [editingName, setEditingName] = useState('')
   const [mutationError, setMutationError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
-  const [memberThread, setMemberThread] = useState<Thread | null>(null)
-  const [rangeThread, setRangeThread] = useState<Thread | null>(null)
+  const [memberThread, setMemberThread] = useState<ThreadListItem | null>(null)
+  const [rangeThread, setRangeThread] = useState<ThreadListItem | null>(null)
   const [rangeSelection, setRangeSelection] = useState<SelectedIssueRange | null>(null)
   const [membershipMessage, setMembershipMessage] = useState<string | null>(null)
 
@@ -212,7 +212,7 @@ export default function CrossoversPage() {
     }
   }
 
-  const selectRangeThread = (thread: Thread | null) => {
+  const selectRangeThread = (thread: ThreadListItem | null) => {
     setRangeThread(thread)
     setRangeSelection(null)
   }

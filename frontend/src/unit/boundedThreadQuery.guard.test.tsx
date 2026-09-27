@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useQueueThreads } from '../hooks/useQueue'
 import * as useThreadModule from '../hooks/useThread'
 import { threadsApi } from '../services/api-threads'
-import type { Thread } from '../types'
+import type { ThreadListItem } from '../types'
 
 vi.mock('../services/api-threads', () => ({
   threadsApi: {
@@ -26,10 +26,11 @@ function createWrapper() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: Test data supplies only id; remaining ThreadListItem fields are never read by this guard test.
   mockedThreadsApi.list.mockResolvedValue({
-    // SAFETY: the list only needs ids to assert the page-size cap
-    threads: Array.from({ length: 51 }, (_, index) => ({ id: index + 1 }) as Thread),
+    threads: Array.from({ length: 51 }, (_, index) => ({ id: index + 1 }) as ThreadListItem),
     next_page_token: 'page-2',
+    active_count: 51,
   })
 })
 

@@ -6,7 +6,7 @@ import type {
   ContinuityPlanNode,
   ContinuityPlanOrderingMode,
 } from '../../services/api-continuity-plans'
-import type { Issue, Thread } from '../../types'
+import type { Issue, ThreadListItem } from '../../types'
 import { isString } from '../../utils/runtimeChecks'
 import { useSaveReadingPlan } from '../../hooks/useReadingPlans'
 import {
@@ -66,7 +66,7 @@ export function useContinuityPlannerEditor({
   const [savedNodes, setSavedNodes] = useState<PlannerNode[]>([])
   const [savedOrderingMode, setSavedOrderingMode] =
     useState<ContinuityPlanOrderingMode>('informational')
-  const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
+  const [selectedThread, setSelectedThread] = useState<ThreadListItem | null>(null)
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null)
   const [selectedGroupId, setSelectedGroupId] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -167,7 +167,7 @@ export function useContinuityPlannerEditor({
     ? activeLaneId
     : (orderedLanes[0]?.id ?? DEFAULT_LANE_ID)
 
-  const selectThread = (thread: Thread | null) => {
+  const selectThread = (thread: ThreadListItem | null) => {
     setSelectedThread(thread)
     setSelectedIssue(null)
     setSelectedThreadId(thread?.id ?? null)

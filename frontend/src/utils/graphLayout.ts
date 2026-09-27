@@ -5,7 +5,7 @@
  * to position nodes in a directed acyclic graph. No external dependencies.
  */
 
-import type { Thread, FlowchartDependency, GraphLayout, FlowchartNode, FlowchartEdge } from '../types'
+import type { ThreadListItem, FlowchartDependency, GraphLayout, FlowchartNode, FlowchartEdge } from '../types'
 
 /** Width of each thread node rectangle in the flowchart */
 const NODE_WIDTH = 160
@@ -144,14 +144,16 @@ function computeEdgePath(
 /**
  * Lay out a dependency graph for SVG rendering.
  *
- * @param threads - Array of threads to include as thread-level nodes
+ * @param threads - Array of threads to include as thread-level nodes. Only the
+ *   node id and title are read, so both the queue list item and the thread
+ *   detail response are accepted.
  * @param dependencies - Array of dependency relationships
  * @param blockedIds - Set of thread IDs that are currently blocked
  * @param issueNodes - Pre-built issue-level nodes to include in the layout
  * @returns Graph layout with positioned nodes and edge paths
  */
 export function layoutGraph(
-    threads: Thread[],
+    threads: Pick<ThreadListItem, 'id' | 'title'>[],
     dependencies: FlowchartDependency[],
     blockedIds: Set<number>,
     issueNodes: FlowchartNode[] = [],

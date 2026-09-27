@@ -8,7 +8,7 @@ import { queryKeys } from '../query/queryKeys'
 import { queueApi } from '../services/api-queue'
 import { threadsApi } from '../services/api-threads'
 import { getApiErrorDetail } from '../utils/apiError'
-import type { MoveToPositionPayload, Thread, ThreadListResponse, ThreadQueryParams } from '../types'
+import type { MoveToPositionPayload, Thread, ThreadListItem, ThreadListResponse, ThreadQueryParams } from '../types'
 import type { QueueSortBy } from '../pages/QueuePage/useQueueFilters'
 import type { QueueSort } from '../query/queryKeys'
 
@@ -104,7 +104,7 @@ export function useQueueThreads(
   sort: QueueSortBy = 'position',
   threadsList: Pick<typeof threadsApi, 'list'> = threadsApi,
 ) {
-  const query = useInfiniteCollection<Thread, ThreadListResponse>({
+  const query = useInfiniteCollection<ThreadListItem, ThreadListResponse>({
     ...queueThreadsQueryOptions(searchTerm, sort, threadsList),
     retry: false,
     placeholderData: keepPreviousData,

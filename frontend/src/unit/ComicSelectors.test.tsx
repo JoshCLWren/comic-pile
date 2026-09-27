@@ -6,13 +6,13 @@ import {
   ContinuityIssueSelector,
   ContinuityThreadSelector,
 } from '../components/continuity/ComicSelectors'
-import type { Issue, Thread } from '../types'
+import type { Issue, ThreadListItem } from '../types'
 
 // SAFETY: test fixture supplies only the fields the selector reads
 const threads = [
-  { id: 1, title: 'Alpha Flight', format: 'ongoing', issues_remaining: 5, total_issues: 10, queue_position: 1, status: 'active', is_blocked: false, blocking_reasons: [], created_at: '2026-01-01T00:00:00Z' },
-  { id: 2, title: 'New Mutants', format: 'ongoing', issues_remaining: 3, total_issues: 12, queue_position: 2, status: 'active', is_blocked: false, blocking_reasons: [], created_at: '2026-01-01T00:00:00Z' },
-] as Thread[]
+  { id: 1, title: 'Alpha Flight', format: 'ongoing', issues_remaining: 5, total_issues: 10, queue_position: 1, status: 'active', is_blocked: false, blocking_reasons: [], last_activity_at: null, created_at: '2026-01-01T00:00:00Z' },
+  { id: 2, title: 'New Mutants', format: 'ongoing', issues_remaining: 3, total_issues: 12, queue_position: 2, status: 'active', is_blocked: false, blocking_reasons: [], last_activity_at: null, created_at: '2026-01-01T00:00:00Z' },
+] as ThreadListItem[]
 const thread = threads[0]
 
 // SAFETY: test fixture supplies only the fields the selector reads
@@ -211,9 +211,9 @@ describe('continuity comic selectors', () => {
   it('distinguishes ambiguous series with issue counts in selector options', () => {
     // SAFETY: test fixture supplies only the fields the selector reads
     const ambiguous = [
-      { id: 1, title: 'Starman', format: 'ongoing', issues_remaining: 61, total_issues: 80, queue_position: 1, status: 'active', is_blocked: false, blocking_reasons: [], created_at: '2026-01-01T00:00:00Z' },
-      { id: 2, title: 'Starman (Vol. 2) (1994 - 2001)', format: 'ongoing', issues_remaining: 3, total_issues: 12, queue_position: 2, status: 'active', is_blocked: false, blocking_reasons: [], created_at: '2026-01-01T00:00:00Z' },
-    ] as Thread[]
+      { id: 1, title: 'Starman', format: 'ongoing', issues_remaining: 61, total_issues: 80, queue_position: 1, status: 'active', is_blocked: false, blocking_reasons: [], last_activity_at: null, created_at: '2026-01-01T00:00:00Z' },
+      { id: 2, title: 'Starman (Vol. 2) (1994 - 2001)', format: 'ongoing', issues_remaining: 3, total_issues: 12, queue_position: 2, status: 'active', is_blocked: false, blocking_reasons: [], last_activity_at: null, created_at: '2026-01-01T00:00:00Z' },
+    ] as ThreadListItem[]
     render(<ContinuityThreadSelector threads={ambiguous} value={null} onChange={vi.fn()} />)
 
     const search = screen.getByRole('searchbox')
@@ -240,8 +240,9 @@ describe('continuity comic selectors', () => {
       status: 'active',
       is_blocked: false,
       blocking_reasons: [],
+      last_activity_at: null,
       created_at: '2026-01-01T00:00:00Z',
-    } as Thread
+    } as ThreadListItem
     const onChange = vi.fn()
     const { rerender } = render(
       <ContinuityThreadSelector threads={[longThread]} value={longThread} onChange={onChange} />,
@@ -283,8 +284,9 @@ describe('continuity comic selectors', () => {
       status: 'active',
       is_blocked: false,
       blocking_reasons: [],
+      last_activity_at: null,
       created_at: '2026-01-01T00:00:00Z',
-    } as Thread
+    } as ThreadListItem
     const onChange = vi.fn()
     render(
       <ContinuityThreadSelector threads={[longThread]} value={longThread} onChange={onChange} />,

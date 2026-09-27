@@ -7,7 +7,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { layoutGraph, NODE_WIDTH, NODE_HEIGHT, ISSUE_NODE_WIDTH, ISSUE_NODE_HEIGHT } from '../utils/graphLayout'
-import type { Thread, FlowchartDependency, FlowchartNode } from '../types'
+import type { ThreadListItem, FlowchartDependency, FlowchartNode } from '../types'
 
 const PAGE_SIZE = 50
 const LARGE_GRAPH_THRESHOLD = 100
@@ -16,7 +16,7 @@ const MAX_SCALE = 3
 const ZOOM_STEP = 1.2
 
 interface DependencyFlowchartProps {
-  threads: Thread[]
+  threads: Pick<ThreadListItem, 'id' | 'title'>[]
   dependencies: FlowchartDependency[]
   blockedIds: Set<number>
   issueNodes?: FlowchartNode[]
