@@ -427,32 +427,32 @@ function PublicRoute({ children }: { children: ReactNode }) {
   return children
 }
 
-function RootRoute() {
-  const { submit } = useBugReport()
+function RootRoute({ onBugReportSubmit }: { onBugReportSubmit: BugReportSubmit }) {
   const { authState } = useAuth()
-  
+
   if (authState.isLoading) {
-    return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Loading...</div>
+    return <div className="flex min-h-screen items-center justify-center text-center text-stone-500" data-app-shell-ready>Checking authentication...</div>
   }
-  
-  if (authState.status === 'authenticated') {
+
+  // Only a definitively unauthenticated visitor sees the logged-out landing page.
+  // Degraded states (service_unavailable/network_error) must keep the authenticated
+  // shell so the "your session is still active" recovery overlay stays coherent.
+  if (authState.status === 'unauthenticated') {
     return (
-      <ProtectedRoute>
-        <ServiceUnavailableWrapper>
-          <AuthenticatedLayout wide onBugReportSubmit={submit}>
-            <RollPage />
-          </AuthenticatedLayout>
-        </ServiceUnavailableWrapper>
-      </ProtectedRoute>
-    )
-  }
-  
-  return (
-    <PublicRoute>
-      <PublicLayout onBugReportSubmit={submit}>
+      <PublicLayout onBugReportSubmit={onBugReportSubmit}>
         <LandingPage />
       </PublicLayout>
-    </PublicRoute>
+    )
+  }
+
+  return (
+    <ProtectedRoute>
+      <ServiceUnavailableWrapper>
+        <AuthenticatedLayout wide onBugReportSubmit={onBugReportSubmit}>
+          <RollPage />
+        </AuthenticatedLayout>
+      </ServiceUnavailableWrapper>
+    </ProtectedRoute>
   )
 }
 
@@ -497,7 +497,7 @@ function AppRoutes() {
         <Route path="/register" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><RegisterPage /></PublicLayout></PublicRoute>} />
         <Route path="/rate" element={<Navigate to="/" replace />} />
         <Route path="/analytics" element={<Navigate to="/" replace />} />
-        <Route path="/" element={<RootRoute />} />
+        <Route path="/" element={<RootRoute onBugReportSubmit={submit} />} />
         <Route path="/queue" element={
           <ProtectedRoute>
             <ServiceUnavailableWrapper>

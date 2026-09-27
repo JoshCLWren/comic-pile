@@ -263,6 +263,25 @@ describe('route guards', () => {
     expect(screen.queryByTestId('landing-page')).not.toBeInTheDocument()
   })
 
+  test('keeps the authenticated shell at root while auth is degraded instead of showing the landing page', async () => {
+    // SAFETY: the auth provider reads only response.status from this rejection
+    mockApiGet.mockRejectedValue(Object.assign(new Error('service unavailable'), {
+      isAxiosError: true,
+      response: { status: 503 },
+    }))
+    window.__COMIC_PILE_ACCESS_TOKEN = 'fake-token'
+    renderWithAuth('/')
+
+    await waitFor(() => {
+      expect(authContextValue?.authState.status).toBe('service_unavailable')
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('degraded-service-state')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('roll-page')).toBeInTheDocument()
+    expect(screen.queryByTestId('landing-page')).not.toBeInTheDocument()
+  })
+
   test('allows unauthenticated users to access /login', async () => {
     mockApiGet.mockRejectedValue(unauthenticatedError())
     renderWithAuth('/login')
@@ -378,7 +397,7 @@ describe('auth-loading shell handoff (issue #1245)', () => {
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
-  test('dismisses the bootstrap footer while resuming by rendering the app-shell-ready loading state', async () => {
+  test('protected routes dismiss the bootstrap footer while resuming by rendering the app-shell-ready loading state', async () => {
     let resolveAuth!: (value: { username: string }) => void
     mockApiGet
       .mockReturnValueOnce(new Promise((resolve) => { resolveAuth = resolve }))
@@ -387,12 +406,12 @@ describe('auth-loading shell handoff (issue #1245)', () => {
     renderWithAuth('/')
 
     await waitFor(() => {
-      expect(screen.getByText('Loading...')).toBeInTheDocument()
+      expect(screen.getByText('Checking authentication...')).toBeInTheDocument()
     })
 
     const readyShell = document.querySelector('[data-app-shell-ready]')
     expect(readyShell).not.toBeNull()
-    expect(readyShell?.textContent).toContain('Loading')
+    expect(readyShell?.textContent).toContain('Checking authentication')
     expect(screen.queryByRole('navigation', { name: /main navigation/i })).not.toBeInTheDocument()
 
     await act(async () => resolveAuth({ username: 'reader' }))
@@ -435,26 +454,21 @@ describe('anonymous no-token probe suppression', () => {
   })
 
   test('anonymous user does not call /auth/me when no token exists', async () => {
-  const originalPath = window.location.pathname
-  Object.defineProperty(window, 'location', {
-    value: { ...window.location, pathname: '/login' },
-    writable: true,
-    configurable: true,
-  })
+    // The auth provider decides whether to probe /auth/me from
+    // window.location.pathname, so align the global with the MemoryRouter entry.
+    const originalPath = window.location.pathname
+    window.history.replaceState({}, '', '/login')
+    try {
+      renderWithAuth('/login')
 
-  renderWithAuth('/login')
-
-  await waitFor(() => {
-    expect(screen.getByTestId('login-page')).toBeInTheDocument()
+      await waitFor(() => {
+        expect(screen.getByTestId('login-page')).toBeInTheDocument()
+      })
+      expect(mockApiGet).not.toHaveBeenCalledWith('/v1/auth/me', expect.anything())
+    } finally {
+      window.history.replaceState({}, '', originalPath || '/')
+    }
   })
-  expect(mockApiGet).not.toHaveBeenCalledWith('/v1/auth/me', expect.anything())
-
-  Object.defineProperty(window, 'location', {
-    value: { ...window.location, pathname: originalPath },
-    writable: true,
-    configurable: true,
-  })
-})
 
   test('unauthenticated users see landing page at root route', async () => {
     mockApiGet.mockRejectedValue(unauthenticatedError())
@@ -463,6 +477,7 @@ describe('anonymous no-token probe suppression', () => {
     await waitFor(() => {
       expect(screen.getByTestId('landing-page')).toBeInTheDocument()
     })
+    expect(screen.queryByTestId('roll-page')).not.toBeInTheDocument()
   })
 
   test('SSR token injection still triggers /auth/me when in-memory token is null', async () => {
