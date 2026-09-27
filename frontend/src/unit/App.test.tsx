@@ -378,7 +378,7 @@ describe('auth-loading shell handoff (issue #1245)', () => {
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
-  test('protected routes dismiss the bootstrap footer while resuming by rendering the app-shell-ready loading state', async () => {
+  test('dismisses the bootstrap footer while resuming by rendering the app-shell-ready loading state', async () => {
     let resolveAuth!: (value: { username: string }) => void
     mockApiGet
       .mockReturnValueOnce(new Promise((resolve) => { resolveAuth = resolve }))
@@ -387,12 +387,12 @@ describe('auth-loading shell handoff (issue #1245)', () => {
     renderWithAuth('/')
 
     await waitFor(() => {
-      expect(screen.getByText('Checking authentication...')).toBeInTheDocument()
+      expect(screen.getByText('Loading...')).toBeInTheDocument()
     })
 
     const readyShell = document.querySelector('[data-app-shell-ready]')
     expect(readyShell).not.toBeNull()
-    expect(readyShell?.textContent).toContain('Checking authentication')
+    expect(readyShell?.textContent).toContain('Loading')
     expect(screen.queryByRole('navigation', { name: /main navigation/i })).not.toBeInTheDocument()
 
     await act(async () => resolveAuth({ username: 'reader' }))
@@ -435,13 +435,26 @@ describe('anonymous no-token probe suppression', () => {
   })
 
   test('anonymous user does not call /auth/me when no token exists', async () => {
-    renderWithAuth('/login')
-
-    await waitFor(() => {
-      expect(screen.getByTestId('login-page')).toBeInTheDocument()
-    })
-    expect(mockApiGet).not.toHaveBeenCalledWith('/v1/auth/me', expect.anything())
+  const originalPath = window.location.pathname
+  Object.defineProperty(window, 'location', {
+    value: { ...window.location, pathname: '/login' },
+    writable: true,
+    configurable: true,
   })
+
+  renderWithAuth('/login')
+
+  await waitFor(() => {
+    expect(screen.getByTestId('login-page')).toBeInTheDocument()
+  })
+  expect(mockApiGet).not.toHaveBeenCalledWith('/v1/auth/me', expect.anything())
+
+  Object.defineProperty(window, 'location', {
+    value: { ...window.location, pathname: originalPath },
+    writable: true,
+    configurable: true,
+  })
+})
 
   test('unauthenticated users see landing page at root route', async () => {
     mockApiGet.mockRejectedValue(unauthenticatedError())
