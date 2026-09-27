@@ -64,10 +64,12 @@ vi.mock('@testing-library/react', async (importOriginal) => {
 // Ensure globals exist before user-event and other libraries access them
 if (typeof global.window === 'undefined') {
   // SAFETY: test setup runs in Node; we assign a minimal window for jsdom compatibility
+  // SAFETY: type assertion needed to add window property to the global object
   (global as { window?: unknown }).window = {}
 }
 if (typeof global.document === 'undefined') {
   // SAFETY: test setup runs in Node; we assign a minimal document for jsdom compatibility
+  // SAFETY: type assertion needed to add document property to the global object
   (global as { document?: unknown }).document = {
     addEventListener: () => {},
     removeEventListener: () => {},

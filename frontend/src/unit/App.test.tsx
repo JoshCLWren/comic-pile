@@ -310,6 +310,7 @@ describe('auth state race condition regression', () => {
     mockClearAccessToken.mockReset()
     mockApiGet.mockRejectedValue(unauthenticatedError())
     // SAFETY: the api client reads this global token slot, which the test sets and clears directly
+    // SAFETY: type assertion needed to extend the Window type with a custom token property
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
@@ -371,10 +372,11 @@ describe('auth state race condition regression', () => {
 describe('auth-loading shell handoff (issue #1245)', () => {
   beforeEach(() => {
     mockApiGet.mockReset()
-    mockSetAccessToken.mockReset()
+mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
-    mockGetAccessToken.mockReturnValue('test-token')
+    mockApiGet.mockRejectedValue(unauthenticatedError())
     // SAFETY: the api client reads this global token slot, which the test sets and clears directly
+    // SAFETY: type assertion needed to extend the Window type with a custom token property
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
