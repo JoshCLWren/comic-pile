@@ -354,6 +354,23 @@ def _fetch_pull(repository: str, number: int) -> dict[str, object]:
     return result
 
 
+def _fetch_issue(repository: str, number: int) -> dict[str, object]:
+    """Fetch issue details from GitHub API.
+
+    Args:
+        repository: Owner/name repository string.
+        number: Issue number to fetch.
+
+    Returns:
+        Dict with issue details including number, title, body, state, and labels.
+    """
+    owner, name = _repository_parts(repository)
+    result = _github_request(f"{_GITHUB_API_BASE}/repos/{owner}/{name}/issues/{number}")
+    if not isinstance(result, dict):
+        _fail("GitHub issue response must be an object")
+    return result
+
+
 def _pr(repository: str, raw_number: str) -> None:
     number = _pr_number(raw_number)
     pull = _fetch_pull(repository, number)
@@ -454,9 +471,22 @@ def _is_inside_version_delimiter(text: str, match_start: int) -> bool:
 
 
 def _issues(repository: str, raw_number: str) -> None:
+    """Fetch linked issue details for a pull request.
+
+    Returns detailed information for each linked issue, including number, title,
+    state, body, and labels, to help classify whether the PR represents reader-visible
+    changes or internal implementation work.
+
+    Args:
+        repository: Owner/name repository string.
+        raw_number: Pull request number string.
+
+    Returns:
+        None (prints JSON to stdout).
+    """
     number = _pr_number(raw_number)
     pull = _fetch_pull(repository, number)
-    references: set[int] = set()
+    pr_references: set[int] = set()
     text = f"{pull.get('title') or ''} {pull.get('body') or ''}"
     for match in _ISSUE_REFERENCE_PATTERN.finditer(text):
         preceding = _preceding_word(text, match.start())
@@ -466,8 +496,20 @@ def _issues(repository: str, raw_number: str) -> None:
             continue
         referenced = int(match.group(1))
         if referenced != number:
-            references.add(referenced)
-    print(json.dumps(sorted(references), separators=(",", ":")))
+            pr_references.add(referenced)
+
+    issues = []
+    for issue_number in sorted(pr_references):
+        issue = _fetch_issue(repository, issue_number)
+        labels = [label.get("name") for label in issue.get("labels", [])] if isinstance(issue.get("labels"), list) else []
+        issues.append({
+            "number": issue.get("number"),
+            "title": issue.get("title"),
+            "state": issue.get("state"),
+            "body": issue.get("body"),
+            "labels": labels,
+        })
+    print(json.dumps(issues, separators=(",", ":")))
 
 
 def _skip(raw: str) -> None:
