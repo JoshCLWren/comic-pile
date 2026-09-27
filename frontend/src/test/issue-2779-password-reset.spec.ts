@@ -190,7 +190,7 @@ test.describe('AUTH-002: Password reset flow', () => {
     await page.fill('input[name="confirmPassword"]', 'AnotherNewPw1!')
     await page.click('button[type="submit"]')
 
-    await expect(page.locator('.text-red-400')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText(/expired, been used, or is invalid/i)).toBeVisible({ timeout: 5000 })
   })
 
   test('password shorter than 6 characters is rejected', async ({ page }) => {

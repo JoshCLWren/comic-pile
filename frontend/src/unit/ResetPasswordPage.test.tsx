@@ -46,9 +46,9 @@ describe('ResetPasswordPage', () => {
   it('shows error when new password is empty', async () => {
     renderPage('?token=valid-token');
 
-    const submitButton = screen.getByRole('button', { name: /reset password/i });
+    const form = screen.getByRole('button', { name: /reset password/i }).closest('form')!;
     await act(async () => {
-      fireEvent.click(submitButton);
+      fireEvent.submit(form);
     });
 
     await waitFor(() => {
@@ -118,10 +118,13 @@ describe('ResetPasswordPage', () => {
   });
 
   it('shows error for expired token', async () => {
-    mockApi.post.mockRejectedValue({
-      response: { data: { detail: 'Token has expired' }, status: 400 },
-    });
-    
+    mockApi.post.mockRejectedValue(
+      Object.assign(new Error('Token has expired'), {
+        isAxiosError: true,
+        response: { status: 400, data: { detail: 'Token has expired' } },
+      }),
+    );
+
     renderPage('?token=valid-token');
 
 
@@ -141,10 +144,13 @@ describe('ResetPasswordPage', () => {
   });
 
   it('shows error for invalid token', async () => {
-    mockApi.post.mockRejectedValue({
-      response: { data: { detail: 'Invalid or expired token' }, status: 400 },
-    });
-    
+    mockApi.post.mockRejectedValue(
+      Object.assign(new Error('Invalid or expired token'), {
+        isAxiosError: true,
+        response: { status: 400, data: { detail: 'Invalid or expired token' } },
+      }),
+    );
+
     renderPage('?token=valid-token');
 
 
@@ -164,10 +170,13 @@ describe('ResetPasswordPage', () => {
   });
 
   it('shows error for already used token', async () => {
-    mockApi.post.mockRejectedValue({
-      response: { data: { detail: 'Token has already been used' }, status: 400 },
-    });
-    
+    mockApi.post.mockRejectedValue(
+      Object.assign(new Error('Token has already been used'), {
+        isAxiosError: true,
+        response: { status: 400, data: { detail: 'Token has already been used' } },
+      }),
+    );
+
     renderPage('?token=valid-token');
 
 
@@ -187,9 +196,12 @@ describe('ResetPasswordPage', () => {
   });
 
   it('shows error for rate limited', async () => {
-    mockApi.post.mockRejectedValue({
-      response: { data: { detail: 'Too many attempts' }, status: 429 },
-    });
+    mockApi.post.mockRejectedValue(
+      Object.assign(new Error('Too many attempts'), {
+        isAxiosError: true,
+        response: { status: 429 },
+      }),
+    );
 
     renderPage('?token=valid-token');
 

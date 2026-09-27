@@ -31,6 +31,7 @@ _BARE_API_EXCEPTIONS = frozenset(
         "/api/test/reading-orders",
         "/api/test/issue-identity",
         "/api/test/cbl-source",
+        "/api/test/password-reset-token",
     }
 )
 

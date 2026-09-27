@@ -18,7 +18,7 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
 
-   const validateForm = () => {
+  const validateForm = () => {
     if (!username.trim()) {
       setError('Username is required')
       return false

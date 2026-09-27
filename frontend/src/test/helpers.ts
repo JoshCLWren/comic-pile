@@ -283,12 +283,11 @@ export async function getPasswordResetToken(page: Page, email: string): Promise<
   const token = await getAuthToken(page);
   const csrfToken = await getCsrfToken(page, token);
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'X-CSRF-Token': csrfToken,
-  };
+  const headers: Record<string, string> = {}
+  headers['Content-Type'] = 'application/json'
+  headers['X-CSRF-Token'] = csrfToken
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers['Authorization'] = `Bearer ${token}`
   }
 
   const response = await page.request.post('/api/test/password-reset-token', {
@@ -369,7 +368,7 @@ export async function createThread(
   if (token) {
     jsonHeaders['Authorization'] = `Bearer ${token}`;
   }
-  
+
   const authHeaders: Record<string, string> = {};
   if (token) {
     authHeaders['Authorization'] = `Bearer ${token}`;
