@@ -422,7 +422,9 @@ export default function DependencyBuilder({
                   role="tablist"
                   aria-label="Reading order view"
                   onKeyDown={(e) => {
+                    // SAFETY: the role=tab selector matches only the tab buttons this component renders
                     const tabs = Array.from(e.currentTarget.querySelectorAll('[role="tab"]')) as HTMLElement[];
+                    // SAFETY: the keydown handler runs while focus is on one of the tab buttons it renders
                     const currentIndex = tabs.indexOf(document.activeElement as HTMLElement);
                     if (currentIndex === -1) return;
                     let newIndex = currentIndex;

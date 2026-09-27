@@ -8,7 +8,7 @@ import {
   useDeferInboxItem,
   useSkipInboxItem,
 } from '../hooks/useIdentityInbox'
-import type { IdentityInboxCandidate as InboxCandidate, IdentityInboxItem as InboxItem } from '../services/api'
+import type { IdentityInboxCandidate as InboxCandidate, IdentityInboxItem as InboxItem } from '../services/api-identity'
 
 type MetadataValue = string | Record<string, string> | null
 type EvidenceValue = string | string[] | null

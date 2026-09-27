@@ -2,7 +2,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactElement, ReactNode } from 'react'
 import { createToastSpy, ToastContextSpy } from './toastTestHarness'
-import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api'
+import { comicVineApi } from '../services/api'
+import type { ComicVineIssueIntelligence } from '../services/api-comicvine'
 import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
 
 const toast = createToastSpy()

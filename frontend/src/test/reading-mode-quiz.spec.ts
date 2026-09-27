@@ -20,6 +20,7 @@ test.beforeAll(async ({ browser }) => {
   const probe = await browser.newPage()
   await probe.goto('/')
   quizEnabled = await probe.evaluate(
+    // SAFETY: the test toggles only the readingModeQuiz flag the bootstrap reader reads
     () => (window as { __COMIC_PILE_FEATURES__?: { readingModeQuiz?: boolean } })
       .__COMIC_PILE_FEATURES__?.readingModeQuiz === true,
   )
@@ -58,6 +59,7 @@ test.describe('reading-mode quiz acceptance', () => {
       headers: { Accept: 'application/json' },
     })
     expect(response.ok()).toBe(true)
+    // SAFETY: the test reads only the session_mode fields it asserts
     const body = (await response.json()) as {
       bandwidth: string
       intent: string
@@ -88,6 +90,7 @@ test.describe('reading-mode quiz acceptance', () => {
     // Modal closed without submitting; prior manual mode is unchanged.
     await expect(page.getByTestId('reading-mode-quiz')).toBeHidden()
     const response = await page.request.get('/api/v1/reading-mode')
+    // SAFETY: the test reads only the bandwidth and source fields it asserts
     const body = (await response.json()) as { bandwidth: string; source: string }
     expect(body.bandwidth).toBe('light')
     expect(body.source).toBe('manual')

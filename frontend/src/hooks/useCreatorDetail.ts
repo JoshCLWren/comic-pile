@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { creatorsApi, type CreatorDetailResponse, type CreatorIssueRow } from '../services/api'
+import { creatorsApi } from '../services/api'
+import type { CreatorDetailResponse, CreatorIssueRow } from '../services/api-creators'
 import { queryKeys } from '../query/queryKeys'
 
 export const CREATOR_DETAIL_PAGE_SIZE = 50
