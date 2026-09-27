@@ -87,6 +87,7 @@ describe('dependency and graph utilities', () => {
     expect(result.height).toBeGreaterThan(0)
     expect(layoutGraph([thread(1), thread(2)], [{ id: 'x', source_id: 1, target_id: 2, created_at: 'now' }, { id: 'y', source_id: 2, target_id: 1, created_at: 'now' }], new Set()).nodes).toHaveLength(2)
     const issueGraph = layoutGraph([thread(1)], [{ id: 'issue-edge', source_id: -10, target_id: 1, is_issue_level: true, created_at: 'now' }], new Set([1]), [
+      // SAFETY: the node fixture supplies only the fields the layout helper reads
       { id: -10, title: null, x: 0, y: 0, isBlocked: false, isIssueNode: true, parentThreadId: 1 } as never,
     ])
     expect(issueGraph.edges[0]?.isIssueLevel).toBe(true)
@@ -203,6 +204,7 @@ describe('remaining pure branches', () => {
     expect(nanConfig.tileSize).toBe(DEFAULT_DICE_RENDER_CONFIG.global.tileSize)
     // L68 `typeof value === 'boolean' ? value : fallback` — non-boolean d10AutoCenter
     const boolConfig = getDiceRenderConfigForSides(6, {
+      // SAFETY: the resolver must reject this out-of-domain config value
       global: { ...DEFAULT_DICE_RENDER_CONFIG.global, d10AutoCenter: 'yes' as never },
     })
     expect(boolConfig.d10AutoCenter).toBe(false)
@@ -222,6 +224,7 @@ describe('nullish operand branches', () => {
   it('returns Unknown error for Axios errors with a nullish message and no detail', () => {
     // L27 `error.message ?? ''` and L30 `error.message ?? 'Unknown error'`
     expect(getApiErrorDetail({ isAxiosError: true, response: { status: 502, data: {} }, message: undefined })).toBe('Unknown error')
+    // SAFETY: the client reads isAxiosError and response.data.detail from this shape
     expect(getApiErrorDetail({ isAxiosError: true, response: {}, message: undefined } as never)).toBe('Unknown error')
   })
 
@@ -275,8 +278,10 @@ describe('nullish operand branches', () => {
 
   it('falls back through nullish rating-thread metadata operands', () => {
     // L31 `metadata.id ?? metadata.thread_id ?? Number(threadId)` — both metadata ids nullish
+    // SAFETY: the rating helper reads only the thread fields the assertion checks
     expect(buildRatingThread(7, null, { title: 'Meta', id: undefined, thread_id: undefined } as never)?.id).toBe(7)
     // L33 `metadata.format ?? sessionThread?.format ?? ''` — metadata.format and sessionThread both nullish
+    // SAFETY: the rating helper reads only the thread fields the assertion checks
     expect(buildRatingThread(7, null, { title: 'Meta', format: undefined } as never)?.format).toBe('')
     // L61 `issues_remaining || 0` — issues_remaining falsy (0)
     expect(getProgressPercentage({ total_issues: 4, issues_remaining: 0 })).toBe(100)

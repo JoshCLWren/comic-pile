@@ -217,8 +217,10 @@ test('broadcasts logout events and closes the auth channel', async () => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   renderWithAuth('/')
   await waitFor(() => expect(authContextValue?.isAuthenticated).toBe(true))
+  // SAFETY: the handler reads only data.type, which is the field the test sets
   act(() => channel?.onmessage?.({ data: { type: 'other' } } as MessageEvent))
   expect(authContextValue?.isAuthenticated).toBe(true)
+  // SAFETY: the handler reads only data.type, which is the field the test sets
   act(() => channel?.onmessage?.({ data: { type: 'logout' } } as MessageEvent))
   expect(authContextValue?.isAuthenticated).toBe(false)
   act(() => authContextValue?.logout())
@@ -233,6 +235,7 @@ describe('route guards', () => {
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
     mockApiGet.mockRejectedValue(unauthenticatedError())
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
@@ -246,8 +249,7 @@ describe('route guards', () => {
 
   test('allows authenticated users to access protected routes', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
-      'fake-token'
+    window.__COMIC_PILE_ACCESS_TOKEN = 'fake-token'
     renderWithAuth('/')
 
     await waitFor(() => {
@@ -275,8 +277,7 @@ describe('route guards', () => {
 
   test('redirects authenticated users from /login to home', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
-      'fake-token'
+    window.__COMIC_PILE_ACCESS_TOKEN = 'fake-token'
     renderWithAuth('/login')
 
     await waitFor(() => {
@@ -286,8 +287,7 @@ describe('route guards', () => {
 
   test('redirects authenticated users from /register to home', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
-      'fake-token'
+    window.__COMIC_PILE_ACCESS_TOKEN = 'fake-token'
     renderWithAuth('/register')
 
     await waitFor(() => {
@@ -303,6 +303,7 @@ describe('auth state race condition regression', () => {
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
     mockApiGet.mockRejectedValue(unauthenticatedError())
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
@@ -367,6 +368,7 @@ describe('auth-loading shell handoff (issue #1245)', () => {
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
     mockGetAccessToken.mockReturnValue('test-token')
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
@@ -418,6 +420,7 @@ describe('anonymous no-token probe suppression', () => {
     mockGetAccessToken.mockReturnValue(null)
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
@@ -445,8 +448,7 @@ describe('anonymous no-token probe suppression', () => {
 
   test('SSR token injection still triggers /auth/me when in-memory token is null', async () => {
     mockApiGet.mockResolvedValue({ username: 'ssruser', email: 'ssr@test.com' })
-    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
-      'ssr-token'
+    window.__COMIC_PILE_ACCESS_TOKEN = 'ssr-token'
     renderWithAuth('/')
 
     await waitFor(() => {

@@ -128,7 +128,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   }
 
   const creatorKeys = useMemo(() => {
-    if (!metadata) return [] as string[]
+    if (!metadata) return []
     const seen = new Set<string>()
     const keys: string[] = []
     for (const creator of metadata.creators) {
