@@ -250,6 +250,7 @@ describe('route guards', () => {
   test('allows authenticated users to access protected routes', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
     // SAFETY: the api client reads this global token slot, which the test sets and clears directly
+    // SAFETY: type assertion needed to extend the Window type with a custom token property
     ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = 'fake-token'
     renderWithAuth('/')
 
@@ -279,6 +280,7 @@ describe('route guards', () => {
   test('redirects authenticated users from /login to home', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
     // SAFETY: the api client reads this global token slot, which the test sets and clears directly
+    // SAFETY: type assertion needed to extend the Window type with a custom token property
     ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = 'fake-token'
     renderWithAuth('/login')
 
@@ -290,6 +292,7 @@ describe('route guards', () => {
   test('redirects authenticated users from /register to home', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
     // SAFETY: the api client reads this global token slot, which the test sets and clears directly
+    // SAFETY: type assertion needed to extend the Window type with a custom token property
     ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = 'fake-token'
     renderWithAuth('/register')
 
@@ -452,6 +455,7 @@ describe('anonymous no-token probe suppression', () => {
   test('SSR token injection still triggers /auth/me when in-memory token is null', async () => {
     mockApiGet.mockResolvedValue({ username: 'ssruser', email: 'ssr@test.com' })
     // SAFETY: the api client reads this global token slot, which the test sets and clears directly
+    // SAFETY: type assertion needed to extend the Window type with a custom token property
     ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = 'ssr-token'
     renderWithAuth('/')
 
