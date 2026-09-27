@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { ReadingContextStatusCard } from '../pages/RollPage/components/ReadingContextStatusCard'
+import type { RatingViewData } from '../pages/RollPage/useRatingView'
 import {
   hasReadingContextContent,
   hasReadingContextInformation,
