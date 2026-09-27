@@ -100,8 +100,9 @@ export const creatorsApi = {
 
   getList: (params: CreatorListParams = {}) => {
     const queryParams: Record<string, string | number> = {}
-    if (params.search !== undefined) {
-      queryParams.search = params.search
+    const search = params.search?.trim()
+    if (search) {
+      queryParams.search = search
     }
     if (params.sort !== undefined) {
       queryParams.sort = params.sort
