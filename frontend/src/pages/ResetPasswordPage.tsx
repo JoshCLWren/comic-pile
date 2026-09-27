@@ -16,9 +16,8 @@ interface ResetPasswordResponse {
   message: string
 }
 
-function extractTokenFromSearch(): string | null {
-  if (typeof window === 'undefined') return null
-  const params = new URLSearchParams(window.location.search)
+function extractTokenFromSearch(search?: string): string | null {
+  const params = new URLSearchParams(search ?? (typeof window !== 'undefined' ? window.location.search : ''))
   return params.get('token')
 }
 
@@ -32,7 +31,7 @@ export default function ResetPasswordPage() {
   const [token, setToken] = useState<string | null>(null)
 
   useEffect(() => {
-    const t = extractTokenFromSearch()
+    const t = extractTokenFromSearch(location.search)
     setToken(t)
     if (!t) {
       setError('This reset link is invalid or has expired. Please request a new password reset link.')
