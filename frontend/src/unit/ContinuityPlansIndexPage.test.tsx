@@ -21,7 +21,7 @@ const plan = {
   ordering_mode: 'informational',
   lane_count: 1,
   step_count: 3,
-  // SAFETY: invariant verified
+  // SAFETY: this fixture declares no source paths
   source_paths: [] as string[],
   updated_at: '2026-08-28T00:00:00Z',
 }

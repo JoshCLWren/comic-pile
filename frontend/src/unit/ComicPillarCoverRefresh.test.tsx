@@ -9,9 +9,9 @@ const { searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy, confirmIdentit
     searchSeriesSpy: vi.fn(),
     getSeriesIssuesSpy: vi.fn(),
     getIssueIdentitySpy: vi.fn(),
-    // SAFETY: invariant verified
+    // SAFETY: mock payload supplies only the fields this test asserts
     confirmIdentitySpy: vi.fn().mockResolvedValue({} as never),
-    // SAFETY: invariant verified
+    // SAFETY: mock payload supplies only the fields this test asserts
     replaceIdentitySpy: vi.fn().mockResolvedValue({} as never),
     getIntelligenceSpy: vi.fn(),
   }))
@@ -160,7 +160,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     expect(getIntelligenceSpy).toHaveBeenCalledWith(77)
 
     // sanity: cache holds stale data
-    // SAFETY: invariant verified
+    // SAFETY: the cached entry was seeded by this test with the image_url it asserts
     const cachedBefore = queryClient.getQueryData(queryKeys.comicVine.issueIntelligence(77)) as { image_url: string } | undefined
     expect(cachedBefore?.image_url).toBe('https://images.example/old-cover.jpg')
 
@@ -190,7 +190,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
 
     // Ensure we did NOT globally clear unrelated caches (queue pages should stay untouched)
     // The only invalidation is for the specific issueId query; verify cache updated not cleared globally
-    // SAFETY: invariant verified
+    // SAFETY: the cached entry was seeded by this test with the image_url it asserts
     const cachedAfter = queryClient.getQueryData(queryKeys.comicVine.issueIntelligence(77)) as { image_url: string | null } | undefined
     expect(cachedAfter?.image_url).toBe('https://images.example/new-cover.jpg')
 
@@ -240,7 +240,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     const unrelatedIssueId = 123
     // Pre-populate unrelated query
     queryClient.setQueryData(queryKeys.comicVine.issueIntelligence(unrelatedIssueId), freshIntelligence('https://images.example/other.jpg'))
-    // SAFETY: invariant verified
+    // SAFETY: the query is seeded with an empty page set before the assertion runs
     queryClient.setQueryData(queryKeys.queue.pages(), { pages: [], pageParams: [] } as never)
 
     getIntelligenceSpy.mockResolvedValueOnce(staleIntelligence('https://images.example/old.jpg'))
@@ -271,7 +271,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
 
     // unrelated comicVine query must still be present (not cleared)
     await waitFor(() => expect(getIntelligenceSpy).toHaveBeenCalledWith(77))
-    // SAFETY: invariant verified
+    // SAFETY: the cached entry was seeded by this test with the image_url it asserts
     const other = queryClient.getQueryData(queryKeys.comicVine.issueIntelligence(unrelatedIssueId)) as { image_url: string } | undefined
     expect(other?.image_url).toBe('https://images.example/other.jpg')
   })

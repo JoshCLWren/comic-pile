@@ -20,9 +20,9 @@ vi.mock('../services/api-undo', () => ({
 const mockedUndoApi = vi.mocked(undoApi)
 
 beforeEach(() => {
-  // SAFETY: invariant verified
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedUndoApi.listSnapshots.mockResolvedValue([{ id: 1 }] as never)
-  // SAFETY: invariant verified
+  // SAFETY: the endpoint returns no body, so the mock resolves to undefined
   mockedUndoApi.undo.mockResolvedValue(undefined as never)
 })
 

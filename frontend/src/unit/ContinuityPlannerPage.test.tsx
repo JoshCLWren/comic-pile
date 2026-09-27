@@ -17,7 +17,7 @@ interface AddMaterialProbeProps {
 }
 
 const addMaterialProbe = vi.hoisted(() => ({
-  // SAFETY: invariant verified
+  // SAFETY: the probe starts with no add-material form open
   current: null as AddMaterialProbeProps | null,
 }))
 
@@ -113,21 +113,21 @@ beforeEach(() => {
       window.localStorage.clear();
     }
   queryClient.clear()
-  // SAFETY: invariant verified
+  // SAFETY: the module mock replaces the API surface the component calls
   continuityPlansApi.create = mocks.create as never
-  // SAFETY: invariant verified
+  // SAFETY: the module mock replaces the API surface the component calls
   continuityPlansApi.list = mocks.list as never
-  // SAFETY: invariant verified
+  // SAFETY: the module mock replaces the API surface the component calls
   continuityPlansApi.get = mocks.get as never
-  // SAFETY: invariant verified
+  // SAFETY: the module mock replaces the API surface the component calls
   continuityPlansApi.update = mocks.update as never
-  // SAFETY: invariant verified
+  // SAFETY: the module mock replaces the API surface the component calls
   dependencyGroupsApi.list = mocks.listGroups as never
-  // SAFETY: invariant verified
+  // SAFETY: the module mock replaces the API surface the component calls
   issuesApi.list = mocks.listIssues as never
-  // SAFETY: invariant verified
+  // SAFETY: the module mock replaces the API surface the component calls
   threadsApi.list = mocks.listThreads as never
-  // SAFETY: invariant verified
+  // SAFETY: the module mock replaces the API surface the component calls
   threadsApi.get = mocks.getThread as never
   vi.clearAllMocks()
   mocks.create.mockReset()

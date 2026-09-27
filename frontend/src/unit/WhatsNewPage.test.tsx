@@ -33,7 +33,7 @@ function renderPage() {
 }
 
 function release(overrides: Partial<Release> = {}): Release {
-  // SAFETY: invariant verified
+  // SAFETY: the release fixture supplies only the fields the changelog list reads
   return {
     id: 1,
     released_at: '2026-08-11T20:00:00Z',

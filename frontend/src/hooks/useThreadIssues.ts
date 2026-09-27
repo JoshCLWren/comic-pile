@@ -52,7 +52,8 @@ export function useThreadIssuePages(
       }
       return issuesApi.list(threadId!, params)
     },
-    // SAFETY: invariant verified
+    // SAFETY: the first page has no cursor; the cast pins TPageParam so
+    // getNextPageParam may return the string cursor
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_page_token,
     enabled: threadId != null && enabled,

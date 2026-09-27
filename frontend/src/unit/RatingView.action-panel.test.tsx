@@ -380,7 +380,7 @@ describe('RatingView desktop layout contract (#2711 revises #1943)', () => {
   })
 
   it('contains no Why this?, Reading Context or Reading Boundaries affordance even with populated props', () => {
-    // SAFETY: invariant verified
+    // SAFETY: the reader-context fixture supplies only the fields the rating panel reads
     const { container } = render(ratingView({ readerContext: { issue_id: 100, series: { identity_source: 'comicvine', canonical_series_id: 's1', series_name: 'Saga', average_rating: 4, ratings_count: 1, previous_issue: null, recent_ratings: [], highest_rating: 5, lowest_rating: 1 }, crossovers: [], local_chain: { issues: [], edges: [] } } as any }))
     expect(screen.queryByText('Why this?')).not.toBeInTheDocument()
     expect(screen.queryByText('Reading Context')).not.toBeInTheDocument()

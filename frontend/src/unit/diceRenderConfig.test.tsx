@@ -15,9 +15,9 @@ it('returns default config when no overrides are provided', () => {
 })
 
 it('applies global overrides', () => {
-  // SAFETY: invariant verified
+  // SAFETY: the override supplies only the config keys this assertion reads
   const config = getDiceRenderConfigForSides(6, {
-    // SAFETY: invariant verified
+    // SAFETY: the override supplies only the config keys this assertion reads
     global: {
       uvInset: 0.12,
       fontScale: 0.5,
@@ -31,14 +31,14 @@ it('applies global overrides', () => {
 })
 
 it('applies per-side overrides over global values', () => {
-  // SAFETY: invariant verified
+  // SAFETY: the override supplies only the config keys this assertion reads
   const config = getDiceRenderConfigForSides(20, {
-    // SAFETY: invariant verified
+    // SAFETY: the override supplies only the config keys this assertion reads
     global: {
       uvInset: 0.08,
     } as Partial<DiceRenderConfig['global']>,
     perSides: {
-      // SAFETY: invariant verified
+      // SAFETY: the override supplies only the config keys this assertion reads
       '20': {
         uvInset: 0.16,
       } as Partial<DiceRenderConfig['global']>,
@@ -59,9 +59,9 @@ it('uses committed per-side defaults', () => {
 })
 
 it('clamps invalid values to safe ranges', () => {
-  // SAFETY: invariant verified
+  // SAFETY: the override supplies only the config keys this assertion reads
   const config = getDiceRenderConfigForSides(10, {
-    // SAFETY: invariant verified
+    // SAFETY: the override supplies only the config keys this assertion reads
     global: {
       tileSize: 255.7,
       uvInset: 9,

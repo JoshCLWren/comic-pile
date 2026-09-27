@@ -51,7 +51,7 @@ async function getCsrfToken(request: APIRequestContext, accessToken: string): Pr
     throw new Error(`Failed to fetch CSRF token: ${response.status()} ${response.statusText()}`);
   }
 
-  // SAFETY: invariant verified
+  // SAFETY: the test reads only csrf_token from the response body
   const data = await response.json() as { csrf_token?: string };
   if (!data.csrf_token) {
     throw new Error('CSRF bootstrap response did not include csrf_token');
@@ -155,7 +155,7 @@ async function listAllActiveThreadIds(
     if (!threadsResponse.ok()) {
       return ids
     }
-    // SAFETY: invariant verified
+    // SAFETY: the stubbed /threads response matches the list payload contract
     const payload = (await threadsResponse.json()) as ThreadListPayload
     const threads = payload.threads ?? []
     ids.push(...threads.map((thread) => thread.id))
@@ -405,7 +405,7 @@ export const test = base.extend<TestFixtures>({
 
     await page.addInitScript((token: string) => {
       localStorage.setItem('auth_token', token);
-      // SAFETY: invariant verified
+      // SAFETY: the api client reads this global token slot, which the test sets and clears directly
       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
     }, accessToken);
 
@@ -415,7 +415,7 @@ export const test = base.extend<TestFixtures>({
 
     await page.evaluate(() => {
       localStorage.clear();
-      // SAFETY: invariant verified
+      // SAFETY: the api client reads this global token slot, which the test sets and clears directly
       delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
     });
 
@@ -447,7 +447,7 @@ export const test = base.extend<TestFixtures>({
 
      await page.addInitScript((token: string) => {
        localStorage.setItem('auth_token', token);
-       // SAFETY: invariant verified
+       // SAFETY: the api client reads this global token slot, which the test sets and clears directly
        (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
      }, accessToken);
 
@@ -462,7 +462,7 @@ export const test = base.extend<TestFixtures>({
     // Cleanup: clear localStorage and attempt logout
     await page.evaluate(() => {
       localStorage.clear();
-      // SAFETY: invariant verified
+      // SAFETY: the api client reads this global token slot, which the test sets and clears directly
       delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
     });
     try {
@@ -491,7 +491,7 @@ export const test = base.extend<TestFixtures>({
 
     await page.addInitScript((token: string) => {
       localStorage.setItem('auth_token', token);
-      // SAFETY: invariant verified
+      // SAFETY: the api client reads this global token slot, which the test sets and clears directly
       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
     }, accessToken);
 
@@ -502,7 +502,7 @@ export const test = base.extend<TestFixtures>({
 
     await page.evaluate(() => {
       localStorage.clear();
-      // SAFETY: invariant verified
+      // SAFETY: the api client reads this global token slot, which the test sets and clears directly
       delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
     });
   },
@@ -522,7 +522,7 @@ export const test = base.extend<TestFixtures>({
 
     await page.addInitScript((token: string) => {
       localStorage.setItem('auth_token', token);
-      // SAFETY: invariant verified
+      // SAFETY: the api client reads this global token slot, which the test sets and clears directly
       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
     }, accessToken);
 
@@ -533,7 +533,7 @@ export const test = base.extend<TestFixtures>({
 
     await page.evaluate(() => {
       localStorage.clear();
-      // SAFETY: invariant verified
+      // SAFETY: the api client reads this global token slot, which the test sets and clears directly
       delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
     });
   },
@@ -555,7 +555,7 @@ export const test = base.extend<TestFixtures>({
 
     await page.addInitScript((token: string) => {
       localStorage.setItem('auth_token', token);
-      // SAFETY: invariant verified
+      // SAFETY: the api client reads this global token slot, which the test sets and clears directly
       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
     }, accessToken);
 
@@ -565,7 +565,7 @@ export const test = base.extend<TestFixtures>({
 
     await page.evaluate(() => {
       localStorage.clear();
-      // SAFETY: invariant verified
+      // SAFETY: the api client reads this global token slot, which the test sets and clears directly
       delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
     });
   },

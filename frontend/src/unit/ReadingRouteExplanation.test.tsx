@@ -4,12 +4,12 @@ import type { ReadingOrder } from '../services/api-reading-orders'
 import type { ConnectedThreadInfo } from '../types'
 import { ReadingRouteExplanation } from '../pages/RollPage/components/ReadingRouteExplanation'
 
-// SAFETY: invariant verified
+// SAFETY: the route fixture supplies only the fields the timeline reads
 const routes = [
   { id: 2, name: 'Secret Wars', completed_items: 2, total_items: 8 },
   { id: 1, name: 'Avengers path', completed_items: 5, total_items: 10 },
 ] as ReadingOrder[]
-// SAFETY: invariant verified
+// SAFETY: the connection fixture supplies only the fields the explanation reads
 const connections = [
   { thread_id: 9, dependency_id: 4, title: 'Prelude', connection_type: 'blocked_by' as const },
 ] as ConnectedThreadInfo[]

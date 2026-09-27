@@ -47,14 +47,14 @@ describe('app page scroller (issue #2725)', () => {
     const wrapper = document.createElement('div')
     root.appendChild(wrapper)
 
-    // SAFETY: invariant verified
+    // SAFETY: jsdom performs no layout, so the test stubs only the measured edge
     vi.spyOn(root, 'getBoundingClientRect').mockReturnValue({ top: 0 } as DOMRect)
-    // SAFETY: invariant verified
+    // SAFETY: jsdom performs no layout, so the test stubs only the measured edge
     vi.spyOn(wrapper, 'getBoundingClientRect').mockReturnValue({ top: 200 } as DOMRect)
     root.scrollTop = 0
     expect(measureAppScrollMargin(wrapper)).toBe(200)
 
-    // SAFETY: invariant verified
+    // SAFETY: jsdom performs no layout, so the test stubs only the measured edge
     vi.spyOn(wrapper, 'getBoundingClientRect').mockReturnValue({ top: -2200 } as DOMRect)
     root.scrollTop = 2400
     expect(measureAppScrollMargin(wrapper)).toBe(200)
@@ -89,10 +89,10 @@ describe('app page scroller (issue #2725)', () => {
     document.body.appendChild(root)
     const windowScrollTo = vi.spyOn(window, 'scrollTo')
     const rootScrollTo = vi.fn()
-    // SAFETY: invariant verified
+    // SAFETY: jsdom has no scrollTo implementation, so the test supplies the stub it records
     root.scrollTo = rootScrollTo as typeof root.scrollTo
 
-    // SAFETY: invariant verified
+    // SAFETY: the adjustment list the test passes is the complete set of scroll corrections
     scrollAppToOffset(900, { adjustments: 50, behavior: 'auto' }, {} as never)
 
     expect(rootScrollTo).toHaveBeenCalledWith({ top: 950, behavior: 'auto' })

@@ -39,7 +39,7 @@ const group = {
   created_at: '2026-08-12T00:00:00Z',
 }
 
-// SAFETY: invariant verified
+// SAFETY: the plan fixture supplies only the fields the editor reads
 const savedPlan = {
   id: 12,
   user_id: 1,
@@ -109,11 +109,11 @@ describe('useContinuityPlannerEditor', () => {
     await waitFor(() => expect(result.current.statusText).toBe('New plan'))
 
     act(() => {
-      // SAFETY: invariant verified
+      // SAFETY: the plan fixture supplies only the fields the editor reads
       result.current.selectThread(thread as never)
     })
     act(() => {
-      // SAFETY: invariant verified
+      // SAFETY: the plan fixture supplies only the fields the editor reads
       result.current.setSelectedIssue(issue as never)
     })
     act(() => {
@@ -130,7 +130,7 @@ describe('useContinuityPlannerEditor', () => {
     expect(result.current.isDirty).toBe(true)
 
     act(() => {
-      // SAFETY: invariant verified
+      // SAFETY: the plan fixture supplies only the fields the editor reads
       result.current.setSelectedIssue(issue as never)
     })
     act(() => {
@@ -145,7 +145,7 @@ describe('useContinuityPlannerEditor', () => {
       ({ inputs }: { inputs: ContinuityPlannerEditorInputs }) => useContinuityPlannerEditor(inputs),
       {
         wrapper,
-        // SAFETY: invariant verified
+        // SAFETY: the plan fixture supplies only the fields the editor reads
         initialProps: { inputs: { ...baseInputs, groups: [group] as never } },
       },
     )
@@ -180,7 +180,7 @@ describe('useContinuityPlannerEditor', () => {
     await waitFor(() => expect(result.current.nodes).toHaveLength(1))
 
     act(() => {
-      // SAFETY: invariant verified
+      // SAFETY: the plan fixture supplies only the fields the editor reads
       result.current.selectThread(thread as never)
     })
     expect(result.current.selectedThreadId).toBe(4)

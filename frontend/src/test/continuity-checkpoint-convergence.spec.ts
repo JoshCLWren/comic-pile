@@ -11,7 +11,7 @@ async function getCsrf(page: Page, token: string | null): Promise<string> {
     headers,
   })
   expect(response.ok()).toBeTruthy()
-  // SAFETY: invariant verified
+  // SAFETY: the test reads only csrf_token from the response body
   const data = await response.json() as { csrf_token?: string }
   expect(data.csrf_token).toBeDefined()
   return data.csrf_token!
@@ -26,7 +26,7 @@ async function getIssueIds(page: Page, token: string | null, threadId: number): 
     headers,
   })
   expect(response.ok(), `issue list failed: ${await response.text()}`).toBeTruthy()
-  // SAFETY: invariant verified
+  // SAFETY: the test reads only the response fields listed in this type
   const data = await response.json() as { issues: Array<{ id: number }> }
   expect(data.issues.length).toBeGreaterThan(0)
   return data.issues.map((i) => i.id)
@@ -57,7 +57,7 @@ async function createPlanViaApi(
     data: { name, ordering_mode: 'informational', lanes, nodes },
   })
   expect(response.ok(), `plan create failed: ${await response.text()}`).toBeTruthy()
-  // SAFETY: invariant verified
+  // SAFETY: the test reads only the response fields listed in this type
   const plan = await response.json() as { id: number }
   return plan.id
 }

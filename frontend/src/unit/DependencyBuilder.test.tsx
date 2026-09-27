@@ -69,7 +69,7 @@ const mockedListThreads = vi.mocked(mocks.listThreads)
 const mockedListIssues = vi.mocked(mocks.listIssues)
 
 function makeThread(overrides: Partial<Thread> & { id: number; title: string }): Thread {
-  // SAFETY: invariant verified
+  // SAFETY: the thread fixture supplies only the fields the dependency list reads
   return {
     format: 'comic',
     status: 'active',
@@ -87,7 +87,7 @@ function makeThread(overrides: Partial<Thread> & { id: number; title: string }):
 }
 
 function makeIssue(overrides: Partial<Issue> & { id: number; thread_id: number }): Issue {
-  // SAFETY: invariant verified
+  // SAFETY: the issue fixture supplies only the fields the issue picker reads
   return {
     issue_number: String(overrides.id),
     status: 'unread',

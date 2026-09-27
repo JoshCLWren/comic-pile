@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const schemaPath = resolve(__dirname, '../generated/openapi.json')
-// SAFETY: invariant verified
+// SAFETY: the committed API schema file has exactly this shape
 const schema = JSON.parse(readFileSync(schemaPath, 'utf-8')) as {
   paths: Record<string, Record<string, string>>
 }

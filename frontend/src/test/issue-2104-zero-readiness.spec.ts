@@ -18,7 +18,7 @@ async function getCsrf(page: Page, token: string | null): Promise<string> {
   }
   const response = await page.request.get('/api/auth/csrf', { headers })
   expect(response.ok()).toBeTruthy()
-  // SAFETY: invariant verified
+  // SAFETY: the test reads only csrf_token from the response body
   const data = (await response.json()) as { csrf_token?: string }
   expect(data.csrf_token).toBeDefined()
   return data.csrf_token!
@@ -31,7 +31,7 @@ async function getIssueIds(page: Page, token: string | null, threadId: number): 
   }
   const response = await page.request.get(`/api/v1/threads/${threadId}/issues`, { headers })
   expect(response.ok(), `issue list failed: ${await response.text()}`).toBeTruthy()
-  // SAFETY: invariant verified
+  // SAFETY: the test reads only the issue ids the assertion depends on
   const data = (await response.json()) as { issues: Array<{ id: number }> }
   expect(data.issues.length).toBeGreaterThan(0)
   return data.issues.map((issue) => issue.id)
@@ -75,7 +75,7 @@ test.describe('Issue #2104 zero readiness network requests', () => {
       data: { name: 'Zero Readiness Crossover' },
     })
     expect(groupResponse.ok(), await groupResponse.text()).toBeTruthy()
-    // SAFETY: invariant verified
+    // SAFETY: the API returns a created record, so its id is always present
     const group = (await groupResponse.json()) as { id: number }
 
     const memberResponse = await page.request.post(
@@ -103,7 +103,7 @@ test.describe('Issue #2104 zero readiness network requests', () => {
       },
     })
     expect(planResponse.ok(), await planResponse.text()).toBeTruthy()
-    // SAFETY: invariant verified
+    // SAFETY: the API returns a created record, so its id is always present
     const plan = (await planResponse.json()) as { id: number }
 
     await gotoRollPage(page)

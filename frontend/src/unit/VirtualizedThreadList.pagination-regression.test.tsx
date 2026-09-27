@@ -303,7 +303,7 @@ it('paints virtual rows at natural document offsets when the wrapper sits below 
         reorderError={null}
         renderItem={renderItem}
         isSearching={false}
-        // SAFETY: invariant verified
+        // SAFETY: the virtualized list always mounts the sentinel element this test measures
         sentinelRef={sentinelRef as React.RefObject<HTMLDivElement | null>}
         hasNextPage
         useVirtualizer={scrollMarginAwareUseVirtualizer}
@@ -312,7 +312,7 @@ it('paints virtual rows at natural document offsets when the wrapper sits below 
 
     // Model the wrapper as sitting 120px down the initial viewport while the
     // window is scrolled 300px: its document-space offset is 420px.
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const wrapper = container.firstElementChild as HTMLElement
     // SAFETY: wrapper is the VirtualizedThreadList root div handled by the component.
     vi.spyOn(wrapper, 'getBoundingClientRect').mockReturnValue(cast<DOMRect>({ top: 120 }))
@@ -337,7 +337,7 @@ it('paints virtual rows at natural document offsets when the wrapper sits below 
     const rows = container.querySelectorAll('[data-index]')
     expect(rows.length).toBeGreaterThan(50)
     rows.forEach((row, index) => {
-      // SAFETY: invariant verified
+      // SAFETY: the queried node is the row the component rendered
       const style = (row as HTMLElement).style
       expect(style.transform).toBe(`translateY(${index * ROW_HEIGHT_WITH_GAP}px)`)
     })
@@ -346,7 +346,7 @@ it('paints virtual rows at natural document offsets when the wrapper sits below 
     // stay consistent so infinite scroll keeps firing past the threshold.
     const scrollEl = container.querySelector('#queue-container')
     expect(scrollEl).toBeInTheDocument()
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the row the component rendered
     const spacer = (scrollEl as HTMLElement).firstElementChild as HTMLElement
     expect(spacer.style.position).toBe('relative')
     expect(spacer.style.height).toBe(

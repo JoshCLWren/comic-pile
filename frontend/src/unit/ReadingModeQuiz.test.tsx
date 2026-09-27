@@ -82,7 +82,7 @@ it('cannot advance without selecting an answer', async () => {
   const user = userEvent.setup()
   render(<Harness />)
 
-  // SAFETY: invariant verified
+  // SAFETY: the selector matches only the control the component rendered
   const next = screen.getByTestId('reading-mode-quiz-next') as HTMLButtonElement
   expect(next.disabled).toBe(true)
   await user.click(next)

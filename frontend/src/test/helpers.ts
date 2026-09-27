@@ -261,13 +261,13 @@ export async function loginUser(page: Page, user: TestUser): Promise<string> {
 
   await page.evaluate((token: string) => {
     localStorage.setItem('auth_token', token);
-    // SAFETY: invariant verified
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     (window as WindowWithAccessToken).__COMIC_PILE_ACCESS_TOKEN = token;
   }, user.accessToken);
 
   await page.addInitScript((token: string) => {
     localStorage.setItem('auth_token', token);
-    // SAFETY: invariant verified
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     (window as WindowWithAccessToken).__COMIC_PILE_ACCESS_TOKEN = token;
   }, user.accessToken);
 
@@ -276,7 +276,7 @@ export async function loginUser(page: Page, user: TestUser): Promise<string> {
 
 export async function getAuthToken(page: Page): Promise<string | null> {
   return await page.evaluate(() => {
-    // SAFETY: invariant verified
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     const win = window as WindowWithAccessToken;
     return localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN ?? null;
   });
@@ -295,7 +295,7 @@ async function getCsrfToken(page: Page, token: string | null): Promise<string> {
     throw new Error(`Failed to fetch CSRF token: ${response.status()} ${response.statusText()}`);
   }
 
-  // SAFETY: invariant verified
+  // SAFETY: the test reads only csrf_token from the response body
   const data = await response.json() as { csrf_token?: string };
   if (!data.csrf_token) {
     throw new Error('CSRF bootstrap response did not include csrf_token');
@@ -450,7 +450,7 @@ export async function setupAuthenticatedPage(
 export async function cleanupTestUser(page: Page, _user: TestUser): Promise<void> {
   await page.evaluate(() => {
     localStorage.clear();
-    // SAFETY: invariant verified
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     delete (window as WindowWithAccessToken).__COMIC_PILE_ACCESS_TOKEN;
   });
 }
@@ -458,7 +458,7 @@ export async function cleanupTestUser(page: Page, _user: TestUser): Promise<void
 export async function setRangeInput(page: Page, selector: string, value: string): Promise<void> {
   await page.evaluate(
     ({ selector, value }) => {
-      // SAFETY: invariant verified
+      // SAFETY: the selector matches only the control the component rendered
       const input = document.querySelector(selector) as HTMLInputElement;
       if (input) {
         input.value = value;
@@ -549,20 +549,20 @@ export const SELECTORS = {
 
 export function extractThreadsFromResponse(response: unknown): Thread[] {
   if (Array.isArray(response)) {
-    // SAFETY: invariant verified
+    // SAFETY: the /threads endpoint returns a bare array for this test route
     return response as Thread[];
   }
   if (isObject(response) && 'threads' in response) {
-    // SAFETY: invariant verified
+    // SAFETY: the guard above already proved the response carries a threads field
     const threadsResponse = response as { threads?: unknown };
-    // SAFETY: invariant verified
+    // SAFETY: the stubbed payload provides a threads array and no next page token
     return threadsResponse.threads as Thread[];
   }
   return [];
 }
 
 export async function navigateToRatePage(page: Page): Promise<void> {
-  // SAFETY: invariant verified
+  // SAFETY: the api client reads this global token slot, which the test sets and clears directly
   const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
   const threadsResponse = await page.request.get('/api/threads/', {
     headers: { Authorization: `Bearer ${token}` },

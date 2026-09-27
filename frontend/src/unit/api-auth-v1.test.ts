@@ -18,12 +18,12 @@ vi.mock('axios', () => ({
 
 import { setAccessToken } from '../services/api'
 
-// SAFETY: invariant verified
+// SAFETY: this is the interceptor the test registered through the mocked axios instance
 const requestInterceptor = apiMock.interceptors.request.use.mock.calls[0][0] as (
   config: { method?: string; url?: string; headers?: Record<string, string> },
 ) => Promise<{ method?: string; url?: string; headers?: Record<string, string> }>
 
-// SAFETY: invariant verified
+// SAFETY: this is the interceptor the test registered through the mocked axios instance
 const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] as (
   error: {
     config: { url: string; headers?: Record<string, string> }

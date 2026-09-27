@@ -76,7 +76,7 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     document.body.appendChild(narrowContainer)
 
     const { unmount } = render(
-      // SAFETY: invariant verified
+      // SAFETY: the stubbed thread supplies only the fields the overlap check reads
       <ComicPillar activeRatingThread={baseThread as never} onRefreshThread={vi.fn()} />,
       { container: narrowContainer },
     )
@@ -95,7 +95,7 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
 
     // Simulate rendered geometry at 320px tablet-portrait pillar width.
     // With flex-wrap, the title occupies the first row full-width and controls wrap to second row.
-    // SAFETY: invariant verified
+    // SAFETY: jsdom performs no layout, so the test stubs only the edges the overlap check reads
     const titleRect = {
       left: 0,
       right: 320,
@@ -107,7 +107,7 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
       y: 0,
       toJSON() {},
     } as DOMRect
-    // SAFETY: invariant verified
+    // SAFETY: jsdom performs no layout, so the test stubs only the edges the overlap check reads
     const controlsRect = {
       left: 0,
       right: 210,
@@ -153,7 +153,7 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     document.body.appendChild(wideContainer)
 
     const { unmount } = render(
-      // SAFETY: invariant verified
+      // SAFETY: the stubbed thread supplies only the fields the overlap check reads
       <ComicPillar activeRatingThread={baseThread as never} onRefreshThread={vi.fn()} />,
       { container: wideContainer },
     )
@@ -169,7 +169,7 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     expect(controlsRegion.className).toContain('flex-wrap')
 
     // In the new vertical stack layout, title and controls are in separate rows — no overlap possible
-    // SAFETY: invariant verified
+    // SAFETY: jsdom performs no layout, so the test stubs only the edges the overlap check reads
     const titleRect = {
       left: 0,
       right: 900,
@@ -181,7 +181,7 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
       y: 0,
       toJSON() {},
     } as DOMRect
-    // SAFETY: invariant verified
+    // SAFETY: jsdom performs no layout, so the test stubs only the edges the overlap check reads
     const controlsRect = {
       left: 0,
       right: 210,
@@ -214,7 +214,7 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     document.body.appendChild(narrowContainer)
 
     const { unmount } = render(
-      // SAFETY: invariant verified
+      // SAFETY: the stubbed thread supplies only the fields the overlap check reads
       <ComicPillar activeRatingThread={baseThread as never} onRefreshThread={vi.fn()} />,
       { container: narrowContainer },
     )

@@ -41,7 +41,7 @@ const baseProps: ContinuityCorrectionDialogProps = {
   issueId: 42,
   issueNumber: '10',
   threadTitle: 'The Ultimates',
-  // SAFETY: invariant verified
+  // SAFETY: this case seeds no connected threads
   connectedThreads: [] as ConnectedThreadInfo[],
   onClose: vi.fn(),
   onSuccess: vi.fn(),

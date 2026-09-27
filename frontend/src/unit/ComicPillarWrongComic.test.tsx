@@ -4,9 +4,9 @@ import type { ReactNode } from 'react'
 
 const { confirmIdentitySpy, replaceIdentitySpy, searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy } =
   vi.hoisted(() => ({
-    // SAFETY: invariant verified
+    // SAFETY: mock payload supplies only the fields this test asserts
     confirmIdentitySpy: vi.fn().mockResolvedValue({} as never),
-    // SAFETY: invariant verified
+    // SAFETY: mock payload supplies only the fields this test asserts
     replaceIdentitySpy: vi.fn().mockResolvedValue({} as never),
     searchSeriesSpy: vi.fn(),
     getSeriesIssuesSpy: vi.fn(),

@@ -49,15 +49,15 @@ function renderWithClient<T>(hook: () => T) {
 }
 
 beforeEach(() => {
-  // SAFETY: invariant verified
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.getCurrent.mockResolvedValue({ id: 1 } as never)
-  // SAFETY: invariant verified
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.list.mockResolvedValue({ sessions: [{ id: 2 }], next_page_token: null } as never)
-  // SAFETY: invariant verified
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.getDetails.mockResolvedValue({ session_id: 3 } as never)
-  // SAFETY: invariant verified
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.getSnapshots.mockResolvedValue({ snapshots: [] } as never)
-  // SAFETY: invariant verified
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.restoreSessionStart.mockResolvedValue({} as never)
 })
 
@@ -77,13 +77,11 @@ it('loads first page of sessions', async () => {
 })
 
 it('is invalidated by queryKeys.session.pages() and queryKeys.session.all', async () => {
-  mockedSessionApi.list.mockReset()
-  // SAFETY: invariant verified
-  const __sessionMock1 = { sessions: [{ id: 1 }], next_page_token: null } as never
-  mockedSessionApi.list.mockResolvedValueOnce(__sessionMock1)
-  // SAFETY: invariant verified
-  const __sessionMock2 = { sessions: [{ id: 2 }], next_page_token: null } as never
-  mockedSessionApi.list.mockResolvedValueOnce(__sessionMock2)
+  // SAFETY: the stubbed page supplies only the fields the session pager reads
+  mockedSessionApi.list
+    .mockReset()
+    .mockResolvedValueOnce({ sessions: [{ id: 1 }], next_page_token: null } as never)
+    .mockResolvedValueOnce({ sessions: [{ id: 2 }], next_page_token: null } as never)
 
   const { result, client } = renderWithClient(() => useSessions())
 
@@ -106,13 +104,11 @@ it('is invalidated by queryKeys.session.pages() and queryKeys.session.all', asyn
 })
 
 it('paginates with loadMore and deduplicates sessions', async () => {
-  mockedSessionApi.list.mockReset()
-  // SAFETY: invariant verified
-  const __sessionMock3 = { sessions: [{ id: 1 }], next_page_token: 'token2' } as never
-  mockedSessionApi.list.mockResolvedValueOnce(__sessionMock3)
-  // SAFETY: invariant verified
-  const __sessionMock4 = { sessions: [{ id: 2 }], next_page_token: 'token3' } as never
-  mockedSessionApi.list.mockResolvedValueOnce(__sessionMock4)
+  // SAFETY: the stubbed page supplies only the fields the session pager reads
+  mockedSessionApi.list
+    .mockReset()
+    .mockResolvedValueOnce({ sessions: [{ id: 1 }], next_page_token: 'token2' } as never)
+    .mockResolvedValueOnce({ sessions: [{ id: 2 }], next_page_token: 'token3' } as never)
 
   const { result } = renderWithProvider(() => useSessions())
 
@@ -134,13 +130,11 @@ it('paginates with loadMore and deduplicates sessions', async () => {
 })
 
 it('deduplicates sessions when loading more pages', async () => {
-  mockedSessionApi.list.mockReset()
-  // SAFETY: invariant verified
-  const __sessionMock5 = { sessions: [{ id: 1 }, { id: 2 }], next_page_token: 'token2' } as never
-  mockedSessionApi.list.mockResolvedValueOnce(__sessionMock5)
-  // SAFETY: invariant verified
-  const __sessionMock6 = { sessions: [{ id: 2 }, { id: 3 }], next_page_token: null } as never
-  mockedSessionApi.list.mockResolvedValueOnce(__sessionMock6)
+  // SAFETY: the stubbed page supplies only the fields the session pager reads
+  mockedSessionApi.list
+    .mockReset()
+    .mockResolvedValueOnce({ sessions: [{ id: 1 }, { id: 2 }], next_page_token: 'token2' } as never)
+    .mockResolvedValueOnce({ sessions: [{ id: 2 }, { id: 3 }], next_page_token: null } as never)
 
   const { result } = renderWithProvider(() => useSessions())
 
@@ -202,7 +196,7 @@ it('handles empty ids, non-Error failures, persisted session changes, and restor
     setItem: (key: string, value: string) => storage.set(key, value),
     removeItem: (key: string) => storage.delete(key),
   } })
-  // SAFETY: invariant verified
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.getCurrent.mockResolvedValueOnce({ id: 8, user_id: 4 } as never)
   window.localStorage.setItem('comic_pile_last_session_id_4', '7')
   const current = renderWithProvider(() => useSession())
@@ -232,7 +226,7 @@ it('continues when session storage cannot be read or written', async () => {
     setItem: () => { throw new Error('storage write blocked') },
     removeItem: () => { throw new Error('storage remove blocked') },
   } })
-  // SAFETY: invariant verified
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.getCurrent.mockResolvedValueOnce({ id: 12, user_id: 6 } as never)
   const { result } = renderWithProvider(() => useSession())
   await waitFor(() => expect(result.current.data).toEqual({ id: 12, user_id: 6 }))
@@ -263,7 +257,7 @@ it('reports current-session failures and tolerates a malformed current response'
   const failed = renderWithProvider(() => useSession())
   await waitFor(() => expect(failed.result.current.error?.message).toBe('current unavailable'))
 
-  // SAFETY: invariant verified
+  // SAFETY: mock payload supplies only the fields this test asserts
   mockedSessionApi.getCurrent.mockResolvedValueOnce({ id: null } as never)
   const malformed = renderWithProvider(() => useSession())
   await waitFor(() => expect(malformed.result.current.isPending).toBe(false))

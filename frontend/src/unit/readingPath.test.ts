@@ -6,7 +6,7 @@ import {
 import type { ReaderContextEdge } from '../types'
 
 function edge(overrides: Partial<ReaderContextEdge> & { id: number; source_issue_id: number; target_issue_id: number }): ReaderContextEdge {
-  // SAFETY: invariant verified
+  // SAFETY: the context edge fixture supplies only the fields the path builder reads
   return {
     kind: 'dependency',
     source_thread_id: 1,

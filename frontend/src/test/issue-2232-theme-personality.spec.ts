@@ -71,7 +71,7 @@ async function readAppliedTokens(page: import('@playwright/test').Page): Promise
     const styles = getComputedStyle(document.documentElement)
     return tokenNames.map((token) => styles.getPropertyValue(token).trim())
   }, READ_TOKENS)
-  // SAFETY: invariant verified
+  // SAFETY: READ_TOKENS and values are parallel arrays, so every token key is present
   return Object.fromEntries(READ_TOKENS.map((token, index) => [token, values[index]])) as AppliedTokens
 }
 
@@ -173,7 +173,7 @@ test.describe('Theme personality and accent separation (#2232)', () => {
     const page = authenticatedWithThreadsPage
     await page.setViewportSize(DESKTOP_VIEWPORT)
 
-    // SAFETY: invariant verified
+    // SAFETY: the loop below populates every theme key, so the empty record is only a seed
     const palettes: Record<(typeof THEMES)[number], AppliedTokens> = {} as Record<
       (typeof THEMES)[number],
       AppliedTokens

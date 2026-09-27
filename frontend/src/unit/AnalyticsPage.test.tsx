@@ -5,7 +5,7 @@ import { useAnalytics } from '../hooks/useAnalytics'
 
 vi.mock('../hooks/useAnalytics', () => ({ useAnalytics: vi.fn() }))
 
-// SAFETY: invariant verified
+// SAFETY: the module is mocked, so the test supplies the return shape directly
 const mockedUseAnalytics = vi.mocked(useAnalytics) as any
 
 beforeEach(() => {

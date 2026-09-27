@@ -18,9 +18,9 @@ describe('startBootstrapShellLifecycle', () => {
   })
 
   it('removes the static shell once the React auth-loading state mounts with the app-shell-ready marker', async () => {
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const root = document.getElementById('root') as HTMLElement
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const shell = document.getElementById('bootstrap-shell') as HTMLElement
 
     startBootstrapShellLifecycle(root, shell)
@@ -31,9 +31,9 @@ describe('startBootstrapShellLifecycle', () => {
   })
 
   it('changes to a reconnecting message when bootstrap times out', () => {
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const root = document.getElementById('root') as HTMLElement
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const shell = document.getElementById('bootstrap-shell') as HTMLElement
 
     startBootstrapShellLifecycle(root, shell, 100)
@@ -46,9 +46,9 @@ describe('startBootstrapShellLifecycle', () => {
   })
 
   it('does not treat a presentation class as application readiness', async () => {
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const root = document.getElementById('root') as HTMLElement
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const shell = document.getElementById('bootstrap-shell') as HTMLElement
 
     startBootstrapShellLifecycle(root, shell)
@@ -59,9 +59,9 @@ describe('startBootstrapShellLifecycle', () => {
   })
 
   it('removes the static shell only after a resolved application layout renders', async () => {
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const root = document.getElementById('root') as HTMLElement
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const shell = document.getElementById('bootstrap-shell') as HTMLElement
 
     startBootstrapShellLifecycle(root, shell)
@@ -72,9 +72,9 @@ describe('startBootstrapShellLifecycle', () => {
   })
 
   it('removes the shell immediately when the application is already ready', () => {
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const root = document.getElementById('root') as HTMLElement
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const shell = document.getElementById('bootstrap-shell') as HTMLElement
     root.innerHTML = '<main data-app-shell-ready>Ready</main>'
 
@@ -85,9 +85,9 @@ describe('startBootstrapShellLifecycle', () => {
   })
 
   it('disconnects observation and cancels the reconnecting timer', async () => {
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const root = document.getElementById('root') as HTMLElement
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const shell = document.getElementById('bootstrap-shell') as HTMLElement
     const lifecycle = startBootstrapShellLifecycle(root, shell, 100)
 
@@ -101,16 +101,16 @@ describe('startBootstrapShellLifecycle', () => {
   })
 
   it('is safe when the static shell is absent', () => {
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const root = document.getElementById('root') as HTMLElement
 
     expect(() => startBootstrapShellLifecycle(root, null).disconnect()).not.toThrow()
   })
 
   it('hides the footer navigation while resuming or logging in (issue #1245)', async () => {
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const root = document.getElementById('root') as HTMLElement
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const shell = document.getElementById('bootstrap-shell') as HTMLElement
     shell.innerHTML = `
       <main>

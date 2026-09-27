@@ -270,7 +270,7 @@ describe('CrossoversPage', () => {
 
   it('uses API detail messages and safe fallbacks for non-Error failures', async () => {
     const axiosFailure = (detail: string) => {
-      // SAFETY: invariant verified
+      // SAFETY: the client narrows the axios failure to this shape before reading the detail message
       const error = new Error() as Error & { isAxiosError?: boolean; response?: { data: { detail: string } } }
       error.isAxiosError = true
       error.response = { data: { detail } }

@@ -6,7 +6,7 @@ import { useSessions } from '../hooks/useSession'
 
 vi.mock('../hooks/useSession', () => ({ useSessions: vi.fn() }))
 
-// SAFETY: invariant verified
+// SAFETY: the module is mocked, so the test supplies the return shape directly
 const mockedUseSessions = vi.mocked(useSessions) as any
 
 beforeEach(() => {

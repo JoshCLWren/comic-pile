@@ -14,14 +14,14 @@ describe('edge component behavior', () => {
   it('renders wrapped title without overflow clipping', () => {
     const { container } = render(<MarqueeTitle title="A title" className="extra" />)
     expect(container).toHaveTextContent('A title')
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const heading = container.querySelector('h3') as HTMLElement
     expect(heading).toHaveClass('whitespace-normal', 'break-words', 'extra')
   })
 
   it('renders a compact title wrapped properly', () => {
     const { container } = render(<MarqueeTitle title="Fits" />)
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const heading = container.querySelector('h3') as HTMLElement
     expect(heading).toHaveTextContent('Fits')
     expect(heading).toHaveClass('whitespace-normal', 'break-words')
@@ -95,7 +95,7 @@ describe('edge component behavior', () => {
     fireEvent.submit(screen.getByRole('button', { name: 'Start Tracking' }).closest('form')!)
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/negative|greater than 0/))
     const dialog = screen.getByRole('dialog')
-    // SAFETY: invariant verified
+    // SAFETY: the queried node is the element the component rendered under test
     const backdrop = dialog.previousElementSibling as HTMLElement
     fireEvent.click(backdrop)
     expect(onClose).toHaveBeenCalledTimes(1)

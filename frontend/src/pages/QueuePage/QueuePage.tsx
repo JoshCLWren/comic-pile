@@ -75,7 +75,7 @@ export default function QueuePage() {
 
   const submitCreate = useCallback(
     (input: { title: string; format: string; issues_remaining: number; notes: string | null }) =>
-      // SAFETY: invariant verified
+      // SAFETY: useCreateThread exposes mutateAsync, so this resolves to the created thread record
       createMutation.mutate(input) as Promise<{ id?: number }>,
     [createMutation],
   )

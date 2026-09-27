@@ -11,7 +11,7 @@ async function getCsrf(page: Page, token: string | null): Promise<string> {
     headers,
   })
   expect(response.ok()).toBeTruthy()
-  // SAFETY: invariant verified
+  // SAFETY: the test reads only csrf_token from the response body
   const data = await response.json() as { csrf_token?: string }
   expect(data.csrf_token).toBeDefined()
   return data.csrf_token!
@@ -26,7 +26,7 @@ async function getFirstIssueId(page: Page, token: string | null, threadId: numbe
     headers,
   })
   expect(response.ok(), `issue list failed: ${await response.text()}`).toBeTruthy()
-  // SAFETY: invariant verified
+  // SAFETY: the test reads only the response fields listed in this type
   const data = await response.json() as { issues: Array<{ id: number }> }
   expect(data.issues.length).toBeGreaterThan(0)
   return data.issues[0].id
@@ -49,7 +49,7 @@ async function createParallelPlan(
     data: { name, ordering_mode: 'informational', lanes, nodes },
   })
   expect(response.ok(), `plan create failed: ${await response.text()}`).toBeTruthy()
-  // SAFETY: invariant verified
+  // SAFETY: the test reads only the response fields listed in this type
   const plan = await response.json() as { id: number }
   return plan.id
 }
@@ -66,7 +66,7 @@ test.describe('Continuity plan parallel lanes', () => {
     if (token) {
       issueListHeaders['Authorization'] = `Bearer ${token}`
     }
-    // SAFETY: invariant verified
+    // SAFETY: the test reads only the issue ids the lane-order assertion compares
     const issueB = (await page.request.get(`/api/v1/threads/${thread.id}/issues`, {
       headers: issueListHeaders,
     }).then((r) => r.json()) as { issues: Array<{ id: number }> }).issues[1].id
@@ -113,7 +113,7 @@ test.describe('Continuity plan parallel lanes', () => {
     if (token) {
       issueListHeaders['Authorization'] = `Bearer ${token}`
     }
-    // SAFETY: invariant verified
+    // SAFETY: the test reads only the issue ids the convergence assertion compares
     const issues = (await page.request.get(`/api/v1/threads/${thread.id}/issues`, {
       headers: issueListHeaders,
     }).then((r) => r.json()) as { issues: Array<{ id: number }> }).issues

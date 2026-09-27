@@ -42,7 +42,7 @@ vi.mock('@testing-library/react', async (importOriginal) => {
       ui: Parameters<typeof actual.render>[0],
       options?: Record<string, string | ((props: { children: ReactNode }) => ReactElement) | undefined>,
     ) => {
-      // SAFETY: invariant verified
+      // SAFETY: the wrapper prop is supplied by this file's wrapper factory, never by a caller
       const wrapper = options?.wrapper as
         | ((props: { children: ReactNode }) => ReactElement)
         | undefined
@@ -52,7 +52,7 @@ vi.mock('@testing-library/react', async (importOriginal) => {
       callback: Parameters<typeof actual.renderHook>[0],
       options?: Record<string, string | ((props: { children: ReactNode }) => ReactElement) | undefined>,
     ) => {
-      // SAFETY: invariant verified
+      // SAFETY: the wrapper prop is supplied by this file's wrapper factory, never by a caller
       const wrapper = options?.wrapper as
         | ((props: { children: ReactNode }) => ReactElement)
         | undefined
@@ -87,8 +87,8 @@ if (typeof global.document === 'undefined') {
 
 // Provide a minimal localStorage implementation if missing
 if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
-  const __windowLocal: any = window
-  __windowLocal.localStorage = {
+  // SAFETY: test setup runs in Node; it installs the minimal localStorage user-event needs
+  ;(window as { localStorage?: unknown }).localStorage = {
     clear: vi.fn(),
     getItem: vi.fn(),
     setItem: vi.fn(),
@@ -97,7 +97,7 @@ if (typeof window === 'undefined' || typeof window.localStorage === 'undefined')
 
 // Make window.scrollTo a no-op in environments where it throws
 if (typeof window !== 'undefined') {
-  // SAFETY: invariant verified
+  // SAFETY: jsdom throws on scrollTo, so the test replaces it with a no-op
   window.scrollTo = (() => undefined) as typeof window.scrollTo
 }
 

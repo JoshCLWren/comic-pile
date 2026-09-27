@@ -138,7 +138,7 @@ export function DecisionCard({
         step="0.5"
         value={rating}
         className="rating-slider h-4 w-full"
-        // SAFETY: invariant verified
+        // SAFETY: the custom property is read by the slider fill gradient, not by React's CSSProperties
         style={{ '--slider-fill': `${ratingFillPct}%` } as CSSProperties}
         aria-label="Rating from 0.5 to 5.0 in steps of 0.5"
         aria-describedby="rating-value queue-effect"
