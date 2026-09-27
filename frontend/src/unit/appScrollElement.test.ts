@@ -47,11 +47,14 @@ describe('app page scroller (issue #2725)', () => {
     const wrapper = document.createElement('div')
     root.appendChild(wrapper)
 
+    // SAFETY: invariant verified
     vi.spyOn(root, 'getBoundingClientRect').mockReturnValue({ top: 0 } as DOMRect)
+    // SAFETY: invariant verified
     vi.spyOn(wrapper, 'getBoundingClientRect').mockReturnValue({ top: 200 } as DOMRect)
     root.scrollTop = 0
     expect(measureAppScrollMargin(wrapper)).toBe(200)
 
+    // SAFETY: invariant verified
     vi.spyOn(wrapper, 'getBoundingClientRect').mockReturnValue({ top: -2200 } as DOMRect)
     root.scrollTop = 2400
     expect(measureAppScrollMargin(wrapper)).toBe(200)
@@ -86,8 +89,10 @@ describe('app page scroller (issue #2725)', () => {
     document.body.appendChild(root)
     const windowScrollTo = vi.spyOn(window, 'scrollTo')
     const rootScrollTo = vi.fn()
+    // SAFETY: invariant verified
     root.scrollTo = rootScrollTo as typeof root.scrollTo
 
+    // SAFETY: invariant verified
     scrollAppToOffset(900, { adjustments: 50, behavior: 'auto' }, {} as never)
 
     expect(rootScrollTo).toHaveBeenCalledWith({ top: 950, behavior: 'auto' })

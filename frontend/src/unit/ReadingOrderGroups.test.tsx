@@ -188,6 +188,7 @@ describe('ReadingOrderGroups', () => {
       target_issue_number: '3',
       changed: true,
     })
+    // SAFETY: invariant verified
     mockedFetchAndPublishRollBootstrap.mockResolvedValue({} as never)
 
     renderGroups(17)
@@ -235,6 +236,7 @@ describe('ReadingOrderGroups', () => {
       refetch: vi.fn(),
     })
     mockedSwitchPrerequisite.mockRejectedValue(new Error('stale'))
+    // SAFETY: invariant verified
     mockedFetchAndPublishRollBootstrap.mockResolvedValue({} as never)
 
     renderGroups(17)
@@ -257,6 +259,7 @@ describe('ReadingOrderGroups', () => {
     })
     mockedIsAmbiguousNetworkFailure.mockReturnValue(true)
     mockedSwitchPrerequisite.mockRejectedValue(new Error('Network Error'))
+    // SAFETY: invariant verified
     mockedFetchAndPublishRollBootstrap.mockResolvedValue({} as never)
 
     renderGroups(17)

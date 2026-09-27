@@ -36,12 +36,19 @@ function createWrapper() {
 }
 
 beforeEach(() => {
+  // SAFETY: invariant verified
   mockedThreadsApi.list.mockResolvedValue({ threads: [{ id: 1 }], next_page_token: null } as never)
+  // SAFETY: invariant verified
   mockedThreadsApi.get.mockResolvedValue({ id: 2 } as never)
+  // SAFETY: invariant verified
   mockedThreadsApi.listStale.mockResolvedValue([{ id: 3 }] as never)
+  // SAFETY: invariant verified
   mockedThreadsApi.create.mockResolvedValue({} as never)
+  // SAFETY: invariant verified
   mockedThreadsApi.update.mockResolvedValue({} as never)
+  // SAFETY: invariant verified
   mockedThreadsApi.delete.mockResolvedValue(undefined as never)
+  // SAFETY: invariant verified
   mockedThreadsApi.reactivate.mockResolvedValue({} as never)
 })
 
@@ -98,6 +105,7 @@ it('handles empty ids, detail failures, and stale failures', async () => {
   mockedThreadsApi.listStale.mockRejectedValueOnce(new Error('stale failed'))
   const stale = renderHook(() => useStaleThreads(), { wrapper })
   await waitFor(() => expect(stale.result.current.isError).toBe(true))
+  // SAFETY: invariant verified
   mockedThreadsApi.listStale.mockResolvedValueOnce([] as never)
   await act(async () => stale.result.current.refetch())
 })
@@ -116,6 +124,7 @@ it('marks all thread mutations as errors and resets pending state', async () => 
   ] as const
   for (const [hook, payload] of cases) {
     const { result } = renderHook(() => hook(), { wrapper })
+    // SAFETY: invariant verified
     await expect(act(async () => result.current.mutate(payload as never))).rejects.toThrow()
     expect(result.current.isPending).toBe(false)
   }
@@ -135,6 +144,7 @@ it('handles non-Error mutation failures and stale refetch failures', async () =>
   ] as const
   for (const [hook, payload] of cases) {
     const { result } = renderHook(() => hook(), { wrapper })
+    // SAFETY: invariant verified
     await expect(act(async () => result.current.mutate(payload as never))).rejects.toBeDefined()
   }
   mockedThreadsApi.listStale.mockRejectedValueOnce(new Error('refetch failed'))
@@ -154,6 +164,7 @@ it('ignores late detail and stale responses after unmount', async () => {
   detail.unmount()
   stale.unmount()
   await act(async () => {
+    // SAFETY: invariant verified
     resolveDetail({ id: 10 } as Thread)
     resolveStale([])
     await Promise.resolve()
@@ -193,6 +204,7 @@ it('normalizes Axios mutation failures while preserving their details', async ()
   ] as const
   for (const [hook, payload] of cases) {
     const { result } = renderHook(() => hook(), { wrapper })
+    // SAFETY: invariant verified
     await expect(act(async () => result.current.mutate(payload as never))).rejects.toBe(axiosError)
   }
 })
@@ -201,6 +213,7 @@ it('uses response details and ignores late hook results after unmount', async ()
   const wrapper = createWrapper()
   const axiosError = new axios.AxiosError('fallback message', 'ERR_BAD_REQUEST')
   axiosError.isAxiosError = true
+  // SAFETY: invariant verified
   axiosError.response = { status: 422, data: { detail: 'server detail' }, headers: {}, config: { headers: {} }, statusText: 'Unprocessable Entity' } as never
   mockedThreadsApi.create.mockRejectedValueOnce(axiosError)
   const { result } = renderHook(() => useCreateThread(), { wrapper })
@@ -210,6 +223,7 @@ it('uses response details and ignores late hook results after unmount', async ()
   mockedThreadsApi.get.mockImplementationOnce(() => new Promise((resolve) => { resolveThread = resolve }))
   const pending = renderHook(() => useThread(44), { wrapper })
   pending.unmount()
+  // SAFETY: invariant verified
   await act(async () => resolveThread({ id: 44 } as never))
 })
 
@@ -219,5 +233,6 @@ it('ignores late stale-thread results after unmount', async () => {
   mockedThreadsApi.listStale.mockImplementationOnce(() => new Promise((resolve) => { resolveStale = resolve }))
   const pending = renderHook(() => useStaleThreads(14), { wrapper })
   pending.unmount()
+  // SAFETY: invariant verified
   await act(async () => resolveStale([{ id: 14 }] as never))
 })

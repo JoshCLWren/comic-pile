@@ -69,6 +69,7 @@ async function getCsrf(page: Page, token: string | null): Promise<string> {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   expect(response.ok()).toBeTruthy()
+  // SAFETY: invariant verified
   const data = (await response.json()) as { csrf_token?: string }
   expect(data.csrf_token).toBeDefined()
   return data.csrf_token!
@@ -90,6 +91,7 @@ async function listIssues(page: Page, threadId: number): Promise<number[]> {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   expect(response.ok(), `issue list failed: ${await response.text()}`).toBeTruthy()
+  // SAFETY: invariant verified
   const data = (await response.json()) as { issues: Array<{ id: number }> }
   expect(data.issues.length).toBeGreaterThan(0)
   return data.issues.map((issue) => issue.id)
@@ -149,6 +151,7 @@ async function seedCrossover(
     data: { name },
   })
   expect(createResponse.ok(), `crossover create failed: ${await createResponse.text()}`).toBeTruthy()
+  // SAFETY: invariant verified
   const group = (await createResponse.json()) as { id: number }
   for (const threadId of memberThreadIds) {
     const memberResponse = await page.request.post(

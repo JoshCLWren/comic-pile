@@ -6,6 +6,7 @@ import {
 import type { ReaderContextEdge } from '../types'
 
 function edge(overrides: Partial<ReaderContextEdge> & { id: number; source_issue_id: number; target_issue_id: number }): ReaderContextEdge {
+  // SAFETY: invariant verified
   return {
     kind: 'dependency',
     source_thread_id: 1,

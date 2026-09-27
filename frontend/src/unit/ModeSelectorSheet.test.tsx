@@ -7,6 +7,7 @@ import type { SessionModeState } from '../types/rollBootstrap'
 
 const defaultProps = {
   isOpen: true,
+  // SAFETY: invariant verified
   currentMode: null as SessionModeState | null,
   onClose: vi.fn(),
   onSubmit: vi.fn().mockResolvedValue(undefined),

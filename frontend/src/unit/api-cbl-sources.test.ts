@@ -35,6 +35,7 @@ function entry(overrides: Partial<CBLAdoptionPreviewEntry>): CBLAdoptionPreviewE
   }
 }
 
+// SAFETY: invariant verified
 const reviewedPreview = {
   source: {
     source_list_id: 42,
@@ -112,6 +113,7 @@ describe('cblSourcesApi.commit', () => {
   })
 
   it('expands colliding series_name groups into distinct position overrides', async () => {
+    // SAFETY: invariant verified
     const collidingPreview = {
       ...reviewedPreview,
       entries: [

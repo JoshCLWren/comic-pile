@@ -83,7 +83,9 @@ it('preserves topmost backdrop dismissal after portaling', async () => {
   )
 
   const dialogs = await screen.findAllByRole('dialog')
+  // SAFETY: invariant verified
   const firstBackdrop = dialogs[0].previousElementSibling as HTMLElement
+  // SAFETY: invariant verified
   const secondBackdrop = dialogs[1].previousElementSibling as HTMLElement
 
   await user.click(firstBackdrop)

@@ -27,6 +27,7 @@ function createWrapper() {
 beforeEach(() => {
   vi.clearAllMocks()
   mockedThreadsApi.list.mockResolvedValue({
+    // SAFETY: invariant verified
     threads: Array.from({ length: 51 }, (_, index) => ({ id: index + 1 }) as Thread),
     next_page_token: 'page-2',
   })

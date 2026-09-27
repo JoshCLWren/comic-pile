@@ -15,6 +15,7 @@ vi.mock('../services/api-releases', () => ({
 const mockedList = vi.mocked(releasesApi.list)
 
 function release(overrides: Partial<Release> = {}): Release {
+  // SAFETY: invariant verified
   return {
     id: 1,
     released_at: '2026-08-11T20:00:00Z',

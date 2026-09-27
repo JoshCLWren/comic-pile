@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
 const { confirmIdentitySpy, replaceIdentitySpy, searchSeriesSpy, getSeriesIssuesSpy, resolveIdentitySpy } = vi.hoisted(() => ({
+  // SAFETY: invariant verified
   confirmIdentitySpy: vi.fn().mockResolvedValue({} as never),
+  // SAFETY: invariant verified
   replaceIdentitySpy: vi.fn().mockResolvedValue({} as never),
   searchSeriesSpy: vi.fn(),
   getSeriesIssuesSpy: vi.fn(),
@@ -58,6 +60,7 @@ const defaultProps = (overrides = {}) => ({
   issueId: 43,
   threadTitle: 'Stormwatch Vol. 1',
   issueNumber: '1',
+  // SAFETY: invariant verified
   mode: 'confirm' as 'confirm' | 'replace',
   onClose: vi.fn(),
   onConfirmed: vi.fn(),

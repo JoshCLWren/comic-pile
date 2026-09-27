@@ -38,6 +38,7 @@ describe('MigrationDialog', () => {
 
   it('submits successfully and exposes API failures and skip confirmation', async () => {
     const user = userEvent.setup(); const onComplete = vi.fn(); const onSkip = vi.fn(); const onClose = vi.fn()
+    // SAFETY: invariant verified
     vi.mocked(migrationApi.migrateThread).mockResolvedValue({ id: 7, title: 'Saga' } as never)
     render(<MigrationDialog thread={thread} onComplete={onComplete} onSkip={onSkip} onClose={onClose} />)
     await user.type(screen.getByLabelText(/Last Issue Read/), '2')
@@ -81,6 +82,7 @@ describe('MigrationDialog', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Please fill in both fields')
     await user.clear(last); await user.type(last, '1')
     vi.mocked(migrationApi.migrateThread).mockRejectedValueOnce(
+      // SAFETY: invariant verified
       new axios.AxiosError('fallback message', 'ERR_BAD_REQUEST', undefined, undefined, { data: { message: 'message detail' }, status: 400, statusText: 'Bad Request', headers: {}, config: {} } as never),
     )
     fireEvent.submit(screen.getByRole('button', { name: 'Start Tracking' }).closest('form')!)
@@ -91,6 +93,7 @@ describe('MigrationDialog', () => {
     const onClose = vi.fn()
     render(<MigrationDialog thread={thread} onComplete={vi.fn()} onSkip={vi.fn()} onClose={onClose} />)
     const dialog = screen.getByRole('dialog')
+    // SAFETY: invariant verified
     const backdrop = dialog.previousElementSibling as HTMLElement
     fireEvent.click(backdrop)
     expect(onClose).toHaveBeenCalledTimes(1)

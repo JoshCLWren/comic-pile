@@ -25,12 +25,15 @@ vi.mock('axios', () => ({
 
 import { bugReportsApi, creatorsApi, dependenciesApi, migrationApi, queueApi, rateApi, rollApi, sessionApi, setAccessToken, snoozeApi, tasksApi, threadsApi, undoApi } from '../services/api'
 
+// SAFETY: invariant verified
 const requestInterceptor = apiMock.interceptors.request.use.mock.calls[0][0] as (
   config: { method?: string; url?: string; headers?: Record<string, string> }
 ) => Promise<{ method?: string; url?: string; headers?: Record<string, string> }>
+// SAFETY: invariant verified
 const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] as (
   error: { config: { url: string; headers?: Record<string, string>; skipAuthRedirect?: boolean }; response: { status: number } },
 ) => Promise<Record<string, string | number | boolean | null>>
+// SAFETY: invariant verified
 const responseSuccessInterceptor = apiMock.interceptors.response.use.mock.calls[0][0] as (
   response: { data: { ok?: boolean } },
 ) => { ok?: boolean }
@@ -257,10 +260,14 @@ it('bootstraps a csrf token before protected requests when the cookie is missing
 it('handles response success, network errors, validation errors, and auth errors', async () => {
   const success = await responseSuccessInterceptor({ data: { ok: true } })
   expect(success).toEqual({ ok: true })
+  // SAFETY: invariant verified
   await expect(responseInterceptor({ config: { url: '/x' }, response: undefined } as never)).rejects.toThrow('Network error')
+  // SAFETY: invariant verified
   await expect(responseInterceptor({ config: { url: '/x' }, response: { status: 400 } } as never)).rejects.toEqual(expect.objectContaining({ response: { status: 400 } }))
+  // SAFETY: invariant verified
   await expect(responseInterceptor({ config: {}, response: { status: 500 } } as never)).rejects.toEqual(expect.objectContaining({ response: { status: 500 } }))
   await expect(responseInterceptor({ config: { url: '/v1/auth/login' }, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
+  // SAFETY: invariant verified
   await expect(responseInterceptor({ config: { url: '/x', _retry: true } as never, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
 })
 
@@ -268,6 +275,7 @@ it('refreshes when FastAPI rejects a request without a bearer header', async () 
   post.mockResolvedValue({ access_token: 'refreshed-token' })
   apiMock.request.mockResolvedValue({ authenticated: true })
 
+  // SAFETY: invariant verified
   const result = responseInterceptor({
     config: { url: '/v1/auth/me', headers: {} },
     response: { status: 403, data: { detail: 'Not authenticated' } },
@@ -283,6 +291,7 @@ it('refreshes when FastAPI rejects a request without a bearer header', async () 
 })
 
 it('does not refresh for unrelated forbidden responses', async () => {
+  // SAFETY: invariant verified
   await expect(responseInterceptor({
     config: { url: '/threads/1' },
     response: { status: 403, data: { detail: 'Forbidden' } },

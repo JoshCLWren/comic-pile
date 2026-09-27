@@ -21,6 +21,7 @@ vi.mock('axios', () => ({
 
 import { getAccessToken, setAccessToken } from '../services/api'
 
+// SAFETY: invariant verified
 const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] as (
   error: {
     config: { url: string; headers?: Record<string, string>; skipAuthRedirect?: boolean }

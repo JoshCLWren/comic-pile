@@ -197,6 +197,7 @@ describe('useThreadAllIssues', () => {
 
 describe('useThreadDependencies', () => {
   it('maps dependencies with incoming or outgoing', async () => {
+    // SAFETY: invariant verified
     mockedDepsApi.listForThread.mockResolvedValue({
       issues: [
         { issue_id: 1, incoming: [{ dependency_id: 1, source_issue_id: 2, source_issue_number: '2', source_thread_id: 1, source_thread_title: 'T' }], outgoing: [] },
@@ -214,6 +215,7 @@ describe('useThreadDependencies', () => {
   })
 
   it('returns empty map when no deps', async () => {
+    // SAFETY: invariant verified
     mockedDepsApi.listForThread.mockResolvedValue({ issues: [] } as never)
     const wrapper = createWrapper()
     const { result } = renderHook(() => useThreadDependencies(9), { wrapper })
@@ -251,6 +253,7 @@ describe('mutations', () => {
   })
 
   it('creates issues from range', async () => {
+    // SAFETY: invariant verified
     mockedIssuesApi.create.mockResolvedValue({ issues: [], total_count: 0, page_size: 100, next_page_token: null } as never)
     const wrapper = createWrapper()
     const { result } = renderHook(() => useCreateIssues(11), { wrapper })
@@ -261,6 +264,7 @@ describe('mutations', () => {
   })
 
   it('creates issues without insertAfterIssueId', async () => {
+    // SAFETY: invariant verified
     mockedIssuesApi.create.mockResolvedValue({ issues: [], total_count: 0, page_size: 100, next_page_token: null } as never)
     const wrapper = createWrapper()
     const { result } = renderHook(() => useCreateIssues(12), { wrapper })

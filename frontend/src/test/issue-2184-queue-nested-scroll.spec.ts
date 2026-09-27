@@ -30,6 +30,7 @@ async function assertNoNestedScroll(page: import('@playwright/test').Page): Prom
     const style = window.getComputedStyle(element)
     return {
       overflowY: style.overflowY,
+      // SAFETY: invariant verified
       inlineHeight: (element as HTMLElement).style.height,
     }
   })
@@ -54,6 +55,7 @@ async function assertNoNestedScroll(page: import('@playwright/test').Page): Prom
     const style = window.getComputedStyle(element)
     return {
       overflowY: style.overflowY,
+      // SAFETY: invariant verified
       inlineHeight: (element as HTMLElement).style.height,
       scrollTop: element.scrollTop,
     }

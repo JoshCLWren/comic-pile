@@ -38,6 +38,7 @@ async function getCsrfToken(request: APIRequestContext, token: string): Promise<
   if (!response.ok()) {
     throw new Error(`Failed to fetch CSRF token: ${response.status()}`);
   }
+  // SAFETY: invariant verified
   const data = (await response.json()) as { csrf_token?: string };
   if (!data.csrf_token) {
     throw new Error('CSRF bootstrap response did not include csrf_token');
@@ -64,6 +65,7 @@ async function apiPost(
   if (!response.ok()) {
     throw new Error(`POST ${path} failed: ${response.status()} ${await response.text()}`);
   }
+  // SAFETY: invariant verified
   return (await response.json()) as ApiPostResult;
 }
 
@@ -74,6 +76,7 @@ async function listIssues(page: Page, user: TestUser, threadId: number): Promise
   if (!response.ok()) {
     throw new Error(`Listing issues for thread ${threadId} failed: ${response.status()}`);
   }
+  // SAFETY: invariant verified
   const data = (await response.json()) as { issues: IssueInfo[] };
   return data.issues;
 }
@@ -107,6 +110,7 @@ async function seedInterrelatedThreads(
 
   await apiPost(page, user, '/api/v1/reading-order-groups/', { name: 'Cosmic Clash' })
     .then(async (group) => {
+      // SAFETY: invariant verified
       const groupId = group.id as number;
       await apiPost(page, user, `/api/v1/reading-order-groups/${groupId}/issue-ranges`, {
         thread_id: threadA.id,

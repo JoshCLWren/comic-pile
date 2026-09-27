@@ -20,7 +20,9 @@ vi.mock('../services/api-undo', () => ({
 const mockedUndoApi = vi.mocked(undoApi)
 
 beforeEach(() => {
+  // SAFETY: invariant verified
   mockedUndoApi.listSnapshots.mockResolvedValue([{ id: 1 }] as never)
+  // SAFETY: invariant verified
   mockedUndoApi.undo.mockResolvedValue(undefined as never)
 })
 

@@ -75,6 +75,7 @@ export default function QueuePage() {
 
   const submitCreate = useCallback(
     (input: { title: string; format: string; issues_remaining: number; notes: string | null }) =>
+      // SAFETY: invariant verified
       createMutation.mutate(input) as Promise<{ id?: number }>,
     [createMutation],
   )

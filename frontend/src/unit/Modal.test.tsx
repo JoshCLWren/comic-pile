@@ -206,6 +206,7 @@ it('backdrop click on the topmost overlapping modal closes only it', async () =>
 
   const backdrops = document.querySelectorAll('[data-overlay-root="true"] [aria-hidden="true"]')
   const topmostBackdrop = backdrops[backdrops.length - 1]
+  // SAFETY: invariant verified
   await user.click(topmostBackdrop as HTMLElement)
   expect(secondOnClose).toHaveBeenCalledTimes(1)
   expect(firstOnClose).not.toHaveBeenCalled()

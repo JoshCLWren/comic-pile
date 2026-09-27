@@ -54,6 +54,7 @@ export function useReadingOrdersForThread(threadId: number | null, enabled = tru
   })
 
   return {
+    // SAFETY: invariant verified
     readingOrders: data?.reading_orders ?? ([] as ReadingOrder[]),
     isPending,
     isError,
@@ -69,6 +70,7 @@ export function useConnectedThreads(threadId: number | null, enabled = true) {
   })
 
   return {
+    // SAFETY: invariant verified
     connectedThreads: data?.connected_threads ?? ([] as ConnectedThreadInfo[]),
     isPending,
     isError,

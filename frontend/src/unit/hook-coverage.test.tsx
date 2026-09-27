@@ -219,6 +219,7 @@ describe('data hooks', () => {
     expect(current.result.current.error?.message).toBe('Failed to fetch current session')
 
     api.sessionApi.list.mockRejectedValueOnce(new Error('list failed'))
+    // SAFETY: invariant verified
     const sessions = renderHook(() => useSessions(null as never), { wrapper: createWrapper() })
     await waitFor(() => expect(sessions.result.current.isError).toBe(true))
     api.sessionApi.list.mockRejectedValueOnce('string list failed')
@@ -255,6 +256,7 @@ describe('data hooks', () => {
     expect(emptySnapshots.result.current.isPending).toBe(false)
     const axiosError = new axios.AxiosError('restore request failed', 'ERR_BAD_REQUEST')
     axiosError.isAxiosError = true
+    // SAFETY: invariant verified
     axiosError.response = { status: 400, data: { detail: 'server rejected restore' } } as never
     api.sessionApi.restoreSessionStart.mockRejectedValueOnce(axiosError)
     const restore = renderHook(() => useRestoreSessionStart(), { wrapper: createWrapper() })

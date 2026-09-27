@@ -71,6 +71,7 @@ test.describe('Desktop sidebar theme selector containment (#1941)', () => {
       const box = await option.boundingBox()
       expect(box, `${label} must have a rendered bounding box`).not.toBeNull()
       expect(
+        // SAFETY: invariant verified
         containedBy(box as Box, groupBox as Box),
         `${label} must stay inside the theme selector boundary`,
       ).toBe(true)
@@ -99,6 +100,7 @@ test.describe('Desktop sidebar theme selector containment (#1941)', () => {
     await expect(logout).toBeVisible()
     const logoutBox = await logout.boundingBox()
     expect(
+      // SAFETY: invariant verified
       containedBy(logoutBox as Box, navBox as Box, 1),
       'Log Out control must remain inside the sidebar footer',
     ).toBe(true)
@@ -107,6 +109,7 @@ test.describe('Desktop sidebar theme selector containment (#1941)', () => {
     await expect(username).toBeVisible()
     const usernameBox = await username.boundingBox()
     expect(
+      // SAFETY: invariant verified
       containedBy(usernameBox as Box, navBox as Box, 1),
       'username must remain inside the sidebar footer',
     ).toBe(true)

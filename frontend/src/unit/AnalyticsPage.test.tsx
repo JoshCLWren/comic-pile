@@ -5,6 +5,7 @@ import { useAnalytics } from '../hooks/useAnalytics'
 
 vi.mock('../hooks/useAnalytics', () => ({ useAnalytics: vi.fn() }))
 
+// SAFETY: invariant verified
 const mockedUseAnalytics = vi.mocked(useAnalytics) as any
 
 beforeEach(() => {

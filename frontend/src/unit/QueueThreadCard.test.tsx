@@ -53,6 +53,7 @@ vi.mock('../components/PositionMenu', () => ({
         <button
           type="button"
           data-testid="mock-position-snooze"
+          // SAFETY: invariant verified
           onClick={onSnooze ? () => onSnooze({} as Thread) : undefined}
           disabled={snoozeDisabled}
         >
@@ -99,6 +100,7 @@ function renderCard(thread: Thread, overrides: Partial<Parameters<typeof QueueTh
     thread,
     index: 0,
     isBlocked: false,
+    // SAFETY: invariant verified
     blockingDependencies: [] as BlockingDependency[],
     isDragOver: false,
     snoozeIcon: '',
@@ -495,6 +497,7 @@ describe('QueueThreadCard', () => {
 
   it('handles keyboard, drag, blocked dependency, and all position-menu callbacks', async () => {
     const user = userEvent.setup()
+    // SAFETY: invariant verified
     const callbacks = Object.fromEntries([
       'onCardClick', 'onDragStart', 'onDragEnd', 'onDragOver', 'onDrop', 'onDependencies',
       'onMoveToFront', 'onMoveToBack', 'onReposition', 'onEdit', 'onDelete',
@@ -602,6 +605,7 @@ describe('QueueThreadCard', () => {
 
       const readButton = actionsContainer.querySelector('button[aria-label="Read"]')
 
+      // SAFETY: invariant verified
       await user.click(readButton as HTMLElement)
       expect(onRead).toHaveBeenCalledTimes(1)
       expect(onCardClick).not.toHaveBeenCalled()

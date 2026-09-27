@@ -7,6 +7,7 @@ import { useBugReport } from '../hooks/useBugReport'
 const createSpy = vi.spyOn(bugReportsApi, 'create').mockImplementation(() => new Promise(() => {}))
 vi.spyOn(apiError, 'getApiErrorDetail').mockImplementation(
   (error: unknown) => {
+    // SAFETY: invariant verified
     const message = (error as { message?: string | null | undefined })?.message
     return message ?? 'Unknown error'  // Match the real function's behavior
   },
@@ -65,6 +66,7 @@ describe('useBugReport', () => {
       try {
         await result.current.submit('bug', 'Test title', 'Test description', null)
       } catch (err) {
+        // SAFETY: invariant verified
         thrownError = err as Error
       }
     })

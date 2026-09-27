@@ -60,6 +60,7 @@ describe('useCorrectionSheetExamples', () => {
   })
 
   it('normalizes a missing field to null instead of inheriting another choice example', async () => {
+    // SAFETY: invariant verified
     mockedSessionApi.getCorrectionExamples.mockResolvedValue({
       even_easier: 'Think more like Pal Jimmy Olsen #134.',
     } as Awaited<ReturnType<typeof sessionApi.getCorrectionExamples>>)

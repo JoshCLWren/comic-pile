@@ -91,6 +91,7 @@ describe('small and dialog components', () => {
   it('renders reading timeline empty and populated states', () => {
     render(<ReadingOrderTimeline thread={null} dependencies={[]} />)
     expect(screen.getByText(/Select a thread/)).toBeInTheDocument()
+    // SAFETY: invariant verified
     render(<ReadingOrderTimeline thread={{ ...thread, issues_remaining: 0, total_issues: null, next_unread_issue_number: null } as never} dependencies={[]} />)
     expect(screen.getByText('Completed')).toBeInTheDocument()
     expect(screen.getByText(/more precise/)).toBeInTheDocument()
@@ -109,6 +110,7 @@ describe('small and dialog components', () => {
       { id: 1, source_thread_id: 2, target_thread_id: null, source_issue_id: 1, target_issue_id: 101, source_label: 'Source #1', target_label: 'Target #2', target_issue_thread_id: 1, source_issue_thread_id: 2, is_issue_level: true, created_at: 'now' },
       { id: 2, source_thread_id: 3, target_thread_id: null, source_issue_id: 2, target_issue_id: 104, source_label: 'Other #2', target_label: 'Target #5', target_issue_thread_id: 1, source_issue_thread_id: 3, is_issue_level: true, created_at: 'now' },
     ]
+    // SAFETY: invariant verified
     render(<ReadingOrderTimeline thread={timelineThread as never} dependencies={dependencies as never} />)
     expect(screen.getAllByText('Issue #2').length).toBeGreaterThan(0)
     expect(screen.getByText('Blocked')).toBeInTheDocument()
@@ -119,7 +121,9 @@ describe('small and dialog components', () => {
 
   it('renders unknown reading position and a single prerequisite gate', () => {
     render(<ReadingOrderTimeline
+      // SAFETY: invariant verified
       thread={{ ...thread, issues_remaining: 3, total_issues: 5, next_unread_issue_number: null, next_unread_issue_id: 100 } as never}
+      // SAFETY: invariant verified
       dependencies={[{
         id: 9, source_thread_id: 2, target_thread_id: null, source_issue_id: 2, target_issue_id: 100,
         source_label: 'Prerequisite #2', target_label: 'Target', target_issue_thread_id: 1,
@@ -132,7 +136,9 @@ describe('small and dialog components', () => {
 
   it('renders current spans and safe gate labels for sparse issue metadata', () => {
     render(<ReadingOrderTimeline
+      // SAFETY: invariant verified
       thread={{ ...thread, id: 1, issues_remaining: 2, total_issues: 6, next_unread_issue_number: '4', next_unread_issue_id: 104 } as never}
+      // SAFETY: invariant verified
       dependencies={[{
         id: 10, source_thread_id: 2, target_thread_id: null, source_issue_id: 2, target_issue_id: 104,
         source_label: 'Prerequisite', target_label: null, target_issue_thread_id: 1,

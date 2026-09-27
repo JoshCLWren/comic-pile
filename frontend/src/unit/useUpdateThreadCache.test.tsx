@@ -24,6 +24,7 @@ beforeEach(() => {
 })
 
 it('publishes the authoritative update through the targeted thread-cache contract', async () => {
+  // SAFETY: invariant verified
   const updatedThread = {
     id: 7,
     title: 'Updated title',

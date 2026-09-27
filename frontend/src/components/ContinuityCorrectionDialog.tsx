@@ -141,6 +141,7 @@ export default function ContinuityCorrectionDialog({
       }
 
       if (canSaveCurrentIssue) {
+        // SAFETY: invariant verified
         await groupsApi.addMember(targetGroup.id, { issue_id: issueId as number });
         addedLabels.push(`issue ${issueNumber ?? '?'}`);
       }

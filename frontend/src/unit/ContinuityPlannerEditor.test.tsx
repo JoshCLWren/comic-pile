@@ -39,6 +39,7 @@ const group = {
   created_at: '2026-08-12T00:00:00Z',
 }
 
+// SAFETY: invariant verified
 const savedPlan = {
   id: 12,
   user_id: 1,
@@ -108,9 +109,11 @@ describe('useContinuityPlannerEditor', () => {
     await waitFor(() => expect(result.current.statusText).toBe('New plan'))
 
     act(() => {
+      // SAFETY: invariant verified
       result.current.selectThread(thread as never)
     })
     act(() => {
+      // SAFETY: invariant verified
       result.current.setSelectedIssue(issue as never)
     })
     act(() => {
@@ -127,6 +130,7 @@ describe('useContinuityPlannerEditor', () => {
     expect(result.current.isDirty).toBe(true)
 
     act(() => {
+      // SAFETY: invariant verified
       result.current.setSelectedIssue(issue as never)
     })
     act(() => {
@@ -141,6 +145,7 @@ describe('useContinuityPlannerEditor', () => {
       ({ inputs }: { inputs: ContinuityPlannerEditorInputs }) => useContinuityPlannerEditor(inputs),
       {
         wrapper,
+        // SAFETY: invariant verified
         initialProps: { inputs: { ...baseInputs, groups: [group] as never } },
       },
     )
@@ -175,6 +180,7 @@ describe('useContinuityPlannerEditor', () => {
     await waitFor(() => expect(result.current.nodes).toHaveLength(1))
 
     act(() => {
+      // SAFETY: invariant verified
       result.current.selectThread(thread as never)
     })
     expect(result.current.selectedThreadId).toBe(4)

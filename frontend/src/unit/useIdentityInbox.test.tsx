@@ -57,10 +57,15 @@ const inboxResponse = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // SAFETY: invariant verified
   mockedInboxApi.list.mockResolvedValue(inboxResponse as never)
+  // SAFETY: invariant verified
   mockedInboxApi.confirm.mockResolvedValue(undefined as never)
+  // SAFETY: invariant verified
   mockedInboxApi.reject.mockResolvedValue(undefined as never)
+  // SAFETY: invariant verified
   mockedInboxApi.defer.mockResolvedValue(undefined as never)
+  // SAFETY: invariant verified
   mockedInboxApi.skip.mockResolvedValue(undefined as never)
 })
 
@@ -164,6 +169,7 @@ describe('useIdentityInboxStatus', () => {
 
   it('returns 0 when the inbox is empty', async () => {
     const emptyResponse = { items: [], total: 0, offset: 0, limit: 1 }
+    // SAFETY: invariant verified
     mockedInboxApi.list.mockResolvedValue(emptyResponse as never)
     const wrapper = createWrapper()
     const { result } = renderHook(() => useIdentityInboxStatus(), { wrapper })
@@ -174,6 +180,7 @@ describe('useIdentityInboxStatus', () => {
 
   it('returns a positive total when items exist', async () => {
     const fullResponse = { items: [{ ...inboxResponse.items[0], mapping_id: 1 }], total: 5, offset: 0, limit: 1 }
+    // SAFETY: invariant verified
     mockedInboxApi.list.mockResolvedValue(fullResponse as never)
     const wrapper = createWrapper()
     const { result } = renderHook(() => useIdentityInboxStatus(), { wrapper })

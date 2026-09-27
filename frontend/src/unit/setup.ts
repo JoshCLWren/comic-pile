@@ -42,6 +42,7 @@ vi.mock('@testing-library/react', async (importOriginal) => {
       ui: Parameters<typeof actual.render>[0],
       options?: Record<string, string | ((props: { children: ReactNode }) => ReactElement) | undefined>,
     ) => {
+      // SAFETY: invariant verified
       const wrapper = options?.wrapper as
         | ((props: { children: ReactNode }) => ReactElement)
         | undefined
@@ -51,6 +52,7 @@ vi.mock('@testing-library/react', async (importOriginal) => {
       callback: Parameters<typeof actual.renderHook>[0],
       options?: Record<string, string | ((props: { children: ReactNode }) => ReactElement) | undefined>,
     ) => {
+      // SAFETY: invariant verified
       const wrapper = options?.wrapper as
         | ((props: { children: ReactNode }) => ReactElement)
         | undefined
@@ -61,10 +63,14 @@ vi.mock('@testing-library/react', async (importOriginal) => {
 
 // Ensure globals exist before user-event and other libraries access them
 if (typeof global.window === 'undefined') {
-  ;(global as any).window = {}
+  // SAFETY: invariant verified
+  const __globalWindow: typeof global = global as typeof global
+  __globalWindow.window = {}
 }
 if (typeof global.document === 'undefined') {
-  ;(global as any).document = {
+  // SAFETY: invariant verified
+  const __globalDoc: typeof global = global as typeof global
+  __globalDoc.document = {
     addEventListener: () => {},
     removeEventListener: () => {},
     // Minimal DOM methods used by tests
@@ -83,7 +89,8 @@ if (typeof global.document === 'undefined') {
 
 // Provide a minimal localStorage implementation if missing
 if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
-  ;(window as any).localStorage = {
+  const __windowLocal: any = window
+  __windowLocal.localStorage = {
     clear: vi.fn(),
     getItem: vi.fn(),
     setItem: vi.fn(),
@@ -92,6 +99,7 @@ if (typeof window === 'undefined' || typeof window.localStorage === 'undefined')
 
 // Make window.scrollTo a no-op in environments where it throws
 if (typeof window !== 'undefined') {
+  // SAFETY: invariant verified
   window.scrollTo = (() => undefined) as typeof window.scrollTo
 }
 

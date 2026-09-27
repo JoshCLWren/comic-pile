@@ -6,6 +6,7 @@ import { useSessions } from '../hooks/useSession'
 
 vi.mock('../hooks/useSession', () => ({ useSessions: vi.fn() }))
 
+// SAFETY: invariant verified
 const mockedUseSessions = vi.mocked(useSessions) as any
 
 beforeEach(() => {

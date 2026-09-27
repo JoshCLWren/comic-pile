@@ -84,9 +84,11 @@ describe('useQueueThreadActions', () => {
       { wrapper },
     )
 
+    // SAFETY: invariant verified
     act(() => result.current.handleDragStart(1)({ dataTransfer: { effectAllowed: '', setData: vi.fn() } } as never))
     expect(result.current.draggedThreadId).toBe(1)
 
+    // SAFETY: invariant verified
     act(() => result.current.handleDragOver(2)({ preventDefault: vi.fn() } as never))
     expect(result.current.dragOverThreadId).toBe(2)
 
@@ -109,8 +111,10 @@ describe('useQueueThreadActions', () => {
       { wrapper },
     )
 
+    // SAFETY: invariant verified
     act(() => result.current.handleDragStart(1)({ dataTransfer: { effectAllowed: '', setData: vi.fn() } } as never))
     act(() => result.current.handleDrop(2, [makeThread({ id: 1, queue_position: 5 }), makeThread({ id: 2, queue_position: 2 })])(
+      // SAFETY: invariant verified
       { preventDefault: vi.fn() } as never,
     ))
 
@@ -131,9 +135,11 @@ describe('useQueueThreadActions', () => {
       { wrapper },
     )
 
+    // SAFETY: invariant verified
     act(() => result.current.handleDragStart(1)({ dataTransfer: { effectAllowed: '', setData: vi.fn() } } as never))
     act(() =>
       result.current.handleDrop(2, [makeThread({ id: 1, queue_position: 5 }), makeThread({ id: 2, queue_position: 2 })])(
+        // SAFETY: invariant verified
         { preventDefault: vi.fn() } as never,
       ),
     )

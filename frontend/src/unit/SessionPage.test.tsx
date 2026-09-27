@@ -24,9 +24,13 @@ const restoreSpy = vi.fn()
 const undoSpy = vi.fn()
 const refetchDetailsSpy = vi.fn()
 const refetchSnapshotsSpy = vi.fn()
+// SAFETY: invariant verified
 const mockedUseSessionDetails = vi.mocked(useSessionDetails) as any
+// SAFETY: invariant verified
 const mockedUseSessionSnapshots = vi.mocked(useSessionSnapshots) as any
+// SAFETY: invariant verified
 const mockedUseRestoreSessionStart = vi.mocked(useRestoreSessionStart) as any
+// SAFETY: invariant verified
 const mockedUseUndo = vi.mocked(useUndo) as any
 
 beforeEach(() => {

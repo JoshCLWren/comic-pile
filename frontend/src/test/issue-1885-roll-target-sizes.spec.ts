@@ -70,6 +70,7 @@ async function getCsrfToken(page: Page, token: string | null): Promise<string> {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   expect(response.ok()).toBeTruthy()
+  // SAFETY: invariant verified
   const data = (await response.json()) as { csrf_token?: string }
   expect(data.csrf_token).toBeDefined()
   return data.csrf_token!
@@ -122,6 +123,7 @@ test.describe('Roll pointer target sizes (#1885)', () => {
     expect(focusedLabel).toBe('d20')
 
     const focusIndicator = await page.evaluate(() => {
+      // SAFETY: invariant verified
       const style = window.getComputedStyle(document.activeElement as Element)
       return {
         outlineStyle: style.outlineStyle,
@@ -186,6 +188,7 @@ test.describe('Roll pointer target sizes (#1885)', () => {
         headers: { Authorization: `Bearer ${await getAuthToken(page)}` },
       })
       expect(response.ok(), `issue list failed: ${response.status()}`).toBeTruthy()
+      // SAFETY: invariant verified
       const data = (await response.json()) as { issues: Array<{ id: number }> }
       expect(data.issues.length).toBeGreaterThan(0)
       return data.issues[0]!.id

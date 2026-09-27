@@ -64,6 +64,7 @@ async function listIssues(page: Page, threadId: number): Promise<number[]> {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   expect(response.ok(), `issue list failed: ${await response.text()}`).toBeTruthy()
+  // SAFETY: invariant verified
   const data = (await response.json()) as { issues: Array<{ id: number }> }
   expect(data.issues.length).toBeGreaterThan(0)
   return data.issues.map((issue) => issue.id)
@@ -80,6 +81,7 @@ async function seedCoverIdentity(
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   expect(csrfResponse.ok()).toBeTruthy()
+  // SAFETY: invariant verified
   const data = (await csrfResponse.json()) as { csrf_token?: string }
   const seedHeaders: Record<string, string> = {};
   seedHeaders['Content-Type'] = 'application/json';

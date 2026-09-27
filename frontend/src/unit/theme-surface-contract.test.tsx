@@ -132,6 +132,7 @@ function tokenValuesPerTheme(css: string, token: string): string[] {
   return THEMES.map((theme) => {
     const value = extractTokenMap(extractThemeBlock(css, theme)).get(token)
     expect(value, `${token} missing for ${theme}`).toBeTruthy()
+    // SAFETY: invariant verified
     return value as string
   })
 }
@@ -196,6 +197,7 @@ describe('semantic theme stylesheet contract (#1646)', () => {
 
     for (const theme of THEMES) {
       const tokens = extractTokenMap(extractThemeBlock(css, theme))
+      // SAFETY: invariant verified
       const values = accents.map((token) => tokens.get(token) as string)
       expect(new Set(values).size, `${theme} accents must be pairwise distinct`).toBe(accents.length)
 

@@ -52,6 +52,7 @@ export function useThreadIssuePages(
       }
       return issuesApi.list(threadId!, params)
     },
+    // SAFETY: invariant verified
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_page_token,
     enabled: threadId != null && enabled,

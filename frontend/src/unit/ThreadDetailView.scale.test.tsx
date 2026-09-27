@@ -40,12 +40,14 @@ const mockedIssuesApiList = vi.mocked(issuesApi.list)
 beforeEach(() => {
   mockedThreadsApiGet.mockReset()
   mockedIssuesApiList.mockReset()
+  // SAFETY: invariant verified
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
 })
 
 it.each([25, 250, 1_000, 10_000])(
   'renders metadata for a %,d-issue thread without requesting issue rows',
   async (totalIssues) => {
+    // SAFETY: invariant verified
     mockedThreadsApiGet.mockResolvedValue({
       id: 1,
       title: `Scale Test ${totalIssues}`,
@@ -71,6 +73,7 @@ it.each([25, 250, 1_000, 10_000])(
 )
 
 it('keeps unmigrated threads independent from the issue-list endpoint', async () => {
+  // SAFETY: invariant verified
   mockedThreadsApiGet.mockResolvedValue({
     id: 1,
     title: 'Legacy Thread',

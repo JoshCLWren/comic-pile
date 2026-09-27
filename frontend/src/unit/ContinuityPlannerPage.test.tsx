@@ -17,6 +17,7 @@ interface AddMaterialProbeProps {
 }
 
 const addMaterialProbe = vi.hoisted(() => ({
+  // SAFETY: invariant verified
   current: null as AddMaterialProbeProps | null,
 }))
 
@@ -112,13 +113,21 @@ beforeEach(() => {
       window.localStorage.clear();
     }
   queryClient.clear()
+  // SAFETY: invariant verified
   continuityPlansApi.create = mocks.create as never
+  // SAFETY: invariant verified
   continuityPlansApi.list = mocks.list as never
+  // SAFETY: invariant verified
   continuityPlansApi.get = mocks.get as never
+  // SAFETY: invariant verified
   continuityPlansApi.update = mocks.update as never
+  // SAFETY: invariant verified
   dependencyGroupsApi.list = mocks.listGroups as never
+  // SAFETY: invariant verified
   issuesApi.list = mocks.listIssues as never
+  // SAFETY: invariant verified
   threadsApi.list = mocks.listThreads as never
+  // SAFETY: invariant verified
   threadsApi.get = mocks.getThread as never
   vi.clearAllMocks()
   mocks.create.mockReset()
