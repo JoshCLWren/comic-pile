@@ -153,7 +153,7 @@ async def test_backfill_persists_item_read_and_expands_converged_rules(
         (row.source_issue_id, row.target_issue_id)
         for row in (await async_db.execute(select(Dependency))).scalars()
     }
-    assert repeated == {(s, t) for s, _t, _n in edges}
+    assert repeated == {(s, t) for s, t, _n in edges}
 
     # Downgrade removes exactly the rows this migration created.
     await _run_sql(async_db, _backfill.DELETE_CANONICAL_EDGES_SQL)
