@@ -90,7 +90,7 @@ beforeEach(() => {
   groupsApi.get.mockResolvedValue({ id: 7, name: 'Annihilation', created_at: '2026-08-06T00:00:00Z', memberships: [] })
   groupsApi.addMember.mockResolvedValue({ id: 99, thread_id: null, issue_id: null })
   groupsApi.addIssueRange.mockResolvedValue({ thread_id: 1, start_position: 1, end_position: 5, added_issue_ids: [], already_present_issue_ids: [] })
-  mockedThreadsApi.list.mockResolvedValue({ threads: [], next_page_token: null })
+  mockedThreadsApi.list.mockResolvedValue({ threads: [], next_page_token: null, active_count: 0 })
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 

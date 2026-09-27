@@ -1,4 +1,9 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import {
+  renderHook,
+  waitFor,
+  type RenderHookOptions,
+  type RenderHookResult,
+} from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSession } from '../hooks/useSession'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
@@ -8,15 +13,33 @@ import {
   SESSION_STORAGE_KEY_PREFIX,
 } from '../utils/sessionGreeting'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { ReactNode } from 'react'
+import type { SessionApi } from '../services/apiTypes'
+import type { RollBootstrapApi } from '../services/apiTypes'
+import { cast } from '../utils/cast'
+import { createToastSpy } from './toastSpy'
+import { ToastContextSpy } from './toastTestHarness'
 
-const api = vi.hoisted(() => ({
-  sessionApi: { getCurrent: vi.fn() },
+const sessionApiMock = vi.hoisted(() => ({
+  getCurrent: vi.fn(),
 }))
-const bootstrapApi = vi.hoisted(() => ({ rollBootstrapApi: { get: vi.fn() } }))
-const toast = vi.hoisted(() => ({ showToast: vi.fn() }))
-vi.mock('../services/api-sessions', () => api)
-vi.mock('../services/rollBootstrapApi', () => bootstrapApi)
-vi.mock('../contexts/useToast', () => ({ useToast: () => toast }))
+const rollBootstrapApiMock = vi.hoisted(() => ({ get: vi.fn() }))
+// SAFETY: each mock implements only the hook surface these scenarios exercise,
+// so the boundary coercion to the full API type is intentional.
+const sessionApi = cast<SessionApi>(sessionApiMock)
+const rollBootstrapApi = cast<RollBootstrapApi>(rollBootstrapApiMock)
+const toast = createToastSpy()
+
+const toastWrapper = ({ children }: { children: ReactNode }) => (
+  <ToastContextSpy value={toast}>{children}</ToastContextSpy>
+)
+
+function renderHookWithToast<Result, Props>(
+  render: (initialProps: Props) => Result,
+  options?: RenderHookOptions<Props>,
+): RenderHookResult<Result, Props> {
+  return renderHook<Result, Props>(render, { ...options, wrapper: toastWrapper })
+}
 
 function bootstrapResponse(sessionId: number, userId: number): RollBootstrapResponse {
   return {
@@ -56,19 +79,19 @@ beforeEach(() => {
   vi.clearAllMocks()
   localStorage.clear()
   resetSessionGreetingMemory()
-  api.sessionApi.getCurrent.mockResolvedValue({ id: 1, user_id: 1 })
-  bootstrapApi.rollBootstrapApi.get.mockResolvedValue(bootstrapResponse(1, 1))
+  sessionApiMock.getCurrent.mockResolvedValue({ id: 1, user_id: 1 })
+  rollBootstrapApiMock.get.mockResolvedValue(bootstrapResponse(1, 1))
 })
 
 describe('session-started toast ownership across hooks', () => {
   it('emits exactly one toast when both hooks observe the same genuinely new session', async () => {
     localStorage.setItem(`${SESSION_STORAGE_KEY_PREFIX}_4`, '10')
-    api.sessionApi.getCurrent.mockResolvedValue({ id: 12, user_id: 4 })
-    bootstrapApi.rollBootstrapApi.get.mockResolvedValue(bootstrapResponse(12, 4))
+    sessionApiMock.getCurrent.mockResolvedValue({ id: 12, user_id: 4 })
+    rollBootstrapApiMock.get.mockResolvedValue(bootstrapResponse(12, 4))
 
-    renderHook(() => {
-      useSession()
-      useRollBootstrap()
+    renderHookWithToast(() => {
+      useSession(sessionApi)
+      useRollBootstrap(rollBootstrapApi)
     })
 
     await waitFor(() => expect(toast.showToast).toHaveBeenCalledTimes(1))
@@ -78,14 +101,14 @@ describe('session-started toast ownership across hooks', () => {
 
   it('does not re-toast when navigating from the session surface to the Roll surface', async () => {
     localStorage.setItem(`${SESSION_STORAGE_KEY_PREFIX}_4`, '10')
-    api.sessionApi.getCurrent.mockResolvedValue({ id: 12, user_id: 4 })
-    bootstrapApi.rollBootstrapApi.get.mockResolvedValue(bootstrapResponse(12, 4))
+    sessionApiMock.getCurrent.mockResolvedValue({ id: 12, user_id: 4 })
+    rollBootstrapApiMock.get.mockResolvedValue(bootstrapResponse(12, 4))
 
-    const session = renderHook(() => useSession())
+    const session = renderHookWithToast(() => useSession(sessionApi))
     await waitFor(() => expect(toast.showToast).toHaveBeenCalledTimes(1))
     session.unmount()
 
-    const roll = renderHook(() => useRollBootstrap())
+    const roll = renderHookWithToast(() => useRollBootstrap(rollBootstrapApi))
     await waitFor(() => expect(roll.result.current.isPending).toBe(false))
     expect(toast.showToast).toHaveBeenCalledTimes(1)
     expect(localStorage.getItem(`${SESSION_STORAGE_KEY_PREFIX}_4`)).toBe('12')
@@ -93,14 +116,14 @@ describe('session-started toast ownership across hooks', () => {
 
   it('does not re-toast when navigating from the Roll surface to the session surface', async () => {
     localStorage.setItem(`${SESSION_STORAGE_KEY_PREFIX}_4`, '10')
-    api.sessionApi.getCurrent.mockResolvedValue({ id: 12, user_id: 4 })
-    bootstrapApi.rollBootstrapApi.get.mockResolvedValue(bootstrapResponse(12, 4))
+    sessionApiMock.getCurrent.mockResolvedValue({ id: 12, user_id: 4 })
+    rollBootstrapApiMock.get.mockResolvedValue(bootstrapResponse(12, 4))
 
-    const roll = renderHook(() => useRollBootstrap())
+    const roll = renderHookWithToast(() => useRollBootstrap(rollBootstrapApi))
     await waitFor(() => expect(toast.showToast).toHaveBeenCalledTimes(1))
     roll.unmount()
 
-    const session = renderHook(() => useSession())
+    const session = renderHookWithToast(() => useSession(sessionApi))
     await waitFor(() => expect(session.result.current.isPending).toBe(false))
     await waitFor(() => expect(session.result.current.data?.id).toBe(12))
     expect(toast.showToast).toHaveBeenCalledTimes(1)
@@ -108,15 +131,15 @@ describe('session-started toast ownership across hooks', () => {
   })
 
   it('never toasts for a first session while navigating between surfaces', async () => {
-    api.sessionApi.getCurrent.mockResolvedValue({ id: 12, user_id: 4 })
-    bootstrapApi.rollBootstrapApi.get.mockResolvedValue(bootstrapResponse(12, 4))
+    sessionApiMock.getCurrent.mockResolvedValue({ id: 12, user_id: 4 })
+    rollBootstrapApiMock.get.mockResolvedValue(bootstrapResponse(12, 4))
 
-    const roll = renderHook(() => useRollBootstrap())
+    const roll = renderHookWithToast(() => useRollBootstrap(rollBootstrapApi))
     await waitFor(() => expect(roll.result.current.isPending).toBe(false))
     expect(toast.showToast).not.toHaveBeenCalled()
     roll.unmount()
 
-    const session = renderHook(() => useSession())
+    const session = renderHookWithToast(() => useSession(sessionApi))
     await waitFor(() => expect(session.result.current.data?.id).toBe(12))
     expect(toast.showToast).not.toHaveBeenCalled()
     expect(localStorage.getItem(`${SESSION_STORAGE_KEY_PREFIX}_4`)).toBe('12')
@@ -138,12 +161,12 @@ describe('session-started toast ownership across hooks', () => {
       },
     })
     try {
-      api.sessionApi.getCurrent.mockResolvedValue({ id: 12, user_id: 4 })
-      bootstrapApi.rollBootstrapApi.get.mockResolvedValue(bootstrapResponse(12, 4))
+      sessionApiMock.getCurrent.mockResolvedValue({ id: 12, user_id: 4 })
+      rollBootstrapApiMock.get.mockResolvedValue(bootstrapResponse(12, 4))
 
-      const view = renderHook(() => {
-        const session = useSession()
-        const roll = useRollBootstrap()
+      const view = renderHookWithToast(() => {
+        const session = useSession(sessionApi)
+        const roll = useRollBootstrap(rollBootstrapApi)
         return { session, roll }
       })
 
@@ -175,12 +198,12 @@ describe('session-started toast ownership across hooks', () => {
       },
     })
     try {
-      api.sessionApi.getCurrent.mockResolvedValue({ id: 12, user_id: 4 })
-      bootstrapApi.rollBootstrapApi.get.mockResolvedValue(bootstrapResponse(12, 4))
+      sessionApiMock.getCurrent.mockResolvedValue({ id: 12, user_id: 4 })
+      rollBootstrapApiMock.get.mockResolvedValue(bootstrapResponse(12, 4))
 
-      renderHook(() => {
-        useSession()
-        useRollBootstrap()
+      renderHookWithToast(() => {
+        useSession(sessionApi)
+        useRollBootstrap(rollBootstrapApi)
       })
 
       await waitFor(() => expect(toast.showToast).toHaveBeenCalledTimes(1))

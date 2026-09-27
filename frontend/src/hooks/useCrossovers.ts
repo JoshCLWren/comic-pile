@@ -5,7 +5,7 @@ import {
 } from '../services/api-dependency-groups'
 import { threadsApi } from '../services/api-threads'
 import { issuesApi, type IssueListParams } from '../services/api-issues'
-import type { Issue, Thread, ThreadListResponse } from '../types'
+import type { Issue, ThreadListItem, ThreadListResponse } from '../types'
 import { queryKeys } from '../query/queryKeys'
 import { invalidateAfterCrossoverMutation } from '../query/cacheEffects'
 
@@ -34,8 +34,8 @@ async function fetchAllIssues(threadId: number): Promise<PositionedIssue[]> {
   }
 }
 
-async function fetchAllThreads(): Promise<Thread[]> {
-  const threads: Thread[] = []
+async function fetchAllThreads(): Promise<ThreadListItem[]> {
+  const threads: ThreadListItem[] = []
   const seenPageTokens = new Set<string>()
   let nextPageToken: string | null = null
 

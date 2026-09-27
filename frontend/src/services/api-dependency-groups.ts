@@ -1,4 +1,4 @@
-import api from './api'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { Thread, Issue } from '../types'
 
 export interface DependencyGroupMember {
@@ -52,86 +52,96 @@ export type DependencyGroupMemberTarget =
   | { thread_id: number; issue_id?: never }
   | { issue_id: number; thread_id?: never }
 
-export const dependencyGroupsApi = {
-  list: async (): Promise<DependencyGroup[]> => {
-    return api.get<DependencyGroup[]>('/v1/reading-order-groups/')
-  },
+/**
+ * Build the dependency-group service bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every dependency-group request.
+ * @returns The dependency groups API bound to `client`.
+ */
+export function createDependencyGroupsApi(client: HttpClient) {
+  return {
+    list: async (): Promise<DependencyGroup[]> => {
+      return client.get<DependencyGroup[]>('/v1/reading-order-groups/')
+    },
 
-  create: async (name: string): Promise<DependencyGroup> => {
-    return api.post<DependencyGroup>('/v1/reading-order-groups/', { name })
-  },
+    create: async (name: string): Promise<DependencyGroup> => {
+      return client.post<DependencyGroup>('/v1/reading-order-groups/', { name })
+    },
 
-  get: async (groupId: number): Promise<DependencyGroup> => {
-    return api.get<DependencyGroup>(`/v1/reading-order-groups/${groupId}`)
-  },
+    get: async (groupId: number): Promise<DependencyGroup> => {
+      return client.get<DependencyGroup>(`/v1/reading-order-groups/${groupId}`)
+    },
 
-  getDetail: async (groupId: number): Promise<DependencyGroupDetail> => {
-    return api.get<DependencyGroupDetail>(`/v1/reading-order-groups/${groupId}/detail`)
-  },
+    getDetail: async (groupId: number): Promise<DependencyGroupDetail> => {
+      return client.get<DependencyGroupDetail>(`/v1/reading-order-groups/${groupId}/detail`)
+    },
 
-  rename: async (groupId: number, name: string): Promise<DependencyGroup> => {
-    return api.patch<DependencyGroup>(`/v1/reading-order-groups/${groupId}`, { name })
-  },
+    rename: async (groupId: number, name: string): Promise<DependencyGroup> => {
+      return client.patch<DependencyGroup>(`/v1/reading-order-groups/${groupId}`, { name })
+    },
 
-  delete: async (groupId: number): Promise<void> => {
-    await api.delete(`/v1/reading-order-groups/${groupId}`)
-  },
+    delete: async (groupId: number): Promise<void> => {
+      await client.delete(`/v1/reading-order-groups/${groupId}`)
+    },
 
-  listForThread: async (threadId: number): Promise<DependencyGroupSummary[]> => {
-    return api.get<DependencyGroupSummary[]>(
-      `/v1/reading-order-groups/threads/${threadId}/groups`,
-    )
-  },
+    listForThread: async (threadId: number): Promise<DependencyGroupSummary[]> => {
+      return client.get<DependencyGroupSummary[]>(
+        `/v1/reading-order-groups/threads/${threadId}/groups`,
+      )
+    },
 
-  plansForGroup: async (groupId: number): Promise<DependencyGroupSummary[]> => {
-    return api.get<DependencyGroupSummary[]>(
-      `/v1/reading-order-groups/${groupId}/plans`,
-    )
-  },
+    plansForGroup: async (groupId: number): Promise<DependencyGroupSummary[]> => {
+      return client.get<DependencyGroupSummary[]>(
+        `/v1/reading-order-groups/${groupId}/plans`,
+      )
+    },
 
-  listForThreads: async (
-    threadIds: number[],
-  ): Promise<Record<number, DependencyGroupSummary[]>> => {
-    const entries = await Promise.all(
-      threadIds.map(async (threadId) => [
-        threadId,
-        await api.get<DependencyGroupSummary[]>(
-          `/v1/reading-order-groups/threads/${threadId}/groups`,
-        ),
-      ] as const),
-    )
-    return Object.fromEntries(entries)
-  },
+    listForThreads: async (
+      threadIds: number[],
+    ): Promise<Record<number, DependencyGroupSummary[]>> => {
+      const entries = await Promise.all(
+        threadIds.map(async (threadId) => [
+          threadId,
+          await client.get<DependencyGroupSummary[]>(
+            `/v1/reading-order-groups/threads/${threadId}/groups`,
+          ),
+        ] as const),
+      )
+      return Object.fromEntries(entries)
+    },
 
-  addMember: async (
-    groupId: number,
-    target: DependencyGroupMemberTarget,
-  ): Promise<DependencyGroupMember> => {
-    return api.post<DependencyGroupMember>(
-      `/v1/reading-order-groups/${groupId}/members`,
-      target,
-    )
-  },
+    addMember: async (
+      groupId: number,
+      target: DependencyGroupMemberTarget,
+    ): Promise<DependencyGroupMember> => {
+      return client.post<DependencyGroupMember>(
+        `/v1/reading-order-groups/${groupId}/members`,
+        target,
+      )
+    },
 
-  addIssueRange: async (
-    groupId: number,
-    threadId: number,
-    startPosition: number,
-    endPosition: number,
-  ): Promise<DependencyGroupIssueRangeResult> => {
-    return api.post<DependencyGroupIssueRangeResult>(
-      `/v1/reading-order-groups/${groupId}/issue-ranges`,
-      {
-        thread_id: threadId,
-        start_position: startPosition,
-        end_position: endPosition,
-      },
-    )
-  },
+    addIssueRange: async (
+      groupId: number,
+      threadId: number,
+      startPosition: number,
+      endPosition: number,
+    ): Promise<DependencyGroupIssueRangeResult> => {
+      return client.post<DependencyGroupIssueRangeResult>(
+        `/v1/reading-order-groups/${groupId}/issue-ranges`,
+        {
+          thread_id: threadId,
+          start_position: startPosition,
+          end_position: endPosition,
+        },
+      )
+    },
 
-  removeMember: async (groupId: number, memberId: number): Promise<void> => {
-    await api.delete(
-      `/v1/reading-order-groups/${groupId}/members/${memberId}`,
-    )
-  },
+    removeMember: async (groupId: number, memberId: number): Promise<void> => {
+      await client.delete(
+        `/v1/reading-order-groups/${groupId}/members/${memberId}`,
+      )
+    },
+    }
 }
+
+export const dependencyGroupsApi = createDependencyGroupsApi(defaultHttpClient())

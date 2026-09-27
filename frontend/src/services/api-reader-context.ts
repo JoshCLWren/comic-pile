@@ -1,4 +1,4 @@
-import api from './api'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 
 export interface ReaderContextPreviousIssue {
   issue_id: number
@@ -80,7 +80,17 @@ export interface ReaderContextResponse {
   local_chain: ReaderContextLocalChain
 }
 
-export const readerContextApi = {
-  get: (issueId: number) =>
-    api.get<ReaderContextResponse>(`/v1/issues/${issueId}/reader-context`),
+/**
+ * Build the reader-context service bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every request.
+ * @returns The reader-context service bound to `client`.
+ */
+export function createReaderContextApi(client: HttpClient) {
+  return {
+    get: (issueId: number) =>
+      client.get<ReaderContextResponse>(`/v1/issues/${issueId}/reader-context`),
+  }
 }
+
+export const readerContextApi = createReaderContextApi(defaultHttpClient())

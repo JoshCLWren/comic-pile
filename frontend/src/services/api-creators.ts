@@ -1,4 +1,4 @@
-import api from './api'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 
 /** Headline personal summary for one stable creator identity (issue #2028). */
 export interface CreatorSummaryItem {
@@ -83,36 +83,46 @@ export interface CreatorListParams {
   offset?: number
 }
 
-export const creatorsApi = {
-  getDetail: (creatorKey: string, params: CreatorDetailPageParams = {}) => {
-    const queryParams: Record<string, string | number> = {}
-    if (params.limit !== undefined) {
-      queryParams.limit = params.limit
-    }
-    if (params.offset !== undefined && params.offset > 0) {
-      queryParams.offset = params.offset
-    }
-    return api.get<CreatorDetailResponse>(
-      `/v1/creators/${encodeURIComponent(creatorKey)}`,
-      { params: queryParams },
-    )
-  },
+/**
+ * Build the creator service bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every creator request.
+ * @returns The creator API bound to `client`.
+ */
+export function createCreatorsApi(client: HttpClient) {
+  return {
+    getDetail: (creatorKey: string, params: CreatorDetailPageParams = {}) => {
+      const queryParams: Record<string, string | number> = {}
+      if (params.limit !== undefined) {
+        queryParams.limit = params.limit
+      }
+      if (params.offset !== undefined && params.offset > 0) {
+        queryParams.offset = params.offset
+      }
+      return client.get<CreatorDetailResponse>(
+        `/v1/creators/${encodeURIComponent(creatorKey)}`,
+        { params: queryParams },
+      )
+    },
 
-  getList: (params: CreatorListParams = {}) => {
-    const queryParams: Record<string, string | number> = {}
-    const search = params.search?.trim()
-    if (search) {
-      queryParams.search = search
-    }
-    if (params.sort !== undefined) {
-      queryParams.sort = params.sort
-    }
-    if (params.limit !== undefined) {
-      queryParams.limit = params.limit
-    }
-    if (params.offset !== undefined && params.offset > 0) {
-      queryParams.offset = params.offset
-    }
-    return api.get<CreatorListResponse>('/v1/creators', { params: queryParams })
-  },
+    getList: (params: CreatorListParams = {}) => {
+      const queryParams: Record<string, string | number> = {}
+      const search = params.search?.trim()
+      if (search) {
+        queryParams.search = search
+      }
+      if (params.sort !== undefined) {
+        queryParams.sort = params.sort
+      }
+      if (params.limit !== undefined) {
+        queryParams.limit = params.limit
+      }
+      if (params.offset !== undefined && params.offset > 0) {
+        queryParams.offset = params.offset
+      }
+      return client.get<CreatorListResponse>('/v1/creators', { params: queryParams })
+    },
+  }
 }
+
+export const creatorsApi = createCreatorsApi(defaultHttpClient())

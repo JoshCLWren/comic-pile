@@ -5,7 +5,7 @@ import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
 import { IssueToggleList } from './IssueToggleList'
 import { FormatSelect } from './FormatSelect'
-import type { Thread } from '../../types'
+import type { Thread, ThreadListItem } from '../../types'
 import type { QueueFormState } from './types'
 
 interface QueueModalsProps {
@@ -16,17 +16,17 @@ interface QueueModalsProps {
   setEditForm: (next: QueueFormState) => void
   issuePreview: number | null
   issueParseError: string | null
-  editingThread: Thread | null
-  repositioningThread: Thread | null
-  dependencyThread: Thread | null
-  threadToMigrate: Thread | null
+  editingThread: Thread | ThreadListItem | null
+  repositioningThread: ThreadListItem | null
+  dependencyThread: ThreadListItem | null
+  threadToMigrate: Thread | ThreadListItem | null
   showMigrationDialog: boolean
   reactivateThreadId: string
   setReactivateThreadId: (next: string) => void
   issuesToAdd: number
   setIssuesToAdd: (next: number) => void
-  activeThreads: Thread[]
-  completedThreads: Thread[]
+  activeThreads: ThreadListItem[]
+  completedThreads: ThreadListItem[]
   /**
    * Authoritative whole-queue active total, independent of the loaded page.
    * Drives the reposition slider range (issue #2568).
@@ -45,7 +45,7 @@ interface QueueModalsProps {
   onMigrationComplete: (thread: Thread) => Promise<void>
   onMigrationSkip: () => void
   onCloseMigration: () => void
-  onOpenMigrationDialog: (thread: Thread) => void
+  onOpenMigrationDialog: (thread: Thread | ThreadListItem) => void
   onOpenDependencies?: () => void
   onIssueChanged?: () => void
   isPendingCreate: boolean
@@ -263,7 +263,7 @@ export function QueueModals({
               />
             </div>
 
-            {editingThread?.total_issues === null && (
+            {editingThread != null && editingThread.total_issues == null && (
               <div className="space-y-2">
                 <label
                   htmlFor="edit-thread-issues-remaining"
@@ -302,7 +302,7 @@ export function QueueModals({
               />
             </div>
 
-            {editingThread?.total_issues === null && (
+            {editingThread != null && editingThread.total_issues == null && (
               <div className="space-y-2 pt-2 border-t border-white/10">
                 <button
                   type="button"
@@ -321,7 +321,7 @@ export function QueueModals({
             )}
           </form>
 
-          {editingThread && editingThread.total_issues !== null && (
+          {editingThread && editingThread.total_issues != null && (
             <IssueToggleList threadId={editingThread.id} onOpenDependencies={onOpenDependencies} onIssueChanged={onIssueChanged} />
           )}
 
