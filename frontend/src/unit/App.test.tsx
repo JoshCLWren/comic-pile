@@ -40,6 +40,9 @@ vi.mock('../services/api', () => {
   }
 })
 
+vi.mock('../pages/LandingPage', () => ({
+  default: () => <div data-testid="landing-page">Landing</div>,
+}))
 vi.mock('../pages/LoginPage', () => ({
   default: () => <div data-testid="login-page">Welcome Back</div>,
 }))
@@ -128,10 +131,10 @@ test('logs in successfully and logs out without BroadcastChannel support', async
   else vi.unstubAllGlobals()
 })
 
-test('mounts the application shell', async () => {
+test('mounts the application shell with landing page for unauthenticated users', async () => {
   mockApiGet.mockRejectedValue(unauthenticatedError())
   render(<App />)
-  await waitFor(() => expect(screen.getByTestId('login-page')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByTestId('landing-page')).toBeInTheDocument())
 })
 
 test('ignores an auth response that arrives after the provider unmounts', async () => {
@@ -239,22 +242,23 @@ describe('route guards', () => {
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
-  test('redirects unauthenticated users to /login when accessing protected routes', async () => {
+  test('shows landing page for unauthenticated users at root', async () => {
     renderWithAuth('/')
 
     await waitFor(() => {
-      expect(screen.getByTestId('login-page')).toBeInTheDocument()
+      expect(screen.getByTestId('landing-page')).toBeInTheDocument()
     })
   })
 
-  test('allows authenticated users to access protected routes', async () => {
+  test('allows authenticated users to land on RollPage at root route', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
     window.__COMIC_PILE_ACCESS_TOKEN = 'fake-token'
     renderWithAuth('/')
 
     await waitFor(() => {
-      expect(screen.queryByTestId('login-page')).not.toBeInTheDocument()
+      expect(screen.getByTestId('roll-page')).toBeInTheDocument()
     })
+    expect(screen.queryByTestId('landing-page')).not.toBeInTheDocument()
   })
 
   test('allows unauthenticated users to access /login', async () => {
@@ -437,12 +441,12 @@ describe('anonymous no-token probe suppression', () => {
     expect(mockApiGet).not.toHaveBeenCalledWith('/v1/auth/me', expect.anything())
   })
 
-  test('anonymous user falls through correctly to login page from protected route', async () => {
+  test('unauthenticated users see landing page at root route', async () => {
     mockApiGet.mockRejectedValue(unauthenticatedError())
     renderWithAuth('/')
 
     await waitFor(() => {
-      expect(screen.getByTestId('login-page')).toBeInTheDocument()
+      expect(screen.getByTestId('landing-page')).toBeInTheDocument()
     })
   })
 
