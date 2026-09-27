@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import type { ReactElement, ReactNode } from 'react'
 import { createToastSpy, ToastContextSpy } from './toastTestHarness'
+import { createRouterHarness } from './routerTestHarness'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
 
@@ -75,10 +75,11 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
 }
 
 function renderRatingView(overrides: Partial<RatingViewData> = {}) {
+  const { wrapper: RouterWrapper } = createRouterHarness();
   return renderWithToast(
-    <MemoryRouter>
+    <RouterWrapper>
       <RatingView data={makeRatingViewData(overrides)} />
-    </MemoryRouter>,
+    </RouterWrapper>,
   )
 }
 

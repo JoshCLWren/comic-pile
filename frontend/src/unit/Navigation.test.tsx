@@ -1,5 +1,4 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
 import { expect, test, beforeEach, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../App'
@@ -9,6 +8,7 @@ import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { cast } from '../utils/cast'
 import type { ReactElement, ReactNode } from 'react'
 import { createToastSpy, ToastContextSpy } from './toastTestHarness'
+import { createRouterHarness } from './routerTestHarness'
 import * as api from '../services/api'
 
 const toast = createToastSpy()
@@ -76,8 +76,9 @@ const renderWithAuth = (initialEntry = '/') => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   mockSetAccessToken.mockImplementation(() => undefined)
 
+  const { wrapper: RouterWrapper } = createRouterHarness([initialEntry]);
   return renderWithToast(
-    <MemoryRouter initialEntries={[initialEntry]}>
+    <RouterWrapper>
       <AuthProvider>
         <BugReportRestoreProvider>
           <NavCollapseProvider>
@@ -85,14 +86,15 @@ const renderWithAuth = (initialEntry = '/') => {
           </NavCollapseProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
-    </MemoryRouter>
+    </RouterWrapper>
   )
 }
 
 const renderWithoutAuth = () => {
   mockApiGet.mockRejectedValue(new Error('unauthenticated'))
+  const { wrapper: RouterWrapper } = createRouterHarness(['/']);
   return renderWithToast(
-    <MemoryRouter initialEntries={['/']}>
+    <RouterWrapper>
       <AuthProvider>
         <BugReportRestoreProvider>
           <NavCollapseProvider>
@@ -100,7 +102,7 @@ const renderWithoutAuth = () => {
           </NavCollapseProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
-    </MemoryRouter>
+    </RouterWrapper>
   )
 }
 
@@ -175,8 +177,9 @@ test('shows loading and non-auth failure states and logs out gracefully', async 
   mockApiGet.mockResolvedValueOnce({ username: 'user', email: 'user@example.com' })
     .mockRejectedValueOnce(new Error('server unavailable'))
     .mockRejectedValueOnce(new Error('server unavailable'))
+  const { wrapper: RouterWrapper } = createRouterHarness(['/queue']);
   renderWithToast(
-    <MemoryRouter initialEntries={['/queue']}>
+    <RouterWrapper>
       <AuthProvider>
         <BugReportRestoreProvider>
           <NavCollapseProvider>
@@ -184,7 +187,7 @@ test('shows loading and non-auth failure states and logs out gracefully', async 
           </NavCollapseProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
-    </MemoryRouter>,
+    </RouterWrapper>,
   )
   const user = userEvent.setup()
   await user.click(await screen.findByRole('button', { name: /more pages/i }))
@@ -216,8 +219,9 @@ test('clears authentication when AuthProvider bootstrap returns unauthorized', a
   mockApiGet
     .mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } })
     .mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } })
+  const { wrapper: RouterWrapper } = createRouterHarness(['/']);
   renderWithToast(
-    <MemoryRouter initialEntries={['/']}>
+    <RouterWrapper>
       <AuthProvider>
         <BugReportRestoreProvider>
           <NavCollapseProvider>
@@ -225,7 +229,7 @@ test('clears authentication when AuthProvider bootstrap returns unauthorized', a
           </NavCollapseProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
-    </MemoryRouter>,
+    </RouterWrapper>,
   )
   await waitFor(() => expect(mockClearAccessToken).toHaveBeenCalled())
 })
@@ -233,8 +237,9 @@ test('clears authentication when AuthProvider bootstrap returns unauthorized', a
 test('falls back to an empty username when the user profile omits it', async () => {
   // L43 `setUsername(user.username || '')` — username falsy
   mockApiGet.mockResolvedValue({ username: '', email: 'empty@test.com' })
+  const { wrapper: RouterWrapper2 } = createRouterHarness(['/']);
   renderWithToast(
-    <MemoryRouter initialEntries={['/']}>
+    <RouterWrapper2>
       <AuthProvider>
         <BugReportRestoreProvider>
           <NavCollapseProvider>
@@ -242,7 +247,7 @@ test('falls back to an empty username when the user profile omits it', async () 
           </NavCollapseProvider>
         </BugReportRestoreProvider>
       </AuthProvider>
-    </MemoryRouter>,
+    </RouterWrapper2>,
   )
   await waitFor(() => expect(screen.getByRole('button', { name: /more pages/i })).toBeInTheDocument())
   // empty username is falsy, so no username span is rendered for it
