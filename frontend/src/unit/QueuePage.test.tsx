@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
 import { ToastProvider } from '../contexts/ToastProvider'
-import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import {
   useCreateThread,
   useDeleteThread,
@@ -22,73 +21,109 @@ import { useSession } from '../hooks/useSession'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useToast } from '../contexts/useToast'
-import { threadsApi as realThreadsApi } from '../services/api-threads'
-import { dependenciesApi as realDependenciesApi } from '../services/api'
-import { issuesApi as realIssuesApi } from '../services/api-issues'
+import { threadsApi } from '../services/api-threads'
+import { dependenciesApi } from '../services/api'
+import { issuesApi } from '../services/api-issues'
 import type { Thread } from '../types'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 
-// Mock hook functions with proper return types — no module mocking
-const mockedUseCreateThread = vi.fn<ReturnType<typeof useCreateThread>>()
-const mockedUseUpdateThread = vi.fn<ReturnType<typeof useUpdateThread>>()
-const mockedUseDeleteThread = vi.fn<ReturnType<typeof useDeleteThread>>()
-const mockedUseReactivateThread = vi.fn<ReturnType<typeof useReactivateThread>>()
+vi.mock('../hooks/useThread', () => ({
+  useCreateThread: vi.fn(),
+  useUpdateThread: vi.fn(),
+  useDeleteThread: vi.fn(),
+  useReactivateThread: vi.fn(),
+}))
 
-const mockedUseMoveToFront = vi.fn<ReturnType<typeof useMoveToFront>>()
-const mockedUseMoveToBack = vi.fn<ReturnType<typeof useMoveToBack>>()
-const mockedUseMoveToPosition = vi.fn<ReturnType<typeof useMoveToPosition>>()
-const mockedUseQueueThreads = vi.fn<ReturnType<typeof useQueueThreads>>()
-const mockedUseShuffleQueue = vi.fn<ReturnType<typeof useShuffleQueue>>()
+vi.mock('../hooks/useQueue', () => ({
+  useMoveToFront: vi.fn(),
+  useMoveToBack: vi.fn(),
+  useMoveToPosition: vi.fn(),
+  useQueueThreads: vi.fn(),
+  useShuffleQueue: vi.fn(),
+}))
 
-const mockedUseSession = vi.fn<ReturnType<typeof useSession>>()
-const mockedUseSnooze = vi.fn<ReturnType<typeof useSnooze>>()
-const mockedUseUnsnooze = vi.fn<ReturnType<typeof useUnsnooze>>()
-const mockedUseQueueBlockingInfo = vi.fn<ReturnType<typeof useQueueBlockingInfo>>()
+vi.mock('../hooks/useSession', () => ({
+  useSession: vi.fn(),
+}))
 
-const mockedUseBugReportRestore = vi.fn<ReturnType<typeof useBugReportRestore>>()
-const mockedUseToast = vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }))
+vi.mock('../hooks/useSnooze', () => ({
+  useSnooze: vi.fn(),
+  useUnsnooze: vi.fn(),
+}))
 
-// Mock API objects — no module mocking
-const mockedThreadsApi = {
-  setPending: vi.fn<typeof realThreadsApi.setPending>(),
-}
+vi.mock('../hooks/useQueueBlockingInfo', () => ({
+  useQueueBlockingInfo: vi.fn(() => ({})),
+}))
 
-const mockedDependenciesApi = {
-  listBlockedThreadIds: vi.fn<typeof realDependenciesApi.listBlockedThreadIds>().mockResolvedValue([]),
-  getBlockingInfo: vi.fn<typeof realDependenciesApi.getBlockingInfo>().mockResolvedValue({ blocking_reasons: [] }),
-}
+vi.mock('../services/api-threads', () => ({
+  threadsApi: {
+    setPending: vi.fn(),
+  },
+}))
 
-const mockedIssuesApi = {
-  create: vi.fn<typeof realIssuesApi.create>().mockResolvedValue({ issues: [] }),
-  markRead: vi.fn<typeof realIssuesApi.markRead>().mockResolvedValue(undefined),
-  bulkMarkRead: vi.fn<typeof realIssuesApi.bulkMarkRead>().mockResolvedValue(undefined),
-  bulkMarkUnread: vi.fn<typeof realIssuesApi.bulkMarkUnread>().mockResolvedValue(undefined),
-  migrateThread: vi.fn<typeof realIssuesApi.migrateThread>().mockResolvedValue({}),
-}
+vi.mock('../services/api', () => ({
+  dependenciesApi: {
+    listBlockedThreadIds: vi.fn().mockResolvedValue([]),
+    getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
+  },
+}))
 
-// Mock hook references — using direct mock functions instead of vi.mocked
-const mockUseCreateThread = mockedUseCreateThread
-const mockUseUpdateThread = mockedUseUpdateThread
-const mockUseDeleteThread = mockedUseDeleteThread
-const mockUseReactivateThread = mockedUseReactivateThread
-const mockUseMoveToFront = mockedUseMoveToFront
-const mockUseMoveToBack = mockedUseMoveToBack
-const mockUseMoveToPosition = mockedUseMoveToPosition
-const mockUseQueueThreads = mockedUseQueueThreads
-const mockUseShuffleQueue = mockedUseShuffleQueue
-const mockUseSession = mockedUseSession
-const mockUseQueueBlockingInfo = mockedUseQueueBlockingInfo
-const mockUseBugReportRestore = mockedUseBugReportRestore
-const mockUseUnsnooze = mockedUseUnsnooze
-const mockUseSnooze = mockedUseSnooze
-const mockThreadsApi = mockedThreadsApi
-const mockDependenciesApi = mockedDependenciesApi
-const mockIssuesApi = mockedIssuesApi
+vi.mock('../services/api-issues', () => ({
+  issuesApi: {
+    create: vi.fn().mockResolvedValue({ issues: [] }),
+    markRead: vi.fn().mockResolvedValue(undefined),
+    bulkMarkRead: vi.fn().mockResolvedValue(undefined),
+    bulkMarkUnread: vi.fn().mockResolvedValue(undefined),
+    migrateThread: vi.fn().mockResolvedValue({}),
+  },
+}))
+
+vi.mock('../contexts/useBugReportRestore', () => ({
+  useBugReportRestore: vi.fn(),
+}))
+
+vi.mock('../contexts/useToast', () => ({
+  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
+}))
+
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseCreateThread = vi.mocked(useCreateThread) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseDeleteThread = vi.mocked(useDeleteThread) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseReactivateThread = vi.mocked(useReactivateThread) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseSession = vi.mocked(useSession) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseQueueBlockingInfo = vi.mocked(useQueueBlockingInfo) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedUseSnooze = vi.mocked(useSnooze) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedThreadsApi = vi.mocked(threadsApi) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedDependenciesApi = vi.mocked(dependenciesApi) as any
+// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
+const mockedIssuesApi = vi.mocked(issuesApi) as any
 
 beforeEach(() => {
   vi.stubGlobal('alert', vi.fn())
-  
-  // Setup mock return values for each hook
   mockedUseQueueThreads.mockReturnValue({
     data: [
       { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
@@ -97,34 +132,26 @@ beforeEach(() => {
     isPending: false,
     refetch: vi.fn(),
   })
-  
   mockedUseCreateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseDeleteThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  
   mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  
   mockedUseSession.mockReturnValue({
     data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
     refetch: vi.fn(),
   })
-  
   mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  
   mockedUseBugReportRestore.mockReturnValue({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
     restoreLastView: vi.fn(),
   })
-  
-  mockedUseQueueBlockingInfo.mockReturnValue({})
-  
-  // Setup mock API calls
+  // SAFETY: full response shape satisfies RollResponse; never cast bypasses strict mock typing
   mockedThreadsApi.setPending.mockResolvedValue({
     thread_id: 1,
     title: 'Saga',
@@ -141,18 +168,16 @@ beforeEach(() => {
     next_issue_number: null,
     total_issues: null,
     reading_progress: null,
-  })
+  } as never)
 })
 
   it('renders queue items and opens create modal', async () => {
   const user = userEvent.setup()
   render(
     <BrowserRouter>
-      <BugReportRestoreProvider>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BugReportRestoreProvider>
+      <ToastProvider>
+        <QueuePage />
+      </ToastProvider>
     </BrowserRouter>
   )
 
@@ -176,11 +201,9 @@ beforeEach(() => {
 
   render(
     <BrowserRouter>
-      <BugReportRestoreProvider>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BugReportRestoreProvider>
+      <ToastProvider>
+        <QueuePage />
+      </ToastProvider>
     </BrowserRouter>
   )
 
@@ -212,11 +235,9 @@ beforeEach(() => {
   const user = userEvent.setup()
   render(
     <BrowserRouter>
-      <BugReportRestoreProvider>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BugReportRestoreProvider>
+      <ToastProvider>
+        <QueuePage />
+      </ToastProvider>
     </BrowserRouter>
   )
 
@@ -239,14 +260,12 @@ describe('Visible action Snooze/Unsnooze', () => {
   it('shows visible actions for thread cards', async () => {
     const user = userEvent.setup()
     render(
-    <BrowserRouter>
-      <BugReportRestoreProvider>
+      <BrowserRouter>
         <ToastProvider>
           <QueuePage />
         </ToastProvider>
-      </BugReportRestoreProvider>
-    </BrowserRouter>
-  )
+      </BrowserRouter>
+    )
 
     const readButtons = screen.getAllByLabelText('Read')
     expect(readButtons.length).toBeGreaterThan(0)
@@ -266,14 +285,12 @@ describe('Visible action Snooze/Unsnooze', () => {
 
     const user = userEvent.setup()
     render(
-    <BrowserRouter>
-      <BugReportRestoreProvider>
+      <BrowserRouter>
         <ToastProvider>
           <QueuePage />
         </ToastProvider>
-      </BugReportRestoreProvider>
-    </BrowserRouter>
-  )
+      </BrowserRouter>
+    )
 
     const snoozeButtons = screen.getAllByRole('button', { name: /series actions/i })
     await user.click(snoozeButtons[0])
@@ -295,14 +312,12 @@ describe('Visible action Snooze/Unsnooze', () => {
 
     const user = userEvent.setup()
     render(
-    <BrowserRouter>
-      <BugReportRestoreProvider>
+      <BrowserRouter>
         <ToastProvider>
           <QueuePage />
         </ToastProvider>
-      </BugReportRestoreProvider>
-    </BrowserRouter>
-  )
+      </BrowserRouter>
+    )
 
     const unsnoozeButtons = screen.getAllByRole('button', { name: /series actions/i })
     await user.click(unsnoozeButtons[0])
@@ -329,14 +344,12 @@ describe('Visible action Snooze/Unsnooze', () => {
 
     const user = userEvent.setup()
     render(
-    <BrowserRouter>
-      <BugReportRestoreProvider>
+      <BrowserRouter>
         <ToastProvider>
           <QueuePage />
         </ToastProvider>
-      </BugReportRestoreProvider>
-    </BrowserRouter>
-  )
+      </BrowserRouter>
+    )
 
     const snoozeButtons = screen.getAllByRole('button', { name: /series actions/i })
     await user.click(snoozeButtons[0])
@@ -369,14 +382,12 @@ describe('Visible action Snooze/Unsnooze', () => {
 
     const user = userEvent.setup()
     render(
-    <BrowserRouter>
-      <BugReportRestoreProvider>
+      <BrowserRouter>
         <ToastProvider>
           <QueuePage />
         </ToastProvider>
-      </BugReportRestoreProvider>
-    </BrowserRouter>
-  )
+      </BrowserRouter>
+    )
 
     const unsnoozeButtons = screen.getAllByRole('button', { name: /series actions/i })
     await user.click(unsnoozeButtons[0])
@@ -392,14 +403,12 @@ describe('Visible action Snooze/Unsnooze', () => {
 describe('Keyboard Accessibility', () => {
   it('thread card is present and focusable', () => {
     render(
-    <BrowserRouter>
-      <BugReportRestoreProvider>
+      <BrowserRouter>
         <ToastProvider>
           <QueuePage />
         </ToastProvider>
-      </BugReportRestoreProvider>
-    </BrowserRouter>
-  )
+      </BrowserRouter>
+    )
 
     const threadItems = screen.getAllByTestId('queue-thread-item')
     expect(threadItems.length).toBeGreaterThan(0)
@@ -427,7 +436,7 @@ describe('Keyboard Accessibility', () => {
         loadMore: vi.fn(),
       }
     })
-    render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+    render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
     expect(screen.getByText('Done')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Title' }))
     const cards = screen.getAllByTestId('queue-thread-item')
@@ -455,7 +464,7 @@ describe('Keyboard Accessibility', () => {
         loadMore: vi.fn(),
       }
     })
-    render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+    render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
     await user.type(screen.getByPlaceholderText('Search...'), 'done')
     await waitFor(() => expect(screen.getByText('No active series match your search')).toBeInTheDocument(), { timeout: 2000 })
   })
@@ -466,7 +475,7 @@ describe('Keyboard Accessibility', () => {
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
   mockedThreadsApi.setPending.mockResolvedValue({})
   mockedUseQueueThreads.mockReturnValue({ data: [], isLoading: false, refetch: vi.fn() })
-  render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'New Series')
   await user.clear(screen.getByLabelText('Issues'))
@@ -485,7 +494,7 @@ describe('Keyboard Accessibility', () => {
   ], isLoading: false, refetch })
   const update = vi.fn().mockResolvedValue({})
   mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
-  render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   const menu = screen.getAllByRole('button', { name: /series actions/i })[0]
   await user.click(menu)
   await user.click(screen.getByRole('menuitem', { name: /edit/i }))
@@ -503,10 +512,10 @@ describe('Keyboard Accessibility', () => {
   it('renders loading and empty queue states', async () => {
   const user = userEvent.setup()
   mockedUseQueueThreads.mockReturnValue({ data: undefined, isPending: true, refetch: vi.fn() })
-  const { rerender } = render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  const { rerender } = render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   expect(screen.getByRole('status')).toBeInTheDocument()
   mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
-  rerender(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  rerender(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   expect(screen.getByTestId('queue-empty')).toBeInTheDocument()
   expect(screen.getByText('Nothing to roll yet')).toBeInTheDocument()
   expect(
@@ -523,8 +532,8 @@ describe('Keyboard Accessibility', () => {
   mockedUseQueueThreads.mockReturnValue({ data: [{ id: 1, title: 'Blocked', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, is_blocked: true, total_issues: null, blocking_reasons: ['Blocked by: Prequel'] }], isPending: false, refetch: vi.fn() })
   mockedUseQueueBlockingInfo.mockReturnValue({ 1: [{ label: 'Blocked by: Prequel' }] })
   const showToast = vi.fn()
-  mockedUseToast.mockReturnValue({ showToast, removeToast: vi.fn(), toasts: [] })
-  render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  vi.mocked(useToast).mockReturnValue({ showToast, removeToast: vi.fn(), toasts: [] })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   const readButton = screen.getByLabelText('Read')
   expect(readButton).toBeDisabled()
   expect(readButton).toHaveAttribute('title', expect.stringContaining('Blocked by: Prequel'))
@@ -548,7 +557,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
     isPending: false,
     refetch: vi.fn(),
   })
-  render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /delete/i }))
   expect(screen.getByRole('heading', { name: /delete series/i })).toBeInTheDocument()
@@ -576,7 +585,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
     isPending: false,
     refetch: vi.fn(),
   }))
-  render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getByRole('button', { name: 'Recently added' }))
   const cards = screen.getAllByTestId('queue-thread-item')
   expect(cards[0]).toHaveTextContent('New')
@@ -603,7 +612,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
     refetch,
   })
 
-  render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   const openMenu = async () => user.click(screen.getByRole('button', { name: /series actions/i }))
 
   await openMenu()
@@ -633,7 +642,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
     { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 1 },
     { id: 2, title: 'Spawn', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1 },
   ], isPending: false, refetch: vi.fn() })
-  render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getByRole('button', { name: /shuffle/i }))
   await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('shuffle')))
   await user.click(screen.getAllByRole('button', { name: /series actions/i })[0]!)
@@ -651,7 +660,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   const create = vi.fn().mockResolvedValue({ id: 55 })
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
   mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
-  render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Annuals')
   await user.clear(screen.getByLabelText('Issues'))
@@ -673,7 +682,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   const update = vi.fn().mockRejectedValue(new Error('update failed'))
   mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
   mockedUseQueueThreads.mockReturnValue({ data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', is_blocked: true, queue_position: 1, issues_remaining: 2, total_issues: null }], isPending: false, refetch: vi.fn() })
-  render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   expect(mockedDependenciesApi.listBlockedThreadIds).not.toHaveBeenCalled()
   expect(mockedDependenciesApi.getBlockingInfo).not.toHaveBeenCalled()
   await user.click(screen.getByRole('button', { name: /series actions/i }))
@@ -695,7 +704,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
     { id: 1, title: 'One', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 1 },
     { id: 2, title: 'Two', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1 },
   ], isPending: false, refetch })
-  render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   const cards = screen.getAllByTestId('queue-thread-item')
   const drag = screen.getAllByRole('button', { name: 'Drag to reorder' })
   fireEvent.dragStart(drag[0]!, { dataTransfer: { effectAllowed: '', setData: vi.fn() } })
@@ -713,7 +722,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
   mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   mockedIssuesApi.create.mockResolvedValue({ issues: [{ id: 11 }, { id: 12 }] })
-  render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Complex')
   await user.type(screen.getByLabelText('Issues'), 'Annual 1, 5-7')
@@ -731,7 +740,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   mockedUseQueueThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
   mockedIssuesApi.create.mockResolvedValue({ issues: [{ id: 71, issue_number: '71' }] })
 
-  render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
   await user.type(screen.getByLabelText('Title'), 'Marvel Graphic Novel')
   await user.type(screen.getByLabelText('Issues'), '71')
@@ -756,7 +765,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   const reactivate = vi.fn().mockResolvedValue({})
   mockedUseReactivateThread.mockReturnValue({ mutate: reactivate, isPending: false })
   mockedUseQueueThreads.mockReturnValue({ data: [{ id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }], isPending: false, refetch: vi.fn() })
-  render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0])
   await user.selectOptions(screen.getAllByRole('combobox').at(-1)!, '2')
   fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '3' } })
@@ -790,7 +799,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
     is_blocked: index === 0,
   }))
   mockedUseQueueThreads.mockReturnValue({ data: manyThreads, isPending: false, refetch: vi.fn() })
-  render(<BrowserRouter><BugReportRestoreProvider><ToastProvider><QueuePage /></ToastProvider></BugReportRestoreProvider></BrowserRouter>)
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await waitFor(() => expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument())
   expect(screen.getByRole('list', { name: 'Series queue' })).toBeInTheDocument()
   expect(mockedDependenciesApi.listBlockedThreadIds).not.toHaveBeenCalled()
@@ -812,14 +821,12 @@ describe('Roll nudge after first thread creation', () => {
     mockedUseCreateThread.mockReturnValue({ mutate: mockCreate, isPending: false })
     
     render(
-    <BrowserRouter>
-      <BugReportRestoreProvider>
+      <BrowserRouter>
         <ToastProvider>
           <QueuePage />
         </ToastProvider>
-      </BugReportRestoreProvider>
-    </BrowserRouter>
-  )
+      </BrowserRouter>
+    )
 
     // Open create modal
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
@@ -845,14 +852,12 @@ describe('Roll nudge after first thread creation', () => {
     mockedUseCreateThread.mockReturnValue({ mutate: mockCreate, isPending: false })
     
     render(
-    <BrowserRouter>
-      <BugReportRestoreProvider>
+      <BrowserRouter>
         <ToastProvider>
           <QueuePage />
         </ToastProvider>
-      </BugReportRestoreProvider>
-    </BrowserRouter>
-  )
+      </BrowserRouter>
+    )
 
     // Open create modal
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
@@ -876,14 +881,12 @@ describe('Roll nudge after first thread creation', () => {
     mockedUseCreateThread.mockReturnValue({ mutate: mockCreate, isPending: false })
     
     render(
-    <BrowserRouter>
-      <BugReportRestoreProvider>
+      <BrowserRouter>
         <ToastProvider>
           <QueuePage />
         </ToastProvider>
-      </BugReportRestoreProvider>
-    </BrowserRouter>
-  )
+      </BrowserRouter>
+    )
 
     // Open create modal and submit
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
@@ -908,14 +911,12 @@ describe('Roll nudge after first thread creation', () => {
     mockedUseCreateThread.mockReturnValue({ mutate: mockCreate, isPending: false })
     
     render(
-    <BrowserRouter>
-      <BugReportRestoreProvider>
+      <BrowserRouter>
         <ToastProvider>
           <QueuePage />
         </ToastProvider>
-      </BugReportRestoreProvider>
-    </BrowserRouter>
-  )
+      </BrowserRouter>
+    )
 
     // Open create modal and submit
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
