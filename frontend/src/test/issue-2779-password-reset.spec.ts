@@ -15,7 +15,6 @@ import { test, expect } from './fixtures'
 import {
   generateTestUser,
   registerUser,
-  loginUser,
   getPasswordResetToken,
 } from './helpers'
 
@@ -39,10 +38,7 @@ test.describe('AUTH-002: Password reset flow', () => {
     await page.goto('/forgot-password', { waitUntil: 'domcontentloaded' })
     await expect(page.locator('h1')).toHaveText(/forgot password/i)
     await expect(page.locator('input[name="email"]')).toBeVisible()
-    await page
-      .locator('text=Use your username, not email.')
-      .or(page.locator('text=Sign in with your username'))
-      .isVisible()
+    await expect(page.getByText(/not your username/i)).toBeVisible()
   })
 
   test('known and unknown email requests render the same acknowledgement', async ({
@@ -50,6 +46,9 @@ test.describe('AUTH-002: Password reset flow', () => {
   }) => {
     const user = generateTestUser()
     await registerUser(page, user)
+    // Registration signs the user in; the forgot-password screen is a public
+    // route that redirects authenticated users, so sign out first.
+    await page.evaluate(() => localStorage.clear())
 
     await page.goto('/forgot-password', { waitUntil: 'domcontentloaded' })
     await page.fill('input[name="email"]', user.email)
@@ -59,7 +58,7 @@ test.describe('AUTH-002: Password reset flow', () => {
     await expect(page.locator('h1')).toHaveText(/check your email/i)
     const knownAck = await page.locator('text=' + KNOWN_ACK_TEXT).textContent()
 
-    await page.click('a[href="/forgot-password"]')
+    await page.goto('/forgot-password', { waitUntil: 'domcontentloaded' })
     await page.fill('input[name="email"]', 'nonexistent_user@example.com')
     await page.click('button[type="submit"]')
 
@@ -74,6 +73,9 @@ test.describe('AUTH-002: Password reset flow', () => {
     await registerUser(page, user)
 
     const token = await getPasswordResetToken(page, user.email)
+    // The reset screen is a public route that redirects authenticated users,
+    // so sign out after minting the token and before driving the flow.
+    await page.evaluate(() => localStorage.clear())
 
     await page.goto(`/reset-password?token=${encodeURIComponent(token)}`, {
       waitUntil: 'domcontentloaded',
@@ -96,6 +98,9 @@ test.describe('AUTH-002: Password reset flow', () => {
     await registerUser(page, user)
 
     const token = await getPasswordResetToken(page, user.email)
+    // The reset screen is a public route that redirects authenticated users,
+    // so sign out after minting the token and before driving the flow.
+    await page.evaluate(() => localStorage.clear())
 
     await page.goto(`/reset-password?token=${encodeURIComponent(token)}`, {
       waitUntil: 'domcontentloaded',
@@ -118,8 +123,8 @@ test.describe('AUTH-002: Password reset flow', () => {
     expect(tokenInStorage).toBeTruthy()
   })
 
-  test('invalid token renders safe actionable state', async ({ page }) => {
-    await page.goto('/reset-password?token=invalid-token-value', {
+  test('missing token renders safe actionable state', async ({ page }) => {
+    await page.goto('/reset-password', {
       waitUntil: 'domcontentloaded',
     })
 
@@ -130,6 +135,20 @@ test.describe('AUTH-002: Password reset flow', () => {
     ).not.toBeVisible()
   })
 
+  test('bogus token renders safe actionable state on submit', async ({ page }) => {
+    await page.goto('/reset-password?token=invalid-token-value', {
+      waitUntil: 'domcontentloaded',
+    })
+
+    await expect(page.locator('h1')).toHaveText(/reset password/i)
+    await page.fill('input[name="newPassword"]', 'BrandNewPw1!')
+    await page.fill('input[name="confirmPassword"]', 'BrandNewPw1!')
+    await page.click('button[type="submit"]')
+
+    await expect(page.getByText(/expired, been used, or is invalid/i)).toBeVisible({ timeout: 10000 })
+    await expect(page).toHaveURL(/\/reset-password/)
+  })
+
   test('token is not persisted to localStorage or sessionStorage after reset', async ({
     page,
   }) => {
@@ -137,6 +156,9 @@ test.describe('AUTH-002: Password reset flow', () => {
     await registerUser(page, user)
 
     const token = await getPasswordResetToken(page, user.email)
+    // The reset screen is a public route that redirects authenticated users,
+    // so sign out after minting the token and before driving the flow.
+    await page.evaluate(() => localStorage.clear())
 
     await page.goto(`/reset-password?token=${encodeURIComponent(token)}`, {
       waitUntil: 'domcontentloaded',
@@ -169,6 +191,9 @@ test.describe('AUTH-002: Password reset flow', () => {
     await registerUser(page, user)
 
     const token = await getPasswordResetToken(page, user.email)
+    // The reset screen is a public route that redirects authenticated users,
+    // so sign out after minting the token and before driving the flow.
+    await page.evaluate(() => localStorage.clear())
 
     await page.goto(`/reset-password?token=${encodeURIComponent(token)}`, {
       waitUntil: 'domcontentloaded',
@@ -198,6 +223,9 @@ test.describe('AUTH-002: Password reset flow', () => {
     await registerUser(page, user)
 
     const token = await getPasswordResetToken(page, user.email)
+    // The reset screen is a public route that redirects authenticated users,
+    // so sign out after minting the token and before driving the flow.
+    await page.evaluate(() => localStorage.clear())
 
     await page.goto(`/reset-password?token=${encodeURIComponent(token)}`, {
       waitUntil: 'domcontentloaded',
@@ -206,10 +234,7 @@ test.describe('AUTH-002: Password reset flow', () => {
     await page.fill('input[name="confirmPassword"]', 'ab')
     await page.click('button[type="submit"]')
 
-    await expect(page.locator('.text-red-400')).toHaveText(
-      /at least 6 characters/i,
-      { timeout: 5000 },
-    )
+    await expect(page.getByText(/at least 6 characters/i)).toBeVisible({ timeout: 5000 })
   })
 
   test('mismatched passwords are rejected', async ({ page }) => {
@@ -217,6 +242,9 @@ test.describe('AUTH-002: Password reset flow', () => {
     await registerUser(page, user)
 
     const token = await getPasswordResetToken(page, user.email)
+    // The reset screen is a public route that redirects authenticated users,
+    // so sign out after minting the token and before driving the flow.
+    await page.evaluate(() => localStorage.clear())
 
     await page.goto(`/reset-password?token=${encodeURIComponent(token)}`, {
       waitUntil: 'domcontentloaded',
@@ -225,10 +253,7 @@ test.describe('AUTH-002: Password reset flow', () => {
     await page.fill('input[name="confirmPassword"]', 'DifferentPassword1!')
     await page.click('button[type="submit"]')
 
-    await expect(page.locator('.text-red-400')).toHaveText(
-      /passwords do not match/i,
-      { timeout: 5000 },
-    )
+    await expect(page.getByText(/passwords do not match/i)).toBeVisible({ timeout: 5000 })
   })
 
   test('existing login behavior remains unchanged', async ({ page }) => {
@@ -252,6 +277,7 @@ test.describe('AUTH-002: Password reset flow', () => {
     await page.setViewportSize(MOBILE_VIEWPORT)
     const user = generateTestUser()
     await registerUser(page, user)
+    await page.evaluate(() => localStorage.clear())
 
     await page.goto('/forgot-password', { waitUntil: 'domcontentloaded' })
     await page.fill('input[name="email"]', user.email)
@@ -267,6 +293,9 @@ test.describe('AUTH-002: Password reset flow', () => {
     await registerUser(page, user)
 
     const token = await getPasswordResetToken(page, user.email)
+    // The reset screen is a public route that redirects authenticated users,
+    // so sign out after minting the token and before driving the flow.
+    await page.evaluate(() => localStorage.clear())
 
     await page.goto(`/reset-password?token=${encodeURIComponent(token)}`, {
       waitUntil: 'domcontentloaded',

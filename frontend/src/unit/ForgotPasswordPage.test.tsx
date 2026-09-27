@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage';
 import api from '../services/api';
@@ -50,5 +50,46 @@ describe('ForgotPasswordPage', () => {
     renderPage();
 
     expect(screen.getByRole('link', { name: /back to login/i })).toHaveAttribute('href', '/login');
+  });
+
+  it('submits a valid email to the forgot-password endpoint', async () => {
+    _mockApi.post.mockResolvedValue({ message: 'ok' });
+
+    renderPage();
+
+    const emailInput = screen.getByLabelText(/email address/i);
+    const submitButton = screen.getByRole('button', { name: /send reset link/i });
+
+    await act(async () => {
+      fireEvent.change(emailInput, { target: { value: 'user@example.com' } });
+      fireEvent.click(submitButton);
+    });
+
+    await waitFor(() => {
+      expect(_mockApi.post).toHaveBeenCalledWith('/v1/auth/forgot-password', {
+        email: 'user@example.com',
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /check your email/i })).toBeInTheDocument();
+    });
+  });
+
+  it('shows a validation error without calling the API for an invalid email', async () => {
+    renderPage();
+
+    const emailInput = screen.getByLabelText(/email address/i);
+    const submitButton = screen.getByRole('button', { name: /send reset link/i });
+
+    await act(async () => {
+      fireEvent.change(emailInput, { target: { value: 'not-an-email' } });
+      fireEvent.click(submitButton);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Please enter a valid email address')).toBeInTheDocument();
+    });
+    expect(_mockApi.post).not.toHaveBeenCalled();
   });
 });
