@@ -11,7 +11,7 @@ import {
   useSkipInboxItem,
 } from '../hooks/useIdentityInbox'
 import * as api from '../services/api'
-import type { IdentityInboxItem } from '../services/api'
+import type { IdentityInboxItem } from '../services/api-identity'
 import { queryKeys } from '../query/queryKeys'
 
 vi.mock('../services/api', () => ({
