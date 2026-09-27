@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, expect, it } from 'vitest'
 import { createApiClient, getAccessToken, setAccessToken } from '../services/api'
 import { createTransportDouble } from './transportDouble'
 

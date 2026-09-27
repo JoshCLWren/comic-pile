@@ -18,6 +18,7 @@ import type {
   Thread,
   ThreadDependenciesResponse,
 } from '../types'
+import type { CreatorDetailResponse, CreatorSummaryItem } from './api-creators'
 
 type ApiRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
   _retry?: boolean
@@ -25,7 +26,7 @@ type ApiRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
   skipAuthRedirect?: boolean
 }
 
-interface ApiClient extends Omit<AxiosInstance, 'request' | 'get' | 'delete' | 'head' | 'post' | 'put' | 'patch'> {
+export interface ApiClient extends Omit<AxiosInstance, 'request' | 'get' | 'delete' | 'head' | 'post' | 'put' | 'patch'> {
   request<T = unknown, D = unknown>(config: ApiRequestConfig<D>): Promise<T>
   get<T = unknown>(url: string, config?: ApiRequestConfig): Promise<T>
   delete<T = unknown>(url: string, config?: ApiRequestConfig): Promise<T>
@@ -49,6 +50,64 @@ const AUTH_ENDPOINT_PATHS = new Set(['/v1/auth/login', '/v1/auth/register', '/v1
 // Cast once at the boundary so callers get strongly typed payload methods.
 // SAFETY: rawApi is an AxiosInstance; response interceptor unwraps .data at the boundary so the ApiClient contract holds.
 const api = rawApi as ApiClient
+
+export function createApiClient(factory: () => AxiosInstance): ApiClient {
+  const instance = factory()
+  const client = instance as unknown as ApiClient
+  client.interceptors.request.use(
+    async (config: InternalAxiosRequestConfig) => {
+      const token = getAccessToken()
+      config.headers = config.headers ?? {}
+      if (token) {
+        (config.headers as Record<string, string>).Authorization = `Bearer ${token}`
+      }
+      if (shouldAttachCsrfToken(config)) {
+        const csrfToken = await ensureCsrfToken()
+        if (csrfToken) {
+          (config.headers as Record<string, string>)[CSRF_HEADER_NAME] = csrfToken
+        }
+      }
+      return config
+    },
+    (error: unknown) => Promise.reject(error),
+  )
+  client.interceptors.response.use(
+    (response) => response.data,
+    async (error: AxiosError) => {
+      const originalRequest = (error.config ?? {}) as ApiRequestConfig
+      if (!error.response) {
+        return Promise.reject(new Error('Network error. Please check your connection and try again.'))
+      }
+      if (error.response.status === 400) {
+        console.error('API Validation Error Details:', { status: error.response.status, data: error.response.data })
+      }
+      if (isAuthenticationFailure(error) && !originalRequest._retry) {
+        originalRequest._retry = true
+        if (isRefreshing) {
+          return new Promise<unknown>((resolve, reject) => failedQueue.push({ resolve, reject, config: originalRequest }))
+        }
+        isRefreshing = true
+        sessionRefreshRejected = false
+        try {
+          const token = await refreshSession({ skipAuthRedirect: true })
+          processQueue(null, token)
+          isRefreshing = false
+          return client.request(originalRequest)
+        } catch (e) {
+          processQueue(e as Error, null)
+          isRefreshing = false
+          return Promise.reject(e)
+        }
+      }
+      if (error.response.status === 401 && originalRequest.url !== '/v1/auth/login') {
+        window.location.href = '/login'
+        return Promise.reject(new Error('Session expired. Redirecting to login.'))
+      }
+      return Promise.reject(error)
+    },
+  )
+  return client
+}
 
 export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
@@ -419,4 +478,60 @@ export const preferencesApi = {
     api.get<UserPreferencesResponse>('/v1/users/me/preferences', options),
   patch: (data: UserPreferencesPatchRequest) =>
     api.patch<UserPreferencesResponse, UserPreferencesPatchRequest>('/v1/users/me/preferences', data),
+}
+
+export function createBugReportsApi(client: ApiClient) {
+  return {
+    create: (data: { title: string; description: string; diagnostics?: unknown }) =>
+      client.post<BugReportResponse>('/v1/bug-reports/', data),
+  }
+}
+
+export function createCreatorsApiInApi(client: ApiClient) {
+  return {
+    getDetail: (creatorKey: string, params?: { limit?: number; offset?: number }) => {
+      const queryParams: Record<string, string | number> = {}
+      if (params?.limit !== undefined) queryParams.limit = params.limit
+      if (params?.offset !== undefined) queryParams.offset = params.offset
+      return client.get<CreatorDetailResponse>(`/v1/creators/${creatorKey}`, { params: queryParams })
+    },
+    getSummaries: (creatorKeys: string[]) =>
+      client.post<CreatorSummaryItem[]>('/v1/creators/summaries', { creator_keys: creatorKeys }),
+  }
+}
+
+export function createDependenciesApi(client: ApiClient) {
+  return {
+    listBlockedThreadIds: () => client.get<number[]>('/v1/dependencies/blocked'),
+    listThreadDependencies: (threadId: number) =>
+      client.get<ThreadDependenciesResponse>(`/v1/threads/${threadId}/dependencies`),
+    getIssueDependencies: (issueId: number) =>
+      client.get<IssueDependenciesResponse>(`/v1/issues/${issueId}/dependencies`),
+    getBlockingInfo: (threadId: number) =>
+      client.post<BlockingInfoResponse>(`/v1/threads/${threadId}:getBlockingInfo`),
+    getBatchBlockingInfo: (threadIds: number[]) =>
+      client.post<BatchBlockingInfoResponse>('/v1/threads:getBlockingInfo', { thread_ids: threadIds }),
+    getConnectedThreads: (threadId: number) =>
+      client.get<ConnectedDependenciesResponse>(`/v1/threads/${threadId}/connected`),
+    createDependency: ({ sourceType = 'thread', sourceId, targetType = 'thread', targetId }: DependencyCreatePayload) =>
+      client.post<Dependency, { source_type: 'thread' | 'issue'; source_id: number; target_type: 'thread' | 'issue'; target_id: number }>('/v1/dependencies/', {
+        source_type: sourceType, source_id: sourceId, target_type: targetType, target_id: targetId,
+      }),
+    deleteDependency: (dependencyId: number) => client.delete<void>(`/v1/dependencies/${dependencyId}`),
+    updateDependency: (dependencyId: number, note: string | null) =>
+      client.patch<Dependency, { note: string | null }>(`/v1/dependencies/${dependencyId}`, { note }),
+  }
+}
+
+export function createMigrationApi(client: ApiClient) {
+  return {
+    migrateThread: (threadId: number, data: { last_issue_read: number; total_issues: number }) =>
+      client.post<Thread, { last_issue_read: number; total_issues: number }>(`/v1/threads/${threadId}:migrateToIssues`, data),
+  }
+}
+
+export function createTasksApi(client: ApiClient) {
+  return {
+    getMetrics: () => client.get<AnalyticsMetrics>('/v1/analytics/metrics'),
+  }
 }

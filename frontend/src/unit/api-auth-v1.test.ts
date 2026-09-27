@@ -1,5 +1,5 @@
-import { beforeEach, expect, it, vi } from 'vitest'
-import { createApiClient, getAccessToken, setAccessToken } from '../services/api'
+import { beforeEach, expect, it } from 'vitest'
+import { createApiClient, setAccessToken } from '../services/api'
 import { createTransportDouble } from './transportDouble'
 
 const transport = createTransportDouble()

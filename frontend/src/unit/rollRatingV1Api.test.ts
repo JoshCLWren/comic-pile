@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, expect, it } from 'vitest'
 import { createRateApi } from '../services/api-rate'
 import { createRollApi } from '../services/api-roll'
 import { createProtectedRollMutationApi } from '../services/protectedRollMutationApi'

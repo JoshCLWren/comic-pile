@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, expect, it } from 'vitest'
 import { createRollBootstrapApi } from '../services/rollBootstrapApi'
 import { createHttpClientStub } from './httpClientStub'
 
