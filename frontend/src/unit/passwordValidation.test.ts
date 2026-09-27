@@ -48,10 +48,9 @@ describe('passwordValidation', () => {
       expect(validatePassword('abcde')).toBe('Password must be at least 6 characters');
     });
 
-    it('trims for empty check but uses raw length for min check', () => {
+    it('uses trimmed length for min check', () => {
       expect(validatePassword('  abcdef  ')).toBeNull();
-      // '  abcde  ' has length 9 (including spaces) so passes min length
-      expect(validatePassword('  abcde  ')).toBeNull();
+      expect(validatePassword('  abcde  ')).toBe('Password must be at least 6 characters');
     });
   });
 
