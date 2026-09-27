@@ -6,6 +6,7 @@ import api from '../services/api'
 import type { AuthTokens } from '../types'
 import { useAuth } from '../App'
 import { isReturningVisitor, markReturningVisitor } from '../utils/returningVisitor'
+import { validatePassword } from '../utils/passwordValidation'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -25,12 +26,9 @@ export default function LoginPage() {
       setError('Sign in with your username, not your email.')
       return false
     }
-    if (!password.trim()) {
-      setError('Password is required')
-      return false
-    }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters')
+    const passwordError = validatePassword(password)
+    if (passwordError) {
+      setError(passwordError)
       return false
     }
     return true
@@ -133,7 +131,12 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="text-center space-y-3">
+        <div className="text-center space-y-4">
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            <Link to="/forgot-password" className="text-[var(--theme-primary-action)] hover:opacity-80 font-bold transition-opacity">
+              Forgot password?
+            </Link>
+          </p>
           <p className="text-sm text-[var(--theme-text-muted)]">
             New to Comic Pile?{' '}
             <Link to="/register" className="text-[var(--theme-primary-action)] hover:opacity-80 font-bold transition-opacity">

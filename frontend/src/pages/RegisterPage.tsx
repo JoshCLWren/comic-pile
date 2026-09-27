@@ -6,6 +6,7 @@ import api from '../services/api'
 import type { AuthTokens } from '../types'
 import { useAuth } from '../App'
 import { markReturningVisitor } from '../utils/returningVisitor'
+import { validatePassword, validateEmail } from '../utils/passwordValidation'
 
 export default function RegisterPage() {
   const { login } = useAuth()
@@ -17,11 +18,7 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
 
-  const validateEmail = (emailValue: string) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)
-  }
-
-  const validateForm = () => {
+   const validateForm = () => {
     if (!username.trim()) {
       setError('Username is required')
       return false
@@ -34,16 +31,18 @@ export default function RegisterPage() {
       setError('Email is required')
       return false
     }
-    if (!validateEmail(email)) {
-      setError('Please enter a valid email address')
+    const emailError = validateEmail(email)
+    if (emailError) {
+      setError(emailError)
       return false
     }
     if (!password.trim()) {
       setError('Password is required')
       return false
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters')
+    const passwordError = validatePassword(password)
+    if (passwordError) {
+      setError(passwordError)
       return false
     }
     if (password !== confirmPassword) {

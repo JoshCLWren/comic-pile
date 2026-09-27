@@ -14,6 +14,7 @@ from app.services.test_helpers import (
     create_test_issue_identity as seed_test_issue_identity,
     create_test_reading_order as seed_test_reading_order,
     expire_current_session as expire_test_session,
+    issue_password_reset_token as issue_test_reset_token,
 )
 
 router = APIRouter(prefix="/test", tags=["test"])
@@ -106,3 +107,19 @@ async def expire_current_session(
         HTTPException: If not in test environment or no active session found.
     """
     return await expire_test_session(db, user_id=current_user.id)
+
+
+@router.post("/password-reset-token")
+async def password_reset_token(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    payload: dict[str, object] | None = None,
+) -> dict[str, str]:
+    """Issue a raw password-reset token for E2E browser tests.
+
+    Only available in the test environment. Returns the token directly so the
+    frontend test harness can drive the reset-password flow without outbound
+    email delivery (#2778). The token is issued for the authenticated user.
+    """
+    email = str((payload or {}).get("email") or current_user.email or "")
+    return await issue_test_reset_token(db, email=email)

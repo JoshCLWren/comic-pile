@@ -14,6 +14,7 @@ from app.models.external_identity import (
 )
 from app.models.reading_order import ReadingOrder, ReadingOrderItem
 from app.schemas.test_fixtures import TestCblSourceCreate, TestCblSourceResponse
+from app.services.password_reset_service import request_forgot_password
 from app.services.test_cbl_source_seed import create_test_cbl_source as seed_test_cbl_source
 
 
@@ -251,10 +252,32 @@ async def expire_current_session(
     return {"status": "success", "message": "Session expired"}
 
 
+async def issue_password_reset_token(
+    db: AsyncSession,
+    *,
+    email: str,
+) -> dict[str, str]:
+    """Issue a password-reset token for E2E browser tests.
+
+    Returns the raw reset token so the frontend test harness can drive the
+    reset-password flow without outbound email delivery (#2778). Only
+    available in the test environment.
+    """
+    _require_test_environment()
+    handoff = await request_forgot_password(db, email)
+    if handoff is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No user found for this email",
+        )
+    return {"token": handoff.reset_token}
+
+
 __all__ = [
     "create_test_cbl_source",
-    "create_test_issue_identity",
     "create_test_reading_order",
+    "create_test_issue_identity",
     "expire_current_session",
     "seed_test_cbl_source",
+    "issue_password_reset_token",
 ]

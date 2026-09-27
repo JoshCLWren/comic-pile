@@ -61,6 +61,8 @@ const HelpPage = lazyRoute('glossary')
 const WhatsNewPage = lazyRoute('whatsNew')
 const LoginPage = lazyRoute('login')
 const RegisterPage = lazyRoute('register')
+const ForgotPasswordPage = lazyRoute('forgotPassword')
+const ResetPasswordPage = lazyRoute('resetPassword')
 const IdentityInboxPage = lazyRoute('identityInbox')
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -211,7 +213,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const authChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('comic-pile-auth') : null
     
     const validateSession = async () => {
-      const isPublicAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register'
+      const isPublicAuthPage =
+        window.location.pathname === '/login' ||
+        window.location.pathname === '/register' ||
+        window.location.pathname === '/forgot-password' ||
+        window.location.pathname === '/reset-password'
       if (!getAccessToken() && !window.__COMIC_PILE_ACCESS_TOKEN && isPublicAuthPage) {
         setAuthState(prev => ({
           ...prev,
@@ -465,6 +471,8 @@ function AppRoutes() {
       <Routes>
         <Route path="/login" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><LoginPage /></PublicLayout></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><RegisterPage /></PublicLayout></PublicRoute>} />
+        <Route path="/forgot-password" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><ForgotPasswordPage /></PublicLayout></PublicRoute>} />
+        <Route path="/reset-password" element={<PublicRoute><PublicLayout onBugReportSubmit={submit}><ResetPasswordPage /></PublicLayout></PublicRoute>} />
         <Route path="/rate" element={<Navigate to="/" replace />} />
         <Route path="/analytics" element={<Navigate to="/" replace />} />
         <Route path="/" element={

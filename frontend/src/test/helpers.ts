@@ -279,6 +279,33 @@ export async function getAuthToken(page: Page): Promise<string | null> {
   });
 }
 
+export async function getPasswordResetToken(page: Page, email: string): Promise<string> {
+  const token = await getAuthToken(page);
+  const csrfToken = await getCsrfToken(page, token);
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-CSRF-Token': csrfToken,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await page.request.post('/api/test/password-reset-token', {
+    data: { email },
+    headers,
+  });
+
+  if (!response.ok()) {
+    throw new Error(
+      `Failed to get password reset token: ${response.status()} ${response.statusText()}`,
+    );
+  }
+
+  const data = await response.json() as { token: string };
+  return data.token;
+}
+
 async function getCsrfToken(page: Page, token: string | null): Promise<string> {
   const headers: Record<string, string> = {};
   if (token) {

@@ -35,6 +35,8 @@ export const routeModules = {
   whatsNew: () => import('../pages/WhatsNewPage'),
   login: () => import('../pages/LoginPage'),
   register: () => import('../pages/RegisterPage'),
+  forgotPassword: () => import('../pages/ForgotPasswordPage'),
+  resetPassword: () => import('../pages/ResetPasswordPage'),
   identityInbox: () => import('../pages/IdentityInboxPage'),
 } as const satisfies Record<string, () => Promise<RouteModule>>
 
