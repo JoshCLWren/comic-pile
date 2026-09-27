@@ -105,7 +105,7 @@ def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> N
         labels.append(final_stage)
     # Enforce ralph-status invariant: in-progress without real owner -> pending
     if 'ralph-status:in-progress' in current and final_owner == 'factory:unowned':
-        labels = [l for l in labels if l != 'ralph-status:in-progress']
+        labels = [label for label in labels if label != 'ralph-status:in-progress']
         labels.append('ralph-status:pending')
     
     run_gh(['api', '--method', 'PUT', f'repos/{REPO}/issues/{number}/labels', '--input', '-'], input_json={'labels': sorted(set(labels))})
