@@ -55,7 +55,7 @@ export interface CrossoversPageProps {
   api?: CrossoverApiDeps
 }
 
-export default function CrossoversPage({ api = {} }: CrossoversPageProps = {}) {
+export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
   const [searchParams] = useSearchParams()
   const requestedGroupId = searchParams.get('group')
   const startsAtParam = searchParams.get('starts_at')

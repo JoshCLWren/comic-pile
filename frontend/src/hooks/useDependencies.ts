@@ -160,10 +160,10 @@ export function useUpdateDependency(
   });
 }
 
-export function useMigrateThread(api: DependencyMigrationApi = migrationApi) {
+export function useMigrateThread(api?: DependencyMigrationApi) {
   return useMutation({
     mutationFn: ({ threadId, lastIssueRead, totalIssues }: { threadId: number; lastIssueRead: number; totalIssues: number }) =>
-      api.migrateThread(threadId, { last_issue_read: lastIssueRead, total_issues: totalIssues }),
+      (api ?? migrationApi).migrateThread(threadId, { last_issue_read: lastIssueRead, total_issues: totalIssues }),
     onSuccess: async (updatedThread) => {
       await applyMigratedThreadCache(queryClient, updatedThread);
     },

@@ -15,7 +15,7 @@ import {
   useMigrateThread,
   type DependencyBuilderApiDeps,
 } from '../hooks'
-import { dependenciesApi, migrationApi as defaultMigrationApi } from '../services/api'
+import { dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api-threads'
 import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse, ThreadListItem } from '../types'
@@ -58,7 +58,6 @@ export default function DependencyBuilder({
   const dependencyApi = api.dependencies ?? dependenciesApi
   const threadApi = api.threads ?? threadsApi
   const issueApi = api.issues ?? issuesApi
-  const migrationApi = api.migration ?? defaultMigrationApi
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedThreadId, setSelectedThreadId] = useState<number | null>(null)
   const [showReadingOrder, setShowReadingOrder] = useState(false)
@@ -131,7 +130,7 @@ export default function DependencyBuilder({
   const createDependencyMutation = useCreateDependency(threadId, dependencyApi)
   const deleteDependencyMutation = useDeleteDependency(threadId, dependencyApi)
   const updateDependencyMutation = useUpdateDependency(threadId, dependencyApi)
-  const migrateThreadMutation = useMigrateThread(migrationApi)
+  const migrateThreadMutation = useMigrateThread(api.migration)
 
   const dependencies = useMemo(
     () => dependenciesData ?? { blocking: [], blocked_by: [] },
