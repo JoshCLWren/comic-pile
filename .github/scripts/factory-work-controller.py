@@ -92,11 +92,13 @@ def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> N
     
     # Normalize state based on global policy
     from factory_work_policy import normalize_target_state
-    norm_owner, norm_stage = normalize_target_state(set(current), owner if owner != 'factory:unowned' else None)
+    norm_owner, norm_stage = normalize_target_state(set(current), owner)
     
-    # Use requested stage if provided, otherwise use normalized stage
+    # Use requested stage if provided, otherwise use normalized stage.
+    # Normalized owner/stage enforce invariants (e.g. done removes transient
+    # labels; unowned removes building; blocked unowned gets factory:blocked).
     final_stage = stage if stage is not None else norm_stage
-    final_owner = norm_owner if owner == 'factory:unowned' else owner
+    final_owner = norm_owner
 
     # Remove all existing owner labels (including factory:unowned) and stage labels
     labels = [label for label in current if not OWNER_RE.fullmatch(label) and label not in STAGE_LABELS and (label != 'factory')]

@@ -222,7 +222,6 @@ def producer_worker_from_pr(pr: dict[str, Any]) -> str | None:
     return producer_worker_from_values(branch=str(pr.get('headRefName') or ''), body=str(pr.get('body') or ''))
 
 
-# ... existing code ...
 def stage_of(labels: Iterable[str]) -> str | None:
     """Return the deterministic current factory lifecycle stage."""
     present = set(labels)
@@ -270,8 +269,6 @@ def normalize_target_state(labels: set[str], current_owner: str | None) -> tuple
 
 
 def provenance_lane(labels: set[str]) -> int:
-# ... existing code ...
-
     """Return the deterministic assignment lane for a label set."""
     if 'main-breakage' in labels:
         return 0
