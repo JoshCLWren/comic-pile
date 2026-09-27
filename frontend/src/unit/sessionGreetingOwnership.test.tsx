@@ -16,6 +16,7 @@ import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import type { ReactNode } from 'react'
 import type { SessionApi } from '../services/apiTypes'
 import type { RollBootstrapApi } from '../services/apiTypes'
+import { cast } from '../utils/cast'
 import { createToastSpy } from './toastSpy'
 import { ToastContextSpy } from './toastTestHarness'
 
@@ -23,8 +24,10 @@ const sessionApiMock = vi.hoisted(() => ({
   getCurrent: vi.fn(),
 }))
 const rollBootstrapApiMock = vi.hoisted(() => ({ get: vi.fn() }))
-const sessionApi = sessionApiMock as unknown as SessionApi
-const rollBootstrapApi = rollBootstrapApiMock as unknown as RollBootstrapApi
+// SAFETY: each mock implements only the hook surface these scenarios exercise,
+// so the boundary coercion to the full API type is intentional.
+const sessionApi = cast<SessionApi>(sessionApiMock)
+const rollBootstrapApi = cast<RollBootstrapApi>(rollBootstrapApiMock)
 const toast = createToastSpy()
 
 const toastWrapper = ({ children }: { children: ReactNode }) => (
