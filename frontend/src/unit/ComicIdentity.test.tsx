@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api'
+import { comicVineApi } from '../services/api'
+import type { ComicVineIssueIntelligence } from '../services/api-comicvine'
 import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
 
 vi.mock('../services/api', async () => {

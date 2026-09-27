@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { useCreatorDetail } from '../hooks/useCreatorDetail'
 import { getApiErrorStatus } from '../utils/apiError'
 import { parseCreatorKey } from '../utils/creatorKey'
-import type { CreatorIssueRow } from '../services/api'
+import type { CreatorIssueRow } from '../services/api-creators'
 
 function formatRatingDate(value: string | null): string | null {
   if (!value) return null
