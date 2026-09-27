@@ -5,8 +5,10 @@ import { type ComicVineRelatedIssue } from '../../../services/api'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import ImageWithLoading from '../../../components/ImageWithLoading'
+import Modal from '../../../components/Modal'
 import { CreatorName } from './CreatorName'
 import { optimizedImageSrcSet, optimizedImageUrl } from '../../../services/imageDelivery'
+import { useResponsive } from '../../../utils/responsive'
 
 interface ComicIdentityProps {
   issueId: number | null | undefined
@@ -29,10 +31,28 @@ const STORY_ARC_LIMIT = 3
 const RELATED_ISSUES_PER_ARC_LIMIT = 5
 const COVER_HEIGHT_CAP_VH = 45
 const COVER_RATIO_FALLBACK = 2 / 3
+const SUMMARY_LONG_THRESHOLD = 280
 
 function formatRating(value: number): string {
   const normalized = parseFloat(value.toFixed(2))
   return Number.isFinite(normalized) ? String(normalized) : String(value)
+}
+
+function EyeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className ?? 'w-4 h-4'} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+    </svg>
+  )
+}
+
+function ArrowTopRightOnSquareIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className ?? 'w-4 h-4'} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+    </svg>
+  )
 }
 
 export function ComicIdentity({ issueId }: ComicIdentityProps) {
@@ -42,12 +62,19 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   const [showAllCreators, setShowAllCreators] = useState(false)
   const [showAllStoryArcs, setShowAllStoryArcs] = useState(false)
   const [showAllRelatedIssues, setShowAllRelatedIssues] = useState<Record<number, boolean>>({})
+  const [summaryExpanded, setSummaryExpanded] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const creatorsDetailsRef = useRef<HTMLDetailsElement>(null)
   const storyArcsDetailsRef = useRef<HTMLDetailsElement>(null)
+  const { isDesktop } = useResponsive()
 
   useEffect(() => {
     setCoverRatio(null)
   }, [metadata?.image_url, isLoading])
+
+  useEffect(() => {
+    setSummaryExpanded(false)
+  }, [metadata?.comicvine_issue_id])
 
   useEffect(() => {
     if (creatorsDetailsRef.current) {
@@ -140,6 +167,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   const date = formatDate(metadata.store_date) ?? formatDate(metadata.cover_date)
   const creatorsToShow = showAllCreators ? metadata.creators : metadata.creators.slice(0, CREATOR_LIMIT)
   const hasMoreCreators = metadata.creators.length > CREATOR_LIMIT
+  const isLongSummary = metadata.description != null && metadata.description.length > SUMMARY_LONG_THRESHOLD
 
   return (
     <>
@@ -156,22 +184,47 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
         style={{ ...coverStyle, ...coverFrameBorder }}
       >
         {metadata.image_url && metadata.image_url !== failedImageUrl ? (
-          <ImageWithLoading
-            src={optimizedImageUrl(metadata.image_url, 720) ?? metadata.image_url}
-            srcSet={optimizedImageSrcSet(metadata.image_url, [240, 480, 720]) ?? undefined}
-            sizes="(min-width: 1024px) 30vh, calc((45vh * 2) / 3)"
-            alt=""
-            loading="eager"
-            className="h-full w-full object-contain"
-            placeholderClassName="animate-pulse bg-white/10"
-            onLoad={(img) => {
-              const { naturalWidth, naturalHeight } = img
-              if (naturalWidth > 0 && naturalHeight > 0) {
-                setCoverRatio(naturalWidth / naturalHeight)
-              }
-            }}
-            onError={() => setFailedImageUrl(metadata.image_url)}
-          />
+          <>
+            <ImageWithLoading
+              src={optimizedImageUrl(metadata.image_url, 720) ?? metadata.image_url}
+              srcSet={optimizedImageSrcSet(metadata.image_url, [240, 480, 720]) ?? undefined}
+              sizes="(min-width: 1024px) 30vh, calc((45vh * 2) / 3)"
+              alt=""
+              loading="eager"
+              className="h-full w-full object-contain"
+              placeholderClassName="animate-pulse bg-white/10"
+              onLoad={(img) => {
+                const { naturalWidth, naturalHeight } = img
+                if (naturalWidth > 0 && naturalHeight > 0) {
+                  setCoverRatio(naturalWidth / naturalHeight)
+                }
+              }}
+              onError={() => setFailedImageUrl(metadata.image_url)}
+            />
+            <div className="absolute bottom-2 left-2 right-2 flex justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(true)}
+                className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-black/60 text-stone-300 hover:text-stone-100 hover:bg-black/80 transition-colors focus:ring-2 focus:ring-amber-500"
+                aria-label="View cover larger"
+                title="View larger"
+              >
+                <EyeIcon className="w-4 h-4" />
+              </button>
+              {metadata.comicvine_url && (
+                <a
+                  href={metadata.comicvine_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-black/60 text-stone-300 hover:text-stone-100 hover:bg-black/80 transition-colors focus:ring-2 focus:ring-amber-500"
+                  aria-label="Open on ComicVine"
+                  title="Open in ComicVine"
+                >
+                  <ArrowTopRightOnSquareIcon className="w-4 h-4" />
+                </a>
+              )}
+            </div>
+          </>
         ) : (
           <div data-testid="cover-placeholder" className="w-full h-full flex items-center justify-center text-stone-600 flex-col gap-2" aria-hidden="true">
             <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -183,24 +236,61 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       </div>
 
       <div className="space-y-3">
+        {metadata.name && (
+          <h3 className="text-base font-black text-stone-200 leading-tight break-words">
+            {metadata.name}
+          </h3>
+        )}
+
         {date && (
           <p className="text-[11px] text-stone-500">{date}</p>
         )}
 
         {metadata.description && (
-          <details className="group space-y-2">
+          <details
+            className="group space-y-2"
+            {...(isDesktop ? { open: true } : {})}
+          >
             <summary className="flex items-center gap-2 cursor-pointer list-none focus:ring-2 focus:ring-amber-500 rounded-lg p-2 hover:bg-white/5 transition-colors">
               <span className="text-[10px] font-black uppercase tracking-wider text-stone-400">Summary</span>
               <span className="text-stone-500 group-open:rotate-180 transition-transform" aria-hidden="true">⌄</span>
             </summary>
             <div className="pl-6 pr-2 pb-2 text-xs leading-relaxed text-stone-300 border-l border-white/10">
-              {metadata.description}
+              {isLongSummary && !summaryExpanded ? (
+                <>
+                  <p>{metadata.description!.slice(0, SUMMARY_LONG_THRESHOLD)}…</p>
+                  <button
+                    type="button"
+                    onClick={() => setSummaryExpanded(true)}
+                    className="mt-1 inline-flex min-h-6 items-center text-[10px] font-bold text-amber-500 hover:text-amber-400 focus:ring-2 focus:ring-amber-500 rounded"
+                    aria-expanded={summaryExpanded}
+                  >
+                    Show more
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p>{metadata.description}</p>
+                  {isLongSummary && (
+                    <button
+                      type="button"
+                      onClick={() => setSummaryExpanded(false)}
+                      className="mt-1 inline-flex min-h-6 items-center text-[10px] font-bold text-amber-500 hover:text-amber-400 focus:ring-2 focus:ring-amber-500 rounded"
+                      aria-expanded={!summaryExpanded}
+                    >
+                      Show less
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           </details>
         )}
 
         {metadata.creators.length > 0 && (
-          <details ref={creatorsDetailsRef} className="group space-y-2">
+          <>
+            {metadata.description && <hr className="border-white/10 my-1" />}
+            <details ref={creatorsDetailsRef} className="group space-y-2">
             <summary className="flex items-center gap-2 cursor-pointer list-none focus:ring-2 focus:ring-amber-500 rounded-lg p-2 hover:bg-white/5 transition-colors">
               <span className="text-[10px] font-black uppercase tracking-wider text-stone-400">Creators</span>
               <span className="ml-auto text-stone-500 group-open:rotate-180 transition-transform" aria-hidden="true">⌄</span>
@@ -301,7 +391,8 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                 {showAllCreators ? 'Show less' : `Show all ${metadata.creators.length}`}
               </button>
             )}
-          </details>
+            </details>
+          </>
         )}
 
         {metadata.story_arcs.length > 0 && (
@@ -439,6 +530,23 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
         }}
       />
     )}
+    <Modal
+      isOpen={isModalOpen}
+      title="Comic Cover"
+      onClose={() => setIsModalOpen(false)}
+      data-testid="cover-viewer-modal"
+      size="large"
+    >
+      {metadata.image_url && (
+        <img
+          src={optimizedImageUrl(metadata.image_url, 1200) ?? metadata.image_url}
+          srcSet={optimizedImageSrcSet(metadata.image_url, [480, 720, 1200]) ?? undefined}
+          sizes="(min-width: 1024px) 80vw, 90vw"
+          alt={metadata.name ?? 'Comic cover'}
+          className="w-full rounded-lg"
+        />
+      )}
+    </Modal>
     </>
   )
 }
