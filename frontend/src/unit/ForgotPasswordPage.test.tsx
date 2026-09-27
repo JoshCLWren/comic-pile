@@ -57,12 +57,11 @@ describe('ForgotPasswordPage', () => {
 
     renderPage();
 
-    const emailInput = screen.getByLabelText(/email address/i);
-    const submitButton = screen.getByRole('button', { name: /send reset link/i });
+    const form = screen.getByTestId('forgot-password-form');
 
     await act(async () => {
-      fireEvent.change(emailInput, { target: { value: 'user@example.com' } });
-      fireEvent.click(submitButton);
+      fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'user@example.com' } });
+      fireEvent.submit(form);
     });
 
     await waitFor(() => {
@@ -79,12 +78,11 @@ describe('ForgotPasswordPage', () => {
   it('shows a validation error without calling the API for an invalid email', async () => {
     renderPage();
 
-    const emailInput = screen.getByLabelText(/email address/i);
-    const submitButton = screen.getByRole('button', { name: /send reset link/i });
+    const form = screen.getByTestId('forgot-password-form');
 
     await act(async () => {
-      fireEvent.change(emailInput, { target: { value: 'not-an-email' } });
-      fireEvent.click(submitButton);
+      fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'not-an-email' } });
+      fireEvent.submit(form);
     });
 
     await waitFor(() => {
