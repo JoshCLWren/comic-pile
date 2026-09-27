@@ -14,7 +14,8 @@ import {
 } from '../utils/sessionGreeting'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import type { ReactNode } from 'react'
-import { createToastSpy, ToastContextSpy } from './toastTestHarness'
+import { createToastSpy } from './toastSpy'
+import { ToastContextSpy } from './toastTestHarness'
 
 const api = vi.hoisted(() => ({
   sessionApi: { getCurrent: vi.fn() },

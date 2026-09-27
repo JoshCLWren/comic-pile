@@ -86,55 +86,55 @@ export interface CBLAdoptionPlanChoices {
  */
 export function createCblSourcesApi(client: HttpClient) {
   return {
-  discover: (query: string, limit = 25) =>
-    client.get<CBLSourceListDiscoveryItem[]>('/v1/issue-identity/cbl-sources', {
-      params: { q: query, limit },
-    }),
-  preview: (listId: number) =>
-    client.get<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-preview`),
-  plan: (listId: number, choices: CBLAdoptionPlanChoices) =>
-    client.post<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-plan`, choices),
-  commit: (
-    listId: number,
-    planId: number,
-    preview: CBLAdoptionPreview,
-    choices: CBLAdoptionPlanChoices,
-  ) => {
-    const entriesById = new Map(
-      preview.entries.map((entry) => [String(entry.cbl_entry_id), entry]),
-    )
-    // Expand identity-aware group decisions into per-position overrides so two
-    // runs that share a series_name cannot collapse on the backend.
-    const overridesByPosition = new Map<number, 'include' | 'exclude'>()
-    for (const [groupId, include] of Object.entries(choices.series_decisions)) {
-      const decision = include ? 'include' : 'exclude'
-      for (const entry of preview.entries) {
-        if (entry.series_group_id === groupId) {
-          overridesByPosition.set(entry.cbl_position, decision)
+    discover: (query: string, limit = 25) =>
+      client.get<CBLSourceListDiscoveryItem[]>('/v1/issue-identity/cbl-sources', {
+        params: { q: query, limit },
+      }),
+    preview: (listId: number) =>
+      client.get<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-preview`),
+    plan: (listId: number, choices: CBLAdoptionPlanChoices) =>
+      client.post<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-plan`, choices),
+    commit: (
+      listId: number,
+      planId: number,
+      preview: CBLAdoptionPreview,
+      choices: CBLAdoptionPlanChoices,
+    ) => {
+      const entriesById = new Map(
+        preview.entries.map((entry) => [String(entry.cbl_entry_id), entry]),
+      )
+      // Expand identity-aware group decisions into per-position overrides so two
+      // runs that share a series_name cannot collapse on the backend.
+      const overridesByPosition = new Map<number, 'include' | 'exclude'>()
+      for (const [groupId, include] of Object.entries(choices.series_decisions)) {
+        const decision = include ? 'include' : 'exclude'
+        for (const entry of preview.entries) {
+          if (entry.series_group_id === groupId) {
+            overridesByPosition.set(entry.cbl_position, decision)
+          }
         }
       }
-    }
-    for (const [entryId, include] of Object.entries(choices.entry_decisions)) {
-      const entry = entriesById.get(entryId)
-      if (entry) {
-        overridesByPosition.set(entry.cbl_position, include ? 'include' : 'exclude')
+      for (const [entryId, include] of Object.entries(choices.entry_decisions)) {
+        const entry = entriesById.get(entryId)
+        if (entry) {
+          overridesByPosition.set(entry.cbl_position, include ? 'include' : 'exclude')
+        }
       }
-    }
-    const seriesOverrides = [...overridesByPosition.entries()]
-      .sort(([left], [right]) => left - right)
-      .map(([cbl_position, decision]) => ({ cbl_position, decision }))
-    return client.post<CBLAdoptionCommitResult>(
-      `/v1/cbl/${listId}/reading-plans/${planId}/adoption-commit`,
-      {
-        entry_decisions: {},
-        series_decisions: [],
-        series_overrides: seriesOverrides,
-        content_hash: preview.source.content_hash,
-        revision_sha: preview.source.revision_sha,
-      },
-    )
-  },
-}
+      const seriesOverrides = [...overridesByPosition.entries()]
+        .sort(([left], [right]) => left - right)
+        .map(([cbl_position, decision]) => ({ cbl_position, decision }))
+      return client.post<CBLAdoptionCommitResult>(
+        `/v1/cbl/${listId}/reading-plans/${planId}/adoption-commit`,
+        {
+          entry_decisions: {},
+          series_decisions: [],
+          series_overrides: seriesOverrides,
+          content_hash: preview.source.content_hash,
+          revision_sha: preview.source.revision_sha,
+        },
+      )
+    },
+  }
 }
 
 export const cblSourcesApi = createCblSourcesApi(defaultHttpClient())

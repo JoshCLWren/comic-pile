@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactElement, ReactNode } from 'react'
-import { createToastSpy, ToastContextSpy } from './toastTestHarness'
+import { createToastSpy } from './toastSpy'
+import { ToastContextSpy } from './toastTestHarness'
 import { comicVineApi } from '../services/api'
 import { ComicVineIssueCard } from '../pages/RollPage/components/ComicVineIssueCard'
 

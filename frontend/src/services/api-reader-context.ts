@@ -88,9 +88,9 @@ export interface ReaderContextResponse {
  */
 export function createReaderContextApi(client: HttpClient) {
   return {
-  get: (issueId: number) =>
-    client.get<ReaderContextResponse>(`/v1/issues/${issueId}/reader-context`),
-}
+    get: (issueId: number) =>
+      client.get<ReaderContextResponse>(`/v1/issues/${issueId}/reader-context`),
+  }
 }
 
 export const readerContextApi = createReaderContextApi(defaultHttpClient())

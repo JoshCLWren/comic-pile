@@ -45,15 +45,15 @@ export interface TasteSignalResponse {
  */
 export function createTasteApi(client: HttpClient) {
   return {
-  getDiscoveries: () => client.get<TasteDiscoveryListResponse>('/v1/taste/discoveries'),
-  dismiss: (signalId: number) =>
-    client.post<{ dismissed: boolean }>(`/v1/taste/discoveries/${signalId}/dismiss`),
-  submitVerdict: (signalType: string, externalKey: string, verdict: TasteVerdict) =>
-    client.put<TasteSignalResponse>(
-      `/v1/users/me/taste-signals/${encodeURIComponent(signalType)}/${encodeURIComponent(externalKey)}/verdict`,
-      { verdict },
-    ),
-}
+    getDiscoveries: () => client.get<TasteDiscoveryListResponse>('/v1/taste/discoveries'),
+    dismiss: (signalId: number) =>
+      client.post<{ dismissed: boolean }>(`/v1/taste/discoveries/${signalId}/dismiss`),
+    submitVerdict: (signalType: string, externalKey: string, verdict: TasteVerdict) =>
+      client.put<TasteSignalResponse>(
+        `/v1/users/me/taste-signals/${encodeURIComponent(signalType)}/${encodeURIComponent(externalKey)}/verdict`,
+        { verdict },
+      ),
+  }
 }
 
 export const tasteApi = createTasteApi(defaultHttpClient())

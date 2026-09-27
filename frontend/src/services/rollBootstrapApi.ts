@@ -13,15 +13,15 @@ import type {
  */
 export function createRollBootstrapApi(client: HttpClient) {
   return {
-  get: (timezone?: string) => {
-    if (!timezone) return client.get<RollBootstrapResponse>('/v1/roll/bootstrap')
-    return client.get<RollBootstrapResponse>('/v1/roll/bootstrap', {
-      params: { timezone },
-    })
-  },
-  switchPrerequisite: (request: RollPrerequisiteSwitchRequest) =>
-    client.post<RollPrerequisiteSwitchResponse>('/v1/roll/switch-prerequisite', request),
-}
+    get: (timezone?: string) => {
+      if (!timezone) return client.get<RollBootstrapResponse>('/v1/roll/bootstrap')
+      return client.get<RollBootstrapResponse>('/v1/roll/bootstrap', {
+        params: { timezone },
+      })
+    },
+    switchPrerequisite: (request: RollPrerequisiteSwitchRequest) =>
+      client.post<RollPrerequisiteSwitchResponse>('/v1/roll/switch-prerequisite', request),
+  }
 }
 
 export const rollBootstrapApi = createRollBootstrapApi(defaultHttpClient())

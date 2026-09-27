@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ReadingContextPillar } from '../pages/RollPage/components/ReadingContextPillar'
 import type { ReaderContextResponse } from '../types'
 import { createRouterHarness } from './routerTestHarness'
-import { createToastSpy, ToastContextSpy } from './toastTestHarness'
+import { createToastSpy } from './toastSpy'
+import { ToastContextSpy } from './toastTestHarness'
 
 const router = createRouterHarness()
 
