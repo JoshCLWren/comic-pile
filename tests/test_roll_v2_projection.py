@@ -28,7 +28,7 @@ from app.services.roll_v2_projection import (
     extract_volume,
     get_v2_rollable_projection,
 )
-from app.schemas.roll_v2 import IdentityState
+from app.schemas.roll_v2 import IdentityState, RollableItem, RollLastRead
 
 D1 = datetime(2026, 1, 1, tzinfo=UTC)
 D2 = datetime(2026, 1, 2, tzinfo=UTC)
@@ -70,8 +70,7 @@ async def _make_thread(
         issues.append(issue)
     await db.flush()
     if issue_count and read_through < issue_count:
-        pointer = next_unread_override if next_unread_override is not None else read_through
-        thread.next_unread_issue_id = issues[pointer].id
+        thread.next_unread_issue_id = issues[read_through].id
     await db.flush()
     return thread, issues
 
@@ -172,7 +171,9 @@ class _ExecuteCounter:
     def __init__(self, db: AsyncSession) -> None:
         """Wrap the session's execute entry point."""
         self.calls = 0
-        self._original = db.execute
+        from collections.abc import Awaitable, Callable
+
+        self._original: Callable[..., Awaitable[object]] = db.execute  # type: ignore[assignment]
 
     async def __call__(self, *args: object, **kwargs: object) -> object:
         """Count one round trip and delegate to the real execute."""
@@ -184,7 +185,7 @@ async def _projection_calls(
     db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
     **kwargs: object,
-) -> tuple[int, object]:
+) -> tuple[int, tuple[list[RollableItem], RollLastRead | None, list[int]]]:
     """Run the projection while counting its database round trips."""
     counter = _ExecuteCounter(db)
     monkeypatch.setattr(db, "execute", counter)
@@ -378,6 +379,10 @@ async def test_duplicate_rate_events_count_once_latest_wins(
         await _confirm_identity(
             async_db, issue, external_id=f"4000-{position}", series_id=20764, series_name="Thanos"
         )
+    # Next unread issue also needs confirmed identity for canonical series resolution.
+    await _confirm_identity(
+        async_db, issues[3], external_id="4000-9", series_id=20764, series_name="Thanos"
+    )
     await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
     await _rate(async_db, issues[1], rating=3.5, timestamp=D2)
     await _rate(async_db, issues[2], rating=5.0, timestamp=D3)
@@ -408,6 +413,10 @@ async def test_unread_confirmed_issues_do_not_contribute(
         await _confirm_identity(
             async_db, issue, external_id=f"4000-{position}", series_id=20764, series_name="Thanos"
         )
+    # Next unread issue also needs confirmed identity for canonical series resolution.
+    await _confirm_identity(
+        async_db, issues[3], external_id="4000-9", series_id=20764, series_name="Thanos"
+    )
     await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
     await _rate(async_db, issues[1], rating=3.5, timestamp=D2)
     await _rate(async_db, issues[2], rating=5.0, timestamp=D3)
@@ -444,11 +453,19 @@ async def test_split_threads_aggregate_same_series(
     await _confirm_identity(
         async_db, first_issues[1], external_id="4000-2", series_id=20764, series_name="Thanos"
     )
+    # Next unread issue for first thread also needs confirmed identity.
+    await _confirm_identity(
+        async_db, first_issues[2], external_id="4000-5", series_id=20764, series_name="Thanos"
+    )
     await _confirm_identity(
         async_db, second_issues[0], external_id="4000-3", series_id=20764, series_name="Thanos"
     )
     await _confirm_identity(
         async_db, second_issues[1], external_id="4000-4", series_id=20764, series_name="Thanos"
+    )
+    # Next unread issue for second thread also needs confirmed identity.
+    await _confirm_identity(
+        async_db, second_issues[2], external_id="4000-6", series_id=20764, series_name="Thanos"
     )
     await _rate(async_db, first_issues[0], rating=4.0, timestamp=D1)
     await _rate(async_db, second_issues[0], rating=2.0, timestamp=D2)
@@ -519,11 +536,19 @@ async def test_run_length_comes_from_catalog_and_nullable_when_unknown(
     _, unknown_issues = await _make_thread(
         async_db, default_user, title="Unknown", issue_count=3, queue_position=2, read_through=2
     )
+    # Confirm identity for read issues so series aggregates query returns rows.
     await _confirm_identity(
-        async_db, known_issues[2], external_id="4000-1", series_id=20764, series_name="Thanos"
+        async_db, known_issues[0], external_id="4000-1", series_id=20764, series_name="Thanos"
     )
     await _confirm_identity(
-        async_db, unknown_issues[2], external_id="4000-2", series_id=99999, series_name="Lost"
+        async_db, known_issues[1], external_id="4000-2", series_id=20764, series_name="Thanos"
+    )
+    # Next unread issue also needs confirmed identity for canonical series resolution.
+    await _confirm_identity(
+        async_db, known_issues[2], external_id="4000-3", series_id=20764, series_name="Thanos"
+    )
+    await _confirm_identity(
+        async_db, unknown_issues[2], external_id="4000-4", series_id=99999, series_name="Lost"
     )
     await _catalog_series(async_db, external_id="20764", name="Thanos", count_of_issues=12)
 

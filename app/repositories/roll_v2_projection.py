@@ -78,11 +78,12 @@ class LastReadRow(TypedDict):
     read_at: datetime | None
 
 
-def _route_labels_subquery(user_id: int) -> ColumnElement[list[str] | None]:
+def _route_labels_subquery(user_id: int) -> ColumnElement[object]:
     """Aggregate owned route names touching a thread or its next issue."""
     from sqlalchemy.dialects.postgresql import ARRAY
+    from sqlalchemy import cast
 
-    return (
+    subq = (
         select(func.array_agg(func.distinct(DependencyGroup.name)))
         .select_from(DependencyGroupMembership)
         .join(DependencyGroup, DependencyGroup.id == DependencyGroupMembership.group_id)
@@ -95,8 +96,8 @@ def _route_labels_subquery(user_id: int) -> ColumnElement[list[str] | None]:
         )
         .correlate(Thread)
         .scalar_subquery()
-        .cast(ARRAY(Text))
     )
+    return cast(subq, ARRAY(Text))
 
 
 async def fetch_rollable_candidates(
@@ -269,28 +270,28 @@ async def fetch_series_aggregates(    db: AsyncSession,
         )
     volume_match = or_(*conditions)
     series_name_sq = (
-        select(SeriesIdentity.metadata_json["name"].astext)
+        select(SeriesIdentity.metadata_json["name"].as_string())
         .where(
             SeriesIdentity.provider == "comicvine",
             SeriesIdentity.entity_type == "series",
             SeriesIdentity.external_id
             == func.coalesce(
-                ExternalIdentity.metadata_json["volume"]["id"].astext,
-                ExternalIdentity.metadata_json["volume_id"].astext,
+                ExternalIdentity.metadata_json["volume"]["id"].as_string(),
+                ExternalIdentity.metadata_json["volume_id"].as_string(),
             ),
         )
         .correlate(ExternalIdentity)
         .scalar_subquery()
     )
     series_count_sq = (
-        select(SeriesIdentity.metadata_json["count_of_issues"].astext)
+        select(SeriesIdentity.metadata_json["count_of_issues"].as_string())
         .where(
             SeriesIdentity.provider == "comicvine",
             SeriesIdentity.entity_type == "series",
             SeriesIdentity.external_id
             == func.coalesce(
-                ExternalIdentity.metadata_json["volume"]["id"].astext,
-                ExternalIdentity.metadata_json["volume_id"].astext,
+                ExternalIdentity.metadata_json["volume"]["id"].as_string(),
+                ExternalIdentity.metadata_json["volume_id"].as_string(),
             ),
         )
         .correlate(ExternalIdentity)
