@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react'
 import axios from 'axios'
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
 import api from '../services/api'
 import type { AuthTokens } from '../types'
 import { useAuth } from '../App'
@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
 
   const validateForm = () => {
     if (!username.trim()) {
@@ -78,6 +79,13 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {location.state?.passwordReset && (
+          <div className="bg-[var(--theme-primary-action)]/10 border border-[var(--theme-primary-action)]/20 rounded-xl px-4 py-3">
+            <p className="text-sm text-[var(--theme-primary-action)] font-medium">
+              Your password has been reset. Existing sessions were revoked. Please sign in with your username and new password.
+            </p>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-6">
           <div className="space-y-4">
             <div className="space-y-2">

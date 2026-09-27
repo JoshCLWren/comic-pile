@@ -8,7 +8,6 @@ import { validatePassword, MIN_PASSWORD_LENGTH } from '../utils/passwordValidati
 const TOKEN_EXPIRED_MESSAGES = [
   'expired',
   'invalid or expired',
-  'expired',
   'already been used',
   'invalid',
 ]
