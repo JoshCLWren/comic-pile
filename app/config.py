@@ -577,6 +577,38 @@ class ImageDeliverySettings(BaseSettings):
     )
 
 
+class EmailSettings(BaseSettings):
+    """Email delivery configuration settings."""
+
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
+
+    resend_api_key: str | None = Field(
+        default=None,
+        description="Resend API key for password reset email delivery",
+        json_schema_extra={"env": "RESEND_API_KEY"},
+    )
+    password_reset_sender_email: str | None = Field(
+        default="noreply@comicpile.app",
+        description="Sender email address for password reset emails",
+        json_schema_extra={"env": "PASSWORD_RESET_SENDER_EMAIL"},
+    )
+    password_reset_sender_name: str | None = Field(
+        default="Comic Pile",
+        description="Sender name for password reset emails",
+        json_schema_extra={"env": "PASSWORD_RESET_SENDER_NAME"},
+    )
+    password_reset_origin: str | None = Field(
+        default="https://comicpile.app",
+        description="Public origin for password reset links",
+        json_schema_extra={"env": "PASSWORD_RESET_ORIGIN"},
+    )
+
+    @property
+    def is_resend_configured(self) -> bool:
+        """Return whether Resend email delivery is configured."""
+        return bool(self.resend_api_key)
+
+
 class Settings(BaseSettings):
     """Main settings class that aggregates all configuration groups."""
 
@@ -621,6 +653,11 @@ class Settings(BaseSettings):
     def image_delivery(self) -> ImageDeliverySettings:
         """Get remote image delivery settings."""
         return get_image_delivery_settings()
+
+    @property
+    def email(self) -> EmailSettings:
+        """Get email delivery settings."""
+        return get_email_settings()
 
 
 @lru_cache
@@ -678,6 +715,12 @@ def get_image_delivery_settings() -> ImageDeliverySettings:
 
 
 @lru_cache
+def get_email_settings() -> EmailSettings:
+    """Get cached email delivery settings instance."""
+    return EmailSettings()
+
+
+@lru_cache
 def get_settings() -> Settings:
     """Get cached main settings instance."""
     return Settings()
@@ -694,4 +737,5 @@ def clear_settings_cache() -> None:
     get_redis_settings.cache_clear()
     get_recommendation_settings.cache_clear()
     get_image_delivery_settings.cache_clear()
+    get_email_settings.cache_clear()
     get_settings.cache_clear()
