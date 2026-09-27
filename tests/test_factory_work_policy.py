@@ -1033,10 +1033,10 @@ def test_normalize_done_strips_all_transient_factory_state():
 
 def test_normalize_drops_redundant_unowned_when_one_active_owner_remains():
     """A no-persisted-change handoff can leave one active owner with
-    factory:unowned; normalization must keep the legitimate owner and drop
-    the redundant unowned marker and any surviving stage."""
+    factory:unowned; normalization must keep the legitimate owner,
+    drop the redundant unowned marker, and preserve the actual stage."""
     labels = _labels("factory", "factory:unowned", "factory:13", "factory:building")
-    assert policy.normalize_target_state(labels, "factory:13") == ("factory:13", None)
+    assert policy.normalize_target_state(labels, "factory:13") == ("factory:13", "factory:building")
 
 
 def test_normalize_blocked_unowned_uses_factory_blocked_stage():
@@ -1093,6 +1093,7 @@ def test_normalize_is_idempotent():
         _labels("ralph-status:blocked", "factory:unowned", "factory:blocked"),
         _labels("factory", "factory:13", "factory:building"),
         _labels("ralph-status:done"),
+        _labels("factory", "factory:unowned", "factory:13", "factory:changes-requested"),
     ):
         once = policy.normalize_target_state(labels, policy.owner_of(labels))
         twice = policy.normalize_target_state(_labels(*once), once[0])

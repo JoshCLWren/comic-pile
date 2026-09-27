@@ -237,13 +237,14 @@ def normalize_target_state(labels: set[str], current_owner: str | None) -> tuple
     1. If owner is 'factory:unowned':
        - Stage cannot be 'factory:building'.
        - If 'ralph-status:blocked' is present, stage must be 'factory:blocked'.
-       - Otherwise, if no other stage is present, it is 'factory:building' ONLY if owned.
-       - For unowned, if no stage is present or it's 'factory:building', it should be None (or 'factory:building' is removed).
+       - Otherwise, if no other stage is present, it is None.
     2. If 'ralph-status:done' is present:
        - No transient factory stage or owner labels should remain.
-       - Owner becomes 'factory:unowned' (or None, but for consistency 'factory:unowned').
+       - Owner becomes 'factory:unowned'.
        - Stage becomes None.
-    3. If 'ralph-status:in-progress' is present but owner is 'factory:unowned':
+    3. If an active owner coexists with 'factory:unowned':
+       - Drop the redundant unowned marker and preserve the actual stage.
+    4. If 'ralph-status:in-progress' is present but owner is 'factory:unowned':
        - Normalize to 'ralph-status:pending' (implicit via labels) and owner 'factory:unowned'.
     """
     # Handle Done state first - it overrides everything
@@ -256,9 +257,9 @@ def normalize_target_state(labels: set[str], current_owner: str | None) -> tuple
 
     # Contradiction: an active owner may not coexist with factory:unowned.
     # A no-persisted-change release can leave both behind; drop the redundant
-    # unowned marker and any stage that survived the handoff.
+    # unowned marker but preserve the actual stage.
     if owner != 'factory:unowned' and has_unowned:
-        return owner, None
+        return owner, stage_of(labels)
 
     # Handle blocked unowned
     if owner == 'factory:unowned' and 'ralph-status:blocked' in labels:

@@ -886,7 +886,7 @@ def test_reconcile_contradictory_labels_repairs_unowned_plus_worker(
     )
 
     assert controller.reconcile_contradictory_labels(issues, []) == [3001]
-    assert replaced == [(3001, "factory:13", None)]
+    assert replaced == [(3001, "factory:13", "factory:building")]
 
 
 def test_reconcile_contradictory_labels_repairs_building_unowned(
@@ -952,7 +952,7 @@ def test_reconcile_contradictory_labels_repairs_unowned_plus_single_worker(
     )
 
     assert controller.reconcile_contradictory_labels(issues, []) == [3008]
-    assert replaced == [(3008, "factory:13", None)]
+    assert replaced == [(3008, "factory:13", "factory:building")]
 
 
 def test_reconcile_contradictory_labels_repairs_in_progress_unowned(
