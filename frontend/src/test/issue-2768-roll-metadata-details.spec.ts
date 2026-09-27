@@ -21,6 +21,12 @@ const DESKTOP_VIEWPORT = { width: 1280, height: 900 }
 const PHONE_VIEWPORT = { width: 390, height: 844 }
 const TABLET_VIEWPORT = { width: 800, height: 1094 }
 
+/** Small opaque SVG used so the cover never hits the image optimizer. */
+const COVER_DATA_URI = (() => {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600"><rect width="400" height="600" fill="#111"/></svg>'
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
+})()
+
 function baseIntelligence(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     comicvine_issue_id: '100',
@@ -91,30 +97,6 @@ async function installRoutes(page: Page, intelligence: Record<string, unknown>):
   )
 }
 
-async function enterRatingView(page: Page, threadTitle: string): Promise<void> {
-  await installRoutes(page, baseIntelligence())
-  await gotoRollPage(page)
-  await page.locator('#main-die-3d').click()
-  await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
-  await page.getByText(threadTitle).first().click()
-  await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
-  await expect(page.getByTestId('rating-actions')).toBeVisible()
-  await page.evaluate(async () => {
-    if (document.fonts) {
-      await document.fonts.ready
-    }
-  })
-}
-
-async function getCoverUtilsRow(page: Page): Promise<{ viewLarger: boolean; comicVineLink: boolean }> {
-  const viewLargerBtn = page.locator('button[aria-label="View cover larger"]')
-  const comicVineLink = page.locator('a[aria-label="Open on ComicVine"]')
-  return {
-    viewLarger: await viewLargerBtn.count() > 0,
-    comicVineLink: await comicVineLink.count() > 0,
-  }
-}
-
 test.describe('issue #2768: cover utilities and metadata details', () => {
   test('View larger opens cover in Modal when image exists', async ({ authenticatedPage }) => {
     const page = authenticatedPage
@@ -125,7 +107,17 @@ test.describe('issue #2768: cover utilities and metadata details', () => {
       issues_remaining: 3,
       total_issues: 3,
     })
-    await enterRatingView(page, 'Cover Modal Thread')
+    await installRoutes(page, baseIntelligence({ image_url: COVER_DATA_URI }))
+    await gotoRollPage(page)
+    await page.locator('#main-die-3d').click()
+    await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
+    await page.getByText('Cover Modal Thread').first().click()
+    await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
+    await page.evaluate(async () => {
+      if (document.fonts) {
+        await document.fonts.ready
+      }
+    })
 
     const viewLargerBtn = page.locator('button[aria-label="View cover larger"]')
     await expect(viewLargerBtn).toBeVisible()
@@ -337,7 +329,11 @@ test.describe('issue #2768: creators and story arcs', () => {
     await expect(page.getByText('Writer One')).toBeVisible()
     await expect(page.getByText('Artist One')).toBeVisible()
     // Roles should be present
-    await expect(page.getByText((content) => content.includes('writer') && content.includes('penciler'))).toBeVisible()
+    const writerRow = page.locator('[data-testid="creator-row"]', { hasText: 'Writer One' })
+    await expect(writerRow).toContainText('writer')
+    const artistRow = page.locator('[data-testid="creator-row"]', { hasText: 'Artist One' })
+    await expect(artistRow).toContainText('penciler')
+    await expect(artistRow).toContainText('inker')
   })
 
   test('long creator list preserves Show all path', async ({ authenticatedPage }) => {
@@ -367,7 +363,7 @@ test.describe('issue #2768: creators and story arcs', () => {
 
     // Initially only first 6 shown
     await expect(page.getByText('Creator 6')).toBeVisible()
-    await expect(page.queryByText('Creator 7')).not.toBeVisible()
+    await expect(page.getByText('Creator 7')).toHaveCount(0)
 
     // Show all button
     const showAllBtn = page.getByRole('button', { name: /show all 10/i })

@@ -73,6 +73,10 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   }, [metadata?.image_url, isLoading])
 
   useEffect(() => {
+    setSummaryExpanded(false)
+  }, [metadata?.comicvine_issue_id])
+
+  useEffect(() => {
     if (creatorsDetailsRef.current) {
       creatorsDetailsRef.current.open = true
     }
@@ -387,7 +391,8 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                 {showAllCreators ? 'Show less' : `Show all ${metadata.creators.length}`}
               </button>
             )}
-          </details>
+            </details>
+          </>
         )}
 
         {metadata.story_arcs.length > 0 && (
