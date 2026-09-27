@@ -247,6 +247,8 @@ export const queryKeys = {
   },
   creators: {
     all: ['creators'] as const,
+    list: (params: { search?: string; sort?: 'name' | 'ratings_count' | 'average_rating'; limit?: number; offset?: number }) =>
+      ['creators', 'list', params] as const,
     summaries: (keys: string[]) =>
       ['creators', 'summaries', [...keys].sort()] as const,
   },

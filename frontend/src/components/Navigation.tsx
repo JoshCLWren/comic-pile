@@ -30,6 +30,7 @@ type NavIconName =
   | 'queue'
   | 'history'
   | 'crossovers'
+  | 'creators'
   | 'planner'
   | 'new'
   | 'glossary'
@@ -48,6 +49,7 @@ const MAIN_NAV_ITEMS: NavItem[] = [
   { path: '/queue', label: 'Queue', icon: 'queue', ariaLabel: 'Queue page' },
   { path: '/history', label: 'History', icon: 'history', ariaLabel: 'History page' },
   { path: '/crossovers', label: 'Crossovers', icon: 'crossovers', ariaLabel: 'Crossovers page' },
+  { path: '/creators', label: 'Creators', icon: 'creators', ariaLabel: 'Creators page' },
 ]
 
 const SECONDARY_NAV_ITEMS: NavItem[] = [
@@ -99,6 +101,11 @@ function NavIcon({ name }: { name: NavIconName }) {
         <path d="M4 17h3.5c1.4 0 2.4-.7 3.2-2"></path>
         <path d="M13.3 9c.8-1.3 1.8-2 3.2-2H20"></path>
         <path d="m17 4 3 3-3 3"></path>
+      </>
+    ),
+    creators: (
+      <>
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"></path>
       </>
     ),
     planner: (

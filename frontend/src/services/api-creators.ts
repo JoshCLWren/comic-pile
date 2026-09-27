@@ -58,6 +58,31 @@ export interface CreatorDetailPageParams {
   offset?: number
 }
 
+/** One row in the bounded creator discovery collection (issue #2775). */
+export interface CreatorListItem {
+  canonical_creator_key: string
+  display_name: string
+  normalized_roles: string[]
+  average_rating: number | null
+  ratings_count: number
+}
+
+/** Response body for the bounded personal creator list endpoint (issue #2775). */
+export interface CreatorListResponse {
+  items: CreatorListItem[]
+  total: number
+  limit: number
+  offset: number
+  coverage: CreatorSummaryCoverage
+}
+
+export interface CreatorListParams {
+  search?: string
+  sort?: 'name' | 'ratings_count' | 'average_rating'
+  limit?: number
+  offset?: number
+}
+
 export const creatorsApi = {
   getDetail: (creatorKey: string, params: CreatorDetailPageParams = {}) => {
     const queryParams: Record<string, string | number> = {}
@@ -71,5 +96,22 @@ export const creatorsApi = {
       `/v1/creators/${encodeURIComponent(creatorKey)}`,
       { params: queryParams },
     )
+  },
+
+  getList: (params: CreatorListParams = {}) => {
+    const queryParams: Record<string, string | number> = {}
+    if (params.search !== undefined) {
+      queryParams.search = params.search
+    }
+    if (params.sort !== undefined) {
+      queryParams.sort = params.sort
+    }
+    if (params.limit !== undefined) {
+      queryParams.limit = params.limit
+    }
+    if (params.offset !== undefined && params.offset > 0) {
+      queryParams.offset = params.offset
+    }
+    return api.get<CreatorListResponse>('/v1/creators', { params: queryParams })
   },
 }

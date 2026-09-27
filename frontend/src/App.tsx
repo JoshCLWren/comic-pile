@@ -51,6 +51,7 @@ const RollPage = lazyRoute('roll')
 const QueuePage = lazyRoute('queue')
 const ThreadDetailView = lazyRoute('threadDetail')
 const CreatorDetailPage = lazyRoute('creatorDetail')
+const CreatorsPage = lazyRoute('creators')
 const HistoryPage = lazyRoute('history')
 const SessionPage = lazyRoute('session')
 const CrossoversPage = lazyRoute('crossovers')
@@ -517,6 +518,15 @@ function AppRoutes() {
             <ServiceUnavailableWrapper>
               <AuthenticatedLayout onBugReportSubmit={submit}>
                 <SessionPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
+        <Route path="/creators" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <CreatorsPage />
               </AuthenticatedLayout>
             </ServiceUnavailableWrapper>
           </ProtectedRoute>
