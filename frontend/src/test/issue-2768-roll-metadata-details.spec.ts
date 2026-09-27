@@ -14,6 +14,7 @@
  * 10. Phone/tablet remain free of horizontal overflow.
  */
 import { expect, type Page } from '@playwright/test'
+import { type ComicVineIssueIntelligence } from '../services/api'
 import { test } from './fixtures'
 import { createThread, gotoRollPage } from './helpers'
 
@@ -27,7 +28,7 @@ const COVER_DATA_URI = (() => {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
 })()
 
-function baseIntelligence(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function baseIntelligence(overrides: Partial<ComicVineIssueIntelligence> = {}): ComicVineIssueIntelligence {
   return {
     comicvine_issue_id: '100',
     comicvine_url: null,
@@ -76,7 +77,7 @@ function minimalReaderContext() {
   }
 }
 
-async function installRoutes(page: Page, intelligence: Record<string, unknown>): Promise<void> {
+async function installRoutes(page: Page, intelligence: ComicVineIssueIntelligence): Promise<void> {
   await page.route('**/v1/threads/*/reading-orders', (route) =>
     route.fulfill({ json: { reading_orders: [] } }),
   )
