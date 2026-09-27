@@ -5,6 +5,8 @@ Always use next_issue_id and next_issue_number instead. The old fields are kept 
 backward compatibility but will be removed in a future version.
 """
 
+from __future__ import annotations
+
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from enum import StrEnum
