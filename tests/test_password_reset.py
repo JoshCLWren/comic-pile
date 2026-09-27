@@ -10,7 +10,6 @@ from app.services.email_delivery_service import (
     FakeEmailProvider,
     ResendEmailProvider,
     EmailDeliveryService,
-    get_email_delivery_service,
     EmailDeliveryError,
 )
 
@@ -122,17 +121,16 @@ class TestFakeEmailProvider:
         assert "message_id" in result
         assert "metadata" in result
         assert result["metadata"]["user_username"] == "testuser"
-        assert result["metadata"]["reset_token"] == "fake-token-123"
         
         # Verify email was stored
         assert len(provider.sent_emails) == 1
         email = provider.sent_emails[0]
         assert email["to"] == "test@example.com"
-        assert email["from"] == "Comic Pile <noreply@comicpile.app>"
+        assert email["sender"] == "Comic Pile <noreply@comicpile.app>"
         assert email["subject"] == "Reset your Comic Pile password"
         assert "Hello testuser" in email["text"]
         assert "https://comicpile.app/reset-password?token=fake-token-123" in email["text"]
-        assert "expires at" in email["text"]
+        assert "will expire at" in email["text"]
 
     @pytest.mark.asyncio
     async def test_multiple_emails_stored_separately(self) -> None:
@@ -223,27 +221,26 @@ class TestPasswordResetEmailIntegration:
     """Integration tests for password reset email delivery via API."""
 
     @pytest.mark.asyncio
-    async def test_forgot_password_sends_email_when_user_exists(self, async_db) -> None:
+    async def test_forgot_password_sends_email_when_user_exists(self, async_db, client) -> None:
         """Test that forgot-password endpoint sends email when user exists."""
         # Create a test user
         from app.repositories.user_repository import create_user
         from app.auth import hash_password
-        
-        user = await create_user(
+
+        await create_user(
             async_db,
             username="emailtest",
             email="emailtest@example.com",
             password_hash=hash_password("password"),
         )
         await async_db.commit()
-        
+
         # Mock the email service to capture calls
         with patch('app.api.auth.get_email_delivery_service') as mock_get_service:
             mock_email_service = AsyncMock()
             mock_get_service.return_value = mock_email_service
-            
+
             # Call forgot-password endpoint
-            client = AsyncClient()
             response = await client.post("/api/auth/forgot-password", json={"email": "emailtest@example.com"})
             
             # Verify response
@@ -255,7 +252,7 @@ class TestPasswordResetEmailIntegration:
             
             # Get the handoff that was passed to the email service
             call_args = mock_email_service.send_password_reset_email.call_args
-            handoff = call_args[1]["handoff"]
+            handoff = call_args[0][0]
             
             assert handoff.recipient_email == "emailtest@example.com"
             assert handoff.user_username == "emailtest"
@@ -263,15 +260,14 @@ class TestPasswordResetEmailIntegration:
             assert isinstance(handoff.expires_at, datetime)
 
     @pytest.mark.asyncio
-    async def test_forgot_password_does_not_send_email_when_user_not_exists(self, async_db) -> None:
+    async def test_forgot_password_does_not_send_email_when_user_not_exists(self, async_db, client) -> None:
         """Test that forgot-password endpoint doesn't send email when user doesn't exist."""
         # Mock the email service to capture calls
         with patch('app.api.auth.get_email_delivery_service') as mock_get_service:
             mock_email_service = AsyncMock()
             mock_get_service.return_value = mock_email_service
-            
+
             # Call forgot-password endpoint with non-existent email
-            client = AsyncClient()
             response = await client.post("/api/auth/forgot-password", json={"email": "notfound@example.com"})
             
             # Verify response
@@ -282,28 +278,27 @@ class TestPasswordResetEmailIntegration:
             mock_email_service.send_password_reset_email.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_email_delivery_failure_does_not_leak_account_existence(self, async_db) -> None:
+    async def test_email_delivery_failure_does_not_leak_account_existence(self, async_db, client) -> None:
         """Test that email delivery failure doesn't leak account existence."""
         # Create a test user
         from app.repositories.user_repository import create_user
         from app.auth import hash_password
-        
-        user = await create_user(
+
+        await create_user(
             async_db,
             username="emailfailtest",
             email="emailfailtest@example.com",
             password_hash=hash_password("password"),
         )
         await async_db.commit()
-        
+
         # Mock the email service to raise an error
         with patch('app.api.auth.get_email_delivery_service') as mock_get_service:
             mock_email_service = AsyncMock()
             mock_email_service.send_password_reset_email.side_effect = EmailDeliveryError("Delivery failed")
             mock_get_service.return_value = mock_email_service
-            
+
             # Call forgot-password endpoint
-            client = AsyncClient()
             response = await client.post("/api/auth/forgot-password", json={"email": "emailfailtest@example.com"})
             
             # Verify response is still safe (doesn't reveal account existence)

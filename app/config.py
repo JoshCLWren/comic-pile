@@ -602,6 +602,12 @@ class EmailSettings(BaseSettings):
         description="Public origin for password reset links",
         json_schema_extra={"env": "PASSWORD_RESET_ORIGIN"},
     )
+    email_delivery_timeout_seconds: float = Field(
+        default=10.0,
+        ge=1.0,
+        description="Timeout in seconds for outbound email delivery requests",
+        json_schema_extra={"env": "EMAIL_DELIVERY_TIMEOUT_SECONDS"},
+    )
 
     @property
     def is_resend_configured(self) -> bool:
