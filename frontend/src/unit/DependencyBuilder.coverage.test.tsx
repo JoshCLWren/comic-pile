@@ -11,10 +11,26 @@ import { cast } from '../utils/cast'
 import DependencyBuilder from '../components/DependencyBuilder'
 
 const api = {
-  dependenciesApi: vi.mocked(dependenciesApi, { deep: true }),
-  threadsApi: vi.mocked(threadsApi, { deep: true }),
-  issuesApi: vi.mocked(issuesApi, { deep: true }),
-  migrationApi: vi.mocked(migrationApi, { deep: true }),
+  dependenciesApi: {
+    ...dependenciesApi,
+    listThreadDependencies: vi.fn(),
+    listBlockedThreadIds: vi.fn(),
+    createDependency: vi.fn(),
+    deleteDependency: vi.fn(),
+    updateDependency: vi.fn(),
+  },
+  threadsApi: {
+    ...threadsApi,
+    list: vi.fn(),
+  },
+  issuesApi: {
+    ...issuesApi,
+    list: vi.fn(),
+  },
+  migrationApi: {
+    ...migrationApi,
+    migrateThread: vi.fn(),
+  },
 }
 
 const toast = {
@@ -36,14 +52,14 @@ const dependency: Dependency = { id: 4, source_thread_id: 2, target_thread_id: 1
 
 describe('DependencyBuilder', () => {
   beforeEach(() => {
-    vi.spyOn(dependenciesApi, 'listThreadDependencies').mockResolvedValue({ blocking: [], blocked_by: [] })
-    vi.spyOn(dependenciesApi, 'listBlockedThreadIds').mockResolvedValue([])
-    vi.spyOn(dependenciesApi, 'createDependency').mockResolvedValue({} as never)
-    vi.spyOn(dependenciesApi, 'deleteDependency').mockResolvedValue(undefined)
-    vi.spyOn(dependenciesApi, 'updateDependency').mockResolvedValue({} as never)
-    vi.spyOn(threadsApi, 'list').mockResolvedValue({ threads: [], next_page_token: null })
-    vi.spyOn(issuesApi, 'list').mockResolvedValue({ issues: [], total_count: 0, page_size: 100, next_page_token: null })
-    vi.spyOn(migrationApi, 'migrateThread').mockResolvedValue({} as never)
+    api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [], blocked_by: [] })
+    api.dependenciesApi.listBlockedThreadIds.mockResolvedValue([])
+    api.dependenciesApi.createDependency.mockResolvedValue({} as never)
+    api.dependenciesApi.deleteDependency.mockResolvedValue(undefined)
+    api.dependenciesApi.updateDependency.mockResolvedValue({} as never)
+    api.threadsApi.list.mockResolvedValue({ threads: [], next_page_token: null })
+    api.issuesApi.list.mockResolvedValue({ issues: [], total_count: 0, page_size: 100, next_page_token: null })
+    api.migrationApi.migrateThread.mockResolvedValue({} as never)
   })
 
   afterEach(() => {
