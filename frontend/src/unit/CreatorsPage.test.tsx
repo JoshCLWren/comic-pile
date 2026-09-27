@@ -257,7 +257,14 @@ describe('CreatorsPage', () => {
   })
 
   it('shows a busy load-more control while the next page loads', () => {
-    mockedHook.mockReturnValue(baseState({ hasMore: true, isFetchingMore: true }))
+    mockedHook.mockReturnValue(
+      baseState({
+        items: [makeItem({ canonical_creator_key: 'creator:7' })],
+        total: 40,
+        hasMore: true,
+        isFetchingMore: true,
+      }),
+    )
 
     renderPage()
 

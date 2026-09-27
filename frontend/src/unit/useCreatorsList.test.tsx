@@ -108,6 +108,7 @@ describe('useCreatorsList', () => {
       await result.current.loadMore()
     })
 
+    await waitFor(() => expect(result.current.items).toHaveLength(3))
     expect(mockedGetList).toHaveBeenLastCalledWith({
       search: undefined,
       sort: 'name',
@@ -151,6 +152,7 @@ describe('useCreatorsList', () => {
       await result.current.loadMore()
     })
 
+    await waitFor(() => expect(result.current.items).toHaveLength(3))
     expect(result.current.items.map((item) => item.canonical_creator_key)).toEqual([
       'creator:1',
       'creator:2',
