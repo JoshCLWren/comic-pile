@@ -3,10 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
+import { ToastProvider } from '../contexts/ToastProvider'
 import { RATING_THRESHOLD } from '../pages/RollPage/utils'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
 import type { ReaderContextResponse } from '../types'
-vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
 vi.mock('../components/Tooltip', () => ({
@@ -102,7 +102,9 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
 function ratingView(overrides: Partial<RatingViewData> = {}) {
   return (
     <MemoryRouter>
-      <RatingView data={makeRatingViewData(overrides)} />
+      <ToastProvider>
+        <RatingView data={makeRatingViewData(overrides)} />
+      </ToastProvider>
     </MemoryRouter>
   )
 }

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { RatingView } from '../pages/RollPage/components/RatingView'
-import type { RatingViewData } from '../pages/RollPage/useRatingView'
+import { ToastProvider } from '../contexts/ToastProvider'
 import { ReadingContextStatusCard } from '../pages/RollPage/components/ReadingContextStatusCard'
 import {
   hasReadingContextContent,
@@ -12,7 +12,6 @@ import {
 import type { RatingThread } from '../pages/RollPage/types'
 import type { ReaderContextResponse } from '../types'
 
-vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
 vi.mock('../components/Tooltip', () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -87,7 +86,9 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
 function renderRatingView(overrides: Partial<RatingViewData> = {}) {
   return render(
     <MemoryRouter>
-      <RatingView data={makeRatingViewData(overrides)} />
+      <ToastProvider>
+        <RatingView data={makeRatingViewData(overrides)} />
+      </ToastProvider>
     </MemoryRouter>
   )
 }
