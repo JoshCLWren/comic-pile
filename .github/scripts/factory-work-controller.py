@@ -18,7 +18,7 @@ from factory_capacity_policy import (
     omniroute_enabled,
     remaining_omniroute_free_entry_slots,
 )
-from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments)
+from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, env_positive_int, item_is_unowned, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments, stage_of)
 from stale_pr_decay import StalePRGuard
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
@@ -89,11 +89,27 @@ def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> N
         raise RuntimeError('dispatcher authorization failed: mutation blocked for non-dispatcher workflow')
     target = target_json(number)
     current = [label['name'] for label in target.get('labels', [])]
-    existing_stage = next((label for label in current if label in STAGE_LABELS), None)
-    stage = stage or existing_stage or 'factory:building'
+    
+    # Normalize state based on global policy
+    from factory_work_policy import normalize_target_state
+    norm_owner, norm_stage = normalize_target_state(set(current), owner)
+    
+    # Use requested stage if provided, otherwise use normalized stage.
+    # Normalized owner/stage enforce invariants (e.g. done removes transient
+    # labels; unowned removes building; blocked unowned gets factory:blocked).
+    final_stage = stage if stage is not None else norm_stage
+    final_owner = norm_owner
+
     # Remove all existing owner labels (including factory:unowned) and stage labels
     labels = [label for label in current if not OWNER_RE.fullmatch(label) and label not in STAGE_LABELS and (label != 'factory')]
-    labels.extend(['factory', owner, stage])
+    labels.extend(['factory', final_owner])
+    if final_stage:
+        labels.append(final_stage)
+    # Enforce ralph-status invariant: in-progress without real owner -> pending
+    if 'ralph-status:in-progress' in current and final_owner == 'factory:unowned':
+        labels = [label for label in labels if label != 'ralph-status:in-progress']
+        labels.append('ralph-status:pending')
+    
     run_gh(['api', '--method', 'PUT', f'repos/{REPO}/issues/{number}/labels', '--input', '-'], input_json={'labels': sorted(set(labels))})
 
 
@@ -470,29 +486,69 @@ def reconcile_contradictory_labels(
     issues: list[dict[str, Any]] | None=None,
     prs: list[dict[str, Any]] | None=None,
 ) -> list[int]:
-    """Repair pre-existing contradictory ownership labels without fresh assignment.
+    """Repair contradictory ownership and stage labels across all open targets.
 
-    A target carrying both ``factory:unowned`` and exactly one active worker
-    lease is contradictory: it claims to be simultaneously unowned and owned.
-    Remove the redundant ``factory:unowned`` label while preserving the active
-    owner and workflow stage. Fail closed (repair nothing) when the legitimate
-    owner cannot be determined, e.g. two distinct active worker leases.
+     repairs:
+    - `factory:building + factory:unowned` -> `factory:unowned` (no stage)
+    - `ralph-status:in-progress + factory:unowned` -> `factory:unowned`
+    - `ralph-status:blocked` without `factory:blocked` -> `factory:blocked + factory:unowned`
+    - `ralph-status:done` with transient labels -> removed
     """
     issue_items = list_issues() if issues is None else issues
     pr_items = list_prs() if prs is None else prs
     repaired: list[int] = []
+    
+    from factory_work_policy import normalize_target_state
+    
     for item in [*issue_items, *pr_items]:
-        owners = [label for label in labels_of(item) if OWNER_RE.fullmatch(label)]
-        if len(owners) <= 1 or 'factory:unowned' not in owners:
+        current_labels = labels_of(item)
+        owner = owner_of(current_labels)
+        
+        norm_owner, norm_stage = normalize_target_state(current_labels, owner)
+        
+        # Check if normalization would actually change anything
+        # We need to see if current labels match normalized state
+        is_contradictory = False
+        
+        # 1. Check owner mismatch
+        if owner != norm_owner:
+            is_contradictory = True
+        
+        # 2. Check stage mismatch
+        current_stage = stage_of(current_labels)
+        if current_stage != norm_stage:
+            is_contradictory = True
+
+        # Special case: if it's unowned but still has a building label, it's contradictory
+        if owner == 'factory:unowned' and 'factory:building' in current_labels:
+            is_contradictory = True
+
+        # An active owner may not coexist with factory:unowned (no-persisted-change
+        # handoff can leave both behind); drop the redundant unowned marker.
+        # Fail closed when two distinct active leases coexist with unowned:
+        # guessing which owner is legitimate would silently drop a real lease.
+        active_owners = {
+            label for label in current_labels
+            if OWNER_RE.fullmatch(label) and label != 'factory:unowned'
+        }
+        if len(active_owners) == 1 and 'factory:unowned' in current_labels:
+            is_contradictory = True
+        elif len(active_owners) > 1 and 'factory:unowned' in current_labels:
+            is_contradictory = False
+
+        # Executable work must never masquerade as in-progress without a real owner.
+        if 'ralph-status:in-progress' in current_labels and owner == 'factory:unowned':
+            is_contradictory = True
+            
+        if not is_contradictory:
             continue
-        active_owners = [owner for owner in owners if owner != 'factory:unowned']
-        if len(active_owners) != 1:
-            continue
+            
         number = int(item['number'])
-        replace_factory_labels(number, active_owners[0])
+        # This will apply the normalized owner and stage
+        replace_factory_labels(number, norm_owner, norm_stage)
         repaired.append(number)
         print(
-            f'[factory-controller] reconciled contradictory unowned label on #{number}',
+            f'[factory-controller] repaired contradictory state on #{number}: {owner}/{current_stage} -> {norm_owner}/{norm_stage}',
             file=sys.stderr,
         )
     return repaired
@@ -667,6 +723,7 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
         )
         return None
     reconcile_stale_leases()
+    reconcile_contradictory_labels()
     issues = list_issues()
     prs = list_prs()
     try:
