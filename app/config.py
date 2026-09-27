@@ -163,8 +163,10 @@ class AppSettings(BaseSettings):
     legacy_dependency_blocking_enabled: bool = Field(
         default=True,
         description=(
-            "Keep the raw Dependency Roll compatibility path enabled until the "
-            "reader-order migration cutover audit passes in production"
+            "Retired. The raw Dependency / ContinuityRule Roll switch is deleted; "
+            "Roll eligibility is computed from Thread frontiers plus canonical "
+            "Dependency rows only. The value is still accepted so existing "
+            "deployment configuration keeps loading, and it has no runtime effect."
         ),
         json_schema_extra={"env": "LEGACY_DEPENDENCY_BLOCKING_ENABLED"},
     )

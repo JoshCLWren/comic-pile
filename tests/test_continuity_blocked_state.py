@@ -50,11 +50,11 @@ async def _make_thread_with_issue(
 
 
 @pytest.mark.asyncio
-async def test_continuity_rule_immediately_updates_denormalized_blocked_state(
+async def test_canonical_dependency_immediately_updates_denormalized_blocked_state(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """Continuity rules refresh persisted blocked state immediately."""
+    """Canonical Dependency edges refresh persisted blocked state immediately."""
     user = await get_or_create_user_async(async_db)
     source_thread, source_issue = await _make_thread_with_issue(
         async_db,
@@ -70,6 +70,8 @@ async def test_continuity_rule_immediately_updates_denormalized_blocked_state(
     )
     await async_db.commit()
 
+    # A bare ContinuityRule is provenance only. Under the frozen architecture it
+    # must not gate Roll eligibility on its own.
     response = await auth_client.post(
         "/api/v1/continuity-rules/",
         json={
@@ -84,8 +86,22 @@ async def test_continuity_rule_immediately_updates_denormalized_blocked_state(
     assert response.status_code == 201, response.text
 
     await async_db.refresh(target_thread)
-    assert target_thread.is_blocked is True
+    assert target_thread.is_blocked is False
 
+    # The canonical edge is what blocks, and the mirroring trigger links it back
+    # to the rule so the two representations cannot drift apart.
+    async_db.add(
+        Dependency(
+            source_issue_id=source_issue.id,
+            target_issue_id=target_issue.id,
+        )
+    )
+    await async_db.commit()
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+
+    await async_db.refresh(target_thread)
+    assert target_thread.is_blocked is True
 
     source_issue.status = "read"
     await async_db.flush()
@@ -99,35 +115,35 @@ async def test_continuity_rule_immediately_updates_denormalized_blocked_state(
 
 
 @pytest.mark.asyncio
-async def test_unified_blocked_ids_preserve_legacy_issue_dependencies(
+async def test_canonical_blocked_ids_follow_issue_dependencies(
     async_db: AsyncSession,
 ) -> None:
-    """Unified blocked-state evaluation preserves legacy issue dependencies."""
+    """Canonical blocked-state evaluation follows canonical issue dependencies."""
     user = await get_or_create_user_async(async_db)
-    _legacy_source_thread, legacy_source_issue = await _make_thread_with_issue(
+    _canonical_source_thread, canonical_source_issue = await _make_thread_with_issue(
         async_db,
         user_id=user.id,
-        title="Legacy source",
+        title="Canonical source",
         queue_position=911,
     )
-    legacy_target_thread, legacy_target_issue = await _make_thread_with_issue(
+    canonical_target_thread, canonical_target_issue = await _make_thread_with_issue(
         async_db,
         user_id=user.id,
-        title="Legacy target",
+        title="Canonical target",
         queue_position=912,
     )
     async_db.add(
         Dependency(
-            source_issue_id=legacy_source_issue.id,
-            target_issue_id=legacy_target_issue.id,
+            source_issue_id=canonical_source_issue.id,
+            target_issue_id=canonical_target_issue.id,
         )
     )
     await async_db.commit()
 
     blocked_ids = await _get_blocked_thread_ids_uncached(user.id, async_db)
-    assert legacy_target_thread.id in blocked_ids
+    assert canonical_target_thread.id in blocked_ids
 
-    legacy_source_issue.status = "read"
+    canonical_source_issue.status = "read"
     await async_db.commit()
     blocked_ids = await _get_blocked_thread_ids_uncached(user.id, async_db)
-    assert legacy_target_thread.id not in blocked_ids
+    assert canonical_target_thread.id not in blocked_ids

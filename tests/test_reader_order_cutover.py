@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -283,30 +282,18 @@ async def test_cutover_fails_when_sequence_order_contributes_to_eligibility(
 
 
 @pytest.mark.asyncio
-async def test_runtime_switch_uses_only_canonical_rules_for_roll_eligibility(
+async def test_historical_cbl_rows_never_block_while_canonical_prerequisites_do(
     async_db: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Turning off raw blocking ignores debris while canonical prerequisites remain."""
-    user_id, threads, _issues, reader_order, _standalone = await _two_dependency_families(
+    """Historical ``cbl-order:%`` materialization is inert; canonical prerequisites block."""
+    user_id, threads, issues, reader_order, _standalone = await _two_dependency_families(
         async_db
     )
-    linked_reader_rule = await async_db.scalar(
-        select(ContinuityRule).where(
-            ContinuityRule.legacy_dependency_id == reader_order.id
-        )
-    )
-    assert linked_reader_rule is not None
-    await async_db.execute(
-        delete(ContinuityRule).where(ContinuityRule.id == linked_reader_rule.id)
-    )
+    # Reclassify the reader-order edge as historical CBL materialization, which
+    # the frozen architecture treats as source/order data rather than hard intent.
+    reader_order.note = "cbl-order:source:12345"
     await async_db.commit()
 
-    monkeypatch.setattr(
-        dependencies,
-        "get_app_settings",
-        lambda: SimpleNamespace(legacy_dependency_blocking_enabled=False),
-    )
     blocked = await dependencies._get_blocked_thread_ids_uncached(user_id, async_db)
     assert threads[1].id not in blocked
     assert threads[3].id in blocked
@@ -316,3 +303,28 @@ async def test_runtime_switch_uses_only_canonical_rules_for_roll_eligibility(
     roll_ids = {thread.id for thread in await get_roll_pool(user_id, async_db)}
     assert threads[1].id in roll_ids
     assert threads[3].id not in roll_ids
+
+
+@pytest.mark.asyncio
+async def test_cutover_audit_reports_pre_cutover_versus_canonical_blocked_sets(
+    async_db: AsyncSession,
+) -> None:
+    """The release gate measures the pre-cutover union beside the canonical set."""
+    user_id, threads, issues, reader_order, _standalone = await _two_dependency_families(
+        async_db
+    )
+    reader_order.note = "cbl-order:source:12345"
+    await async_db.commit()
+
+    audit = await reader_order_cutover.build_reader_order_cutover_audit(
+        async_db,
+        user_id=user_id,
+    )
+    # Both raw-Dependency rows block before the cutover.
+    assert sorted(audit["pre_cutover_blocked_thread_ids"]) == sorted(
+        [threads[1].id, threads[3].id]
+    )
+    # Only the canonical prerequisite survives the cutover.
+    assert audit["canonical_blocked_thread_ids"] == [threads[3].id]
+    assert audit["newly_blocked_thread_ids"] == []
+    assert audit["unblocked_thread_ids"] == [threads[1].id]

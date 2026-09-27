@@ -2,16 +2,20 @@
 
 from collections import defaultdict, deque
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import ColumnElement, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import TTL, cached
-from app.config import get_app_settings
-
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.services.continuity_graph import SNAPSHOT_SESSION_KEY
+
+# Historical CBL materialization carries its provenance in the note. Those rows
+# are source/order data, never reader-authored hard intent, so they stay inert
+# unless a specific row is separately proven or promoted. See
+# docs/READING_GRAPH_RUNTIME_AUDIT.md section 5.
+HISTORICAL_CBL_NOTE_PREFIX = "cbl-order:%"
 
 
 def _invalidate_continuity_snapshot(user_id: int, db: AsyncSession) -> None:
@@ -21,19 +25,43 @@ def _invalidate_continuity_snapshot(user_id: int, db: AsyncSession) -> None:
         session_cache.pop(user_id, None)
 
 
+def is_canonical_dependency() -> ColumnElement[bool]:
+    """Return the canonical-Dependency predicate shared by eligibility and explanations.
+
+    Eligibility and reader-facing blocking explanations must never disagree, so
+    both read the same predicate instead of restating the historical-CBL rule.
+
+    Returns:
+        A SQL predicate that is true for canonical hard edges only.
+    """
+    return or_(
+        Dependency.note.is_(None),
+        Dependency.note.notlike(HISTORICAL_CBL_NOTE_PREFIX),
+    )
+
+
 async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
-    """Read canonical blocked thread IDs directly from the current transaction.
-    
-    After the cutover, canonical Dependencies are the only Roll authority.
-    Thread.next_unread_issue_id + incoming canonical Dependencies = Roll eligibility.
+    """Return the canonical blocked thread IDs for one user.
+
+    ``Thread.next_unread_issue_id`` plus that frontier issue's incoming canonical
+    Dependency rows is the only Roll eligibility authority. ``ContinuityRule`` and
+    ``DependencyGroup`` ordering are not consulted; proven hard rule semantics were
+    persisted as canonical Dependency rows by
+    ``c86400000001_persist_canonical_continuity_dependencies``.
+
+    Args:
+        user_id: Thread owner whose blocked set is being evaluated.
+        db: Database session bound to the current transaction.
+
+    Returns:
+        IDs of threads whose current frontier issue has an unread canonical
+        prerequisite.
     """
     source_issue = Issue.__table__.alias("source_issue")
     next_unread_issue = Issue.__table__.alias("next_unread_issue")
     target_thread = Thread.__table__.alias("target_thread")
     source = Thread.__table__.alias("source_thread")
 
-    # Canonical runtime: Thread frontier + incoming Dependencies
-    # Exclude historical cbl-order:% rows unless separately proven as reader hard intent
     issue_result = await db.execute(
         select(target_thread.c.id)
         .join(
@@ -47,21 +75,68 @@ async def _get_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> se
         .where(source.c.user_id == user_id)
         .where(source_issue.c.status != "read")
         .where(target_thread.c.next_unread_issue_id.isnot(None))
-        .where(
-            # Canonical dependencies: exclude historical cbl-order:% rows
-            (Dependency.note.is_(None)) | (Dependency.note.notlike('cbl-order:%'))
-        )
+        .where(is_canonical_dependency())
         .distinct()
     )
     return {row[0] for row in issue_result.all()}
 
 
+async def _get_legacy_blocked_thread_ids_uncached(user_id: int, db: AsyncSession) -> set[int]:
+    """Return the pre-cutover raw-Dependency blocked set for the release gate.
 
+    This measures the behaviour the reader saw before the cutover: every raw
+    Dependency row blocks, including historical ``cbl-order:%`` materialization.
+    It is read-only measurement support for
+    :mod:`app.services.reader_order_cutover` and is never a Roll authority.
 
+    Args:
+        user_id: Thread owner whose pre-cutover blocked set is being measured.
+        db: Database session bound to the current transaction.
+
+    Returns:
+        IDs of threads blocked by any raw Dependency row.
+    """
+    source_issue = Issue.__table__.alias("source_issue")
+    next_unread_issue = Issue.__table__.alias("next_unread_issue")
+    target_thread = Thread.__table__.alias("target_thread")
+    source = Thread.__table__.alias("source_thread")
+
+    issue_result = await db.execute(
+        select(target_thread.c.id)
+        .join(
+            next_unread_issue,
+            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
+        )
+        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(source, source_issue.c.thread_id == source.c.id)
+        .where(target_thread.c.user_id == user_id)
+        .where(source.c.user_id == user_id)
+        .where(source_issue.c.status != "read")
+        .where(target_thread.c.next_unread_issue_id.isnot(None))
+        .distinct()
+    )
+    return {row[0] for row in issue_result.all()}
 
 @cached(ttl=TTL.SHORT)
 async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
     """Return cached blocked thread IDs for non-transactional reads."""
+    return await _get_blocked_thread_ids_uncached(user_id, db)
+
+
+async def get_canonical_blocked_thread_ids(
+    user_id: int,
+    db: AsyncSession,
+) -> set[int]:
+    """Return the canonical blocked set for measurement, bypassing the cache.
+
+    Args:
+        user_id: Thread owner whose blocked set is measured.
+        db: Database session bound to the current transaction.
+
+    Returns:
+        IDs of threads blocked by an unread canonical prerequisite.
+    """
     return await _get_blocked_thread_ids_uncached(user_id, db)
 
 
@@ -115,13 +190,24 @@ def _merge_blocking_explanations(
     return merged
 
 
-
-
-
-async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[BlockingDependency]:
+async def get_blocking_explanations(
+    thread_id: int,
+    user_id: int,
+    db: AsyncSession,
+) -> list[BlockingDependency]:
     """Human-readable reasons a thread is blocked using canonical Dependencies.
-    
-    After the cutover, canonical Dependencies are the only blocking authority.
+
+    Reads the same frontier plus incoming canonical Dependency rows as
+    :func:`_get_blocked_thread_ids_uncached`, so explanations never describe a
+    blocker Roll would not enforce.
+
+    Args:
+        thread_id: Thread whose blocking prerequisites are described.
+        user_id: Authenticated user ID for ownership validation.
+        db: Database session.
+
+    Returns:
+        One :class:`BlockingDependency` per unread canonical prerequisite.
     """
     source_issue = Issue.__table__.alias("source_issue")
     next_unread_issue = Issue.__table__.alias("next_unread_issue")
@@ -148,19 +234,16 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
         .where(source_thread.c.user_id == user_id)
         .where(source_issue.c.status != "read")
         .where(target_thread.c.next_unread_issue_id.isnot(None))
-        .where(
-            # Canonical dependencies: exclude historical cbl-order:% rows
-            (Dependency.note.is_(None)) | (Dependency.note.notlike('cbl-order:%'))
-        )
+        .where(is_canonical_dependency())
         .distinct()
     )
     return [
         BlockingDependency(
-            thread_id=thread_id_val,
+            thread_id=source_thread_id,
             thread_title=thread_title,
             issue_number=str(issue_number),
         )
-        for thread_id_val, thread_title, _issue_id, issue_number in issue_result.all()
+        for source_thread_id, thread_title, _issue_id, issue_number in issue_result.all()
     ]
 
 
@@ -169,9 +252,21 @@ async def get_blocking_explanations_batch(
     user_id: int,
     db: AsyncSession,
 ) -> dict[int, list[BlockingDependency]]:
-    """Human-readable blocking reasons for multiple threads using canonical Dependencies."""
+    """Human-readable blocking reasons for multiple threads in one query.
+
+    Args:
+        thread_ids: Threads whose blocking prerequisites are described.
+        user_id: Authenticated user ID for ownership validation.
+        db: Database session.
+
+    Returns:
+        Mapping of thread ID to that thread's unread canonical prerequisites.
+        Every requested thread is present, so callers can rely on the mapping
+        agreeing with eligibility for the whole batch.
+    """
     if not thread_ids:
         return {}
+
 
     source_issue = Issue.__table__.alias("source_issue")
     next_unread_issue = Issue.__table__.alias("next_unread_issue")
@@ -198,13 +293,12 @@ async def get_blocking_explanations_batch(
         .where(source_thread.c.user_id == user_id)
         .where(source_issue.c.status != "read")
         .where(target_thread.c.next_unread_issue_id.isnot(None))
-        .where(
-            # Canonical dependencies: exclude historical cbl-order:% rows
-            (Dependency.note.is_(None)) | (Dependency.note.notlike('cbl-order:%'))
-        )
+        .where(is_canonical_dependency())
     )
 
-    reasons_map: dict[int, list[BlockingDependency]] = {}
+    reasons_map: dict[int, list[BlockingDependency]] = {
+        thread_id: [] for thread_id in thread_ids
+    }
     for target_tid, src_tid, src_title, _src_iid, src_issue_num in result.all():
         reasons_map.setdefault(target_tid, []).append(
             BlockingDependency(
@@ -384,58 +478,6 @@ async def refresh_user_blocked_status(
         Mapping of changed thread IDs to their previous blocked flag.
     """
     blocked_ids = await _get_blocked_thread_ids_uncached(user_id, db)
-
-    candidate_filter = Thread.is_blocked.is_(True)
-    if blocked_ids:
-        candidate_filter = or_(candidate_filter, Thread.id.in_(blocked_ids))
-
-    result = await db.execute(
-        select(Thread.id, Thread.is_blocked)
-        .where(Thread.user_id == user_id)
-        .where(candidate_filter)
-    )
-    prior_values = {row.id: row.is_blocked for row in result.all()}
-    changes = {
-        thread_id: old_value
-        for thread_id, old_value in prior_values.items()
-        if old_value != (thread_id in blocked_ids)
-    }
-
-    to_unblock = [thread_id for thread_id in changes if thread_id not in blocked_ids]
-    if to_unblock:
-        await db.execute(
-            update(Thread)
-            .where(Thread.user_id == user_id)
-            .where(Thread.id.in_(to_unblock))
-            .values(is_blocked=False)
-        )
-
-    to_block = [thread_id for thread_id in changes if thread_id in blocked_ids]
-    if to_block:
-        await db.execute(
-            update(Thread)
-            .where(Thread.user_id == user_id)
-            .where(Thread.id.in_(to_block))
-            .values(is_blocked=True)
-        )
-
-    return changes
-
-
-async def refresh_legacy_blocked_status(
-    user_id: int,
-    db: AsyncSession,
-) -> dict[int, bool]:
-    """Recalculate dependency-based blocked flags and return prior values that changed.
-
-    Args:
-        user_id: Thread owner.
-        db: Database session.
-
-    Returns:
-        Mapping of changed thread IDs to their previous blocked flag.
-    """
-    blocked_ids = await _get_legacy_blocked_thread_ids_uncached(user_id, db)
 
     candidate_filter = Thread.is_blocked.is_(True)
     if blocked_ids:

@@ -24,6 +24,7 @@ from app.services.explicit_reader_order_migration import (
 from comic_pile.dependencies import (
     _get_legacy_blocked_thread_ids_uncached,
     _invalidate_continuity_snapshot,
+    get_canonical_blocked_thread_ids,
 )
 
 
@@ -71,6 +72,13 @@ async def build_reader_order_cutover_audit(
     only — active ``DependencyGroupMembership.sequence_order`` blockers fail the
     gate rather than counting as canonical coverage. Point-in-time Roll equality
     is reported as an additional check, not as the definition of equivalence.
+
+    After the canonical cutover the release gate also reports the measured
+    difference between the pre-cutover blocked union and the canonical blocked
+    set, which is the shadow verification required by
+    ``docs/READING_GRAPH_RUNTIME_AUDIT.md`` section 7 step 2. A non-empty
+    ``newly_blocked_thread_ids`` means the cutover would hide a comic the reader
+    could previously roll, and must block promotion.
     """
     _invalidate_continuity_snapshot(user_id, db)
     index = _load_step14_index()
@@ -124,6 +132,12 @@ async def build_reader_order_cutover_audit(
     continuity_rule_blocked = await get_continuity_rule_blocked_thread_ids(user_id, db)
     sequence_order_blocked = await get_sequence_order_blocked_thread_ids(user_id, db)
     legacy_only = sorted(legacy_blocked - continuity_rule_blocked)
+    # Shadow verification for the canonical cutover: compare the pre-cutover
+    # union against the frontier + canonical-Dependency blocked set.
+    canonical_blocked = await get_canonical_blocked_thread_ids(user_id, db)
+    pre_cutover_blocked = legacy_blocked | continuity_rule_blocked
+    newly_blocked = sorted(canonical_blocked - pre_cutover_blocked)
+    unblocked = sorted(pre_cutover_blocked - canonical_blocked)
 
     linked_rules = list(
         (
@@ -177,6 +191,9 @@ async def build_reader_order_cutover_audit(
         and not legacy_only
         and not sequence_order_blocked_ids
     )
+    # The canonical switch is only safe when it hides nothing the reader could
+    # previously roll.
+    canonical_cutover_safe = not newly_blocked
     return {
         "user_id": user_id,
         "classification_totals": dict(sorted(totals.items())),
@@ -205,6 +222,11 @@ async def build_reader_order_cutover_audit(
         "continuity_blocked_thread_ids": sorted(continuity_rule_blocked),
         "sequence_order_blocked_thread_ids": sequence_order_blocked_ids,
         "legacy_only_blocked_thread_ids": legacy_only,
+        "pre_cutover_blocked_thread_ids": sorted(pre_cutover_blocked),
+        "canonical_blocked_thread_ids": sorted(canonical_blocked),
+        "newly_blocked_thread_ids": newly_blocked,
+        "unblocked_thread_ids": unblocked,
         "release_condition_met": release_condition_met,
         "runtime_cutover_safe": runtime_cutover_safe,
+        "canonical_cutover_safe": canonical_cutover_safe,
     }
