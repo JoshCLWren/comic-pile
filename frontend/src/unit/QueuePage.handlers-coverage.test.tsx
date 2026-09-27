@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, unmount, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserRouter, MemoryRouter } from 'react-router-dom'
@@ -349,7 +349,11 @@ describe('QueuePage callback coverage', () => {
 
   it('handles loading, empty active queues, and failed queue mutations', async () => {
     const loadingDoubles = createDoubles({ threads: { data: null, isPending: true } })
-    const { unmount } = renderPage(loadingDoubles)
+    const { unmount } = render(
+      <BrowserRouter>
+        <QueuePage dependencies={loadingDoubles.deps} />
+      </BrowserRouter>,
+    )
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
     unmount()
 
