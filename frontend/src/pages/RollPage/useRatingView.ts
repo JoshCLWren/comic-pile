@@ -9,7 +9,9 @@ interface UseRatingViewParams {
   readerContextRequested: boolean
   readingContextRequested: boolean
   readingBoundariesRequested: boolean
+  readingOrdersIsLoading: boolean
   readingOrdersError: Error | null
+  connectedThreadsIsLoading: boolean
   connectedThreadsError: Error | null
   rating: {
     updateRatingUI: (value: string) => void
@@ -49,7 +51,11 @@ export interface RatingViewData {
   readerContextError: Error | null
   ratingViewTopRef: React.RefObject<HTMLDivElement | null> | null
   issuesRemaining: number
+  readingContextRequested: boolean
+  readingBoundariesRequested: boolean
+  readingOrdersIsLoading: boolean
   readingOrdersError: Error | null
+  connectedThreadsIsLoading: boolean
   connectedThreadsError: Error | null
 }
 
@@ -61,13 +67,21 @@ export interface RatingViewData {
  * reader-context-requested flag from useRollRating. This reduces
  * RatingView's prop surface from 20+ individual props to a single
  * data object consumed by the hook.
+ *
+ * The optional reading-detail request scopes and their bounded
+ * loading/error state are passed through untouched, so the Reading
+ * Context and Reading Boundaries cards can render their own local
+ * state without reaching back into the page or the global rating
+ * error channel.
  */
 export function useRatingView({
   state,
-   readerContextRequested,
-   readingContextRequested: _readingContextRequested,
-   readingBoundariesRequested: _readingBoundariesRequested,
-   readingOrdersError,
+  readerContextRequested,
+  readingContextRequested,
+  readingBoundariesRequested,
+  readingOrdersIsLoading,
+  readingOrdersError,
+  connectedThreadsIsLoading,
   connectedThreadsError,
   rating,
   snooze,
@@ -121,7 +135,11 @@ export function useRatingView({
     readerContextError: readerContextError ?? null,
     ratingViewTopRef,
     issuesRemaining,
+    readingContextRequested,
+    readingBoundariesRequested,
+    readingOrdersIsLoading,
     readingOrdersError,
+    connectedThreadsIsLoading,
     connectedThreadsError,
   }
 }

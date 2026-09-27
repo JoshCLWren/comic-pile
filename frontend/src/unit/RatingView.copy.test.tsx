@@ -68,7 +68,11 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     readerContextError: null,
     ratingViewTopRef: null,
     issuesRemaining: 4,
+    readingContextRequested: false,
+    readingBoundariesRequested: false,
+    readingOrdersIsLoading: false,
     readingOrdersError: null,
+    connectedThreadsIsLoading: false,
     connectedThreadsError: null,
     ...overrides,
   }

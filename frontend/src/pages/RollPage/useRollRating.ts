@@ -55,36 +55,36 @@ export function useRollRating({
 
   const readerContextRequested = readingContextRequested || readingBoundariesRequested
 
+  // Reading orders and connected-thread metadata belong to the Reading Context
+  // surface only, so they stay disabled until that surface is requested. The
+  // Reading Boundaries surface shares the reader-context payload, not these two
+  // queries.
+  //
+  // React Query reports a disabled query as pending, so the loading flags are
+  // gated on the request scope. Otherwise a card would render a permanent
+  // spinner for a request the user never made.
   const {
     readingOrders,
+    isPending: readingOrdersPending,
     isError: readingOrdersIsError,
     error: readingOrdersError,
   } = useReadingOrdersForThread(activeRatingThread?.id ?? null, readingContextRequested)
 
   const {
     connectedThreads,
+    isPending: connectedThreadsPending,
     isError: connectedThreadsIsError,
     error: connectedThreadsError,
   } = useConnectedThreads(activeRatingThread?.id ?? null, readingContextRequested)
 
+  const readingOrdersIsLoading = readingContextRequested && readingOrdersPending
+  const connectedThreadsIsLoading = readingContextRequested && connectedThreadsPending
+
   const clearLastRated = useCallback(() => setLastRated(null), [])
 
-  const requestReaderContext = useCallback(() => {
+  const fetchReadingContext = useCallback((_threadId: number | null) => {
     setReadingContextRequested(true)
-    setReadingBoundariesRequested(true)
   }, [])
-
-  const fetchReadingDetails = useCallback((_threadId: number | null) => {
-    setReadingContextRequested(true)
-    setReadingBoundariesRequested(true)
-  }, [])
-
-   const fetchReadingContext = useCallback(
-    (_threadId: number | null) => {
-      setReadingContextRequested(true)
-    },
-    [],
-  )
 
   const fetchReadingBoundaries = useCallback(() => {
     setReadingBoundariesRequested(true)
@@ -115,7 +115,9 @@ export function useRollRating({
 
       // A fresh rating session starts with no reading details: reader context,
       // reading orders, and connected threads are user-triggered and never
-      // carried over (or re-fetched) from a previous thread.
+      // carried over (or re-fetched) from a previous thread. Both optional
+      // request scopes reset together so one issue can never leak an opened
+      // surface into the next.
       setReadingContextRequested(false)
       setReadingBoundariesRequested(false)
 
@@ -345,12 +347,12 @@ export function useRollRating({
     readingContextRequested,
     readingBoundariesRequested,
     readerContextRequested,
-    fetchReadingDetails,
     fetchReadingContext,
     fetchReadingBoundaries,
-    requestReaderContext,
+    readingOrdersIsLoading,
     readingOrdersIsError,
     readingOrdersError,
+    connectedThreadsIsLoading,
     connectedThreadsIsError,
     connectedThreadsError,
     enterRatingView,
