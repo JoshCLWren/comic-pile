@@ -59,13 +59,13 @@ async function fetchAllIssues(threadId: number, issueApi: CrossoverIssuesApi = i
   }
 }
 
-async function fetchAllThreads(threads: CrossoverThreadsApi = threadsApi): Promise<ThreadListItem[]> {
+async function fetchAllThreads(threadApi: CrossoverThreadsApi = threadsApi): Promise<ThreadListItem[]> {
   const threads: ThreadListItem[] = []
   const seenPageTokens = new Set<string>()
   let nextPageToken: string | null = null
 
   while (true) {
-    const data: ThreadListResponse = await threads.list({ page_size: 100 }, nextPageToken)
+    const data: ThreadListResponse = await threadApi.list({ page_size: 100 }, nextPageToken)
     threads.push(...data.threads)
     if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) return threads
     seenPageTokens.add(data.next_page_token)
