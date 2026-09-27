@@ -21,10 +21,10 @@ const COVER_DATA_URI = (() => {
 async function enterRatingView(page: Page, title: string) {
   await gotoRollPage(page)
   await page.locator('#main-die-3d').click()
-  await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 20000 })
+  await expect(page.getByRole('button', { name: 'Roll' })).toBeVisible({ timeout: 20000 })
   await page.getByText(title).first().click()
   await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
-  await page.getByTestId('rating-actions').toBeVisible()
+  await expect(page.getByTestId('rating-actions')).toBeVisible()
   await page.evaluate(async () => {
     if (document.fonts) await document.fonts.ready
   })
