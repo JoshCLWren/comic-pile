@@ -221,6 +221,38 @@ class SeriesMappingPreviewProviderSeries(BaseModel):
     image: dict[str, object] | None = Field(default=None, description="Image information")
 
 
+class SeriesMappingCommitRequest(BaseModel):
+    """Schema for series mapping commit requests."""
+
+    preview_token: str = Field(..., min_length=1, description="Signed preview token from preview endpoint")
+    idempotency_key: str = Field(..., min_length=1, description="Unique key for idempotent commits")
+    approved_row_ids: list[str] = Field(..., description="List of approved row IDs (e.g., 'issue:789') - must be safe_exact_match only")
+
+    @field_validator("approved_row_ids")
+    @classmethod
+    def validate_approved_row_ids(cls, approved_row_ids: list[str]) -> list[str]:
+        """Validate that all approved row IDs are properly formatted."""
+        for row_id in approved_row_ids:
+            if not row_id.startswith("issue:"):
+                raise ValueError(f"invalid row_id format: {row_id} - must start with 'issue:'")
+            try:
+                int(row_id[6:])  # Extract and validate issue number part
+            except ValueError:
+                raise ValueError(f"invalid row_id format: {row_id} - issue number must be integer")
+        return approved_row_ids
+
+
+class SeriesMappingCommitResponse(BaseModel):
+    """Schema for series mapping commit responses."""
+
+    idempotency_key: str = Field(..., description="Original idempotency key")
+    confirmed_issue_ids: list[int] = Field(default_factory=list, description="Issue IDs that were newly confirmed")
+    already_confirmed_issue_ids: list[int] = Field(default_factory=list, description="Issue IDs that were already confirmed")
+    needs_review_issue_ids: list[int] = Field(default_factory=list, description="Issue IDs that still need review")
+    hydration_queued_issue_ids: list[int] = Field(default_factory=list, description="Issue IDs queued for metadata hydration")
+    series_mapping: dict[str, object] = Field(..., description="Information about the confirmed series mapping")
+
+
 class SeriesMappingPreviewResponse(BaseModel):
     """Schema for series mapping preview responses."""
 

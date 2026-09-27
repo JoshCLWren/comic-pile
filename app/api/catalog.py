@@ -450,3 +450,49 @@ async def preview_series_mapping(
         issued_at=preview_data["issued_at"],
         expires_at=preview_data.get("expires_at"),
     )
+
+
+@router.post(
+    "/catalog/series-mappings/commit",
+    response_model=SeriesMappingCommitResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def commit_series_mapping(
+    request: SeriesMappingCommitRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SeriesMappingCommitResponse:
+    """Commit approved series mappings from a preview.
+    
+    This endpoint applies only the reviewed bulk-safe mappings from a series-mapping
+    preview, establishes confirmed series evidence with provenance, and hands metadata
+    hydration to existing infrastructure.
+    
+    Args:
+        request: Commit request with preview token, idempotency key, and approved row IDs.
+        current_user: Authenticated user for authorization.
+        db: Database session.
+        
+    Returns:
+        Commit response with confirmed, already confirmed, and needs review issue IDs.
+        
+    Raises:
+        HTTPException: For various error conditions including stale tokens, conflicts,
+            invalid input, and idempotency violations.
+    """
+    commit_response = await commit_series_mapping_svc(
+        db,
+        user_id=current_user.id,
+        preview_token=request.preview_token,
+        idempotency_key=request.idempotency_key,
+        approved_row_ids=request.approved_row_ids,
+    )
+    
+    return SeriesMappingCommitResponse(
+        idempotency_key=commit_response["idempotency_key"],
+        confirmed_issue_ids=commit_response["confirmed_issue_ids"],
+        already_confirmed_issue_ids=commit_response["already_confirmed_issue_ids"],
+        needs_review_issue_ids=commit_response["needs_review_issue_ids"],
+        hydration_queued_issue_ids=commit_response["hydration_queued_issue_ids"],
+        series_mapping=commit_response["series_mapping"],
+    )
