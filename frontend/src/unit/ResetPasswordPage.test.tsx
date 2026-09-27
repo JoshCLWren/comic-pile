@@ -38,7 +38,7 @@ describe('ResetPasswordPage', () => {
     renderPage('?token=valid-token');
 
     expect(screen.getByRole('heading', { name: /reset password/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/new password/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^new password$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/confirm new password/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /reset password/i })).toBeInTheDocument();
   });
@@ -59,7 +59,7 @@ describe('ResetPasswordPage', () => {
   it('shows error when password is too short', async () => {
     renderPage('?token=valid-token');
 
-    const newPasswordInput = screen.getByLabelText(/new password/i);
+    const newPasswordInput = screen.getByLabelText(/^new password$/i);
     const confirmPasswordInput = screen.getByLabelText(/confirm new password/i);
     const submitButton = screen.getByRole('button', { name: /reset password/i });
 
@@ -77,7 +77,7 @@ describe('ResetPasswordPage', () => {
   it('shows error when passwords do not match', async () => {
     renderPage('?token=valid-token');
 
-    const newPasswordInput = screen.getByLabelText(/new password/i);
+    const newPasswordInput = screen.getByLabelText(/^new password$/i);
     const confirmPasswordInput = screen.getByLabelText(/confirm new password/i);
     const submitButton = screen.getByRole('button', { name: /reset password/i });
 
@@ -97,7 +97,7 @@ describe('ResetPasswordPage', () => {
 
     renderPage('?token=valid-token');
 
-    const newPasswordInput = screen.getByLabelText(/new password/i);
+    const newPasswordInput = screen.getByLabelText(/^new password$/i);
     const confirmPasswordInput = screen.getByLabelText(/confirm new password/i);
     const submitButton = screen.getByRole('button', { name: /reset password/i });
 
@@ -125,7 +125,7 @@ describe('ResetPasswordPage', () => {
     renderPage('?token=valid-token');
 
 
-    const newPasswordInput = screen.getByLabelText(/new password/i);
+    const newPasswordInput = screen.getByLabelText(/^new password$/i);
     const confirmPasswordInput = screen.getByLabelText(/confirm new password/i);
     const submitButton = screen.getByRole('button', { name: /reset password/i });
 
@@ -148,7 +148,7 @@ describe('ResetPasswordPage', () => {
     renderPage('?token=valid-token');
 
 
-    const newPasswordInput = screen.getByLabelText(/new password/i);
+    const newPasswordInput = screen.getByLabelText(/^new password$/i);
     const confirmPasswordInput = screen.getByLabelText(/confirm new password/i);
     const submitButton = screen.getByRole('button', { name: /reset password/i });
 
@@ -171,7 +171,7 @@ describe('ResetPasswordPage', () => {
     renderPage('?token=valid-token');
 
 
-    const newPasswordInput = screen.getByLabelText(/new password/i);
+    const newPasswordInput = screen.getByLabelText(/^new password$/i);
     const confirmPasswordInput = screen.getByLabelText(/confirm new password/i);
     const submitButton = screen.getByRole('button', { name: /reset password/i });
 
@@ -193,7 +193,7 @@ describe('ResetPasswordPage', () => {
 
     renderPage('?token=valid-token');
 
-    const newPasswordInput = screen.getByLabelText(/new password/i);
+    const newPasswordInput = screen.getByLabelText(/^new password$/i);
     const confirmPasswordInput = screen.getByLabelText(/confirm new password/i);
     const submitButton = screen.getByRole('button', { name: /reset password/i });
 
@@ -213,7 +213,7 @@ describe('ResetPasswordPage', () => {
 
     renderPage('?token=valid-token');
 
-    const newPasswordInput = screen.getByLabelText(/new password/i);
+    const newPasswordInput = screen.getByLabelText(/^new password$/i);
     const confirmPasswordInput = screen.getByLabelText(/confirm new password/i);
     const submitButton = screen.getByRole('button', { name: /reset password/i });
 
@@ -234,7 +234,7 @@ describe('ResetPasswordPage', () => {
 
     renderPage('?token=valid-token');
 
-    const newPasswordInput = screen.getByLabelText(/new password/i);
+    const newPasswordInput = screen.getByLabelText(/^new password$/i);
     const confirmPasswordInput = screen.getByLabelText(/confirm new password/i);
     const submitButton = screen.getByRole('button', { name: /reset password/i });
 
