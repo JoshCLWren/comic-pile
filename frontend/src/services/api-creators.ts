@@ -58,6 +58,31 @@ export interface CreatorDetailPageParams {
   offset?: number
 }
 
+/** One row in the bounded creator discovery collection (issue #2775). */
+export interface CreatorListItem {
+  canonical_creator_key: string
+  display_name: string
+  normalized_roles: string[]
+  average_rating: number | null
+  ratings_count: number
+}
+
+/** Response body for the bounded personal creator list endpoint (issue #2775). */
+export interface CreatorListResponse {
+  items: CreatorListItem[]
+  total: number
+  limit: number
+  offset: number
+  coverage: CreatorSummaryCoverage
+}
+
+export interface CreatorListParams {
+  search?: string
+  sort?: 'name' | 'ratings_count' | 'average_rating'
+  limit?: number
+  offset?: number
+}
+
 /**
  * Build the creator service bound to an HTTP client.
  *
@@ -78,6 +103,24 @@ export function createCreatorsApi(client: HttpClient) {
         `/v1/creators/${encodeURIComponent(creatorKey)}`,
         { params: queryParams },
       )
+    },
+
+    getList: (params: CreatorListParams = {}) => {
+      const queryParams: Record<string, string | number> = {}
+      const search = params.search?.trim()
+      if (search) {
+        queryParams.search = search
+      }
+      if (params.sort !== undefined) {
+        queryParams.sort = params.sort
+      }
+      if (params.limit !== undefined) {
+        queryParams.limit = params.limit
+      }
+      if (params.offset !== undefined && params.offset > 0) {
+        queryParams.offset = params.offset
+      }
+      return client.get<CreatorListResponse>('/v1/creators', { params: queryParams })
     },
   }
 }
