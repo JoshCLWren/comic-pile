@@ -1,31 +1,15 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, expect, it } from 'vitest'
 import { createApiClient, setAccessToken } from '../services/api'
 import { createApiServiceSet } from './apiServiceSet'
+import { createTransportDouble } from './transportDouble'
 
-/**
- * Faithful in-test transport. It records every request the production service
- * layer makes and captures the interceptors `createApiClient` registers, so
- * the real client wiring is exercised instead of a replaced module.
- */
-const transport = {
-  request: vi.fn(),
-  get: vi.fn(),
-  post: vi.fn(),
-  put: vi.fn(),
-  delete: vi.fn(),
-  patch: vi.fn(),
-  interceptors: {
-    request: { use: vi.fn() },
-    response: { use: vi.fn() },
-  },
-}
+const transport = createTransportDouble()
+const client = createApiClient(() => transport)
 
 const { get, post, put } = transport
 const del = transport.delete
 const patch = transport.patch
 
-// SAFETY: test transport double satisfies AxiosInstance shape for createApiClient; interceptor wiring is exercised.
-const client = createApiClient(() => transport as never)
 const {
   bugReportsApi,
   creatorsApi,

@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { RatePayload, Thread } from '../types'
 
 /**
@@ -15,4 +14,4 @@ export function createRateApi(client: HttpClient) {
   }
 }
 
-export const rateApi = createRateApi(api)
+export const rateApi = createRateApi(defaultHttpClient())

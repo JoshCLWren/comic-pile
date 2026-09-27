@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { RollResponse } from '../types'
 
 /**
@@ -15,4 +14,4 @@ export function createSkipApi(client: HttpClient) {
   }
 }
 
-export const skipApi = createSkipApi(api)
+export const skipApi = createSkipApi(defaultHttpClient())

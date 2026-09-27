@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { RollResponse } from '../types'
 
 /**
@@ -20,4 +19,4 @@ export function createRollApi(client: HttpClient) {
   }
 }
 
-export const rollApi = createRollApi(api)
+export const rollApi = createRollApi(defaultHttpClient())

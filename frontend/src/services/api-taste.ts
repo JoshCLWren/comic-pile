@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 
 /** Explicit reader verdict for an inferred taste pattern. */
 export type TasteVerdict = 'confirmed' | 'sometimes' | 'rejected'
@@ -57,4 +56,4 @@ export function createTasteApi(client: HttpClient) {
 }
 }
 
-export const tasteApi = createTasteApi(api)
+export const tasteApi = createTasteApi(defaultHttpClient())

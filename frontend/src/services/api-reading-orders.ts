@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { ContinuityPlan } from './api-continuity-plans'
 
 export interface ReadingOrderItem {
@@ -135,4 +134,4 @@ export function createReadingOrdersApi(client: HttpClient) {
 }
 }
 
-export const readingOrdersApi = createReadingOrdersApi(api)
+export const readingOrdersApi = createReadingOrdersApi(defaultHttpClient())

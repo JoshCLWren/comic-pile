@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 import type {
   ReactivateThreadPayload,
   RollResponse,
@@ -55,4 +54,4 @@ export function createThreadsApi(client: HttpClient) {
   }
 }
 
-export const threadsApi = createThreadsApi(api)
+export const threadsApi = createThreadsApi(defaultHttpClient())

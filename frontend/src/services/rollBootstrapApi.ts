@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 import type {
   RollBootstrapResponse,
   RollPrerequisiteSwitchRequest,
@@ -25,4 +24,4 @@ export function createRollBootstrapApi(client: HttpClient) {
 }
 }
 
-export const rollBootstrapApi = createRollBootstrapApi(api)
+export const rollBootstrapApi = createRollBootstrapApi(defaultHttpClient())

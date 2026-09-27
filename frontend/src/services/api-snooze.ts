@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 
 /**
  * Build the snooze service bound to an HTTP client.
@@ -14,4 +13,4 @@ export function createSnoozeApi(client: HttpClient) {
   }
 }
 
-export const snoozeApi = createSnoozeApi(api)
+export const snoozeApi = createSnoozeApi(defaultHttpClient())

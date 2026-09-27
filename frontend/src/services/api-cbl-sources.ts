@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { ContinuityPlan } from './api-continuity-plans'
 
 export interface CBLSourceListDiscoveryItem {
@@ -138,4 +137,4 @@ export function createCblSourcesApi(client: HttpClient) {
 }
 }
 
-export const cblSourcesApi = createCblSourcesApi(api)
+export const cblSourcesApi = createCblSourcesApi(defaultHttpClient())

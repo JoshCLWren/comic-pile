@@ -3,8 +3,7 @@ import { createApiClient, getAccessToken, setAccessToken } from '../services/api
 import { createTransportDouble } from './transportDouble'
 
 const transport = createTransportDouble()
-// SAFETY: test transport double satisfies AxiosInstance shape for createApiClient; interceptor wiring is exercised.
-createApiClient(() => transport as never)
+createApiClient(() => transport)
 
 
 // SAFETY: transport.interceptors.response.use is a vi.fn(); first call's second arg is the response interceptor with expected signature.

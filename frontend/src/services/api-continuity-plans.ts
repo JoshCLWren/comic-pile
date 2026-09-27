@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 
 export type ContinuityPlanNodeType = 'issue' | 'crossover' | 'thread'
 
@@ -93,4 +92,4 @@ export function createContinuityPlansApi(client: HttpClient) {
   }
 }
 
-export const continuityPlansApi = createContinuityPlansApi(api)
+export const continuityPlansApi = createContinuityPlansApi(defaultHttpClient())

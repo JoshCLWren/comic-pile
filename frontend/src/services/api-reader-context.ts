@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 
 export interface ReaderContextPreviousIssue {
   issue_id: number
@@ -94,4 +93,4 @@ export function createReaderContextApi(client: HttpClient) {
 }
 }
 
-export const readerContextApi = createReaderContextApi(api)
+export const readerContextApi = createReaderContextApi(defaultHttpClient())

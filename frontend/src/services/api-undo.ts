@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { SessionSnapshotsResponse } from '../types'
 
 /**
@@ -16,4 +15,4 @@ export function createUndoApi(client: HttpClient) {
   }
 }
 
-export const undoApi = createUndoApi(api)
+export const undoApi = createUndoApi(defaultHttpClient())

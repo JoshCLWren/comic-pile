@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { Thread, Issue } from '../types'
 
 export interface DependencyGroupMember {
@@ -145,4 +144,4 @@ export function createDependencyGroupsApi(client: HttpClient) {
   }
 }
 
-export const dependencyGroupsApi = createDependencyGroupsApi(api)
+export const dependencyGroupsApi = createDependencyGroupsApi(defaultHttpClient())

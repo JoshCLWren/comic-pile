@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 
 /**
  * Build the queue service bound to an HTTP client.
@@ -17,4 +16,4 @@ export function createQueueApi(client: HttpClient) {
   }
 }
 
-export const queueApi = createQueueApi(api)
+export const queueApi = createQueueApi(defaultHttpClient())

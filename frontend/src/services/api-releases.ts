@@ -1,6 +1,5 @@
 import type { components } from '../generated/openapi'
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 
 export type Release = components['schemas']['PublicReleaseResponse']
 export type ReleaseListResponse = components['schemas']['ReleaseListResponse']
@@ -20,4 +19,4 @@ export function createReleasesApi(client: HttpClient) {
   }
 }
 
-export const releasesApi = createReleasesApi(api)
+export const releasesApi = createReleasesApi(defaultHttpClient())

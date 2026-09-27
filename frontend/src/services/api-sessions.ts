@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 import type {
   CorrectionSheetExamplesResponse,
   SessionCurrent,
@@ -42,4 +41,4 @@ export function createSessionApi(client: HttpClient) {
 }
 }
 
-export const sessionApi = createSessionApi(api)
+export const sessionApi = createSessionApi(defaultHttpClient())

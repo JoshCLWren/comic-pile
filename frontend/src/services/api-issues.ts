@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 import type {
   Issue,
   IssueListResponse,
@@ -186,4 +185,4 @@ export function createIssuesApi(client: HttpClient) {
   }
 }
 
-export const issuesApi = createIssuesApi(api)
+export const issuesApi = createIssuesApi(defaultHttpClient())

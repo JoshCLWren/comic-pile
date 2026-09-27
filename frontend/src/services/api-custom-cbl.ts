@@ -1,5 +1,4 @@
-import api from './api'
-import type { HttpClient } from './httpClient'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { ContinuityPlan } from './api-continuity-plans'
 
 export interface CustomCBLEntry {
@@ -73,4 +72,4 @@ export function createCustomCBLApi(client: HttpClient) {
   }
 }
 
-export const customCBLApi = createCustomCBLApi(api)
+export const customCBLApi = createCustomCBLApi(defaultHttpClient())
