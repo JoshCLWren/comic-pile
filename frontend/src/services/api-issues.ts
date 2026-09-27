@@ -1,4 +1,5 @@
 import api from './api'
+import type { HttpClient } from './httpClient'
 import type {
   Issue,
   IssueListResponse,
@@ -7,13 +8,6 @@ import type {
 } from '../types'
 
 export type { IssueListResponse }
-
-/** HTTP client contract required by the issue service. */
-export interface IssuesApiHttpClient {
-  get<T = unknown>(url: string, config?: unknown): Promise<T>
-  post<T = unknown, D = unknown>(url: string, data?: D, config?: unknown): Promise<T>
-  delete<T = unknown>(url: string, config?: unknown): Promise<T>
-}
 
 export interface SetCurrentIssueResponse {
   thread_id: number
@@ -45,7 +39,7 @@ export interface IssueListParams {
  * Issue tracking API service
  * Provides methods for managing comic issues within threads
  */
-export function createIssuesApi(client: IssuesApiHttpClient) {
+export function createIssuesApi(client: HttpClient) {
   return {
     /**
      * List issues for a thread with optional status filter and pagination

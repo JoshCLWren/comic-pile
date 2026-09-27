@@ -1,28 +1,22 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const apiMock = vi.hoisted(() => ({
-  get: vi.fn(),
-  post: vi.fn(),
-  delete: vi.fn(),
-}))
+import { createIssuesApi } from '../services/api-issues'
+import { createHttpClientStub } from './httpClientStub'
 
-vi.mock('../services/api', () => ({
-  default: apiMock,
-}))
-
-import { issuesApi } from '../services/api-issues'
+const client = createHttpClientStub()
+const issuesApi = createIssuesApi(client)
 
 beforeEach(() => {
-  apiMock.get.mockReset()
-  apiMock.post.mockReset()
-  apiMock.delete.mockReset()
-  apiMock.post.mockResolvedValue({})
+  client.get.mockReset()
+  client.post.mockReset()
+  client.delete.mockReset()
+  client.post.mockResolvedValue({})
 })
 
 it('uses the canonical thread route when migrating a thread to issue tracking', async () => {
   await issuesApi.migrateThread(42, 7, 12)
 
-  expect(apiMock.post).toHaveBeenCalledWith('/v1/threads/42:migrateToIssues', {
+  expect(client.post).toHaveBeenCalledWith('/v1/threads/42:migrateToIssues', {
     last_issue_read: 7,
     total_issues: 12,
   })

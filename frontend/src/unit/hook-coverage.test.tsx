@@ -1,4 +1,5 @@
 import { renderHook, waitFor, act } from '@testing-library/react'
+import { createToastSpy, ToastContextSpy } from './toastTestHarness'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { type ReactNode } from 'react'
 import axios from 'axios'
@@ -9,7 +10,9 @@ function createWrapper() {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   const Wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      <ToastContextSpy value={toast}>{children}</ToastContextSpy>
+    </QueryClientProvider>
   )
   return Wrapper
 }
@@ -35,8 +38,7 @@ vi.mock('../services/api-sessions', () => ({ sessionApi: api.sessionApi }))
 vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn(), create: vi.fn(), get: vi.fn(), markRead: vi.fn(), markUnread: vi.fn(), bulkMarkRead: vi.fn(), bulkMarkUnread: vi.fn(), move: vi.fn(), reorder: vi.fn(), delete: vi.fn(), migrateThread: vi.fn(), setCurrentIssue: vi.fn(), getReaderContext: vi.fn() } }))
 vi.mock('../services/protectedRollMutationApi', () => ({ protectedRollMutationApi: protectedApi }))
 vi.mock('../services/rollBootstrapApi', () => ({ rollBootstrapApi: bootstrapApi }))
-const toast = vi.hoisted(() => ({ showToast: vi.fn() }))
-vi.mock('../contexts/useToast', () => ({ useToast: () => toast }))
+const toast = createToastSpy()
 
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks/useRate'

@@ -1,27 +1,12 @@
 import { beforeEach, expect, it, vi } from 'vitest'
+import { createApiClient, getAccessToken, setAccessToken } from '../services/api'
+import { createTransportDouble } from './transportDouble'
 
-const apiMock = vi.hoisted(() => ({
-  request: vi.fn(),
-  get: vi.fn(),
-  post: vi.fn(),
-  put: vi.fn(),
-  delete: vi.fn(),
-  patch: vi.fn(),
-  interceptors: {
-    request: { use: vi.fn() },
-    response: { use: vi.fn() },
-  },
-}))
+const transport = createTransportDouble()
+createApiClient(() => transport as never)
 
-vi.mock('axios', () => ({
-  default: {
-    create: vi.fn(() => apiMock),
-  },
-}))
 
-import { getAccessToken, setAccessToken } from '../services/api'
-
-const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] as (
+const responseInterceptor = transport.interceptors.response.use.mock.calls[0][1] as (
   error: {
     config: { url: string; headers?: Record<string, string> }
     response: { status: number; data?: unknown }
@@ -29,8 +14,8 @@ const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] a
 ) => Promise<Record<string, string | number | boolean | null>>
 
 beforeEach(() => {
-  apiMock.post.mockReset()
-  apiMock.request.mockReset()
+  transport.post.mockReset()
+  transport.request.mockReset()
   setAccessToken(null)
 })
 
@@ -39,7 +24,7 @@ it.each([
   ['a temporary network failure', new Error('network timeout')],
 ])('keeps the current session after %s during token refresh', async (_description, refreshError) => {
   setAccessToken('preserve-this-token')
-  apiMock.post.mockRejectedValueOnce(refreshError)
+  transport.post.mockRejectedValueOnce(refreshError)
 
   await expect(
     responseInterceptor({
@@ -49,5 +34,5 @@ it.each([
   ).rejects.toBe(refreshError)
 
   expect(getAccessToken()).toBe('preserve-this-token')
-  expect(apiMock.request).not.toHaveBeenCalled()
+  expect(transport.request).not.toHaveBeenCalled()
 })

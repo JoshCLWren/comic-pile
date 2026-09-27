@@ -18,6 +18,7 @@ import type {
   Thread,
   ThreadDependenciesResponse,
 } from '../types'
+import type { HttpClient } from './httpClient'
 
 type ApiRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
   _retry?: boolean
@@ -25,7 +26,7 @@ type ApiRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
   skipAuthRedirect?: boolean
 }
 
-interface ApiClient extends Omit<AxiosInstance, 'request' | 'get' | 'delete' | 'head' | 'post' | 'put' | 'patch'> {
+export interface ApiClient extends Omit<AxiosInstance, 'request' | 'get' | 'delete' | 'head' | 'post' | 'put' | 'patch'> {
   request<T = unknown, D = unknown>(config: ApiRequestConfig<D>): Promise<T>
   get<T = unknown>(url: string, config?: ApiRequestConfig): Promise<T>
   delete<T = unknown>(url: string, config?: ApiRequestConfig): Promise<T>
@@ -35,20 +36,10 @@ interface ApiClient extends Omit<AxiosInstance, 'request' | 'get' | 'delete' | '
   patch<T = unknown, D = unknown>(url: string, data?: D, config?: ApiRequestConfig<D>): Promise<T>
 }
 
-const rawApi = axios.create({
-  baseURL: '/api',
-  timeout: 10000,
-})
-
 const CSRF_COOKIE_NAME = 'csrf_token'
 const CSRF_HEADER_NAME = 'X-CSRF-Token'
 const CSRF_PROTECTED_METHODS = new Set(['post', 'put', 'patch', 'delete'])
 const AUTH_ENDPOINT_PATHS = new Set(['/v1/auth/login', '/v1/auth/register', '/v1/auth/refresh'])
-
-// Axios returns AxiosResponse by default, but the response interceptor below unwraps to response.data.
-// Cast once at the boundary so callers get strongly typed payload methods.
-// SAFETY: rawApi is an AxiosInstance; response interceptor unwraps .data at the boundary so the ApiClient contract holds.
-const api = rawApi as ApiClient
 
 export const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
 
@@ -130,6 +121,13 @@ function buildRejectedRefreshError(): Error & { isAxiosError: true; response: { 
 }
 
 export async function refreshSession(options?: { skipAuthRedirect?: boolean }): Promise<string> {
+  return refreshSessionWith(api, options)
+}
+
+async function refreshSessionWith(
+  client: ApiClient,
+  options?: { skipAuthRedirect?: boolean },
+): Promise<string> {
   if (sessionRefreshRejected) {
     throw buildRejectedRefreshError()
   }
@@ -140,8 +138,8 @@ export async function refreshSession(options?: { skipAuthRedirect?: boolean }): 
   refreshPromise = (async () => {
     try {
       const response = options?.skipAuthRedirect
-        ? await api.post<AuthTokens>('/v1/auth/refresh', undefined, { skipAuthRedirect: true })
-        : await api.post<AuthTokens>('/v1/auth/refresh')
+        ? await client.post<AuthTokens>('/v1/auth/refresh', undefined, { skipAuthRedirect: true })
+        : await client.post<AuthTokens>('/v1/auth/refresh')
       setAccessToken(response.access_token)
       return response.access_token
     } catch (error) {
@@ -186,7 +184,7 @@ function shouldAttachCsrfToken(config: InternalAxiosRequestConfig): boolean {
   return !AUTH_ENDPOINT_PATHS.has(getRequestPathname(config.url ?? ''))
 }
 
-async function ensureCsrfToken(): Promise<string | null> {
+async function ensureCsrfToken(client: ApiClient): Promise<string | null> {
   const existingToken = getCookieValue(CSRF_COOKIE_NAME)
   if (existingToken) {
     return existingToken
@@ -194,7 +192,7 @@ async function ensureCsrfToken(): Promise<string | null> {
 
   if (!csrfTokenPromise) {
     // SAFETY: only the skipAuthRedirect flag is needed from ApiRequestConfig; other fields have sensible defaults.
-    csrfTokenPromise = api
+    csrfTokenPromise = client
       .get<{ csrf_token: string }>('/v1/auth/csrf', { skipAuthRedirect: true } as ApiRequestConfig)
       .then((response) => response.csrf_token ?? getCookieValue(CSRF_COOKIE_NAME))
       .finally(() => {
@@ -240,130 +238,162 @@ function isAuthenticationFailure(error: AxiosError): boolean {
   return responseData?.detail === 'Not authenticated'
 }
 
-rawApi.interceptors.request.use(
-  async (config: InternalAxiosRequestConfig) => {
-    const token = getAccessToken()
-    config.headers = config.headers ?? {}
+/**
+ * Attach the auth, CSRF, and refresh-retry interceptors to a client instance.
+ *
+ * @param client - The client the interceptors must dispatch retries through.
+ */
+function registerInterceptors(client: ApiClient): void {
+  client.interceptors.request.use(
+    async (config: InternalAxiosRequestConfig) => {
+      const token = getAccessToken()
+      config.headers = config.headers ?? {}
 
-    if (token) {
-      // SAFETY: InternalAxiosRequestHeaders is indexable by string key; setting Authorization is safe.
-      (config.headers as Record<string, string>).Authorization = `Bearer ${token}`
-    }
-
-    if (shouldAttachCsrfToken(config)) {
-      const csrfToken = await ensureCsrfToken()
-      if (csrfToken) {
-        // SAFETY: InternalAxiosRequestHeaders is indexable by string key; CSRF header assignment is safe.
-        (config.headers as Record<string, string>)[CSRF_HEADER_NAME] = csrfToken
+      if (token) {
+        // SAFETY: InternalAxiosRequestHeaders is indexable by string key; setting Authorization is safe.
+        (config.headers as Record<string, string>).Authorization = `Bearer ${token}`
       }
-    }
 
-    return config
-  },
-  (error: unknown) => Promise.reject(error),
-)
+      if (shouldAttachCsrfToken(config)) {
+        const csrfToken = await ensureCsrfToken(client)
+        if (csrfToken) {
+          // SAFETY: InternalAxiosRequestHeaders is indexable by string key; CSRF header assignment is safe.
+          (config.headers as Record<string, string>)[CSRF_HEADER_NAME] = csrfToken
+        }
+      }
 
-function processQueue(error: unknown | null, token: string | null = null): void {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error)
-    } else {
-      prom.config.headers = prom.config.headers ?? {}
-      // SAFETY: headers is initialized above and is indexable by string; Authorization assignment is safe.
-      const authHeaders = prom.config.headers as Record<string, string>
-      authHeaders.Authorization = `Bearer ${token}`
-      prom.resolve(api.request(prom.config))
-    }
-  })
-  failedQueue = []
-}
+      return config
+    },
+    (error: unknown) => Promise.reject(error),
+  )
 
-rawApi.interceptors.response.use(
-  (response) => response.data,
-  async (error: AxiosError) => {
-    // SAFETY: error.config may be absent for network errors; default to empty object and widen to ApiRequestConfig.
-    const originalRequest = (error.config ?? {}) as ApiRequestConfig
+  function processQueue(client: ApiClient, error: unknown | null, token: string | null = null): void {
+    failedQueue.forEach((prom) => {
+      if (error) {
+        prom.reject(error)
+      } else {
+        prom.config.headers = prom.config.headers ?? {}
+        // SAFETY: headers is initialized above and is indexable by string; Authorization assignment is safe.
+        const authHeaders = prom.config.headers as Record<string, string>
+        authHeaders.Authorization = `Bearer ${token}`
+        prom.resolve(client.request(prom.config))
+      }
+    })
+    failedQueue = []
+  }
 
-    if (!error.response) {
-      console.error('Network Error:', error.message)
-      return Promise.reject(new Error('Network error. Please check your connection and try again.'))
-    }
+  client.interceptors.response.use(
+    (response) => response.data,
+    async (error: AxiosError) => {
+      // SAFETY: error.config may be absent for network errors; default to empty object and widen to ApiRequestConfig.
+      const originalRequest = (error.config ?? {}) as ApiRequestConfig
 
-    if (error.response.status === 400) {
-      console.error('API Validation Error Details:', {
-        status: error.response.status,
-        data: error.response.data,
-      })
-    }
+      if (!error.response) {
+        console.error('Network Error:', error.message)
+        return Promise.reject(new Error('Network error. Please check your connection and try again.'))
+      }
 
-    if (isAuthenticationFailure(error) && !originalRequest._retry) {
-      const requestPathname = getRequestPathname(originalRequest.url ?? '')
-      if (AUTH_ENDPOINT_PATHS.has(requestPathname)) {
-        if (requestPathname === '/v1/auth/refresh' && isAuthenticationFailure(error)) {
-          markSessionRefreshRejected()
+      if (error.response.status === 400) {
+        console.error('API Validation Error Details:', {
+          status: error.response.status,
+          data: error.response.data,
+        })
+      }
+
+      if (isAuthenticationFailure(error) && !originalRequest._retry) {
+        const requestPathname = getRequestPathname(originalRequest.url ?? '')
+        if (AUTH_ENDPOINT_PATHS.has(requestPathname)) {
+          if (requestPathname === '/v1/auth/refresh' && isAuthenticationFailure(error)) {
+            markSessionRefreshRejected()
+            if (!originalRequest.skipAuthRedirect) {
+              redirectToLogin()
+            }
+          }
+          return Promise.reject(error)
+        }
+
+        if (sessionRefreshRejected) {
           if (!originalRequest.skipAuthRedirect) {
             redirectToLogin()
           }
+          return Promise.reject(error)
         }
-        return Promise.reject(error)
-      }
 
-      if (sessionRefreshRejected) {
-        if (!originalRequest.skipAuthRedirect) {
-          redirectToLogin()
+        if (isRefreshing) {
+          return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject, config: originalRequest })
+          }).then((token) => token).catch((err) => {
+            // SAFETY: rejected value from refresh queue is either an AxiosError or a plain error from processQueue.
+            if ((err as AxiosError)?.response?.status === 401) {
+              return Promise.reject(error)
+            }
+            return Promise.reject(err)
+          })
         }
-        return Promise.reject(error)
-      }
 
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject, config: originalRequest })
-        }).then((token) => token).catch((err) => {
-          // SAFETY: rejected value from refresh queue is either an AxiosError or a plain error from processQueue.
-          if ((err as AxiosError)?.response?.status === 401) {
-            return Promise.reject(error)
+        originalRequest._retry = true
+        isRefreshing = true
+
+        try {
+          const access_token = await refreshSessionWith(client, {
+            skipAuthRedirect: originalRequest.skipAuthRedirect,
+          })
+
+          processQueue(client, null, access_token)
+          isRefreshing = false
+
+          originalRequest.headers = originalRequest.headers ?? {}
+          // SAFETY: headers is initialized above and is indexable by string; Authorization assignment is safe.
+          const authHeaders = originalRequest.headers as Record<string, string>
+          authHeaders.Authorization = `Bearer ${access_token}`
+          return client.request(originalRequest)
+        } catch (refreshError) {
+          processQueue(client, refreshError, null)
+          isRefreshing = false
+          // SAFETY: catch clause is unknown; refreshSession rethrows AxiosError on auth failure.
+          if (
+            !originalRequest.skipAuthRedirect &&
+            isAuthenticationFailure(refreshError as AxiosError)
+          ) {
+            redirectToLogin()
           }
-          return Promise.reject(err)
-        })
-      }
-
-      originalRequest._retry = true
-      isRefreshing = true
-
-      try {
-        const access_token = await refreshSession({
-          skipAuthRedirect: originalRequest.skipAuthRedirect,
-        })
-
-        processQueue(null, access_token)
-        isRefreshing = false
-
-        originalRequest.headers = originalRequest.headers ?? {}
-        // SAFETY: headers is initialized above and is indexable by string; Authorization assignment is safe.
-        const authHeaders = originalRequest.headers as Record<string, string>
-        authHeaders.Authorization = `Bearer ${access_token}`
-        return api.request(originalRequest)
-      } catch (refreshError) {
-        processQueue(refreshError, null)
-        isRefreshing = false
-        // SAFETY: catch clause is unknown; refreshSession rethrows AxiosError on auth failure.
-        if (
-          !originalRequest.skipAuthRedirect &&
-          isAuthenticationFailure(refreshError as AxiosError)
-        ) {
-          redirectToLogin()
+          return Promise.reject(refreshError)
         }
-        return Promise.reject(refreshError)
       }
-    }
 
-    const status = error.response?.status
-    if (status !== 503) {
-      console.error('API Error:', error)
-    }
-    return Promise.reject(error)
-  },
-)
+      const status = error.response?.status
+      if (status !== 503) {
+        console.error('API Error:', error)
+      }
+      return Promise.reject(error)
+    },
+  )
+}
+
+/**
+ * Build the configured API client on top of an injected axios instance factory.
+ *
+ * Production wiring passes `axios.create`; tests pass a factory returning a
+ * faithful in-test transport so the real interceptor pipeline is exercised
+ * without replacing a module.
+ *
+ * @param createInstance - Factory that produces the underlying transport.
+ * @returns The configured client.
+ */
+export function createApiClient(
+  createInstance: (config: { baseURL: string; timeout: number }) => AxiosInstance,
+): ApiClient {
+  const instance = createInstance({ baseURL: '/api', timeout: 10000 })
+  // Axios returns AxiosResponse by default, but the response interceptor below unwraps to response.data.
+  // Cast once at the boundary so callers get strongly typed payload methods.
+  // SAFETY: `instance` is an AxiosInstance; the response interceptor unwraps .data at the
+  // SAFETY: boundary so the ApiClient contract holds.
+  const client = instance as ApiClient
+  registerInterceptors(client)
+  return client
+}
+
+const api = createApiClient(axios.create)
 
 export default api
 
@@ -378,29 +408,40 @@ export type { SessionListParams } from './api-sessions'
 export { queueApi } from './api-queue'
 export { undoApi } from './api-undo'
 
-export const dependenciesApi = {
-  listBlockedThreadIds: () => api.get<number[]>('/v1/dependencies/blocked'),
+/**
+ * Build the dependency bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every request.
+ * @returns The dependency bound to `client`.
+ */
+export function createDependenciesApi(client: HttpClient) {
+  return {
+  listBlockedThreadIds: () => client.get<number[]>('/v1/dependencies/blocked'),
   listThreadDependencies: (threadId: number) =>
-    api.get<ThreadDependenciesResponse>(`/v1/threads/${threadId}/dependencies`),
+    client.get<ThreadDependenciesResponse>(`/v1/threads/${threadId}/dependencies`),
   getIssueDependencies: (issueId: number) =>
-    api.get<IssueDependenciesResponse>(`/v1/issues/${issueId}/dependencies`),
+    client.get<IssueDependenciesResponse>(`/v1/issues/${issueId}/dependencies`),
   getBlockingInfo: (threadId: number) =>
-    api.post<BlockingInfoResponse>(`/v1/threads/${threadId}:getBlockingInfo`),
+    client.post<BlockingInfoResponse>(`/v1/threads/${threadId}:getBlockingInfo`),
   getBatchBlockingInfo: (threadIds: number[]) =>
-    api.post<BatchBlockingInfoResponse>('/v1/threads:getBlockingInfo', { thread_ids: threadIds }),
+    client.post<BatchBlockingInfoResponse>('/v1/threads:getBlockingInfo', { thread_ids: threadIds }),
   getConnectedThreads: (threadId: number) =>
-    api.get<ConnectedDependenciesResponse>(`/v1/threads/${threadId}/connected`),
+    client.get<ConnectedDependenciesResponse>(`/v1/threads/${threadId}/connected`),
   createDependency: ({ sourceType = 'thread', sourceId, targetType = 'thread', targetId }: DependencyCreatePayload) =>
-    api.post<Dependency, { source_type: 'thread' | 'issue'; source_id: number; target_type: 'thread' | 'issue'; target_id: number }>('/v1/dependencies/', {
+    client.post<Dependency, { source_type: 'thread' | 'issue'; source_id: number; target_type: 'thread' | 'issue'; target_id: number }>('/v1/dependencies/', {
       source_type: sourceType,
       source_id: sourceId,
       target_type: targetType,
       target_id: targetId,
     }),
-  deleteDependency: (dependencyId: number) => api.delete<void>(`/v1/dependencies/${dependencyId}`),
+  deleteDependency: (dependencyId: number) => client.delete<void>(`/v1/dependencies/${dependencyId}`),
   updateDependency: (dependencyId: number, note: string | null) =>
-    api.patch<Dependency, { note: string | null }>(`/v1/dependencies/${dependencyId}`, { note }),
+    client.patch<Dependency, { note: string | null }>(`/v1/dependencies/${dependencyId}`, { note }),
+  }
 }
+
+export const dependenciesApi = createDependenciesApi(api)
+
 
 export interface ComicVineCreator {
   creator_id?: number | null
@@ -568,36 +609,58 @@ export interface MetadataCorrectionsResponse {
   corrections: CanonicalCorrection[]
 }
 
-export const comicVineApi = {
+/**
+ * Build the ComicVine bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every request.
+ * @returns The ComicVine bound to `client`.
+ */
+export function createComicVineApi(client: HttpClient) {
+  return {
   getIssueIntelligence: (issueId: number) =>
-    api.get<ComicVineIssueIntelligence | null>(`/v1/issues/${issueId}/comicvine`),
+    client.get<ComicVineIssueIntelligence | null>(`/v1/issues/${issueId}/comicvine`),
   importIssue: (payload: ComicVineImportIssuePayload) =>
-    api.post<ComicVineImportIssueResult, ComicVineImportIssuePayload>('/v1/comicvine/issues:import', payload),
+    client.post<ComicVineImportIssueResult, ComicVineImportIssuePayload>('/v1/comicvine/issues:import', payload),
   searchSeries: (query: string, limit = 10, offset = 0) =>
-    api.get<ComicVineSeriesSearchResponse>(`/v1/comicvine/search/series`, { params: { q: query, limit, offset } }),
+    client.get<ComicVineSeriesSearchResponse>(`/v1/comicvine/search/series`, { params: { q: query, limit, offset } }),
   resolveIdentity: (input: string) =>
-    api.get<ComicVineResolveResponse>(`/v1/comicvine/resolve`, { params: { input } }),
+    client.get<ComicVineResolveResponse>(`/v1/comicvine/resolve`, { params: { input } }),
   getSeriesIssues: (volumeId: number, seriesName = '') =>
-    api.get<ComicVineSeriesIssuesResponse>(`/v1/comicvine/series/${volumeId}/issues`, { params: { series_name: seriesName } }),
+    client.get<ComicVineSeriesIssuesResponse>(`/v1/comicvine/series/${volumeId}/issues`, { params: { series_name: seriesName } }),
   getIssueIdentity: (issueId: number) =>
-    api.get<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity`),
+    client.get<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity`),
   confirmIdentity: (issueId: number, comicvineIssueId: number) =>
-    api.post<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity:confirm`, { comicvine_issue_id: comicvineIssueId }),
+    client.post<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity:confirm`, { comicvine_issue_id: comicvineIssueId }),
   replaceIdentity: (issueId: number, comicvineIssueId: number, reason?: string) =>
-    api.post<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity:replace`, { comicvine_issue_id: comicvineIssueId, reason }),
+    client.post<IssueIdentityResponse>(`/v1/comicvine/issues/${issueId}/identity:replace`, { comicvine_issue_id: comicvineIssueId, reason }),
   refreshMetadata: (issueId: number) =>
-    api.post<MetadataRefreshResponse>(`/v1/comicvine/issues/${issueId}/metadata:refresh`),
+    client.post<MetadataRefreshResponse>(`/v1/comicvine/issues/${issueId}/metadata:refresh`),
   applyCorrection: (issueId: number, fieldName: string, canonicalValue: string, reason?: string) =>
-    api.post<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:correct`, { field_name: fieldName, canonical_value: canonicalValue, reason }),
+    client.post<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:correct`, { field_name: fieldName, canonical_value: canonicalValue, reason }),
   listCorrections: (issueId: number) =>
-    api.get<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:corrections`),
+    client.get<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:corrections`),
   revertCorrection: (issueId: number, correctionId: number) =>
-    api.post<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:revert`, { correction_id: correctionId }),
+    client.post<MetadataCorrectionsResponse>(`/v1/comicvine/issues/${issueId}/metadata:revert`, { correction_id: correctionId }),
+  }
 }
 
-export const tasksApi = {
-  getMetrics: () => api.get<AnalyticsMetrics>('/v1/analytics/metrics'),
+export const comicVineApi = createComicVineApi(api)
+
+
+/**
+ * Build the analytics bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every request.
+ * @returns The analytics bound to `client`.
+ */
+export function createTasksApi(client: HttpClient) {
+  return {
+  getMetrics: () => client.get<AnalyticsMetrics>('/v1/analytics/metrics'),
+  }
 }
+
+export const tasksApi = createTasksApi(api)
+
 
 /** Headline personal summary for one stable creator identity (issue #2028). */
 export interface CreatorSummaryItem {
@@ -657,7 +720,14 @@ export interface CreatorDetailPageParams {
   offset?: number
 }
 
-export const creatorsApi = {
+/**
+ * Build the creator-detail bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every request.
+ * @returns The creator-detail bound to `client`.
+ */
+export function createCreatorsApiInApi(client: HttpClient) {
+  return {
   getDetail: (creatorKey: string, params: CreatorDetailPageParams = {}) => {
     const queryParams: Record<string, string | number> = {}
     if (params.limit !== undefined) {
@@ -666,27 +736,53 @@ export const creatorsApi = {
     if (params.offset !== undefined && params.offset > 0) {
       queryParams.offset = params.offset
     }
-    return api.get<CreatorDetailResponse>(
+    return client.get<CreatorDetailResponse>(
       `/v1/creators/${encodeURIComponent(creatorKey)}`,
       { params: queryParams },
     )
   },
+  }
 }
+
+export const creatorsApi = createCreatorsApiInApi(api)
+
 
 // Temporary reading-runtime re-exports keep this slice independently shippable.
 // TODO(#2785): remove these re-exports once every call site imports the focused domain clients.
 export { snoozeApi } from './api-snooze'
 export { skipApi } from './api-skip'
 
-export const migrationApi = {
+/**
+ * Build the migration bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every request.
+ * @returns The migration bound to `client`.
+ */
+export function createMigrationApi(client: HttpClient) {
+  return {
   migrateThread: (threadId: number, data: { last_issue_read: number; total_issues: number }) =>
-    api.post<Thread, { last_issue_read: number; total_issues: number }>(`/v1/threads/${threadId}:migrateToIssues`, data),
+    client.post<Thread, { last_issue_read: number; total_issues: number }>(`/v1/threads/${threadId}:migrateToIssues`, data),
+  }
 }
 
-export const bugReportsApi = {
+export const migrationApi = createMigrationApi(api)
+
+
+/**
+ * Build the bug-report bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every request.
+ * @returns The bug-report bound to `client`.
+ */
+export function createBugReportsApi(client: HttpClient) {
+  return {
   create: (data: { title: string; description: string; diagnostics?: unknown }) =>
-    api.post<BugReportResponse>('/v1/bug-reports/', data),
+    client.post<BugReportResponse>('/v1/bug-reports/', data),
+  }
 }
+
+export const bugReportsApi = createBugReportsApi(api)
+
 
 export interface IdentityInboxCandidate {
   external_identity_id: number
@@ -732,18 +828,29 @@ export interface IdentityInboxRejectPayload {
   rejection_reason: string
 }
 
-export const identityInboxApi = {
+/**
+ * Build the identity-inbox bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every request.
+ * @returns The identity-inbox bound to `client`.
+ */
+export function createIdentityInboxApi(client: HttpClient) {
+  return {
   list: (offset: number, limit: number) =>
-    api.get<IdentityInboxResponse>('/v1/identity-inbox', { params: { offset, limit } }),
+    client.get<IdentityInboxResponse>('/v1/identity-inbox', { params: { offset, limit } }),
   confirm: (mappingId: number, payload: IdentityInboxConfirmPayload) =>
-    api.post<void>(`/v1/identity-inbox/${mappingId}/confirm`, payload),
+    client.post<void>(`/v1/identity-inbox/${mappingId}/confirm`, payload),
   reject: (mappingId: number, payload: IdentityInboxRejectPayload) =>
-    api.post<void>(`/v1/identity-inbox/${mappingId}/reject`, payload),
+    client.post<void>(`/v1/identity-inbox/${mappingId}/reject`, payload),
   defer: (mappingId: number) =>
-    api.post<void>(`/v1/identity-inbox/${mappingId}/defer`),
+    client.post<void>(`/v1/identity-inbox/${mappingId}/defer`),
   skip: (mappingId: number) =>
-    api.post<void>(`/v1/identity-inbox/${mappingId}/skip`),
+    client.post<void>(`/v1/identity-inbox/${mappingId}/skip`),
+  }
 }
+
+export const identityInboxApi = createIdentityInboxApi(api)
+
 
 export interface UserPreferencesResponse {
   theme: 'classic' | 'ink-gold' | 'command-center'
@@ -754,9 +861,20 @@ export interface UserPreferencesPatchRequest {
   theme?: 'classic' | 'ink-gold' | 'command-center' | null
 }
 
-export const preferencesApi = {
+/**
+ * Build the preferences bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every request.
+ * @returns The preferences bound to `client`.
+ */
+export function createPreferencesApi(client: HttpClient) {
+  return {
   get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
-    api.get<UserPreferencesResponse>('/v1/users/me/preferences', options),
+    client.get<UserPreferencesResponse>('/v1/users/me/preferences', options),
   patch: (data: UserPreferencesPatchRequest) =>
-    api.patch<UserPreferencesResponse, UserPreferencesPatchRequest>('/v1/users/me/preferences', data),
+    client.patch<UserPreferencesResponse, UserPreferencesPatchRequest>('/v1/users/me/preferences', data),
+  }
 }
+
+export const preferencesApi = createPreferencesApi(api)
+

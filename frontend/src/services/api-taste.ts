@@ -1,4 +1,5 @@
 import api from './api'
+import type { HttpClient } from './httpClient'
 
 /** Explicit reader verdict for an inferred taste pattern. */
 export type TasteVerdict = 'confirmed' | 'sometimes' | 'rejected'
@@ -37,13 +38,23 @@ export interface TasteSignalResponse {
   last_prompted_at: string | null
 }
 
-export const tasteApi = {
-  getDiscoveries: () => api.get<TasteDiscoveryListResponse>('/v1/taste/discoveries'),
+/**
+ * Build the taste service bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every request.
+ * @returns The taste service bound to `client`.
+ */
+export function createTasteApi(client: HttpClient) {
+  return {
+  getDiscoveries: () => client.get<TasteDiscoveryListResponse>('/v1/taste/discoveries'),
   dismiss: (signalId: number) =>
-    api.post<{ dismissed: boolean }>(`/v1/taste/discoveries/${signalId}/dismiss`),
+    client.post<{ dismissed: boolean }>(`/v1/taste/discoveries/${signalId}/dismiss`),
   submitVerdict: (signalType: string, externalKey: string, verdict: TasteVerdict) =>
-    api.put<TasteSignalResponse>(
+    client.put<TasteSignalResponse>(
       `/v1/users/me/taste-signals/${encodeURIComponent(signalType)}/${encodeURIComponent(externalKey)}/verdict`,
       { verdict },
     ),
 }
+}
+
+export const tasteApi = createTasteApi(api)

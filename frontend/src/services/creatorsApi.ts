@@ -1,13 +1,24 @@
 import api from './api'
+import type { HttpClient } from './httpClient'
 import type { components } from '../generated/openapi'
 
 export type CreatorSummariesResponse = components['schemas']['CreatorSummariesResponse']
 export type CreatorSummaryItem = components['schemas']['CreatorSummaryItem']
 export type CreatorSummaryCoverage = components['schemas']['CreatorSummaryCoverage']
 
-export const creatorsApi = {
+/**
+ * Build the creator service bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every request.
+ * @returns The creator service bound to `client`.
+ */
+export function createCreatorsApi(client: HttpClient) {
+  return {
   getSummaries: (keys: string[]) =>
-    api.get<CreatorSummariesResponse>('/v1/creators/summaries', {
+    client.get<CreatorSummariesResponse>('/v1/creators/summaries', {
       params: { keys: keys.join(',') },
     }),
 }
+}
+
+export const creatorsApi = createCreatorsApi(api)

@@ -7,12 +7,21 @@ import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import { cast } from '../utils/cast'
+import type { ReactElement, ReactNode } from 'react'
+import { createToastSpy, ToastContextSpy } from './toastTestHarness'
 import * as api from '../services/api'
 
+const toast = createToastSpy()
 
-vi.mock('../contexts/useToast', () => ({
-  useToast: () => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] }),
-}))
+function ToastWrapper({ children }: { children: ReactNode }) {
+  return <ToastContextSpy value={toast}>{children}</ToastContextSpy>
+}
+
+function renderWithToast(ui: ReactElement) {
+  return render(ui, { wrapper: ToastWrapper })
+}
+
+
 
 const mockApiGet = vi.fn()
 const mockApiPost = vi.fn()
@@ -67,7 +76,7 @@ const renderWithAuth = (initialEntry = '/') => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   mockSetAccessToken.mockImplementation(() => undefined)
 
-  return render(
+  return renderWithToast(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AuthProvider>
         <BugReportRestoreProvider>
@@ -82,7 +91,7 @@ const renderWithAuth = (initialEntry = '/') => {
 
 const renderWithoutAuth = () => {
   mockApiGet.mockRejectedValue(new Error('unauthenticated'))
-  return render(
+  return renderWithToast(
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
         <BugReportRestoreProvider>
@@ -166,7 +175,7 @@ test('shows loading and non-auth failure states and logs out gracefully', async 
   mockApiGet.mockResolvedValueOnce({ username: 'user', email: 'user@example.com' })
     .mockRejectedValueOnce(new Error('server unavailable'))
     .mockRejectedValueOnce(new Error('server unavailable'))
-  render(
+  renderWithToast(
     <MemoryRouter initialEntries={['/queue']}>
       <AuthProvider>
         <BugReportRestoreProvider>
@@ -207,7 +216,7 @@ test('clears authentication when AuthProvider bootstrap returns unauthorized', a
   mockApiGet
     .mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } })
     .mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } })
-  render(
+  renderWithToast(
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
         <BugReportRestoreProvider>
@@ -224,7 +233,7 @@ test('clears authentication when AuthProvider bootstrap returns unauthorized', a
 test('falls back to an empty username when the user profile omits it', async () => {
   // L43 `setUsername(user.username || '')` — username falsy
   mockApiGet.mockResolvedValue({ username: '', email: 'empty@test.com' })
-  render(
+  renderWithToast(
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
         <BugReportRestoreProvider>

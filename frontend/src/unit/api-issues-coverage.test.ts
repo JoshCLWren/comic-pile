@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createIssuesApi } from '../services/api-issues'
+import { createHttpClientStub } from './httpClientStub'
 
-const client = {
-  get: vi.fn(),
-  post: vi.fn(),
-  delete: vi.fn(),
-}
+const client = createHttpClientStub()
 
 const issuesApi = createIssuesApi(client)
 

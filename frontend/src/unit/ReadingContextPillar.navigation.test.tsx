@@ -1,29 +1,34 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ReadingContextPillar } from '../pages/RollPage/components/ReadingContextPillar'
 import type { ReaderContextResponse } from '../types'
+import { createRouterHarness } from './routerTestHarness'
+import { createToastSpy, ToastContextSpy } from './toastTestHarness'
 
-const navigateSpy = vi.fn()
+const router = createRouterHarness()
 
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom')
-  return { ...actual, useNavigate: () => navigateSpy }
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 })
 
-vi.mock('../components/ContinuityCorrectionDialog', () => ({ default: () => null }))
-vi.mock('../pages/RollPage/components/ReadingOrderGroups', () => ({
-  ReadingOrderGroups: () => null,
-}))
-vi.mock('../pages/RollPage/components/ReadingRouteExplanation', () => ({
-  ReadingRouteExplanation: () => null,
-}))
-vi.mock('../pages/RollPage/components/ReadingPathPanel', () => ({
-  ReadingPathPanel: () => null,
-}))
+const toast = createToastSpy()
+
+function renderPillarWithProviders(ui: Parameters<typeof render>[0]) {
+  return render(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={queryClient}>
+        <ToastContextSpy value={toast}>
+          {router.wrapper({ children })}
+        </ToastContextSpy>
+      </QueryClientProvider>
+    ),
+  })
+}
 
 beforeEach(() => {
-  navigateSpy.mockClear()
+  router.reset()
 })
 
 const activeRatingThread = {
@@ -108,8 +113,16 @@ function buildContext(overrides: Partial<ReaderContextResponse> = {}): ReaderCon
   }
 }
 
+function boundariesRegion() {
+  return screen.getByRole('region', { name: 'Your Reading Boundaries' })
+}
+
+function localSeriesRegion() {
+  return screen.getByRole('region', { name: /Where you are in/ })
+}
+
 function renderPillar(context: ReaderContextResponse) {
-  return render(
+  return renderPillarWithProviders(
     <ReadingContextPillar
       activeRatingThread={activeRatingThread}
       readingOrders={[]}
@@ -133,7 +146,7 @@ describe('ReadingContextPillar navigation (issue #1877)', () => {
 
     expect(previousNode).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByText('Issue 3 · Already read · Your rating: ★★★½')).toBeVisible()
-    expect(navigateSpy).not.toHaveBeenCalled()
+    expect(router.navigations).toEqual(['/'])
   })
 
   it('produces different contexts when different chain nodes are selected', async () => {
@@ -160,8 +173,7 @@ describe('ReadingContextPillar navigation (issue #1877)', () => {
     await userEvent.setup().click(currentNode)
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Open Saga' }))
-    expect(navigateSpy).toHaveBeenCalledTimes(1)
-    expect(navigateSpy).toHaveBeenCalledWith('/thread/42')
+    expect(router.navigations).toEqual(['/', '/thread/42'])
   })
 
   it('activates chain nodes consistently by pointer, Enter, and Space', async () => {
@@ -177,7 +189,7 @@ describe('ReadingContextPillar navigation (issue #1877)', () => {
 
     await user.keyboard(' ')
     expect(node).toHaveAttribute('aria-expanded', 'true')
-    expect(navigateSpy).not.toHaveBeenCalled()
+    expect(router.navigations).toEqual(['/'])
   })
 
   it('links edge endpoint buttons deep to their threads', async () => {
@@ -214,28 +226,30 @@ describe('ReadingContextPillar navigation (issue #1877)', () => {
       }),
     )
 
+    const boundaries = within(boundariesRegion())
     await screen.findByText('Your Reading Boundaries')
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Open series for Saga #3' }))
-    expect(navigateSpy).toHaveBeenCalledWith('/thread/42')
+    await userEvent.setup().click(boundaries.getByRole('button', { name: 'Open series for Saga #3' }))
+    expect(router.navigations).toEqual(['/', '/thread/42'])
 
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Open series for Saga #5' }))
-    expect(navigateSpy).toHaveBeenCalledWith('/thread/7')
+    await userEvent.setup().click(boundaries.getByRole('button', { name: 'Open series for Saga #5' }))
+    expect(router.navigations).toEqual(['/', '/thread/42', '/thread/7'])
   })
 
   it('links both dependency edge endpoints to their threads and shows the explanation', async () => {
     renderPillar(buildContext())
 
-    const sources = await screen.findAllByRole('button', { name: 'Open series for Saga #3' })
+    const boundaries = within(boundariesRegion())
+    const sources = await boundaries.findAllByRole('button', { name: 'Open series for Saga #3' })
     expect(sources).toHaveLength(2)
-    const targets = screen.getAllByRole('button', { name: 'Open series for Saga #5' })
+    const targets = boundaries.getAllByRole('button', { name: 'Open series for Saga #5' })
     expect(targets).toHaveLength(2)
     await userEvent.setup().click(sources[0])
-    expect(navigateSpy).toHaveBeenLastCalledWith('/thread/42')
+    expect(router.navigations).toEqual(['/', '/thread/42'])
 
     await userEvent.setup().click(targets[1])
-    expect(navigateSpy).toHaveBeenLastCalledWith('/thread/42')
-    expect(screen.getAllByText('Blocked by issue #3 in Saga')).toHaveLength(1)
-    expect(screen.getByText('Saga #3 must be read before Saga #5')).toBeVisible()
+    expect(router.navigations).toEqual(['/', '/thread/42'])
+    expect(boundaries.getAllByText('Blocked by issue #3 in Saga')).toHaveLength(1)
+    expect(boundaries.getByText('Saga #3 must be read before Saga #5')).toBeVisible()
   })
 
   it('links membership chips in expanded issue detail to their specific crossovers', async () => {
@@ -262,9 +276,11 @@ describe('ReadingContextPillar navigation (issue #1877)', () => {
     const expandButton = await screen.findByRole('button', { name: /Show context for Ultimate Black Panther issue 5/ })
     await userEvent.setup().click(expandButton)
 
-    const chip = await screen.findByRole('button', { name: 'Open Animal Man crossover' })
+    const chip = await within(localSeriesRegion()).findByRole('button', {
+      name: 'Open Animal Man crossover',
+    })
     await userEvent.setup().click(chip)
-    expect(navigateSpy).toHaveBeenLastCalledWith('/crossovers/9')
+    expect(router.navigations).toEqual(['/', '/crossovers/9'])
   })
 
   it('labels incoming dependency edges "Blocked by:" without counts', async () => {
@@ -335,8 +351,9 @@ describe('ReadingContextPillar navigation (issue #1877)', () => {
     )
 
     await screen.findByText('Continuity:')
-    expect(screen.getByText('#100')).toBeVisible()
-    expect(screen.getByText('#101')).toBeVisible()
-    expect(screen.getByText('checkpoint')).toBeVisible()
+    const boundaries = within(boundariesRegion())
+    expect(boundaries.getByText('#100')).toBeVisible()
+    expect(boundaries.getByText('#101')).toBeVisible()
+    expect(boundaries.getByText('checkpoint')).toBeVisible()
   })
 })

@@ -1,7 +1,20 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ReactElement, ReactNode } from 'react'
+import { createToastSpy, ToastContextSpy } from './toastTestHarness'
 import { comicVineApi } from '../services/api'
 import { ComicVineIssueCard } from '../pages/RollPage/components/ComicVineIssueCard'
+
+const toast = createToastSpy()
+
+function ToastWrapper({ children }: { children: ReactNode }) {
+  return <ToastContextSpy value={toast}>{children}</ToastContextSpy>
+}
+
+function renderWithToast(ui: ReactElement) {
+  return render(ui, { wrapper: ToastWrapper })
+}
+
 
 vi.mock('../services/api', async () => {
   const actual = await vi.importActual<typeof import('../services/api')>('../services/api')
@@ -14,14 +27,6 @@ vi.mock('../services/api-reading-orders', () => ({
     getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }),
     insertItem: vi.fn().mockResolvedValue({}),
   },
-}))
-
-vi.mock('../contexts/useToast', () => ({
-  useToast: () => ({
-    showToast: vi.fn(),
-    removeToast: vi.fn(),
-    toasts: [],
-  }),
 }))
 
 const getIntelligence = vi.mocked(comicVineApi.getIssueIntelligence)
@@ -65,7 +70,7 @@ describe('ComicVineIssueCard', () => {
       }],
     })
 
-    render(<ComicVineIssueCard issueId={1} />)
+    renderWithToast(<ComicVineIssueCard issueId={1} />)
     expect(await screen.findByText('Alpha #1')).toBeInTheDocument()
     fireEvent.click(screen.getByText('Comic details'))
     expect(screen.getByText('A bold beginning.')).toBeInTheDocument()
@@ -117,7 +122,7 @@ describe('ComicVineIssueCard', () => {
       }],
     })
 
-    render(<ComicVineIssueCard issueId={1} />)
+    renderWithToast(<ComicVineIssueCard issueId={1} />)
     expect(await screen.findByText('Three')).toBeInTheDocument()
     fireEvent.click(screen.getByText('Comic details'))
     // Primary identity and secondary title are now separate elements
@@ -135,7 +140,7 @@ describe('ComicVineIssueCard', () => {
 
   it('renders nothing when the issue has no confirmed ComicVine mapping', async () => {
     getIntelligence.mockResolvedValue(null)
-    const { container } = render(<ComicVineIssueCard issueId={9} />)
+    const { container } = renderWithToast(<ComicVineIssueCard issueId={9} />)
     await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(9))
     await waitFor(() => expect(container).toBeEmptyDOMElement())
   })
@@ -193,7 +198,7 @@ describe('ComicVineIssueCard', () => {
       ],
     })
 
-    const { container } = render(<ComicVineIssueCard issueId={2} />)
+    const { container } = renderWithToast(<ComicVineIssueCard issueId={2} />)
     expect(await screen.findByText('ComicVine')).toBeInTheDocument()
     expect(screen.getByText('2 story arcs')).toBeInTheDocument()
     expect(screen.getByText('Coming soon')).toBeInTheDocument()
@@ -216,14 +221,14 @@ describe('ComicVineIssueCard', () => {
   })
 
   it('does not request metadata when no issue is selected', () => {
-    const { container } = render(<ComicVineIssueCard issueId={null} />)
+    const { container } = renderWithToast(<ComicVineIssueCard issueId={null} />)
     expect(getIntelligence).not.toHaveBeenCalled()
     expect(container).toBeEmptyDOMElement()
   })
 
   it('fails closed when metadata loading fails', async () => {
     getIntelligence.mockRejectedValue(new Error('metadata unavailable'))
-    const { container } = render(<ComicVineIssueCard issueId={3} />)
+    const { container } = renderWithToast(<ComicVineIssueCard issueId={3} />)
     await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(3))
     await waitFor(() => expect(screen.queryByLabelText('Loading comic details')).not.toBeInTheDocument())
     expect(container).toBeEmptyDOMElement()
@@ -234,7 +239,7 @@ describe('ComicVineIssueCard', () => {
     getIntelligence.mockImplementation(() => new Promise((resolve) => {
       resolveRequest = resolve
     }))
-    const { unmount } = render(<ComicVineIssueCard issueId={4} />)
+    const { unmount } = renderWithToast(<ComicVineIssueCard issueId={4} />)
     await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(4))
 
     unmount()
@@ -270,7 +275,7 @@ describe('ComicVineIssueCard', () => {
       }],
     })
 
-    render(<ComicVineIssueCard issueId={5} />)
+    renderWithToast(<ComicVineIssueCard issueId={5} />)
     expect(await screen.findByText('Batman #125')).toBeInTheDocument()
     fireEvent.click(screen.getByText('Comic details'))
     const addButton = screen.getByRole('button', { name: /Add Batman #126 to ComicPile/i })
@@ -312,7 +317,7 @@ describe('ComicVineIssueCard', () => {
       }],
     })
 
-    render(<ComicVineIssueCard issueId={6} />)
+    renderWithToast(<ComicVineIssueCard issueId={6} />)
     await waitFor(() => expect(screen.getByText('Big Arc')).toBeInTheDocument())
     fireEvent.click(screen.getByText('Comic details'))
 
@@ -371,7 +376,7 @@ describe('ComicVineIssueCard', () => {
       }],
     })
 
-    render(<ComicVineIssueCard issueId={6} />)
+    renderWithToast(<ComicVineIssueCard issueId={6} />)
     await waitFor(() => expect(screen.getByText('Comic details')).toBeInTheDocument())
     fireEvent.click(screen.getByText('Comic details'))
 
@@ -408,7 +413,7 @@ describe('ComicVineIssueCard', () => {
       }],
     })
 
-    render(<ComicVineIssueCard issueId={6} />)
+    renderWithToast(<ComicVineIssueCard issueId={6} />)
     await waitFor(() => expect(screen.getByText('Spider-Man #50')).toBeInTheDocument())
     fireEvent.click(screen.getByText('Comic details'))
     const addButton = screen.getByRole('button', { name: /Add Spider-Man #51 to ComicPile/i })
@@ -455,7 +460,7 @@ describe('ComicVineIssueCard', () => {
       }],
     })
 
-    render(<ComicVineIssueCard issueId={7} />)
+    renderWithToast(<ComicVineIssueCard issueId={7} />)
     await waitFor(() => expect(screen.getByText('X-Men #100')).toBeInTheDocument())
     fireEvent.click(screen.getByText('Comic details'))
     const addButton = screen.getByRole('button', { name: /Add X-Men #101 to ComicPile/i })

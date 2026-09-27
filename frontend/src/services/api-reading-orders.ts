@@ -1,4 +1,5 @@
 import api from './api'
+import type { HttpClient } from './httpClient'
 import type { ContinuityPlan } from './api-continuity-plans'
 
 export interface ReadingOrderItem {
@@ -77,15 +78,22 @@ export interface InsertReadingOrderItemResponse {
   total_items: number
 }
 
-export const readingOrdersApi = {
+/**
+ * Build the reading-order service bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every request.
+ * @returns The reading-order service bound to `client`.
+ */
+export function createReadingOrdersApi(client: HttpClient) {
+  return {
   list: async (): Promise<ReadingOrderListResponse> => {
-    return api.get<ReadingOrderListResponse>('/v1/reading-orders/')
+    return client.get<ReadingOrderListResponse>('/v1/reading-orders/')
   },
   insertItem: async (
     readingOrderId: number,
     data: { thread_id: number; position: number },
   ): Promise<InsertReadingOrderItemResponse> => {
-    return api.post<InsertReadingOrderItemResponse>(
+    return client.post<InsertReadingOrderItemResponse>(
       `/v1/reading-orders/${readingOrderId}/items`,
       data,
     )
@@ -94,7 +102,7 @@ export const readingOrdersApi = {
     planId: number,
     readingOrderId: number,
   ): Promise<ReadingOrderProjectionPreview> => {
-    return api.post<ReadingOrderProjectionPreview>(
+    return client.post<ReadingOrderProjectionPreview>(
       `/v1/continuity-plans/${planId}/reading-orders/project-preview`,
       { reading_order_id: readingOrderId },
     )
@@ -103,13 +111,13 @@ export const readingOrdersApi = {
     planId: number,
     readingOrderId: number,
   ): Promise<ReadingOrderProjectionResult> => {
-    return api.post<ReadingOrderProjectionResult>(
+    return client.post<ReadingOrderProjectionResult>(
       `/v1/continuity-plans/${planId}/reading-orders/project`,
       { reading_order_id: readingOrderId },
     )
   },
   getForThread: async (threadId: number): Promise<ThreadReadingOrdersResponse> => {
-    return api.get<ThreadReadingOrdersResponse>(`/v1/threads/${threadId}/reading-orders`)
+    return client.get<ThreadReadingOrdersResponse>(`/v1/threads/${threadId}/reading-orders`)
   },
   adoptReadingOrder: async (params: {
     readingOrderId: number
@@ -117,7 +125,7 @@ export const readingOrdersApi = {
     laneId?: string
     laneName?: string
   }): Promise<ContinuityPlan> => {
-    return api.post(`/v1/continuity-plans/from-reading-order`, {
+    return client.post(`/v1/continuity-plans/from-reading-order`, {
       reading_order_id: params.readingOrderId,
       plan_name: params.planName ?? null,
       lane_id: params.laneId ?? 'adopted',
@@ -125,3 +133,6 @@ export const readingOrdersApi = {
     })
   },
 }
+}
+
+export const readingOrdersApi = createReadingOrdersApi(api)

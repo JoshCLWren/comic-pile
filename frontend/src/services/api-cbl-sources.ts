@@ -1,4 +1,5 @@
 import api from './api'
+import type { HttpClient } from './httpClient'
 import type { ContinuityPlan } from './api-continuity-plans'
 
 export interface CBLSourceListDiscoveryItem {
@@ -78,15 +79,22 @@ export interface CBLAdoptionPlanChoices {
   entry_decisions: Record<string, boolean>
 }
 
-export const cblSourcesApi = {
+/**
+ * Build the CBL source service bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every request.
+ * @returns The CBL source service bound to `client`.
+ */
+export function createCblSourcesApi(client: HttpClient) {
+  return {
   discover: (query: string, limit = 25) =>
-    api.get<CBLSourceListDiscoveryItem[]>('/v1/issue-identity/cbl-sources', {
+    client.get<CBLSourceListDiscoveryItem[]>('/v1/issue-identity/cbl-sources', {
       params: { q: query, limit },
     }),
   preview: (listId: number) =>
-    api.get<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-preview`),
+    client.get<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-preview`),
   plan: (listId: number, choices: CBLAdoptionPlanChoices) =>
-    api.post<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-plan`, choices),
+    client.post<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-plan`, choices),
   commit: (
     listId: number,
     planId: number,
@@ -116,7 +124,7 @@ export const cblSourcesApi = {
     const seriesOverrides = [...overridesByPosition.entries()]
       .sort(([left], [right]) => left - right)
       .map(([cbl_position, decision]) => ({ cbl_position, decision }))
-    return api.post<CBLAdoptionCommitResult>(
+    return client.post<CBLAdoptionCommitResult>(
       `/v1/cbl/${listId}/reading-plans/${planId}/adoption-commit`,
       {
         entry_decisions: {},
@@ -128,3 +136,6 @@ export const cblSourcesApi = {
     )
   },
 }
+}
+
+export const cblSourcesApi = createCblSourcesApi(api)
