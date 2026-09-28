@@ -469,7 +469,7 @@ async def forgot_password(
             # No user found; no email sent. Log minimal info to avoid enumeration.
             logger.debug(
                 "Password reset requested for non-existent email: %s",
-                email,
+                data.email,
                 extra={"event": "password_reset_non_existent_email"},
             )
 
