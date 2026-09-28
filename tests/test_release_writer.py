@@ -302,10 +302,13 @@ class TestReleaseWriterValidation:
         assert result["visibility"] == "public"
         assert result["status"] == "published"
         assert result["sort_order"] == 0
-        assert result["provenance_json"] == {"source": "github"}
+        assert result["provenance_json"] == _public_provenance()
 
     def test_publish_sets_defaults(self) -> None:
-        """Optional fields should get default values.
+        """Optional non-evidence fields should get default values.
+
+        Public classification evidence is not optional, so it stays in the
+        payload while the remaining optional fields are exercised.
 
         Args:
             None.
@@ -314,15 +317,29 @@ class TestReleaseWriterValidation:
             None.
         """
         payload = _valid_payload()
-        # Remove optional fields
-        for field in ("body", "visibility", "status", "sort_order", "provenance_json"):
+        # Remove optional fields; classification evidence is not optional
+        for field in ("body", "visibility", "status", "sort_order"):
             del payload[field]
 
         result = release_writer._validate_release(json.dumps(payload))
         assert result["visibility"] == "public"
         assert result["status"] == "published"
         assert result["sort_order"] == 0
-        assert result["provenance_json"] == {}
+        assert result["provenance_json"] == _public_provenance()
+
+    def test_publish_requires_public_classification_evidence(self) -> None:
+        """A public payload without classification evidence must be rejected.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        del payload["provenance_json"]
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert 'provenance_json.classification must be "public"' in stderr
 
 
 class TestReleaseWriterCheck:
@@ -473,6 +490,11 @@ class TestReleaseWriterSkip:
         assert published["provenance_json"] == {
             "classification": "internal",
             "reason": "Internal maintenance only",
+            "reader_reachable": False,
+            "user_visible_evidence": "",
+            "inspected_issue_numbers": [],
+            "scope_fences": [],
+            "contradicting_evidence": [],
         }
 
 
@@ -614,6 +636,26 @@ class TestReleaseWriterEnvironment:
             assert "RELEASE_WRITER_TOKEN is required" in stderr
 
 
+def _public_provenance() -> dict[str, object]:
+    """Return complete reader-visible classification evidence for a public release.
+
+    Returns:
+        Provenance object satisfying every public classification requirement.
+    """
+    return {
+        "classification": "public",
+        "classification_reason": "Queue page behavior changed for every reader.",
+        "user_visible_evidence": (
+            "frontend/src/pages/QueuePage.tsx now shows a saved-search filter."
+        ),
+        "reader_reachable": True,
+        "inspected_issue_numbers": [1070],
+        "scope_fences": [],
+        "contradicting_evidence": [],
+        "reader_reachable_path": "Queue page at /queue",
+    }
+
+
 def _valid_payload() -> dict[str, object]:
     """Return a valid release payload for testing."""
     return {
@@ -629,7 +671,7 @@ def _valid_payload() -> dict[str, object]:
         "visibility": "public",
         "status": "published",
         "sort_order": 0,
-        "provenance_json": {"source": "github"},
+        "provenance_json": _public_provenance(),
     }
 
 
@@ -954,3 +996,405 @@ class TestReleaseWriterRetract:
                         "abcdef1234567890",
                     )
             assert "no release ledger record exists for this source identity" in stderr
+
+
+class TestReleaseWriterPublicClassificationEvidence:
+    """Public publication requires auditable reader-visible classification evidence."""
+
+    def test_publish_rejects_weak_user_visible_evidence(self) -> None:
+        """Placeholder evidence must not justify a public release.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["provenance_json"]["user_visible_evidence"] = "looks good"
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "provenance_json.user_visible_evidence must describe the change" in stderr
+
+    def test_publish_rejects_public_without_reader_reachability(self) -> None:
+        """A change with no shipped reader path must be classified internal.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["provenance_json"]["reader_reachable"] = False
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "provenance_json.reader_reachable must be true" in stderr
+
+    def test_publish_rejects_public_when_scope_fence_has_no_contradiction(self) -> None:
+        """A declared scope fence blocks publication until it is contradicted.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["provenance_json"]["scope_fences"] = ["no frontend callers"]
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "linked issue scope fences contradict a public release" in stderr
+        assert "no frontend callers" in stderr
+
+    def test_publish_accepts_public_when_scope_fence_is_contradicted(self) -> None:
+        """Documented contradicting evidence is the audited escape hatch.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["provenance_json"]["scope_fences"] = ["no frontend callers"]
+        payload["provenance_json"]["contradicting_evidence"] = [
+            "The shipped queue page already calls this endpoint."
+        ]
+        result = release_writer._validate_release(json.dumps(payload))
+        assert result["visibility"] == "public"
+
+    def test_publish_rejects_capability_claim_without_reachable_path(self) -> None:
+        """'You can now' claims must name the shipped reader path.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["title"] = "Saved queue filters"
+        payload["summary"] = "You can now save and reuse queue filters."
+        del payload["provenance_json"]["reader_reachable_path"]
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "provenance_json.reader_reachable_path must be a string" in stderr
+
+    def test_publish_rejects_mistyped_inspected_issue_numbers(self) -> None:
+        """Inspected issue provenance must be a list of issue numbers.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["provenance_json"]["inspected_issue_numbers"] = ["1070"]
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "provenance_json.inspected_issue_numbers must be a list of issue numbers" in stderr
+
+    def test_publish_rejects_oversized_evidence(self) -> None:
+        """Classification evidence must stay bounded.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["provenance_json"]["classification_reason"] = "r" * 1001
+        stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
+        assert "provenance_json.classification_reason must be at most 1000 characters" in stderr
+
+    def test_internal_records_skip_public_evidence_requirements(self) -> None:
+        """Internal records remain publishable without reader-visible evidence.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["visibility"] = "internal"
+        payload["provenance_json"] = {
+            "classification": "internal",
+            "reader_reachable": False,
+        }
+        result = release_writer._validate_release(json.dumps(payload))
+        assert result["visibility"] == "internal"
+
+
+class TestReleaseWriterSkipEvidence:
+    """Internal skips record auditable classification provenance."""
+
+    def test_skip_records_inspected_issues_and_scope_fences(self) -> None:
+        """Skip evidence is durable and auditable in the ledger.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = {
+            "source_repository": "test/repo",
+            "source_pr_number": 2910,
+            "source_merge_sha": "abcdef1234567890",
+            "merged_at": "2024-01-01T00:00:00Z",
+            "reason": "Backend CBL adoption with the reader UI deferred.",
+            "inspected_issue_numbers": [2128],
+            "scope_fences": ["no frontend callers"],
+        }
+        with patch.object(release_writer, "_request") as mock_request:
+            mock_request.return_value = {"id": 1}
+            with patch.object(release_writer, "_api_base", return_value="http://test/api"):
+                with patch.object(release_writer, "_token", return_value="test-token"):
+                    _capture_stdout(release_writer._skip, json.dumps(payload))
+        published = mock_request.call_args[0][2]
+        assert published["provenance_json"]["inspected_issue_numbers"] == [2128]
+        assert published["provenance_json"]["scope_fences"] == ["no frontend callers"]
+        assert published["provenance_json"]["reader_reachable"] is False
+
+    def test_skip_rejects_reader_visible_evidence(self) -> None:
+        """An internal skip must not also claim reader-visible change.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = {
+            "source_repository": "test/repo",
+            "source_pr_number": 1,
+            "source_merge_sha": "abcdef1234567890",
+            "merged_at": "2024-01-01T00:00:00Z",
+            "reason": "Internal maintenance only",
+            "user_visible_evidence": "Readers can now see the new board view.",
+        }
+        stderr = _capture_stderr(release_writer._skip, json.dumps(payload))
+        assert "user_visible_evidence must be empty for an internal record" in stderr
+
+    def test_skip_rejects_unsupported_fields(self) -> None:
+        """Unknown skip fields must fail instead of being silently dropped.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = {
+            "source_repository": "test/repo",
+            "source_pr_number": 1,
+            "source_merge_sha": "abcdef1234567890",
+            "merged_at": "2024-01-01T00:00:00Z",
+            "reason": "Internal maintenance only",
+            "visibility": "public",
+        }
+        stderr = _capture_stderr(release_writer._skip, json.dumps(payload))
+        assert "skip payload contains unsupported fields" in stderr
+
+
+class TestReleaseWriterScopeFenceDetection:
+    """Deterministic scope-fence detection over real issue failure shapes."""
+
+    def test_detects_cbl_deferred_ui_fence(self) -> None:
+        """The #2910 CBL shape must be detected as decisive.
+
+        Uses the real scope-boundary wording from issue 2127.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        text = (
+            "## Scope boundaries\n\n"
+            "- No final browser/review UI. #2128 owns that.\n"
+            "- Do not add standalone readiness/preflight UI.\n"
+        )
+        assert release_writer._scope_fences(text) == ["no shipped ui", "ui not shipped"]
+
+    def test_detects_roll_bootstrap_fence(self) -> None:
+        """The #2916 Roll bootstrap shape must be detected as decisive.
+
+        Uses the real acceptance wording from issue 2717.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        text = (
+            "- [ ] No frontend caller changes in this issue.\n\n"
+            "## Scope fence\n\n"
+            "Do not migrate the idle UI, add Map series, or change Roll eligibility.\n"
+        )
+        assert release_writer._scope_fences(text) == ["no frontend callers", "scope fence"]
+
+    def test_detects_refactor_and_ambiguous_fences(self) -> None:
+        """Internal refactors and partial rollouts must be detected.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        text = (
+            "Internal refactor: React Query component split with behavior preserved. "
+            "Staged rollout for readers."
+        )
+        assert release_writer._scope_fences(text) == [
+            "behavior preserved",
+            "internal refactor",
+            "staged rollout",
+        ]
+
+    def test_ignores_public_issue_prose(self) -> None:
+        """Reader-visible issue prose must not fabricate fences.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        text = "The queue page now offers saved filters and a faster roll."
+        assert release_writer._scope_fences(text) == []
+
+
+class TestReleaseWriterPublishGrounding:
+    """Publish-time grounding compares the copy with merged-diff and issue evidence."""
+
+    def test_backend_only_capability_claim_is_rejected(self) -> None:
+        """#2910/#2916 shape: capability claim with no reader-facing diff.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["source_pr_number"] = 2910
+        payload["title"] = "Comic Book Library reading plans"
+        payload["summary"] = "You can now build a reading plan from library lists."
+        payload["provenance_json"].pop("reader_reachable_path")
+
+        def fake_read(url: str):
+            if "/files" in url:
+                return [{"filename": "app/services/queue.py", "status": "modified"}]
+            return {"number": 2910, "title": "CBL adoption", "body": "Closes #2128."}
+
+        with patch.object(release_writer, "_github_read", side_effect=fake_read):
+            stderr = _capture_stderr(
+                release_writer._validate_publish_grounding, payload
+            )
+        assert "no reader-facing product surface" in stderr
+
+    def test_reader_visible_diff_allows_capability_claim(self) -> None:
+        """A real reader-facing change keeps its public capability claim.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["title"] = "Saved queue filters"
+        payload["summary"] = "You can now save and reuse queue filters."
+
+        def fake_read(url: str):
+            return [{"filename": "frontend/src/pages/QueuePage.tsx"}]
+
+        with patch.object(release_writer, "_github_read", side_effect=fake_read):
+            release_writer._validate_publish_grounding(payload)
+
+    def test_linked_issue_fence_blocks_undocumented_publication(self) -> None:
+        """A fence in linked issue context blocks publication.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["provenance_json"]["scope_fences"] = []
+
+        def fake_read(url: str):
+            if "/files" in url:
+                return [{"filename": "frontend/src/pages/QueuePage.tsx"}]
+            if "/issues/" in url:
+                return {
+                    "number": 2128,
+                    "title": "CBL support",
+                    "body": "No frontend caller changes and the UI is out of scope.",
+                }
+            return {"number": 2910, "title": "CBL adoption", "body": "Closes #2128."}
+
+        with patch.object(release_writer, "_github_read", side_effect=fake_read):
+            stderr = _capture_stderr(
+                release_writer._validate_publish_grounding, payload
+            )
+        assert "linked issue context contains decisive scope fences" in stderr
+
+    def test_contradicting_evidence_skips_grounding_checks(self) -> None:
+        """Documented contradicting evidence is the audited escape hatch.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["provenance_json"]["contradicting_evidence"] = [
+            "The shipped queue page already calls this endpoint today."
+        ]
+
+        def unexpected_read(url: str):
+            raise AssertionError(f"grounding must short-circuit, got {url}")
+
+        with patch.object(release_writer, "_github_read", side_effect=unexpected_read):
+            release_writer._validate_publish_grounding(payload)
+
+    def test_unavailable_github_does_not_block_publication(self) -> None:
+        """Grounding fails open on unreadable evidence and closed on real evidence.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["title"] = "Saved queue filters"
+        payload["summary"] = "You can now save and reuse queue filters."
+
+        with patch.object(release_writer, "_github_read", return_value=None):
+            release_writer._validate_publish_grounding(payload)
+
+    def test_internal_public_grounding_is_skipped(self) -> None:
+        """Internal records never run publish-time grounding.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["visibility"] = "internal"
+        payload["provenance_json"] = {"classification": "internal"}
+
+        def unexpected_read(url: str):
+            raise AssertionError(f"grounding must skip internal records, got {url}")
+
+        with patch.object(release_writer, "_github_read", side_effect=unexpected_read):
+            release_writer._validate_publish_grounding(payload)
