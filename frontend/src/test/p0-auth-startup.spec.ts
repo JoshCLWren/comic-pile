@@ -75,7 +75,7 @@ test.describe('AUTH-001: Authentication and startup', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
     await expect(page).toHaveURL(/\/$/)
 
-    const signUp = page.getByRole('link', { name: /sign up free/i })
+    const signUp = page.getByRole('link', { name: /create your queue/i })
     await expect(signUp).toBeVisible()
     await expect(page.getByRole('link', { name: /^sign in$/i })).toBeVisible()
 
