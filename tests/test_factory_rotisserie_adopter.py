@@ -98,7 +98,7 @@ def test_rejects_an_unscoped_repository_capture() -> None:
         raise AssertionError("unscoped repository capture was accepted")
 
 
-def test_legacy_only_retry_suppression_remains_visible_as_divergence() -> None:
+def test_retry_suppression_is_visible() -> None:
     adapter = load_adapter()
     view = json.loads(FIXTURE.read_text(encoding="utf-8"))
     view["no_diff_attempts_by_issue"] = {"3002": 3}
@@ -111,3 +111,25 @@ def test_legacy_only_retry_suppression_remains_visible_as_divergence() -> None:
     assert observations[("eligibility", "work:3002")]["outcome"] == "blocked"
     assert observations[("eligibility", "work:3002")]["reasons"] == ["adopter_policy"]
     assert ("ranking", "work:3002") not in observations
+
+
+def test_manual_gate_mapping() -> None:
+    adapter = load_adapter()
+    view = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    view["issues"][1]["body"] = "<!-- factory-execution:manual-only -->"
+
+    legacy = adapter.legacy_decisions(view)
+    snapshot = adapter.graph_snapshot(view)
+    observations = {
+        (item["dimension"], item["subject"]): item for item in legacy["observations"]
+    }
+
+    assert observations[("eligibility", "work:3002")]["reasons"] == ["human_boundary"]
+    assert snapshot["boundaries"] == [
+        {
+            "id": "comic-pile-policy-3002",
+            "work": snapshot["works"][1]["id"],
+            "kind": "human_approval",
+            "satisfied_by": None,
+        }
+    ]
