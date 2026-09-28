@@ -171,7 +171,7 @@ export default function Modal({
           ref={modalRef}
           data-testid={testId}
           tabIndex={-1}
-          className={`relative w-full ${size === 'large' ? 'max-w-4xl' : 'max-w-lg'} h-[calc(100dvh-1rem)] md:h-auto modal-card ${size === 'large' ? 'max-h-[calc(100dvh-1rem)] md:max-h-[90vh]' : 'max-h-[calc(100dvh-1rem)] md:max-h-[85vh]'} flex flex-col overflow-hidden rounded-t-2xl md:rounded-lg animate-slide-up md:animate-fade-in pb-[env(safe-area-inset-bottom)]`}
+          className={`relative w-full ${size === 'large' ? 'max-w-4xl' : 'max-w-lg'} h-[calc(100dvh-1rem)] md:h-auto surface-modal ${size === 'large' ? 'max-h-[calc(100dvh-1rem)] md:max-h-[90vh]' : 'max-h-[calc(100dvh-1rem)] md:max-h-[85vh]'} flex flex-col overflow-hidden rounded-t-2xl md:rounded-lg animate-slide-up md:animate-fade-in pb-[env(safe-area-inset-bottom)]`}
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}

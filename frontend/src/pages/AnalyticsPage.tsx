@@ -36,19 +36,19 @@ export default function AnalyticsPage() {
 
       {/* Top Metrics Cards */}
       <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
-        <div className="glass-card p-3 md:p-4">
+        <div className="surface-panel p-3 md:p-4">
           <div className="text-2xl md:text-3xl font-bold text-amber-500">{metrics.total_threads || 0}</div>
           <div className="text-[10px] md:text-xs text-stone-400 uppercase tracking-widest mt-1">Total Threads</div>
         </div>
-        <div className="glass-card p-3 md:p-4">
+        <div className="surface-panel p-3 md:p-4">
           <div className="text-2xl md:text-3xl font-bold text-amber-400">{metrics.active_threads || 0}</div>
           <div className="text-[10px] md:text-xs text-stone-400 uppercase tracking-widest mt-1">Active Threads</div>
         </div>
-        <div className="glass-card p-3 md:p-4">
+        <div className="surface-panel p-3 md:p-4">
           <div className="text-2xl md:text-3xl font-bold text-amber-300">{metrics.completed_threads || 0}</div>
           <div className="text-[10px] md:text-xs text-stone-400 uppercase tracking-widest mt-1">Completed</div>
         </div>
-        <div className="glass-card p-3 md:p-4">
+        <div className="surface-panel p-3 md:p-4">
           <div className="text-2xl md:text-3xl font-bold text-orange-400">
             {Number.isFinite(metrics.completion_rate) 
               ? `${metrics.completion_rate.toFixed(1)}%` 
@@ -56,7 +56,7 @@ export default function AnalyticsPage() {
           </div>
           <div className="text-[10px] md:text-xs text-stone-400 uppercase tracking-widest mt-1">Completion Rate</div>
         </div>
-        <div className="glass-card p-3 md:p-4">
+        <div className="surface-panel p-3 md:p-4">
           <div className="text-2xl md:text-3xl font-bold text-amber-400">
             {Number.isFinite(metrics.average_session_hours)
               ? `${metrics.average_session_hours.toFixed(1)}h`
@@ -68,7 +68,7 @@ export default function AnalyticsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Recent Sessions */}
-        <div className="glass-card p-4">
+        <div className="surface-panel p-4">
           <h3 className="text-sm font-black uppercase tracking-widest text-stone-300 mb-3">Recent Sessions</h3>
           {metrics.recent_sessions && metrics.recent_sessions.length > 0 ? (
             <div className="space-y-2">
@@ -106,7 +106,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Event Stats */}
-        <div className="glass-card p-4">
+        <div className="surface-panel p-4">
           <h3 className="text-sm font-black uppercase tracking-widest text-stone-300 mb-3">Event Statistics</h3>
           {metrics.event_stats && Object.keys(metrics.event_stats).length > 0 ? (
             <div className="space-y-2">
@@ -138,7 +138,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Top Rated Comics */}
-      <div className="glass-card p-4">
+      <div className="surface-panel p-4">
         <h3 className="text-sm font-black uppercase tracking-widest text-stone-300 mb-3">Top Rated Comics</h3>
         {metrics.top_rated_threads && metrics.top_rated_threads.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
