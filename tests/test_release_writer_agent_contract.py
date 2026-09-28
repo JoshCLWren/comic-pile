@@ -156,3 +156,72 @@ def test_release_writer_all_read_helpers_are_get_only(monkeypatch) -> None:
     release_writer._pr("JoshCLWren/comic-pile", "1082")
     release_writer._files("JoshCLWren/comic-pile", "1082")
     release_writer._issues("JoshCLWren/comic-pile", "1082")
+
+
+def test_release_writer_contract_requires_public_classification_evidence() -> None:
+    """A public note must carry auditable reader-visible classification evidence.
+
+    Returns:
+        None.
+    """
+    agent_text = RELEASE_WRITER_AGENT.read_text(encoding="utf-8")
+    for field in (
+        "classification",
+        "classification_reason",
+        "user_visible_evidence",
+        "reader_reachable",
+        "inspected_issue_numbers",
+        "scope_fences",
+        "contradicting_evidence",
+        "reader_reachable_path",
+    ):
+        assert f'"{field}"' in agent_text, f"missing public provenance field {field}"
+    assert "provenance_json" in agent_text
+    assert "classify as `internal`" in agent_text
+
+
+def test_release_writer_contract_defaults_ambiguous_changes_to_internal() -> None:
+    """Ambiguous or incomplete evidence must classify as internal, not public.
+
+    Returns:
+        None.
+    """
+    agent_text = RELEASE_WRITER_AGENT.read_text(encoding="utf-8")
+    assert "When the evidence is ambiguous, conflicting, or incomplete" in agent_text
+    for internal_category in (
+        "backend or API prerequisite",
+        "persistence, schema, or data-model groundwork",
+        "internal refactor",
+        "test, tooling, build, or deployment plumbing",
+        "whose supported product UI remains unshipped",
+        "explicitly fences the user-facing portion into a follow-up",
+    ):
+        assert internal_category in agent_text
+
+
+def test_release_writer_contract_requires_scope_fence_contradiction() -> None:
+    """Decisive scope fences must be read before publishing and contradicted.
+
+    Returns:
+        None.
+    """
+    agent_text = RELEASE_WRITER_AGENT.read_text(encoding="utf-8")
+    assert "no frontend caller changes" in agent_text
+    assert "no final UI" in agent_text
+    assert "`contradicting_evidence` is required whenever `scope_fences` is non-empty" in agent_text
+    helper_text = RELEASE_WRITER_HELPER.read_text(encoding="utf-8")
+    assert "_scope_fences" in helper_text
+    assert "_validate_publish_grounding" in helper_text
+
+
+def test_release_writer_helper_validates_public_evidence_and_grounding() -> None:
+    """The credential-holding helper must enforce the classification guardrails.
+
+    Returns:
+        None.
+    """
+    helper_text = RELEASE_WRITER_HELPER.read_text(encoding="utf-8")
+    assert "_validate_public_evidence" in helper_text
+    assert "_validate_internal_evidence" in helper_text
+    assert "_validate_release(sys.argv[2])" in helper_text
+    assert "_validate_publish_grounding(payload)" in helper_text
