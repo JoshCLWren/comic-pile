@@ -469,3 +469,23 @@ export const preferencesApi = {
   patch: (data: UserPreferencesPatchRequest) =>
     api.patch<UserPreferencesResponse, UserPreferencesPatchRequest>('/v1/users/me/preferences', data),
 }
+
+export interface ForgotPasswordRequest {
+  email: string
+}
+
+export interface ResetPasswordRequest {
+  token: string
+  new_password: string
+}
+
+export interface PasswordResetResponse {
+  message: string
+}
+
+export const authApi = {
+  forgotPassword: (data: ForgotPasswordRequest) =>
+    api.post<PasswordResetResponse, ForgotPasswordRequest>('/v1/auth/forgot-password', data),
+  resetPassword: (data: ResetPasswordRequest) =>
+    api.post<PasswordResetResponse, ResetPasswordRequest>('/v1/auth/reset-password', data),
+}
