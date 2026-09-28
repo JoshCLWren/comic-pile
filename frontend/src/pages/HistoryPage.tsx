@@ -18,7 +18,7 @@ export default function HistoryPage() {
         <header className="flex flex-wrap items-end justify-between gap-3 px-2">
           <div>
             <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
-<p className="mt-2 text-base font-semibold text-stone-500">Your reading session history</p>
+            <p className="mt-2 text-base font-semibold text-stone-500">Your reading session history</p>
           </div>
           <a
             href="/admin/export/summary/"
