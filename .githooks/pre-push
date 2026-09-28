@@ -62,7 +62,7 @@ fi
 
 if [ ! -d "frontend/node_modules" ]; then
     echo "Installing frontend dependencies (frontend/node_modules missing)..."
-    pnpm install --frozen-lockfile
+    CI=1 pnpm install --frozen-lockfile
 fi
 
 echo ""

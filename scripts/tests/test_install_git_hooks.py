@@ -56,6 +56,48 @@ class InstallGitHooksTests(unittest.TestCase):
                     installed_contents[hook_name],
                 )
 
+    def test_installs_into_common_git_directory_from_linked_worktree(self) -> None:
+        """A linked worktree has a .git file, not a directory."""
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            repository = root / "repository"
+            worktree = root / "worktree"
+            subprocess.run(["git", "init", str(repository)], check=True, capture_output=True)
+            subprocess.run(
+                ["git", "-C", str(repository), "config", "user.email", "test@example.com"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(repository), "config", "user.name", "Test User"],
+                check=True,
+            )
+            (repository / "seed").write_text("seed\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(repository), "add", "seed"], check=True)
+            subprocess.run(
+                ["git", "-C", str(repository), "commit", "-m", "seed"],
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(repository), "worktree", "add", "-b", "test", str(worktree)],
+                check=True,
+                capture_output=True,
+            )
+            shutil.copytree(ROOT / ".githooks", worktree / ".githooks")
+            shutil.copy2(INSTALLER, worktree / "install-git-hooks.sh")
+
+            subprocess.run(
+                ["bash", "install-git-hooks.sh"], cwd=worktree, check=True, capture_output=True
+            )
+
+            self.assertTrue((repository / ".git" / "hooks" / "pre-commit").is_file())
+
+    def test_pre_push_dependency_install_is_non_interactive(self) -> None:
+        """Git hooks cannot answer pnpm's reinstall confirmation prompt."""
+        pre_push = (ROOT / ".githooks" / "pre-push").read_text(encoding="utf-8")
+
+        self.assertIn("CI=1 pnpm install --frozen-lockfile", pre_push)
+
 
 if __name__ == "__main__":
     unittest.main()
