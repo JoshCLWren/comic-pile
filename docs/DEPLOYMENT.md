@@ -91,14 +91,21 @@ Notes:
   `password_reset_delivery_failed` event and still returns the
   enumeration-safe acknowledgement, so requesters cannot distinguish the
   outage from ordinary behavior.
+- Delivery runs as a request background task after the acknowledgement is
+  returned, so provider latency (including the 10-second adapter timeout
+  during an outage) never changes how quickly a known address is
+  acknowledged compared with an unknown one.
 - `PASSWORD_RESET_ORIGIN` must be the public origin users open in a
   browser; the reset token is appended as an encoded `?token=` query
   parameter on `PASSWORD_RESET_PATH` at the delivery boundary only.
 - When any setting is missing (local development, tests), the app uses a
   deterministic fake mailer and records messages in-memory instead of
-  sending. Automated coverage in `tests/test_password_reset_mailer.py`
+  sending, logging a `password_reset_email_unconfigured` warning so a
+  misconfigured production environment is visible operationally.
+  Automated coverage in `tests/test_password_reset_mailer.py`
   asserts link construction, expiry copy, digest-only storage, enumeration
-  safety under provider failure, and that the raw token is never logged.
+  safety under provider failure, deferred delivery, and that the raw token
+  is never logged.
 
 ### How ComicPile uses Neon
 

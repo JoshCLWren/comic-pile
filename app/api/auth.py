@@ -4,7 +4,7 @@ import logging
 import secrets
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from jose.exceptions import ExpiredSignatureError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -415,14 +415,16 @@ async def get_current_user_info(
 async def forgot_password(
     request: Request,
     data: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> PasswordResetResponse:
     """Enumeration-safe forgot-password request.
 
-    Same acknowledgement whether email exists or not.
-    Rate-limited via existing application limiter.
+    Same acknowledgement whether email exists or not, and returned before any
+    outbound email attempt so provider latency cannot distinguish a known
+    address from an unknown one. Rate-limited via existing application limiter.
     """
-    await handle_forgot_password_request(db, data.email)
+    await handle_forgot_password_request(db, data.email, background_tasks)
     return PasswordResetResponse(message="If an account exists, a reset link has been sent.")
 
 

@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
+from starlette.background import BackgroundTasks
 
 from app.auth import hash_password
 from app.config import clear_settings_cache, get_email_settings
@@ -27,6 +28,7 @@ from app.services.password_reset_mailer import (
 from app.services.password_reset_service import (
     TOKEN_EXPIRY_MINUTES,
     complete_reset,
+    handle_forgot_password_request,
     request_forgot_password,
 )
 
@@ -325,3 +327,31 @@ async def test_fake_delivery_link_completes_reset(
         urllib.parse.urlparse(fake.sent[0].reset_url).query,
     )["token"][0]
     assert await complete_reset(async_db, delivered_token, "brand-new-pw") is True
+
+
+@pytest.mark.asyncio
+async def test_delivery_is_deferred_to_background_task(
+    _clean_mailer_state: None,
+    async_db,
+) -> None:
+    """The service only schedules delivery, keeping the ack path provider-free."""
+    if await get_user_by_username(async_db, "bgdeferuser") is None:
+        await create_user(
+            async_db,
+            username="bgdeferuser",
+            email="bgdefer@example.com",
+            password_hash=hash_password("pw"),
+        )
+        await async_db.commit()
+
+    tasks = BackgroundTasks()
+    await handle_forgot_password_request(async_db, "bgdefer@example.com", tasks)
+
+    # Nothing has touched the mailer yet: provider latency cannot leak
+    # account existence through response timing.
+    assert len(tasks.tasks) == 1
+    assert len(get_fake_mailer().sent) == 0
+
+    await tasks()
+    assert len(get_fake_mailer().sent) == 1
+    assert get_fake_mailer().sent[0].recipient_email == "bgdefer@example.com"
