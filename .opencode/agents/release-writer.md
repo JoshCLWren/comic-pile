@@ -29,17 +29,22 @@ For the merged pull request you are asked to process:
    - `python scripts/release_writer.py pr <repository> <pr-number>` for title, body, merged state,
      merge SHA, and merged timestamp;
    - `python scripts/release_writer.py files <repository> <pr-number>` for the changed-file summary;
-   - `python scripts/release_writer.py issues <repository> <pr-number>` for linked issue references.
+   - `python scripts/release_writer.py issues <repository> <pr-number>` for linked issue context.
+     Each entry carries the issue number, title, state, labels, body, a deterministic
+     `scope_fences` list, and `references` with parent/dependency relationships, plus the
+     `relationship` the pull request assigns to that issue. An entry with `"unavailable": true` is
+     a reference that no longer resolves and proves nothing either way.
    Never call `gh api` directly for inspection.
-3. Classify the change as `public` or `internal`. Do not force a public note for test-only,
-   generated-only, documentation-only, or strictly internal maintenance.
+3. Classify the change as `public` or `internal` using the classification contract below.
 4. For a public change, construct exactly one JSON object matching the release-ledger API contract
-   and call `python scripts/release_writer.py publish '<json>'`.
+   and call `python scripts/release_writer.py publish '<json>'`. The object must carry the
+   `provenance_json` classification evidence described below.
 5. For an internal change, call `python scripts/release_writer.py skip '<json>'` using exactly:
    `{"source_repository":"owner/repo","source_pr_number":123,"source_merge_sha":"abc1234",`
    `"merged_at":"2026-01-01T00:00:00Z","reason":"Concise internal-only reason"}`.
    Do not rename them to `repository`, `pr_number`, or `merge_sha`; the helper expects the exact
-   source field names shown above.
+   source field names shown above. You may additionally pass `"inspected_issue_numbers":[123]` and
+   `"scope_fences":["no frontend callers"]` so the ledger can audit the decision.
    The helper records a durable hidden internal source record so reconciliation does not repeatedly
    reclassify the same PR.
 6. Before exiting, call the exact `check` command again. Exit successfully only after the source
@@ -47,6 +52,57 @@ For the merged pull request you are asked to process:
    an exit code of zero without a durable source as a failed attempt.
 7. To retract a broken or placeholder public release, call
    `python scripts/release_writer.py retract <repository> <pr-number> <merge-sha>`.
+
+## Public versus internal classification
+
+Publish publicly only when the merged change alters behavior a ComicPile reader can reach in the
+product as it ships today. Classify as `internal` when the change is only:
+
+- a backend or API prerequisite with no current product caller or supported user path;
+- persistence, schema, or data-model groundwork;
+- an internal refactor whose behavior is intended to stay unchanged;
+- test, tooling, build, or deployment plumbing without a concrete reader-visible effect;
+- one stage of a larger feature whose supported product UI remains unshipped;
+- an implementation whose linked issue explicitly fences the user-facing portion into a follow-up.
+
+When the evidence is ambiguous, conflicting, or incomplete, classify as `internal`. Never invent a
+reader benefit to justify a public note. Read the linked issue bodies before deciding: scope
+fences such as "no frontend caller changes", "no final UI", "out of scope", "deferred", or
+"internal only" are decisive unless you can name the shipped reader path that contradicts them.
+
+## Required public classification evidence
+
+A public payload must include this exact `provenance_json` object:
+
+```json
+{
+  "classification": "public",
+  "classification_reason": "Why the change is reader visible rather than internal.",
+  "user_visible_evidence": "The reader action or visible behavior that changed, and which changed file or acceptance criterion establishes it.",
+  "reader_reachable": true,
+  "inspected_issue_numbers": [1234],
+  "scope_fences": ["no frontend callers"],
+  "contradicting_evidence": ["Shipped queue page calls this endpoint today."],
+  "reader_reachable_path": "Which shipped screen or flow reaches the new behavior."
+}
+```
+
+- `classification_reason` and `user_visible_evidence` must be substantive prose, not a task name.
+- `inspected_issue_numbers` lists every linked issue you actually read.
+- `scope_fences` copies the fences reported by the `issues` helper. Leave it empty only when the
+  linked context contains none.
+- `contradicting_evidence` is required whenever `scope_fences` is non-empty. Name the shipped reader
+  path that makes the change public despite the fence.
+- `reader_reachable_path` is required whenever the copy promises a new capability in reader language.
+- Never claim a reader benefit the evidence does not establish. Backend enablement is not a product
+  capability a reader can use.
+
+Publication fails while public classification evidence is missing, while a scope fence has no
+contradicting evidence, or while capability language promises a change the merged diff does not
+reach. Re-read the linked issues and either correct the copy or publish an internal skip. Never
+edit the payload to bypass a rejection.
+
+## Reader-facing release copy
 
 Keep summaries user-facing and concrete. Every public entry must read like ordinary product
 language for ComicPile readers:

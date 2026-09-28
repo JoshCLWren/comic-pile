@@ -1,0 +1,135 @@
+"""Contract tests for the read-only Rotisserie adopter boundary."""
+from __future__ import annotations
+
+import importlib.util
+import json
+import sys
+from pathlib import Path
+from types import ModuleType
+
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = ROOT / ".github" / "scripts" / "factory_rotisserie_adopter.py"
+FIXTURE = ROOT / "tests" / "fixtures" / "factory-rotisserie" / "parity-view.json"
+
+
+def load_adapter() -> ModuleType:
+    """Load the workflow-side adapter as a testable module."""
+    scripts = str(SCRIPT.parent)
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    spec = importlib.util.spec_from_file_location("factory_rotisserie_adopter", SCRIPT)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_one_capture_generates_both_versioned_shadow_inputs() -> None:
+    adapter = load_adapter()
+    raw = FIXTURE.read_bytes()
+
+    bundle = adapter.build_bundle(raw)
+
+    assert bundle["source_revision"] == "3c37115284352561c8c260f6e0932aa2addb8e12"
+    assert len(bundle["source_sha256"]) == 64
+    legacy = bundle["legacy"]
+    snapshot = bundle["snapshot"]
+    assert legacy["schema_version"] == 1
+    assert legacy["revision"] == bundle["source_revision"]
+    assert set(legacy["dimensions"]) == {
+        "eligibility", "ranking", "ownership", "review", "completion", "recovery"
+    }
+    assert snapshot["schema_version"] == 1
+    assert {item["id"]["repository"]["name"] for item in snapshot["works"]} == {"comic-pile"}
+
+
+def test_fixture_covers_exact_head_review_completion_and_lease_recovery() -> None:
+    adapter = load_adapter()
+    view = json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+    legacy = adapter.legacy_decisions(view)
+    observations = {
+        (item["dimension"], item["subject"]): item for item in legacy["observations"]
+    }
+
+    assert observations[("eligibility", "work:3002")]["outcome"] == "eligible"
+    assert observations[("eligibility", "work:3003")]["reasons"] == [
+        "implementation_exists"
+    ]
+    assert observations[("review", "change:4001")]["outcome"] == "approved"
+    assert observations[("completion", "change:4001")]["outcome"] == "ready"
+    assert observations[("recovery", "lease:issue-3004-7")]["outcome"] == "retain"
+
+    view["captured_at"] = 1790612100
+    expired = adapter.legacy_decisions(view)
+    expired_observations = {
+        (item["dimension"], item["subject"]): item for item in expired["observations"]
+    }
+    assert expired_observations[("recovery", "lease:issue-3004-7")]["outcome"] == "release"
+
+
+def test_changed_head_cannot_reuse_old_review_evidence() -> None:
+    adapter = load_adapter()
+    view = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    pr = view["pull_requests"][0]
+    pr["reviews"][0]["head"] = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+    snapshot = adapter.graph_snapshot(view)
+    legacy = adapter.legacy_decisions(view)
+    observations = {
+        (item["dimension"], item["subject"]): item for item in legacy["observations"]
+    }
+
+    assert snapshot["reviews"][0]["revision"]["value"] != snapshot["changes"][0]["head"]["value"]
+    assert observations[("review", "change:4001")]["outcome"] == "pending"
+    assert observations[("completion", "change:4001")]["outcome"] == "blocked"
+
+
+def test_rejects_an_unscoped_repository_capture() -> None:
+    adapter = load_adapter()
+    view = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    view["repository"] = "someone/else"
+
+    try:
+        adapter.graph_snapshot(view)
+    except adapter.AdopterInputError as error:
+        assert "outside" in str(error)
+    else:
+        raise AssertionError("unscoped repository capture was accepted")
+
+
+def test_retry_suppression_is_visible() -> None:
+    adapter = load_adapter()
+    view = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    view["no_diff_attempts_by_issue"] = {"3002": 3}
+
+    legacy = adapter.legacy_decisions(view)
+    observations = {
+        (item["dimension"], item["subject"]): item for item in legacy["observations"]
+    }
+
+    assert observations[("eligibility", "work:3002")]["outcome"] == "blocked"
+    assert observations[("eligibility", "work:3002")]["reasons"] == ["adopter_policy"]
+    assert ("ranking", "work:3002") not in observations
+
+
+def test_manual_gate_mapping() -> None:
+    adapter = load_adapter()
+    view = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    view["issues"][1]["body"] = "<!-- factory-execution:manual-only -->"
+
+    legacy = adapter.legacy_decisions(view)
+    snapshot = adapter.graph_snapshot(view)
+    observations = {
+        (item["dimension"], item["subject"]): item for item in legacy["observations"]
+    }
+
+    assert observations[("eligibility", "work:3002")]["reasons"] == ["human_boundary"]
+    assert snapshot["boundaries"] == [
+        {
+            "id": "comic-pile-policy-3002",
+            "work": snapshot["works"][1]["id"],
+            "kind": "human_approval",
+            "satisfied_by": None,
+        }
+    ]

@@ -51,7 +51,20 @@ async def test_public_release_response_hides_source_provenance(
         "visibility": "public",
         "status": "published",
         "sort_order": 0,
-        "provenance_json": {"source": "github", "internal_note": "hidden"},
+        "provenance_json": {
+            "source": "github",
+            "internal_note": "hidden",
+            "classification": "public",
+            "classification_reason": "Queue page behavior changed for every reader.",
+            "user_visible_evidence": (
+                "frontend/src/pages/QueuePage.tsx now shows a saved-search filter."
+            ),
+            "reader_reachable": True,
+            "inspected_issue_numbers": [1070],
+            "scope_fences": [],
+            "contradicting_evidence": [],
+            "reader_reachable_path": "Queue page at /queue",
+        },
     }
 
     created = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)

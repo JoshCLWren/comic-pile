@@ -27,7 +27,6 @@
     65,
     68,
     69,
-    71,
     72,
     73
   ],
@@ -49,11 +48,13 @@
     57,
     66,
     67,
-    70
+    70,
+    71
   ],
   "retired_models": [
     "deepseek-v4-flash-free",
     "hy3-free",
+    "inclusionai/ling-3.0-flash-fin:free",
     "inclusionai/ling-3.0-flash-vl:free",
     "jev-1.13-free",
     "laguna-s-2.1-free",

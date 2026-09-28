@@ -24,3 +24,16 @@ Before retrying a source, the release writer checks `/api/v1/releases/source` wi
 The release-writer agent gathers merged-PR context through `scripts/release_writer.py` read-only subcommands (`pr`, `files`, `issues`) rather than raw `gh api` calls, so the GitHub read surface stays inside the credential-holding helper and the agent stays structurally read-only.
 
 Public changes are validated by `scripts/release_writer.py` before being sent to the release API. Strictly internal changes are emitted as an explicit machine-readable `internal`/`skipped` classification in the workflow log instead of forcing a public What's New entry.
+
+## Public classification grounding
+
+`issues` returns full linked-issue context (number, title, state, labels, bounded body, detected `scope_fences`, and parent/dependency `references`) so classification is grounded in issue prose rather than issue numbers.
+
+A public publication must carry `provenance_json` classification evidence: `classification`, `classification_reason`, `user_visible_evidence`, `reader_reachable`, `inspected_issue_numbers`, `scope_fences`, and `contradicting_evidence`. The helper and the release API both reject a public payload that:
+
+- omits classification evidence, or sets `reader_reachable` to anything but `true`;
+- records a non-empty `scope_fences` list without `contradicting_evidence` naming the shipped reader path;
+- promises a reader capability in reader-facing copy without `reader_reachable_path`;
+- claims a reader capability in copy while the merged diff changes no reader-facing product surface and a scope fence or undocumented reader path contradicts it.
+
+Grounding only blocks on positive evidence, so an unavailable GitHub read never blocks an otherwise valid publication. Internal skips record `reader_reachable: false` with an empty `user_visible_evidence` and accept `inspected_issue_numbers` and `scope_fences` for audit.

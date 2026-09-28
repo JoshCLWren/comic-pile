@@ -35,7 +35,7 @@ export function DegradedServiceState({
   return (
     <OverlayPortal layer="dialog">
       <div
-        className={`flex items-center justify-center bg-[var(--theme-bg-page)]/80 p-4 backdrop-blur-sm transition-opacity duration-300 ${
+        className={`flex items-center justify-center bg-[var(--theme-bg-page)]/80 p-4 surface-glass transition-opacity duration-300 ${
           isVisible ? 'opacity-100' : 'opacity-0'
         } ${className}`}
         data-testid="degraded-service-state"

@@ -194,7 +194,7 @@ export default function PositionSlider({
       {/* Context threads preview */}
       <div className="space-y-2">
         <div className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Preview</div>
-        <div className="glass-card p-3 space-y-1 max-h-48 overflow-y-auto">
+        <div className="surface-panel p-3 space-y-1 max-h-48 overflow-y-auto">
           {contextThreads.map(({ thread, position }) => {
             const isCurrentThread = thread?.id === currentThread.id
             const isTargetPosition = position - 1 === clampedValue

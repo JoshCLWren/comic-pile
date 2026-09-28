@@ -45,7 +45,7 @@ export default function BugReportButton({
   const isFloating = variant === 'floating'
   const isSidebar = variant === 'sidebar'
   const buttonClassName = isFloating
-    ? 'fixed bottom-8 right-4 z-50 flex items-center justify-center w-8 h-8 bg-[var(--theme-bg-panel)] border-[var(--theme-border)] text-stone-400 hover:text-stone-900 rounded-full shadow-sm transition-all backdrop-blur-sm'
+    ? 'fixed bottom-8 right-4 z-50 flex items-center justify-center w-8 h-8 bg-[var(--theme-bg-panel)] border-[var(--theme-border)] text-stone-400 hover:text-stone-900 rounded-full shadow-sm transition-all surface-panel'
     : isSidebar
       ? collapsed
         ? 'flex h-8 w-8 items-center justify-center rounded-lg text-[var(--theme-text-muted)] transition-colors hover:bg-white/5 hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]'

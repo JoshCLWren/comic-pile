@@ -349,7 +349,7 @@ export default function RollPage() {
       <ReadingModeLauncher />
 
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex-1 flex flex-col relative md:glass-card md:rounded-xl">
+        <div className="flex-1 flex flex-col relative md:surface-panel md:rounded-xl">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 md:w-80 md:h-80 bg-amber-900/15 rounded-full blur-[100px] md:blur-[120px] pointer-events-none"></div>
           <div className="flex-1 flex flex-col">
             {!state.isRatingView && hasRollableContent ? (

@@ -44,6 +44,19 @@ _KNOWN_TYPOS: dict[str, str] = {
     "compatability": "compatibility",
 }
 
+# Reader capability claims must be backed by a named shipped reader path.
+_CAPABILITY_CLAIM_PATTERN = re.compile(
+    r"\b(?:you can now|can now|now\s+(?:supports|includes|lets\s+you|handles)"
+    r"|(?:is|are)\s+now\s+available)\b",
+    re.IGNORECASE,
+)
+_MIN_USER_VISIBLE_EVIDENCE = 20
+_PUBLIC_EVIDENCE_TEXT_LIMITS: dict[str, int] = {
+    "classification_reason": 1000,
+    "user_visible_evidence": 2000,
+    "reader_reachable_path": 500,
+}
+
 
 def visible_release_text(value: object) -> str:
     """Return release copy as readers see it after stripping Markdown formatting.
@@ -103,6 +116,86 @@ def _display_length(value: object) -> int:
         The number of visible characters in the stripped text.
     """
     return len(visible_release_text(value).strip())
+
+
+def _provenance_text(
+    provenance: dict[str, object], name: str, *, minimum: int = 1
+) -> str:
+    """Return a required public-classification provenance string.
+
+    Args:
+        provenance: Classification provenance supplied with the release.
+        name: Provenance field name being validated.
+        minimum: Minimum meaningful character count for the field.
+
+    Returns:
+        The stripped provenance text.
+
+    Raises:
+        ValueError: If the field is missing, mistyped, empty, too short, or too long.
+    """
+    value = provenance.get(name)
+    if not isinstance(value, str):
+        raise ValueError(
+            f"provenance_json.{name} must be a string to justify a public release"
+        )
+    text = value.strip()
+    maximum = _PUBLIC_EVIDENCE_TEXT_LIMITS.get(name, 1000)
+    if len(text) < minimum:
+        raise ValueError(
+            f"provenance_json.{name} must describe the change in at least "
+            f"{minimum} characters to justify a public release"
+        )
+    if len(text) > maximum:
+        raise ValueError(f"provenance_json.{name} must be at most {maximum} characters")
+    return text
+
+
+def _provenance_string_list(provenance: dict[str, object], name: str) -> list[str]:
+    """Return a provenance string-list field, defaulting to an empty list.
+
+    Args:
+        provenance: Classification provenance supplied with the release.
+        name: Provenance field name being validated.
+
+    Returns:
+        The non-empty stripped entries of the list.
+
+    Raises:
+        ValueError: If the field is not a list of non-empty strings.
+    """
+    value = provenance.get(name, [])
+    if not isinstance(value, list):
+        raise ValueError(f"provenance_json.{name} must be a list of non-empty strings")
+    entries: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"provenance_json.{name} must be a list of non-empty strings")
+        entries.append(item.strip())
+    return entries
+
+
+def _provenance_issue_numbers(provenance: dict[str, object]) -> list[int]:
+    """Return the inspected linked issue numbers recorded in provenance.
+
+    Args:
+        provenance: Classification provenance supplied with the release.
+
+    Returns:
+        Sorted unique positive issue numbers the writer inspected.
+
+    Raises:
+        ValueError: If the field is not a list of positive integers.
+    """
+    value = provenance.get("inspected_issue_numbers", [])
+    if not isinstance(value, list) or any(
+        isinstance(item, bool) or not isinstance(item, int) or item < 1
+        for item in value
+    ):
+        raise ValueError(
+            "provenance_json.inspected_issue_numbers must be a list of issue numbers"
+        )
+    return sorted(set(value))
 
 
 class ReleaseUpsertRequest(BaseModel):
@@ -183,6 +276,57 @@ class ReleaseUpsertRequest(BaseModel):
                     f"{field_name} must contain meaningful release content "
                     f"(at least {minimum} visible characters)"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def require_public_classification_evidence(self) -> Self:
+        """Require auditable reader-visible evidence for a public publication.
+
+        Public classification is only accepted when the ledger records why the
+        change is reader reachable, which linked issues were inspected, which
+        scope fences were found, and what contradicts those fences.
+
+        Args:
+            self: Validated release publication request.
+
+        Returns:
+            The validated request when public classification evidence is complete.
+
+        Raises:
+            ValueError: If classification, reader-reachability, evidence, or
+                contradicting-evidence provenance is missing or mistyped.
+        """
+        if self.status != "published" or self.visibility != "public":
+            return self
+        provenance = self.provenance_json
+        if provenance.get("classification") != "public":
+            raise ValueError(
+                'provenance_json.classification must be "public" for a public release'
+            )
+        _provenance_text(provenance, "classification_reason")
+        _provenance_text(
+            provenance, "user_visible_evidence", minimum=_MIN_USER_VISIBLE_EVIDENCE
+        )
+        if provenance.get("reader_reachable") is not True:
+            raise ValueError(
+                "provenance_json.reader_reachable must be true for a public release; "
+                "classify the change as internal when no shipped reader path exists"
+            )
+        _provenance_issue_numbers(provenance)
+        scope_fences = _provenance_string_list(provenance, "scope_fences")
+        contradicting = _provenance_string_list(provenance, "contradicting_evidence")
+        if scope_fences and not contradicting:
+            raise ValueError(
+                "linked issue scope fences contradict a public release "
+                f"({', '.join(scope_fences)}); classify the change as internal or "
+                "record provenance_json.contradicting_evidence explaining the "
+                "shipped reader path"
+            )
+        if any(
+            _CAPABILITY_CLAIM_PATTERN.search(str(getattr(self, name)))
+            for name in _READER_FACING_FIELDS
+        ):
+            _provenance_text(provenance, "reader_reachable_path")
         return self
 
 

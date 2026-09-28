@@ -183,6 +183,26 @@ async def test_public_release_list_filters_and_orders(
     assert [item["title"] for item in second_page.json()["releases"]] == ["Release 1205"]
 
 
+def _public_provenance() -> dict[str, object]:
+    """Return complete reader-visible classification evidence for public payloads.
+
+    Returns:
+        Provenance object satisfying the public classification requirements.
+    """
+    return {
+        "classification": "public",
+        "classification_reason": "Queue page behavior changed for every reader.",
+        "user_visible_evidence": (
+            "frontend/src/pages/QueuePage.tsx now shows a saved-search filter."
+        ),
+        "reader_reachable": True,
+        "inspected_issue_numbers": [1070],
+        "scope_fences": [],
+        "contradicting_evidence": [],
+        "reader_reachable_path": "Queue page at /queue",
+    }
+
+
 def _release_payload(*, pr_number: int, merge_sha: str) -> dict[str, object]:
     """Build a valid merged-PR-backed release payload for API tests."""
     now = datetime.now(UTC).isoformat()
@@ -199,7 +219,7 @@ def _release_payload(*, pr_number: int, merge_sha: str) -> dict[str, object]:
         "visibility": "public",
         "status": "published",
         "sort_order": 0,
-        "provenance_json": {"source": "github"},
+        "provenance_json": _public_provenance(),
     }
 
 
@@ -420,3 +440,90 @@ async def test_release_retract_missing_release_is_404(
     response = await auth_client.post("/api/v1/releases/999999/retract", headers=headers)
 
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_public_release_payload_requires_classification_evidence(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Public publication without reader-visible classification evidence is rejected.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+    payload = _release_payload(pr_number=1220, merge_sha="5" * 40)
+    payload["provenance_json"] = {"source": "github"}
+
+    response = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
+
+    assert response.status_code == 422
+    assert any(
+        'provenance_json.classification must be "public"' in error["message"]
+        for error in response.json()["errors"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_public_release_payload_rejects_uncontradicted_scope_fence(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A linked-issue scope fence blocks public publication until it is contradicted.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+    payload = _release_payload(pr_number=1221, merge_sha="4" * 40)
+    payload["provenance_json"]["scope_fences"] = ["no frontend callers"]
+
+    response = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
+
+    assert response.status_code == 422
+    assert any(
+        "linked issue scope fences contradict a public release" in error["message"]
+        for error in response.json()["errors"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_public_release_payload_rejects_capability_claim_without_path(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reader capability language must name the shipped reader path.
+
+    Args:
+        auth_client: Authenticated async API client.
+        monkeypatch: Pytest environment patch helper.
+
+    Returns:
+        None.
+    """
+    monkeypatch.setenv("RELEASE_WRITER_TOKEN", "writer-secret")
+    headers = {"X-Release-Writer-Token": "writer-secret"}
+    payload = _release_payload(pr_number=1222, merge_sha="3" * 40)
+    payload["summary"] = "You can now save and reuse queue filters."
+    provenance = payload["provenance_json"]
+    assert isinstance(provenance, dict)
+    del provenance["reader_reachable_path"]
+
+    response = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
+
+    assert response.status_code == 422
+    assert any(
+        "provenance_json.reader_reachable_path must be a string" in error["message"]
+        for error in response.json()["errors"]
+    )

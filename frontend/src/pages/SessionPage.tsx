@@ -113,7 +113,7 @@ export default function SessionPage() {
         <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Session #{details.session_id}</p>
       </header>
 
-      <div className="glass-card p-4 md:p-6 space-y-4 md:space-y-6">
+      <div className="surface-panel p-4 md:p-6 space-y-4 md:space-y-6">
         <div className="grid gap-3 md:gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Started</p>
@@ -167,7 +167,7 @@ export default function SessionPage() {
         </div>
       </div>
 
-      <div className="glass-card p-4 md:p-6 space-y-4">
+      <div className="surface-panel p-4 md:p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-black uppercase text-stone-200">Snapshots</h2>
           <button
@@ -219,7 +219,7 @@ export default function SessionPage() {
         )}
       </div>
 
-      <div className="glass-card p-4 md:p-6 space-y-4 min-w-0">
+      <div className="surface-panel p-4 md:p-6 space-y-4 min-w-0">
         <h2 className="text-lg font-black uppercase text-stone-200">Event Timeline</h2>
         {details.events.length === 0 ? (
           <p className="text-xs text-stone-500">

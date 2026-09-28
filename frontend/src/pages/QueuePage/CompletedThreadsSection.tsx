@@ -62,7 +62,7 @@ export default function CompletedThreadsSection<T extends CompletedThread>({
       <div id="completed-thread-list" className="space-y-4" hidden={!isExpanded}>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {threads.map((thread) => (
-            <div key={thread.id} className="glass-card p-4 space-y-2">
+            <div key={thread.id} className="surface-panel p-4 space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-black text-stone-300 truncate">{thread.title}</p>
