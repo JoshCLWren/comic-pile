@@ -175,7 +175,7 @@ export default function ThreadDetailView() {
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">
             Thread Details
           </h1>
-          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+          <p className="text-base font-semibold text-stone-500">
             View thread information
           </p>
         </header>
@@ -205,7 +205,7 @@ export default function ThreadDetailView() {
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase truncate">
             {thread.title}
           </h1>
-          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+          <p className="text-sm font-medium text-stone-500">
             {thread.format}
           </p>
         </div>
@@ -267,7 +267,7 @@ export default function ThreadDetailView() {
                 return (
                   <>
                     <div className="space-y-1">
-                      <h3 className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Blocked by</h3>
+                      <h3 className="text-base font-bold text-stone-400">Blocked by</h3>
                       {blockedBy.length === 0 && <p className="text-xs text-stone-500">Nothing blocks this series</p>}
                       {blockedBy.map((t) => (
                         <Link
@@ -284,7 +284,7 @@ export default function ThreadDetailView() {
                       ))}
                     </div>
                     <div className="space-y-1">
-                      <h3 className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Blocking</h3>
+                      <h3 className="text-base font-bold text-stone-400">Blocking</h3>
                       {blocking.length === 0 && <p className="text-xs text-stone-500">This series blocks nothing</p>}
                       {blocking.map((t) => (
                         <Link
@@ -457,7 +457,7 @@ export default function ThreadDetailView() {
         <div className="space-y-4">
           <form id="edit-thread-form" className="space-y-4" onSubmit={handleEditSubmit}>
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+              <label className="text-sm font-medium text-stone-500">
                 Title
               </label>
               <input
@@ -469,7 +469,7 @@ export default function ThreadDetailView() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+              <label className="text-sm font-medium text-stone-500">
                 Format
               </label>
               <FormatSelect
@@ -481,7 +481,7 @@ export default function ThreadDetailView() {
 
             {thread.total_issues === null && (
               <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+                <label className="text-sm font-medium text-stone-500">
                   Issues Remaining
                 </label>
                 <input
@@ -500,7 +500,7 @@ export default function ThreadDetailView() {
             )}
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
+              <label className="text-sm font-medium text-stone-500">
                 Notes
               </label>
               <textarea

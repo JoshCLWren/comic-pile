@@ -18,12 +18,12 @@ export default function HistoryPage() {
         <header className="flex flex-wrap items-end justify-between gap-3 px-2">
           <div>
             <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
-            <p className="mt-2 text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your reading session history</p>
+<p className="mt-2 text-base font-semibold text-stone-500">Your reading session history</p>
           </div>
           <a
             href="/admin/export/summary/"
             download
-            className="py-1 text-[10px] font-bold uppercase tracking-widest text-stone-500 hover:text-stone-300 underline decoration-dotted underline-offset-4"
+className="py-1 text-sm font-medium text-stone-500 hover:text-stone-300 underline decoration-dotted underline-offset-4"
           >
             Export Summary
           </a>
@@ -86,12 +86,12 @@ export default function HistoryPage() {
       <header className="flex flex-wrap items-end justify-between gap-3 px-2">
         <div>
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
-          <p className="mt-2 text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your reading session history</p>
+          <p className="mt-2 text-base font-semibold text-stone-500">Your reading session history</p>
         </div>
         <a
           href="/admin/export/summary/"
           download
-          className="py-1 text-[10px] font-bold uppercase tracking-widest text-stone-500 hover:text-stone-300 underline decoration-dotted underline-offset-4"
+          className="py-1 text-sm font-medium text-stone-500 hover:text-stone-300 underline decoration-dotted underline-offset-4"
         >
           Export Summary
         </a>
@@ -180,7 +180,7 @@ export default function HistoryPage() {
 
       {isLoadingMore && (
         <div className="flex items-center justify-center py-8">
-          <div className="text-sm font-bold text-stone-400 uppercase tracking-widest animate-pulse">
+          <div className="text-sm font-bold text-stone-400 animate-pulse">
             Loading more...
           </div>
         </div>
@@ -188,7 +188,7 @@ export default function HistoryPage() {
 
       {error && !isLoadingMore && (
         <div className="text-center py-4">
-          <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-3">
+          <p className="text-sm font-bold text-red-400 mb-3">
             Failed to load more sessions
           </p>
           <button

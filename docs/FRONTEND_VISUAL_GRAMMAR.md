@@ -69,7 +69,32 @@ Comic Pile uses Outfit as its application typeface. Preserve the existing compac
 | Eyebrow/status label | about `10px`, uppercase, black/bold, wider tracking |
 | Primary numeric readout | intentionally large and heavy, e.g. the rating value |
 
-The small uppercase eyebrow is a real Comic Pile motif, not a default treatment for every label. Do not turn ordinary body copy, buttons, or navigation into tracked all-caps simply for visual intensity.
+### Eyebrow typography usage
+
+The small uppercase eyebrow treatment is a deliberate Comic Pile motif for compact status/category/metadata labels. Its usage must be semantically disciplined:
+
+**Appropriate uses:**
+- Status badges and indicators (e.g., "COMPLETED", "IN PROGRESS", priority levels)
+- Compact category/metadata labels (e.g., "COLLECTOR'S EDITION", "VARIANT", "DIGITAL")
+- Selected intentional hero branding (e.g., landing page brand/tagline)
+- Navigation labels where space is extremely constrained
+
+**Inappropriate uses:**
+- Page subtitles (use section heading styles instead)
+- Form labels and fieldset legends (use proper form label hierarchy)
+- Ordinary metadata that doesn't carry status/category meaning
+- Section headers (use card/section heading styles instead)
+- Buttons and action text (use button hierarchy instead)
+- Helper copy or descriptive text
+
+**Migration guidance:**
+- Replace inappropriate eyebrow usage with existing typography roles:
+  - Form labels: Use `text-sm font-medium` with proper spacing
+  - Page subtitles: Use `text-base font-semibold` or `text-lg font-semibold`
+  - Section headers: Use `text-base font-bold` or `text-lg font-semibold`
+  - Ordinary metadata: Use `text-xs` or `text-[11px]` without uppercase/tracking
+- Preserve the eyebrow treatment for legitimate status, category, and compact metadata uses
+- Do not introduce new arbitrary font-size/tracking combinations to replace the old pattern
 
 Use line height appropriate to content. Titles may be tight; descriptions and explanatory copy must remain comfortably readable. Avoid arbitrary font sizes when an existing role fits.
 

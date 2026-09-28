@@ -28,7 +28,7 @@ export default function AnalyticsPage() {
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">
             Analytics
           </h1>
-          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
+          <p className="text-base font-semibold text-stone-500">
             Comic reading metrics and engagement stats
           </p>
         </div>
@@ -69,7 +69,7 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Recent Sessions */}
         <div className="glass-card p-4">
-          <h3 className="text-sm font-black uppercase tracking-widest text-stone-300 mb-3">Recent Sessions</h3>
+          <h3 className="text-base font-bold text-stone-300 mb-3">Recent Sessions</h3>
           {metrics.recent_sessions && metrics.recent_sessions.length > 0 ? (
             <div className="space-y-2">
               {metrics.recent_sessions.slice(0, 5).map((session) => (
@@ -107,7 +107,7 @@ export default function AnalyticsPage() {
 
         {/* Event Stats */}
         <div className="glass-card p-4">
-          <h3 className="text-sm font-black uppercase tracking-widest text-stone-300 mb-3">Event Statistics</h3>
+          <h3 className="text-base font-bold text-stone-300 mb-3">Event Statistics</h3>
           {metrics.event_stats && Object.keys(metrics.event_stats).length > 0 ? (
             <div className="space-y-2">
               {Object.entries(metrics.event_stats).map(([eventType, count]) => (
@@ -139,7 +139,7 @@ export default function AnalyticsPage() {
 
       {/* Top Rated Comics */}
       <div className="glass-card p-4">
-        <h3 className="text-sm font-black uppercase tracking-widest text-stone-300 mb-3">Top Rated Comics</h3>
+        <h3 className="text-base font-bold text-stone-300 mb-3">Top Rated Comics</h3>
         {metrics.top_rated_threads && metrics.top_rated_threads.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {metrics.top_rated_threads.map((thread) => (
