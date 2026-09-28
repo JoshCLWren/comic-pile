@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DependencyBuilder from '../components/DependencyBuilder'
 import { ToastProvider } from '../contexts/ToastProvider'
-import type { DependencyBuilderApiDeps } from '../hooks/useDependencies'
 import type { Issue, IssueListResponse, Thread } from '../types'
 
 const dependenciesApi = {
@@ -21,17 +20,6 @@ const threadsApi = {
 
 const issuesApi = {
   list: vi.fn(),
-}
-
-const migrationApi = {
-  migrateThread: vi.fn(),
-}
-
-const builderApi: DependencyBuilderApiDeps = {
-  dependencies: dependenciesApi,
-  threads: threadsApi,
-  issues: issuesApi,
-  migration: migrationApi,
 }
 
 const mockedListThreadDependencies = vi.mocked(dependenciesApi.listThreadDependencies)
