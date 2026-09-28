@@ -165,11 +165,14 @@ def _provenance_string_list(provenance: dict[str, object], name: str) -> list[st
         ValueError: If the field is not a list of non-empty strings.
     """
     value = provenance.get(name, [])
-    if not isinstance(value, list) or any(
-        not isinstance(item, str) or not item.strip() for item in value
-    ):
+    if not isinstance(value, list):
         raise ValueError(f"provenance_json.{name} must be a list of non-empty strings")
-    return [item.strip() for item in value]
+    entries: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"provenance_json.{name} must be a list of non-empty strings")
+        entries.append(item.strip())
+    return entries
 
 
 def _provenance_issue_numbers(provenance: dict[str, object]) -> list[int]:

@@ -701,6 +701,9 @@ def _fetch_issue(
 ) -> dict[str, object] | None:
     """Fetch issue details from GitHub API.
 
+    A deleted issue (HTTP 404) yields None so a stale reference cannot abort
+    context collection; other API failures still fail unless best_effort.
+
     Args:
         repository: Owner/name repository string.
         number: Issue number to fetch.
@@ -713,7 +716,7 @@ def _fetch_issue(
     """
     owner, name = _repository_parts(repository)
     url = f"{_GITHUB_API_BASE}/repos/{owner}/{name}/issues/{number}"
-    result = _github_read(url) if best_effort else _github_request(url)
+    result = _github_read(url) if best_effort else _github_request(url, missing_ok=True)
     if result is None:
         return None
     if not isinstance(result, dict):

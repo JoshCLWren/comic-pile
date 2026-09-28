@@ -1073,7 +1073,9 @@ class TestReleaseWriterPublicClassificationEvidence:
         payload = _valid_payload()
         payload["title"] = "Saved queue filters"
         payload["summary"] = "You can now save and reuse queue filters."
-        del payload["provenance_json"]["reader_reachable_path"]
+        provenance = payload["provenance_json"]
+        assert isinstance(provenance, dict)
+        del provenance["reader_reachable_path"]
         stderr = _capture_stderr(release_writer._validate_release, json.dumps(payload))
         assert "provenance_json.reader_reachable_path must be a string" in stderr
 
@@ -1283,7 +1285,9 @@ class TestReleaseWriterPublishGrounding:
         payload["source_pr_number"] = 2910
         payload["title"] = "Comic Book Library reading plans"
         payload["summary"] = "You can now build a reading plan from library lists."
-        payload["provenance_json"].pop("reader_reachable_path")
+        provenance = payload["provenance_json"]
+        assert isinstance(provenance, dict)
+        provenance.pop("reader_reachable_path")
 
         def fake_read(url: str):
             if "/files" in url:

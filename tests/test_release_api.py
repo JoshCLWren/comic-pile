@@ -516,7 +516,9 @@ async def test_public_release_payload_rejects_capability_claim_without_path(
     headers = {"X-Release-Writer-Token": "writer-secret"}
     payload = _release_payload(pr_number=1222, merge_sha="3" * 40)
     payload["summary"] = "You can now save and reuse queue filters."
-    del payload["provenance_json"]["reader_reachable_path"]
+    provenance = payload["provenance_json"]
+    assert isinstance(provenance, dict)
+    del provenance["reader_reachable_path"]
 
     response = await auth_client.put("/api/v1/releases/", json=payload, headers=headers)
 
