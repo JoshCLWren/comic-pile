@@ -107,7 +107,10 @@ _CAPABILITY_CLAIM_PATTERN = re.compile(
     r"|(?:is|are)\s+now\s+available)\b",
     re.IGNORECASE,
 )
-_READER_SURFACE_PREFIXES = ("frontend/src/", "frontend/public/", "static/react/", "templates/")
+# Tracked reader-facing surfaces. `static/` covers the shipped shell, its styles,
+# and the built React bundle; `templates/` does not exist in this repository and
+# `static/react/` is gitignored build output rather than a committable diff path.
+_READER_SURFACE_PREFIXES = ("frontend/src/", "frontend/public/", "static/")
 
 _PUBLIC_EVIDENCE_TEXT_LIMITS: dict[str, int] = {
     "classification_reason": 1000,

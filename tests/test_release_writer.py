@@ -5,6 +5,7 @@ import json
 import os
 from collections.abc import Callable
 from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
@@ -1315,6 +1316,42 @@ class TestReleaseWriterPublishGrounding:
 
         def fake_read(url: str):
             return [{"filename": "frontend/src/pages/QueuePage.tsx"}]
+
+        with patch.object(release_writer, "_github_read", side_effect=fake_read):
+            release_writer._validate_publish_grounding(payload)
+
+    def test_reader_surface_prefixes_match_tracked_reader_paths(self) -> None:
+        """Reader-surface prefixes must stay aligned with the shipped surfaces.
+
+        The grounding guard only blocks when every changed file is backend or
+        test code, so a prefix naming a path this repository does not track would
+        silently reject a genuine reader-visible change.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        repository_root = Path(__file__).resolve().parents[1]
+        for prefix in release_writer._READER_SURFACE_PREFIXES:
+            assert (repository_root / prefix).exists(), prefix
+
+    def test_static_shell_change_allows_capability_claim(self) -> None:
+        """A shipped-shell style or markup change reaches the reader.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
+        payload = _valid_payload()
+        payload["title"] = "Faster queue rendering"
+        payload["summary"] = "You can now see the queue render without a delay."
+
+        def fake_read(url: str):
+            return [{"filename": "static/css/styles.css"}]
 
         with patch.object(release_writer, "_github_read", side_effect=fake_read):
             release_writer._validate_publish_grounding(payload)
