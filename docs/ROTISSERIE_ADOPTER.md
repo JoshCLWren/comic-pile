@@ -23,6 +23,17 @@ python .github/scripts/factory_rotisserie_adopter.py captured-view.json \
   --output parity-inputs.json
 ```
 
+An operator can acquire the input with read-only GitHub CLI calls. The command filters
+to Factory-managed issues and pull requests, binds semantic review markers and checks
+to exact heads, and emits no credential material:
+
+```bash
+git fetch origin main
+python .github/scripts/factory_rotisserie_capture.py \
+  --revision "$(git rev-parse origin/main)" \
+  --output captured-view.json
+```
+
 Run the atomic public comparison with an installed Rotisserie CLI and a repository-
 scoped operator configuration:
 
@@ -36,6 +47,10 @@ The Rotisserie command writes only its local, credential-free operation evidence
 divergence exits 3 and must be explained before any canary decision. Invalid or stale
 input exits 2. The adapter never changes Factory labels, dispatches a worker, enables a
 workflow, or applies a cutover decision.
+
+The shadow invocation supplies ComicPile's observed completion backlog and configured
+limit as explicit Rotisserie projection inputs. Backpressure therefore remains portable
+decision policy instead of being hidden inside the adopter translation.
 
 ## Current Factory classification
 

@@ -19,7 +19,12 @@ from typing import Any
 
 from factory_review_policy import head_has_authorized_approval
 from factory_work_policy import (
+    BLOCKED_LABELS,
+    FACTORY_REVIEW_BACKLOG_LIMIT,
+    MANUAL_ONLY_MARKER,
+    NON_EXECUTABLE_ISSUES,
     build_candidates,
+    factory_review_backlog_count,
     labels_of,
     linked_issue_from_pr,
     owner_of,
@@ -76,6 +81,19 @@ def _producer(pr: dict[str, Any]) -> str | None:
     if declared is not None:
         return str(declared)
     return producer_worker_from_pr(pr)
+
+
+def _human_gate(issue: dict[str, Any]) -> bool:
+    """Return whether ComicPile policy requires an explicit non-worker gate."""
+    labels = set(_labels(issue))
+    return (
+        int(issue["number"]) in NON_EXECUTABLE_ISSUES
+        or bool(labels & {"epic", "prd"})
+        or MANUAL_ONLY_MARKER in str(issue.get("body") or "")
+        or bool(labels & BLOCKED_LABELS)
+        or "ralph-status:done" in labels
+        or "factory:ready" in labels
+    )
 
 
 def graph_snapshot(view: dict[str, Any]) -> dict[str, object]:
@@ -182,7 +200,16 @@ def graph_snapshot(view: dict[str, Any]) -> dict[str, object]:
         "reviews": reviews,
         "evidence": [],
         "capacities": [],
-        "boundaries": [],
+        "boundaries": [
+            {
+                "id": f"comic-pile-policy-{issue['number']}",
+                "work": _work_id(int(issue["number"])),
+                "kind": "human_approval",
+                "satisfied_by": None,
+            }
+            for issue in issues
+            if _human_gate(issue)
+        ],
         "dependencies": dependencies,
     }
 
@@ -200,6 +227,8 @@ def _work_blocks(
         blocks.append("not_open")
     if parse_depends_on_numbers(str(issue.get("body") or "")) & open_numbers:
         blocks.append("dependency_incomplete")
+    if _human_gate(issue):
+        blocks.append("human_boundary")
     lease = issue.get("lease")
     if isinstance(lease, dict) and int(lease["acquired_at"]) <= at < int(lease["expires_at"]):
         blocks.append("active_lease")
@@ -241,7 +270,13 @@ def legacy_decisions(view: dict[str, Any]) -> dict[str, object]:
             implemented=implemented,
             at=at,
         )
-        if number not in eligible_issues and not blocks:
+        if (
+            number not in eligible_issues
+            and not blocks
+            and factory_review_backlog_count(prs) >= FACTORY_REVIEW_BACKLOG_LIMIT
+        ):
+            blocks.append("backpressure")
+        elif number not in eligible_issues and not blocks:
             # Provider topology, retry-generation limits, manual-only markers,
             # or fleet backpressure can suppress otherwise portable work. Keep
             # that deliberate adopter policy visible instead of pretending the
@@ -418,6 +453,10 @@ def main() -> int:
                 str(bundle["source_revision"]),
                 "--at",
                 str(bundle["captured_at"]),
+                "--completion-backlog",
+                str(factory_review_backlog_count(json.loads(raw)["pull_requests"])),
+                "--backlog-limit",
+                str(FACTORY_REVIEW_BACKLOG_LIMIT),
             ]
             return subprocess.run(command, check=False).returncode
     except (AdopterInputError, KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as error:
