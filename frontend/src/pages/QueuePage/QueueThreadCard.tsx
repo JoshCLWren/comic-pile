@@ -5,11 +5,11 @@ import PositionMenu from '../../components/PositionMenu'
 import { CrossoverTags } from '../../components/CrossoverTags'
 import { useCrossoverGroups } from '../../hooks/useCrossoverGroups'
 import type { DependencyGroupSummary } from '../../services/api-dependency-groups'
-import type { BlockingDependency, Thread } from '../../types'
+import type { BlockingDependency, ThreadListItem } from '../../types'
 import QueueThreadActions from './QueueThreadActions'
 
 export interface QueueThreadCardProps {
-  thread: Thread
+  thread: ThreadListItem
   index: number
   isBlocked: boolean
   blockingDependencies: BlockingDependency[]

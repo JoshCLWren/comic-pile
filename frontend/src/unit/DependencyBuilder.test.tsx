@@ -100,7 +100,6 @@ function renderBuilder() {
           thread={TARGET_THREAD}
           isOpen
           onClose={() => {}}
-          api={builderApi}
         />
       </ToastProvider>
     </QueryClientProvider>,

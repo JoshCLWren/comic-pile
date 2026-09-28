@@ -5,7 +5,7 @@ import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
 import { IssueToggleList } from './IssueToggleList'
 import { FormatSelect } from './FormatSelect'
-import type { Thread } from '../../types'
+import type { ThreadListItem } from '../../types'
 import type { QueueFormState } from './types'
 
 interface QueueModalsProps {
@@ -16,17 +16,17 @@ interface QueueModalsProps {
   setEditForm: (next: QueueFormState) => void
   issuePreview: number | null
   issueParseError: string | null
-  editingThread: Thread | null
-  repositioningThread: Thread | null
-  dependencyThread: Thread | null
-  threadToMigrate: Thread | null
+  editingThread: ThreadListItem | null
+  repositioningThread: ThreadListItem | null
+  dependencyThread: ThreadListItem | null
+  threadToMigrate: ThreadListItem | null
   showMigrationDialog: boolean
   reactivateThreadId: string
   setReactivateThreadId: (next: string) => void
   issuesToAdd: number
   setIssuesToAdd: (next: number) => void
-  activeThreads: Thread[]
-  completedThreads: Thread[]
+  activeThreads: ThreadListItem[]
+  completedThreads: ThreadListItem[]
   /**
    * Authoritative whole-queue active total, independent of the loaded page.
    * Drives the reposition slider range (issue #2568).
@@ -42,10 +42,10 @@ interface QueueModalsProps {
   onCloseReactivate: () => void
   onCloseReposition: () => void
   onCloseDependency: () => void
-  onMigrationComplete: (thread: Thread) => Promise<void>
+  onMigrationComplete: (thread: ThreadListItem) => Promise<void>
   onMigrationSkip: () => void
   onCloseMigration: () => void
-  onOpenMigrationDialog: (thread: Thread) => void
+  onOpenMigrationDialog: (thread: ThreadListItem) => void
   onOpenDependencies?: () => void
   onIssueChanged?: () => void
   isPendingCreate: boolean

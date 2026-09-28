@@ -16,7 +16,7 @@ import {
 } from '../hooks'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api'
-import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse } from '../types'
+import type { Dependency, FlowchartDependency, FlowchartNode, Issue, ThreadListItem, ThreadDependenciesResponse } from '../types'
 import { buildFlowchartGraph } from '../utils/dependencyFlowchartAdapter'
 import { getApiErrorDetail } from '../utils/apiError'
 import { useToast } from '../contexts/useToast'
@@ -34,7 +34,7 @@ function groupByThread(deps: Dependency[], labelKey: 'source_label' | 'target_la
 }
 
 export interface DependencyBuilderProps {
-  thread: Thread | null
+  thread: ThreadListItem | null
   isOpen: boolean
   onClose: () => void
   onChanged?: () => void
@@ -136,7 +136,7 @@ export default function DependencyBuilder({
 
   // Flowchart state
   const [isGraphLoading, setIsGraphLoading] = useState(false)
-  const [flowchartThreads, setFlowchartThreads] = useState<Thread[]>([])
+  const [flowchartThreads, setFlowchartThreads] = useState<ThreadListItem[]>([])
   const [flowchartDependencies, setFlowchartDependencies] = useState<FlowchartDependency[]>([])
   const [flowchartIssueNodes, setFlowchartIssueNodes] = useState<FlowchartNode[]>([])
 

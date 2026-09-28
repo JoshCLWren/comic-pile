@@ -69,7 +69,7 @@ interface UseQueueModalsResult {
   handleCreateSubmit: (event: FormEvent) => Promise<void>
   handleEditSubmit: (event: FormEvent) => Promise<void>
   handleReactivateSubmit: (event: FormEvent) => Promise<void>
-  handleMigrationComplete: (migratedThread: Thread) => Promise<void>
+  handleMigrationComplete: (migratedThread: ThreadListItem) => Promise<void>
   handleMigrationSkip: () => void
   isPendingCreate: boolean
   isPendingEdit: boolean
@@ -391,7 +391,7 @@ export function useQueueModals(
   )
 
   const handleMigrationComplete = useCallback(
-    async (migratedThread: Thread) => {
+    async (migratedThread: ThreadListItem) => {
       try {
         await onUpdated()
         await refetchSession()
