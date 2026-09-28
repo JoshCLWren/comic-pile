@@ -220,7 +220,7 @@ export default function ThreadDetailView() {
 
       <div className="space-y-4 md:space-y-6">
         {progressPercentage && (
-          <div className="glass-card p-3 md:p-4 space-y-3">
+          <div className="surface-panel p-3 md:p-4 space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-xs font-black uppercase tracking-widest text-stone-500">
                 Reading Progress
@@ -238,7 +238,7 @@ export default function ThreadDetailView() {
         )}
 
         {thread.notes && (
-          <div className="glass-card p-3 md:p-4 space-y-2">
+          <div className="surface-panel p-3 md:p-4 space-y-2">
             <span className="text-xs font-black uppercase tracking-widest text-stone-500">
               Notes
             </span>
@@ -246,7 +246,7 @@ export default function ThreadDetailView() {
           </div>
         )}
 
-        <div className="glass-card p-3 md:p-4 space-y-2">
+        <div className="surface-panel p-3 md:p-4 space-y-2">
           <span className="text-xs font-black uppercase tracking-widest text-stone-500">
             Dependencies
           </span>
@@ -307,7 +307,7 @@ export default function ThreadDetailView() {
           )}
         </div>
 
-        <div className="glass-card p-3 md:p-4 space-y-2">
+        <div className="surface-panel p-3 md:p-4 space-y-2">
           <span className="text-xs font-black uppercase tracking-widest text-stone-500">
             Crossovers
           </span>
@@ -324,7 +324,7 @@ export default function ThreadDetailView() {
         </div>
 
         {isMigrated && (
-          <div className="glass-card p-3 md:p-4 space-y-3">
+          <div className="surface-panel p-3 md:p-4 space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-xs font-black uppercase tracking-widest text-stone-500">
                 Issues ({issuesTotal > 0 ? issuesTotal : (thread.total_issues ?? issues.length)})
@@ -423,7 +423,7 @@ export default function ThreadDetailView() {
         )}
 
         {!isMigrated && (
-          <div className="glass-card p-3 md:p-4 space-y-2">
+          <div className="surface-panel p-3 md:p-4 space-y-2">
             <span className="text-xs font-black uppercase tracking-widest text-stone-500">
               Issues Remaining
             </span>
@@ -431,14 +431,14 @@ export default function ThreadDetailView() {
           </div>
         )}
 
-        <div className="glass-card p-3 md:p-4 space-y-2">
+        <div className="surface-panel p-3 md:p-4 space-y-2">
           <span className="text-xs font-black uppercase tracking-widest text-stone-500">
             Queue Position
           </span>
           <p className="text-sm text-stone-300">Position #{thread.queue_position}</p>
         </div>
 
-        <div className="glass-card p-3 md:p-4 space-y-2">
+        <div className="surface-panel p-3 md:p-4 space-y-2">
           <span className="text-xs font-black uppercase tracking-widest text-stone-500">
             Status
           </span>

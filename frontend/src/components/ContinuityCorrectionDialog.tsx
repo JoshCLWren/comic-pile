@@ -170,7 +170,7 @@ export default function ContinuityCorrectionDialog({
       title="Correct Continuity"
       onClose={onClose}
       data-testid="continuity-correction-dialog"
-      overlayClassName="bg-black/70 backdrop-blur-sm"
+      overlayClassName="bg-black/70 surface-glass"
     >
       <section aria-labelledby="continuity-current-heading" className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
         <h3 id="continuity-current-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">

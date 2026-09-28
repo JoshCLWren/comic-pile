@@ -54,7 +54,7 @@ export default function ReadingOrderTimeline({ thread, dependencies }: Props) {
       : 'Unknown'
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm p-4 space-y-3">
+    <div className="rounded-3xl border border-white/10 bg-white/5 surface-panel p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-black uppercase tracking-widest text-stone-400">
         <span>Reading Position</span>
         <span className="text-white">{nextIssueLabel}</span>

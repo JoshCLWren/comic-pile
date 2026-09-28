@@ -68,13 +68,13 @@ it('uses an opaque modal surface with a dimmed overlay', () => {
   const dialog = screen.getByRole('dialog', { name: 'Opaque Modal' })
   const overlay = document.querySelector('[data-overlay-root="true"] [aria-hidden="true"]')
 
-  expect(dialog).toHaveClass('modal-card')
-  expect(dialog.className).toContain('modal-card')
+  expect(dialog).toHaveClass('surface-modal')
+  expect(dialog.className).toContain('surface-modal')
   expect(overlay).not.toBeNull()
-  expect(overlay).toHaveClass('backdrop-blur-sm')
+  expect(overlay).toHaveClass('surface-glass')
 
   const stylesheet = readFileSync(resolve(__dirname, '../styles.css'), 'utf8')
-  const modalRule = stylesheet.match(/\.modal-card\s*\{([^}]*)\}/)?.[1] ?? ''
+  const modalRule = stylesheet.match(/\.surface-modal\s*\{([^}]*)\}/)?.[1] ?? ''
   expect(modalRule).toContain('rgba(17, 14, 10, 0.95)')
   expect(modalRule).not.toContain('rgba(255, 255, 255, 0.03)')
 })
