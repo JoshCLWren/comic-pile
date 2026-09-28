@@ -153,10 +153,10 @@ exclude = ["scripts/**", "alembic/versions/**", "tests/test_scripts_verify_readi
 error-on-warning = true
 
 [tool.ty.rules]
-deprecated = "ignore"
-invalid-argument-type = "ignore"
-invalid-assignment = "ignore"
-unused-ignore-comment = "ignore"
+deprecated = "warn"
+invalid-argument-type = "warn"
+invalid-assignment = "warn"
+unused-ignore-comment = "warn"
 
 [tool.env]
 # Default environment variables for local development
