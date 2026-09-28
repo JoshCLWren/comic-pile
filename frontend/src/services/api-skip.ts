@@ -1,7 +1,17 @@
-import api from './api'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { RollResponse } from '../types'
 
-export const skipApi = {
-  skip: () => api.post<RollResponse>('/v1/roll/skip'),
-  unskip: (threadId: number) => api.post<void>(`/v1/roll/skip/${threadId}/unskip`),
+/**
+ * Build the skip service bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every skip request.
+ * @returns The skip API bound to `client`.
+ */
+export function createSkipApi(client: HttpClient) {
+  return {
+    skip: () => client.post<RollResponse>('/v1/roll/skip'),
+    unskip: (threadId: number) => client.post<void>(`/v1/roll/skip/${threadId}/unskip`),
+  }
 }
+
+export const skipApi = createSkipApi(defaultHttpClient())

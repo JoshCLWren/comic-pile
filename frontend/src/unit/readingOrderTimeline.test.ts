@@ -17,6 +17,9 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     is_blocked: overrides.is_blocked ?? false,
     blocking_reasons: overrides.blocking_reasons ?? [],
     notes: overrides.notes ?? null,
+    last_activity_at: overrides.last_activity_at ?? null,
+    last_rating: overrides.last_rating ?? null,
+    is_test: overrides.is_test ?? false,
     created_at: overrides.created_at ?? '2024-01-01T00:00:00Z',
   }
 }

@@ -1,4 +1,4 @@
-import type { ComicVineComicPileMatch, ComicVineRelatedIssue } from '../services/api'
+import type { ComicVineComicPileMatch, ComicVineRelatedIssue } from '../services/api-comicvine'
 
 export interface ComicIdentity {
   primary: string

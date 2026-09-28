@@ -9,6 +9,7 @@ import {
 describe('Auth State Service', () => {
   describe('isDefinitiveAuthenticationFailure', () => {
     it('returns true for 401 errors', () => {
+      // SAFETY: the api client reads the failure shape the test attaches to this plain Error
       const error = new Error('Unauthorized') as any
       error.isAxiosError = true
       error.response = { status: 401 }
@@ -16,6 +17,7 @@ describe('Auth State Service', () => {
     })
 
     it('returns false for non-401 errors', () => {
+      // SAFETY: the api client reads the failure shape the test attaches to this plain Error
       const error = new Error('Service Unavailable') as any
       error.isAxiosError = true
       error.response = { status: 503 }
@@ -30,6 +32,7 @@ describe('Auth State Service', () => {
 
   describe('isServiceUnavailable', () => {
     it('returns true for 503 errors', () => {
+      // SAFETY: the api client reads the failure shape the test attaches to this plain Error
       const error = new Error('Service Unavailable') as any
       error.isAxiosError = true
       error.response = { status: 503 }
@@ -37,6 +40,7 @@ describe('Auth State Service', () => {
     })
 
     it('returns true for timeout errors', () => {
+      // SAFETY: the api client reads the failure shape the test attaches to this plain Error
       const error = new Error('Timeout') as any
       error.isAxiosError = true
       error.code = 'ECONNABORTED'
@@ -44,6 +48,7 @@ describe('Auth State Service', () => {
     })
 
     it('returns false for other errors', () => {
+      // SAFETY: the api client reads the failure shape the test attaches to this plain Error
       const error = new Error('Network error') as any
       error.isAxiosError = true
       error.response = { status: 500 }
@@ -53,12 +58,14 @@ describe('Auth State Service', () => {
 
   describe('isNetworkError', () => {
     it('returns true for network errors without response', () => {
+      // SAFETY: the api client reads the failure shape the test attaches to this plain Error
       const error = new Error('Network error') as any
       error.isAxiosError = true
       expect(isNetworkError(error)).toBe(true)
     })
 
     it('returns true for ERR_NETWORK errors', () => {
+      // SAFETY: the api client reads the failure shape the test attaches to this plain Error
       const error = new Error('Network error') as any
       error.isAxiosError = true
       error.code = 'ERR_NETWORK'
@@ -66,6 +73,7 @@ describe('Auth State Service', () => {
     })
 
     it('returns false for errors with response', () => {
+      // SAFETY: the api client reads the failure shape the test attaches to this plain Error
       const error = new Error('Service error') as any
       error.isAxiosError = true
       error.response = { status: 500 }
@@ -75,6 +83,7 @@ describe('Auth State Service', () => {
 
   describe('createAuthError', () => {
     it('creates definitive auth failure error for 401', () => {
+      // SAFETY: the api client reads the failure shape the test attaches to this plain Error
       const error = new Error('Unauthorized') as any
       error.isAxiosError = true
       error.response = { status: 401 }
@@ -88,6 +97,7 @@ describe('Auth State Service', () => {
     })
 
     it('creates service unavailable error for 503', () => {
+      // SAFETY: the api client reads the failure shape the test attaches to this plain Error
       const error = new Error('Service Unavailable') as any
       error.isAxiosError = true
       error.response = { status: 503 }
@@ -101,6 +111,7 @@ describe('Auth State Service', () => {
     })
 
     it('creates network error for network failures', () => {
+      // SAFETY: the api client reads the failure shape the test attaches to this plain Error
       const error = new Error('Network error') as any
       error.isAxiosError = true
       
@@ -112,6 +123,7 @@ describe('Auth State Service', () => {
     })
 
     it('returns null for unknown error types', () => {
+      // SAFETY: the api client reads the failure shape the test attaches to this plain Error
       const error = new Error('Unknown error') as any
       error.isAxiosError = true
       error.response = { status: 500 }

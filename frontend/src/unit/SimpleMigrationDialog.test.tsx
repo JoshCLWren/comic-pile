@@ -30,6 +30,7 @@ it('closes from Escape, its close button, and an overlay click', async () => {
   await user.keyboard('{Escape}')
   await user.click(screen.getByRole('button', { name: 'Close modal' }))
   const dialog = screen.getByRole('dialog')
+  // SAFETY: the queried node is the element the component rendered under test
   const backdrop = dialog.previousElementSibling as HTMLElement
   await user.click(backdrop)
 

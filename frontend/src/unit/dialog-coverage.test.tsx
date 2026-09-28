@@ -12,6 +12,7 @@ import IssueCorrectionDialog from '../components/IssueCorrectionDialog'
 describe('bug report and issue correction dialogs', () => {
   it('validates, submits, cancels, and reports bug submission errors', async () => {
     const user = userEvent.setup(); const onSubmit = vi.fn().mockRejectedValue(new Error('failed')); const onClose = vi.fn()
+    // SAFETY: the diagnostic fixture supplies only the fields the modal reports
     render(<BugReportModal isOpen onClose={onClose} onSubmit={onSubmit} diagnosticData={{ browser: 'x' } as never} />)
     expect(screen.getByText(/Browser info/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Submit Report' })).toBeDisabled()

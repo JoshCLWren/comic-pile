@@ -1,37 +1,40 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, expect, it } from 'vitest'
+import { createApiClient, setAccessToken } from '../services/api'
+import { createApiServiceSet } from './apiServiceSet'
+import { createTransportDouble } from './transportDouble'
 
-const apiMock = vi.hoisted(() => ({
-  request: vi.fn(),
-  get: vi.fn(),
-  post: vi.fn(),
-  put: vi.fn(),
-  delete: vi.fn(),
-  patch: vi.fn(),
-  interceptors: {
-    request: { use: vi.fn() },
-    response: { use: vi.fn() },
-  },
-}))
+const transport = createTransportDouble()
+const client = createApiClient(() => transport)
 
-const { get, post, put } = apiMock
-const del = apiMock.delete
-const patch = apiMock.patch
+const { get, post, put } = transport
+const del = transport.delete
+const patch = transport.patch
 
-vi.mock('axios', () => ({
-  default: {
-    create: vi.fn(() => apiMock),
-  },
-}))
+const {
+  bugReportsApi,
+  creatorsApi,
+  dependenciesApi,
+  migrationApi,
+  queueApi,
+  rateApi,
+  rollApi,
+  sessionApi,
+  snoozeApi,
+  tasksApi,
+  threadsApi,
+  undoApi,
+} = createApiServiceSet(client)
 
-import { bugReportsApi, creatorsApi, dependenciesApi, migrationApi, queueApi, rateApi, rollApi, sessionApi, setAccessToken, snoozeApi, tasksApi, threadsApi, undoApi } from '../services/api'
-
-const requestInterceptor = apiMock.interceptors.request.use.mock.calls[0][0] as (
+// SAFETY: transport.interceptors.request.use is a vi.fn(); first call's first arg is the request interceptor with expected signature.
+const requestInterceptor = transport.interceptors.request.use.mock.calls[0][0] as (
   config: { method?: string; url?: string; headers?: Record<string, string> }
 ) => Promise<{ method?: string; url?: string; headers?: Record<string, string> }>
-const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] as (
+// SAFETY: transport.interceptors.response.use is a vi.fn(); first call's second arg is the response interceptor with expected signature.
+const responseInterceptor = transport.interceptors.response.use.mock.calls[0][1] as (
   error: { config: { url: string; headers?: Record<string, string>; skipAuthRedirect?: boolean }; response: { status: number } },
 ) => Promise<Record<string, string | number | boolean | null>>
-const responseSuccessInterceptor = apiMock.interceptors.response.use.mock.calls[0][0] as (
+// SAFETY: transport.interceptors.response.use is a vi.fn(); first call's first arg is the success interceptor with expected signature.
+const responseSuccessInterceptor = transport.interceptors.response.use.mock.calls[0][0] as (
   response: { data: { ok?: boolean } },
 ) => { ok?: boolean }
 
@@ -46,20 +49,20 @@ beforeEach(() => {
   put.mockResolvedValue({})
   del.mockResolvedValue({})
   patch.mockResolvedValue({})
-  apiMock.request.mockReset()
+  transport.request.mockReset()
   setAccessToken(null)
   document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
 })
 
 it('refreshes and retries a request after an expired access token', async () => {
   post.mockResolvedValue({ access_token: 'refreshed-token' })
-  apiMock.request.mockResolvedValue({ refreshed: true })
+  transport.request.mockResolvedValue({ refreshed: true })
 
   const originalRequest = { url: '/v1/threads/42/reading-orders', headers: {} }
   const result = await responseInterceptor({ config: originalRequest, response: { status: 401 } })
 
   expect(post).toHaveBeenCalledWith('/v1/auth/refresh')
-  expect(apiMock.request).toHaveBeenCalledWith({
+  expect(transport.request).toHaveBeenCalledWith({
     ...originalRequest,
     _retry: true,
     headers: { Authorization: 'Bearer refreshed-token' },
@@ -257,17 +260,22 @@ it('bootstraps a csrf token before protected requests when the cookie is missing
 it('handles response success, network errors, validation errors, and auth errors', async () => {
   const success = await responseSuccessInterceptor({ data: { ok: true } })
   expect(success).toEqual({ ok: true })
+  // SAFETY: test passes minimal error shapes matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   await expect(responseInterceptor({ config: { url: '/x' }, response: undefined } as never)).rejects.toThrow('Network error')
+  // SAFETY: test passes minimal error shapes matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   await expect(responseInterceptor({ config: { url: '/x' }, response: { status: 400 } } as never)).rejects.toEqual(expect.objectContaining({ response: { status: 400 } }))
+  // SAFETY: test passes minimal error shapes matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   await expect(responseInterceptor({ config: {}, response: { status: 500 } } as never)).rejects.toEqual(expect.objectContaining({ response: { status: 500 } }))
   await expect(responseInterceptor({ config: { url: '/v1/auth/login' }, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
+  // SAFETY: test passes minimal error shapes matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   await expect(responseInterceptor({ config: { url: '/x', _retry: true } as never, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
 })
 
 it('refreshes when FastAPI rejects a request without a bearer header', async () => {
   post.mockResolvedValue({ access_token: 'refreshed-token' })
-  apiMock.request.mockResolvedValue({ authenticated: true })
+  transport.request.mockResolvedValue({ authenticated: true })
 
+  // SAFETY: test passes minimal error shape matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   const result = responseInterceptor({
     config: { url: '/v1/auth/me', headers: {} },
     response: { status: 403, data: { detail: 'Not authenticated' } },
@@ -275,7 +283,7 @@ it('refreshes when FastAPI rejects a request without a bearer header', async () 
 
   await expect(result).resolves.toEqual({ authenticated: true })
   expect(post).toHaveBeenCalledWith('/v1/auth/refresh')
-  expect(apiMock.request).toHaveBeenCalledWith(expect.objectContaining({
+  expect(transport.request).toHaveBeenCalledWith(expect.objectContaining({
     url: '/v1/auth/me',
     _retry: true,
     headers: { Authorization: 'Bearer refreshed-token' },
@@ -283,6 +291,7 @@ it('refreshes when FastAPI rejects a request without a bearer header', async () 
 })
 
 it('does not refresh for unrelated forbidden responses', async () => {
+  // SAFETY: test passes minimal error shape matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   await expect(responseInterceptor({
     config: { url: '/threads/1' },
     response: { status: 403, data: { detail: 'Forbidden' } },
@@ -295,7 +304,7 @@ it('does not refresh for unrelated forbidden responses', async () => {
 it('rejects a failed token refresh without retrying the original request', async () => {
   post.mockRejectedValueOnce(new Error('refresh failed'))
   await expect(responseInterceptor({ config: { url: '/threads/1' }, response: { status: 401 } })).rejects.toThrow('refresh failed')
-  expect(apiMock.request).not.toHaveBeenCalled()
+  expect(transport.request).not.toHaveBeenCalled()
 })
 
 it('redirects to login when the refresh endpoint itself returns unauthorized', async () => {
@@ -310,7 +319,7 @@ it('redirects to login when the refresh endpoint itself returns unauthorized', a
 it('queues concurrent unauthorized requests behind a single refresh', async () => {
   let resolveRefresh: (value: { access_token: string }) => void = () => {}
   post.mockImplementationOnce(() => new Promise((resolve) => { resolveRefresh = resolve }))
-  apiMock.request.mockResolvedValue({ ok: true })
+  transport.request.mockResolvedValue({ ok: true })
 
   const first = responseInterceptor({ config: { url: '/threads/1' }, response: { status: 401 } })
   const second = responseInterceptor({ config: { url: '/threads/2' }, response: { status: 401 } })
@@ -319,7 +328,7 @@ it('queues concurrent unauthorized requests behind a single refresh', async () =
   await expect(first).resolves.toEqual({ ok: true })
   await expect(second).resolves.toEqual({ ok: true })
   expect(post).toHaveBeenCalledTimes(1)
-  expect(apiMock.request).toHaveBeenCalledWith(expect.objectContaining({
+  expect(transport.request).toHaveBeenCalledWith(expect.objectContaining({
     url: '/threads/2',
     headers: { Authorization: 'Bearer shared-token' },
   }))
@@ -351,7 +360,7 @@ it('covers csrf fallback, redirect guards, and queued refresh rejection', async 
 it('preserves queued request headers and avoids redirecting skipped refresh failures', async () => {
   let resolveRefresh: (value: { access_token: string }) => void = () => {}
   post.mockImplementationOnce(() => new Promise((resolve) => { resolveRefresh = resolve }))
-  apiMock.request.mockResolvedValue({ ok: true })
+  transport.request.mockResolvedValue({ ok: true })
 
   const first = responseInterceptor({ config: { url: '/threads/first' }, response: { status: 401 } })
   const second = responseInterceptor({
@@ -362,7 +371,7 @@ it('preserves queued request headers and avoids redirecting skipped refresh fail
   resolveRefresh({ access_token: 'queued-token' })
   await expect(first).resolves.toEqual({ ok: true })
   await expect(second).resolves.toEqual({ ok: true })
-  expect(apiMock.request).toHaveBeenCalledWith(expect.objectContaining({
+  expect(transport.request).toHaveBeenCalledWith(expect.objectContaining({
     url: '/threads/second',
     headers: { Authorization: 'Bearer queued-token' },
   }))

@@ -3,56 +3,33 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CrossoversPage from '../pages/CrossoversPage'
-import { threadsApi } from '../services/api-threads'
-import { dependencyGroupsApi } from '../services/api-dependency-groups'
-import { issuesApi } from '../services/api-issues'
+import type { CrossoverApiDeps } from '../hooks/useCrossovers'
 
-vi.mock('../services/api-dependency-groups', () => ({
-  dependencyGroupsApi: {
-    list: vi.fn(),
-    get: vi.fn(),
-    create: vi.fn(),
-    rename: vi.fn(),
-    delete: vi.fn(),
-    addMember: vi.fn(),
-    addIssueRange: vi.fn(),
-    removeMember: vi.fn(),
-    listForThread: vi.fn(),
-    listForThreads: vi.fn(),
-    plansForGroup: vi.fn(),
-    getDetail: vi.fn(),
-  },
-}))
+const groupsApi = {
+  list: vi.fn(),
+  get: vi.fn(),
+  create: vi.fn(),
+  rename: vi.fn(),
+  delete: vi.fn(),
+  addMember: vi.fn(),
+  addIssueRange: vi.fn(),
+  removeMember: vi.fn(),
+}
 
-vi.mock('../services/api', () => ({
-  default: {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-  },
-  threadsApi: {
-    list: vi.fn(),
-    get: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
-    reactivate: vi.fn(),
-    listStale: vi.fn(),
-    setPending: vi.fn(),
-    setCurrentIssue: vi.fn(),
-    listCompleted: vi.fn(),
-  },
-  issuesApi: {
-    list: vi.fn(),
-  },
-}))
+const threadApi = {
+  list: vi.fn(),
+  get: vi.fn(),
+}
 
-const api = vi.mocked(dependencyGroupsApi)
-const threadApi = vi.mocked(threadsApi)
+const issueApi = {
+  list: vi.fn(),
+}
+
+const pageApi: CrossoverApiDeps = { groups: groupsApi, threads: threadApi, issues: issueApi }
+
+const api = groupsApi
 
 function createWrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -64,7 +41,7 @@ function createWrapper() {
 function renderPage() {
   return render(
     <MemoryRouter>
-      <CrossoversPage />
+      <CrossoversPage api={pageApi} />
     </MemoryRouter>,
     { wrapper: createWrapper() },
   )
@@ -90,6 +67,10 @@ const thread = {
   status: 'active',
   is_blocked: false,
   blocking_reasons: [],
+  last_activity_at: null,
+  last_rating: null,
+  notes: null,
+  is_test: false,
   created_at: '2026-08-01T00:00:00Z',
 }
 
@@ -145,29 +126,26 @@ async function selectThread(label: string, query: string, title: string) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.spyOn(dependencyGroupsApi, 'list').mockResolvedValue([crossover])
-  vi.spyOn(dependencyGroupsApi, 'get').mockResolvedValue(crossover)
-  vi.spyOn(dependencyGroupsApi, 'create').mockResolvedValue({ id: 0, name: '', created_at: '', memberships: [] })
-  vi.spyOn(dependencyGroupsApi, 'rename').mockResolvedValue({ id: 0, name: '', created_at: '', memberships: [] })
-  vi.spyOn(dependencyGroupsApi, 'delete').mockResolvedValue(undefined)
-  vi.spyOn(dependencyGroupsApi, 'addMember').mockResolvedValue({ id: 0, issue_id: null, thread_id: null })
-  vi.spyOn(dependencyGroupsApi, 'addIssueRange').mockResolvedValue({ thread_id: 0, start_position: 0, end_position: 0, added_issue_ids: [], already_present_issue_ids: [] })
-  vi.spyOn(dependencyGroupsApi, 'removeMember').mockResolvedValue(undefined)
-  vi.spyOn(threadsApi, 'list').mockResolvedValue({
+  groupsApi.list.mockResolvedValue([crossover])
+  groupsApi.get.mockResolvedValue(crossover)
+  groupsApi.create.mockResolvedValue({ id: 0, name: '', created_at: '', memberships: [] })
+  groupsApi.rename.mockResolvedValue({ id: 0, name: '', created_at: '', memberships: [] })
+  groupsApi.delete.mockResolvedValue(undefined)
+  groupsApi.addMember.mockResolvedValue({ id: 0, issue_id: null, thread_id: null })
+  groupsApi.addIssueRange.mockResolvedValue({ thread_id: 0, start_position: 0, end_position: 0, added_issue_ids: [], already_present_issue_ids: [] })
+  groupsApi.removeMember.mockResolvedValue(undefined)
+  threadApi.list.mockResolvedValue({
     threads: [thread, xmenThread],
     next_page_token: null,
+    active_count: 2,
   })
-  vi.spyOn(threadsApi, 'get').mockResolvedValue(thread)
-  vi.spyOn(issuesApi, 'list').mockResolvedValue({
+  threadApi.get.mockResolvedValue(thread)
+  issueApi.list.mockResolvedValue({
     issues,
     total_count: issues.length,
     page_size: 100,
     next_page_token: null,
   })
-})
-
-afterEach(() => {
-  vi.restoreAllMocks()
 })
 
 describe('CrossoversPage membership editing', () => {
@@ -395,7 +373,7 @@ describe('CrossoversPage membership editing', () => {
   it('distinguishes ambiguous series with counts in dropdown', async () => {
     const starman = { ...thread, id: 99, title: 'Starman', format: 'single issues', issues_remaining: 61, total_issues: 80 }
     const starmanV2 = { ...thread, id: 100, title: 'Starman (Vol. 2) (1994 - 2001)', format: 'single issues', issues_remaining: 5, total_issues: 10 }
-    threadApi.list.mockResolvedValue({ threads: [starman, starmanV2], next_page_token: null })
+    threadApi.list.mockResolvedValue({ threads: [starman, starmanV2], next_page_token: null, active_count: 2 })
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /Annihilation.*2 members/ }))
 

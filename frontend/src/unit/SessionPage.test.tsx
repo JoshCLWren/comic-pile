@@ -24,9 +24,13 @@ const restoreSpy = vi.fn()
 const undoSpy = vi.fn()
 const refetchDetailsSpy = vi.fn()
 const refetchSnapshotsSpy = vi.fn()
+// SAFETY: the module is mocked, so the test supplies the return shape directly
 const mockedUseSessionDetails = vi.mocked(useSessionDetails) as any
+// SAFETY: the module is mocked, so the test supplies the return shape directly
 const mockedUseSessionSnapshots = vi.mocked(useSessionSnapshots) as any
+// SAFETY: the module is mocked, so the test supplies the return shape directly
 const mockedUseRestoreSessionStart = vi.mocked(useRestoreSessionStart) as any
+// SAFETY: the module is mocked, so the test supplies the return shape directly
 const mockedUseUndo = vi.mocked(useUndo) as any
 
 beforeEach(() => {

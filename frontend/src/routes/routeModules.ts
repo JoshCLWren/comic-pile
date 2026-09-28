@@ -25,6 +25,7 @@ export const routeModules = {
   queue: () => import('../pages/QueuePage'),
   threadDetail: () => import('../pages/ThreadDetailView'),
   creatorDetail: () => import('../pages/CreatorDetailPage'),
+  creators: () => import('../pages/CreatorsPage'),
   history: () => import('../pages/HistoryPage'),
   session: () => import('../pages/SessionPage'),
   crossovers: () => import('../pages/CrossoversPage'),
@@ -36,6 +37,7 @@ export const routeModules = {
   login: () => import('../pages/LoginPage'),
   register: () => import('../pages/RegisterPage'),
   identityInbox: () => import('../pages/IdentityInboxPage'),
+  landing: () => import('../pages/LandingPage'),
 } as const satisfies Record<string, () => Promise<RouteModule>>
 
 export function lazyRoute<K extends RouteModuleKey>(

@@ -11,7 +11,7 @@ import { useQueueBlockingInfo } from '../../hooks/useQueueBlockingInfo'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
-import type { Thread } from '../../types'
+import type { ThreadListItem } from '../../types'
 import QueueThreadCard from './QueueThreadCard'
 import CompletedThreadsSection from './CompletedThreadsSection'
 import { QueueControls } from './QueueControls'
@@ -96,7 +96,7 @@ export default function QueuePage({
   )
 
   const navigateToRoll = useCallback(
-    (_thread: Thread, response: unknown) => {
+    (_thread: ThreadListItem, response: unknown) => {
       navigate('/', { state: { rollResponse: response } })
     },
     [navigate],
@@ -124,6 +124,7 @@ export default function QueuePage({
 
   const submitCreate = useCallback(
     (input: { title: string; format: string; issues_remaining: number; notes: string | null }) =>
+      // SAFETY: useCreateThread exposes mutateAsync, so this resolves to the created thread record
       createMutation.mutate(input) as Promise<{ id?: number }>,
     [createMutation],
   )
@@ -196,7 +197,7 @@ export default function QueuePage({
   )
 
   const renderThreadCard = useCallback(
-    (thread: Thread, index: number) => {
+    (thread: ThreadListItem, index: number) => {
       const isDragOver = actions.dragOverThreadId === thread.id
       const isBlocked = thread.is_blocked
       const blockingDependencies = blockingByThreadId[thread.id] ?? []

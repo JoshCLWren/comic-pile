@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import type { Thread } from '../../types'
+import type { Thread, ThreadListItem } from '../../types'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { getApiErrorDetail } from '../../utils/apiError'
@@ -10,7 +10,7 @@ import { DEFAULT_CREATE_STATE, type EditThreadData, type QueueFormState } from '
 type ModalKey = 'create' | 'edit' | 'reactivate' | 'dependency' | 'reposition' | 'migration'
 
 interface QueueModalsParams {
-  threads: Thread[] | null | undefined
+  threads: ThreadListItem[] | null | undefined
   onCreated: () => Promise<void>
   onUpdated: () => Promise<void>
   onReactivated: () => Promise<void>
@@ -43,10 +43,10 @@ interface UseQueueModalsResult {
   editForm: QueueFormState
   issuePreview: number | null
   issueParseError: string | null
-  editingThread: Thread | null
-  repositioningThread: Thread | null
-  dependencyThread: Thread | null
-  threadToMigrate: Thread | null
+  editingThread: Thread | ThreadListItem | null
+  repositioningThread: ThreadListItem | null
+  dependencyThread: ThreadListItem | null
+  threadToMigrate: Thread | ThreadListItem | null
   showMigrationDialog: boolean
   reactivateThreadId: string
   issuesToAdd: number
@@ -56,15 +56,15 @@ interface UseQueueModalsResult {
   setIssuesToAdd: (next: number) => void
   showCreateModal: () => void
   closeCreateModal: () => void
-  showEditModal: (thread: Thread) => void
+  showEditModal: (thread: ThreadListItem) => void
   closeEditModal: () => void
-  openReactivateModal: (thread: Thread | null) => void
+  openReactivateModal: (thread: ThreadListItem | null) => void
   closeReactivateModal: () => void
-  openRepositionModal: (thread: Thread) => void
+  openRepositionModal: (thread: ThreadListItem) => void
   closeRepositionModal: () => void
-  openDependenciesModal: (thread: Thread) => void
+  openDependenciesModal: (thread: ThreadListItem) => void
   closeDependenciesModal: () => void
-  openMigrationDialog: (thread: Thread) => void
+  openMigrationDialog: (thread: Thread | ThreadListItem) => void
   closeMigrationDialog: () => void
   handleCreateSubmit: (event: FormEvent) => Promise<void>
   handleEditSubmit: (event: FormEvent) => Promise<void>
@@ -124,12 +124,12 @@ export function useQueueModals(
   const [openModal, setOpenModal] = useState<ModalKey | null>(null)
   const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
-  const [editingThread, setEditingThread] = useState<Thread | null>(null)
+  const [editingThread, setEditingThread] = useState<Thread | ThreadListItem | null>(null)
   const [reactivateThreadId, setReactivateThreadId] = useState('')
   const [issuesToAdd, setIssuesToAdd] = useState(1)
-  const [repositioningThread, setRepositioningThread] = useState<Thread | null>(null)
-  const [dependencyThread, setDependencyThread] = useState<Thread | null>(null)
-  const [threadToMigrate, setThreadToMigrate] = useState<Thread | null>(null)
+  const [repositioningThread, setRepositioningThread] = useState<ThreadListItem | null>(null)
+  const [dependencyThread, setDependencyThread] = useState<ThreadListItem | null>(null)
+  const [threadToMigrate, setThreadToMigrate] = useState<Thread | ThreadListItem | null>(null)
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
   const [issuePreview, setIssuePreview] = useState<number | null>(null)
   const [issueParseError, setIssueParseError] = useState<string | null>(null)
@@ -156,7 +156,7 @@ export function useQueueModals(
   }, [clearQueueModalState, clearRestoreAction])
 
   const showEditModal = useCallback(
-    (thread: Thread) => {
+    (thread: ThreadListItem) => {
       setEditingThread(thread)
       setEditForm({
         title: thread.title,
@@ -190,7 +190,7 @@ export function useQueueModals(
     clearQueueModalState()
   }, [clearQueueModalState, clearRestoreAction])
 
-  const openReactivateModal = useCallback((thread: Thread | null) => {
+  const openReactivateModal = useCallback((thread: ThreadListItem | null) => {
     setReactivateThreadId(thread?.id ? String(thread.id) : '')
     setIssuesToAdd(1)
     setOpenModal('reactivate')
@@ -200,7 +200,7 @@ export function useQueueModals(
     setOpenModal(null)
   }, [])
 
-  const openRepositionModal = useCallback((thread: Thread) => {
+  const openRepositionModal = useCallback((thread: ThreadListItem) => {
     setRepositioningThread(thread)
     setOpenModal('reposition')
   }, [])
@@ -210,7 +210,7 @@ export function useQueueModals(
     setOpenModal(null)
   }, [])
 
-  const openDependenciesModal = useCallback((thread: Thread) => {
+  const openDependenciesModal = useCallback((thread: ThreadListItem) => {
     setDependencyThread(thread)
     setOpenModal('dependency')
   }, [])
@@ -220,7 +220,7 @@ export function useQueueModals(
     setOpenModal(null)
   }, [])
 
-  const openMigrationDialog = useCallback((thread: Thread) => {
+  const openMigrationDialog = useCallback((thread: Thread | ThreadListItem) => {
     setThreadToMigrate(thread)
     setShowMigrationDialog(true)
   }, [])
@@ -357,7 +357,7 @@ export function useQueueModals(
           format: editForm.format,
           notes: editForm.notes || null,
         }
-        if (editingThread.total_issues === null) {
+        if (editingThread.total_issues == null) {
           data.issues_remaining = Number(editForm.issuesRemaining)
         }
         await submitEdit({ id: editingThread.id, data })

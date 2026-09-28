@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { Dependency, Thread } from '../types'
+import type { Dependency, Thread, ThreadListItem } from '../types'
 import {
   buildReadingOrderTimelineEntries,
   type GateStatus,
@@ -9,7 +9,7 @@ import {
 } from '../utils/readingOrderTimeline'
 
 interface Props {
-  thread: Thread | null
+  thread: Thread | ThreadListItem | null
   dependencies: Dependency[]
 }
 
@@ -59,7 +59,7 @@ export default function ReadingOrderTimeline({ thread, dependencies }: Props) {
         <span>Reading Position</span>
         <span className="text-white">{nextIssueLabel}</span>
       </div>
-      {thread.total_issues === null && (
+      {thread.total_issues == null && (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] font-semibold uppercase tracking-widest text-amber-200">
           Reading order will be more precise after migrating this thread to per-issue tracking.
         </div>

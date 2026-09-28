@@ -1,28 +1,18 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, expect, it } from 'vitest'
+import { createApiClient, setAccessToken } from '../services/api'
+import { createTransportDouble } from './transportDouble'
 
-const apiMock = vi.hoisted(() => ({
-  request: vi.fn(),
-  get: vi.fn(),
-  post: vi.fn(),
-  interceptors: {
-    request: { use: vi.fn() },
-    response: { use: vi.fn() },
-  },
-}))
+const transport = createTransportDouble()
+createApiClient(() => transport)
 
-vi.mock('axios', () => ({
-  default: {
-    create: vi.fn(() => apiMock),
-  },
-}))
 
-import { setAccessToken } from '../services/api'
-
-const requestInterceptor = apiMock.interceptors.request.use.mock.calls[0][0] as (
+// SAFETY: transport.interceptors.request.use is a vi.fn(); first call's first arg is the request interceptor with expected signature.
+const requestInterceptor = transport.interceptors.request.use.mock.calls[0][0] as (
   config: { method?: string; url?: string; headers?: Record<string, string> },
 ) => Promise<{ method?: string; url?: string; headers?: Record<string, string> }>
 
-const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] as (
+// SAFETY: transport.interceptors.response.use is a vi.fn(); first call's second arg is the response interceptor with expected signature.
+const responseInterceptor = transport.interceptors.response.use.mock.calls[0][1] as (
   error: {
     config: { url: string; headers?: Record<string, string> }
     response: { status: number; data?: unknown }
@@ -30,15 +20,15 @@ const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] a
 ) => Promise<Record<string, string | number | boolean | null>>
 
 beforeEach(() => {
-  apiMock.get.mockReset()
-  apiMock.post.mockReset()
-  apiMock.request.mockReset()
+  transport.get.mockReset()
+  transport.post.mockReset()
+  transport.request.mockReset()
   setAccessToken(null)
   document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
 })
 
 it('bootstraps csrf through the canonical v1 auth endpoint', async () => {
-  apiMock.get.mockResolvedValue({ csrf_token: 'fresh-token' })
+  transport.get.mockResolvedValue({ csrf_token: 'fresh-token' })
 
   const config = await requestInterceptor({
     method: 'delete',
@@ -46,7 +36,7 @@ it('bootstraps csrf through the canonical v1 auth endpoint', async () => {
     headers: {},
   })
 
-  expect(apiMock.get).toHaveBeenCalledWith('/v1/auth/csrf', { skipAuthRedirect: true })
+  expect(transport.get).toHaveBeenCalledWith('/v1/auth/csrf', { skipAuthRedirect: true })
   expect(config.headers).toEqual({ 'X-CSRF-Token': 'fresh-token' })
 })
 
@@ -58,7 +48,7 @@ it('keeps canonical credential endpoints exempt from csrf bootstrap', async () =
   expect(login.headers).toEqual({})
   expect(register.headers).toEqual({})
   expect(refresh.headers).toEqual({})
-  expect(apiMock.get).not.toHaveBeenCalled()
+  expect(transport.get).not.toHaveBeenCalled()
 })
 
 it('matches absolute canonical client URLs by pathname', async () => {
@@ -69,11 +59,11 @@ it('matches absolute canonical client URLs by pathname', async () => {
   })
 
   expect(login.headers).toEqual({})
-  expect(apiMock.get).not.toHaveBeenCalled()
+  expect(transport.get).not.toHaveBeenCalled()
 })
 
 it('does not exempt protected requests that only mention an auth path in the query', async () => {
-  apiMock.get.mockResolvedValue({ csrf_token: 'fresh-token' })
+  transport.get.mockResolvedValue({ csrf_token: 'fresh-token' })
 
   const config = await requestInterceptor({
     method: 'post',
@@ -81,13 +71,13 @@ it('does not exempt protected requests that only mention an auth path in the que
     headers: {},
   })
 
-  expect(apiMock.get).toHaveBeenCalledWith('/v1/auth/csrf', { skipAuthRedirect: true })
+  expect(transport.get).toHaveBeenCalledWith('/v1/auth/csrf', { skipAuthRedirect: true })
   expect(config.headers).toEqual({ 'X-CSRF-Token': 'fresh-token' })
 })
 
 it('refreshes expired requests through the canonical v1 auth endpoint', async () => {
-  apiMock.post.mockResolvedValue({ access_token: 'refreshed-token' })
-  apiMock.request.mockResolvedValue({ refreshed: true })
+  transport.post.mockResolvedValue({ access_token: 'refreshed-token' })
+  transport.request.mockResolvedValue({ refreshed: true })
 
   const originalRequest = { url: '/v1/threads/42', headers: {} }
   const result = await responseInterceptor({
@@ -95,8 +85,8 @@ it('refreshes expired requests through the canonical v1 auth endpoint', async ()
     response: { status: 401 },
   })
 
-  expect(apiMock.post).toHaveBeenCalledWith('/v1/auth/refresh')
-  expect(apiMock.request).toHaveBeenCalledWith({
+  expect(transport.post).toHaveBeenCalledWith('/v1/auth/refresh')
+  expect(transport.request).toHaveBeenCalledWith({
     ...originalRequest,
     _retry: true,
     headers: { Authorization: 'Bearer refreshed-token' },
@@ -105,8 +95,8 @@ it('refreshes expired requests through the canonical v1 auth endpoint', async ()
 })
 
 it('refreshes a protected request whose query mentions an auth path', async () => {
-  apiMock.post.mockResolvedValue({ access_token: 'refreshed-token' })
-  apiMock.request.mockResolvedValue({ refreshed: true })
+  transport.post.mockResolvedValue({ access_token: 'refreshed-token' })
+  transport.request.mockResolvedValue({ refreshed: true })
 
   const originalRequest = { url: '/v1/threads/42?returnTo=/v1/auth/login', headers: {} }
   const result = await responseInterceptor({
@@ -114,8 +104,8 @@ it('refreshes a protected request whose query mentions an auth path', async () =
     response: { status: 401 },
   })
 
-  expect(apiMock.post).toHaveBeenCalledWith('/v1/auth/refresh')
-  expect(apiMock.request).toHaveBeenCalledWith({
+  expect(transport.post).toHaveBeenCalledWith('/v1/auth/refresh')
+  expect(transport.request).toHaveBeenCalledWith({
     ...originalRequest,
     _retry: true,
     headers: { Authorization: 'Bearer refreshed-token' },

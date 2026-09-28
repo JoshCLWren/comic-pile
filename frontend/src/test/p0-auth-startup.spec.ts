@@ -69,9 +69,18 @@ test.describe('AUTH-001: Authentication and startup', () => {
     await expect(page).toHaveURL(/\/login/)
   })
 
-  test('unauthenticated user is redirected to login', async ({ page }) => {
+  test('unauthenticated user sees the landing page with sign up and sign in paths', async ({ page }) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
-    await expect(page).toHaveURL(/\/login/)
+    await page.evaluate(() => localStorage.clear())
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await expect(page).toHaveURL(/\/$/)
+
+    const signUp = page.getByRole('link', { name: /sign up free/i })
+    await expect(signUp).toBeVisible()
+    await expect(page.getByRole('link', { name: /^sign in$/i })).toBeVisible()
+
+    await signUp.click()
+    await expect(page).toHaveURL(/\/register/)
   })
 
   test('login form is reachable from register page', async ({ page }) => {

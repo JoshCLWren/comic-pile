@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { type ComicVineCreator } from '../../../services/api'
+import type { ComicVineCreator } from '../../../services/api-comicvine'
 import { creatorKeyFor, creatorRoutePath } from '../../../utils/creatorKey'
 
 /**

@@ -8,14 +8,14 @@ import VirtualizedThreadList from '../pages/QueuePage/VirtualizedThreadList'
 import { ROW_HEIGHT_WITH_GAP } from '../pages/QueuePage/VirtualizedThreadList.helpers'
 import { QueueList } from '../pages/QueuePage/QueueList'
 import { cast } from '../utils/cast'
-import type { Thread } from '../types'
+import type { ThreadListItem } from '../types'
 
 interface MockThread {
   id: number
   title: string
 }
 
-function createMockThread(id: number): Thread {
+function createMockThread(id: number): ThreadListItem {
   return {
     id,
     title: `Thread ${id}`,
@@ -124,7 +124,7 @@ it('keeps paginated queue items as full-width rows on a wide viewport', async ()
  * DOM geometry belongs to the Playwright suite in issue #2725).
  */
 it('keeps a single scroll surface while the queue grows and shrinks across pages', async () => {
-  const page = (count: number): Thread[] =>
+  const page = (count: number): ThreadListItem[] =>
     Array.from({ length: count }, (_, i) => createMockThread(i + 1))
 
   // Faithful count-aware double mirroring the library contract: item `start`
@@ -155,7 +155,7 @@ it('keeps a single scroll surface while the queue grows and shrinks across pages
   }
 
   const sentinelRef = { current: null }
-  const renderItem = (thread: Thread, index: number) => (
+  const renderItem = (thread: ThreadListItem, index: number) => (
     <div data-testid="queue-thread-item" key={thread.id}>
       {thread.title} #{index + 1}
     </div>
@@ -185,7 +185,7 @@ it('keeps a single scroll surface while the queue grows and shrinks across pages
   }
 
   // SAFETY: sentinelRef is a nullable ref; cast to match QueueList prop types
-  const renderQueue = (threads: Thread[]) => (
+  const renderQueue = (threads: ThreadListItem[]) => (
     <QueueList
       activeThreads={threads}
       filteredThreads={threads}
@@ -255,10 +255,10 @@ it('keeps a single scroll surface while the queue grows and shrinks across pages
  * `rect.top`-only scrollMargin variant, because each shifts the virtual rows.
  */
 it('paints virtual rows at natural document offsets when the wrapper sits below the page top', async () => {
-  const threads: Thread[] = Array.from({ length: 60 }, (_, i) => createMockThread(i + 1))
+  const threads: ThreadListItem[] = Array.from({ length: 60 }, (_, i) => createMockThread(i + 1))
 
   const sentinelRef = { current: null }
-  const renderItem = (thread: Thread, index: number) => (
+  const renderItem = (thread: ThreadListItem, index: number) => (
     <div data-testid="queue-thread-item" key={thread.id}>
       {thread.title} #{index + 1}
     </div>
@@ -303,6 +303,7 @@ it('paints virtual rows at natural document offsets when the wrapper sits below 
         reorderError={null}
         renderItem={renderItem}
         isSearching={false}
+        // SAFETY: the virtualized list always mounts the sentinel element this test measures
         sentinelRef={sentinelRef as React.RefObject<HTMLDivElement | null>}
         hasNextPage
         useVirtualizer={scrollMarginAwareUseVirtualizer}
@@ -311,6 +312,7 @@ it('paints virtual rows at natural document offsets when the wrapper sits below 
 
     // Model the wrapper as sitting 120px down the initial viewport while the
     // window is scrolled 300px: its document-space offset is 420px.
+    // SAFETY: the queried node is the element the component rendered under test
     const wrapper = container.firstElementChild as HTMLElement
     // SAFETY: wrapper is the VirtualizedThreadList root div handled by the component.
     vi.spyOn(wrapper, 'getBoundingClientRect').mockReturnValue(cast<DOMRect>({ top: 120 }))
@@ -335,6 +337,7 @@ it('paints virtual rows at natural document offsets when the wrapper sits below 
     const rows = container.querySelectorAll('[data-index]')
     expect(rows.length).toBeGreaterThan(50)
     rows.forEach((row, index) => {
+      // SAFETY: the queried node is the row the component rendered
       const style = (row as HTMLElement).style
       expect(style.transform).toBe(`translateY(${index * ROW_HEIGHT_WITH_GAP}px)`)
     })
@@ -343,6 +346,7 @@ it('paints virtual rows at natural document offsets when the wrapper sits below 
     // stay consistent so infinite scroll keeps firing past the threshold.
     const scrollEl = container.querySelector('#queue-container')
     expect(scrollEl).toBeInTheDocument()
+    // SAFETY: the queried node is the row the component rendered
     const spacer = (scrollEl as HTMLElement).firstElementChild as HTMLElement
     expect(spacer.style.position).toBe('relative')
     expect(spacer.style.height).toBe(

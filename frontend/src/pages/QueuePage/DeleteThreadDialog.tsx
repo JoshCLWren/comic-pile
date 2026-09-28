@@ -1,8 +1,8 @@
 import Modal from '../../components/Modal'
-import type { Thread } from '../../types'
+import type { ThreadListItem } from '../../types'
 
 interface DeleteThreadDialogProps {
-  thread: Thread | null
+  thread: ThreadListItem | null
   isPending: boolean
   error: string | null
   onConfirm: () => void

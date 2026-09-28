@@ -53,17 +53,9 @@ from app.schemas import (
 )
 from app.schemas.roll_v2 import (
     RollV2BootstrapResponse,
-    RollableItem,
     RollableThread,
-    RollableIssue,
-    RollableIdentity,
-    RollableReader,
-    RollableRoute,
-    RollLastRead,
-    IdentityState,
-    RouteKind,
-    ProgressScope,
 )
+from app.services.roll_v2_projection import get_v2_rollable_projection
 from app.schemas.recommendation_context import (
     RecommendationContextCreate,
 )
@@ -1390,126 +1382,21 @@ async def roll_v2_bootstrap(
         pending_thread_title=pending_thread_title,
     )
 
-    # Get existing roll pool data and convert to v2 rollable format
-    route_labels_subq = (
-        select(
-            func.array_agg(func.distinct(DependencyGroup.name)),
-        )
-        .select_from(DependencyGroupMembership)
-        .join(DependencyGroup, DependencyGroup.id == DependencyGroupMembership.group_id)
-        .where(
-            or_(
-                DependencyGroupMembership.thread_id == Thread.id,
-                DependencyGroupMembership.issue_id == Thread.next_unread_issue_id,
-            ),
-            DependencyGroup.user_id == user_id,
-        )
-        .correlate(Thread)
-        .scalar_subquery()
-        .cast(ARRAY(Text))
-    )
-
-    # Contract-only v2 projection over stored data. The Issue model carries
-    # no canonical-series columns, so canonical identity stays unavailable
-    # (null id/stats per #1401) until the heavy projection lands. No
-    # synchronous provider call is made here.
-    pool_query = (
-        select(
-            Thread.id,
-            Thread.title,
-            Thread.format,
-            Thread.last_activity_at,
-            Thread.next_unread_issue_id.label("issue_id"),
-            Issue.issue_number,
-            route_labels_subq.label("route_labels"),
-        )
-        .outerjoin(Issue, Issue.id == Thread.next_unread_issue_id)
-        .where(Thread.user_id == user_id)
-        .where(Thread.status == "active")
-        .where(Thread.queue_position >= 1)
-        .where(Thread.is_blocked.is_(False))
-        .order_by(Thread.queue_position)
-        .limit(die_size)
-    )
-
+    # Bounded v2 projection (issue #2717): rollable[] and session last-read
+    # come from three bulk read-model round trips with no per-row queries.
+    # Session/recovery/partition semantics above stay identical to #2716.
     snoozed_ids = list(current_session.snoozed_thread_ids or [])
     skipped_ids = list(current_session.skipped_thread_ids or [])
     derived_snoozed_ids = await derive_cross_session_excluded_thread_ids(db, user_id)
     effective_snoozed_ids = sorted(set(snoozed_ids) | set(derived_snoozed_ids))
-    if effective_snoozed_ids:
-        pool_query = pool_query.where(Thread.id.not_in(effective_snoozed_ids))
-    if skipped_ids:
-        pool_query = pool_query.where(Thread.id.not_in(skipped_ids))
-
-    pool_result = await db.execute(pool_query)
-    pool_rows = pool_result.all()
-
-    # Convert v1 roll pool to v2 rollable format
-    rollable: list[RollableItem] = []
-    for row in pool_rows:
-        if row.issue_id is None:
-            # Skip threads with no next unread issue (v2 never returns issue: null)
-            continue
-
-        # Create rollable thread
-        rollable_thread = RollableThread(
-            id=row.id,
-            title=row.title,
-            format=normalize_format_value(row.format),
-            last_activity_at=row.last_activity_at.isoformat() if row.last_activity_at else None,
-        )
-
-        # Create rollable issue (required/non-null). Covers stay null until
-        # the projection can supply same-origin optimized URLs; raw provider
-        # URLs are never exposed as the Roll contract.
-        rollable_issue = RollableIssue(
-            id=row.issue_id,
-            number=row.issue_number,
-            canonical_series_title=None,
-            cover_url=None,
-        )
-
-        # Contract slice: canonical identity is unavailable, so the id and
-        # canonical-series stats stay null per #1401 and progress falls back
-        # to the thread scope with a nullable run length.
-        rollable_identity = RollableIdentity(
-            source="unavailable",
-            canonical_series_id=None,
-            state=IdentityState.UNRESOLVED,
-            series_mapping_state=IdentityState.UNRESOLVED,
-        )
-
-        # Create rollable reader
-        rollable_reader = RollableReader(
-            latest_rating=None,
-            average_rating=None,
-            rating_count=None,
-            read_count=None,
-            issue_count=None,
-            progress_scope=ProgressScope.THREAD,
-        )
-
-        # Max 3 routes plus an overflow count; the frozen v2 kind is "group"
-        # with no subtype guessing from the group name.
-        all_route_names = list(row.route_labels or [])
-        visible_route_names = all_route_names[:3]
-        rollable_routes = [
-            RollableRoute(
-                kind=RouteKind.GROUP,
-                name=route_name,
-            )
-            for route_name in visible_route_names
-        ]
-
-        rollable_item = RollableItem(
-            thread=rollable_thread,
-            issue=rollable_issue,
-            identity=rollable_identity,
-            reader=rollable_reader,
-            routes=rollable_routes,
-            overflow_routes_count=max(0, len(all_route_names) - len(visible_route_names)),
-        )
-        rollable.append(rollable_item)
+    excluded_thread_ids = sorted(set(effective_snoozed_ids) | set(skipped_ids))
+    rollable, last_read, _omitted_thread_ids = await get_v2_rollable_projection(
+        db,
+        user_id=user_id,
+        die_size=die_size,
+        excluded_thread_ids=excluded_thread_ids,
+        session_id=current_session_id,
+    )
 
     # Get snoozed, skipped, blocked threads in v2 format
     snoozed_threads: list[RollableThread] = []
@@ -1618,17 +1505,6 @@ async def roll_v2_bootstrap(
                     format=normalize_format_value(stale_row.format),
                     last_activity_at=stale_row.last_activity_at.isoformat() if stale_row.last_activity_at else None,
                 )
-
-    # Create last_read (nullable session-scoped)
-    last_read = None
-    if active_thread and active_thread.next_issue_id:
-        last_read = RollLastRead(
-            issue_id=active_thread.next_issue_id,
-            issue_number=active_thread.next_issue_number,
-            thread_id=active_thread.id,
-            thread_title=active_thread.title,
-            read_at=None,  # Would need to be set when user actually reads
-        )
 
     return RollV2BootstrapResponse(
         current_die=die_size,

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery, useInfiniteQuery, useMutation } from "@tanstack/react-query";
-import { sessionApi } from "../services/api-sessions";
+import { sessionApi as defaultSessionApi } from "../services/api-sessions";
+import type { SessionApi } from "../services/apiTypes";
 import type {
   SessionCurrent,
   SessionDetails,
@@ -20,7 +21,8 @@ function normalizeQueryError(error: unknown, fallbackMessage: string): Error | n
   return new Error(fallbackMessage);
 }
 
-export function useSession() {
+export function useSession(api?: SessionApi) {
+  const sessionApi = api ?? defaultSessionApi;
   const { showToast } = useToast();
 
   const { data, isPending, isError, error, refetch } = useQuery({
@@ -57,7 +59,7 @@ export function useSessions(params: SessionListParams = EMPTY_PARAMS) {
     queryFn: async ({ pageParam }) => {
       try {
         // SAFETY: useInfiniteQuery starts at the null initialPageParam and only advances with page tokens.
-        return await sessionApi.list(params, pageParam as string | null);
+        return await defaultSessionApi.list(params, pageParam as string | null);
       } catch (error: unknown) {
         if (error instanceof Error) throw error;
         throw new Error(
@@ -106,7 +108,7 @@ export function useSessions(params: SessionListParams = EMPTY_PARAMS) {
 export function useSessionDetails(id: number | string | null | undefined) {
   const { data, isPending, fetchStatus, isError, error, refetch } = useQuery({
     queryKey: id ? queryKeys.session.detail(Number(id)) : [],
-    queryFn: () => sessionApi.getDetails(id!),
+    queryFn: () => defaultSessionApi.getDetails(id!),
     enabled: !!id,
   });
 
@@ -122,7 +124,7 @@ export function useSessionDetails(id: number | string | null | undefined) {
 export function useSessionSnapshots(id: number | string | null | undefined) {
   const { data, isPending, fetchStatus, isError, error, refetch } = useQuery({
     queryKey: id ? ['session', 'snapshots', id] : [],
-    queryFn: () => sessionApi.getSnapshots(id!),
+    queryFn: () => defaultSessionApi.getSnapshots(id!),
     enabled: !!id,
   });
 
@@ -137,7 +139,7 @@ export function useSessionSnapshots(id: number | string | null | undefined) {
 
 export function useRestoreSessionStart() {
   const mutation = useMutation({
-    mutationFn: (sessionId: number | string) => sessionApi.restoreSessionStart(sessionId),
+    mutationFn: (sessionId: number | string) => defaultSessionApi.restoreSessionStart(sessionId),
   });
 
   return {

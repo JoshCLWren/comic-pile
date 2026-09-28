@@ -42,6 +42,10 @@ const thread: Thread = {
   status: 'active',
   is_blocked: false,
   blocking_reasons: [],
+  last_activity_at: null,
+  last_rating: null,
+  notes: null,
+  is_test: false,
   created_at: '2000-01-01T00:00:00Z',
 }
 const callbacks = () => ({

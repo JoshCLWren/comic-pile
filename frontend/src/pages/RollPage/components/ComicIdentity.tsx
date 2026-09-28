@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, useMemo } from 'react'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 import { canonicalCreatorKey, useCreatorSummaries } from '../../../hooks/useCreatorSummaries'
-import { type ComicVineRelatedIssue } from '../../../services/api'
+import type { ComicVineRelatedIssue } from '../../../services/api-comicvine'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import ImageWithLoading from '../../../components/ImageWithLoading'
@@ -128,7 +128,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   }
 
   const creatorKeys = useMemo(() => {
-    if (!metadata) return [] as string[]
+    if (!metadata) return []
     const seen = new Set<string>()
     const keys: string[] = []
     for (const creator of metadata.creators) {

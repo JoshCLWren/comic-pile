@@ -9,7 +9,7 @@ import {
 import { type DependencyGroup, type DependencyGroupMember } from '../services/api-dependency-groups'
 import type { Issue } from '../types'
 import GlossaryLink from '../components/GlossaryLink'
-import type { Thread } from '../types'
+import type { ThreadListItem } from '../types'
 import { isString } from '../utils/runtimeChecks'
 import {
   useCrossoverGroupsList,
@@ -21,6 +21,7 @@ import {
   useAddCrossoverMember,
   useAddCrossoverIssueRange,
   useRemoveCrossoverMember,
+  type CrossoverApiDeps,
 } from '../hooks/useCrossovers'
 
 type PositionedIssue = Issue & { position: number }
@@ -45,7 +46,16 @@ function memberLabel(member: DependencyGroupMember): string {
   return 'Unavailable comic'
 }
 
-export default function CrossoversPage() {
+export interface CrossoversPageProps {
+  /**
+   * Optional service seams. Production callers omit this and use the real
+   * services; tests inject faithful in-memory implementations instead of
+   * replacing the service modules themselves.
+   */
+  api?: CrossoverApiDeps
+}
+
+export default function CrossoversPage({ api = {} }: CrossoversPageProps) {
   const [searchParams] = useSearchParams()
   const requestedGroupId = searchParams.get('group')
   const startsAtParam = searchParams.get('starts_at')
@@ -56,19 +66,19 @@ export default function CrossoversPage() {
     isPending: isLoadingGroups,
     error: groupsError,
     refetch: refetchGroups,
-  } = useCrossoverGroupsList()
+  } = useCrossoverGroupsList(api)
 
   const {
     data: threads = [],
     error: threadsError,
-  } = useAllThreads()
+  } = useAllThreads(api)
 
-  const createMutation = useCreateCrossoverGroup()
-  const renameMutation = useRenameCrossoverGroup()
-  const deleteMutation = useDeleteCrossoverGroup()
-  const addMemberMutation = useAddCrossoverMember()
-  const addRangeMutation = useAddCrossoverIssueRange()
-  const removeMemberMutation = useRemoveCrossoverMember()
+  const createMutation = useCreateCrossoverGroup(api)
+  const renameMutation = useRenameCrossoverGroup(api)
+  const deleteMutation = useDeleteCrossoverGroup(api)
+  const addMemberMutation = useAddCrossoverMember(api)
+  const addRangeMutation = useAddCrossoverIssueRange(api)
+  const removeMemberMutation = useRemoveCrossoverMember(api)
 
   const [name, setName] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
@@ -76,8 +86,8 @@ export default function CrossoversPage() {
   const [editingName, setEditingName] = useState('')
   const [mutationError, setMutationError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
-  const [memberThread, setMemberThread] = useState<Thread | null>(null)
-  const [rangeThread, setRangeThread] = useState<Thread | null>(null)
+  const [memberThread, setMemberThread] = useState<ThreadListItem | null>(null)
+  const [rangeThread, setRangeThread] = useState<ThreadListItem | null>(null)
   const [rangeSelection, setRangeSelection] = useState<SelectedIssueRange | null>(null)
   const [membershipMessage, setMembershipMessage] = useState<string | null>(null)
 
@@ -85,7 +95,7 @@ export default function CrossoversPage() {
     data: rangeIssues = [],
     isPending: isPendingRangeIssues,
     error: rangeIssuesError,
-  } = useCrossoverIssuesForRange(rangeThread?.id ?? null)
+  } = useCrossoverIssuesForRange(rangeThread?.id ?? null, api)
   const isLoadingRangeIssues = rangeThread !== null && isPendingRangeIssues
 
   const threadLoadError = threadsError ? errorMessage(threadsError, 'Unable to load comics for selection.') : null
@@ -212,7 +222,7 @@ export default function CrossoversPage() {
     }
   }
 
-  const selectRangeThread = (thread: Thread | null) => {
+  const selectRangeThread = (thread: ThreadListItem | null) => {
     setRangeThread(thread)
     setRangeSelection(null)
   }

@@ -8,6 +8,7 @@ const mockApiGet = vi.fn()
 const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
 const mockGetAccessToken = vi.fn<() => string | null>(() => 'test-token')
+const mockReadStoredAccessToken = vi.fn<() => string | null>(() => null)
 
 const unauthenticatedError = () => Object.assign(new Error('unauthenticated'), {
   isAxiosError: true,
@@ -32,6 +33,7 @@ vi.mock('../services/api', () => {
     setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) => mockSetAccessToken(...args),
     clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) => mockClearAccessToken(...args),
     getAccessToken: () => mockGetAccessToken(),
+    readStoredAccessToken: () => mockReadStoredAccessToken(),
     refreshSession: vi.fn().mockRejectedValue(Object.assign(new Error('unauthenticated'), {
       isAxiosError: true,
       response: { status: 401 },
@@ -40,6 +42,9 @@ vi.mock('../services/api', () => {
   }
 })
 
+vi.mock('../pages/LandingPage', () => ({
+  default: () => <div data-testid="landing-page">Landing</div>,
+}))
 vi.mock('../pages/LoginPage', () => ({
   default: () => <div data-testid="login-page">Welcome Back</div>,
 }))
@@ -128,10 +133,10 @@ test('logs in successfully and logs out without BroadcastChannel support', async
   else vi.unstubAllGlobals()
 })
 
-test('mounts the application shell', async () => {
+test('mounts the application shell with landing page for unauthenticated users', async () => {
   mockApiGet.mockRejectedValue(unauthenticatedError())
   render(<App />)
-  await waitFor(() => expect(screen.getByTestId('login-page')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByTestId('landing-page')).toBeInTheDocument())
 })
 
 test('ignores an auth response that arrives after the provider unmounts', async () => {
@@ -217,8 +222,10 @@ test('broadcasts logout events and closes the auth channel', async () => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   renderWithAuth('/')
   await waitFor(() => expect(authContextValue?.isAuthenticated).toBe(true))
+  // SAFETY: the handler reads only data.type, which is the field the test sets
   act(() => channel?.onmessage?.({ data: { type: 'other' } } as MessageEvent))
   expect(authContextValue?.isAuthenticated).toBe(true)
+  // SAFETY: the handler reads only data.type, which is the field the test sets
   act(() => channel?.onmessage?.({ data: { type: 'logout' } } as MessageEvent))
   expect(authContextValue?.isAuthenticated).toBe(false)
   act(() => authContextValue?.logout())
@@ -233,26 +240,46 @@ describe('route guards', () => {
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
     mockApiGet.mockRejectedValue(unauthenticatedError())
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
-  test('redirects unauthenticated users to /login when accessing protected routes', async () => {
+  test('shows landing page for unauthenticated users at root', async () => {
     renderWithAuth('/')
 
     await waitFor(() => {
-      expect(screen.getByTestId('login-page')).toBeInTheDocument()
+      expect(screen.getByTestId('landing-page')).toBeInTheDocument()
     })
   })
 
-  test('allows authenticated users to access protected routes', async () => {
+  test('allows authenticated users to land on RollPage at root route', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
-      'fake-token'
+    window.__COMIC_PILE_ACCESS_TOKEN = 'fake-token'
     renderWithAuth('/')
 
     await waitFor(() => {
-      expect(screen.queryByTestId('login-page')).not.toBeInTheDocument()
+      expect(screen.getByTestId('roll-page')).toBeInTheDocument()
     })
+    expect(screen.queryByTestId('landing-page')).not.toBeInTheDocument()
+  })
+
+  test('keeps the authenticated shell at root while auth is degraded instead of showing the landing page', async () => {
+    // SAFETY: the auth provider reads only response.status from this rejection
+    mockApiGet.mockRejectedValue(Object.assign(new Error('service unavailable'), {
+      isAxiosError: true,
+      response: { status: 503 },
+    }))
+    window.__COMIC_PILE_ACCESS_TOKEN = 'fake-token'
+    renderWithAuth('/')
+
+    await waitFor(() => {
+      expect(authContextValue?.authState.status).toBe('service_unavailable')
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('degraded-service-state')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('roll-page')).toBeInTheDocument()
+    expect(screen.queryByTestId('landing-page')).not.toBeInTheDocument()
   })
 
   test('allows unauthenticated users to access /login', async () => {
@@ -275,8 +302,7 @@ describe('route guards', () => {
 
   test('redirects authenticated users from /login to home', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
-      'fake-token'
+    window.__COMIC_PILE_ACCESS_TOKEN = 'fake-token'
     renderWithAuth('/login')
 
     await waitFor(() => {
@@ -286,8 +312,7 @@ describe('route guards', () => {
 
   test('redirects authenticated users from /register to home', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
-      'fake-token'
+    window.__COMIC_PILE_ACCESS_TOKEN = 'fake-token'
     renderWithAuth('/register')
 
     await waitFor(() => {
@@ -303,6 +328,7 @@ describe('auth state race condition regression', () => {
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
     mockApiGet.mockRejectedValue(unauthenticatedError())
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
@@ -367,6 +393,7 @@ describe('auth-loading shell handoff (issue #1245)', () => {
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
     mockGetAccessToken.mockReturnValue('test-token')
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
@@ -418,6 +445,7 @@ describe('anonymous no-token probe suppression', () => {
     mockGetAccessToken.mockReturnValue(null)
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
     delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
@@ -426,27 +454,35 @@ describe('anonymous no-token probe suppression', () => {
   })
 
   test('anonymous user does not call /auth/me when no token exists', async () => {
-    renderWithAuth('/login')
+    // The auth provider decides whether to probe /auth/me from
+    // window.location.pathname, so align the global with the MemoryRouter entry.
+    const originalPath = window.location.pathname
+    window.history.replaceState({}, '', '/login')
+    try {
+      renderWithAuth('/login')
 
-    await waitFor(() => {
-      expect(screen.getByTestId('login-page')).toBeInTheDocument()
-    })
-    expect(mockApiGet).not.toHaveBeenCalledWith('/v1/auth/me', expect.anything())
+      await waitFor(() => {
+        expect(screen.getByTestId('login-page')).toBeInTheDocument()
+      })
+      expect(mockApiGet).not.toHaveBeenCalledWith('/v1/auth/me', expect.anything())
+    } finally {
+      window.history.replaceState({}, '', originalPath || '/')
+    }
   })
 
-  test('anonymous user falls through correctly to login page from protected route', async () => {
+  test('unauthenticated users see landing page at root route', async () => {
     mockApiGet.mockRejectedValue(unauthenticatedError())
     renderWithAuth('/')
 
     await waitFor(() => {
-      expect(screen.getByTestId('login-page')).toBeInTheDocument()
+      expect(screen.getByTestId('landing-page')).toBeInTheDocument()
     })
+    expect(screen.queryByTestId('roll-page')).not.toBeInTheDocument()
   })
 
   test('SSR token injection still triggers /auth/me when in-memory token is null', async () => {
     mockApiGet.mockResolvedValue({ username: 'ssruser', email: 'ssr@test.com' })
-    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
-      'ssr-token'
+    window.__COMIC_PILE_ACCESS_TOKEN = 'ssr-token'
     renderWithAuth('/')
 
     await waitFor(() => {

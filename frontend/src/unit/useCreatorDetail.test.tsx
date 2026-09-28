@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCreatorDetail } from '../hooks/useCreatorDetail'
 import { creatorsApi as realCreatorsApi } from '../services/api'
-import type { CreatorDetailResponse } from '../services/api'
+import type { CreatorDetailResponse } from '../services/api-creators'
 
 const getDetail = vi.fn<typeof realCreatorsApi.getDetail>()
 const detailApi: Pick<typeof realCreatorsApi, 'getDetail'> = { getDetail }

@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import Modal from './Modal'
-import {
-  comicVineApi,
-  type ComicVineSeriesResult,
-  type ComicVineIssueCandidate,
-  type ComicVineResolveResponse,
-  type ComicVineResolvedIssue,
-} from '../services/api'
+import { comicVineApi } from '../services/api'
+import type {
+  ComicVineSeriesResult,
+  ComicVineIssueCandidate,
+  ComicVineResolveResponse,
+  ComicVineResolvedIssue,
+} from '../services/api-comicvine'
 import ImageWithLoading from './ImageWithLoading'
 import { optimizedImageSrcSet, optimizedImageUrl } from '../services/imageDelivery'
 

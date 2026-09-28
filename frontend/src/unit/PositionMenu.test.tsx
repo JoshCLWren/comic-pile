@@ -22,6 +22,7 @@ const mockThread = {
   reading_progress: null,
   blocking_reasons: [],
   is_blocked: false,
+  last_activity_at: null,
   created_at: '2024-01-01T00:00:00Z',
 }
 
@@ -107,6 +108,7 @@ describe('PositionMenu', () => {
     )
 
     const trigger = screen.getByRole('button', { name: /series actions/i })
+    // SAFETY: the stub returns the partial shape the component reads
     vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
       bottom: 100,
       right: 200,
@@ -117,6 +119,7 @@ describe('PositionMenu', () => {
     expect(menu).toHaveStyle({ top: '104px' })
     expect(menu).toHaveStyle({ right: '812px' })
 
+    // SAFETY: the stub returns the partial shape the component reads
     vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
       bottom: 160,
       right: 300,
@@ -143,6 +146,7 @@ describe('PositionMenu', () => {
       />
     )
     const trigger = screen.getByRole('button', { name: /series actions/i })
+    // SAFETY: the stub returns the partial shape the component reads
     vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
       top: 700,
       bottom: 740,

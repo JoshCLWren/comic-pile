@@ -5,13 +5,38 @@ import {
 } from '../services/api-dependency-groups'
 import { threadsApi } from '../services/api-threads'
 import { issuesApi, type IssueListParams } from '../services/api-issues'
-import type { Issue, Thread, ThreadListResponse } from '../types'
+import type { Issue, ThreadListItem, ThreadListResponse } from '../types'
 import { queryKeys } from '../query/queryKeys'
 import { invalidateAfterCrossoverMutation } from '../query/cacheEffects'
 
 type PositionedIssue = Issue & { position: number }
 
-async function fetchAllIssues(threadId: number): Promise<PositionedIssue[]> {
+/** Crossover group service surface the Crossovers page depends on. */
+export type CrossoverGroupsApi = Pick<
+  typeof dependencyGroupsApi,
+  'list' | 'get' | 'create' | 'rename' | 'delete' | 'addMember' | 'addIssueRange' | 'removeMember'
+>
+
+/** Thread service surface the Crossovers page depends on. */
+export type CrossoverThreadsApi = Pick<typeof threadsApi, 'list'>
+
+/** Issue service surface the Crossovers page depends on. */
+export type CrossoverIssuesApi = Pick<typeof issuesApi, 'list'>
+
+/**
+ * Injectable service seams for the Crossovers page.
+ *
+ * Tests pass faithful in-memory implementations through the page's `api` prop
+ * instead of replacing the service modules themselves, so the page exercises
+ * the real query and mutation wiring against a controllable transport.
+ */
+export interface CrossoverApiDeps {
+  groups?: CrossoverGroupsApi
+  threads?: CrossoverThreadsApi
+  issues?: CrossoverIssuesApi
+}
+
+async function fetchAllIssues(threadId: number, issueApi: CrossoverIssuesApi = issuesApi): Promise<PositionedIssue[]> {
   const issues: PositionedIssue[] = []
   const seenPageTokens = new Set<string>()
   let nextPageToken: string | null = null
@@ -21,7 +46,7 @@ async function fetchAllIssues(threadId: number): Promise<PositionedIssue[]> {
     if (nextPageToken) {
       params.page_token = nextPageToken
     }
-    const data = await issuesApi.list(threadId, params)
+    const data = await issueApi.list(threadId, params)
     // SAFETY: the issues endpoint returns position-ordered issues; the integer-position check below enforces the contract.
     const pageIssues = data.issues as PositionedIssue[]
     if (pageIssues.some((issue) => !Number.isInteger(issue.position) || issue.position < 1)) {
@@ -34,13 +59,13 @@ async function fetchAllIssues(threadId: number): Promise<PositionedIssue[]> {
   }
 }
 
-async function fetchAllThreads(): Promise<Thread[]> {
-  const threads: Thread[] = []
+async function fetchAllThreads(threadApi: CrossoverThreadsApi = threadsApi): Promise<ThreadListItem[]> {
+  const threads: ThreadListItem[] = []
   const seenPageTokens = new Set<string>()
   let nextPageToken: string | null = null
 
   while (true) {
-    const data: ThreadListResponse = await threadsApi.list({ page_size: 100 }, nextPageToken)
+    const data: ThreadListResponse = await threadApi.list({ page_size: 100 }, nextPageToken)
     threads.push(...data.threads)
     if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) return threads
     seenPageTokens.add(data.next_page_token)
@@ -48,12 +73,13 @@ async function fetchAllThreads(): Promise<Thread[]> {
   }
 }
 
-export function useCrossoverGroupsList() {
+export function useCrossoverGroupsList(deps: CrossoverApiDeps = {}) {
+  const groups = deps.groups ?? dependencyGroupsApi
   return useQuery({
     queryKey: queryKeys.crossover.list(),
     queryFn: async () => {
       try {
-        return await dependencyGroupsApi.list()
+        return await groups.list()
       } catch (err) {
         throw err instanceof Error ? err : new Error('Unable to load crossovers.')
       }
@@ -62,12 +88,12 @@ export function useCrossoverGroupsList() {
   })
 }
 
-export function useAllThreads() {
+export function useAllThreads(deps: CrossoverApiDeps = {}) {
   return useQuery({
     queryKey: queryKeys.thread.all,
     queryFn: async () => {
       try {
-        return await fetchAllThreads()
+        return await fetchAllThreads(deps.threads ?? threadsApi)
       } catch (err) {
         throw err instanceof Error ? err : new Error('Unable to load comics for selection.')
       }
@@ -76,12 +102,13 @@ export function useAllThreads() {
   })
 }
 
-export function useCrossoverIssuesForRange(threadId: number | null) {
+export function useCrossoverIssuesForRange(threadId: number | null, deps: CrossoverApiDeps = {}) {
+  const issueApi = deps.issues ?? issuesApi
   return useQuery({
     queryKey: threadId != null ? queryKeys.crossover.issues(threadId) : queryKeys.crossover.issues(-1),
     queryFn: async () => {
       try {
-        return await fetchAllIssues(threadId!)
+        return await fetchAllIssues(threadId!, issueApi)
       } catch (err) {
         throw err instanceof Error ? err : new Error('Unable to load issues for this series.')
       }
@@ -91,42 +118,46 @@ export function useCrossoverIssuesForRange(threadId: number | null) {
   })
 }
 
-export function useCreateCrossoverGroup() {
+export function useCreateCrossoverGroup(deps: CrossoverApiDeps = {}) {
   const client = useQueryClient()
+  const groups = deps.groups ?? dependencyGroupsApi
 
   return useMutation({
-    mutationFn: (name: string) => dependencyGroupsApi.create(name),
+    mutationFn: (name: string) => groups.create(name),
     onSuccess: async () => {
       await invalidateAfterCrossoverMutation(client)
     },
   })
 }
 
-export function useRenameCrossoverGroup() {
+export function useRenameCrossoverGroup(deps: CrossoverApiDeps = {}) {
   const client = useQueryClient()
+  const groups = deps.groups ?? dependencyGroupsApi
 
   return useMutation({
     mutationFn: ({ groupId, name }: { groupId: number; name: string }) =>
-      dependencyGroupsApi.rename(groupId, name),
+      groups.rename(groupId, name),
     onSuccess: async () => {
       await invalidateAfterCrossoverMutation(client)
     },
   })
 }
 
-export function useDeleteCrossoverGroup() {
+export function useDeleteCrossoverGroup(deps: CrossoverApiDeps = {}) {
   const client = useQueryClient()
+  const groups = deps.groups ?? dependencyGroupsApi
 
   return useMutation({
-    mutationFn: (groupId: number) => dependencyGroupsApi.delete(groupId),
+    mutationFn: (groupId: number) => groups.delete(groupId),
     onSuccess: async () => {
       await invalidateAfterCrossoverMutation(client)
     },
   })
 }
 
-export function useAddCrossoverMember() {
+export function useAddCrossoverMember(deps: CrossoverApiDeps = {}) {
   const client = useQueryClient()
+  const groups = deps.groups ?? dependencyGroupsApi
 
   return useMutation({
     mutationFn: ({
@@ -135,15 +166,16 @@ export function useAddCrossoverMember() {
     }: {
       groupId: number
       target: DependencyGroupMemberTarget
-    }) => dependencyGroupsApi.addMember(groupId, target),
+    }) => groups.addMember(groupId, target),
     onSuccess: async () => {
       await invalidateAfterCrossoverMutation(client)
     },
   })
 }
 
-export function useAddCrossoverIssueRange() {
+export function useAddCrossoverIssueRange(deps: CrossoverApiDeps = {}) {
   const client = useQueryClient()
+  const groups = deps.groups ?? dependencyGroupsApi
 
   return useMutation({
     mutationFn: ({
@@ -156,19 +188,20 @@ export function useAddCrossoverIssueRange() {
       threadId: number
       startPosition: number
       endPosition: number
-    }) => dependencyGroupsApi.addIssueRange(groupId, threadId, startPosition, endPosition),
+    }) => groups.addIssueRange(groupId, threadId, startPosition, endPosition),
     onSuccess: async () => {
       await invalidateAfterCrossoverMutation(client)
     },
   })
 }
 
-export function useRemoveCrossoverMember() {
+export function useRemoveCrossoverMember(deps: CrossoverApiDeps = {}) {
   const client = useQueryClient()
+  const groups = deps.groups ?? dependencyGroupsApi
 
   return useMutation({
     mutationFn: ({ groupId, memberId }: { groupId: number; memberId: number }) =>
-      dependencyGroupsApi.removeMember(groupId, memberId),
+      groups.removeMember(groupId, memberId),
     onSuccess: async () => {
       await invalidateAfterCrossoverMutation(client)
     },

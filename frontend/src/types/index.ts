@@ -1,3 +1,5 @@
+import type { components } from '../generated/openapi'
+
 /**
  * Represents a thread in list view (QueuePage).
  *
@@ -6,57 +8,12 @@
  * last_rating, or is_test to reduce payload
  * size for large lists.
  */
-export interface ThreadListItem {
-  id: number;
-  title: string;
-  format: string;
-  issues_remaining: number;
-  total_issues: number | null;
-  next_unread_issue_number?: string | null;
-  queue_position: number;
-  status: string;
-  is_blocked: boolean;
-  blocking_reasons: string[];
-  notes?: string | null;
-  last_activity_at?: string | null;
-  created_at: string;
-}
+export type ThreadListItem = components['schemas']['QueueThreadListItem']
 
 /**
  * Represents a comic thread/series
  */
-export interface Thread {
-  /** Unique identifier for the thread */
-  id: number;
-  /** Title of the thread */
-  title: string;
-  /** Format of the comic (e.g., 'issue', 'trade', 'omnibus') */
-  format: string;
-  /** Number of issues remaining to read */
-  issues_remaining: number;
-  /** Total number of issues in the thread (nullable for future use) */
-  total_issues: number | null;
-  /** ID of the next unread issue (nullable if all read, omitted in list views) */
-  next_unread_issue_id?: number | null;
-  /** Issue number of the next unread issue */
-  next_unread_issue_number?: string | null;
-  /** Reading progress percentage (0-100, nullable, omitted in list views) */
-  reading_progress?: string | null;
-  /** Position in the reading queue */
-  queue_position: number;
-  /** Current status (e.g., 'active', 'completed', 'pending') */
-  status: string;
-  /** Whether the thread is blocked by dependencies */
-  is_blocked: boolean;
-  /** List of reasons why the thread is blocked */
-  blocking_reasons: string[];
-  /** Optional free-form notes */
-  notes?: string | null;
-  /** Timestamp of last activity when available */
-  last_activity_at?: string | null;
-  /** ISO 8601 timestamp when the thread was created */
-  created_at: string;
-}
+export type Thread = components['schemas']['ThreadResponse']
 
 export interface AuthUser {
   id?: number;
@@ -320,16 +277,7 @@ export interface AnalyticsMetrics {
   top_rated_threads: TopRatedThread[];
 }
 
-export interface ThreadListResponse {
-  threads: Thread[];
-  next_page_token: string | null;
-  /**
-   * Authoritative whole-queue active count, independent of loaded page/search/sort.
-   * Optional so older cached responses and test fixtures degrade to the loaded
-   * slice via the caller's fallback (issue #2568).
-   */
-  active_count?: number;
-}
+export type ThreadListResponse = components['schemas']['QueueThreadListResponse']
 
 export interface SessionListResponse {
   sessions: SessionSummary[];

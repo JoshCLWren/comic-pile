@@ -1,4 +1,4 @@
-import api from './api'
+import { defaultHttpClient, type HttpClient } from './httpClient'
 
 export type ContinuityPlanNodeType = 'issue' | 'crossover' | 'thread'
 
@@ -71,15 +71,25 @@ export interface ContinuityPlanListItem {
 }
 
 
-export const continuityPlansApi = {
-  list: (): Promise<ContinuityPlanListItem[]> =>
-    api.get<ContinuityPlanListItem[]>('/v1/continuity-plans/'),
-  create: (payload: ContinuityPlanWrite) =>
-    api.post<ContinuityPlan, ContinuityPlanWrite>('/v1/continuity-plans/', payload),
-  get: (planId: number) =>
-    api.get<ContinuityPlan>(`/v1/continuity-plans/${planId}`),
-  update: (planId: number, payload: ContinuityPlanWrite) =>
-    api.put<ContinuityPlan, ContinuityPlanWrite>(`/v1/continuity-plans/${planId}`, payload),
-  delete: (planId: number) =>
-    api.delete<void>(`/v1/continuity-plans/${planId}`),
+/**
+ * Build the continuity-plan service bound to an HTTP client.
+ *
+ * @param client - HTTP transport used for every continuity-plan request.
+ * @returns The continuity plans API bound to `client`.
+ */
+export function createContinuityPlansApi(client: HttpClient) {
+  return {
+    list: (): Promise<ContinuityPlanListItem[]> =>
+      client.get<ContinuityPlanListItem[]>('/v1/continuity-plans/'),
+    create: (payload: ContinuityPlanWrite) =>
+      client.post<ContinuityPlan, ContinuityPlanWrite>('/v1/continuity-plans/', payload),
+    get: (planId: number) =>
+      client.get<ContinuityPlan>(`/v1/continuity-plans/${planId}`),
+    update: (planId: number, payload: ContinuityPlanWrite) =>
+      client.put<ContinuityPlan, ContinuityPlanWrite>(`/v1/continuity-plans/${planId}`, payload),
+    delete: (planId: number) =>
+      client.delete<void>(`/v1/continuity-plans/${planId}`),
+  }
 }
+
+export const continuityPlansApi = createContinuityPlansApi(defaultHttpClient())

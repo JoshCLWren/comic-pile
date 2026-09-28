@@ -1,21 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { Thread } from '../types'
+import type { ThreadListItem } from '../types'
 import { usePositionMenu } from '../contexts/usePositionMenu'
 import OverlayPortal from './OverlayPortal'
 
 interface PositionMenuProps {
-  thread: Thread
+  thread: ThreadListItem
   onMoveToFront: (threadId: number) => void
-  onReposition: (thread: Thread) => void
+  onReposition: (thread: ThreadListItem) => void
   onMoveToBack: (threadId: number) => void
-  onEdit: (thread: Thread) => void
-  onDependencies: (thread: Thread) => void
+  onEdit: (thread: ThreadListItem) => void
+  onDependencies: (thread: ThreadListItem) => void
   // called when the user selects the Delete action from the menu
   onDelete: (threadId: number) => void
   snoozeIcon?: string
   snoozeLabel?: string
   snoozeDisabled?: boolean
-  onSnooze?: (thread: Thread) => void
+  onSnooze?: (thread: ThreadListItem) => void
 }
 
 export default function PositionMenu({

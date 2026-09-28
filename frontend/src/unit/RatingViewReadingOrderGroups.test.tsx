@@ -1,31 +1,21 @@
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
+import type { ReactElement, ReactNode } from 'react'
+import { createToastSpy } from './toastSpy'
+import { ToastContextSpy } from './toastTestHarness'
+import { createRouterHarness } from './routerTestHarness'
 import { RatingView } from '../pages/RollPage/components/RatingView'
 import type { RatingViewData } from '../pages/RollPage/useRatingView'
-vi.mock('../contexts/useToast', () => ({ useToast: () => ({ toasts: [], showToast: vi.fn(), removeToast: vi.fn() }) }))
 
-vi.mock('../components/LazyDice3D', () => ({ default: () => <div data-testid="dice" /> }))
-vi.mock('../components/Tooltip', () => ({
-  default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}))
-vi.mock('../components/IssueCorrectionDialog', () => ({ default: () => null }))
-vi.mock('../hooks/useDependencyGroups', () => ({
-  useDependencyGroups: (threadId: number | null | undefined) => ({
-    groups: threadId === 42 ? [{ id: 7, name: 'Cosmic bridge' }] : [],
-    isLoading: false,
-    error: null,
-  }),
-}))
-vi.mock('../hooks/useRollBootstrap', () => ({
-  useRollBootstrap: () => ({
-    data: null,
-    isPending: false,
-    isError: false,
-    error: null,
-    refetch: vi.fn(),
-  }),
-}))
+const toast = createToastSpy()
+
+function ToastWrapper({ children }: { children: ReactNode }) {
+  return <ToastContextSpy value={toast}>{children}</ToastContextSpy>
+}
+
+function renderWithToast(ui: ReactElement) {
+  return render(ui, { wrapper: ToastWrapper })
+}
 
 vi.mock('../hooks/useReaderContext', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../hooks/useReaderContext')>()
@@ -86,10 +76,11 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
 }
 
 function renderRatingView(overrides: Partial<RatingViewData> = {}) {
-  return render(
-    <MemoryRouter>
+  const { wrapper: RouterWrapper } = createRouterHarness();
+  return renderWithToast(
+    <RouterWrapper>
       <RatingView data={makeRatingViewData(overrides)} />
-    </MemoryRouter>,
+    </RouterWrapper>,
   )
 }
 

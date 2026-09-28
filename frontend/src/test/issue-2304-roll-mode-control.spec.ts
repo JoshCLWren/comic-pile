@@ -47,10 +47,13 @@ async function headerControlSnapshot(page: Page): Promise<{
       (button) => getComputedStyle(button).backgroundColor === primaryActionRgb,
     )
 
+    // SAFETY: the selector matches only the control the component rendered
     const pickManually = document.querySelector('[data-roll-primary-action="pick-manually"]') as HTMLButtonElement | null
+    // SAFETY: the role=tab selector matches only the tab buttons this component renders
     const dieControl = Array.from(document.querySelectorAll('header button')).find(
       (button) => button.getAttribute('aria-label')?.startsWith('Current die d') ?? false,
     ) as HTMLButtonElement | null
+    // SAFETY: the role=tab selector matches only the tab buttons this component renders
     const auto = Array.from(document.querySelectorAll('header button')).find(
       (button) => button.textContent?.trim() === 'Auto',
     ) as HTMLButtonElement | null
@@ -131,6 +134,7 @@ test.describe('Roll-mode control state grammar at phone width (#2304)', () => {
     await expect(autoButton).toHaveAttribute('aria-pressed', 'true')
 
     // Pin die d8 on the server, mirroring the manual-pick dialog flow.
+    // SAFETY: the test reads only the csrf token from the response body
     const csrf = (await (await page.request.get('/api/auth/csrf', {
       headers: { Authorization: `Bearer ${await getAuthToken(page)}` },
     })).json()) as { csrf_token?: string }
