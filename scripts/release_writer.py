@@ -713,7 +713,7 @@ def _fetch_issue(
     """
     owner, name = _repository_parts(repository)
     url = f"{_GITHUB_API_BASE}/repos/{owner}/{name}/issues/{number}"
-    result = _github_read(url) if best_effort else _github_request(url, missing_ok=True)
+    result = _github_read(url) if best_effort else _github_request(url)
     if result is None:
         return None
     if not isinstance(result, dict):
