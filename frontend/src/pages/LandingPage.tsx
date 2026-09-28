@@ -60,7 +60,7 @@ export default function LandingPage() {
         <div className="text-center space-y-4">
           <Link
             to="/register"
-            className="w-full md:w-auto h-12 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] px-8 inline-block"
+            className="w-full md:w-auto h-12 bg-[var(--theme-primary-action)] hover:bg-[var(--theme-primary-action-hover)] rounded-xl text-sm font-bold text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--theme-focus-ring)] px-8 inline-block"
           >
             Sign Up Free
           </Link>

@@ -23,7 +23,7 @@ export default function HistoryPage() {
           <a
             href="/admin/export/summary/"
             download
-className="py-1 text-sm font-medium text-stone-500 hover:text-stone-300 underline decoration-dotted underline-offset-4"
+            className="py-1 text-sm font-medium text-stone-500 hover:text-stone-300 underline decoration-dotted underline-offset-4"
           >
             Export Summary
           </a>
