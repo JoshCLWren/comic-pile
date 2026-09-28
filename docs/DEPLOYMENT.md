@@ -66,6 +66,40 @@ The maintained hosting target is Vercel. Configure the production environment va
 
 After deployment, `GET /api/v1/health/dependencies` can be used to verify the application's database dependency independently from the lightweight liveness endpoint.
 
+### Password-reset outbound email (Resend, issue #2778)
+
+Password-reset links are delivered through Resend behind a provider-neutral
+mailer boundary. Production delivery requires three settings (see
+[`.env.example`](../.env.example)):
+
+```dotenv
+RESEND_API_KEY=re_...
+PASSWORD_RESET_SENDER=Comic Pile <no-reply@example.com>
+PASSWORD_RESET_ORIGIN=https://your-comic-pile.example
+# Optional: PASSWORD_RESET_PATH=/reset-password
+```
+
+Notes:
+
+- `RESEND_API_KEY` is already configured in the Vercel production
+  environment. Never copy the secret value into GitHub, logs, source, or
+  issue comments.
+- `PASSWORD_RESET_SENDER` must use a domain verified in the Resend
+  dashboard. Verification is an owner-controlled DNS action: add the
+  SPF/DKIM TXT records Resend shows for the sending domain. Until the
+  domain is verified, Resend rejects the message; the app logs a
+  `password_reset_delivery_failed` event and still returns the
+  enumeration-safe acknowledgement, so requesters cannot distinguish the
+  outage from ordinary behavior.
+- `PASSWORD_RESET_ORIGIN` must be the public origin users open in a
+  browser; the reset token is appended as an encoded `?token=` query
+  parameter on `PASSWORD_RESET_PATH` at the delivery boundary only.
+- When any setting is missing (local development, tests), the app uses a
+  deterministic fake mailer and records messages in-memory instead of
+  sending. Automated coverage in `tests/test_password_reset_mailer.py`
+  asserts link construction, expiry copy, digest-only storage, enumeration
+  safety under provider failure, and that the raw token is never logged.
+
 ### How ComicPile uses Neon
 
 Neon is not only an incidental development database in this project:

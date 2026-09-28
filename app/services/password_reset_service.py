@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 
@@ -17,7 +18,13 @@ from app.repositories.password_reset_token_repository import (
 )
 from app.repositories.session_repository import delete_all_sessions_for_user
 from app.repositories.user_repository import get_user_by_email, get_user_by_id
+from app.services.password_reset_mailer import (
+    PasswordResetDeliveryError,
+    get_password_reset_mailer,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 TOKEN_EXPIRY_MINUTES = 30
 
@@ -67,6 +74,48 @@ async def request_forgot_password(
         reset_token=raw_token,
         expires_at=expires_at,
     )
+
+
+async def handle_forgot_password_request(db: AsyncSession, email: str) -> None:
+    """Run the full enumeration-safe forgot-password flow including delivery.
+
+    This is the router's single service entry point (house layering rule): it
+    generates the reset token via :func:`request_forgot_password` and then
+    delivers the reset message through the provider-neutral mailer boundary.
+    The raw token is passed only to the mailer so it can construct the link;
+    it is never persisted or logged here.
+
+    A mail outage neither leaks account existence nor corrupts token state:
+    the token row is already committed before delivery is attempted, and any
+    provider failure is logged operationally (status only, no token, no leak
+    to the caller).
+
+    Args:
+        db: Async database session.
+        email: Recovery email from the request body.
+    """
+    handoff = await request_forgot_password(db, email)
+    if handoff is None:
+        # Unknown email: identical observable behavior, no delivery attempt.
+        return
+    mailer = get_password_reset_mailer()
+    try:
+        await mailer.send_password_reset(
+            recipient_email=handoff.recipient_email,
+            username=handoff.user_username,
+            reset_token=handoff.reset_token,
+            expires_at=handoff.expires_at,
+        )
+    except PasswordResetDeliveryError:
+        logger.warning(
+            "Password reset email delivery failed.",
+            extra={"event": "password_reset_delivery_failed"},
+        )
+    except Exception:
+        logger.warning(
+            "Password reset email delivery failed unexpectedly.",
+            extra={"event": "password_reset_delivery_failed"},
+        )
 
 
 async def complete_reset(
