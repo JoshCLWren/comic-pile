@@ -14,7 +14,7 @@ export default function LandingPage() {
           <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[var(--theme-comic-accent)]">
             Comic Pile · Roll to read. Rotate your stack.
           </p>
-          <h1 id="hero-heading" className="text-4xl font-black tracking-tighter text-[var(--theme-text-primary)]">
+          <h1 id="hero-heading" className="text-4xl font-black tracking-tighter text-glow text-[var(--theme-text-primary)]">
             A dice-driven reading queue for your comic collection.
           </h1>
           <p className="text-base text-[var(--theme-text-muted)] max-w-2xl mx-auto leading-relaxed">
@@ -34,26 +34,30 @@ export default function LandingPage() {
               <CubeIcon className="h-8 w-8 text-[var(--theme-comic-accent)]" aria-hidden="true" />
               <h3 className="text-base font-bold text-[var(--theme-text-primary)]">1. Build your queue</h3>
               <p className="text-sm text-[var(--theme-text-muted)] leading-relaxed">
-                Add each series you want to read. Set the format (single issues, trades, omnibuses),
-                how many issues remain, and any notes. Threads sit in your queue until rolled.
+                Add each series you want to read and pick its format — comic, manga, trade
+                paperback, graphic novel, digital, or your own. Set how many issues remain and
+                leave yourself notes. Every thread keeps its own position, ratings, and progress.
               </p>
             </article>
             <article className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-3">
               <QueueListIcon className="h-8 w-8 text-[var(--theme-continuity-accent)]" aria-hidden="true" />
               <h3 className="text-base font-bold text-[var(--theme-text-primary)]">2. Roll for your next read</h3>
               <p className="text-sm text-[var(--theme-text-muted)] leading-relaxed">
-                Hit Roll. Comic Pile weights your queue by issues remaining, your personal ratings,
-                continuity dependencies, and active sessions — then picks one. No algorithmic feed;
-                just your stack, shuffled with intent.
+                Hit Roll and the die draws from the top of your queue — the die size is the pool,
+                so a smaller die means fewer, more deliberate picks. Rating a series 4.0 or higher
+                moves it to the front of the queue and steps the die down; rating it lower slides
+                it past the next roll and steps the die up. Ask for a light issue or a deep one and
+                the draw is biased to match.
               </p>
             </article>
             <article className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-3">
               <ChartBarIcon className="h-8 w-8 text-[var(--theme-personal-accent)]" aria-hidden="true" />
               <h3 className="text-base font-bold text-[var(--theme-text-primary)]">3. Read, rate, repeat</h3>
               <p className="text-sm text-[var(--theme-text-muted)] leading-relaxed">
-                The rolled thread opens to your current issue. Read, then rate 0.5–5.0. Ratings
-                feed back into future rolls. Progress, continuity links, and session history all
-                persist — your place is never lost.
+                The roll lands on a thread with its reading progress and the next issue already
+                loaded. Read it, then rate it 0.5–5.0. Your rating changes where the thread sits
+                tomorrow, and every session, rating, and continuity link stays stored — your place
+                is never lost.
               </p>
             </article>
           </div>
@@ -68,29 +72,32 @@ export default function LandingPage() {
             <div className="space-y-1">
               <dt className="text-sm font-bold text-[var(--theme-text-primary)]">Weighted by your history</dt>
               <dd className="text-sm text-[var(--theme-text-muted)]">
-                Higher-rated threads roll more often. Actively reading a crossover? Its threads
-                surface first. The queue learns from what you actually enjoy.
+                A thread you rated 4.0 or higher climbs to the front of the queue and shrinks your
+                die, so the good stuff comes around more often. Rate it lower and it moves past the
+                next roll. No popularity feed, no trending list — just what you already rated.
               </dd>
             </div>
             <div className="space-y-1">
               <dt className="text-sm font-bold text-[var(--theme-text-primary)]">Continuity-aware</dt>
               <dd className="text-sm text-[var(--theme-text-muted)]">
-                Link crossover events and reading orders. When you roll a tie-in, its main event
-                and sibling threads get a boost — so you read in the order the story demands.
+                Mark the issue a thread depends on, or link a crossover event and its reading order.
+                Until you have read what comes first, the dependent thread is held out of the pool
+                entirely — story order beats the dice.
               </dd>
             </div>
             <div className="space-y-1">
               <dt className="text-sm font-bold text-[var(--theme-text-primary)]">No external dependencies</dt>
               <dd className="text-sm text-[var(--theme-text-muted)]">
-                Self-hosted, MIT-licensed, PostgreSQL-backed. Your collection lives on your
-                hardware. No cloud sync, no accounts on our servers, no feature gating.
+                Self-hosted, MIT-licensed, PostgreSQL-backed. Your collection lives on your own
+                hardware, with no cloud sync and no account on someone else's server.
               </dd>
             </div>
             <div className="space-y-1">
               <dt className="text-sm font-bold text-[var(--theme-text-primary)]">Built for the long stack</dt>
               <dd className="text-sm text-[var(--theme-text-muted)]">
-                Hundreds of threads, multi-year runs, omnibuses split across formats — the
-                data model handles real collections, not happy-path demos.
+                Big collections and multi-year runs are the normal case, not the demo case. Queue
+                position, issues remaining, per-issue progress, dependencies, and session history
+                are all tracked per thread.
               </dd>
             </div>
           </dl>
@@ -106,7 +113,7 @@ export default function LandingPage() {
             Create your queue
           </Link>
           <p className="text-sm text-[var(--theme-text-muted)]">
-            {isReturning ? 'Welcome back' : 'New here?'}{' '}
+            {isReturning ? 'Welcome back' : 'Already have an account?'}{' '}
             <Link
               to="/login"
               className="text-[var(--theme-primary-action)] hover:opacity-80 font-bold transition-opacity"
