@@ -38,15 +38,15 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
         <div className="surface-panel p-3 md:p-4">
           <div className="text-2xl md:text-3xl font-bold text-amber-500">{metrics.total_threads || 0}</div>
-          <div className="text-[10px] md:text-xs text-stone-400 uppercase tracking-widest mt-1">Total Threads</div>
+          <div className="text-xs md:text-xs text-stone-400 uppercase tracking-widest mt-1">Total Threads</div>
         </div>
         <div className="surface-panel p-3 md:p-4">
           <div className="text-2xl md:text-3xl font-bold text-amber-400">{metrics.active_threads || 0}</div>
-          <div className="text-[10px] md:text-xs text-stone-400 uppercase tracking-widest mt-1">Active Threads</div>
+          <div className="text-xs md:text-xs text-stone-400 uppercase tracking-widest mt-1">Active Threads</div>
         </div>
         <div className="surface-panel p-3 md:p-4">
           <div className="text-2xl md:text-3xl font-bold text-amber-300">{metrics.completed_threads || 0}</div>
-          <div className="text-[10px] md:text-xs text-stone-400 uppercase tracking-widest mt-1">Completed</div>
+          <div className="text-xs md:text-xs text-stone-400 uppercase tracking-widest mt-1">Completed</div>
         </div>
         <div className="surface-panel p-3 md:p-4">
           <div className="text-2xl md:text-3xl font-bold text-orange-400">
@@ -54,7 +54,7 @@ export default function AnalyticsPage() {
               ? `${metrics.completion_rate.toFixed(1)}%` 
               : 'N/A'}
           </div>
-          <div className="text-[10px] md:text-xs text-stone-400 uppercase tracking-widest mt-1">Completion Rate</div>
+          <div className="text-xs md:text-xs text-stone-400 uppercase tracking-widest mt-1">Completion Rate</div>
         </div>
         <div className="surface-panel p-3 md:p-4">
           <div className="text-2xl md:text-3xl font-bold text-amber-400">
@@ -62,7 +62,7 @@ export default function AnalyticsPage() {
               ? `${metrics.average_session_hours.toFixed(1)}h`
               : 'N/A'}
           </div>
-          <div className="text-[10px] md:text-xs text-stone-400 uppercase tracking-widest mt-1">Avg Session</div>
+          <div className="text-xs md:text-xs text-stone-400 uppercase tracking-widest mt-1">Avg Session</div>
         </div>
       </div>
 
@@ -75,26 +75,26 @@ export default function AnalyticsPage() {
               {metrics.recent_sessions.slice(0, 5).map((session) => (
                 <div key={session.id} className="bg-white/5 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-mono text-amber-500">Session #{session.id}</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 uppercase tracking-widest">
-                      Die {session.start_die}
-                    </span>
+                    <span className="text-xs font-mono text-amber-500">Session #{session.id}</span>
+<span className="text-xs px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 uppercase tracking-widest">
+                       Die {session.start_die}
+                     </span>
                   </div>
-                  <div className="flex items-center justify-between text-[10px]">
+                  <div className="flex items-center justify-between text-xs">
                     <span className="text-stone-400">Started:</span>
                     <span className="text-stone-300">{formatTime24(session.started_at)}</span>
                   </div>
                   {session.ended_at && (
-                    <div className="flex items-center justify-between text-[10px] mt-1">
+                    <div className="flex items-center justify-between text-xs mt-1">
                       <span className="text-stone-400">Ended:</span>
                       <span className="text-stone-300">{formatTime24(session.ended_at)}</span>
                     </div>
                   )}
                   {!session.ended_at && (
                     <div className="mt-1">
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 uppercase tracking-widest">
-                        Active
-                      </span>
+<span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 uppercase tracking-widest">
+                         Active
+                       </span>
                     </div>
                   )}
                 </div>
@@ -157,10 +157,10 @@ export default function AnalyticsPage() {
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-mono text-amber-500">#{thread.id}</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-stone-500/20 text-stone-300 uppercase tracking-widest">
-                    {thread.format || 'Unknown'}
-                  </span>
+                  <span className="text-xs font-mono text-amber-500">#{thread.id}</span>
+<span className="text-xs px-2 py-0.5 rounded bg-stone-500/20 text-stone-300 uppercase tracking-widest">
+                     {thread.format || 'Unknown'}
+                   </span>
                 </div>
               </div>
             ))}
