@@ -15,9 +15,9 @@
   position: relative;
   width: 100%;
   max-width: 32rem;
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
+  background: var(--theme-bg-panel);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--theme-border);
   border-radius: 0.75rem;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
 }
@@ -29,7 +29,7 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 1.5rem;
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--theme-border);
 }
 
 .migration-dialog__title {
@@ -100,7 +100,7 @@
   font-size: 0.875rem;
   color: var(--theme-text-primary);
   background: color-mix(in srgb, var(--theme-bg-page) 50%, transparent);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--theme-border);
   border-radius: 0.5rem;
   outline: none;
   transition: all 0.2s ease;
@@ -194,7 +194,7 @@
 
 .migration-dialog__btn--secondary {
   color: var(--theme-text-primary);
-  background: var(--glass-bg);
+  background: var(--theme-bg-panel);
 }
 
 .migration-dialog__btn--secondary:hover:not(:disabled) {
@@ -229,7 +229,7 @@
   max-width: 24rem;
   padding: 1.5rem;
   background: var(--theme-bg-page);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--theme-border);
   border-radius: 0.75rem;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
 }

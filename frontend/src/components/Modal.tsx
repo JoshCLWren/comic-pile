@@ -161,7 +161,7 @@ export default function Modal({
         style={{ zIndex: 60 }}
       >
         <div
-          className="absolute inset-0 bg-[#110e0a]/60 backdrop-blur-sm touch-none"
+          className="absolute inset-0 bg-[#110e0a]/60 surface-glass touch-none"
           onClick={() => {
             if (isTopmostModal(modalIdRef.current!)) onClose()
           }}

@@ -44,7 +44,7 @@ export function ReadingRouteExplanation({
       onClose={onClose}
       autoFocus={false}
       data-testid="reading-route-explanation"
-      overlayClassName="bg-black/70 backdrop-blur-sm"
+      overlayClassName="bg-black/70 backdrop-blur-sm surface-glass"
     >
       <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-500">
         Why this issue is next

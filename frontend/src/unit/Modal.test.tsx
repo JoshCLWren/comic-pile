@@ -71,7 +71,7 @@ it('uses an opaque modal surface with a dimmed overlay', () => {
   expect(dialog).toHaveClass('modal-card')
   expect(dialog.className).toContain('modal-card')
   expect(overlay).not.toBeNull()
-  expect(overlay).toHaveClass('backdrop-blur-sm')
+  expect(overlay).toHaveClass('surface-glass')
 
   const stylesheet = readFileSync(resolve(__dirname, '../styles.css'), 'utf8')
   const modalRule = stylesheet.match(/\.modal-card\s*\{([^}]*)\}/)?.[1] ?? ''

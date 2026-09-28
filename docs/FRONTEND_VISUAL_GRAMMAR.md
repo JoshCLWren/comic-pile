@@ -31,7 +31,7 @@ The three existing themes are `classic`, `ink-gold`, and `command-center`. New f
 | Danger hover | `--theme-danger-hover` | Interactive destructive state |
 | Focus ring | `--theme-focus-ring` | Keyboard/focus visibility |
 
-The older `--bg-*`, `--text-*`, `--accent-*`, and `--glass-*` variables are compatibility aliases. They may remain in existing code, but new work should prefer the `--theme-*` semantic vocabulary when the needed role exists.
+The older `--bg-*`, `--text-*`, `--accent-*`, and `--glass-*` variables are compatibility aliases. The `--glass-*` variables are deprecated and new work should prefer the `--theme-*` semantic vocabulary. New surface styling should use semantic classes like `.surface-panel`, `.surface-glass`, and `.surface-modal` instead of effect-based approaches.
 
 `frontend/src/index.css` contains older root-level theme values such as `--theme-primary` and `--theme-bg-card`. Do not treat those as a second design system or add parallel tokens there. A new semantic role belongs with the `data-theme` token sets in `styles.css` and must be defined for every theme.
 
@@ -82,9 +82,19 @@ Use shape to indicate surface hierarchy, not feature ownership.
 - `rounded-2xl`: prominent panels or hero/selected-state cards.
 - Pill/capsule radii are for chips, badges, compact status controls, and intentionally pill-shaped actions, not generic cards.
 
-`glass-card` is the legacy shared card treatment: semantic panel background, semantic border, `0.75rem` radius. `modal-card` is the established elevated dialog surface with a stronger dark background and shadow. Existing feature-local panels may differ, but new variants require a semantic reason rather than a new radius because it looks better in isolation.
+The legacy `glass-card` class has been retired and is no longer used. Ordinary cards and panels should use the semantic `.surface-panel` class with `--theme-bg-panel` and `--theme-border`. For surfaces that require backdrop blur such as overlays and modals, use `.surface-glass`. Modal dialogs use `.surface-modal` for elevated dialog surfaces with stronger shadows.
 
 Borders should normally use `--theme-border`. Stronger colored borders communicate state or domain meaning. Shadows/elevation should be sparse. Ordinary cards do not need unique shadows. Reserve strong shadows for overlays, active dice/effects, selected states, or another clear depth/state cue.
+
+### Semantic surface classes
+
+Use semantic surface classes to ensure consistent styling across the application:
+
+- `.surface-panel`: Ordinary cards and panels with semantic background and border
+- `.surface-glass`: Surfaces with backdrop blur for overlays and modals where transparency improves readability
+- `.surface-modal`: Elevated dialog surfaces with stronger shadows and opaque backgrounds
+
+These classes use the semantic theme tokens (`--theme-bg-panel`, `--theme-border`) and ensure proper layering and readability across all themes.
 
 ## Icons
 

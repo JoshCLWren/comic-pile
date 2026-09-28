@@ -100,7 +100,7 @@ export default function PlanProjectionDialog({
       title="Project to reading order"
       onClose={onClose}
       data-testid="plan-projection-dialog"
-      overlayClassName="bg-black/70 backdrop-blur-sm"
+      overlayClassName="bg-black/70 surface-glass"
     >
       <p className="text-sm text-stone-400">
         Preview how “{planName}” would appear inside a saved{' '}
