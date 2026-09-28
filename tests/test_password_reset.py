@@ -1,17 +1,23 @@
 """Focused acceptance tests for #2777 password reset lifecycle."""
 
-import pytest
+import logging
 from datetime import UTC, datetime, timedelta
-from httpx import AsyncClient
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
-from app.services.password_reset_service import PasswordResetDeliveryHandoff
+import httpx
+import pytest
+from httpx import AsyncClient
+
 from app.services.email_delivery_service import (
+    RESEND_API_URL,
+    EmailDeliveryError,
+    EmailDeliveryService,
     FakeEmailProvider,
     ResendEmailProvider,
-    EmailDeliveryService,
-    EmailDeliveryError,
+    build_reset_url,
+    deliver_password_reset_handoff,
 )
+from app.services.password_reset_service import PasswordResetDeliveryHandoff
 
 
 @pytest.mark.asyncio
@@ -90,54 +96,73 @@ async def test_unknown_token_fails_safely(client: AsyncClient) -> None:
     assert "Invalid" in res.json()["detail"]
 
 
+class TestBuildResetUrl:
+    """Tests for reset link construction."""
+
+    def test_builds_link_from_origin_without_trailing_slash(self) -> None:
+        """Reset link joins the origin and reset path with a single slash."""
+        url = build_reset_url("https://comicpile.app", "raw-token")
+        assert url == "https://comicpile.app/reset-password?token=raw-token"
+
+    def test_strips_trailing_slash_from_origin(self) -> None:
+        """A configured origin with a trailing slash does not double up separators."""
+        url = build_reset_url("https://comicpile.app/", "raw-token")
+        assert url == "https://comicpile.app/reset-password?token=raw-token"
+
+
+def _handoff(token: str = "raw-token-123") -> PasswordResetDeliveryHandoff:
+    """Build a delivery handoff for provider tests.
+
+    Args:
+        token: Raw one-time reset token to place in the handoff.
+
+    Returns:
+        A handoff with a fixed recipient, username, and expiry.
+    """
+    return PasswordResetDeliveryHandoff(
+        recipient_email="test@example.com",
+        user_username="testuser",
+        reset_token=token,
+        expires_at=datetime(2026, 1, 1, 12, 0, tzinfo=UTC),
+    )
+
+
 class TestFakeEmailProvider:
-    """Tests for the fake email provider."""
+    """Tests for the deterministic fake mailer."""
 
     @pytest.mark.asyncio
-    async def test_sends_password_reset_email(self) -> None:
-        """Test that fake provider stores password reset emails correctly."""
+    async def test_stores_reset_email_with_link_and_expiry_copy(self) -> None:
+        """The fake mailer records the reset link, greeting, and expiry copy."""
         provider = FakeEmailProvider()
-        
-        # Create a test handoff
-        handoff = PasswordResetDeliveryHandoff(
-            recipient_email="test@example.com",
-            user_username="testuser",
-            reset_token="fake-token-123",
-            expires_at=datetime.now(UTC) + timedelta(minutes=30),
-        )
-        
-        # Send email
+
         result = await provider.send_password_reset_email(
-            handoff=handoff,
+            handoff=_handoff(),
             sender_email="noreply@comicpile.app",
             sender_name="Comic Pile",
             reset_origin="https://comicpile.app",
         )
-        
-        # Verify result
+
         assert result["status"] == "sent"
         assert result["provider"] == "fake"
         assert result["recipients"] == ["test@example.com"]
-        assert "message_id" in result
-        assert "metadata" in result
+        assert result["message_id"] == "fake-1"
         assert result["metadata"]["user_username"] == "testuser"
-        
-        # Verify email was stored
+
         assert len(provider.sent_emails) == 1
         email = provider.sent_emails[0]
         assert email["to"] == "test@example.com"
         assert email["sender"] == "Comic Pile <noreply@comicpile.app>"
         assert email["subject"] == "Reset your Comic Pile password"
         assert "Hello testuser" in email["text"]
-        assert "https://comicpile.app/reset-password?token=fake-token-123" in email["text"]
-        assert "will expire at" in email["text"]
+        assert "https://comicpile.app/reset-password?token=raw-token-123" in email["text"]
+        assert "will expire at 2026-01-01 12:00:00 UTC" in email["text"]
+        assert "didn't request this reset" in email["text"]
 
     @pytest.mark.asyncio
-    async def test_multiple_emails_stored_separately(self) -> None:
-        """Test that multiple emails are stored separately."""
+    async def test_stores_multiple_emails_separately(self) -> None:
+        """Each delivery produces its own stored record."""
         provider = FakeEmailProvider()
-        
-        # Send multiple emails
+
         for i in range(3):
             handoff = PasswordResetDeliveryHandoff(
                 recipient_email=f"user{i}@example.com",
@@ -145,87 +170,254 @@ class TestFakeEmailProvider:
                 reset_token=f"token-{i}",
                 expires_at=datetime.now(UTC) + timedelta(minutes=30),
             )
-            
             await provider.send_password_reset_email(
                 handoff=handoff,
                 sender_email="noreply@comicpile.app",
                 sender_name="Comic Pile",
                 reset_origin="https://comicpile.app",
             )
-        
-        # Verify all emails stored
+
         assert len(provider.sent_emails) == 3
         for i, email in enumerate(provider.sent_emails):
             assert email["to"] == f"user{i}@example.com"
             assert f"Hello user{i}" in email["text"]
 
+    @pytest.mark.asyncio
+    async def test_never_logs_the_reset_token(self, caplog: pytest.LogCaptureFixture) -> None:
+        """The fake mailer logs no reset token or reset URL."""
+        provider = FakeEmailProvider()
+
+        with caplog.at_level(logging.DEBUG):
+            await provider.send_password_reset_email(
+                handoff=_handoff("super-secret-token"),
+                sender_email="noreply@comicpile.app",
+                sender_name="Comic Pile",
+                reset_origin="https://comicpile.app",
+            )
+
+        rendered = "\n".join(record.getMessage() for record in caplog.records)
+        rendered += "\n".join(str(record.args) for record in caplog.records)
+        assert "super-secret-token" not in rendered
+        assert "/reset-password?token=" not in rendered
+
+
+class TestResendEmailProvider:
+    """Tests for the Resend production adapter."""
+
+    @pytest.mark.asyncio
+    async def test_posts_payload_and_returns_message_id(self) -> None:
+        """A successful Resend call returns provider status and message id."""
+        captured: dict[str, object] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            import json
+
+            captured["url"] = str(request.url)
+            captured["auth"] = request.headers.get("Authorization")
+            captured["body"] = json.loads(request.content)
+            return httpx.Response(200, json={"id": "msg-1"})
+
+        provider = ResendEmailProvider(
+            api_key="re_test_key",
+            client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        )
+
+        result = await provider.send_password_reset_email(
+            handoff=_handoff(),
+            sender_email="noreply@comicpile.app",
+            sender_name="Comic Pile",
+            reset_origin="https://comicpile.app",
+        )
+
+        assert captured["url"] == RESEND_API_URL
+        assert captured["auth"] == "Bearer re_test_key"
+        body = captured["body"]
+        assert isinstance(body, dict)
+        assert body["to"] == ["test@example.com"]
+        assert body["from"] == "Comic Pile <noreply@comicpile.app>"
+        assert "https://comicpile.app/reset-password?token=raw-token-123" in body["text"]
+        assert result["provider"] == "resend"
+        assert result["status"] == "sent"
+        assert result["message_id"] == "msg-1"
+
+    @pytest.mark.asyncio
+    async def test_raises_delivery_error_on_http_failure(self) -> None:
+        """A non-2xx Resend response becomes a provider-neutral failure."""
+        provider = ResendEmailProvider(
+            api_key="re_test_key",
+            client_factory=lambda: httpx.AsyncClient(
+                transport=httpx.MockTransport(lambda request: httpx.Response(422, json={}))
+            ),
+        )
+
+        with pytest.raises(EmailDeliveryError):
+            await provider.send_password_reset_email(
+                handoff=_handoff(),
+                sender_email="noreply@comicpile.app",
+                sender_name="Comic Pile",
+                reset_origin="https://comicpile.app",
+            )
+
+    @pytest.mark.asyncio
+    async def test_raises_delivery_error_on_transport_failure(self) -> None:
+        """A transport error becomes a provider-neutral failure."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("boom", request=request)
+
+        provider = ResendEmailProvider(
+            api_key="re_test_key",
+            client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        )
+
+        with pytest.raises(EmailDeliveryError):
+            await provider.send_password_reset_email(
+                handoff=_handoff(),
+                sender_email="noreply@comicpile.app",
+                sender_name="Comic Pile",
+                reset_origin="https://comicpile.app",
+            )
+
+    @pytest.mark.asyncio
+    async def test_never_logs_the_reset_token(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A Resend failure log carries no reset token or reset URL."""
+        provider = ResendEmailProvider(
+            api_key="re_test_key",
+            client_factory=lambda: httpx.AsyncClient(
+                transport=httpx.MockTransport(
+                    lambda request: httpx.Response(500, text="provider down")
+                )
+            ),
+        )
+
+        with caplog.at_level(logging.DEBUG):
+            with pytest.raises(EmailDeliveryError):
+                await provider.send_password_reset_email(
+                    handoff=_handoff("super-secret-token"),
+                    sender_email="noreply@comicpile.app",
+                    sender_name="Comic Pile",
+                    reset_origin="https://comicpile.app",
+                )
+
+        rendered = "\n".join(record.getMessage() for record in caplog.records)
+        rendered += "\n".join(str(record.args) for record in caplog.records)
+        assert "super-secret-token" not in rendered
+        assert "/reset-password?token=" not in rendered
+
 
 class TestEmailDeliveryService:
-    """Tests for the email delivery service."""
+    """Tests for provider selection and configuration gating."""
 
-    @pytest.mark.asyncio
-    async def test_uses_fake_provider_when_not_configured(self) -> None:
-        """Test that fake provider is used when Resend is not configured."""
-        with patch('app.services.email_delivery_service.get_email_settings') as mock_settings:
+    def test_uses_fake_provider_when_not_configured(self) -> None:
+        """The deterministic fake mailer is used when Resend is unconfigured."""
+        with patch("app.services.email_delivery_service.get_email_settings") as mock_settings:
             mock_settings.return_value.is_resend_configured = False
-            
-            service = EmailDeliveryService()
-            provider = service._get_provider()
-            
-            assert isinstance(provider, FakeEmailProvider)
 
-    @pytest.mark.asyncio
-    async def test_uses_resend_provider_when_configured(self) -> None:
-        """Test that Resend provider is used when configured."""
-        with patch('app.services.email_delivery_service.get_email_settings') as mock_settings:
+            provider = EmailDeliveryService()._get_provider()
+
+        assert isinstance(provider, FakeEmailProvider)
+
+    def test_uses_resend_provider_when_configured(self) -> None:
+        """The Resend adapter is used when the API key is configured."""
+        with patch("app.services.email_delivery_service.get_email_settings") as mock_settings:
             mock_settings.return_value.is_resend_configured = True
-            mock_settings.return_value.resend_api_key = "test-api-key"
-            
-            service = EmailDeliveryService()
-            provider = service._get_provider()
-            
-            assert isinstance(provider, ResendEmailProvider)
-            assert provider.api_key == "test-api-key"
+            mock_settings.return_value.resend_api_key = "re_test_key"
+            mock_settings.return_value.email_delivery_timeout_seconds = 10.0
 
-    @pytest.mark.asyncio
-    async def test_can_override_provider(self) -> None:
-        """Test that provider can be overridden."""
+            provider = EmailDeliveryService()._get_provider()
+
+        assert isinstance(provider, ResendEmailProvider)
+        assert provider.api_key == "re_test_key"
+
+    def test_unconfigured_provider_raises_in_production(self) -> None:
+        """Production never silently downgrades to the fake mailer."""
+        with (
+            patch("app.services.email_delivery_service.get_email_settings") as mock_settings,
+            patch("app.services.email_delivery_service.get_app_settings") as mock_app,
+        ):
+            mock_settings.return_value.is_resend_configured = False
+            mock_app.return_value.environment = "production"
+
+            with pytest.raises(EmailDeliveryError):
+                EmailDeliveryService()._get_provider()
+
+    def test_explicit_provider_overrides_configuration(self) -> None:
+        """An injected provider wins over configured selection."""
         fake_provider = FakeEmailProvider()
         service = EmailDeliveryService(provider=fake_provider)
-        
+
         assert service._get_provider() is fake_provider
 
     @pytest.mark.asyncio
-    async def test_send_password_reset_email_integration(self) -> None:
-        """Test end-to-end password reset email sending."""
+    async def test_send_uses_configured_sender_and_origin(self) -> None:
+        """Sender identity and reset origin come from configuration."""
+        fake_provider = FakeEmailProvider()
+
+        with patch("app.services.email_delivery_service.get_email_settings") as mock_settings:
+            mock_settings.return_value.password_reset_sender_email = "bounces@comicpile.app"
+            mock_settings.return_value.password_reset_sender_name = "ComicPile"
+            mock_settings.return_value.password_reset_origin = "https://app.comicpile.app/"
+
+            result = await EmailDeliveryService(provider=fake_provider).send_password_reset_email(
+                _handoff()
+            )
+
+        email = fake_provider.sent_emails[0]
+        assert email["sender"] == "ComicPile <bounces@comicpile.app>"
+        assert "https://app.comicpile.app/reset-password?token=raw-token-123" in email["text"]
+        assert isinstance(result, dict)
+
+
+class TestDeliverPasswordResetHandoff:
+    """Tests for the enumeration-safe delivery entry point."""
+
+    @pytest.mark.asyncio
+    async def test_unknown_address_delivers_nothing(self) -> None:
+        """A missing handoff produces no delivery attempt."""
+        provider = AsyncMock()
+        service = EmailDeliveryService(provider=provider)
+
+        assert await deliver_password_reset_handoff(None, service=service) is None
+        provider.send_password_reset_email.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_known_address_returns_delivery_outcome(self) -> None:
+        """A known address returns the provider delivery outcome."""
         provider = FakeEmailProvider()
         service = EmailDeliveryService(provider=provider)
-        
-        handoff = PasswordResetDeliveryHandoff(
-            recipient_email="integration@example.com",
-            user_username="integrationuser",
-            reset_token="integration-token",
-            expires_at=datetime.now(UTC) + timedelta(minutes=30),
-        )
-        
-        result = await service.send_password_reset_email(handoff)
-        
-        assert result["status"] == "sent"
+
+        result = await deliver_password_reset_handoff(_handoff(), service=service)
+
+        assert result is not None
         assert result["provider"] == "fake"
         assert len(provider.sent_emails) == 1
-        email = provider.sent_emails[0]
-        assert email["to"] == "integration@example.com"
+
+    @pytest.mark.asyncio
+    async def test_provider_failure_is_contained(self) -> None:
+        """A provider failure is swallowed so the caller stays enumeration-safe."""
+        service = AsyncMock(spec=EmailDeliveryService)
+        service.send_password_reset_email.side_effect = EmailDeliveryError("down")
+
+        assert await deliver_password_reset_handoff(_handoff(), service=service) is None
+
+    @pytest.mark.asyncio
+    async def test_unexpected_provider_error_is_contained(self) -> None:
+        """An unexpected provider error is also contained."""
+        service = AsyncMock(spec=EmailDeliveryService)
+        service.send_password_reset_email.side_effect = RuntimeError("bug")
+
+        assert await deliver_password_reset_handoff(_handoff(), service=service) is None
 
 
 class TestPasswordResetEmailIntegration:
-    """Integration tests for password reset email delivery via API."""
+    """API-level coverage for password reset email delivery."""
 
     @pytest.mark.asyncio
-    async def test_forgot_password_sends_email_when_user_exists(self, async_db, client) -> None:
-        """Test that forgot-password endpoint sends email when user exists."""
-        # Create a test user
-        from app.repositories.user_repository import create_user
+    async def test_forgot_password_sends_email_when_user_exists(
+        self, async_db, client: AsyncClient
+    ) -> None:
+        """A known address triggers exactly one delivery with the handoff token."""
         from app.auth import hash_password
+        from app.repositories.user_repository import create_user
 
         await create_user(
             async_db,
@@ -235,54 +427,48 @@ class TestPasswordResetEmailIntegration:
         )
         await async_db.commit()
 
-        # Mock the email service to capture calls
-        with patch('app.api.auth.get_email_delivery_service') as mock_get_service:
-            mock_email_service = AsyncMock()
-            mock_get_service.return_value = mock_email_service
+        fake_provider = FakeEmailProvider()
+        with patch(
+            "app.services.email_delivery_service.get_email_delivery_service",
+            return_value=EmailDeliveryService(provider=fake_provider),
+        ):
+            response = await client.post(
+                "/api/auth/forgot-password", json={"email": "emailtest@example.com"}
+            )
 
-            # Call forgot-password endpoint
-            response = await client.post("/api/auth/forgot-password", json={"email": "emailtest@example.com"})
-            
-            # Verify response
-            assert response.status_code == 200
-            assert "If an account exists" in response.json()["message"]
-            
-            # Verify email service was called
-            mock_email_service.send_password_reset_email.assert_called_once()
-            
-            # Get the handoff that was passed to the email service
-            call_args = mock_email_service.send_password_reset_email.call_args
-            handoff = call_args[0][0]
-            
-            assert handoff.recipient_email == "emailtest@example.com"
-            assert handoff.user_username == "emailtest"
-            assert handoff.reset_token is not None
-            assert isinstance(handoff.expires_at, datetime)
+        assert response.status_code == 200
+        assert "If an account exists" in response.json()["message"]
+        assert len(fake_provider.sent_emails) == 1
+        email = fake_provider.sent_emails[0]
+        assert email["to"] == "emailtest@example.com"
+        assert "Hello emailtest" in email["text"]
+        assert "/reset-password?token=" in email["text"]
 
     @pytest.mark.asyncio
-    async def test_forgot_password_does_not_send_email_when_user_not_exists(self, async_db, client) -> None:
-        """Test that forgot-password endpoint doesn't send email when user doesn't exist."""
-        # Mock the email service to capture calls
-        with patch('app.api.auth.get_email_delivery_service') as mock_get_service:
-            mock_email_service = AsyncMock()
-            mock_get_service.return_value = mock_email_service
+    async def test_forgot_password_sends_no_email_when_user_missing(
+        self, async_db, client: AsyncClient
+    ) -> None:
+        """An unknown address produces no delivery attempt."""
+        fake_provider = FakeEmailProvider()
+        with patch(
+            "app.services.email_delivery_service.get_email_delivery_service",
+            return_value=EmailDeliveryService(provider=fake_provider),
+        ):
+            response = await client.post(
+                "/api/auth/forgot-password", json={"email": "notfound@example.com"}
+            )
 
-            # Call forgot-password endpoint with non-existent email
-            response = await client.post("/api/auth/forgot-password", json={"email": "notfound@example.com"})
-            
-            # Verify response
-            assert response.status_code == 200
-            assert "If an account exists" in response.json()["message"]
-            
-            # Verify email service was NOT called
-            mock_email_service.send_password_reset_email.assert_not_called()
+        assert response.status_code == 200
+        assert "If an account exists" in response.json()["message"]
+        assert fake_provider.sent_emails == []
 
     @pytest.mark.asyncio
-    async def test_email_delivery_failure_does_not_leak_account_existence(self, async_db, client) -> None:
-        """Test that email delivery failure doesn't leak account existence."""
-        # Create a test user
-        from app.repositories.user_repository import create_user
+    async def test_delivery_failure_does_not_leak_account_existence(
+        self, async_db, client: AsyncClient
+    ) -> None:
+        """A mail outage returns the same acknowledgement as success."""
         from app.auth import hash_password
+        from app.repositories.user_repository import create_user
 
         await create_user(
             async_db,
@@ -292,18 +478,17 @@ class TestPasswordResetEmailIntegration:
         )
         await async_db.commit()
 
-        # Mock the email service to raise an error
-        with patch('app.api.auth.get_email_delivery_service') as mock_get_service:
-            mock_email_service = AsyncMock()
-            mock_email_service.send_password_reset_email.side_effect = EmailDeliveryError("Delivery failed")
-            mock_get_service.return_value = mock_email_service
+        broken_service = AsyncMock(spec=EmailDeliveryService)
+        broken_service.send_password_reset_email.side_effect = EmailDeliveryError("Delivery failed")
 
-            # Call forgot-password endpoint
-            response = await client.post("/api/auth/forgot-password", json={"email": "emailfailtest@example.com"})
-            
-            # Verify response is still safe (doesn't reveal account existence)
-            assert response.status_code == 200
-            assert "If an account exists" in response.json()["message"]
-            
-            # Verify email service was called but failed
-            mock_email_service.send_password_reset_email.assert_called_once()
+        with patch(
+            "app.services.email_delivery_service.get_email_delivery_service",
+            return_value=broken_service,
+        ):
+            response = await client.post(
+                "/api/auth/forgot-password", json={"email": "emailfailtest@example.com"}
+            )
+
+        assert response.status_code == 200
+        assert "If an account exists" in response.json()["message"]
+        broken_service.send_password_reset_email.assert_called_once()

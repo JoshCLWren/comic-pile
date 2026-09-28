@@ -23,8 +23,8 @@ from app.auth import (
 from app.csrf import ensure_csrf_cookie, is_secure_request
 from app.database import get_db
 from app.middleware import limiter
+from app.services.email_delivery_service import deliver_password_reset_handoff
 from app.services.password_reset_service import request_forgot_password, complete_reset
-from app.services.email_delivery_service import get_email_delivery_service
 from app.models.user import User
 from app.repositories.failed_login_repository import (
     clear_attempts_for_username,
@@ -425,53 +425,16 @@ async def forgot_password(
     """
     handoff = await request_forgot_password(db, data.email)
     if handoff is not None:
-        # Provider-neutral delivery handoff for #2778 — send email via configured provider
         logger.info(
-            "Password reset handoff: user=%s email=%s expires=%s",
+            "Password reset handoff: user=%s expires=%s",
             handoff.user_username,
-            handoff.recipient_email,
             handoff.expires_at,
             extra={
                 "event": "password_reset_handoff",
                 "user": handoff.user_username,
             },
         )
-        
-        # Send password reset email via configured provider
-        if handoff is not None:
-            try:
-                email_service = get_email_delivery_service()
-                delivery_result = await email_service.send_password_reset_email(handoff)
-                logger.info(
-                    "Password reset email sent: user=%s provider=%s status=%s",
-                    handoff.user_username,
-                    delivery_result.get("provider", "unknown"),
-                    delivery_result.get("status", "unknown"),
-                    extra={
-                        "event": "password_reset_email_sent",
-                        "user": handoff.user_username,
-                        "provider": delivery_result.get("provider"),
-                        "status": delivery_result.get("status"),
-                    },
-                )
-            except Exception as e:
-                logger.error(
-                    "Failed to send password reset email: %s", str(e),
-                    extra={
-                        "event": "password_reset_email_failure",
-                        "user": handoff.user_username,
-                        "error": str(e),
-                    },
-                )
-                # Do not leak account existence - maintain enumeration safety
-                # The error is logged but client sees same success message
-        else:
-            # No user found; no email sent. Log minimal info to avoid enumeration.
-            logger.debug(
-                "Password reset requested for non-existent email: %s",
-                data.email,
-                extra={"event": "password_reset_non_existent_email"},
-            )
+    await deliver_password_reset_handoff(handoff)
 
     return PasswordResetResponse(message="If an account exists, a reset link has been sent.")
 

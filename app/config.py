@@ -587,24 +587,28 @@ class EmailSettings(BaseSettings):
         description="Resend API key for password reset email delivery",
         json_schema_extra={"env": "RESEND_API_KEY"},
     )
-    password_reset_sender_email: str | None = Field(
+    password_reset_sender_email: str = Field(
         default="noreply@comicpile.app",
+        min_length=3,
         description="Sender email address for password reset emails",
         json_schema_extra={"env": "PASSWORD_RESET_SENDER_EMAIL"},
     )
-    password_reset_sender_name: str | None = Field(
+    password_reset_sender_name: str = Field(
         default="Comic Pile",
+        min_length=1,
         description="Sender name for password reset emails",
         json_schema_extra={"env": "PASSWORD_RESET_SENDER_NAME"},
     )
-    password_reset_origin: str | None = Field(
+    password_reset_origin: str = Field(
         default="https://comicpile.app",
+        min_length=1,
         description="Public origin for password reset links",
         json_schema_extra={"env": "PASSWORD_RESET_ORIGIN"},
     )
     email_delivery_timeout_seconds: float = Field(
         default=10.0,
         ge=1.0,
+        le=120.0,
         description="Timeout in seconds for outbound email delivery requests",
         json_schema_extra={"env": "EMAIL_DELIVERY_TIMEOUT_SECONDS"},
     )
