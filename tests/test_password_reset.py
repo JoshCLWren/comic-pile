@@ -235,7 +235,9 @@ class TestResendEmailProvider:
         assert isinstance(body, dict)
         assert body["to"] == ["test@example.com"]
         assert body["from"] == "Comic Pile <noreply@comicpile.app>"
-        assert "https://comicpile.app/reset-password?token=raw-token-123" in body["text"]
+        body_text = body["text"]
+        assert isinstance(body_text, str)
+        assert "https://comicpile.app/reset-password?token=raw-token-123" in body_text
         assert result["provider"] == "resend"
         assert result["status"] == "sent"
         assert result["message_id"] == "msg-1"
