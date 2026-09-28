@@ -33,14 +33,14 @@ export function RatingView({ data }: RatingViewProps) {
   return (
     <div ref={ratingViewTopRef} data-testid="rating-view-top" className="relative z-10 space-y-4 p-3 md:p-4">
       <div
-        className="grid items-start gap-4 lg:grid-cols-2 lg:gap-6"
+        className="grid items-start gap-4 lg:grid-cols-[1fr,auto] lg:gap-6"
         data-testid="rating-pillars-grid"
       >
         <div className="min-w-0" data-testid="rating-region-comic">
           <ComicPillar activeRatingThread={activeRatingThread} onRefreshThread={onRefreshThread} />
         </div>
 
-        <div className="min-w-0 space-y-4" data-testid="rating-region-decision">
+        <div className="min-w-0 space-y-4 w-full lg:w-auto" data-testid="rating-region-decision">
           <DecisionCard
             activeRatingThread={activeRatingThread}
             currentDie={currentDie}

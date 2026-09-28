@@ -81,14 +81,14 @@ export function ComicPillar({
   return (
     <div className="w-full space-y-4">
       {/* Cover rail beside issue identity/details composition */}
-      <div className="flex flex-col lg:flex-row gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[auto,1fr] gap-4 items-start">
         {/* Cover rail */}
         <div className="flex-shrink-0 w-full lg:w-auto">
           <ComicIdentity issueId={issueId} />
         </div>
 
         {/* Issue identity and details */}
-        <div className="flex-1 space-y-3" data-testid="comic-header-row">
+        <div className="min-w-0 space-y-3" data-testid="comic-header-row">
           {/* Provider eyebrow and title block */}
           <div className="space-y-2">
             {identityState?.has_confirmed_identity && identityState.comicvine_issue_id && (
