@@ -62,7 +62,7 @@ The migration must target the same Neon database that the deployed application w
 
 ### 4. Deploy the application
 
-The maintained hosting target is Vercel. Configure the production environment variables there, including `DATABASE_URL`, `SECRET_KEY`, `ENVIRONMENT=production`, and `CORS_ORIGINS`, then deploy from `main`.
+The maintained hosting target is Vercel. Configure the production environment variables there, including `DATABASE_URL`, `SECRET_KEY`, `ENVIRONMENT=production`, `CORS_ORIGINS`, and the password-reset email settings described below, then deploy from `main`.
 
 After deployment, `GET /api/v1/health/dependencies` can be used to verify the application's database dependency independently from the lightweight liveness endpoint.
 
@@ -78,6 +78,30 @@ Neon is not only an incidental development database in this project:
 - The repository includes Neon-specific operational and performance documentation, including production-to-local data workflows and connection-pool measurements.
 
 The core application remains portable PostgreSQL software. Neon is the maintained managed-Postgres integration and the production reference implementation.
+
+## Password reset email delivery
+
+Password reset mail is sent through Resend behind the provider-neutral handoff in
+`app/services/password_reset_service.py`. The adapter, sender identity, and reset-link origin are
+configured, never hardcoded:
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `RESEND_API_KEY` | Yes, in production | Resend API credential. Production fails closed when it is missing. |
+| `PASSWORD_RESET_SENDER_EMAIL` | Yes, whenever `RESEND_API_KEY` is set | Sender address on a Resend-verified domain. |
+| `PASSWORD_RESET_SENDER_NAME` | No | Display name; defaults to `Comic Pile`. |
+| `PASSWORD_RESET_ORIGIN` | No | Origin serving reset links; defaults to `https://comic-pile.vercel.app`. Local development should set `http://localhost:5173`. |
+| `EMAIL_DELIVERY_TIMEOUT_SECONDS` | No | Outbound request timeout; defaults to `10.0`. |
+
+Sender identity requires an owner-controlled Resend step: add the sending domain in the Resend
+dashboard and publish the SPF, DKIM (`resend._domainkey.<domain>`), and DMARC TXT records it
+displays, then set `PASSWORD_RESET_SENDER_EMAIL` to an address on that domain. Until the sender is
+configured, delivery fails closed with an operational error while the public forgot-password
+acknowledgement stays enumeration-safe.
+
+Local development and automated tests use the deterministic in-memory fake provider when no Resend
+key is configured; production never silently downgrades to it. Delivery failures are logged as
+`password_reset_email_failure` without ever logging the reset token or reset URL.
 
 ## Production delivery
 

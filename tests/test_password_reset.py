@@ -1,4 +1,4 @@
-"""Focused acceptance tests for #2777 password reset lifecycle."""
+"""Focused acceptance tests for #2777 password reset lifecycle and #2778 delivery."""
 
 import logging
 from datetime import UTC, datetime, timedelta
@@ -8,7 +8,9 @@ import httpx
 import pytest
 from httpx import AsyncClient
 
+from app.config import EmailSettings
 from app.services.email_delivery_service import (
+    DEV_PASSWORD_RESET_SENDER_EMAIL,
     RESEND_API_URL,
     EmailDeliveryError,
     EmailDeliveryService,
@@ -16,6 +18,7 @@ from app.services.email_delivery_service import (
     ResendEmailProvider,
     build_reset_url,
     deliver_password_reset_handoff,
+    resolve_sender_email,
 )
 from app.services.password_reset_service import PasswordResetDeliveryHandoff
 
@@ -494,3 +497,51 @@ class TestPasswordResetEmailIntegration:
         assert response.status_code == 200
         assert "If an account exists" in response.json()["message"]
         broken_service.send_password_reset_email.assert_called_once()
+
+
+class TestSenderAndOriginConfiguration:
+    """Regression coverage for closure-critical delivery configuration."""
+
+    def test_configured_sender_address_is_used(self) -> None:
+        """A configured sender address wins over any fallback."""
+        settings = EmailSettings(
+            password_reset_sender_email="alerts@verified.example",
+            resend_api_key=None,
+        )
+        assert resolve_sender_email(settings) == "alerts@verified.example"
+
+    def test_sender_fails_closed_when_resend_has_no_sender_address(self) -> None:
+        """Resend without a verified sender fails loudly instead of inventing one."""
+        settings = EmailSettings(
+            resend_api_key="re_test_key",
+            password_reset_sender_email=None,
+        )
+        with pytest.raises(EmailDeliveryError):
+            resolve_sender_email(settings)
+
+    def test_local_fallback_sender_when_no_provider_is_configured(self) -> None:
+        """Unconfigured local environments get a harmless development sender."""
+        settings = EmailSettings(resend_api_key=None, password_reset_sender_email=None)
+        assert resolve_sender_email(settings) == DEV_PASSWORD_RESET_SENDER_EMAIL
+
+    def test_default_reset_origin_is_the_live_production_origin(self) -> None:
+        """The built-in reset-link origin must be a real, reachable host."""
+        default = EmailSettings.model_fields["password_reset_origin"].default
+        assert default == "https://comic-pile.vercel.app"
+
+    def test_sender_address_has_no_invented_default(self) -> None:
+        """No sender address is fabricated in source; it is owner configuration."""
+        assert EmailSettings.model_fields["password_reset_sender_email"].default is None
+
+    @pytest.mark.asyncio
+    async def test_service_refuses_to_send_without_a_sender_address(self) -> None:
+        """The delivery service surfaces a missing sender as an operational error."""
+        with patch("app.services.email_delivery_service.get_email_settings") as mock_settings:
+            mock_settings.return_value.password_reset_sender_email = None
+            mock_settings.return_value.is_resend_configured = True
+            mock_settings.return_value.password_reset_sender_name = "Comic Pile"
+            mock_settings.return_value.password_reset_origin = "https://comic-pile.vercel.app"
+
+            service = EmailDeliveryService(provider=FakeEmailProvider())
+            with pytest.raises(EmailDeliveryError):
+                await service.send_password_reset_email(_handoff())

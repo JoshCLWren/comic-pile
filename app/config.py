@@ -587,10 +587,13 @@ class EmailSettings(BaseSettings):
         description="Resend API key for password reset email delivery",
         json_schema_extra={"env": "RESEND_API_KEY"},
     )
-    password_reset_sender_email: str = Field(
-        default="noreply@comicpile.app",
-        min_length=3,
-        description="Sender email address for password reset emails",
+    password_reset_sender_email: str | None = Field(
+        default=None,
+        description=(
+            "Sender address for password reset emails. Required whenever "
+            "RESEND_API_KEY is configured and must be an address on a domain "
+            "verified in Resend; there is no safe built-in default."
+        ),
         json_schema_extra={"env": "PASSWORD_RESET_SENDER_EMAIL"},
     )
     password_reset_sender_name: str = Field(
@@ -600,9 +603,12 @@ class EmailSettings(BaseSettings):
         json_schema_extra={"env": "PASSWORD_RESET_SENDER_NAME"},
     )
     password_reset_origin: str = Field(
-        default="https://comicpile.app",
+        default="https://comic-pile.vercel.app",
         min_length=1,
-        description="Public origin for password reset links",
+        description=(
+            "Public origin that serves password reset links. Defaults to the "
+            "maintained production origin; local development overrides it."
+        ),
         json_schema_extra={"env": "PASSWORD_RESET_ORIGIN"},
     )
     email_delivery_timeout_seconds: float = Field(

@@ -10,17 +10,46 @@ from typing import TypedDict
 
 import httpx
 
-from app.config import get_app_settings, get_email_settings
+from app.config import EmailSettings, get_app_settings, get_email_settings
 from app.services.password_reset_service import PasswordResetDeliveryHandoff
 
 logger = logging.getLogger(__name__)
 
 RESEND_API_URL = "https://api.resend.com/emails"
 RESET_PASSWORD_PATH = "/reset-password"
+DEV_PASSWORD_RESET_SENDER_EMAIL = "noreply@localhost"
 
 
 class EmailDeliveryError(Exception):
     """Exception raised when email delivery fails."""
+
+
+def resolve_sender_email(settings: EmailSettings) -> str:
+    """Resolve the sender address, refusing to invent a production sender.
+
+    A Resend sender must be an address on a domain verified in Resend, which is
+    owner-controlled configuration. Falling back to a built-in address would
+    silently produce provider rejections, so an unconfigured sender fails closed
+    with a clear operational error instead.
+
+    Args:
+        settings: Email delivery settings for the current environment.
+
+    Returns:
+        The configured sender address, or the local-development fallback when no
+        provider is configured.
+
+    Raises:
+        EmailDeliveryError: When Resend is configured but no sender address is.
+    """
+    if settings.password_reset_sender_email:
+        return settings.password_reset_sender_email
+    if settings.is_resend_configured:
+        raise EmailDeliveryError(
+            "PASSWORD_RESET_SENDER_EMAIL is not configured; set it to an address "
+            "on a Resend-verified sending domain"
+        )
+    return DEV_PASSWORD_RESET_SENDER_EMAIL
 
 
 def build_reset_url(reset_origin: str, reset_token: str) -> str:
@@ -307,13 +336,14 @@ class EmailDeliveryService:
             Delivery outcome with status, provider, and non-sensitive metadata.
 
         Raises:
-            EmailDeliveryError: If email delivery fails.
+            EmailDeliveryError: If the provider is unconfigured, the sender
+                address is missing while Resend is configured, or delivery fails.
         """
         settings = get_email_settings()
         provider = self._get_provider()
         return await provider.send_password_reset_email(
             handoff=handoff,
-            sender_email=settings.password_reset_sender_email,
+            sender_email=resolve_sender_email(settings),
             sender_name=settings.password_reset_sender_name,
             reset_origin=settings.password_reset_origin,
         )
@@ -357,12 +387,17 @@ async def deliver_password_reset_handoff(
     try:
         result = await delivery_service.send_password_reset_email(handoff)
     except Exception as exc:
+        # EmailDeliveryError messages are fixed, token-free strings raised by this
+        # module, so the reason is safe to log. Anything else is reported by type
+        # only so provider payloads never reach the log.
+        reason = str(exc) if isinstance(exc, EmailDeliveryError) else type(exc).__name__
         logger.error(
             "Password reset email delivery failed: %s",
-            type(exc).__name__,
+            reason,
             extra={
                 "event": "password_reset_email_failure",
                 "user": handoff.user_username,
+                "failure": reason,
             },
         )
         return None
