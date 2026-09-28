@@ -230,6 +230,7 @@ class EmailDeliveryService:
         """
         self._provider = provider
         self._email_settings = get_email_settings()
+        self._fake_provider: FakeEmailProvider | None = None
 
     def _get_provider(self) -> EmailDeliveryProvider:
         """Get the configured email delivery provider."""
@@ -238,7 +239,9 @@ class EmailDeliveryService:
 
         if not self._email_settings.is_resend_configured:
             logger.warning("Resend not configured, using fake email provider")
-            return FakeEmailProvider()
+            if self._fake_provider is None:
+                self._fake_provider = FakeEmailProvider()
+            return self._fake_provider
 
         api_key = self._email_settings.resend_api_key
         assert api_key is not None, "Resend configured without an API key"
