@@ -11,7 +11,7 @@ interface RollCtaProps {
  * stay demoted in the header.
  */
 export function RollCta({ isRolling, hasRolled, onRoll }: RollCtaProps) {
-  const label = isRolling ? 'Rolling…' : hasRolled ? 'Roll again' : 'Roll now'
+  const label = isRolling ? 'Rolling…' : hasRolled ? 'Roll again' : 'Begin'
   return (
     <button
       type="button"
