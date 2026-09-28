@@ -86,7 +86,6 @@ async def test_continuity_rule_immediately_updates_denormalized_blocked_state(
     await async_db.refresh(target_thread)
     assert target_thread.is_blocked is True
 
-
     source_issue.status = "read"
     await async_db.flush()
     changes = await refresh_user_blocked_status(user.id, async_db)
@@ -131,3 +130,34 @@ async def test_unified_blocked_ids_preserve_legacy_issue_dependencies(
     await async_db.commit()
     blocked_ids = await _get_blocked_thread_ids_uncached(user.id, async_db)
     assert legacy_target_thread.id not in blocked_ids
+
+
+@pytest.mark.asyncio
+async def test_cbl_order_rows_are_not_canonical(
+    async_db: AsyncSession,
+) -> None:
+    """Historical cbl-order:% Dependency rows must not block Roll eligibility."""
+    user = await get_or_create_user_async(async_db)
+    source_thread, source_issue = await _make_thread_with_issue(
+        async_db,
+        user_id=user.id,
+        title="CBL source",
+        queue_position=921,
+    )
+    target_thread, target_issue = await _make_thread_with_issue(
+        async_db,
+        user_id=user.id,
+        title="CBL target",
+        queue_position=922,
+    )
+    async_db.add(
+        Dependency(
+            source_issue_id=source_issue.id,
+            target_issue_id=target_issue.id,
+            note="cbl-order:source:12345",
+        )
+    )
+    await async_db.commit()
+
+    blocked_ids = await _get_blocked_thread_ids_uncached(user.id, async_db)
+    assert target_thread.id not in blocked_ids

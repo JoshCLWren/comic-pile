@@ -1,4 +1,9 @@
-"""Unified continuity-derived blocked-state helpers."""
+"""Unified continuity-derived blocked-state helpers.
+
+DEPRECATED: After the Roll cutover (issue #2553), these functions are
+no longer part of Roll authority. They are retained for diagnostic
+services (reader_order_cutover.py) only.
+"""
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,11 +19,10 @@ async def get_continuity_blocked_thread_ids(
     user_id: int,
     db: AsyncSession,
 ) -> set[int]:
-    """Return threads whose current unread issue is blocked by continuity rules.
+    """DEPRECATED: No longer part of Roll authority after cutover.
 
-    The readiness graph is loaded once, then every owned thread is evaluated against
-    the same snapshot. This keeps Queue/Roll blocked-state refreshes bounded instead
-    of issuing one readiness query set per thread.
+    Return threads whose current unread issue is blocked by continuity rules.
+    Retained for diagnostic services only.
     """
     snapshot = await load_snapshot(db, user_id)
     blocked_thread_ids: set[int] = set()
@@ -33,11 +37,10 @@ async def get_continuity_rule_blocked_thread_ids(
     user_id: int,
     db: AsyncSession,
 ) -> set[int]:
-    """Return threads blocked only by compiled ContinuityRule rows.
+    """DEPRECATED: No longer part of Roll authority after cutover.
 
-    Unlike :func:`get_continuity_blocked_thread_ids`, this deliberately ignores
-    ``DependencyGroupMembership.sequence_order`` crossover ordering so cutover
-    audits cannot treat forbidden sequence-order authority as canonical coverage.
+    Return threads blocked only by compiled ContinuityRule rows.
+    Retained for diagnostic services only.
     """
     snapshot = await load_snapshot(db, user_id)
     blocked_thread_ids: set[int] = set()
@@ -52,7 +55,11 @@ async def get_sequence_order_blocked_thread_ids(
     user_id: int,
     db: AsyncSession,
 ) -> set[int]:
-    """Return threads whose next unread is blocked by crossover sequence_order."""
+    """DEPRECATED: No longer part of Roll authority after cutover.
+
+    Return threads whose next unread is blocked by crossover sequence_order.
+    Retained for diagnostic services only.
+    """
     snapshot = await load_snapshot(db, user_id)
     blocked_thread_ids: set[int] = set()
     for thread_id, thread in snapshot.threads.items():
