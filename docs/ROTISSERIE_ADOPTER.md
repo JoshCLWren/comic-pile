@@ -68,7 +68,19 @@ decision policy instead of being hidden inside the adopter translation.
 | Worker-specific completion ordering | ComicPile dispatch policy; normalized completion readiness remains exact-head and worker-neutral. |
 | Workflow-activity lease liveness | ComicPile translates activity into the explicit lease interval before projection. |
 
-The bounded canary switch and physical compare-and-swap remain ComicPile-owned. They
-must not be added until multiple current-revision shadow reports match (or every
-deliberate difference is approved), rollback evidence exists for the exact lane and
-control revision, and an operator explicitly authorizes the transition.
+The bounded canary switch and physical compare-and-swap are ComicPile-owned in
+`.github/factory-rotisserie-control.json`. The control accepts only the exact
+`evidence.transition` emitted by an authorized Rotisserie CLI result. It verifies the
+operation key, control revision, lane, and expected stage before atomically changing
+the stage; stale, altered, held, and out-of-lane commands fail closed.
+
+Apply an authorized result with:
+
+```bash
+python .github/scripts/factory_rotisserie_control.py adoption-result.json \
+  --state .github/factory-rotisserie-control.json
+```
+
+The checked-in stage remains `legacy`. Entering `canary` requires the independently
+reviewed transition evidence and a dedicated control change. The original Factory is
+retained for immediate rollback and is not removed by this boundary.
