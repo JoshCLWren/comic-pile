@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 
@@ -17,7 +18,15 @@ from app.repositories.password_reset_token_repository import (
 )
 from app.repositories.session_repository import delete_all_sessions_for_user
 from app.repositories.user_repository import get_user_by_email, get_user_by_id
+from app.services.password_reset_mailer import (
+    FakePasswordResetMailer,
+    PasswordResetDeliveryError,
+    get_password_reset_mailer,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.background import BackgroundTasks
+
+logger = logging.getLogger(__name__)
 
 TOKEN_EXPIRY_MINUTES = 30
 
@@ -67,6 +76,76 @@ async def request_forgot_password(
         reset_token=raw_token,
         expires_at=expires_at,
     )
+
+
+async def deliver_password_reset_email(handoff: PasswordResetDeliveryHandoff) -> None:
+    """Deliver one reset message off the request/response path.
+
+    Runs as a background task after the acknowledgement is returned so that
+    provider latency (up to the adapter timeout during an outage) never
+    becomes a caller-observable timing signal that separates a known email
+    address from an unknown one. The token row is already committed by the
+    time this runs, so a failure never corrupts token state, and the outcome
+    is logged operationally (status only, no token, no leak to the caller).
+
+    Args:
+        handoff: Provider-neutral delivery data from the token handoff.
+    """
+    mailer = get_password_reset_mailer()
+    if isinstance(mailer, FakePasswordResetMailer):
+        logger.warning(
+            "Password reset email is being recorded in-memory instead of "
+            "sent: outbound email is not configured.",
+            extra={"event": "password_reset_email_unconfigured"},
+        )
+    try:
+        await mailer.send_password_reset(
+            recipient_email=handoff.recipient_email,
+            username=handoff.user_username,
+            reset_token=handoff.reset_token,
+            expires_at=handoff.expires_at,
+        )
+    except PasswordResetDeliveryError:
+        logger.warning(
+            "Password reset email delivery failed.",
+            extra={"event": "password_reset_delivery_failed"},
+        )
+    except Exception:
+        logger.warning(
+            "Password reset email delivery failed unexpectedly.",
+            extra={"event": "password_reset_delivery_failed"},
+        )
+
+
+async def handle_forgot_password_request(
+    db: AsyncSession,
+    email: str,
+    background_tasks: BackgroundTasks,
+) -> None:
+    """Run the full enumeration-safe forgot-password flow including delivery.
+
+    This is the router's single service entry point (house layering rule): it
+    generates the reset token via :func:`request_forgot_password` and then
+    schedules delivery through the provider-neutral mailer boundary on the
+    request's background task. The raw token is passed only to the mailer so
+    it can construct the link; it is never persisted or logged here.
+
+    Delivery is deliberately deferred: returning the acknowledgement before
+    the outbound attempt keeps known and unknown addresses indistinguishable
+    in response time even when the provider is slow or down, and a mail
+    outage neither leaks account existence nor corrupts token state (the
+    token row is committed before this function returns).
+
+    Args:
+        db: Async database session.
+        email: Recovery email from the request body.
+        background_tasks: Request-scoped background task queue.
+    """
+    handoff = await request_forgot_password(db, email)
+    if handoff is None:
+        # Unknown email: identical observable behavior, no delivery attempt.
+        return
+    background_tasks.add_task(deliver_password_reset_email, handoff)
 
 
 async def complete_reset(
