@@ -30,6 +30,13 @@ function renderReset(initialEntry = '/reset-password') {
   )
 }
 
+function axiosError(status: number): Error & { isAxiosError: true; response: { status: number } } {
+  return Object.assign(new Error(`HTTP ${status}`), {
+    isAxiosError: true as const,
+    response: { status },
+  })
+}
+
 describe('ForgotPasswordPage', () => {
   beforeEach(() => {
     authApi.forgotPassword.mockReset()
@@ -71,10 +78,7 @@ describe('ForgotPasswordPage', () => {
   })
 
   it('reports rate-limit errors without leaking account existence', async () => {
-    const error = new Error('rate limited')
-    ;(error as unknown as { isAxiosError: boolean }).isAxiosError = true
-    ;(error as unknown as { response: { status: number } }).response = { status: 429 }
-    authApi.forgotPassword.mockRejectedValueOnce(error)
+    authApi.forgotPassword.mockRejectedValueOnce(axiosError(429))
 
     renderForgot()
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'reader@example.com' } })
@@ -128,10 +132,7 @@ describe('ResetPasswordPage', () => {
   })
 
   it('renders a safe expired-or-used state for a 400 response', async () => {
-    const error = new Error('bad request')
-    ;(error as unknown as { isAxiosError: boolean }).isAxiosError = true
-    ;(error as unknown as { response: { status: number } }).response = { status: 400 }
-    authApi.resetPassword.mockRejectedValueOnce(error)
+    authApi.resetPassword.mockRejectedValueOnce(axiosError(400))
 
     renderReset('/reset-password?token=abc123')
     fireEvent.change(screen.getByLabelText('New Password'), { target: { value: 'newpassword' } })

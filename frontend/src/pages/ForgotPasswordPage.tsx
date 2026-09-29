@@ -63,7 +63,7 @@ export default function ForgotPasswordPage() {
         </div>
 
         {!isSubmitted ? (
-          <form onSubmit={handleSubmit} className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-6">
+          <form noValidate onSubmit={handleSubmit} className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-6">
             <div className="space-y-4">
               <div className="space-y-2">
                 <label htmlFor="email" className="text-sm font-medium text-[var(--theme-text-muted)]">
