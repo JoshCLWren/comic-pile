@@ -1,1 +1,1 @@
-{"control_revision":"comic-pile-controls-657fe86d9","lane":{"name":"issue-intake","subjects":["label:factory:unowned"]},"last_operation_key":null,"schema_version":1,"stage":"legacy"}
+{"control_revision":"comic-pile-controls-657fe86d9","lane":{"name":"issue-intake","subjects":["label:factory:unowned"]},"last_operation_key":"adoption-transition:94f624345d85973a6f891c88488bcf7920bad6e14def60dd4bdc7e6921fc4773","schema_version":1,"stage":"canary"}
