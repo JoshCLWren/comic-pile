@@ -52,6 +52,7 @@ def upgrade() -> None:
                 ON d.source_issue_id = dcr.source_issue_id
                 AND d.target_issue_id = dcr.target_issue_id
             WHERE d.id IS NULL
+            ORDER BY dcr.source_issue_id, dcr.target_issue_id, dcr.created_at DESC
             ON CONFLICT (source_issue_id, target_issue_id) DO NOTHING
             """
         )
@@ -63,9 +64,9 @@ def upgrade() -> None:
         sa.text(
             """
             INSERT INTO dependencies (source_issue_id, target_issue_id, note, created_at)
-            SELECT DISTINCT ON (src_issue.id, tgt_id)
+            SELECT DISTINCT ON (src_issue.id, (tgt->>'id')::int)
                 src_issue.id,
-                tgt_id,
+                (tgt->>'id')::int,
                 'canonical:' || cr.id,
                 cr.created_at
             FROM continuity_rules cr
@@ -84,6 +85,7 @@ def upgrade() -> None:
             WHERE cr.satisfaction_type = 'converged'
               AND src_issue.id <> (tgt->>'id')::int
               AND d.id IS NULL
+            ORDER BY src_issue.id, (tgt->>'id')::int, cr.created_at DESC
             ON CONFLICT (source_issue_id, target_issue_id) DO NOTHING
             """
         )
