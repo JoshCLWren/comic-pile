@@ -29,6 +29,8 @@ on:
       - '.github/scripts/stale_pr_decay.py'
       - '.github/scripts/factory-review-controller.py'
       - '.github/scripts/factory_work_policy.py'
+      - '.github/scripts/factory_rotisserie_adopter.py'
+      - '.github/factory-rotisserie-control.json'
       - '.github/scripts/factory_review_policy.py'
       - '.github/scripts/factory_migration_lane.py'
       - '.github/scripts/factory-gh-rest-shim.sh'
@@ -65,6 +67,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: main
+
+      - name: Install pinned Rotisserie decision CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          pipx install 'git+https://github.com/JoshCLWren/rotisserie.git@0067e8c49cb3a3142a04f6c56f19795a1e81ad3c'
+          rotisserie --help >/dev/null
 
       - name: Ensure GitHub CLI supports JSON PR checks
         shell: bash
