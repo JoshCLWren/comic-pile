@@ -18,6 +18,7 @@ import {
   applyIssueMutations,
   getPendingIssueIds,
 } from './issueUtils'
+import { findNaturalInsertPosition } from '../../utils/issueOrderUtils'
 import type { IssueMutation, QueuedIssueMutation } from './types'
 
 /** The issue-API surface IssueToggleList consumes, injectable for tests. */
@@ -319,7 +320,17 @@ export function IssueToggleList({
     setIsAdding(true)
     setAddError(null)
     try {
-      await issuesService.create(threadId, addRange.trim())
+      // Parse the issue range to determine what we're adding
+      const issueNumbers = addRange.trim().split(',').map(num => num.trim()).filter(Boolean)
+      
+      // Find the natural insertion position
+      const insertAfterIssueId = findNaturalInsertPosition(issues, issueNumbers)
+      
+      // Create issues with the determined insertion position
+      await issuesService.create(threadId, addRange.trim(), {
+        insert_after_issue_id: insertAfterIssueId
+      })
+      
       setAddRange('')
       await loadIssues()
     } catch (err: unknown) {
