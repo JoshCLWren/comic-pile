@@ -63,7 +63,7 @@ decision policy instead of being hidden inside the adopter translation.
 | Dispatch-failure release and stale-lease reconciliation | Recovery observations use explicit lease expiry; applying a release remains ComicPile-owned. |
 | Worker roster and capacity | ComicPile provider policy. Capacity affects intake before capture and must be recorded when it changes a decision. |
 | Post-merge Factory release reconciliation | Outside the coordination decision contract: it writes ComicPile's product release ledger after completion. |
-| Provenance lane and creation-time ranking | Deliberate adopter policy; differing ranks remain visible in the shadow report. |
+| Provenance lane and creation-time ranking | ComicPile translates its deterministic issue order into host-neutral numeric graph priorities. |
 | Unknown-producer authorization | Deliberate stricter legacy rule (two reviewers); divergence is retained, never coerced. |
 | No-diff retry generations | ComicPile execution policy; a suppressed generation appears blocked in the legacy baseline. |
 | Worker-specific completion ordering | ComicPile dispatch policy; normalized completion readiness remains exact-head and worker-neutral. |
