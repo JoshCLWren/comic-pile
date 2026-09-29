@@ -31,7 +31,9 @@ from factory_work_policy import (
     linked_issue_from_pr,
     owner_of,
     parse_depends_on_numbers,
+    parse_time,
     priority_rank,
+    provenance_lane,
     producer_worker_from_pr,
 )
 
@@ -98,11 +100,29 @@ def _human_gate(issue: dict[str, Any]) -> bool:
     )
 
 
+def _portable_priorities(issues: list[dict[str, Any]]) -> dict[int, int]:
+    """Encode ComicPile's issue ordering as host-neutral numeric priorities."""
+    ordered = sorted(
+        issues,
+        key=lambda issue: (
+            provenance_lane(set(_labels(issue))),
+            -priority_rank(_labels(issue)),
+            parse_time(str(issue.get("createdAt") or "")),
+            int(issue["number"]),
+        ),
+    )
+    return {
+        int(issue["number"]): len(ordered) - rank
+        for rank, issue in enumerate(ordered)
+    }
+
+
 def graph_snapshot(view: dict[str, Any]) -> dict[str, object]:
     """Build Rotisserie's public GraphSnapshot v1 shape from a captured host view."""
     _validate(view)
     issues = [dict(item) for item in view["issues"]]
     prs = [dict(item) for item in view["pull_requests"]]
+    portable_priorities = _portable_priorities(issues)
     issue_numbers = {int(issue["number"]) for issue in issues}
     workers: set[str] = set()
     leases: list[dict[str, object]] = []
@@ -190,7 +210,7 @@ def graph_snapshot(view: dict[str, Any]) -> dict[str, object]:
                 "id": _work_id(int(issue["number"])),
                 "title": str(issue.get("title") or f"Issue {issue['number']}"),
                 "state": "open" if str(issue.get("state", "OPEN")).upper() == "OPEN" else "completed",
-                "priority": priority_rank(_labels(issue)),
+                "priority": portable_priorities[int(issue["number"])],
             }
             for issue in issues
         ],
