@@ -4,6 +4,17 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { authApi } from '../services/api'
 
+// FastAPI reports a successful-but-pessimistic 200 for unknown accounts, so any
+// error here is transport-level. A 422 carries a structured `detail` list
+// instead of a string, which must never be rendered as a React child.
+function readErrorMessage(err: unknown): string | null {
+  if (!axios.isAxiosError<{ detail?: unknown }>(err)) {
+    return null
+  }
+  const detail = err.response?.data?.detail
+  return typeof detail === 'string' && detail ? detail : null
+}
+
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
@@ -40,8 +51,9 @@ export default function ForgotPasswordPage() {
       await authApi.forgotPassword({ email: email.trim() })
       setIsSubmitted(true)
     } catch (err: unknown) {
-      if (axios.isAxiosError<{ detail?: string }>(err) && err.response?.data?.detail) {
-        setError(err.response.data.detail)
+      const detail = readErrorMessage(err)
+      if (detail) {
+        setError(detail)
       } else if (axios.isAxiosError(err) && err.response?.status === 429) {
         setError('Too many requests. Please wait a moment and try again.')
       } else {
@@ -85,7 +97,10 @@ export default function ForgotPasswordPage() {
             </div>
 
             {error && (
-              <div className="bg-[var(--theme-danger)]/10 border border-[var(--theme-danger)]/20 rounded-xl px-4 py-3">
+              <div
+                role="alert"
+                className="bg-[var(--theme-danger)]/10 border border-[var(--theme-danger)]/20 rounded-xl px-4 py-3"
+              >
                 <p className="text-sm text-[var(--theme-danger)] font-medium">{error}</p>
               </div>
             )}

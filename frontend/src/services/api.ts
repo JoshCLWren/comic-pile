@@ -42,6 +42,9 @@ const AUTH_ENDPOINT_PATHS = new Set([
   '/v1/auth/forgot-password',
   '/v1/auth/reset-password',
 ])
+// Request bodies for these paths carry single-use secrets (reset token, new
+// password). They must never reach console output or error telemetry.
+const SENSITIVE_AUTH_BODY_PATHS = new Set(['/v1/auth/reset-password'])
 
 export interface ForgotPasswordRequest {
   email: string
@@ -268,6 +271,30 @@ function isAuthenticationFailure(error: AxiosError): boolean {
   return responseData?.detail === 'Not authenticated'
 }
 
+/**
+ * Build the value that is safe to hand to `console.error` for a failed request.
+ *
+ * Axios errors carry the full request config, so logging one verbatim would
+ * print the request body. For auth paths whose body is a single-use secret the
+ * raw error is replaced with a minimal, redacted summary.
+ *
+ * @param error - The rejected axios error.
+ * @returns The error itself, or a redacted summary for sensitive auth requests.
+ */
+function errorForDiagnosticLog(error: AxiosError): unknown {
+  const requestPathname = getRequestPathname(error.config?.url ?? '')
+  if (!SENSITIVE_AUTH_BODY_PATHS.has(requestPathname)) {
+    return error
+  }
+
+  return {
+    name: error.name,
+    message: error.message,
+    url: requestPathname,
+    status: error.response?.status ?? null,
+  }
+}
+
 function createRequestInterceptor(client: ApiClient) {
   return async (config: InternalAxiosRequestConfig) => {
     const token = getAccessToken()
@@ -385,7 +412,7 @@ function createResponseErrorInterceptor(client: ApiClient) {
 
     const status = error.response?.status
     if (status !== 503) {
-      console.error('API Error:', error)
+      console.error('API Error:', errorForDiagnosticLog(error))
     }
     return Promise.reject(error)
   }

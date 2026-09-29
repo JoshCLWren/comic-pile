@@ -6,12 +6,17 @@ const authApi = vi.hoisted(() => ({
   forgotPassword: vi.fn(),
   resetPassword: vi.fn(),
 }))
+const apiClient = vi.hoisted(() => ({ post: vi.fn() }))
+const auth = vi.hoisted(() => ({ login: vi.fn() }))
 
 vi.mock('../services/api', () => ({
   authApi,
+  default: apiClient,
 }))
+vi.mock('../App', () => ({ useAuth: () => auth }))
 
 import ForgotPasswordPage from '../pages/ForgotPasswordPage'
+import LoginPage from '../pages/LoginPage'
 import ResetPasswordPage from '../pages/ResetPasswordPage'
 
 function renderForgot(initialEntry = '/forgot-password') {
@@ -34,6 +39,13 @@ function axiosError(status: number): Error & { isAxiosError: true; response: { s
   return Object.assign(new Error(`HTTP ${status}`), {
     isAxiosError: true as const,
     response: { status },
+  })
+}
+
+function axiosErrorWithDetail(status: number, detail: unknown) {
+  return Object.assign(new Error(`HTTP ${status}`), {
+    isAxiosError: true as const,
+    response: { status, data: { detail } },
   })
 }
 
@@ -87,6 +99,52 @@ describe('ForgotPasswordPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Too many requests. Please wait a moment and try again.')).toBeInTheDocument()
     })
+  })
+
+  it('renders a safe message when the API rejects the request shape', async () => {
+    authApi.forgotPassword.mockRejectedValueOnce(
+      axiosErrorWithDetail(422, [{ loc: ['body', 'email'], msg: 'value is not a valid email address' }]),
+    )
+
+    renderForgot()
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: `${'a'.repeat(400)}@example.com` },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send Reset Link' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Request failed. Please try again.')
+    })
+  })
+
+  it('announces the error to assistive technology', async () => {
+    authApi.forgotPassword.mockRejectedValueOnce(axiosError(429))
+
+    renderForgot()
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'reader@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send Reset Link' }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
+  })
+})
+
+describe('LoginPage password recovery entry point', () => {
+  beforeEach(() => {
+    auth.login.mockReset()
+    apiClient.post.mockReset()
+  })
+
+  it('exposes a discoverable forgot-password link', () => {
+    render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute(
+      'href',
+      '/forgot-password',
+    )
   })
 })
 
@@ -150,5 +208,78 @@ describe('ResetPasswordPage', () => {
     renderReset('/reset-password?token=secret-token')
     expect(window.localStorage.getItem('auth_token')).toBeNull()
     expect(window.sessionStorage.getItem('auth_token')).toBeNull()
+  })
+
+  it('renders a safe message when the API rejects the request shape', async () => {
+    authApi.resetPassword.mockRejectedValueOnce(
+      axiosErrorWithDetail(422, [{ loc: ['body', 'token'], msg: 'field required' }]),
+    )
+
+    renderReset('/reset-password?token=abc123')
+    fireEvent.change(screen.getByLabelText('New Password'), { target: { value: 'newpassword' } })
+    fireEvent.change(screen.getByLabelText('Confirm New Password'), { target: { value: 'newpassword' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Password' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Reset failed. Please try again.')
+    })
+  })
+
+  it('maps a server-supplied invalid-token detail to the safe invalid-link state', async () => {
+    authApi.resetPassword.mockRejectedValueOnce(
+      axiosErrorWithDetail(422, 'Reset token has already been used.'),
+    )
+
+    renderReset('/reset-password?token=abc123')
+    fireEvent.change(screen.getByLabelText('New Password'), { target: { value: 'newpassword' } })
+    fireEvent.change(screen.getByLabelText('Confirm New Password'), { target: { value: 'newpassword' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Password' }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('This reset link has expired or was already used. Please request a new one.'),
+      ).toBeInTheDocument()
+    })
+  })
+})
+
+describe('post-reset re-login', () => {
+  beforeEach(() => {
+    authApi.resetPassword.mockReset()
+    auth.login.mockReset()
+    apiClient.post.mockReset()
+  })
+
+  it('returns the reader to username login and signs in with the new password', async () => {
+    authApi.resetPassword.mockResolvedValueOnce({ message: 'ok' })
+    const reset = renderReset('/reset-password?token=abc123')
+    fireEvent.change(screen.getByLabelText('New Password'), { target: { value: 'newpassword' } })
+    fireEvent.change(screen.getByLabelText('Confirm New Password'), { target: { value: 'newpassword' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Password' }))
+
+    const signInLink = await screen.findByRole('link', { name: 'Sign In with New Password' })
+    expect(signInLink).toHaveAttribute('href', '/login')
+    expect(screen.getByText(/sign in with your username and new password/i)).toBeInTheDocument()
+    reset.unmount()
+
+    apiClient.post.mockResolvedValueOnce({ access_token: 'fresh-token' })
+    auth.login.mockResolvedValueOnce(undefined)
+    render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
+    )
+
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'reader' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'newpassword' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign In' }))
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith('/v1/auth/login', {
+        username: 'reader',
+        password: 'newpassword',
+      })
+    })
+    expect(auth.login).toHaveBeenCalledWith('fresh-token')
   })
 })
