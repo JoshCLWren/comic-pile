@@ -159,7 +159,7 @@ describe('RatingView desktop layout respects state instead of reserving fixed co
     expect(grid).not.toBeNull()
     expect(grid!.className).toContain('grid')
     expect(grid!.className).toContain('items-start')
-    expect(grid!.className).toContain('lg:grid-cols-2')
+    expect(grid!.className).toContain('lg:grid-cols-[1fr,auto]')
     expect(grid!.className).not.toContain('xl:grid-cols-[repeat(auto-fit')
     expect(grid!.className).not.toMatch(/minmax\(0,\d+fr\)/)
 
