@@ -34,7 +34,6 @@ export function findNaturalInsertPosition(
 ): number | null {
   // Separate ordinary numeric and non-ordinary new issues
   const ordinaryNewIssues = newIssueNumbers.filter(isOrdinaryNumericIssue)
-  const nonOrdinaryNewIssues = newIssueNumbers.filter(issue => !isOrdinaryNumericIssue)
 
   // If no ordinary numeric issues (all ambiguous), append at end
   if (ordinaryNewIssues.length === 0) {
@@ -42,17 +41,12 @@ export function findNaturalInsertPosition(
   }
 
   // Convert existing issues to comparable format
-  const existingOrdinaryIssues = existingIssues
-    .map(issue => ({
-      id: issue.id,
-      issue_number: issue.issue_number,
-      numericValue: parseOrdinaryNumericIssue(issue.issue_number)
-    }))
-    .filter(issue => issue.numericValue !== null) as Array<{
-      id: number
-      issue_number: string
-      numericValue: number
-    }>
+  const existingOrdinaryIssues = existingIssues.flatMap((issue) => {
+    const numericValue = parseOrdinaryNumericIssue(issue.issue_number)
+    return numericValue === null
+      ? []
+      : [{ id: issue.id, issue_number: issue.issue_number, numericValue }]
+  })
 
   // Sort ordinary new issues numerically
   const sortedOrdinaryNewIssues = ordinaryNewIssues
@@ -79,11 +73,6 @@ export function findNaturalInsertPosition(
       // This existing issue comes after or at our new issue, so we stop
       break
     }
-  }
-
-  // If all existing ordinary issues are smaller than our new issue, we insert after the last ordinary one
-  if (insertAfterId === null && existingOrdinaryIssues.length > 0) {
-    insertAfterId = existingOrdinaryIssues[existingOrdinaryIssues.length - 1].id
   }
 
   // If there are no existing ordinary issues, append at end of all issues
@@ -115,5 +104,5 @@ export function findNaturalInsertPosition(
  * 4. Adding "Annual 1" to #1,#2,#3:
  *    - existingIssues: [{id: 1, issue_number: "1"}, {id: 2, issue_number: "2"}, {id: 3, issue_number: "3"}]
  *    - newIssueNumbers: ["Annual 1"]
- *    - Returns: null (ambiguous case, just append)
+ *    - Returns: 3 (ambiguous case, append at end)
  */

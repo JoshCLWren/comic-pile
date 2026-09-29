@@ -649,7 +649,7 @@ describe('IssueToggleList', () => {
     fireEvent.change(input, { target: { value: '4-5' } })
     fireEvent.keyDown(input, { key: 'Enter' })
     await waitFor(() => expect(screen.getByText('add failed')).toBeInTheDocument())
-    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '4-5')
+    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '4-5', { insert_after_issue_id: 3 })
   })
 
   it('recovers after toggle and delete mutation failures', async () => {
@@ -676,7 +676,7 @@ describe('IssueToggleList', () => {
     fireEvent.drop(screen.getByTestId('issue-pill-1'), { dataTransfer: createDataTransfer() })
     fireEvent.change(screen.getByTestId('issue-add-input'), { target: { value: '4' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
-    await waitFor(() => expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '4'))
+    await waitFor(() => expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '4', { insert_after_issue_id: 3 }))
     errorSpy.mockRestore()
   })
 

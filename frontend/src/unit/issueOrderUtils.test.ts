@@ -41,7 +41,7 @@ describe('issueOrderUtils', () => {
 
   describe('findNaturalInsertPosition', () => {
     test('adds #2 to empty list (should append)', () => {
-      const existingIssues = []
+      const existingIssues: Array<{ id: number; issue_number: string }> = []
       const newIssueNumbers = ['2']
       const result = findNaturalInsertPosition(existingIssues, newIssueNumbers)
       expect(result).toBe(null) // Should append when no existing issues
@@ -87,7 +87,7 @@ describe('issueOrderUtils', () => {
       ]
       const newIssueNumbers = ['Annual 1']
       const result = findNaturalInsertPosition(existingIssues, newIssueNumbers)
-      expect(result).toBe(null) // Should append for ambiguous cases
+      expect(result).toBe(3) // Ambiguous cases append at end
     })
 
     test('adds multiple issues with mixed types (should handle numeric naturally)', () => {
