@@ -55,6 +55,17 @@ def test_recovery_watchdog_dispatches_explicit_roster_mode():
     assert "-f mode=roster" in recovery
 
 
+def test_dispatcher_installs_exact_rotisserie_revision_before_assignment():
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    pin = "0067e8c49cb3a3142a04f6c56f19795a1e81ad3c"
+    assert f"rotisserie.git@{pin}" in workflow
+    assert "rotisserie --help >/dev/null" in workflow
+    assert workflow.index("Install pinned Rotisserie decision CLI") < workflow.index(
+        "Resolve and dispatch fixed workers"
+    )
+
+
 def test_roster_chain_is_serialized_and_keeps_hourly_watchdog():
     workflow = WORKFLOW.read_text(encoding="utf-8")
 

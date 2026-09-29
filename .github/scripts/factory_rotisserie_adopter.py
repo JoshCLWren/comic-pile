@@ -21,15 +21,19 @@ from factory_review_policy import head_has_authorized_approval
 from factory_work_policy import (
     BLOCKED_LABELS,
     FACTORY_REVIEW_BACKLOG_LIMIT,
+    FACTORY_PR_WIP_LIMIT,
     MANUAL_ONLY_MARKER,
     NON_EXECUTABLE_ISSUES,
     build_candidates,
     factory_review_backlog_count,
+    factory_pr_wip_count,
     labels_of,
     linked_issue_from_pr,
     owner_of,
     parse_depends_on_numbers,
+    parse_time,
     priority_rank,
+    provenance_lane,
     producer_worker_from_pr,
 )
 
@@ -96,11 +100,29 @@ def _human_gate(issue: dict[str, Any]) -> bool:
     )
 
 
+def _portable_priorities(issues: list[dict[str, Any]]) -> dict[int, int]:
+    """Encode ComicPile's issue ordering as host-neutral numeric priorities."""
+    ordered = sorted(
+        issues,
+        key=lambda issue: (
+            provenance_lane(set(_labels(issue))),
+            -priority_rank(_labels(issue)),
+            parse_time(str(issue.get("createdAt") or "")),
+            int(issue["number"]),
+        ),
+    )
+    return {
+        int(issue["number"]): len(ordered) - rank
+        for rank, issue in enumerate(ordered)
+    }
+
+
 def graph_snapshot(view: dict[str, Any]) -> dict[str, object]:
     """Build Rotisserie's public GraphSnapshot v1 shape from a captured host view."""
     _validate(view)
     issues = [dict(item) for item in view["issues"]]
     prs = [dict(item) for item in view["pull_requests"]]
+    portable_priorities = _portable_priorities(issues)
     issue_numbers = {int(issue["number"]) for issue in issues}
     workers: set[str] = set()
     leases: list[dict[str, object]] = []
@@ -188,7 +210,7 @@ def graph_snapshot(view: dict[str, Any]) -> dict[str, object]:
                 "id": _work_id(int(issue["number"])),
                 "title": str(issue.get("title") or f"Issue {issue['number']}"),
                 "state": "open" if str(issue.get("state", "OPEN")).upper() == "OPEN" else "completed",
-                "priority": priority_rank(_labels(issue)),
+                "priority": portable_priorities[int(issue["number"])],
             }
             for issue in issues
         ],
@@ -457,6 +479,10 @@ def main() -> int:
                 str(factory_review_backlog_count(json.loads(raw)["pull_requests"])),
                 "--backlog-limit",
                 str(FACTORY_REVIEW_BACKLOG_LIMIT),
+                "--active-changes",
+                str(factory_pr_wip_count(json.loads(raw)["pull_requests"])),
+                "--wip-limit",
+                str(FACTORY_PR_WIP_LIMIT),
             ]
             return subprocess.run(command, check=False).returncode
     except (AdopterInputError, KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as error:

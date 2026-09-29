@@ -113,6 +113,37 @@ def test_retry_suppression_is_visible() -> None:
     assert ("ranking", "work:3002") not in observations
 
 
+def test_projection_pressure_uses_factory_wip_policy() -> None:
+    adapter = load_adapter()
+    view = json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+    assert adapter.factory_pr_wip_count(view["pull_requests"]) == 0
+    assert adapter.FACTORY_PR_WIP_LIMIT == 5
+
+
+def test_graph_priorities_preserve_comicpile_provenance_order() -> None:
+    adapter = load_adapter()
+    view = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    first, second = view["issues"][:2]
+    first["labels"] = ["bug", "factory", "factory:unowned", "user-reported"]
+    first["createdAt"] = "2026-09-02T00:00:00Z"
+    second["labels"] = [
+        "factory",
+        "factory:unowned",
+        "infrastructure",
+        "ralph-task",
+        "ralph-priority:critical",
+    ]
+    second["createdAt"] = "2026-09-01T00:00:00Z"
+
+    snapshot = adapter.graph_snapshot(view)
+    priorities = {
+        int(work["id"]["key"]): work["priority"] for work in snapshot["works"]
+    }
+
+    assert priorities[int(first["number"])] > priorities[int(second["number"])]
+
+
 def test_manual_gate_mapping() -> None:
     adapter = load_adapter()
     view = json.loads(FIXTURE.read_text(encoding="utf-8"))

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -38,6 +40,75 @@ def issue(
         "labels": [{"name": label} for label in labels],
         "createdAt": created,
     }
+
+
+def test_rotisserie_intake_preserves_legacy_stage(
+    controller: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Legacy control leaves current issue selection untouched."""
+    control = tmp_path / "control.json"
+    control.write_text(json.dumps({"stage": "legacy"}), encoding="utf-8")
+    monkeypatch.setattr(controller, "ROTISSERIE_CONTROL_PATH", control)
+
+    assert controller.rotisserie_issue_intake([], []) is None
+
+
+def test_rotisserie_intake_uses_public_decision_and_fails_closed(
+    controller: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Expanded intake accepts only eligible work from the Rotisserie CLI."""
+    control = tmp_path / "control.json"
+    control.write_text(
+        json.dumps(
+            {
+                "stage": "expanded",
+                "lane": {
+                    "name": "issue-intake",
+                    "subjects": ["label:factory:unowned"],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(controller, "ROTISSERIE_CONTROL_PATH", control)
+    monkeypatch.setenv("GITHUB_SHA", "a" * 40)
+
+    def decide(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "status": "ok",
+                    "evidence": {
+                        "decisions": {
+                            "observations": [
+                                {
+                                    "dimension": "eligibility",
+                                    "subject": "work:101",
+                                    "outcome": "eligible",
+                                },
+                                {
+                                    "dimension": "eligibility",
+                                    "subject": "work:102",
+                                    "outcome": "blocked",
+                                },
+                            ]
+                        }
+                    },
+                }
+            ),
+        )
+
+    monkeypatch.setattr(controller.subprocess, "run", decide)
+    issues = [
+        issue(101, "factory", "factory:unowned"),
+        issue(102, "factory", "factory:unowned"),
+    ]
+    assert controller.rotisserie_issue_intake(issues, []) == {101}
+
+    control.write_text("{}", encoding="utf-8")
+    assert controller.rotisserie_issue_intake(issues, []) == set()
 
 
 def pr(

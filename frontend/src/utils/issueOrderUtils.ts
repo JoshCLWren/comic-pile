@@ -65,7 +65,12 @@ export function findNaturalInsertPosition(
   // Find where the first new issue should go among existing ordinary issues
   let insertAfterId: number | null = null
 
-  for (const existingIssue of existingOrdinaryIssues) {
+  // Sort by numeric value so the scan finds the correct insertion point
+  const sortedExistingOrdinaryIssues = [...existingOrdinaryIssues].sort(
+    (a, b) => a.numericValue - b.numericValue
+  )
+
+  for (const existingIssue of sortedExistingOrdinaryIssues) {
     if (existingIssue.numericValue < firstNewIssue.numericValue) {
       // This existing issue comes before our new issue, so we could insert after it
       insertAfterId = existingIssue.id
