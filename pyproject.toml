@@ -10,7 +10,16 @@ requires-python = ">=3.14"
 # and migration tooling lives in the `server` and `migrate` dependency groups,
 # which every other runtime discovers through `tool.uv.default-groups`.
 dependencies = [
-    "fastapi>=0.100.0",
+    # FastAPI 0.137.0 turned `router.routes` into a tree of router-inclusion
+    # nodes and stopped `scope["route"].path` reporting the effective mounted
+    # path. This app routes through `include_router` for its whole API surface
+    # and reads both in production: `app/traffic_metrics.py` resolves per-route
+    # request counters from `scope["route"].path`, and the route-surface guards
+    # in `tests/` flatten `app.routes`. Both silently degrade on 0.137+ (every
+    # included route reports its unprefixed sub-path), so the ceiling stays
+    # until the route-introspection layer is migrated off the internals that
+    # 0.137.0 documented as no longer public API.
+    "fastapi>=0.100.0,<0.137.0",
     "sqlalchemy>=2.0.53",
     "pillow>=11.0.0",
     "pydantic[email]>=2.0.0",
