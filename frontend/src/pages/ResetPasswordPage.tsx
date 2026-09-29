@@ -3,6 +3,7 @@ import axios from 'axios'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { authApi } from '../services/api'
+import { isNonEmptyString, isString } from '../utils/runtimeChecks'
 
 const INVALID_LINK_MESSAGE =
   'This reset link has expired or was already used. Please request a new one.'
@@ -18,10 +19,13 @@ function readInvalidLinkError(err: unknown): string | null {
     return INVALID_LINK_MESSAGE
   }
   const detail = err.response?.data?.detail
-  if (typeof detail === 'string' && /\b(expired|used|superseded|invalid)\b/i.test(detail)) {
+  if (!isString(detail)) {
+    return null
+  }
+  if (/\b(expired|used|superseded|invalid)\b/i.test(detail)) {
     return INVALID_LINK_MESSAGE
   }
-  return typeof detail === 'string' && detail ? detail : null
+  return isNonEmptyString(detail) ? detail : null
 }
 
 export default function ResetPasswordPage() {

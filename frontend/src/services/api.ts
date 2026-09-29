@@ -272,6 +272,16 @@ function isAuthenticationFailure(error: AxiosError): boolean {
 }
 
 /**
+ * Redacted stand-in logged for a failed request whose body carried a secret.
+ */
+export interface RedactedRequestDiagnostic {
+  name: string
+  message: string
+  url: string
+  status: number | null
+}
+
+/**
  * Build the value that is safe to hand to `console.error` for a failed request.
  *
  * Axios errors carry the full request config, so logging one verbatim would
@@ -281,7 +291,7 @@ function isAuthenticationFailure(error: AxiosError): boolean {
  * @param error - The rejected axios error.
  * @returns The error itself, or a redacted summary for sensitive auth requests.
  */
-function errorForDiagnosticLog(error: AxiosError): unknown {
+function errorForDiagnosticLog(error: AxiosError): AxiosError | RedactedRequestDiagnostic {
   const requestPathname = getRequestPathname(error.config?.url ?? '')
   if (!SENSITIVE_AUTH_BODY_PATHS.has(requestPathname)) {
     return error

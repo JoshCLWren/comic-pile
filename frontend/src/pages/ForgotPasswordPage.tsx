@@ -3,6 +3,7 @@ import axios from 'axios'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { authApi } from '../services/api'
+import { isNonEmptyString } from '../utils/runtimeChecks'
 
 // FastAPI reports a successful-but-pessimistic 200 for unknown accounts, so any
 // error here is transport-level. A 422 carries a structured `detail` list
@@ -11,8 +12,7 @@ function readErrorMessage(err: unknown): string | null {
   if (!axios.isAxiosError<{ detail?: unknown }>(err)) {
     return null
   }
-  const detail = err.response?.data?.detail
-  return typeof detail === 'string' && detail ? detail : null
+  return isNonEmptyString(err.response?.data?.detail) ? err.response.data.detail : null
 }
 
 export default function ForgotPasswordPage() {
