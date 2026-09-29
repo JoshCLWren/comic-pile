@@ -7,8 +7,10 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, cast
 sys.path.insert(0, os.path.dirname(__file__))
 # OmniRoute enable gate: FACTORY_OMNIROUTE_ENABLED (default off).
@@ -23,6 +25,7 @@ from stale_pr_decay import StalePRGuard
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 ASSIGNMENT_WRITER_WORKFLOW_PATH = ".github/workflows/fixed-model-factory-dispatch.yml"
+ROTISSERIE_CONTROL_PATH = Path(".github/factory-rotisserie-control.json")
 STRIKE_RESET_RE = re.compile(
     r"comic-pile-factory-strike-reset-v1:issue-(?P<issue>\d+):pr-(?P<pr>\d+):"
     r"excluded-producer-(?P<worker>\d+|unknown)"
@@ -66,6 +69,88 @@ def list_issues() -> list[dict[str, Any]]:
 def list_prs() -> list[dict[str, Any]]:
     """List open pull requests including current mergeability."""
     return cast(list[dict[str, Any]], gh_json(['pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500', '--json', 'number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus']))
+
+
+def rotisserie_issue_intake(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> set[int] | None:
+    """Return authorized issue numbers, or None while the lane is legacy."""
+    try:
+        control = json.loads(ROTISSERIE_CONTROL_PATH.read_text(encoding="utf-8"))
+        stage = control.get("stage")
+        if stage == "legacy":
+            return None
+        if stage not in {"canary", "expanded"}:
+            raise ValueError("unsupported adopter stage")
+        if control.get("lane") != {
+            "name": "issue-intake",
+            "subjects": ["label:factory:unowned"],
+        }:
+            raise ValueError("adopter control is outside the issue-intake lane")
+
+        from factory_rotisserie_adopter import (
+            FACTORY_PR_WIP_LIMIT,
+            FACTORY_REVIEW_BACKLOG_LIMIT,
+            factory_pr_wip_count,
+            factory_review_backlog_count,
+            graph_snapshot,
+        )
+
+        revision = os.environ.get("GITHUB_SHA", "").strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{40}", revision):
+            revision = subprocess.run(
+                ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+            ).stdout.strip().lower()
+        now = int(time.time())
+        snapshot = graph_snapshot(
+            {
+                "schema_version": 1,
+                "repository": REPO,
+                "revision": revision,
+                "captured_at": now,
+                "issues": issues,
+                "pull_requests": prs,
+            }
+        )
+        with tempfile.TemporaryDirectory(prefix="comic-pile-rotisserie-intake-") as directory:
+            root = Path(directory)
+            snapshot_path = root / "snapshot.json"
+            config_path = root / "operator.toml"
+            snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+            config_path.write_text(
+                'schema_version = 1\n[repository]\nhost = "github.com"\n'
+                'owner = "JoshCLWren"\nname = "comic-pile"\n[repositories]\n'
+                'allow = [{ host = "github.com", owner = "JoshCLWren", name = "comic-pile" }]\n'
+                '[local]\nsnapshot = "snapshot.json"\nstate_directory = "state"\n'
+                'mutations_enabled = false\n',
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [
+                    os.environ.get("FACTORY_ROTISSERIE_COMMAND", "rotisserie"),
+                    "--config", str(config_path), "decide", "--snapshot", str(snapshot_path),
+                    "--revision", revision, "--at", str(now),
+                    "--completion-backlog", str(factory_review_backlog_count(prs)),
+                    "--backlog-limit", str(FACTORY_REVIEW_BACKLOG_LIMIT),
+                    "--active-changes", str(factory_pr_wip_count(prs)),
+                    "--wip-limit", str(FACTORY_PR_WIP_LIMIT),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        envelope = json.loads(completed.stdout)
+        if envelope.get("status") != "ok":
+            raise ValueError("Rotisserie decision was not successful")
+        observations = envelope["evidence"]["decisions"]["observations"]
+        return {
+            int(item["subject"].removeprefix("work:"))
+            for item in observations
+            if item.get("dimension") == "eligibility"
+            and item.get("outcome") == "eligible"
+            and str(item.get("subject", "")).startswith("work:")
+        }
+    except (KeyError, OSError, RuntimeError, ValueError, json.JSONDecodeError, subprocess.SubprocessError) as error:
+        print(f"[factory-controller] Rotisserie issue intake unavailable; holding fresh issues: {error}", file=sys.stderr)
+        return set()
 
 
 def target_json(number: int) -> dict[str, Any]:
@@ -743,6 +828,13 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
         no_diff_attempts_by_issue=issue_retry_counts,
         no_diff_attempt_records=attempt_records,
     )
+    authorized_issues = rotisserie_issue_intake(issues, prs)
+    if authorized_issues is not None:
+        candidates = [
+            candidate
+            for candidate in candidates
+            if candidate.kind != "issue" or candidate.number in authorized_issues
+        ]
     if kinds is not None:
         candidates = [candidate for candidate in candidates if candidate.kind in kinds]
     elif attempt_records is None:
