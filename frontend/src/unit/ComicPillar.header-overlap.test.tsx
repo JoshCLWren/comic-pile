@@ -86,7 +86,7 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     const controlsRegion = screen.getByTestId('comic-header-controls')
 
     // Structural assertions: header uses vertical stack (space-y-3) with title and controls in separate rows
-    expect(headerRow.className).toContain('flex-1')
+    expect(headerRow.className).toContain('min-w-0')
     expect(headerRow.className).toContain('space-y-3')
     expect(titleRegion.className).toContain('text-xl')
     expect(titleRegion.className).toContain('font-black')
@@ -162,13 +162,11 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     const titleRegion = screen.getByTestId('comic-header-title')
     const controlsRegion = screen.getByTestId('comic-header-controls')
 
-    expect(headerRow.className).toContain('flex-1')
+    expect(headerRow.className).toContain('min-w-0')
     expect(headerRow.className).toContain('space-y-3')
     expect(titleRegion.className).toContain('text-xl')
     expect(titleRegion.className).toContain('font-black')
     expect(controlsRegion.className).toContain('flex-wrap')
-
-    // In the new vertical stack layout, title and controls are in separate rows — no overlap possible
     // SAFETY: jsdom performs no layout, so the test stubs only the edges the overlap check reads
     const titleRect = {
       left: 0,
@@ -220,7 +218,7 @@ describe('ComicPillar header responsive reflow (#2292)', () => {
     )
 
     const headerRow = await screen.findByTestId('comic-header-row')
-    expect(headerRow.className).toContain('flex-1')
+    expect(headerRow.className).toContain('min-w-0')
     expect(headerRow.className).toContain('space-y-3')
 
     // Verify old Copy title placement is removed and single control still reflows safely
